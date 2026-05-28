@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Fashion — 时尚趋势分析平台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Outfit', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+    .font-display { font-family: 'Cormorant Garamond', 'Noto Serif SC', 'Songti SC', Georgia, serif; }
+  </style>
+  <link rel="stylesheet" href="/static/style.css?v=12" />
+</head>
+<body>
+
+  <div class="app-bg" aria-hidden="true"></div>
+
+  <!-- 侧边导航 -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon" aria-hidden="true"><span class="logo-mark">A</span></div>
+        <div class="logo-copy">
+          <div class="logo-text font-display">AI Fashion</div>
+          <div class="logo-sub">趋势情报工作台</div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="nav-list">
+      <li class="nav-item active" data-page="dashboard">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16">
+          <rect x="1" y="1" width="6" height="6" rx="1.5"/>
+          <rect x="9" y="1" width="6" height="6" rx="1.5"/>
+          <rect x="1" y="9" width="6" height="6" rx="1.5"/>
+          <rect x="9" y="9" width="6" height="6" rx="1.5"/>
+        </svg>
+        <span>仪表盘</span>
+      </li>
+      <li class="nav-item" data-page="reports">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16">
+          <path d="M3 2h7l3 3v9H3V2z"/><path d="M10 2v3h3"/><path d="M5 7h6M5 10h4"/>
+        </svg>
+        <span>趋势报告</span>
+      </li>
+      <li class="nav-item" data-page="seasons">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16">
+          <path d="M2 12h12M4 8h8M6 4h4"/><circle cx="8" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>季节趋势</span>
+      </li>
+      <li class="nav-item" data-page="articles">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16">
+          <path d="M3 2.5h10v11H3z"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/>
+        </svg>
+        <span>文章库</span>
+      </li>
+      <li class="nav-item" data-page="keywords">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" width="16" height="16">
+          <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>
+        </svg>
+        <span>热词</span>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div class="subscribe-mini">
+        <input type="email" id="subscribeEmail" placeholder="订阅报告（邮箱）" class="subscribe-input" />
+        <button type="button" class="btn btn-ghost btn-subscribe" onclick="subscribeEmail()">订阅</button>
+      </div>
+      <div class="ws-status" id="wsStatus">
+        <span class="ws-dot"></span>
+        <span class="ws-label">连接中...</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 主内容区 -->
+  <main class="main-content" id="mainContent">
+
+    <!-- 顶部栏 -->
+    <header class="topbar">
+      <div class="topbar-title-wrap">
+        <p class="topbar-eyebrow" id="pageEyebrow">总览</p>
+        <h1 class="page-title font-display" id="pageTitle">仪表盘</h1>
+      </div>
+      <div class="pipeline-controls">
+        <button type="button" class="btn btn-primary" id="triggerBtn" onclick="triggerPipeline()">
+          <svg class="btn-play-icon" viewBox="0 0 12 12" fill="currentColor" width="11" height="11" aria-hidden="true"><path d="M3 2l7 4-7 4V2z"/></svg>
+          <span id="triggerBtnText">启动完整工作流分析</span>
+        </button>
+      </div>
+    </header>
+
+    <div class=”llm-banner” id=”llmBanner” hidden role=”status”></div>
+
+    <!-- Pipeline 进度条 -->
+    <div class="pipeline-banner" id="pipelineBanner" style="display:none">
+      <div class="pipeline-banner-inner">
+        <div class="pipeline-banner-head">
+          <div class="pipeline-banner-title-row">
+            <div class="spinner"></div>
+            <span id="pipelineStatusText">流水线运行中...</span>
+            <span id="pipelinePercentText" class="pipeline-percent-text">0%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progressBar" style="width:0%"></div>
+          </div>
+          <p id="pipelineStageDetail" class="pipeline-stage-detail">等待任务开始…</p>
+        </div>
+        <div id="pipelineStages" class="pipeline-stages" aria-live="polite">
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">初始化</span></div>
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">搜索候选</span></div>
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">深抓正文</span></div>
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">季节分组</span></div>
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">逐篇分析</span></div>
+          <div class="pipeline-stage-item is-pending"><span class="pipeline-stage-dot"></span><span class="pipeline-stage-label">汇总完成</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面容器 -->
+    <div class="page-container">
+
+      <!-- 仪表盘 -->
+      <section class="page" id="page-dashboard">
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card skeleton"></div>
+          <div class="stat-card skeleton"></div>
+          <div class="stat-card skeleton"></div>
+          <div class="stat-card skeleton"></div>
+        </div>
+        <div class="dashboard-bottom">
+          <div class="card latest-report-card">
+            <div class="card-header">
+              <h2>最新趋势报告</h2>
+              <button class="btn btn-ghost" onclick="nav('reports')">查看全部 →</button>
+            </div>
+            <div id="latestReportContent">
+              <div class="skeleton-text"></div>
+              <div class="skeleton-text short"></div>
+            </div>
+          </div>
+          <div class="card recent-tasks-card">
+            <div class="card-header">
+              <h2>季节趋势入口</h2>
+              <button class="btn btn-ghost" onclick="nav('seasons')">打开季节趋势 →</button>
+            </div>
+            <div id="recentTasksContent">
+              <p style="margin:0;line-height:1.7;color:var(--text-secondary)">
+                每次完整工作流分析后，系统会自动按文章发布时间和标题中的季节关键词生成春、夏、秋、冬趋势视图。
+              </p>
+            </div>
+          </div>
+        </div>
+        <!-- 热词速览 -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <h2>热词速览</h2>
+            <button class="btn btn-ghost" onclick="nav('keywords')">查看全部热词 →</button>
+          </div>
+          <div id="dashHotKeywords" class="dash-hot-keywords"></div>
+        </div>
+      </section>
+
+      <!-- 趋势报告 -->
+      <section class="page" id="page-reports" style="display:none">
+        <div class="reports-layout">
+          <div class="reports-list-panel">
+            <div class="list-controls report-filters">
+              <select id="reportSiteFilter" class="filter-select" title="站点" onchange="loadReports(0)">
+                <option value="">全部站点</option>
+              </select>
+              <select id="reportSeasonBucketFilter" class="filter-select" title="按季节标签筛选" onchange="loadReports(0)">
+                <option value="">全部季节标签</option>
+              </select>
+              <div class="filter-dim-wrap">
+                <label for="reportDimQ" class="filter-dim-label">维度关键词</label>
+                <input
+                  class="search-input"
+                  id="reportDimQ"
+                  type="search"
+                  enterkeyhint="search"
+                  autocomplete="off"
+                  list="reportDimExamples"
+                  placeholder="例：牛仔、针织、静奢、云舞白…"
+                  title="在报告的「维度数据」和「摘要」里模糊搜索。可填：流行色名、面料（真丝/牛仔）、单品（西装/乐福鞋）、廓形、图案、风格词等。"
+                  onchange="loadReports(0)"
+                />
+                <datalist id="reportDimExamples">
+                  <option value="牛仔"></option>
+                  <option value="针织"></option>
+                  <option value="真丝"></option>
+                  <option value="静奢"></option>
+                  <option value="廓形"></option>
+                  <option value="乐福鞋"></option>
+                  <option value="西装"></option>
+                </datalist>
+                <p class="filter-dim-hint">
+                  搜索范围：色彩 · 面料 · 单品 · 廓形 · 图案 · 风格关键词（与摘要一并匹配）
+                </p>
+              </div>
+              <input class="search-input" id="reportsSearch" placeholder="在当前列表里搜摘要…" oninput="filterReports()" style="flex:1;min-width:80px" title="仅在左侧已加载的报告列表中筛选摘要，不请求服务器" />
+            </div>
+            <div id="reportsList"><div class="spinner-center"><div class="spinner"></div></div></div>
+            <div class="pagination" id="reportsPagination"></div>
+          </div>
+          <div class="reports-detail-panel" id="reportDetailPanel">
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" opacity=".25">
+                  <path d="M8 6h16l8 8v20H8V6z"/><path d="M24 6v8h8"/><path d="M13 19h14M13 24h10"/>
+                </svg>
+              </div>
+              <p>选择左侧报告查看详情</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 季节趋势：凡有季节归类即列出（含无具体年份），可按年分列浏览 -->
+      <section class="page" id="page-seasons" style="display:none">
+        <div class="card season-trends-top">
+          <div class="card-header" style="align-items:flex-start;flex-direction:column;gap:8px">
+            <h2>按季 · 按年浏览</h2>
+            <p class="season-trends-lead">
+              下列为报告中<strong>凡已写入服装季节标签</strong>的汇总（如 2025 春夏、仅有季次编码等）。<strong>不限于</strong>能解析出日历年份的条目；未能对应到年份的归类会单独成组。点击一格打开<strong>趋势报告</strong>并筛至该标签。
+            </p>
+            <button type="button" class="btn btn-ghost" style="align-self:flex-start" onclick="nav('reports')">打开全部趋势报告 →</button>
+          </div>
+        </div>
+        <div id="seasonTrendsContent" class="season-trends-stack"></div>
+      </section>
+
+      <!-- 文章库 -->
+      <section class="page" id="page-articles" style="display:none">
+        <div class="articles-controls card">
+          <select id="articleSiteFilter" class="filter-select" onchange="loadArticles(0)">
+            <option value="">全部站点</option>
+          </select>
+          <select id="articleAnalyzedFilter" class="filter-select" onchange="loadArticles(0)">
+            <option value="">全部状态</option>
+            <option value="true">已分析</option>
+            <option value="false">未分析</option>
+          </select>
+          <div class="articles-search-wrap">
+            <input class="search-input" id="articlesSearch" placeholder="全文搜索：标题 / 摘要 / 正文关键词..." oninput="debounceArticleSearch()" />
+            <span class="articles-search-hint" id="articlesSearchHint"></span>
+          </div>
+          <button type="button" class="btn btn-ghost" style="white-space:nowrap" onclick="dedupeArticles()" title="合并规范化 URL 相同或同站同标题的重复，保留最早一条">清理重复</button>
+        </div>
+        <div id="articlesGrid" class="articles-grid"></div>
+        <div class="pagination" id="articlesPagination"></div>
+      </section>
+
+      <!-- 热词 -->
+      <section class="page" id="page-keywords" style="display:none">
+        <div class="kw-controls card">
+          <div class="kw-controls-row">
+            <select id="kwCategoryFilter" class="filter-select" onchange="loadKeywords()">
+              <option value="">全部维度</option>
+              <option value="colors">色彩</option>
+              <option value="fabrics">面料</option>
+              <option value="items">单品</option>
+              <option value="silhouettes">廓形</option>
+              <option value="patterns">图案</option>
+              <option value="style_keywords">风格词</option>
+              <option value="consumer_signals">消费信号</option>
+            </select>
+            <input class="search-input" id="kwFilterInput" placeholder="过滤关键词..." oninput="filterKeywords()" style="flex:1;min-width:120px" />
+          </div>
+          <p class="kw-controls-hint">点击任意关键词，下方显示其在近约 2 年内各份报告中的命中趋势。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 id="kwBoardTitle">热词排行</h2>
+          </div>
+          <div id="kwBoardGrid" class="kw-board-grid">
+            <div class="spinner-center"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <div class="card" id="kwTimelineCard" style="display:none">
+          <div class="card-header">
+            <h2>趋势追踪：<span id="kwTimelineTitle" style="color:var(--wine)"></span></h2>
+            <button type="button" class="btn btn-ghost" onclick="closeKwTimeline()">收起</button>
+          </div>
+          <div class="kw-timeline-wrap">
+            <canvas id="kwTimelineCanvas" class="kw-timeline-canvas" width="800" height="140"></canvas>
+            <p class="kw-timeline-hint" id="kwTimelineHint"></p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()" style="display:none"></div>
+
+  <!-- 图片预览（点击放大） -->
+  <div id="imageLightbox" class="image-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
+    <button type="button" class="image-lightbox-close" onclick="closeImageLightbox()" aria-label="关闭">×</button>
+    <img id="imageLightboxImg" class="image-lightbox-img" src="" alt="放大预览" />
+  </div>
+
+  <!-- 来源文章：抓取 HTML 预览 / 源码 -->
+  <div id="articleHtmlModal" class="article-html-modal" role="dialog" aria-modal="true" aria-label="抓取 HTML" hidden>
+    <div class="article-html-modal-backdrop" onclick="closeArticleHtmlModal()"></div>
+    <div class="article-html-modal-panel">
+      <div class="article-html-modal-header">
+        <span id="articleHtmlModalTitle" class="article-html-modal-title"></span>
+        <button type="button" class="article-html-modal-close" onclick="closeArticleHtmlModal()" aria-label="关闭">×</button>
+      </div>
+      <div class="article-html-modal-tabs">
+        <button type="button" class="article-html-tab active" data-tab="preview">页面预览</button>
+        <button type="button" class="article-html-tab" data-tab="source">HTML 源码</button>
+      </div>
+      <div class="article-html-modal-body">
+        <iframe id="articleHtmlIframe" class="article-html-iframe" title="HTML 预览" sandbox="allow-same-origin allow-popups"></iframe>
+        <pre id="articleHtmlSource" class="article-html-source" hidden><code id="articleHtmlSourceCode"></code></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20"></script>
+</body>
+</html>

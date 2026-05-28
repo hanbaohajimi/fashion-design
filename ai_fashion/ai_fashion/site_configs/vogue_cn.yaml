@@ -1,0 +1,75 @@
+# Vogue China - Enhanced Site Configuration
+# Covers multiple fashion sub-sections for better trend coverage
+
+- site_name: "VogueCN"
+  enabled: true
+
+  entry_urls:
+    - "https://www.vogue.com.cn/fashion/"
+    - "https://www.vogue.com.cn/fashion/trend/"
+    - "https://www.vogue.com.cn/fashion/runway/"
+    - "https://www.vogue.com.cn/fashion/street-style/"
+    - "https://www.vogue.com.cn/fashion/shopping/"
+
+  allowed_domains:
+    - "www.vogue.com.cn"
+
+  # Article detail page URL patterns - match fashion articles
+  detail_url_patterns:
+    - "^https?://www\\.vogue\\.com\\.cn/fashion/[^/]+/.+"
+    - "^https?://www\\.vogue\\.com\\.cn/article/.+"
+
+  login:
+    use_login: false
+    login_url: ""
+    storage_state_path: ""
+    username: ""
+    password: ""
+
+  selectors:
+    # Listing page: article card links (more specific than generic a[href$='.html'])
+    article_link_selector: "a[href*='/fashion/'][href$='.html'], a[href*='/article/'][href$='.html'], .article-card a, .content-card a, [class*='card'] a[href$='.html']"
+    # Article page selectors with multiple fallbacks
+    title_selector: "h1.article-title, h1.ArticleTitle, article h1, .article-header h1, h1"
+    content_selector: "div.article-body, div.article-content, article .content, div.Content, div.content, article"
+    published_at_selector: "time[datetime], meta[property='article:published_time'], meta[name='publishdate'], .publish-date, .article-date, [class*='date']"
+    author_selector: ".article-author, .Author, .author, [class*='author'] a, [class*='author']"
+    tags_selector: ".article-tags a, .tags a, [class*='tag'] a"
+    category_selector: ".breadcrumb a, nav.breadcrumb a, .article-category"
+    image_selector: "article img, .article-body img, .article-content img, .content img[src*='vogue'], picture source, img[data-src]"
+    summary_selector: ".article-intro, .article-summary, meta[name='description'], .intro"
+    next_page_selector: ""
+    load_more_selector: ""
+
+  pagination_type: "none"
+  max_pages: 1
+  max_articles_per_run: 30     # Limit per run to focus on quality
+
+  request_delay_min: 2.5
+  request_delay_max: 6.0
+
+  extra:
+    # Skip non-article pages
+    skip_url_contains:
+      - "/video/"
+      - "/gallery/"
+      - "/photo/"
+      - "javascript:"
+      - "#"
+    skip_title_contains:
+      - "404"
+      - "页面不存在"
+      - "登录"
+      - "注册"
+      - "隐私"
+      - "广告"
+    # Prioritize trend-relevant content
+    prefer_url_contains:
+      - "trend"
+      - "runway"
+      - "collection"
+      - "fashion-week"
+      - "spring"
+      - "summer"
+      - "fall"
+      - "winter"

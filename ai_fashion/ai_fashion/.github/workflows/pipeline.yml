@@ -1,0 +1,47 @@
+name: Fashion Pipeline
+
+on:
+  schedule:
+    # 每天 UTC 01:00 运行（北京时间 09:00）
+    - cron: "0 1 * * *"
+  workflow_dispatch:    # 支持手动触发
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Write .env
+        run: |
+          cat > .env << 'EOF'
+          LLM_PROVIDER=${{ secrets.LLM_PROVIDER }}
+          LLM_MODEL=${{ secrets.LLM_MODEL }}
+          API_KEY=${{ secrets.API_KEY }}
+          STORE_BACKEND=json,markdown
+          EOF
+
+      - name: Run pipeline
+        run: python main.py run-once
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fashion-reports-${{ github.run_number }}
+          path: |
+            output/
+            data/reports/
+          retention-days: 30

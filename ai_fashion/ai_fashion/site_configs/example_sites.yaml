@@ -1,0 +1,101 @@
+# ─────────────────────────────────────────────
+# 站点配置示例文件
+# 将此文件复制为 site_configs/my_site.yaml 并填写你的实际配置
+# 所有带 TODO 注释的字段为必须或建议填写的占位符
+# ─────────────────────────────────────────────
+
+# 可在同一文件中配置多个站点（YAML 列表）
+# 每个站点独立运行，互不影响
+
+- site_name: ""          # TODO: 填写站点名称，如 "Vogue"
+  enabled: true           # true=启用 / false=禁用该站点
+
+  # ── 入口 URL ─────────────────────────────
+  # 支持多个列表页/栏目页/专题页 URL
+  entry_urls:
+    - ""                  # TODO: 填写第一个入口 URL
+    # - ""                # TODO: 可继续添加多个入口 URL
+
+  # ── 域名白名单（防止爬取外链）────────────
+  allowed_domains:
+    - ""                  # TODO: 填写允许的域名，如 "www.example.com"
+
+  # ── 详情页 URL 过滤正则（用于判断哪些链接是文章页）
+  detail_url_patterns:
+    - ""                  # TODO: 例如 "/article/\\d+"  or "/trends/"
+
+  # ── 登录配置 ─────────────────────────────
+  login:
+    use_login: false      # TODO: 需要登录则改为 true
+    login_url: ""         # TODO: 登录页 URL（use_login=true 时填写）
+    storage_state_path: "" # TODO: 保存 Playwright storage_state.json 的路径
+    username: ""          # TODO: 账号（可选，推荐使用 storage_state 方式）
+    password: ""          # TODO: 密码（可选，推荐使用 storage_state 方式）
+
+  # ── CSS 选择器（留空则跳过该字段）─────────
+  selectors:
+    article_link_selector: ""    # TODO: 文章链接选择器，如 "a.article-link"
+    title_selector: ""           # TODO: 标题，如 "h1.article-title"
+    content_selector: ""         # TODO: 正文容器，如 "div.article-body"
+    published_at_selector: ""    # TODO: 发布时间，如 "time[datetime]"
+    author_selector: ""          # TODO: 作者，如 "span.author-name"
+    tags_selector: ""            # TODO: 标签列表，如 "a.tag"
+    category_selector: ""        # TODO: 分类，如 "span.category"
+    image_selector: ""           # TODO: 图片，如 "img.article-img"
+    summary_selector: ""         # TODO: 摘要（可选），如 "p.summary"
+    next_page_selector: ""       # TODO: 下一页按钮（分页模式用），如 "a.next-page"
+    load_more_selector: ""       # TODO: 加载更多按钮，如 "button.load-more"
+
+  # ── 分页策略 ─────────────────────────────
+  # 可选值: none / next_page / load_more / infinite_scroll / url_param
+  pagination_type: "none"       # TODO: 根据站点实际分页方式选择
+
+  # ── 抓取限制 ─────────────────────────────
+  max_pages: 5                  # TODO: 最多翻几页（每个入口 URL）
+  max_articles_per_run: 50      # TODO: 每次运行最多抓取文章数
+
+  # ── 访问速率（秒，礼貌爬虫）─────────────
+  request_delay_min: 1.5        # TODO: 最小间隔（建议 ≥ 1.0）
+  request_delay_max: 4.0        # TODO: 最大间隔
+
+# ─────────────────────────────────────────────
+# 第二个站点配置示例（直接复制上方块并修改）
+# ─────────────────────────────────────────────
+- site_name: ""
+  enabled: false                # 默认禁用，填写后改为 true
+
+  entry_urls:
+    - ""
+
+  allowed_domains:
+    - ""
+
+  detail_url_patterns:
+    - ""
+
+  login:
+    use_login: false
+    login_url: ""
+    storage_state_path: ""
+    username: ""
+    password: ""
+
+  selectors:
+    article_link_selector: ""
+    title_selector: ""
+    content_selector: ""
+    published_at_selector: ""
+    author_selector: ""
+    tags_selector: ""
+    category_selector: ""
+    image_selector: ""
+    summary_selector: ""
+    next_page_selector: ""
+    load_more_selector: ""
+
+  pagination_type: "none"
+  max_pages: 3
+  max_articles_per_run: 30
+  request_delay_min: 2.0
+  request_delay_max: 5.0
+

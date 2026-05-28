@@ -1,0 +1,86 @@
+[project]
+name = "ai_fashion"
+version = "0.1.0"
+description = "时尚趋势数据流水线：多站点抓取 + LLM 趋势分析"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    # Web 自动化
+    "playwright>=1.44.0",
+
+    # HTTP 客户端
+    "aiohttp>=3.9.0",
+    "httpx>=0.27.0",
+
+    # HTML 解析
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.2.0",
+
+    # LLM 统一适配
+    "litellm>=1.40.0",
+
+    # 配置管理
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "python-dotenv>=1.0.0",
+
+    # 任务调度
+    "APScheduler>=3.10.0",
+
+    # 日志
+    "loguru>=0.7.2",
+
+    # CLI
+    "click>=8.1.0",
+
+    # Web API + 前端控制台
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+
+    # 日期解析
+    "python-dateutil>=2.9.0",
+
+    # YAML 配置
+    "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+ocr = [
+    # OCR 降级支持（按需安装其一）
+    "pytesseract>=0.3.10",
+    "Pillow>=10.3.0",
+    # 或: easyocr>=1.7.0
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+[project.scripts]
+fashion-pipeline = "main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

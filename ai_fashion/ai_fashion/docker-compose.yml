@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  fashion-pipeline:
+    build: .
+    container_name: ai_fashion_pipeline
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./storage:/app/storage
+      - ./storage_states:/app/storage_states
+      - ./.env:/app/.env:ro
+      - ./site_configs:/app/site_configs:ro
+    environment:
+      - TZ=Asia/Shanghai
+    command: python main.py schedule

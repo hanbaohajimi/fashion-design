@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+frontend/dist/
+
+# Data & logs (kept local)
+ai_fashion/ai_fashion/data/
+ai_fashion/ai_fashion/logs/
+ai_fashion/ai_fashion/output/
+ai_fashion/ai_fashion/storage/
+ai_fashion/ai_fashion/storage_states/
+backend/design-studio/outputs/
+
+# Env & secrets
+.env
+ai_fashion/ai_fashion/.env
+
+# Tooling
+scripts/docgen/node_modules/
+docs/~*.docx
+frontend/tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
