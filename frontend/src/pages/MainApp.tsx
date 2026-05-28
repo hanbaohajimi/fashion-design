@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import ErrorBoundary from '../components/ErrorBoundary';
 import DesignStudioWorkspace from '../modules/design-studio/DesignStudioWorkspace';
 import TrendAnalysisWorkspace from '../modules/trend-analysis/TrendAnalysisWorkspace';
+import LibraryWorkspace from '../modules/library/LibraryWorkspace';
 
-type WorkspaceType = 'design-studio' | 'trend-analysis';
+type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library';
 
 interface WorkspaceTab { id: string; type: WorkspaceType; title: string; }
 
@@ -17,6 +18,7 @@ interface MainAppProps {
 const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: string }> = {
   'design-studio': { title: 'AI 设计工作台', desc: '对话生图 · 画布编辑 · 虚拟试穿', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
   'trend-analysis': { title: '趋势分析中心', desc: '趋势报告 · 热词追踪 · 季节分析', icon: 'M3 3v18h18M9 17V9m4 8V5m4 12v-4' },
+  'library': { title: '我的库', desc: '生成图片 · 合集管理 · 风格分析', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
 };
 
 let _c = 0;
@@ -186,6 +188,12 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
               <ErrorBoundary fallbackLabel={tab.title}>
                 {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} />}
                 {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
+                {tab.type === 'library' && (
+                  <LibraryWorkspace
+                    user={user}
+                    onSwitchToDesignStudio={() => addTab('design-studio')}
+                  />
+                )}
               </ErrorBoundary>
             )}
           </div>

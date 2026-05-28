@@ -7,6 +7,10 @@ import type {
   DesignerWorkspace,
   DesignerProject,
   PersonalStatic,
+  LibraryItem,
+  LibraryCollection,
+  LibraryStats,
+  OutfitSuggestion,
 } from '../types/profile';
 
 const BASE = '/api/design';
@@ -155,4 +159,147 @@ export async function createConversationSession(
     }),
   });
   return handle(res);
+}
+
+// ── Library ───────────────────────────────────────────────
+
+export interface LibraryListParams {
+  mode?: string;
+  project_id?: string;
+  collection_id?: string;
+  is_favorite?: boolean;
+  tags?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function fetchLibraryItems(
+  token: string,
+  params: LibraryListParams = {},
+): Promise<{ items: LibraryItem[]; total: number; page: number; has_more: boolean }> {
+  const q = new URLSearchParams();
+  if (params.mode) q.set('mode', params.mode);
+  if (params.project_id) q.set('project_id', params.project_id);
+  if (params.collection_id) q.set('collection_id', params.collection_id);
+  if (params.is_favorite != null) q.set('is_favorite', String(params.is_favorite));
+  if (params.tags) q.set('tags', params.tags);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  const res = await fetch(`${BASE}/library?${q}`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function patchLibraryItem(
+  token: string,
+  itemId: string,
+  patch: { is_favorite?: boolean; user_tags?: string[]; notes?: string; save_context?: string },
+): Promise<{ item: LibraryItem }> {
+  const res = await fetch(`${BASE}/library/${itemId}`, {
+    method: 'PATCH',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, ...patch }),
+  });
+  return handle(res);
+}
+
+export async function deleteLibraryItem(token: string, itemId: string): Promise<void> {
+  await fetch(`${BASE}/library/${itemId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+}
+
+export async function fetchLibraryStats(token: string): Promise<LibraryStats> {
+  const res = await fetch(`${BASE}/library/stats`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function fetchSimilarItems(token: string, itemId: string): Promise<{ items: LibraryItem[] }> {
+  const res = await fetch(`${BASE}/library/${itemId}/similar`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function triggerLibraryAnalyze(token: string): Promise<void> {
+  await fetch(`${BASE}/library/analyze`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token }),
+  });
+}
+
+export async function suggestOutfit(
+  token: string,
+  occasion?: string,
+  weather?: { temp: number; condition: string },
+): Promise<{ outfits: OutfitSuggestion[]; message?: string }> {
+  const res = await fetch(`${BASE}/library/suggest-outfit`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, occasion, weather }),
+  });
+  return handle(res);
+}
+
+// ── Collections ───────────────────────────────────────────
+
+export async function fetchCollections(token: string): Promise<{ collections: LibraryCollection[] }> {
+  const res = await fetch(`${BASE}/library/collections`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function createCollection(
+  token: string,
+  name: string,
+  mode?: string,
+  designerProjectId?: string,
+): Promise<{ collection: LibraryCollection }> {
+  const res = await fetch(`${BASE}/library/collections`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, name, mode, designer_project_id: designerProjectId }),
+  });
+  return handle(res);
+}
+
+export async function patchCollection(
+  token: string,
+  colId: string,
+  patch: { name?: string; cover_item_id?: string; sort_order?: number },
+): Promise<{ collection: LibraryCollection }> {
+  const res = await fetch(`${BASE}/library/collections/${colId}`, {
+    method: 'PATCH',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, ...patch }),
+  });
+  return handle(res);
+}
+
+export async function deleteCollection(token: string, colId: string): Promise<void> {
+  await fetch(`${BASE}/library/collections/${colId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+}
+
+export async function addItemsToCollection(
+  token: string,
+  colId: string,
+  itemIds: string[],
+): Promise<void> {
+  await fetch(`${BASE}/library/collections/${colId}/items`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, item_ids: itemIds }),
+  });
+}
+
+export async function removeItemFromCollection(
+  token: string,
+  colId: string,
+  itemId: string,
+): Promise<void> {
+  await fetch(`${BASE}/library/collections/${colId}/items/${itemId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
 }

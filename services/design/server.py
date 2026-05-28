@@ -309,6 +309,10 @@ class Session:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_folder = os.path.join(OUTPUTS_DIR, f"{session_id}_{timestamp}")
         os.makedirs(self.run_folder, exist_ok=True)
+        # Set by chat endpoint when user is authenticated
+        self.user_email: Optional[str] = None
+        self.mode: str = "personal"
+        self.designer_project_id: Optional[str] = None
 
     def touch(self):
         self.last_active = datetime.now()
@@ -372,6 +376,22 @@ class Session:
         }
         self.generated_images.append(entry)
         self.stats["images_generated"] += 1
+        # Auto-save to library if user is authenticated
+        if self.user_email:
+            item_id = entry["id"]
+            user_email = self.user_email
+            mode = self.mode
+            project_id = self.designer_project_id
+            session_id = self.session_id
+            prompt = self.last_user_text
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(_auto_save_to_library(
+                        item_id, user_email, url, session_id, prompt, mode, project_id, img_type
+                    ))
+            except Exception:
+                pass
         return entry
 
     def add_favorite(self, image_id: str) -> bool:
@@ -1166,6 +1186,10 @@ async def chat(req: ChatRequest):
                 )
 
         session = get_session(req.session_id, personalization_ctx)
+        if user_email:
+            session.user_email = user_email
+            session.mode = req.mode
+            session.designer_project_id = req.designer_project_id
         if not check_rate_limit(req.session_id):
             raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
 
@@ -1793,6 +1817,85 @@ def _apply_designer_signals(workspace: dict, project_id: str, signals: dict) -> 
     return workspace
 
 
+_AUTO_TAG_SYSTEM = (
+    "你是时尚图像分析师。分析这张服装设计图，严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"garment_types":["上衣"],"colors":["米白"],"silhouette":"H型","occasions":["通勤"],'
+    '"style_keywords":["极简"],"season":"秋冬"}\n'
+    "garment_types选项：上衣/衬衫/T恤/毛衣/外套/风衣/大衣/连衣裙/半裙/裤子/阔腿裤/短裤/套装/其他\n"
+    "silhouette选项：A型/H型/X型/茧型/直筒/修身/不对称/其他\n"
+    "season选项：春夏/秋冬/全季"
+)
+
+
+async def _auto_tag_image(item_id: str, image_url: str, prompt: str) -> None:
+    """Async fire-and-forget: call vision LLM to tag the image, then update DB."""
+    try:
+        tag_prompt = f"生成该图的描述：{prompt}\n请分析图片内容并返回风格标签。" if prompt else "请分析图片内容并返回风格标签。"
+        # Build absolute URL for the image if needed
+        abs_url = image_url
+        if abs_url.startswith("/api/images/"):
+            # Use local file path instead for vision model
+            rel = abs_url.removeprefix("/api/images/")
+            abs_url = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
+            # Convert to file:// or use base64
+            if os.path.exists(abs_url):
+                import base64
+                with open(abs_url, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                ext = os.path.splitext(abs_url)[1].lower().lstrip(".")
+                mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+                abs_url = f"data:{mime};base64,{b64}"
+            else:
+                db.update_library_item_tags(item_id, {}, "failed")
+                return
+
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=VISION_MODEL,
+            messages=[
+                {"role": "system", "content": _AUTO_TAG_SYSTEM},
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": abs_url}},
+                    {"type": "text", "text": tag_prompt},
+                ]},
+            ],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            raw = raw.rsplit("```", 1)[0]
+        tags = json.loads(raw)
+        db.update_library_item_tags(item_id, tags, "completed")
+    except Exception as e:
+        print(f"[WARN] auto_tag_image failed for {item_id}: {e}")
+        db.update_library_item_tags(item_id, {}, "failed")
+
+
+async def _auto_save_to_library(
+    item_id: str,
+    user_email: str,
+    image_url: str,
+    session_id: str,
+    prompt: str,
+    mode: str,
+    project_id: Optional[str],
+    img_type: str,
+) -> None:
+    """Fire-and-forget: save image to library then trigger auto-tagging."""
+    try:
+        db.create_library_item(item_id, user_email, image_url, session_id, prompt, mode, project_id, img_type)
+        asyncio.create_task(_auto_tag_image(item_id, image_url, prompt))
+        # Check if smart collections should be generated
+        total = db.count_library_items(user_email)
+        if total == 30:
+            asyncio.create_task(_generate_smart_collections(user_email))
+        # Trigger library-based profile analysis at thresholds
+        if total in (20, 50, 100):
+            asyncio.create_task(_analyze_library_for_profile(user_email, mode))
+    except Exception as e:
+        print(f"[WARN] _auto_save_to_library failed: {e}")
+
+
 async def _async_update_signals(
     email: str,
     mode: str,
@@ -2167,6 +2270,447 @@ async def create_conversation(req: CreateSessionRequest):
         "mode": req.mode,
         "designer_project_id": req.designer_project_id,
     }
+
+
+# ═══════════════════════════════════════════════════
+# Library — request models
+# ═══════════════════════════════════════════════════
+
+class LibraryPatchRequest(BaseModel):
+    auth_token: str
+    is_favorite: Optional[bool] = None
+    user_tags: Optional[list] = None
+    notes: Optional[str] = None
+    save_context: Optional[str] = None
+
+class CollectionCreateRequest(BaseModel):
+    auth_token: str
+    name: str
+    mode: Optional[str] = None
+    designer_project_id: Optional[str] = None
+
+class CollectionPatchRequest(BaseModel):
+    auth_token: str
+    name: Optional[str] = None
+    cover_item_id: Optional[str] = None
+    sort_order: Optional[int] = None
+
+class CollectionItemsRequest(BaseModel):
+    auth_token: str
+    item_ids: list
+
+class SuggestOutfitRequest(BaseModel):
+    auth_token: str
+    occasion: Optional[str] = None
+    weather: Optional[dict] = None
+
+class LibraryAnalyzeRequest(BaseModel):
+    auth_token: str
+
+class RetryTagsRequest(BaseModel):
+    auth_token: str
+
+
+def _row_to_item(row) -> dict:
+    d = dict(row)
+    try:
+        d["auto_tags"] = json.loads(d.get("auto_tags") or "{}")
+    except Exception:
+        d["auto_tags"] = {}
+    try:
+        d["user_tags"] = json.loads(d.get("user_tags") or "[]")
+    except Exception:
+        d["user_tags"] = []
+    d["is_favorite"] = bool(d.get("is_favorite"))
+    return d
+
+
+# ═══════════════════════════════════════════════════
+# Library — image endpoints
+# ═══════════════════════════════════════════════════
+
+@app.get("/api/library")
+async def list_library(
+    authorization: Optional[str] = Header(None),
+    mode: Optional[str] = None,
+    project_id: Optional[str] = None,
+    collection_id: Optional[str] = None,
+    is_favorite: Optional[bool] = None,
+    tags: Optional[str] = None,
+    page: int = 1,
+    limit: int = 30,
+):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+    rows, total = db.list_library_items(
+        user["email"],
+        mode=mode,
+        designer_project_id=project_id,
+        collection_id=collection_id,
+        is_favorite=is_favorite,
+        tags=tag_list,
+        page=page,
+        limit=limit,
+    )
+    items = [_row_to_item(r) for r in rows]
+    return {"items": items, "total": total, "page": page, "has_more": (page * limit) < total}
+
+
+@app.patch("/api/library/{item_id}")
+async def patch_library_item(item_id: str, req: LibraryPatchRequest):
+    user = _require_user(req.auth_token)
+    kwargs = {}
+    if req.is_favorite is not None:
+        kwargs["is_favorite"] = req.is_favorite
+    if req.user_tags is not None:
+        kwargs["user_tags"] = req.user_tags
+    if req.notes is not None:
+        kwargs["notes"] = req.notes
+    if req.save_context is not None:
+        kwargs["save_context"] = req.save_context
+    row = db.patch_library_item(item_id, user["email"], **kwargs)
+    if not row:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    item = _row_to_item(row)
+    # If favorited, trigger library analysis
+    if req.is_favorite is True:
+        asyncio.create_task(_analyze_library_for_profile(user["email"], "personal"))
+    return {"item": item}
+
+
+@app.delete("/api/library/{item_id}")
+async def delete_library_item(item_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    ok = db.soft_delete_library_item(item_id, user["email"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    return {"status": "ok"}
+
+
+@app.get("/api/library/stats")
+async def get_library_stats(authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    stats = db.get_library_stats(user["email"])
+    return stats
+
+
+@app.get("/api/library/{item_id}/similar")
+async def get_similar_items(item_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    row = db.get_library_item(item_id, user["email"])
+    if not row:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    try:
+        target_tags = json.loads(row["auto_tags"] or "{}")
+    except Exception:
+        target_tags = {}
+
+    target_colors = set(target_tags.get("colors", []))
+    target_styles = set(target_tags.get("style_keywords", []))
+    target_sil = target_tags.get("silhouette", "")
+    target_occ = set(target_tags.get("occasions", []))
+
+    rows, _ = db.list_library_items(user["email"], limit=200)
+    scored = []
+    for r in rows:
+        if r["id"] == item_id:
+            continue
+        try:
+            t = json.loads(r["auto_tags"] or "{}")
+        except Exception:
+            continue
+        score = (
+            len(target_colors & set(t.get("colors", []))) * 2
+            + len(target_styles & set(t.get("style_keywords", []))) * 3
+            + (2 if target_sil and t.get("silhouette") == target_sil else 0)
+            + len(target_occ & set(t.get("occasions", [])))
+        )
+        max_score = max(len(target_colors) * 2 + len(target_styles) * 3 + 2 + len(target_occ), 1)
+        norm = score / max_score
+        if norm >= 0.3:
+            scored.append((_row_to_item(r), norm))
+    scored.sort(key=lambda x: -x[1])
+    return {"items": [x[0] for x in scored[:12]]}
+
+
+@app.post("/api/library/analyze")
+async def trigger_library_analyze(req: LibraryAnalyzeRequest):
+    user = _require_user(req.auth_token)
+    await _analyze_library_for_profile(user["email"], "personal")
+    await _analyze_library_for_profile(user["email"], "designer")
+    return {"status": "ok"}
+
+
+@app.post("/api/library/retry-tags")
+async def retry_failed_tags(req: RetryTagsRequest):
+    user = _require_user(req.auth_token)
+    rows, _ = db.list_library_items(user["email"], limit=500)
+    count = 0
+    for row in rows:
+        if row["tag_status"] == "failed":
+            db.update_library_item_tags(row["id"], {}, "pending")
+            asyncio.create_task(_auto_tag_image(row["id"], row["image_url"], row["generation_prompt"] or ""))
+            count += 1
+    return {"status": "ok", "retrying": count}
+
+
+@app.post("/api/library/suggest-outfit")
+async def suggest_outfit(req: SuggestOutfitRequest):
+    user = _require_user(req.auth_token)
+    occasion = req.occasion or "通勤"
+    weather = req.weather or {}
+    temp = weather.get("temp", 20)
+    condition = weather.get("condition", "")
+
+    # Get tagged items
+    rows, _ = db.list_library_items(user["email"], mode="personal", limit=200)
+    tagged = [_row_to_item(r) for r in rows if r["tag_status"] == "completed"]
+    if not tagged:
+        return {"outfits": [], "message": "库中还没有足够的图片，先生成一些服装图片吧"}
+
+    # Build tag summary
+    item_summaries = []
+    for item in tagged[:50]:
+        t = item["auto_tags"]
+        summary = f"ID:{item['id']} 类型:{','.join(t.get('garment_types',[]))} 颜色:{','.join(t.get('colors',[]))} 廓形:{t.get('silhouette','')} 场合:{','.join(t.get('occasions',[]))} 风格:{','.join(t.get('style_keywords',[]))}"
+        item_summaries.append(summary)
+
+    system_prompt = (
+        "你是专业造型师。根据用户的穿搭库和今日场合，推荐2-3套搭配。"
+        '严格按以下JSON返回：{"outfits":[{"description":"搭配说明（30字内）","item_ids":["id1","id2"],"tags":["标签"]}]}'
+    )
+    user_prompt = (
+        f"今日场合：{occasion}\n天气：{condition} {temp}°C\n"
+        f"用户穿搭库（共{len(tagged)}件）：\n" + "\n".join(item_summaries)
+    )
+
+    result = await _run_llm_summary(system_prompt, user_prompt)
+    if not result:
+        return {"outfits": [], "message": "AI 暂时无法生成搭配建议"}
+
+    # Resolve item objects
+    item_map = {item["id"]: item for item in tagged}
+    outfits = []
+    for outfit in result.get("outfits", []):
+        items = [item_map[iid] for iid in outfit.get("item_ids", []) if iid in item_map]
+        outfits.append({
+            "description": outfit.get("description", ""),
+            "items": items,
+            "tags": outfit.get("tags", []),
+        })
+    return {"outfits": outfits}
+
+
+# ═══════════════════════════════════════════════════
+# Collections
+# ═══════════════════════════════════════════════════
+
+@app.get("/api/library/collections")
+async def list_collections(authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    rows = db.list_collections(user["email"])
+    result = []
+    for row in rows:
+        col = dict(row)
+        col["item_count"] = db.get_collection_item_count(col["id"])
+        col["cover_image"] = db.get_collection_cover(col["id"])
+        col["is_smart"] = bool(col.get("is_smart"))
+        result.append(col)
+    return {"collections": result}
+
+
+@app.post("/api/library/collections")
+async def create_collection(req: CollectionCreateRequest):
+    user = _require_user(req.auth_token)
+    col_id = uuid.uuid4().hex
+    db.create_collection(col_id, user["email"], req.name, mode=req.mode, designer_project_id=req.designer_project_id)
+    row = db.get_collection(col_id, user["email"])
+    col = dict(row)
+    col["item_count"] = 0
+    col["cover_image"] = None
+    col["is_smart"] = False
+    return {"collection": col}
+
+
+@app.patch("/api/library/collections/{col_id}")
+async def patch_collection(col_id: str, req: CollectionPatchRequest):
+    user = _require_user(req.auth_token)
+    kwargs = {}
+    if req.name is not None:
+        kwargs["name"] = req.name
+    if req.cover_item_id is not None:
+        kwargs["cover_item_id"] = req.cover_item_id
+    if req.sort_order is not None:
+        kwargs["sort_order"] = req.sort_order
+    row = db.patch_collection(col_id, user["email"], **kwargs)
+    if not row:
+        raise HTTPException(status_code=404, detail="合集不存在")
+    col = dict(row)
+    col["item_count"] = db.get_collection_item_count(col_id)
+    col["cover_image"] = db.get_collection_cover(col_id)
+    col["is_smart"] = bool(col.get("is_smart"))
+    return {"collection": col}
+
+
+@app.delete("/api/library/collections/{col_id}")
+async def delete_collection(col_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    ok = db.delete_collection(col_id, user["email"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="合集不存在")
+    return {"status": "ok"}
+
+
+@app.post("/api/library/collections/{col_id}/items")
+async def add_to_collection(col_id: str, req: CollectionItemsRequest):
+    user = _require_user(req.auth_token)
+    if not db.get_collection(col_id, user["email"]):
+        raise HTTPException(status_code=404, detail="合集不存在")
+    db.add_items_to_collection(col_id, req.item_ids)
+    return {"status": "ok", "item_count": db.get_collection_item_count(col_id)}
+
+
+@app.delete("/api/library/collections/{col_id}/items/{item_id}")
+async def remove_from_collection(col_id: str, item_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    if not db.get_collection(col_id, user["email"]):
+        raise HTTPException(status_code=404, detail="合集不存在")
+    db.remove_item_from_collection(col_id, item_id)
+    return {"status": "ok"}
+
+
+# ═══════════════════════════════════════════════════
+# Library → Personalization
+# ═══════════════════════════════════════════════════
+
+_LIBRARY_PERSONAL_SYSTEM = (
+    "你是时尚造型顾问。根据用户穿搭库的加权风格统计，分析其风格偏好。"
+    "严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"top_style_keywords":[{"tag":"关键词","confidence":0.85,"evidence":"来自库分析"}],'
+    '"new_disliked_elements":[],"color_tendency":["色系"],'
+    '"summary_note":"一句话概括（15字内）"}'
+)
+
+_LIBRARY_DESIGNER_SYSTEM = (
+    "你是专业时尚编辑。根据设计师库的加权风格统计，分析其设计语言规律。"
+    "严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"design_signatures":[{"pattern":"设计规律","confidence":0.85,"evidence":"来自库分析"}],'
+    '"recurring_elements":["元素"],"emerging_direction":"风格走向（20字内）"}'
+)
+
+
+async def _analyze_library_for_profile(email: str, mode: str) -> None:
+    """Fire-and-forget: analyze library tags and write back to profile."""
+    try:
+        stats = db.get_library_stats(email)
+        if stats["total_count"] < 5:
+            return
+
+        top_tags = (
+            stats["top_styles"][:10]
+            + stats["top_colors"][:5]
+            + stats["top_occasions"][:5]
+            + stats["top_silhouettes"][:3]
+        )
+        tag_summary = ", ".join(f"{t['name']}({t['count']})" for t in top_tags)
+
+        if mode == "personal":
+            user_prompt = f"用户穿搭库共{stats['total_count']}张，收藏{stats['favorite_count']}张。\n加权标签统计：{tag_summary}\n请分析风格偏好。"
+            result = await _run_llm_summary(_LIBRARY_PERSONAL_SYSTEM, user_prompt)
+            if not result:
+                return
+            profile = db.get_personal_profile(email)
+            profile.setdefault("dynamic", {})
+            existing_tags = {k["tag"] for k in profile["dynamic"].get("inferred_keywords", [])}
+            for kw in result.get("top_style_keywords", []):
+                if kw.get("tag") and kw["tag"] not in existing_tags:
+                    kw["evidence"] = kw.get("evidence", "") + "（库分析）"
+                    profile["dynamic"].setdefault("inferred_keywords", []).append(kw)
+            disliked = set(profile["dynamic"].get("disliked_elements", []))
+            disliked.update(result.get("new_disliked_elements", []))
+            profile["dynamic"]["disliked_elements"] = list(disliked)
+            color = set(profile["dynamic"].get("color_tendency", []))
+            color.update(result.get("color_tendency", []))
+            profile["dynamic"]["color_tendency"] = list(color)
+            profile["pending_review"] = {
+                "type": "personal",
+                "result": result,
+                "generated_at": datetime.now().isoformat(),
+                "source": "library",
+            }
+            db.save_personal_profile(email, profile)
+        elif mode == "designer":
+            workspace = db.get_designer_workspace(email)
+            for proj in workspace.get("projects", []):
+                if proj.get("status") != "active":
+                    continue
+                user_prompt = f"设计师项目「{proj['name']}」库分析。加权标签：{tag_summary}\n请提取设计规律。"
+                result = await _run_llm_summary(_LIBRARY_DESIGNER_SYSTEM, user_prompt)
+                if not result:
+                    continue
+                proj["pending_review"] = {
+                    "type": "designer",
+                    "result": result,
+                    "generated_at": datetime.now().isoformat(),
+                    "source": "library",
+                }
+                break
+            db.save_designer_workspace(email, workspace)
+    except Exception as e:
+        print(f"[WARN] _analyze_library_for_profile failed: {e}")
+
+
+async def _generate_smart_collections(email: str) -> None:
+    """Auto-generate smart collections when library hits 30 items."""
+    try:
+        stats = db.get_library_stats(email)
+        existing = db.list_collections(email)
+        existing_names = {r["name"] for r in existing}
+
+        # Rule 1: top color
+        if stats["top_colors"] and stats["top_colors"][0]["count"] >= 5:
+            name = f"你的{stats['top_colors'][0]['name']}系"
+            if name not in existing_names:
+                col_id = uuid.uuid4().hex
+                db.create_collection(col_id, email, name, is_smart=True, smart_rule=f"top_color:{stats['top_colors'][0]['name']}")
+                # Populate with matching items
+                rows, _ = db.list_library_items(email, limit=200)
+                color_val = stats["top_colors"][0]["name"]
+                matched = [r["id"] for r in rows if color_val in json.loads(r["auto_tags"] or "{}").get("colors", [])]
+                if matched:
+                    db.add_items_to_collection(col_id, matched)
+
+        # Rule 2: recent favorites
+        name2 = "最近收藏"
+        if name2 not in existing_names:
+            col_id2 = uuid.uuid4().hex
+            db.create_collection(col_id2, email, name2, is_smart=True, smart_rule="is_favorite:recent30")
+            rows2, _ = db.list_library_items(email, is_favorite=True, limit=50)
+            if rows2:
+                db.add_items_to_collection(col_id2, [r["id"] for r in rows2])
+
+        # Rule 3: designer active project collection
+        workspace = db.get_designer_workspace(email)
+        for proj in workspace.get("projects", []):
+            if proj.get("status") == "active":
+                name3 = f"{proj['name']} · 全部"
+                if name3 not in existing_names:
+                    col_id3 = uuid.uuid4().hex
+                    db.create_collection(col_id3, email, name3, is_smart=True,
+                                         smart_rule=f"project:{proj['id']}", designer_project_id=proj["id"])
+                    rows3, _ = db.list_library_items(email, designer_project_id=proj["id"], limit=200)
+                    if rows3:
+                        db.add_items_to_collection(col_id3, [r["id"] for r in rows3])
+                break
+    except Exception as e:
+        print(f"[WARN] _generate_smart_collections failed: {e}")
 
 
 if __name__ == "__main__":

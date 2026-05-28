@@ -79,3 +79,63 @@ export interface PendingReview {
 }
 
 export type SessionMode = 'personal' | 'designer';
+
+// ── Library ──────────────────────────────────────────────
+
+export interface AutoTags {
+  garment_types?: string[];
+  colors?: string[];
+  silhouette?: string;
+  occasions?: string[];
+  style_keywords?: string[];
+  season?: string;
+}
+
+export interface LibraryItem {
+  id: string;
+  user_email: string;
+  image_url: string;
+  session_id?: string;
+  generation_prompt?: string;
+  mode: 'personal' | 'designer';
+  designer_project_id?: string;
+  img_type?: string;
+  auto_tags: AutoTags;
+  tag_status: 'pending' | 'completed' | 'failed';
+  user_tags: string[];
+  is_favorite: boolean;
+  notes?: string;
+  save_context: string;
+  created_at: string;
+}
+
+export interface LibraryCollection {
+  id: string;
+  user_email: string;
+  name: string;
+  cover_item_id?: string;
+  cover_image?: string;
+  is_smart: boolean;
+  smart_rule?: string;
+  mode?: string;
+  designer_project_id?: string;
+  sort_order: number;
+  item_count: number;
+  created_at: string;
+}
+
+export interface LibraryStats {
+  total_count: number;
+  favorite_count: number;
+  top_colors: Array<{ name: string; count: number }>;
+  top_styles: Array<{ name: string; count: number }>;
+  top_occasions: Array<{ name: string; count: number }>;
+  top_silhouettes: Array<{ name: string; count: number }>;
+  mode_distribution: { personal: number; designer: number };
+}
+
+export interface OutfitSuggestion {
+  description: string;
+  items: LibraryItem[];
+  tags: string[];
+}
