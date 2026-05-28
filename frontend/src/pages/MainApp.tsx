@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import ErrorBoundary from '../components/ErrorBoundary';
-import DesignStudioWorkspace from '../workspaces/design-studio/DesignStudioWorkspace';
-import TrendAnalysisWorkspace from '../workspaces/trend-analysis/TrendAnalysisWorkspace';
+import DesignStudioWorkspace from '../modules/design-studio/DesignStudioWorkspace';
+import TrendAnalysisWorkspace from '../modules/trend-analysis/TrendAnalysisWorkspace';
 
 type WorkspaceType = 'design-studio' | 'trend-analysis';
 

@@ -12,8 +12,8 @@ import threading
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(PROJECT_DIR, "frontend")
-DESIGN_DIR = os.path.join(PROJECT_DIR, "backend", "design-studio")
-TREND_DIR = os.path.join(PROJECT_DIR, "backend", "trend-analysis")
+DESIGN_DIR = os.path.join(PROJECT_DIR, "services", "design")
+TREND_DIR = os.path.join(PROJECT_DIR, "services")
 
 
 def _load_dotenv() -> None:
@@ -132,7 +132,7 @@ def main():
     start_service("Design", f'"{python_cmd}" run.py', DESIGN_DIR, "green")
 
     print("\033[94m[2/3]\033[0m Starting Trend Analysis (port 8002)...")
-    start_service("Trend", f'"{python_cmd}" run.py', TREND_DIR, "blue")
+    start_service("Trend", f'"{python_cmd}" trend_runner.py', TREND_DIR, "blue")
 
     time.sleep(2)
 
