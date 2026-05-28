@@ -2,6 +2,7 @@ import os
 import re
 import json
 import uuid
+import hashlib
 import asyncio
 import time
 import urllib.request
@@ -11,7 +12,7 @@ from http import HTTPStatus
 from typing import Optional, AsyncGenerator, Tuple
 from collections import defaultdict
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Header
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -22,6 +23,10 @@ from dashscope.aigc.image_generation import ImageGeneration
 from dashscope import MultiModalConversation
 import dashscope
 from openai import OpenAI
+
+import sqlite3 as _sqlite3
+
+import db
 
 app = FastAPI(title="AI Fashion Design Backend")
 
@@ -288,9 +293,10 @@ TOOLS = [
 # ─── Session ───
 
 class Session:
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, personalization_ctx: str = ""):
         self.session_id = session_id
-        self.chat_history: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        combined_system = SYSTEM_PROMPT + ("\n\n" + personalization_ctx if personalization_ctx else "")
+        self.chat_history: list[dict] = [{"role": "system", "content": combined_system}]
         self.current_image_path: Optional[str] = None
         self.current_model_path: Optional[str] = None
         self.current_tryon_path: Optional[str] = None
@@ -480,10 +486,10 @@ class Session:
         return "\n".join(lines)
 
 
-def get_session(session_id: str) -> Session:
+def get_session(session_id: str, personalization_ctx: str = "") -> Session:
     cleanup_expired_sessions()
     if session_id not in sessions:
-        sessions[session_id] = Session(session_id)
+        sessions[session_id] = Session(session_id, personalization_ctx)
     session = sessions[session_id]
     session.touch()
     return session
@@ -895,6 +901,9 @@ TOOL_NAMES_CN = {
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    mode: str = "personal"
+    designer_project_id: Optional[str] = None
+    auth_token: Optional[str] = None
 
 class ResetRequest(BaseModel):
     session_id: str
@@ -1138,13 +1147,43 @@ async def _safe_stream_chat(session: Session, message: str):
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     try:
-        session = get_session(req.session_id)
+        # Resolve personalization context if auth_token provided
+        personalization_ctx = ""
+        user_email: Optional[str] = None
+        if req.auth_token:
+            user_row = db.get_user_by_token(req.auth_token)
+            if user_row:
+                user_email = user_row["email"]
+                personal_profile = db.get_personal_profile(user_email)
+                designer_project = None
+                if req.mode == "designer" and req.designer_project_id:
+                    ws = db.get_designer_workspace(user_email)
+                    designer_project = next(
+                        (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
+                    )
+                personalization_ctx = _build_personalization_context(
+                    req.mode, personal_profile, designer_project
+                )
+
+        session = get_session(req.session_id, personalization_ctx)
         if not check_rate_limit(req.session_id):
             raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
-        return StreamingResponse(
-            _safe_stream_chat(session, req.message),
-            media_type="application/x-ndjson",
-        )
+
+        async def _stream_and_side_effects():
+            async for chunk in _safe_stream_chat(session, req.message):
+                yield chunk
+            # After stream completes: signal extraction + history analysis (fire-and-forget)
+            if user_email:
+                asyncio.create_task(_async_update_signals(
+                    user_email, req.mode, req.designer_project_id, req.message
+                ))
+                total = db.count_user_sessions(user_email, req.mode, req.designer_project_id if req.mode == "designer" else None)
+                if req.mode == "personal":
+                    asyncio.create_task(_maybe_analyze_personal(user_email, total))
+                elif req.mode == "designer" and req.designer_project_id:
+                    asyncio.create_task(_maybe_analyze_designer(user_email, req.designer_project_id, total))
+
+        return StreamingResponse(_stream_and_side_effects(), media_type="application/x-ndjson")
     except HTTPException:
         raise
     except Exception as e:
@@ -1491,6 +1530,642 @@ async def export_session(session_id: str):
         "images": session.generated_images,
         "favorites": session.favorites,
         "state": session.get_state_summary(),
+    }
+
+
+@app.get("/api/session/{session_id}/export")
+async def export_session(session_id: str):
+    """Export all session images and metadata as a JSON manifest."""
+    session = get_session(session_id)
+    return {
+        "session_id": session_id,
+        "exported_at": datetime.now().isoformat(),
+        "stats": session.stats,
+        "images": session.generated_images,
+        "favorites": session.favorites,
+        "state": session.get_state_summary(),
+    }
+
+
+# ═══════════════════════════════════════════════════
+# Auth helpers
+# ═══════════════════════════════════════════════════
+
+def _hash_password(pw: str) -> str:
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+
+def _require_user(auth_token: Optional[str]) -> _sqlite3.Row:
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="未登录")
+    user = db.get_user_by_token(auth_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Token 无效或已过期")
+    return user
+
+
+# ═══════════════════════════════════════════════════
+# Auth endpoints (mirror localStorage flow on server)
+# ═══════════════════════════════════════════════════
+
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class LogoutRequest(BaseModel):
+    auth_token: str
+
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    email = req.email.lower().strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="邮箱格式不正确")
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="密码至少6位")
+    existing = db.get_user_by_email(email)
+    if existing:
+        raise HTTPException(status_code=409, detail="该邮箱已注册")
+    db.upsert_user(email, req.name, _hash_password(req.password))
+    token = uuid.uuid4().hex
+    db.set_auth_token(email, token)
+    return {"auth_token": token, "email": email, "name": req.name}
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    email = req.email.lower().strip()
+    user = db.get_user_by_email(email)
+    if not user or user["password_hash"] != _hash_password(req.password):
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    token = uuid.uuid4().hex
+    db.set_auth_token(email, token)
+    return {"auth_token": token, "email": email, "name": user["name"]}
+
+
+@app.post("/api/auth/logout")
+async def logout(req: LogoutRequest):
+    db.revoke_token(req.auth_token)
+    return {"status": "ok"}
+
+
+# ═══════════════════════════════════════════════════
+# Personalization helpers
+# ═══════════════════════════════════════════════════
+
+def _build_personalization_context(
+    mode: str,
+    personal_profile: dict,
+    designer_project: Optional[dict] = None,
+) -> str:
+    if mode == "personal":
+        if not personal_profile.get("meta", {}).get("onboarding_completed"):
+            return ""
+        s = personal_profile.get("static", {})
+        d = personal_profile.get("dynamic", {})
+        keywords = list(s.get("style_keywords") or [])
+        for k in (d.get("inferred_keywords") or []):
+            if k.get("confidence", 0) >= 0.6:
+                keywords.append(k["tag"])
+        avoids = list(s.get("avoid_elements") or []) + list(d.get("disliked_elements") or [])
+        colors = list(s.get("color_palette") or []) + list(d.get("color_tendency") or [])
+        occasions = s.get("occasions") or []
+        body_shape = s.get("body_shape", "")
+        concerns = s.get("concerns") or []
+
+        lines = ["=== 用户个人风格档案 ==="]
+        if body_shape:
+            concern_str = f"，设计重点：{'、'.join(concerns)}" if concerns else ""
+            lines.append(f"体型：{body_shape}{concern_str}")
+        if keywords:
+            lines.append(f"偏好风格：{'、'.join(dict.fromkeys(keywords))}")
+        if colors:
+            lines.append(f"偏好色系：{'、'.join(dict.fromkeys(colors))}")
+        if occasions:
+            lines.append(f"主要场合：{'、'.join(occasions)}")
+        if avoids:
+            lines.append(f"请回避：{'、'.join(dict.fromkeys(avoids))}")
+        lines += [
+            "",
+            "原则：在理解用户本次指令的基础上自动参考以上偏好优化设计。",
+            "本次指令与档案冲突时，以本次指令为准，可轻微提示替代方案。",
+            "不要在回复中提及【根据你的档案】等字样。",
+            "=== 档案结束 ===",
+        ]
+        return "\n".join(lines)
+
+    if mode == "designer":
+        if not designer_project:
+            return ""
+        b = designer_project.get("brief", {})
+        dl = designer_project.get("design_language", {})
+        dyn = designer_project.get("dynamic", {})
+        sigs = [
+            s["pattern"] for s in (dyn.get("design_signatures") or [])
+            if s.get("confidence", 0) >= 0.65
+        ][:5]
+        lines = [f"=== 当前项目设计档案：{designer_project.get('name','')} ==="]
+        if b.get("season"):
+            lines.append(f"系列：{b['season']}")
+        if b.get("target_audience"):
+            lines.append(f"目标客群：{b['target_audience']}")
+        if b.get("style_anchors"):
+            lines.append(f"风格锚点：{'、'.join(b['style_anchors'][:5])}")
+        if b.get("mood_keywords"):
+            lines.append(f"情绪关键词：{'、'.join(b['mood_keywords'][:5])}")
+        if b.get("reference_designers"):
+            lines.append(f"参考方向：{'、'.join(b['reference_designers'][:5])}")
+        if dl.get("silhouettes"):
+            lines.append(f"惯用廓形：{'、'.join(dl['silhouettes'][:5])}")
+        if dl.get("fabric_preferences"):
+            lines.append(f"面料偏好：{'、'.join(dl['fabric_preferences'][:5])}")
+        if dl.get("structural_details"):
+            lines.append(f"结构细节偏好：{'、'.join(dl['structural_details'][:5])}")
+        if sigs:
+            lines.append(f"本项目设计规律：{'；'.join(sigs)}")
+        if b.get("avoid_directions"):
+            lines.append(f"本项目回避方向：{'、'.join(b['avoid_directions'][:5])}")
+        lines += [
+            "",
+            "原则：以上是该项目已建立的设计语言，在生成时保持风格一致性。",
+            "若设计师本次指令探索新方向，忠实执行，不要强行向历史风格靠拢。",
+            "回复使用专业时装设计术语，不需要解释基础概念。",
+            "=== 档案结束 ===",
+        ]
+        return "\n".join(lines)
+
+    return ""
+
+
+# ═══════════════════════════════════════════════════
+# Signal extraction helpers (async, non-blocking)
+# ═══════════════════════════════════════════════════
+
+_PERSONAL_NEGATIVE_PATTERNS = [
+    re.compile(r"太(亮|花|紧|宽|短|长|正式|休闲|甜|成熟)了"),
+    re.compile(r"不(要|喜欢|太).{0,10}(色|款|风格|印花|图案)"),
+    re.compile(r"去掉|换掉|取消"),
+]
+_PERSONAL_POSITIVE_PATTERNS = [
+    re.compile(r"就这|保留|很好|喜欢|完美|对了|收藏"),
+    re.compile(r"再来.{0,4}(类似|同款|这种)"),
+]
+_DIRECTION_MAP = {
+    "宽松": "oversized", "修身": "修身", "简洁": "极简",
+    "深色": "深色系", "浅色": "浅色系", "高级": "高级感",
+    "极简": "极简", "复古": "复古", "街头": "街头",
+}
+_DESIGNER_SILHOUETTE = ["落肩", "宽袖", "茧型", "不对称", "解构", "开衩", "A型", "H型", "X型", "垂坠"]
+_DESIGNER_FABRIC = ["亚麻", "双宫丝", "压缩", "做旧", "垂感", "挺括", "真丝", "羊毛", "牛仔", "皮革"]
+_DESIGNER_CRAFT = ["手工褶皱", "毛边", "拼接", "包边", "刺绣", "解构拼接", "宽袖克夫"]
+_DESIGNER_NEGATIVE = [
+    re.compile(r"不要(.{0,8})感"),
+    re.compile(r"去掉(.{0,8})"),
+    re.compile(r"太(.{0,6})了"),
+]
+
+
+def _extract_personal_signals(text: str) -> dict:
+    neg = []
+    pos = []
+    directions = []
+    for pat in _PERSONAL_NEGATIVE_PATTERNS:
+        for m in pat.finditer(text):
+            neg.append(m.group(0))
+    for pat in _PERSONAL_POSITIVE_PATTERNS:
+        for m in pat.finditer(text):
+            pos.append(m.group(0))
+    for kw, mapped in _DIRECTION_MAP.items():
+        if kw in text:
+            directions.append(mapped)
+    return {"positive_signals": pos, "negative_signals": neg, "direction_keywords": directions}
+
+
+def _extract_designer_signals(text: str) -> dict:
+    tech = []
+    rejected = []
+    for kw in _DESIGNER_SILHOUETTE + _DESIGNER_FABRIC + _DESIGNER_CRAFT:
+        if kw in text:
+            tech.append(kw)
+    for pat in _DESIGNER_NEGATIVE:
+        for m in pat.finditer(text):
+            rejected.append(m.group(1).strip() if m.lastindex else m.group(0))
+    return {"technical_elements": list(set(tech)), "rejected_elements": list(set(rejected))}
+
+
+def _apply_personal_signals(profile: dict, signals: dict) -> dict:
+    dynamic = profile.setdefault("dynamic", {
+        "inferred_keywords": [], "disliked_elements": [],
+        "color_tendency": [], "sessions_analyzed": 0,
+    })
+    existing = {k["tag"]: k for k in dynamic.get("inferred_keywords", [])}
+    for kw in signals.get("direction_keywords", []):
+        if kw in existing:
+            existing[kw]["count"] = existing[kw].get("count", 1) + 1
+            existing[kw]["confidence"] = min(0.9, existing[kw].get("confidence", 0.5) + 0.05)
+        else:
+            existing[kw] = {"tag": kw, "confidence": 0.5, "count": 1}
+    dynamic["inferred_keywords"] = list(existing.values())
+    disliked = set(dynamic.get("disliked_elements", []))
+    for neg in signals.get("negative_signals", []):
+        disliked.add(neg)
+    dynamic["disliked_elements"] = list(disliked)
+    return profile
+
+
+def _apply_designer_signals(workspace: dict, project_id: str, signals: dict) -> dict:
+    projects = workspace.get("projects", [])
+    for proj in projects:
+        if proj.get("id") == project_id:
+            dyn = proj.setdefault("dynamic", {
+                "design_signatures": [], "recurring_elements": [], "sessions_analyzed": 0,
+            })
+            existing = set(dyn.get("recurring_elements", []))
+            for el in signals.get("technical_elements", []):
+                existing.add(el)
+            dyn["recurring_elements"] = list(existing)
+            break
+    return workspace
+
+
+async def _async_update_signals(
+    email: str,
+    mode: str,
+    project_id: Optional[str],
+    user_message: str,
+) -> None:
+    """Fire-and-forget signal extraction — never raises."""
+    try:
+        if mode == "personal":
+            signals = _extract_personal_signals(user_message)
+            if not any(signals.values()):
+                return
+            profile = db.get_personal_profile(email)
+            profile = _apply_personal_signals(profile, signals)
+            db.save_personal_profile(email, profile)
+        elif mode == "designer" and project_id:
+            signals = _extract_designer_signals(user_message)
+            if not any(signals.values()):
+                return
+            workspace = db.get_designer_workspace(email)
+            workspace = _apply_designer_signals(workspace, project_id, signals)
+            db.save_designer_workspace(email, workspace)
+    except Exception:
+        pass  # never block the chat stream
+
+
+# ═══════════════════════════════════════════════════
+# AI history summary
+# ═══════════════════════════════════════════════════
+
+_PERSONAL_SUMMARY_SYSTEM = (
+    "你是时尚顾问助手，分析以下用户的穿搭设计历史，提取个人风格偏好。"
+    "严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"top_style_keywords":[{"tag":"关键词","confidence":0.85,"evidence":"简短依据（10字内）"}],'
+    '"new_disliked_elements":["元素1"],'
+    '"color_tendency":["色系1"],'
+    '"dominant_occasions":["场合1"],'
+    '"summary_note":"一句话概括（15字内）"}\n'
+    "要求：keywords 最多8条，confidence 范围 0.5~0.95，只提取有明确证据的偏好。"
+)
+
+_DESIGNER_SUMMARY_SYSTEM = (
+    "你是专业时尚编辑，分析以下设计师在某项目中的创作历史，提取设计语言规律。"
+    "严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"design_signatures":[{"pattern":"设计规律描述","confidence":0.85,"evidence":"具体依据（15字内）"}],'
+    '"recurring_elements":["反复出现的设计元素"],'
+    '"emerging_direction":"本项目正在形成的风格走向（20字内）",'
+    '"potential_conflicts":null}\n'
+    "注意：design_signatures 描述创作手法和结构规律，最多6条，只提取有3次以上重复依据的规律。"
+)
+
+
+async def _run_llm_summary(system_prompt: str, user_prompt: str) -> Optional[dict]:
+    try:
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            raw = raw.rsplit("```", 1)[0]
+        return json.loads(raw)
+    except Exception as e:
+        print(f"[WARN] LLM summary failed: {e}")
+        return None
+
+
+async def _maybe_analyze_personal(email: str, total_sessions: int) -> None:
+    profile = db.get_personal_profile(email)
+    analyzed = profile.get("dynamic", {}).get("sessions_analyzed", 0)
+    should = (analyzed == 0 and total_sessions >= 10) or (total_sessions - analyzed >= 20)
+    if not should:
+        return
+    user_prompt = (
+        f"历史对话条数：{total_sessions}\n"
+        f"已有推断标签：{json.dumps(profile.get('dynamic',{}).get('inferred_keywords',[]), ensure_ascii=False)}\n"
+        f"已有厌恶元素：{json.dumps(profile.get('dynamic',{}).get('disliked_elements',[]), ensure_ascii=False)}\n"
+        "请基于以上信息进行风格总结。"
+    )
+    result = await _run_llm_summary(_PERSONAL_SUMMARY_SYSTEM, user_prompt)
+    if not result:
+        return
+    profile.setdefault("dynamic", {})
+    profile["dynamic"].setdefault("inferred_keywords", [])
+    existing_tags = {k["tag"] for k in profile["dynamic"]["inferred_keywords"]}
+    for kw in result.get("top_style_keywords", []):
+        if kw.get("tag") and kw["tag"] not in existing_tags:
+            profile["dynamic"]["inferred_keywords"].append(kw)
+    disliked = set(profile["dynamic"].get("disliked_elements", []))
+    disliked.update(result.get("new_disliked_elements", []))
+    profile["dynamic"]["disliked_elements"] = list(disliked)
+    color = set(profile["dynamic"].get("color_tendency", []))
+    color.update(result.get("color_tendency", []))
+    profile["dynamic"]["color_tendency"] = list(color)
+    profile["dynamic"]["sessions_analyzed"] = total_sessions
+    profile["dynamic"]["last_analyzed_at"] = datetime.now().isoformat()
+    # store pending review
+    profile["pending_review"] = {
+        "type": "personal",
+        "result": result,
+        "generated_at": datetime.now().isoformat(),
+    }
+    db.save_personal_profile(email, profile)
+
+
+async def _maybe_analyze_designer(email: str, project_id: str, project_sessions: int) -> None:
+    workspace = db.get_designer_workspace(email)
+    project = next((p for p in workspace.get("projects", []) if p.get("id") == project_id), None)
+    if not project:
+        return
+    analyzed = project.get("dynamic", {}).get("sessions_analyzed", 0)
+    should = (analyzed == 0 and project_sessions >= 8) or (project_sessions - analyzed >= 15)
+    if not should:
+        return
+    user_prompt = (
+        f"项目名称：{project.get('name','')}\n"
+        f"项目背景：{json.dumps(project.get('brief',{}), ensure_ascii=False)}\n"
+        f"已有设计元素：{json.dumps(project.get('dynamic',{}).get('recurring_elements',[]), ensure_ascii=False)}\n"
+        f"项目对话条数：{project_sessions}\n"
+        "请基于以上信息进行设计规律总结。"
+    )
+    result = await _run_llm_summary(_DESIGNER_SUMMARY_SYSTEM, user_prompt)
+    if not result:
+        return
+    for proj in workspace.get("projects", []):
+        if proj.get("id") == project_id:
+            proj.setdefault("dynamic", {})
+            proj["dynamic"]["design_signatures"] = result.get("design_signatures", [])
+            el = set(proj["dynamic"].get("recurring_elements", []))
+            el.update(result.get("recurring_elements", []))
+            proj["dynamic"]["recurring_elements"] = list(el)
+            proj["dynamic"]["sessions_analyzed"] = project_sessions
+            proj["dynamic"]["last_analyzed_at"] = datetime.now().isoformat()
+            proj["pending_review"] = {
+                "type": "designer",
+                "result": result,
+                "generated_at": datetime.now().isoformat(),
+            }
+            break
+    db.save_designer_workspace(email, workspace)
+
+
+# ═══════════════════════════════════════════════════
+# Personal Profile endpoints
+# ═══════════════════════════════════════════════════
+
+class PersonalOnboardingRequest(BaseModel):
+    auth_token: str
+    static: dict
+
+class PersonalStaticPatchRequest(BaseModel):
+    auth_token: str
+    static: dict
+
+class ProfileConfirmRequest(BaseModel):
+    auth_token: str
+    accepted_items: list  # list of accepted diff items
+
+class DesignerProjectCreateRequest(BaseModel):
+    auth_token: str
+    name: str
+    brief: dict = {}
+    design_language: dict = {}
+
+class DesignerProjectPatchRequest(BaseModel):
+    auth_token: str
+    name: Optional[str] = None
+    brief: Optional[dict] = None
+    design_language: Optional[dict] = None
+    status: Optional[str] = None
+
+class DesignerProjectAnalyzeRequest(BaseModel):
+    auth_token: str
+
+class DesignerProjectConfirmRequest(BaseModel):
+    auth_token: str
+    accepted_items: list
+
+class PersonalAnalyzeRequest(BaseModel):
+    auth_token: str
+
+class CreateSessionRequest(BaseModel):
+    auth_token: str
+    mode: str = "personal"
+    designer_project_id: Optional[str] = None
+
+
+@app.get("/api/profile/personal")
+async def get_personal_profile_endpoint(authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    profile = db.get_personal_profile(user["email"])
+    return {"profile": profile}
+
+
+@app.post("/api/profile/personal/onboarding")
+async def personal_onboarding(req: PersonalOnboardingRequest):
+    user = _require_user(req.auth_token)
+    profile = db.get_personal_profile(user["email"])
+    profile["static"] = req.static
+    profile.setdefault("dynamic", {
+        "inferred_keywords": [], "disliked_elements": [],
+        "color_tendency": [], "sessions_analyzed": 0,
+    })
+    profile["meta"] = {"onboarding_completed": True, "updated_at": datetime.now().isoformat()}
+    db.save_personal_profile(user["email"], profile)
+    return {"status": "ok", "profile": profile}
+
+
+@app.patch("/api/profile/personal/static")
+async def patch_personal_static(req: PersonalStaticPatchRequest):
+    user = _require_user(req.auth_token)
+    profile = db.get_personal_profile(user["email"])
+    profile.setdefault("static", {}).update(req.static)
+    profile.setdefault("meta", {})["updated_at"] = datetime.now().isoformat()
+    db.save_personal_profile(user["email"], profile)
+    return {"status": "ok", "profile": profile}
+
+
+@app.post("/api/profile/personal/analyze")
+async def trigger_personal_analyze(req: PersonalAnalyzeRequest):
+    user = _require_user(req.auth_token)
+    total = db.count_user_sessions(user["email"], "personal")
+    await _maybe_analyze_personal(user["email"], max(total, 1))
+    profile = db.get_personal_profile(user["email"])
+    return {"status": "ok", "profile": profile}
+
+
+@app.post("/api/profile/personal/confirm")
+async def confirm_personal_review(req: ProfileConfirmRequest):
+    user = _require_user(req.auth_token)
+    profile = db.get_personal_profile(user["email"])
+    pending = profile.pop("pending_review", None)
+    if not pending:
+        return {"status": "ok", "profile": profile}
+    # merge accepted items
+    result = pending.get("result", {})
+    accepted_tags = {item.get("tag") for item in req.accepted_items if item.get("tag")}
+    existing_tags = {k["tag"] for k in profile.get("dynamic", {}).get("inferred_keywords", [])}
+    for kw in result.get("top_style_keywords", []):
+        if kw.get("tag") in accepted_tags and kw["tag"] not in existing_tags:
+            profile.setdefault("dynamic", {}).setdefault("inferred_keywords", []).append(kw)
+    db.save_personal_profile(user["email"], profile)
+    return {"status": "ok", "profile": profile}
+
+
+# ═══════════════════════════════════════════════════
+# Designer Workspace endpoints
+# ═══════════════════════════════════════════════════
+
+@app.get("/api/profile/designer/projects")
+async def get_designer_projects(authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    workspace = db.get_designer_workspace(user["email"])
+    return {"workspace": workspace}
+
+
+@app.post("/api/profile/designer/projects")
+async def create_designer_project(req: DesignerProjectCreateRequest):
+    user = _require_user(req.auth_token)
+    workspace = db.get_designer_workspace(user["email"])
+    project = {
+        "id": uuid.uuid4().hex,
+        "name": req.name,
+        "status": "active",
+        "created_at": datetime.now().isoformat(),
+        "brief": req.brief,
+        "design_language": req.design_language,
+        "dynamic": {
+            "design_signatures": [],
+            "recurring_elements": [],
+            "sessions_analyzed": 0,
+        },
+    }
+    workspace.setdefault("projects", []).append(project)
+    workspace["active_project_id"] = project["id"]
+    workspace["meta"] = {"onboarding_completed": True, "updated_at": datetime.now().isoformat()}
+    db.save_designer_workspace(user["email"], workspace)
+    return {"status": "ok", "project": project, "workspace": workspace}
+
+
+@app.patch("/api/profile/designer/projects/{project_id}")
+async def patch_designer_project(project_id: str, req: DesignerProjectPatchRequest):
+    user = _require_user(req.auth_token)
+    workspace = db.get_designer_workspace(user["email"])
+    for proj in workspace.get("projects", []):
+        if proj["id"] == project_id:
+            if req.name is not None:
+                proj["name"] = req.name
+            if req.brief is not None:
+                proj.setdefault("brief", {}).update(req.brief)
+            if req.design_language is not None:
+                proj.setdefault("design_language", {}).update(req.design_language)
+            if req.status is not None:
+                proj["status"] = req.status
+            break
+    else:
+        raise HTTPException(status_code=404, detail="项目未找到")
+    workspace.setdefault("meta", {})["updated_at"] = datetime.now().isoformat()
+    db.save_designer_workspace(user["email"], workspace)
+    return {"status": "ok", "workspace": workspace}
+
+
+@app.delete("/api/profile/designer/projects/{project_id}")
+async def archive_designer_project(project_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    workspace = db.get_designer_workspace(user["email"])
+    for proj in workspace.get("projects", []):
+        if proj["id"] == project_id:
+            proj["status"] = "archived"
+            break
+    else:
+        raise HTTPException(status_code=404, detail="项目未找到")
+    db.save_designer_workspace(user["email"], workspace)
+    return {"status": "ok"}
+
+
+@app.post("/api/profile/designer/projects/{project_id}/analyze")
+async def trigger_designer_analyze(project_id: str, req: DesignerProjectAnalyzeRequest):
+    user = _require_user(req.auth_token)
+    cnt = db.count_user_sessions(user["email"], "designer", project_id)
+    await _maybe_analyze_designer(user["email"], project_id, max(cnt, 1))
+    workspace = db.get_designer_workspace(user["email"])
+    return {"status": "ok", "workspace": workspace}
+
+
+@app.post("/api/profile/designer/projects/{project_id}/confirm")
+async def confirm_designer_review(project_id: str, req: DesignerProjectConfirmRequest):
+    user = _require_user(req.auth_token)
+    workspace = db.get_designer_workspace(user["email"])
+    for proj in workspace.get("projects", []):
+        if proj.get("id") == project_id:
+            proj.pop("pending_review", None)
+            accepted_patterns = {item.get("pattern") for item in req.accepted_items if item.get("pattern")}
+            existing = {s["pattern"] for s in proj.get("dynamic", {}).get("design_signatures", [])}
+            for item in req.accepted_items:
+                if item.get("pattern") and item["pattern"] not in existing:
+                    proj.setdefault("dynamic", {}).setdefault("design_signatures", []).append(item)
+            break
+    db.save_designer_workspace(user["email"], workspace)
+    return {"status": "ok", "workspace": workspace}
+
+
+# ═══════════════════════════════════════════════════
+# Session creation with mode
+# ═══════════════════════════════════════════════════
+
+@app.post("/api/conversations")
+async def create_conversation(req: CreateSessionRequest):
+    user = _require_user(req.auth_token)
+    session_id = uuid.uuid4().hex
+    db.create_chat_session(session_id, user["email"], req.mode, req.designer_project_id)
+    # Build personalization context now so it's baked into the session
+    personal_profile = db.get_personal_profile(user["email"])
+    designer_project = None
+    if req.mode == "designer" and req.designer_project_id:
+        ws = db.get_designer_workspace(user["email"])
+        designer_project = next(
+            (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
+        )
+    ctx = _build_personalization_context(req.mode, personal_profile, designer_project)
+    get_session(session_id, ctx)  # pre-create with context
+    return {
+        "session_id": session_id,
+        "mode": req.mode,
+        "designer_project_id": req.designer_project_id,
     }
 
 

@@ -8,16 +8,21 @@ import ToolSelector from './pages/ToolSelector';
 import MainApp from './pages/MainApp';
 
 export type AppView = 'landing' | 'auth' | 'tools' | 'design-studio' | 'trend-analysis';
-export interface AppUser { email: string; name: string; }
+export interface AppUser { email: string; name: string; auth_token: string; }
 
 function AppRouter() {
+  // Clear legacy localStorage-only user store from old version
+  localStorage.removeItem('af_users');
+
   const [view, setView] = useState<AppView>(() => {
     const token = localStorage.getItem('af_token');
-    const user = localStorage.getItem('af_user');
-    if (token && user) {
+    const userRaw = localStorage.getItem('af_user');
+    if (token && userRaw) {
       try {
         const { expires } = JSON.parse(token);
-        if (expires && Date.now() < expires) return 'tools';
+        const user = JSON.parse(userRaw);
+        // Reject old sessions that have no auth_token (pre-server-auth format)
+        if (expires && Date.now() < expires && user?.auth_token) return 'tools';
       } catch { /* fall through */ }
     }
     return 'landing';
@@ -26,7 +31,9 @@ function AppRouter() {
   const [user, setUser] = useState<AppUser | null>(() => {
     try {
       const raw = localStorage.getItem('af_user');
-      return raw ? JSON.parse(raw) : null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      // Reject old format that has no server-issued auth_token
+      return parsed?.auth_token ? parsed : null;
     } catch { return null; }
   });
 
@@ -40,6 +47,13 @@ function AppRouter() {
   };
 
   const handleLogout = () => {
+    if (user?.auth_token) {
+      fetch('/api/design/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auth_token: user.auth_token }),
+      }).catch(() => {});
+    }
     setUser(null);
     localStorage.removeItem('af_user');
     localStorage.removeItem('af_token');

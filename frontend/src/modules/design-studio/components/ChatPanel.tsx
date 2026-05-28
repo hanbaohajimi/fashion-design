@@ -100,9 +100,16 @@ interface ChatPanelProps {
   onClearPendingFromCanvas?: () => void;
   /** 同步当前对话 session_id，供像素编辑等调用后端时写入同一会话目录 */
   onSessionIdChange?: (sessionId: string) => void;
+  /** 外部控制的 session_id（个性化模式由 Workspace 预创建） */
+  externalSessionId?: string;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   side?: 'left' | 'right';
+  authToken?: string;
+  mode?: 'personal' | 'designer';
+  designerProjectId?: string | null;
+  modeBar?: React.ReactNode;
+  settingsButton?: React.ReactNode;
 }
 
 const TYPE_LABEL: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -269,11 +276,20 @@ async function streamChat(
   message: string,
   onEvent: (e: StreamEvent) => void,
   signal?: AbortSignal,
+  authToken?: string,
+  mode?: string,
+  designerProjectId?: string | null,
 ) {
   const res = await fetch('/api/design/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      message,
+      ...(authToken ? { auth_token: authToken } : {}),
+      mode: mode || 'personal',
+      designer_project_id: designerProjectId || undefined,
+    }),
     signal,
   });
   if (!res.ok) {
@@ -413,9 +429,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   pendingFromCanvas = null,
   onClearPendingFromCanvas,
   onSessionIdChange,
+  externalSessionId,
   collapsed = false,
   onToggleCollapse,
   side = 'left',
+  authToken,
+  mode = 'personal',
+  designerProjectId,
+  modeBar,
+  settingsButton,
 }) => {
   const isRight = side === 'right';
   const edgeBorder = isRight ? 'border-l' : 'border-r';
@@ -426,7 +448,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => externalSessionId || crypto.randomUUID());
+
+  // Sync external session id (set by Workspace when a personalized session is created)
+  useEffect(() => {
+    if (externalSessionId && externalSessionId !== sessionId) {
+      setSessionId(externalSessionId);
+    }
+  }, [externalSessionId]);
 
   useEffect(() => {
     onSessionIdChange?.(sessionId);
@@ -965,7 +994,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             );
             break;
         }
-      }, ctrl.signal);
+      }, ctrl.signal, authToken, mode, designerProjectId);
     } catch (err: unknown) {
       if (statusRaf != null) {
         cancelAnimationFrame(statusRaf);
@@ -1126,6 +1155,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
+            {settingsButton}
             <button
               type="button"
               onClick={addToLibrary}
@@ -1163,6 +1193,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {modeBar}
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 chat-scrollbar min-w-0">
         {showWelcome && (

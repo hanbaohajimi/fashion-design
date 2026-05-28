@@ -8,7 +8,7 @@ type WorkspaceType = 'design-studio' | 'trend-analysis';
 interface WorkspaceTab { id: string; type: WorkspaceType; title: string; }
 
 interface MainAppProps {
-  user: { email: string; name: string };
+  user: { email: string; name: string; auth_token: string };
   onLogout: () => void;
   onBackToTools?: () => void;
   initialTool?: WorkspaceType;
@@ -184,7 +184,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
           <div key={tab.id} className={`absolute inset-0 ${activeId === tab.id ? 'z-10 workspace-enter' : 'z-0 invisible'}`}>
             {mounted.has(tab.id) && (
               <ErrorBoundary fallbackLabel={tab.title}>
-                {tab.type === 'design-studio' && <DesignStudioWorkspace />}
+                {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} />}
                 {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
               </ErrorBoundary>
             )}

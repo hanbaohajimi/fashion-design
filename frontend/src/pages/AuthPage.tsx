@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 interface AuthPageProps {
-  onLogin: (user: { email: string; name: string }) => void;
+  onLogin: (user: { email: string; name: string; auth_token: string }) => void;
   onBack: () => void;
 }
 
@@ -12,16 +12,6 @@ interface FormErrors {
   password?: string;
   confirmPassword?: string;
   name?: string;
-}
-
-function getUsers(): Record<string, { password: string; name: string }> {
-  try {
-    return JSON.parse(localStorage.getItem('af_users') || '{}');
-  } catch { return {}; }
-}
-
-function saveUsers(users: Record<string, { password: string; name: string }>) {
-  localStorage.setItem('af_users', JSON.stringify(users));
 }
 
 function validateEmail(email: string): boolean {
@@ -41,13 +31,13 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
   const [password, setPassword] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
   const [name, setName] = useState('');
-  const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const pwCheck = validatePassword(password);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setSubmitError('');
     const errs: FormErrors = {};
     if (!email.trim()) errs.email = '请输入邮箱';
@@ -56,14 +46,24 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const users = getUsers();
-    const user = users[email.toLowerCase()];
-    if (!user) { setSubmitError('该邮箱尚未注册'); return; }
-    if (user.password !== password) { setSubmitError('密码错误'); return; }
-    onLogin({ email: email.toLowerCase(), name: user.name });
+    setLoading(true);
+    try {
+      const res = await fetch('/api/design/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.detail || '登录失败'); return; }
+      onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
+    } catch {
+      setSubmitError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     setSubmitError('');
     const errs: FormErrors = {};
     if (!name.trim()) errs.name = '请输入昵称';
@@ -75,16 +75,26 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
-    const users = getUsers();
-    if (users[email.toLowerCase()]) { setSubmitError('该邮箱已注册'); return; }
-    users[email.toLowerCase()] = { password, name: name.trim() };
-    saveUsers(users);
-    onLogin({ email: email.toLowerCase(), name: name.trim() });
+    setLoading(true);
+    try {
+      const res = await fetch('/api/design/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), name: name.trim(), password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSubmitError(data.detail || '注册失败'); return; }
+      onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
+    } catch {
+      setSubmitError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mode === 'login' ? handleLogin() : handleRegister();
+    void (mode === 'login' ? handleLogin() : handleRegister());
   };
 
   return (
@@ -191,19 +201,6 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               </div>
             )}
 
-            {/* Remember me (login only) */}
-            {mode === 'login' && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={e => setRemember(e.target.checked)}
-                  className="w-3.5 h-3.5 accent-[var(--gold)]"
-                />
-                <span className="text-white/50 text-[12px]">7 天内免登录</span>
-              </label>
-            )}
-
             {/* Submit error */}
             {submitError && (
               <div className="text-red-400 text-[13px] text-center py-2 bg-red-500/10 rounded-lg">
@@ -214,10 +211,11 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
             {/* Submit button */}
             <button
               type="submit"
+              disabled={loading}
               className="w-full py-3.5 border-[1.5px] border-white/70 text-white text-[13px] font-medium tracking-[0.12em] uppercase
-                bg-transparent hover:bg-white/[0.1] transition-all duration-300 active:scale-[0.98]"
+                bg-transparent hover:bg-white/[0.1] transition-all duration-300 active:scale-[0.98] disabled:opacity-50"
             >
-              {mode === 'login' ? '登 录' : '注 册'}
+              {loading ? '处理中...' : (mode === 'login' ? '登 录' : '注 册')}
             </button>
           </form>
 

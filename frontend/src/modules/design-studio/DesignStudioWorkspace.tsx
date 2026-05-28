@@ -2,8 +2,24 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import ChatPanel from './components/ChatPanel';
 import FabricEditor from './components/FabricEditor';
 import DesignCanvas, { type DesignCanvasHandle } from './components/DesignCanvas';
+import ModeBar from './components/ModeBar';
+import OnboardingModal from './components/OnboardingModal';
+import NewProjectForm from './components/NewProjectForm';
+import ProfileDiffModal from './components/ProfileDiffModal';
+import SettingsPanel from './components/SettingsPanel';
 import { useToast } from '../../components/Toast';
-import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw } from 'lucide-react';
+import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
+import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject } from '../../types/profile';
+import {
+  fetchPersonalProfile,
+  fetchDesignerWorkspace,
+  submitPersonalOnboarding,
+  createDesignerProject,
+  createConversationSession,
+  confirmPersonalReview,
+  confirmDesignerReview,
+  patchDesignerProject,
+} from '../../api/profileApi';
 
 interface HistoryImage {
   url: string;
@@ -12,7 +28,11 @@ interface HistoryImage {
 
 type DesignBackendState = 'checking' | 'ok' | 'error';
 
-export default function DesignStudioWorkspace() {
+interface DesignStudioWorkspaceProps {
+  user: { email: string; name: string; auth_token: string };
+}
+
+export default function DesignStudioWorkspace({ user }: DesignStudioWorkspaceProps) {
   const { toast } = useToast();
   const canvasRef = useRef<DesignCanvasHandle>(null);
 
@@ -26,6 +46,61 @@ export default function DesignStudioWorkspace() {
     typeof window !== 'undefined' && localStorage.getItem('fashion-studio-chat-collapsed') === '1',
   );
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(undefined);
+
+  // ── Personalization state ──────────────────────────────
+  const [selectedMode, setSelectedMode] = useState<SessionMode>('personal');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [personalProfile, setPersonalProfile] = useState<PersonalProfile | null>(null);
+  const [workspace, setWorkspace] = useState<DesignerWorkspace | null>(null);
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editingProject, setEditingProject] = useState<DesignerProject | null>(null);
+  const [pendingReview, setPendingReview] = useState<{
+    type: 'personal' | 'designer';
+    projectId?: string;
+    projectName?: string;
+    items: Array<{ tag?: string; pattern?: string; confidence: number; evidence?: string }>;
+  } | null>(null);
+
+  // Load profile + workspace on mount
+  useEffect(() => {
+    void Promise.all([
+      fetchPersonalProfile(user.auth_token).then(p => {
+        setPersonalProfile(p);
+        if (!p?.meta?.onboarding_completed) {
+          setShowOnboarding(true);
+        } else if (p.pending_review) {
+          const r = p.pending_review.result as Record<string, unknown>;
+          const items = (r.top_style_keywords as Array<{ tag: string; confidence: number; evidence?: string }> | undefined) || [];
+          if (items.length) setPendingReview({ type: 'personal', items });
+        }
+      }).catch(() => {}),
+      fetchDesignerWorkspace(user.auth_token).then(w => {
+        setWorkspace(w);
+        // Check any project pending review
+        for (const proj of w.projects || []) {
+          if (proj.pending_review) {
+            const r = proj.pending_review.result as Record<string, unknown>;
+            const items = (r.design_signatures as Array<{ pattern: string; confidence: number; evidence?: string }> | undefined) || [];
+            if (items.length) {
+              setPendingReview({ type: 'designer', projectId: proj.id, projectName: proj.name, items });
+            }
+            break;
+          }
+        }
+      }).catch(() => {}),
+    ]);
+  }, [user.auth_token]);
+
+  // Init default project selection
+  useEffect(() => {
+    if (workspace && !selectedProjectId) {
+      const active = workspace.projects.find(p => p.status === 'active');
+      if (active) setSelectedProjectId(active.id);
+    }
+  }, [workspace]);
 
   useEffect(() => {
     localStorage.setItem('fashion-studio-chat-collapsed', chatCollapsed ? '1' : '0');
@@ -66,6 +141,71 @@ export default function DesignStudioWorkspace() {
   useEffect(() => {
     void recheckDesignBackend();
   }, [recheckDesignBackend]);
+
+  // ── Mode/session management ────────────────────────────
+
+  const handleModeChange = useCallback(async (mode: SessionMode, projectId: string | null) => {
+    setSelectedMode(mode);
+    setSelectedProjectId(projectId);
+    // Create a new personalized session
+    try {
+      const result = await createConversationSession(
+        user.auth_token,
+        mode,
+        projectId || undefined,
+      );
+      setChatSessionId(result.session_id);
+    } catch { /* fall back to random session — ChatPanel handles this */ }
+  }, [user.auth_token]);
+
+  const handleOnboardingComplete = useCallback(async (staticData: object) => {
+    try {
+      const p = await submitPersonalOnboarding(user.auth_token, staticData as Parameters<typeof submitPersonalOnboarding>[1]);
+      setPersonalProfile(p);
+      toast('个人档案已保存', 'success');
+    } catch { toast('保存失败，请重试', 'error'); }
+    setShowOnboarding(false);
+  }, [user.auth_token, toast]);
+
+  const handleNewProjectComplete = useCallback(async (data: { name: string; brief: object; design_language: object }) => {
+    try {
+      const result = await createDesignerProject(user.auth_token, data);
+      setWorkspace(result.workspace);
+      setSelectedProjectId(result.project.id);
+      setSelectedMode('designer');
+      toast(`项目「${data.name}」已创建`, 'success');
+    } catch { toast('创建失败，请重试', 'error'); }
+    setShowNewProject(false);
+    setEditingProject(null);
+  }, [user.auth_token, toast]);
+
+  const handleEditProjectComplete = useCallback(async (data: { name: string; brief: object; design_language: object }) => {
+    if (!editingProject) return;
+    try {
+      const w = await patchDesignerProject(user.auth_token, editingProject.id, data);
+      setWorkspace(w);
+      toast('项目已更新', 'success');
+    } catch { toast('更新失败', 'error'); }
+    setEditingProject(null);
+  }, [editingProject, user.auth_token, toast]);
+
+  const handleConfirmReview = useCallback(async (accepted: Array<{ tag?: string; pattern?: string; confidence: number }>) => {
+    if (!pendingReview) return;
+    try {
+      if (pendingReview.type === 'personal') {
+        const p = await confirmPersonalReview(user.auth_token, accepted);
+        setPersonalProfile(p);
+        toast('风格档案已更新', 'success');
+      } else if (pendingReview.projectId) {
+        const w = await confirmDesignerReview(user.auth_token, pendingReview.projectId, accepted);
+        setWorkspace(w);
+        toast('设计规律已更新', 'success');
+      }
+    } catch { /* ignore */ }
+    setPendingReview(null);
+  }, [pendingReview, user.auth_token, toast]);
+
+  // ── Canvas / editor handlers ───────────────────────────
 
   const handleEditImage = useCallback((imageUrl: string) => {
     if (!imageUrl) return;
@@ -162,6 +302,30 @@ export default function DesignStudioWorkspace() {
 
       <ChatPanel
         side="right"
+        authToken={user.auth_token}
+        mode={selectedMode}
+        designerProjectId={selectedProjectId}
+        modeBar={
+          <ModeBar
+            authToken={user.auth_token}
+            workspace={workspace}
+            selectedMode={selectedMode}
+            selectedProjectId={selectedProjectId}
+            onModeChange={handleModeChange}
+            onNewProject={() => setShowNewProject(true)}
+            onNeedProject={() => setShowNewProject(true)}
+          />
+        }
+        settingsButton={
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+            title="档案管理"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+        }
         onEditImage={handleEditImage}
         onPreviewImage={handlePreviewImage}
         onImageGenerated={handleImageGenerated}
@@ -169,6 +333,7 @@ export default function DesignStudioWorkspace() {
         pendingFromCanvas={pendingAIImage}
         onClearPendingFromCanvas={() => setPendingAIImage(null)}
         onSessionIdChange={setChatSessionId}
+        externalSessionId={chatSessionId}
         collapsed={chatCollapsed}
         onToggleCollapse={() => setChatCollapsed((c) => !c)}
       />
@@ -197,40 +362,28 @@ export default function DesignStudioWorkspace() {
             <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-0.5 bg-[#18181b]/90 backdrop-blur-xl rounded-lg ring-1 ring-white/[0.05]">
               <button
                 type="button"
-                onClick={() => {
-                  handleAddToCanvas(previewImage);
-                  setPreviewImage(null);
-                }}
+                onClick={() => { handleAddToCanvas(previewImage); setPreviewImage(null); }}
                 className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
               >
                 <Plus className="w-3 h-3" /> 置入画布
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  handleEditImage(previewImage);
-                  setPreviewImage(null);
-                }}
+                onClick={() => { handleEditImage(previewImage); setPreviewImage(null); }}
                 className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
               >
                 <PencilRuler className="w-3 h-3" /> 像素编辑
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  handleSendToAI(previewImage);
-                  setPreviewImage(null);
-                }}
+                onClick={() => { handleSendToAI(previewImage); setPreviewImage(null); }}
                 className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
               >
                 <MessageSquare className="w-3 h-3" /> AI
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  handleDownloadPreview();
-                  setPreviewImage(null);
-                }}
+                onClick={() => { handleDownloadPreview(); setPreviewImage(null); }}
                 className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
               >
                 <Download className="w-3 h-3" /> 下载
@@ -247,6 +400,46 @@ export default function DesignStudioWorkspace() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modals */}
+      {showOnboarding && (
+        <OnboardingModal
+          onComplete={handleOnboardingComplete}
+          onSkip={() => setShowOnboarding(false)}
+        />
+      )}
+
+      {(showNewProject || editingProject) && !showOnboarding && (
+        editingProject ? (
+          <NewProjectForm
+            onComplete={handleEditProjectComplete}
+            onCancel={() => setEditingProject(null)}
+          />
+        ) : (
+          <NewProjectForm
+            onComplete={handleNewProjectComplete}
+            onCancel={() => setShowNewProject(false)}
+          />
+        )
+      )}
+
+      {pendingReview && (
+        <ProfileDiffModal
+          type={pendingReview.type}
+          projectName={pendingReview.projectName}
+          newItems={pendingReview.items}
+          onConfirm={handleConfirmReview}
+          onDismiss={() => setPendingReview(null)}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsPanel
+          authToken={user.auth_token}
+          onClose={() => setShowSettings(false)}
+          onEditProject={(proj) => { setShowSettings(false); setEditingProject(proj); }}
+        />
       )}
     </div>
   );
