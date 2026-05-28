@@ -68,14 +68,14 @@ export default function ToolSelector({ user, onSelect, onLogout }: ToolSelectorP
                 className="surface-card group flex min-h-[180px] flex-col justify-between p-5 text-left transition-transform duration-200 hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[color:var(--ink)] text-white">
+                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-gold)', color: 'var(--color-void)' }}>
                     <Sparkles className="h-5 w-5" />
                   </div>
-                  <ArrowRight className="h-5 w-5 text-[color:var(--text-muted)] transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" style={{ color: 'var(--color-ink-3)' }} />
                 </div>
                 <div>
-                  <h2 className="text-[22px] font-extrabold tracking-[-0.02em] text-[color:var(--text-primary)]">AI 设计工作台</h2>
-                  <p className="mt-2 max-w-sm text-[13px] leading-6 text-[color:var(--text-secondary)]">
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 'var(--weight-light)', letterSpacing: 'var(--tracking-tight)', color: 'var(--color-ink)' }}>AI 设计工作台</h2>
+                  <p style={{ marginTop: 8, maxWidth: 360, fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
                     从对话生成、草图编辑到预览与试穿，所有创作动作都在一个连续界面里完成。
                   </p>
                 </div>
@@ -87,14 +87,14 @@ export default function ToolSelector({ user, onSelect, onLogout }: ToolSelectorP
                 className="surface-card group flex min-h-[180px] flex-col justify-between p-5 text-left transition-transform duration-200 hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[color:var(--signal-blue)] text-white">
+                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-info)' }}>
                     <ChartColumn className="h-5 w-5" />
                   </div>
-                  <ArrowRight className="h-5 w-5 text-[color:var(--text-muted)] transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" style={{ color: 'var(--color-ink-3)' }} />
                 </div>
                 <div>
-                  <h2 className="text-[22px] font-extrabold tracking-[-0.02em] text-[color:var(--text-primary)]">趋势分析中心</h2>
-                  <p className="mt-2 max-w-sm text-[13px] leading-6 text-[color:var(--text-secondary)]">
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 'var(--weight-light)', letterSpacing: 'var(--tracking-tight)', color: 'var(--color-ink)' }}>趋势分析中心</h2>
+                  <p style={{ marginTop: 8, maxWidth: 360, fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
                     读取趋势、筛选热点、沉淀灵感，再把结果快速带回设计工作台继续创作。
                   </p>
                 </div>

@@ -119,15 +119,18 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
         <button
           type="button"
           onClick={onBackToTools}
-          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-left hover:bg-white/10"
+          className="flex items-center gap-3 px-3 py-2 text-left"
+          style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', transition: 'background 150ms' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           title="返回工具选择"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[color:var(--warm-metal)] text-white">
+          <div style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-gold)', color: 'var(--color-void)' }}>
             <Boxes className="h-4 w-4" />
           </div>
           <div className="hidden sm:block">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/35">AI Fashion</p>
-            <p className="text-[13px] font-semibold text-white/90">Creative OS</p>
+            <p style={{ fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-widest)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>AI Fashion</p>
+            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>Creative OS</p>
           </div>
         </button>
 
@@ -142,7 +145,12 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                 onClick={() => setActiveId(tab.id)}
                 className={`tab-item relative ${active ? 'active' : ''}`}
               >
-                <span className={`flex h-5 w-5 items-center justify-center rounded-md ${active ? 'bg-[color:var(--ink)] text-white' : 'bg-white/8 text-white/55'}`}>
+                <span style={{
+                  display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 'var(--radius-sm)',
+                  background: active ? 'var(--color-gold)' : 'var(--overlay-medium)',
+                  color: active ? 'var(--color-void)' : 'var(--color-ink-3)',
+                }}>
                   {preset.icon}
                 </span>
                 <span className="truncate max-w-[140px]">{tab.title}</span>
@@ -152,7 +160,15 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                       e.stopPropagation();
                       closeTab(tab.id);
                     }}
-                    className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-black/8 text-[color:var(--text-secondary)]' : 'bg-white/8 text-white/45'}`}
+                    style={{
+                      marginLeft: 4,
+                      borderRadius: 'var(--radius-pill)',
+                      padding: '1px 5px',
+                      fontSize: 10,
+                      background: 'var(--overlay-medium)',
+                      color: 'var(--color-ink-3)',
+                      cursor: 'pointer',
+                    }}
                   >
                     ×
                   </span>
@@ -172,24 +188,48 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
             <Plus className="h-4 w-4" />
           </button>
           {showMenu && (
-            <div className="dropdown-enter absolute right-0 top-full z-[999] mt-2 w-80 rounded-3xl border border-[color:var(--border-soft)] bg-white p-2 shadow-[0_18px_42px_rgba(16,17,20,0.16)]">
-              <div className="px-3 py-2">
-                <p className="section-label">新建工作区</p>
-                <p className="mt-1 text-[13px] text-[color:var(--text-secondary)]">选择一个新的工作入口。</p>
+            <div className="dropdown-enter" style={{
+              position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+              zIndex: 999, width: 300,
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-surface)',
+              boxShadow: 'var(--shadow-xl)',
+              padding: 'var(--space-2)',
+            }}>
+              <div style={{ padding: 'var(--space-2) var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                <p className="subsection-title" style={{ marginBottom: 2 }}>新建工作区</p>
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>选择一个新的工作入口。</p>
               </div>
               {(Object.entries(PRESETS) as [WorkspaceType, typeof PRESETS[WorkspaceType]][]).map(([type, preset]) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => addTab(type)}
-                  className="flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left hover:bg-[color:var(--paper)]"
+                  style={{
+                    display: 'flex', width: '100%', alignItems: 'flex-start', gap: 'var(--space-3)',
+                    borderRadius: 'var(--radius-md)', padding: 'var(--space-3)',
+                    textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+                    transition: 'background 150ms',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${preset.tone}`}>
+                  <span style={{
+                    display: 'flex', width: 40, height: 40, flexShrink: 0,
+                    alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-gold)', color: 'var(--color-void)',
+                  }}>
                     {preset.icon}
                   </span>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-semibold text-[color:var(--text-primary)]">{preset.title}</span>
-                    <span className="mt-0.5 block text-[12px] leading-5 text-[color:var(--text-secondary)]">{preset.desc}</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
+                      {preset.title}
+                    </span>
+                    <span style={{ marginTop: 2, display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
+                      {preset.desc}
+                    </span>
                   </span>
                 </button>
               ))}
@@ -201,31 +241,50 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
           <button
             type="button"
             onClick={() => setShowUserMenu(v => !v)}
-            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-left hover:bg-white/10"
+            className="flex items-center gap-3 px-3 py-2 text-left"
+            style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', transition: 'background 150ms' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             title={user.name}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--warm-metal)] text-[12px] font-semibold text-white">
+            <span style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--color-gold)', fontSize: 12, fontWeight: 'var(--weight-medium)', color: 'var(--color-void)' }}>
               {initials}
             </span>
             <span className="hidden sm:block">
-              <span className="block text-[10px] uppercase tracking-[0.16em] text-white/35">Account</span>
-              <span className="block max-w-[140px] truncate text-[13px] font-medium text-white/90">{user.name}</span>
+              <span style={{ display: 'block', fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-widest)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>Account</span>
+              <span style={{ display: 'block', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>{user.name}</span>
             </span>
-            <ChevronDown className="h-4 w-4 text-white/45" />
+            <ChevronDown className="h-4 w-4" style={{ color: 'var(--color-ink-3)' }} />
           </button>
           {showUserMenu && (
-            <div className="dropdown-enter absolute right-0 top-full z-[999] mt-2 w-64 rounded-3xl border border-[color:var(--border-soft)] bg-white p-2 shadow-[0_18px_42px_rgba(16,17,20,0.16)]">
-              <div className="px-3 py-3 border-b border-[color:var(--border-soft)]">
-                <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">{user.name}</p>
-                <p className="mt-1 text-[12px] text-[color:var(--text-muted)]">{user.email}</p>
+            <div className="dropdown-enter" style={{
+              position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+              zIndex: 999, width: 240,
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-surface)',
+              boxShadow: 'var(--shadow-xl)',
+              padding: 'var(--space-2)',
+            }}>
+              <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border-subtle)', marginBottom: 4 }}>
+                <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>{user.name}</p>
+                <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>{user.email}</p>
               </div>
               {onBackToTools && (
-                <button type="button" onClick={onBackToTools} className="btn-ghost mt-1 w-full justify-start px-3 text-[13px]">
+                <button
+                  type="button" onClick={onBackToTools}
+                  className="btn-ghost"
+                  style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
+                >
                   <ArrowLeft className="h-4 w-4" />
                   工具选择
                 </button>
               )}
-              <button type="button" onClick={onLogout} className="btn-ghost w-full justify-start px-3 text-[13px]">
+              <button
+                type="button" onClick={onLogout}
+                className="btn-ghost"
+                style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
+              >
                 <UserRound className="h-4 w-4" />
                 退出登录
               </button>

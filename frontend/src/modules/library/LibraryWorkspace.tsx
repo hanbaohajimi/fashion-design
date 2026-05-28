@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { Heart, Trash2, MoreHorizontal, Search, SlidersHorizontal, Plus, X, BookOpen, Star, Grid3X3, ChevronRight, RefreshCw, Sparkles } from 'lucide-react';
 import type { LibraryItem, LibraryCollection, LibraryStats, OutfitSuggestion } from '../../types/profile';
 import {
@@ -28,88 +28,375 @@ type Tab = 'all' | 'favorites' | 'collections';
 
 function ItemCard({
   item,
+  index,
   onFavorite,
   onDelete,
   onClick,
 }: {
   item: LibraryItem;
+  index: number;
   onFavorite: (id: string, val: boolean) => void;
   onDelete: (id: string) => void;
   onClick: (item: LibraryItem) => void;
 }) {
   const [hover, setHover] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [favAnimating, setFavAnimating] = useState(false);
+  const favTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (favTimerRef.current) clearTimeout(favTimerRef.current); }, []);
+
+  const handleFav = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavAnimating(true);
+    if (favTimerRef.current) clearTimeout(favTimerRef.current);
+    favTimerRef.current = setTimeout(() => setFavAnimating(false), 400);
+    onFavorite(item.id, !item.is_favorite);
+  };
 
   return (
     <div
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--paper)] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(16,17,20,0.12)]"
+      className="group relative cursor-pointer overflow-hidden"
+      style={{
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--color-surface)',
+        animation: `cardEnter 300ms var(--ease-out) both`,
+        animationDelay: `${Math.min(index * 40, 400)}ms`,
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
       onClick={() => onClick(item)}
     >
-      <img
-        src={item.image_url}
-        alt=""
-        loading="lazy"
-        className="w-full object-cover block"
-        style={{ aspectRatio: '3/4' }}
-      />
+      {/* Image */}
+      <div style={{ overflow: 'hidden' }}>
+        <img
+          src={item.image_url}
+          alt=""
+          loading="lazy"
+          className="w-full block"
+          style={{
+            aspectRatio: '3/4',
+            objectFit: 'cover',
+            transition: 'transform 400ms var(--ease-out)',
+            transform: hover ? 'scale(1.04)' : 'scale(1)',
+          }}
+        />
+      </div>
+
       {/* Hover overlay */}
-      {hover && (
-        <div className="absolute inset-0 bg-black/20 transition-all">
-          <div
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(to top, rgba(8,8,8,0.85) 0%, rgba(8,8,8,0.3) 50%, transparent 100%)',
+          opacity: hover ? 1 : 0,
+          transition: 'opacity 200ms',
+          pointerEvents: hover ? 'auto' : 'none',
+        }}
+      >
+        {/* Top-right actions */}
+        <div
           className="absolute right-2 top-2 flex items-center gap-1"
-            onClick={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Fav button */}
+          <button
+            type="button"
+            onClick={handleFav}
+            style={{
+              width: 32, height: 32,
+              borderRadius: 'var(--radius-pill)',
+              background: 'rgba(8,8,8,0.6)',
+              backdropFilter: 'blur(8px)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: item.is_favorite ? 'var(--color-gold)' : 'var(--color-ink-2)',
+              transform: favAnimating ? 'scale(1.4)' : 'scale(1)',
+              transition: 'transform 400ms var(--ease-out), color 150ms',
+            }}
           >
+            <Heart
+              size={14}
+              fill={item.is_favorite ? 'currentColor' : 'none'}
+            />
+          </button>
+
+          {/* More menu */}
+          <div className="relative">
             <button
               type="button"
-              onClick={() => onFavorite(item.id, !item.is_favorite)}
-              className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
-                item.is_favorite
-                  ? 'bg-red-500 text-white'
-                  : 'bg-white/84 text-[color:var(--text-secondary)] hover:bg-red-50 hover:text-red-500'
-              }`}
+              onClick={() => setMenuOpen(m => !m)}
+              style={{
+                width: 32, height: 32,
+                borderRadius: 'var(--radius-pill)',
+                background: 'rgba(8,8,8,0.6)',
+                backdropFilter: 'blur(8px)',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--color-ink-2)',
+              }}
             >
-              <Heart className="w-3.5 h-3.5" fill={item.is_favorite ? 'currentColor' : 'none'} />
+              <MoreHorizontal size={14} />
             </button>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(m => !m)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/84 text-[color:var(--text-secondary)] backdrop-blur-sm transition-colors hover:bg-white"
-              >
-                <MoreHorizontal className="w-3.5 h-3.5" />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full z-10 mt-1 w-28 rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => { onDelete(item.id); setMenuOpen(false); }}
-                    className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[12px] text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-3 h-3" /> 删除
-                  </button>
-                </div>
-              )}
-            </div>
+            {menuOpen && (
+              <div style={{
+                position: 'absolute',
+                right: 0, top: '100%',
+                zIndex: 20,
+                marginTop: 4,
+                width: 120,
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-surface-2)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: '4px',
+              }}>
+                <button
+                  type="button"
+                  onClick={() => { onDelete(item.id); setMenuOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 10px',
+                    textAlign: 'left',
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--color-danger)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    borderRadius: 'var(--radius-sm)',
+                    fontFamily: 'var(--font-ui)',
+                    transition: 'background 150ms',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(168,88,88,0.1)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <Trash2 size={11} /> 删除
+                </button>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Bottom info */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '8px 10px' }}>
+          {/* Trend tags */}
+          {item.auto_tags?.style_keywords?.length ? (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {item.auto_tags.style_keywords.slice(0, 1).map(k => (
+                <span key={k} className="tag-trend" style={{ fontSize: 9, height: 18 }}>
+                  {k}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {/* Continue */}
+          <div style={{
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-gold)',
+            fontFamily: 'var(--font-ui)',
+            textAlign: 'right',
+          }}>
+            继续创作 →
+          </div>
+        </div>
+      </div>
+
+      {/* Always-visible fav indicator */}
+      {item.is_favorite && !hover && (
+        <div style={{
+          position: 'absolute',
+          top: 8, right: 8,
+          color: 'var(--color-gold)',
+          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.6))',
+        }}>
+          <Heart size={12} fill="currentColor" />
         </div>
       )}
-      {/* Tags */}
-      {item.auto_tags?.style_keywords?.length ? (
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/40 to-transparent">
-          <div className="flex flex-wrap gap-1">
-            {item.auto_tags.style_keywords.slice(0, 2).map(k => (
-              <span key={k} className="rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] text-white/90 backdrop-blur-sm">{k}</span>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
 
-// ── Detail sidebar ────────────────────────────────────────
+const ItemCardMemo = memo(ItemCard);
+
+// ── Collection card ────────────────────────────────────────
+
+function CollectionCard({
+  col,
+  items,
+  isSelected,
+  onSelect,
+  onDelete,
+}: {
+  col: LibraryCollection;
+  items: LibraryItem[];
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const coverItems = items.slice(0, 4);
+
+  return (
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        borderRadius: 'var(--radius-lg)',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        border: isSelected
+          ? '1px solid var(--color-gold)'
+          : hover
+          ? '1px solid var(--color-border)'
+          : '1px solid var(--color-border-subtle)',
+        background: 'var(--color-surface)',
+        transition: 'border-color 150ms, box-shadow 150ms',
+        boxShadow: isSelected ? 'var(--shadow-gold)' : hover ? 'var(--shadow-md)' : 'none',
+      }}
+    >
+      {/* Cover */}
+      <div style={{ height: 180, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}>
+        {coverItems.length === 0 && (
+          <div style={{
+            gridColumn: '1 / -1',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--color-surface-2)',
+            color: 'var(--color-ink-3)',
+          }}>
+            <Grid3X3 size={24} />
+          </div>
+        )}
+        {coverItems.length === 1 && (
+          <img
+            src={coverItems[0].image_url} alt=""
+            style={{ gridColumn: '1 / -1', width: '100%', height: '100%', objectFit: 'cover',
+              transform: hover ? 'scale(1.03)' : 'scale(1)', transition: 'transform 400ms var(--ease-out)' }}
+          />
+        )}
+        {coverItems.length >= 2 && (
+          <>
+            <img src={coverItems[0].image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover',
+              transform: hover ? 'scale(1.03)' : 'scale(1)', transition: 'transform 400ms var(--ease-out)' }} />
+            <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr' }}>
+              {coverItems.slice(1, 3).map((ci, i) => (
+                <img key={i} src={ci.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover',
+                  transform: hover ? 'scale(1.03)' : 'scale(1)', transition: 'transform 400ms var(--ease-out)' }} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 'var(--text-base)', fontWeight: 'var(--weight-medium)',
+            color: 'var(--color-ink)', fontFamily: 'var(--font-ui)',
+          }}>
+            {col.is_smart && <Sparkles size={12} style={{ color: 'var(--color-gold)' }} />}
+            {col.name}
+          </div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', marginTop: 2, fontFamily: 'var(--font-ui)' }}>
+            {col.item_count} 张图片
+          </div>
+          {col.is_smart && (
+            <span className="tag-ai" style={{ marginTop: 4 }}>🤖 自动生成</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+          className="btn-icon"
+          style={{ opacity: hover ? 1 : 0, transition: 'opacity 150ms', color: 'var(--color-danger)' }}
+        >
+          <X size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── New collection card ────────────────────────────────────
+
+function NewCollectionCard({
+  name,
+  onChange,
+  onCreate,
+  creating,
+}: {
+  name: string;
+  onChange: (v: string) => void;
+  onCreate: () => void;
+  creating: boolean;
+}) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        borderRadius: 'var(--radius-lg)',
+        border: hover ? '1px dashed var(--color-gold)' : '1px dashed var(--color-border)',
+        background: 'var(--color-surface)',
+        minHeight: 240,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-6)',
+        transition: 'border-color 150ms',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{
+        width: 40, height: 40,
+        borderRadius: 'var(--radius-pill)',
+        border: hover ? '1px solid var(--color-gold)' : '1px solid var(--color-border)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: hover ? 'var(--color-gold)' : 'var(--color-ink-3)',
+        transition: 'all 150ms',
+      }}>
+        <Plus size={18} />
+      </div>
+      <div style={{
+        fontSize: 'var(--text-sm)', color: hover ? 'var(--color-gold)' : 'var(--color-ink-3)',
+        fontFamily: 'var(--font-ui)', transition: 'color 150ms',
+      }}>
+        新建合集
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', width: '100%' }} onClick={e => e.stopPropagation()}>
+        <input
+          type="text"
+          value={name}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onCreate(); }}
+          placeholder="合集名称..."
+          className="input"
+          style={{ flex: 1, fontSize: 'var(--text-sm)' }}
+        />
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={creating || !name.trim()}
+          className="btn-primary"
+          style={{ padding: '0 var(--space-4)', height: 40 }}
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Detail sidebar ─────────────────────────────────────────
 
 function DetailSidebar({
   item,
@@ -133,20 +420,12 @@ function DetailSidebar({
   const [colMenuOpen, setColMenuOpen] = useState(false);
   const [similar, setSimilar] = useState<LibraryItem[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
-
-  // Version chain: items from same session
   const [versionChain, setVersionChain] = useState<LibraryItem[]>([]);
 
   useEffect(() => {
     setNotes(item.notes || '');
     setNotesChanged(false);
   }, [item.id]);
-
-  useEffect(() => {
-    if (!item.session_id) return;
-    // We'll load version chain from the parent (already have items from same session)
-    // For now leave it empty; parent can pass it
-  }, [item.session_id]);
 
   const loadSimilar = async () => {
     setLoadingSimilar(true);
@@ -210,159 +489,285 @@ function DetailSidebar({
   ].filter(Boolean) as string[];
 
   return (
-    <div className="flex h-full w-80 flex-col border-l border-[color:var(--border-soft)] bg-white">
-      <div className="flex items-center justify-between border-b border-[color:var(--border-soft)] px-4 py-3">
-        <span className="text-[13px] font-semibold text-[color:var(--text-primary)]">图片详情</span>
-        <button type="button" onClick={onClose} className="btn-ghost btn-square h-9 min-h-9 w-9">
-          <X className="w-4 h-4" />
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        width: 320,
+        borderLeft: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+        animation: 'drawerSlide var(--duration-slow) var(--ease-out)',
+        flexShrink: 0,
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderBottom: '1px solid var(--color-border)',
+        padding: 'var(--space-4)',
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
+          图片详情
+        </span>
+        <button type="button" onClick={onClose} className="btn-icon">
+          <X size={16} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-4">
-          <img src={item.image_url} alt="" className="w-full rounded-2xl object-cover" style={{ maxHeight: 300 }} />
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {/* Image */}
+        <div style={{ background: 'var(--color-void)', padding: 'var(--space-4)' }}>
+          <img
+            src={item.image_url} alt=""
+            style={{ width: '100%', borderRadius: 'var(--radius-md)', objectFit: 'contain', maxHeight: 300 }}
+          />
         </div>
 
-        <div className="flex items-center gap-2 px-4 pb-3">
-          <button
-            type="button"
-            onClick={handleFavorite}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-              item.is_favorite
-                ? 'bg-red-50 border-red-200 text-red-600'
-                : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-red-200 hover:text-red-500'
-            }`}
-          >
-            <Heart className="w-3.5 h-3.5" fill={item.is_favorite ? 'currentColor' : 'none'} />
-            {item.is_favorite ? '已收藏' : '收藏'}
-          </button>
-
-          {/* Add to collection */}
-          <div className="relative">
-            <button type="button" onClick={() => setColMenuOpen(m => !m)} className="btn-secondary px-3 text-[12px] font-medium">
-              <BookOpen className="w-3.5 h-3.5" /> 加入合集
+        {/* Action bar */}
+        <div style={{
+          display: 'flex', borderBottom: '1px solid var(--color-border-subtle)',
+          padding: '0 var(--space-4)',
+        }}>
+          {[
+            {
+              icon: <Heart size={14} fill={item.is_favorite ? 'currentColor' : 'none'} />,
+              label: item.is_favorite ? '已收藏' : '收藏',
+              active: item.is_favorite,
+              onClick: () => void handleFavorite(),
+            },
+            {
+              icon: <BookOpen size={14} />,
+              label: '合集',
+              active: false,
+              onClick: () => setColMenuOpen(m => !m),
+            },
+          ].map(btn => (
+            <button
+              key={btn.label}
+              type="button"
+              onClick={btn.onClick}
+              style={{
+                flex: 1,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 4,
+                padding: 'var(--space-3) 0',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: btn.active ? 'var(--color-gold)' : 'var(--color-ink-3)',
+                fontSize: 'var(--text-2xs)',
+                fontFamily: 'var(--font-ui)',
+                transition: 'color 150ms',
+              }}
+              onMouseEnter={e => !btn.active && (e.currentTarget.style.color = 'var(--color-ink-2)')}
+              onMouseLeave={e => !btn.active && (e.currentTarget.style.color = 'var(--color-ink-3)')}
+            >
+              {btn.icon}
+              {btn.label}
             </button>
-            {colMenuOpen && (
-              <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-44 overflow-y-auto rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg">
-                {collections.length === 0 && (
-                  <p className="px-3 py-2 text-[11px] text-[color:var(--text-muted)]">暂无合集</p>
-                )}
-                {collections.map(col => (
-                  <button
-                    key={col.id}
-                    type="button"
-                    onClick={() => handleAddToCollection(col.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]"
-                  >
-                    {col.is_smart && <Sparkles className="w-3 h-3 shrink-0 text-amber-500" />}
-                    <span className="truncate">{col.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
+
+          {/* Collection dropdown */}
+          {colMenuOpen && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 'var(--space-4)',
+              zIndex: 20,
+              marginTop: 4,
+              width: 180,
+              maxHeight: 200,
+              overflowY: 'auto',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-surface-2)',
+              boxShadow: 'var(--shadow-lg)',
+              padding: 4,
+            }}>
+              {collections.length === 0 && (
+                <p style={{ padding: '8px 12px', fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
+                  暂无合集
+                </p>
+              )}
+              {collections.map(col => (
+                <button
+                  key={col.id}
+                  type="button"
+                  onClick={() => void handleAddToCollection(col.id)}
+                  style={{
+                    display: 'flex', width: '100%', alignItems: 'center', gap: 8,
+                    padding: '8px 12px', textAlign: 'left',
+                    fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-ui)',
+                    transition: 'background 150ms',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  {col.is_smart && <Sparkles size={10} style={{ color: 'var(--color-gold)', flexShrink: 0 }} />}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{col.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="space-y-4 px-4 pb-6">
+        <div style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          {/* Auto tags */}
           {allAutoTags.length > 0 && (
             <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">风格标签</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="subsection-title">风格标签</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                 {allAutoTags.map((tag, i) => (
-                  <span key={i} className="rounded-full border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-2 py-0.5 text-[11px] text-[color:var(--text-secondary)]">{tag}</span>
+                  <span key={i} className="tag">{tag}</span>
                 ))}
               </div>
             </div>
           )}
 
+          {/* User tags */}
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">我的标签</p>
-            <div className="mb-2 flex flex-wrap gap-1.5">
+            <p className="subsection-title">我的标签</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
               {item.user_tags.map(tag => (
                 <span
                   key={tag}
-                  className="flex items-center gap-1 rounded-full border border-[rgba(47,107,255,0.14)] bg-[rgba(47,107,255,0.08)] px-2 py-0.5 text-[11px] text-[color:var(--signal-blue)]"
+                  className="tag-user"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
                   {tag}
-                  <button type="button" onClick={() => handleRemoveTag(tag)} className="text-[rgba(47,107,255,0.7)] hover:text-[color:var(--signal-blue)]">
-                    <X className="w-2.5 h-2.5" />
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveTag(tag)}
+                    style={{
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: 'rgba(90,127,168,0.7)', padding: 0, lineHeight: 1,
+                    }}
+                  >
+                    <X size={10} />
                   </button>
                 </span>
               ))}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
               <input
                 type="text"
                 value={tagInput}
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') void handleAddTag(); }}
                 placeholder="添加标签..."
-                className="input-shell flex-1 text-[12px]"
+                className="input"
+                style={{ flex: 1, height: 32, fontSize: 'var(--text-xs)', minHeight: 32 }}
               />
               <button
                 type="button"
                 onClick={() => void handleAddTag()}
-                className="btn-primary btn-square h-10 min-h-10 w-10"
+                className="btn-icon"
+                style={{ width: 32, height: 32, background: 'var(--color-gold)', color: 'var(--color-void)', borderRadius: 'var(--radius-md)' }}
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus size={12} />
               </button>
             </div>
           </div>
 
+          {/* Notes */}
           <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">备注</p>
+            <p className="subsection-title">备注</p>
             <textarea
               value={notes}
               onChange={e => { setNotes(e.target.value); setNotesChanged(true); }}
-              placeholder="点击添加备注..."
+              placeholder="添加备注..."
               rows={3}
-              className="input-shell resize-none text-[12px]"
+              className="input"
+              style={{ height: 'auto', resize: 'none', padding: 'var(--space-3) var(--space-4)', lineHeight: 'var(--leading-normal)' }}
             />
             {notesChanged && (
               <button
                 type="button"
                 onClick={() => void handleSaveNotes()}
-                className="mt-1.5 text-[11px] text-[color:var(--signal-blue)] hover:text-[color:var(--signal-blue)]"
+                style={{
+                  marginTop: 4, fontSize: 'var(--text-xs)', color: 'var(--color-gold)',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                }}
               >
                 保存备注
               </button>
             )}
           </div>
 
-          <div className="border-t border-[color:var(--border-soft)] pt-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">来源对话</p>
-            <p className="mb-1 text-[12px] text-[color:var(--text-secondary)]">
+          {/* Divider */}
+          <div className="divider" style={{ margin: 0 }} />
+
+          {/* Source */}
+          <div>
+            <p className="subsection-title">来源对话</p>
+            <p style={{ marginBottom: 4, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
               {new Date(item.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
             {item.generation_prompt && (
-              <p className="mb-3 line-clamp-2 text-[12px] text-[color:var(--text-primary)]">"{item.generation_prompt}"</p>
+              <p style={{
+                marginBottom: 'var(--space-4)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-ink-2)',
+                lineHeight: 'var(--leading-normal)',
+                fontFamily: 'var(--font-ui)',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}>
+                "{item.generation_prompt}"
+              </p>
             )}
-            <button
-              type="button"
-              onClick={() => onContinueInStudio(item)}
-              className="btn-primary w-full text-[12px] font-semibold"
-            >
-              <ChevronRight className="w-3.5 h-3.5" /> 继续迭代
-            </button>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <button
+                type="button"
+                onClick={() => onContinueInStudio(item)}
+                className="btn-primary"
+                style={{ flex: 1, fontSize: 'var(--text-xs)', height: 36 }}
+              >
+                <ChevronRight size={12} /> 继续迭代 →
+              </button>
+            </div>
           </div>
 
-          <div className="border-t border-[color:var(--border-soft)] pt-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">相似图片</p>
+          {/* Similar */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+              <p className="subsection-title" style={{ marginBottom: 0 }}>相似图片</p>
               {!similar.length && (
-                <button type="button" onClick={() => void loadSimilar()} disabled={loadingSimilar} className="btn-ghost h-8 min-h-8 px-2 text-[11px]">
-                  {loadingSimilar ? <RefreshCw className="w-3 h-3 animate-spin" /> : '加载'}
+                <button
+                  type="button"
+                  onClick={() => void loadSimilar()}
+                  disabled={loadingSimilar}
+                  className="btn-ghost"
+                  style={{ height: 24, padding: '0 8px', fontSize: 'var(--text-xs)' }}
+                >
+                  {loadingSimilar ? <RefreshCw size={10} className="animate-spin" /> : '加载'}
                 </button>
               )}
             </div>
             {similar.length > 0 && (
-              <div className="grid grid-cols-3 gap-1.5">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                 {similar.slice(0, 6).map(s => (
                   <img
                     key={s.id}
                     src={s.image_url}
                     alt=""
-                    className="aspect-square w-full cursor-pointer rounded-xl object-cover transition-opacity hover:opacity-80"
+                    style={{
+                      aspectRatio: '1',
+                      width: '100%',
+                      objectFit: 'cover',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      transition: 'opacity 150ms',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
                   />
                 ))}
               </div>
@@ -374,27 +779,37 @@ function DetailSidebar({
   );
 }
 
-// ── Version chain (designer) ──────────────────────────────
+// ── Version chain ──────────────────────────────────────────
 
 function VersionChain({ items }: { items: LibraryItem[] }) {
   if (items.length < 2) return null;
   return (
-    <div className="border-b border-[color:var(--border-soft)] bg-[color:var(--paper)] px-4 py-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">版本链</p>
-      <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+    <div style={{
+      borderBottom: '1px solid var(--color-border-subtle)',
+      background: 'var(--color-surface-2)',
+      padding: 'var(--space-3) var(--space-4)',
+    }}>
+      <p className="subsection-title" style={{ marginBottom: 'var(--space-2)' }}>版本链</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', scrollbarWidth: 'none' }}>
         {items.map((item, i) => (
-          <div key={item.id} className="flex items-center gap-2 shrink-0">
-            <div className="text-center">
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ textAlign: 'center' }}>
               <img
-                src={item.image_url}
-                alt=""
-                className="h-14 w-14 rounded-xl border-2 border-transparent object-cover transition-all hover:border-[color:var(--border-strong)]"
+                src={item.image_url} alt=""
+                style={{
+                  width: 56, height: 56,
+                  borderRadius: 'var(--radius-md)',
+                  objectFit: 'cover',
+                  border: '1px solid var(--color-border)',
+                }}
               />
-              <p className="mt-1 text-[9px] text-[color:var(--text-muted)]">
+              <p style={{ marginTop: 2, fontSize: 9, color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
                 {new Date(item.created_at).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
               </p>
             </div>
-            {i < items.length - 1 && <ChevronRight className="w-3 h-3 shrink-0 text-[color:var(--text-dim)]" />}
+            {i < items.length - 1 && (
+              <ChevronRight size={12} style={{ color: 'var(--color-ink-3)', flexShrink: 0 }} />
+            )}
           </div>
         ))}
       </div>
@@ -402,27 +817,33 @@ function VersionChain({ items }: { items: LibraryItem[] }) {
   );
 }
 
-// ── Outfit suggestions ────────────────────────────────────
+// ── Outfit card ────────────────────────────────────────────
 
 function OutfitCard({ outfit }: { outfit: OutfitSuggestion }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-white">
-      <div className="flex gap-2 p-3">
+    <div style={{
+      overflow: 'hidden',
+      borderRadius: 'var(--radius-lg)',
+      border: '1px solid var(--color-border)',
+      background: 'var(--color-surface)',
+    }}>
+      <div style={{ display: 'flex', gap: 8, padding: 12 }}>
         {outfit.items.slice(0, 3).map(item => (
           <img
             key={item.id}
-            src={item.image_url}
-            alt=""
-            className="h-20 w-16 shrink-0 rounded-xl object-cover"
+            src={item.image_url} alt=""
+            style={{ height: 80, width: 64, flexShrink: 0, borderRadius: 'var(--radius-md)', objectFit: 'cover' }}
           />
         ))}
       </div>
-      <div className="px-3 pb-3">
-        <p className="text-[13px] text-[color:var(--text-secondary)]">{outfit.description}</p>
+      <div style={{ padding: '0 12px 12px' }}>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
+          {outfit.description}
+        </p>
         {outfit.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {outfit.tags.map(t => (
-              <span key={t} className="rounded-full bg-[color:var(--paper)] px-2 py-0.5 text-[10px] text-[color:var(--text-muted)]">{t}</span>
+              <span key={t} className="tag">{t}</span>
             ))}
           </div>
         )}
@@ -464,8 +885,12 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
   const [analyzingLib, setAnalyzingLib] = useState(false);
 
-  // Version chain for selected item
-  const [versionChain, setVersionChain] = useState<LibraryItem[]>([]);
+  const versionChain = useMemo(() => {
+    if (!selectedItem?.session_id) return [];
+    return items
+      .filter(i => i.session_id === selectedItem.session_id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }, [selectedItem?.session_id, items]);
 
   const loaderRef = useRef<HTMLDivElement>(null);
 
@@ -502,7 +927,6 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
   useEffect(() => { void load(); }, [tab, selectedColId, filterMode, filterOccasion, filterSeason]);
 
-  // Search on enter
   const handleSearch = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') void load();
   };
@@ -520,7 +944,6 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
     setLoadingMore(false);
   }, [loadingMore, hasMore, page, user.auth_token, buildParams]);
 
-  // Infinite scroll
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(entries => {
@@ -530,24 +953,15 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
     return () => obs.disconnect();
   }, [loadMore]);
 
-  // Version chain for selected item
-  useEffect(() => {
-    if (!selectedItem?.session_id) { setVersionChain([]); return; }
-    const chain = items
-      .filter(i => i.session_id === selectedItem.session_id)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-    setVersionChain(chain);
-  }, [selectedItem, items]);
-
-  const handleFavorite = async (id: string, val: boolean) => {
+  const handleFavorite = useCallback(async (id: string, val: boolean) => {
     try {
       const r = await patchLibraryItem(user.auth_token, id, { is_favorite: val });
       setItems(prev => prev.map(i => i.id === id ? r.item : i));
       if (selectedItem?.id === id) setSelectedItem(r.item);
     } catch { toast('操作失败', 'error'); }
-  };
+  }, [user.auth_token, selectedItem?.id, toast]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!window.confirm('确认删除此图片？')) return;
     try {
       await deleteLibraryItem(user.auth_token, id);
@@ -555,7 +969,7 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
       if (selectedItem?.id === id) setSelectedItem(null);
       toast('已删除', 'success');
     } catch { toast('删除失败', 'error'); }
-  };
+  }, [user.auth_token, selectedItem?.id, toast]);
 
   const handleItemUpdate = (updated: LibraryItem) => {
     setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
@@ -609,167 +1023,215 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
     toast('已切换到设计工作台', 'info');
   };
 
-  // Group items by date
-  const groupedItems: Array<{ date: string; items: LibraryItem[] }> = [];
-  for (const item of items) {
-    const date = new Date(item.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-    const last = groupedItems[groupedItems.length - 1];
-    if (last && last.date === date) {
-      last.items.push(item);
-    } else {
-      groupedItems.push({ date, items: [item] });
+  const groupedItems = useMemo(() => {
+    const groups: Array<{ date: string; items: LibraryItem[] }> = [];
+    for (const item of items) {
+      const date = new Date(item.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+      const last = groups[groups.length - 1];
+      if (last && last.date === date) {
+        last.items.push(item);
+      } else {
+        groups.push({ date, items: [item] });
+      }
     }
-  }
+    return groups;
+  }, [items]);
+
+  // Active filters count
+  const activeFilters = [filterMode, filterOccasion, filterSeason].filter(Boolean).length;
+
+  const TABS: [Tab, string][] = [['all', '全部'], ['favorites', '收藏'], ['collections', '合集']];
+
+  const itemsWithSession = useMemo(() => items.filter(i => i.session_id), [items]);
+
+  const handleFavoriteStable = useCallback((id: string, val: boolean) => void handleFavorite(id, val), [user.auth_token]);
+  const handleDeleteStable = useCallback((id: string) => void handleDelete(id), [user.auth_token]);
 
   return (
-    <div className="flex h-full overflow-hidden bg-[color:var(--bg)]">
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--color-ground)' }}>
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <div className="flex shrink-0 items-center gap-3 border-b border-[color:var(--border-soft)] bg-white px-6 py-3">
-          <div className="flex items-center gap-1">
-            {([['all', '全部'], ['favorites', '收藏'], ['collections', '合集']] as [Tab, string][]).map(([t, label]) => (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+
+        {/* Sticky toolbar */}
+        <div style={{
+          position: 'sticky', top: 0,
+          zIndex: 'var(--z-raised)' as any,
+          display: 'flex', flexShrink: 0, alignItems: 'center', gap: 'var(--space-3)',
+          borderBottom: '1px solid var(--color-border-subtle)',
+          background: 'var(--color-ground)',
+          padding: '0 var(--space-6)',
+          height: 52,
+        }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', alignItems: 'stretch', height: '100%' }}>
+            {TABS.map(([t, label]) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => { setTab(t); setSelectedColId(null); }}
-                className={`rounded-xl px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  tab === t ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)]'
-                }`}
+                style={{
+                  position: 'relative',
+                  display: 'flex', alignItems: 'center',
+                  padding: '0 var(--space-4)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-sm)',
+                  fontFamily: 'var(--font-ui)',
+                  fontWeight: tab === t ? 'var(--weight-medium)' : 'var(--weight-regular)',
+                  color: tab === t ? 'var(--color-ink)' : 'var(--color-ink-3)',
+                  transition: 'color 150ms',
+                  whiteSpace: 'nowrap',
+                }}
               >
                 {label}
                 {t === 'all' && total > 0 && (
-                  <span className={`ml-1.5 text-[10px] ${tab === t ? 'text-white/60' : 'text-[color:var(--text-muted)]'}`}>{total}</span>
+                  <span style={{
+                    marginLeft: 6,
+                    fontSize: 'var(--text-2xs)',
+                    color: tab === t ? 'var(--color-ink-3)' : 'var(--color-ink-3)',
+                  }}>
+                    {total}
+                  </span>
+                )}
+                {/* Active underline */}
+                {tab === t && (
+                  <span style={{
+                    position: 'absolute', bottom: 0, left: '20%', right: '20%',
+                    height: 2, borderRadius: 'var(--radius-pill)',
+                    background: 'var(--color-gold)',
+                  }} />
                 )}
               </button>
             ))}
           </div>
 
-          <div className="flex-1" />
+          <div style={{ flex: 1 }} />
 
           {/* Search */}
-          <div className="relative w-48">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--text-muted)]" />
+          <div style={{ position: 'relative', width: 180 }}>
+            <Search size={13} style={{
+              position: 'absolute', left: 10, top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--color-ink-3)', pointerEvents: 'none',
+            }} />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={handleSearch}
               placeholder="搜索标签..."
-              className="input-shell py-1.5 pl-8 pr-3 text-[12px]"
+              className="input"
+              style={{ paddingLeft: 32, height: 34, minHeight: 34, fontSize: 'var(--text-xs)' }}
             />
           </div>
 
           {/* Filter */}
-          <div className="relative">
+          <div style={{ position: 'relative' }}>
             <button
               type="button"
               onClick={() => setFilterOpen(o => !o)}
-              className={`btn-ghost btn-square h-10 min-h-10 w-10 ${filterOpen ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)]' : ''}`}
+              className="btn-icon"
+              style={{
+                color: activeFilters > 0 ? 'var(--color-gold)' : 'var(--color-ink-3)',
+                background: filterOpen ? 'var(--overlay-medium)' : 'transparent',
+              }}
             >
-              <SlidersHorizontal className="w-4 h-4" />
+              <SlidersHorizontal size={15} />
+              {activeFilters > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: 'var(--color-gold)',
+                }} />
+              )}
             </button>
+
             {filterOpen && (
-              <div className="dropdown-enter absolute right-0 top-full z-20 mt-2 w-64 space-y-3 rounded-3xl border border-[color:var(--border-soft)] bg-white p-4 shadow-lg">
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">模式</p>
-                  <div className="flex gap-2">
-                    {[['', '全部'], ['personal', '个人'], ['designer', '设计师']].map(([v, l]) => (
-                      <button key={v} type="button" onClick={() => setFilterMode(v)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterMode === v ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
-                        {l}
-                      </button>
-                    ))}
+              <div
+                className="dropdown-enter"
+                style={{
+                  position: 'absolute', right: 0, top: 'calc(100% + 8px)',
+                  zIndex: 20, width: 260,
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  boxShadow: 'var(--shadow-lg)',
+                  padding: 'var(--space-4)',
+                  display: 'flex', flexDirection: 'column', gap: 'var(--space-4)',
+                }}
+              >
+                {[
+                  {
+                    title: '模式',
+                    options: [['', '全部'], ['personal', '个人'], ['designer', '设计师']] as [string, string][],
+                    current: filterMode,
+                    set: setFilterMode,
+                  },
+                  {
+                    title: '场合',
+                    options: ['职场', '休闲', '约会', '运动', '聚会'].map(o => [o, o] as [string, string]),
+                    current: filterOccasion,
+                    set: setFilterOccasion,
+                  },
+                  {
+                    title: '季节',
+                    options: ['春夏', '秋冬', '全季'].map(s => [s, s] as [string, string]),
+                    current: filterSeason,
+                    set: setFilterSeason,
+                  },
+                ].map(group => (
+                  <div key={group.title}>
+                    <p className="subsection-title" style={{ marginBottom: 'var(--space-2)' }}>{group.title}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      {group.options.map(([v, l]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => group.set(group.current === v ? '' : v)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: group.current === v
+                              ? '1px solid var(--color-gold)'
+                              : '1px solid var(--color-border)',
+                            background: group.current === v
+                              ? 'rgba(201,169,110,0.1)'
+                              : 'transparent',
+                            color: group.current === v ? 'var(--color-gold)' : 'var(--color-ink-3)',
+                            fontSize: 'var(--text-xs)',
+                            fontFamily: 'var(--font-ui)',
+                            cursor: 'pointer',
+                            transition: 'all 150ms',
+                          }}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">场合</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['职场', '休闲', '约会', '运动', '聚会'].map(o => (
-                      <button key={o} type="button" onClick={() => setFilterOccasion(filterOccasion === o ? '' : o)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterOccasion === o ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
-                        {o}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">季节</p>
-                  <div className="flex gap-2">
-                    {['春夏', '秋冬', '全季'].map(s => (
-                      <button key={s} type="button" onClick={() => setFilterSeason(filterSeason === s ? '' : s)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterSeason === s ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Collections sub-nav */}
-        {tab === 'collections' && (
-          <div className="shrink-0 border-b border-[color:var(--border-soft)] bg-white px-6 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedColId(null)}
-                className={`rounded-xl px-3 py-1.5 text-[12px] transition-colors ${!selectedColId ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]'}`}
-              >
-                全部合集
-              </button>
-              {collections.map(col => (
-                <div key={col.id} className="relative group flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedColId(col.id)}
-                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] transition-colors ${selectedColId === col.id ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]'}`}
-                  >
-                    {col.is_smart && <Sparkles className="w-3 h-3 text-amber-500" />}
-                    {col.name}
-                    <span className="text-[10px] opacity-60">{col.item_count}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteCollection(col.id)}
-                    className="hidden p-0.5 text-[color:var(--text-muted)] hover:text-red-500 group-hover:flex"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              {/* New collection */}
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={newColName}
-                  onChange={e => setNewColName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') void handleCreateCollection(); }}
-                  placeholder="新建合集..."
-                  className="input-shell w-28 text-[12px]"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleCreateCollection()}
-                  disabled={creatingCol || !newColName.trim()}
-                  className="btn-primary btn-square h-10 min-h-10 w-10 disabled:opacity-40"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Today's outfit banner — personal mode only */}
+        {/* Outfit banner */}
         {tab === 'all' && !filterMode && (
-          <div className="shrink-0 mx-6 mt-4 mb-2">
+          <div style={{ flexShrink: 0, padding: 'var(--space-4) var(--space-6) var(--space-2)' }}>
             {!showOutfits ? (
-              <div className="flex items-center gap-4 rounded-3xl bg-[linear-gradient(135deg,var(--ink),#25282f)] px-5 py-4 text-white">
-                <div className="flex-1">
-                  <p className="text-[14px] font-semibold text-white">今天穿什么？</p>
-                  <p className="mt-0.5 text-[11px] text-white/60">
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 'var(--space-5)',
+                borderRadius: 'var(--radius-lg)',
+                background: 'linear-gradient(135deg, var(--color-surface-2), var(--color-surface))',
+                border: '1px solid var(--color-border)',
+                padding: 'var(--space-4) var(--space-5)',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
+                    今天穿什么？
+                  </p>
+                  <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
                     {new Date().toLocaleDateString('zh-CN', { weekday: 'long' })} · 让 AI 从你的穿搭库推荐搭配
                   </p>
                 </div>
@@ -777,30 +1239,38 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                   type="button"
                   onClick={() => void handleSuggestOutfit()}
                   disabled={outfitLoading}
-                  className="btn-secondary px-4 text-[12px] font-semibold disabled:opacity-60"
+                  className="btn-secondary"
+                  style={{ height: 36, fontSize: 'var(--text-xs)' }}
                 >
-                  {outfitLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  {outfitLoading ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
                   让 AI 帮我搭
                 </button>
               </div>
             ) : (
-              <div className="rounded-3xl border border-[color:var(--border-soft)] bg-white p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">今日搭配推荐</p>
-                  <button type="button" onClick={() => setShowOutfits(false)} className="btn-ghost btn-square h-9 min-h-9 w-9">
-                    <X className="w-4 h-4" />
+              <div style={{
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-surface)',
+                padding: 'var(--space-4)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
+                  <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
+                    今日搭配推荐
+                  </p>
+                  <button type="button" onClick={() => setShowOutfits(false)} className="btn-icon">
+                    <X size={14} />
                   </button>
                 </div>
                 {outfitLoading && (
-                  <div className="flex items-center gap-2 py-4 text-[12px] text-[color:var(--text-muted)]">
-                    <RefreshCw className="w-4 h-4 animate-spin" /> AI 正在分析你的穿搭库...
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0', fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)' }}>
+                    <RefreshCw size={14} className="animate-spin" /> AI 正在分析你的穿搭库...
                   </div>
                 )}
                 {!outfitLoading && outfitMessage && (
-                  <p className="text-[12px] text-[color:var(--text-secondary)]">{outfitMessage}</p>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>{outfitMessage}</p>
                 )}
                 {!outfitLoading && outfits.length > 0 && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
                     {outfits.map((outfit, i) => <OutfitCard key={i} outfit={outfit} />)}
                   </div>
                 )}
@@ -809,32 +1279,73 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
           </div>
         )}
 
-        {/* Image grid */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        {/* Scrollable content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-4) var(--space-6)' }}>
+
+          {/* Loading */}
           {loading && (
-            <div className="flex items-center justify-center py-20 text-[13px] text-[color:var(--text-muted)]">
-              <RefreshCw className="w-4 h-4 animate-spin mr-2" /> 加载中...
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--color-ink-3)' }}>
+              <RefreshCw size={14} className="animate-spin" /> 加载中...
             </div>
           )}
 
-          {!loading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 text-[color:var(--text-muted)]">
-              <Grid3X3 className="mb-3 h-10 w-10 opacity-30" />
-              <p className="text-[14px]">还没有图片</p>
-              <p className="text-[12px] mt-1">在设计工作台生成图片后会自动入库</p>
+          {/* Empty */}
+          {!loading && items.length === 0 && tab !== 'collections' && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '96px 0', color: 'var(--color-ink-3)' }}>
+              <Grid3X3 size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+              <p style={{ fontSize: 'var(--text-base)', fontFamily: 'var(--font-ui)' }}>还没有图片</p>
+              <p style={{ fontSize: 'var(--text-sm)', marginTop: 4, color: 'var(--color-ink-3)' }}>在设计工作台生成图片后会自动入库</p>
             </div>
           )}
 
-          {!loading && groupedItems.map(group => (
-            <div key={group.date} className="mb-6">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">{group.date}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                {group.items.map(item => (
-                  <ItemCard
+          {/* Collections view */}
+          {tab === 'collections' && !loading && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 'var(--space-5)' }}>
+              {collections.map(col => (
+                <CollectionCard
+                  key={col.id}
+                  col={col}
+                  items={itemsWithSession}
+                  isSelected={selectedColId === col.id}
+                  onSelect={() => setSelectedColId(col.id === selectedColId ? null : col.id)}
+                  onDelete={() => void handleDeleteCollection(col.id)}
+                />
+              ))}
+              <NewCollectionCard
+                name={newColName}
+                onChange={setNewColName}
+                onCreate={() => void handleCreateCollection()}
+                creating={creatingCol}
+              />
+            </div>
+          )}
+
+          {/* Items grid */}
+          {!loading && tab !== 'collections' && groupedItems.map(group => (
+            <div key={group.date} style={{ marginBottom: 'var(--space-8)' }}>
+              <p style={{
+                marginBottom: 'var(--space-3)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 'var(--weight-medium)',
+                letterSpacing: 'var(--tracking-widest)',
+                textTransform: 'uppercase',
+                color: 'var(--color-ink-3)',
+                fontFamily: 'var(--font-ui)',
+              }}>
+                {group.date}
+              </p>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                gap: 'var(--space-3)',
+              }}>
+                {group.items.map((item, i) => (
+                  <ItemCardMemo
                     key={item.id}
                     item={item}
-                    onFavorite={(id, val) => void handleFavorite(id, val)}
-                    onDelete={(id) => void handleDelete(id)}
+                    index={i}
+                    onFavorite={handleFavoriteStable}
+                    onDelete={handleDeleteStable}
                     onClick={setSelectedItem}
                   />
                 ))}
@@ -843,43 +1354,63 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
           ))}
 
           {/* Infinite scroll loader */}
-          <div ref={loaderRef} className="flex justify-center py-2">
-            {loadingMore && <RefreshCw className="w-4 h-4 animate-spin text-[color:var(--text-muted)]" />}
+          <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
+            {loadingMore && <RefreshCw size={14} className="animate-spin" style={{ color: 'var(--color-ink-3)' }} />}
           </div>
 
-          {/* Style insights (≥20 items) */}
+          {/* Style insights */}
           {!loading && stats && stats.total_count >= 20 && (
-            <div className="mt-6 rounded-3xl border border-[color:var(--border-soft)] bg-white p-5">
-              <div className="mb-3 flex items-center justify-between">
+            <div style={{
+              marginTop: 'var(--space-6)',
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--color-border)',
+              background: 'var(--color-surface)',
+              padding: 'var(--space-6)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)' }}>
                 <div>
-                  <p className="text-[14px] font-semibold text-[color:var(--text-primary)]">你的风格洞察</p>
-                  <p className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">基于 {stats.total_count} 张图片分析</p>
+                  <h3 style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--text-xl)',
+                    fontWeight: 'var(--weight-light)',
+                    letterSpacing: 'var(--tracking-tight)',
+                    color: 'var(--color-ink)',
+                  }}>
+                    你的风格洞察
+                  </h3>
+                  <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
+                    基于 {stats.total_count} 张图片分析
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleAnalyzeLib()}
                   disabled={analyzingLib}
-                  className="btn-secondary px-3 text-[12px] disabled:opacity-50"
+                  className="btn-ghost"
+                  style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gold)', height: 32 }}
                 >
-                  {analyzingLib ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
+                  {analyzingLib ? <RefreshCw size={12} className="animate-spin" /> : <Star size={12} />}
                   更新风格档案
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 'var(--space-5)' }}>
                 {stats.top_colors.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">最常见颜色</p>
-                    <div className="flex flex-wrap gap-1">
-                      {stats.top_colors.slice(0, 3).map(c => (
-                        <span key={c.name} className="text-[11px] text-[color:var(--text-secondary)]">{c.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
+                    <p className="subsection-title">最常见颜色</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {stats.top_colors.slice(0, 3).map((c, i) => (
+                        <span key={c.name} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
+                          {i > 0 && <span style={{ color: 'var(--color-ink-3)' }}> · </span>}
+                          {c.name}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
                 {stats.top_silhouettes.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">偏好廓形</p>
-                    <p className="text-[11px] text-[color:var(--text-secondary)]">
+                    <p className="subsection-title">偏好廓形</p>
+                    <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
                       {stats.top_silhouettes[0].name}
                       {stats.total_count > 0 && ` (${Math.round(stats.top_silhouettes[0].count / stats.total_count * 100)}%)`}
                     </p>
@@ -887,21 +1418,27 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                 )}
                 {stats.top_occasions.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">主要场合</p>
-                    <div className="flex flex-wrap gap-1">
-                      {stats.top_occasions.slice(0, 2).map(o => (
-                        <span key={o.name} className="text-[11px] text-[color:var(--text-secondary)]">{o.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
+                    <p className="subsection-title">主要场合</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {stats.top_occasions.slice(0, 2).map((o, i) => (
+                        <span key={o.name} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
+                          {i > 0 && <span style={{ color: 'var(--color-ink-3)' }}> · </span>}
+                          {o.name}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
                 {stats.top_styles.length > 0 && (
                   <div>
-                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">风格关键词</p>
-                    <div className="flex flex-wrap gap-1">
-                      {stats.top_styles.slice(0, 2).map(s => (
-                        <span key={s.name} className="text-[11px] text-[color:var(--text-secondary)]">{s.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
+                    <p className="subsection-title">风格关键词</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {stats.top_styles.slice(0, 2).map((s, i) => (
+                        <span key={s.name} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
+                          {i > 0 && <span style={{ color: 'var(--color-ink-3)' }}> · </span>}
+                          {s.name}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -921,13 +1458,6 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
           onClose={() => setSelectedItem(null)}
           onContinueInStudio={handleContinueInStudio}
         />
-      )}
-
-      {/* Version chain overlay at top of sidebar when designer mode */}
-      {selectedItem && versionChain.length >= 2 && selectedItem.mode === 'designer' && (
-        <div className="absolute left-0 right-80 bottom-0 pointer-events-none">
-          {/* rendered inside the detail sidebar header area */}
-        </div>
       )}
     </div>
   );

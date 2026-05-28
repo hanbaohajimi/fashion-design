@@ -105,7 +105,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
   };
 
   const fieldClass = (hasError?: boolean) =>
-    `auth-input pl-11 ${hasError ? 'border-red-300 focus:border-red-400 focus:shadow-red-500/10' : ''}`;
+    `auth-input pl-11 ${hasError ? 'border-[color:var(--color-danger)]' : ''}`;
 
   return (
     <div className="entry-shell">
@@ -136,10 +136,10 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               返回首页
             </button>
 
-            <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-[color:var(--text-primary)]">
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 'var(--weight-light)', letterSpacing: 'var(--tracking-tight)', color: 'var(--color-ink)' }}>
               {mode === 'login' ? '欢迎回来' : '创建账号'}
             </h2>
-            <p className="mt-2 text-[13px] leading-6 text-[color:var(--text-secondary)]">
+            <p style={{ marginTop: 8, fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-normal)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
               {mode === 'login' ? '进入你的 AI 时尚设计工作台。' : '创建账号后即可保存项目和生成历史。'}
             </p>
 
@@ -147,7 +147,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               {mode === 'register' && (
                 <div>
                   <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                    <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
                     <input
                       type="text"
                       value={name}
@@ -156,13 +156,13 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                       className={fieldClass(!!errors.name)}
                     />
                   </div>
-                  {errors.name && <p className="mt-1.5 text-[11px] text-red-500">{errors.name}</p>}
+                  {errors.name && <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>{errors.name}</p>}
                 </div>
               )}
 
               <div>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
                   <input
                     type="email"
                     value={email}
@@ -171,12 +171,12 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                     className={fieldClass(!!errors.email)}
                   />
                 </div>
-                {errors.email && <p className="mt-1.5 text-[11px] text-red-500">{errors.email}</p>}
+                {errors.email && <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>{errors.email}</p>}
               </div>
 
               <div>
                 <div className="relative">
-                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
                   <input
                     type="password"
                     value={password}
@@ -185,9 +185,9 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                     className={fieldClass(!!errors.password)}
                   />
                 </div>
-                {errors.password && <p className="mt-1.5 text-[11px] text-red-500">{errors.password}</p>}
+                {errors.password && <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>{errors.password}</p>}
                 {mode === 'register' && password && (
-                  <p className={`mt-1.5 text-[11px] ${pwCheck.valid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', color: pwCheck.valid ? 'var(--color-success)' : 'var(--color-warning)' }}>
                     {pwCheck.message}
                   </p>
                 )}
@@ -196,7 +196,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               {mode === 'register' && (
                 <div>
                   <div className="relative">
-                    <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                    <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-ink-3)' }} />
                     <input
                       type="password"
                       value={confirmPw}
@@ -205,12 +205,12 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                       className={fieldClass(!!errors.confirmPassword)}
                     />
                   </div>
-                  {errors.confirmPassword && <p className="mt-1.5 text-[11px] text-red-500">{errors.confirmPassword}</p>}
+                  {errors.confirmPassword && <p style={{ marginTop: 6, fontSize: 'var(--text-xs)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>{errors.confirmPassword}</p>}
                 </div>
               )}
 
               {submitError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-center text-[13px] text-red-600">
+                <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid rgba(168,88,88,0.3)', background: 'rgba(168,88,88,0.1)', padding: '10px 16px', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>
                   {submitError}
                 </div>
               )}
@@ -220,7 +220,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               </button>
             </form>
 
-            <p className="mt-6 text-center text-[13px] text-[color:var(--text-muted)]">
+            <p style={{ marginTop: 24, textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
               {mode === 'login' ? '还没有账号？' : '已有账号？'}
               <button
                 type="button"
@@ -229,7 +229,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                   setErrors({});
                   setSubmitError('');
                 }}
-                className="ml-1 font-semibold text-[color:var(--text-primary)] underline underline-offset-4"
+                style={{ marginLeft: 4, fontWeight: 'var(--weight-medium)', color: 'var(--color-gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)' }}
               >
                 {mode === 'login' ? '立即注册' : '返回登录'}
               </button>
