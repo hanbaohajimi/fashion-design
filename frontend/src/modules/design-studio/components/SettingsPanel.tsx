@@ -87,34 +87,32 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
   const archivedProjects = (workspace?.projects || []).filter(p => p.status === 'archived');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm px-4">
+      <div className="dialog-panel w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[color:var(--border-soft)]">
           <div>
-            <h2 className="text-[16px] font-semibold text-gray-900">个性化档案</h2>
-            <p className="text-[12px] text-gray-400 mt-0.5">管理你的风格偏好和设计项目</p>
+            <h2 className="text-[18px] font-extrabold tracking-[-0.02em] text-[color:var(--text-primary)]">个性化档案</h2>
+            <p className="mt-1 text-[12px] text-[color:var(--text-secondary)]">管理你的风格偏好和设计项目</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+            className="btn-ghost btn-square min-h-10 h-10 w-10"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-6">
+        <div className="flex border-b border-[color:var(--border-soft)] px-6">
           {(['personal', 'designer'] as Tab[]).map(t => (
             <button
               key={t}
               type="button"
               onClick={() => setTab(t)}
-              className={`px-4 py-3 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
+              className={`px-4 py-3 text-[13px] font-semibold border-b-2 -mb-px transition-colors ${
                 tab === t
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-400 hover:text-gray-700'
+                  ? 'border-[color:var(--ink)] text-[color:var(--ink)]'
+                  : 'border-transparent text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]'
               }`}
             >
               {t === 'personal' ? '个人穿搭档案' : '设计师工作区'}
@@ -122,42 +120,39 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
           ))}
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {loading && (
-            <div className="flex items-center justify-center py-12 text-gray-400 text-[13px]">
+            <div className="flex items-center justify-center py-12 text-[color:var(--text-muted)] text-[13px]">
               <RefreshCw className="w-4 h-4 animate-spin mr-2" />
               加载中...
             </div>
           )}
 
-          {/* Personal Tab */}
           {!loading && tab === 'personal' && profile && (
             <div className="space-y-6">
-              {/* Static info */}
               {profile.static && (
                 <div>
-                  <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">基础信息</h3>
+                  <h3 className="section-label mb-3">基础信息</h3>
                   <div className="grid grid-cols-2 gap-3">
                     {profile.static.body_shape && (
-                      <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-                        <p className="text-[10px] text-gray-400">体型</p>
-                        <p className="text-[13px] font-medium text-gray-800 mt-0.5">{profile.static.body_shape}</p>
+                      <div className="rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-3 py-2.5">
+                        <p className="text-[10px] text-[color:var(--text-muted)]">体型</p>
+                        <p className="mt-0.5 text-[13px] font-semibold text-[color:var(--text-primary)]">{profile.static.body_shape}</p>
                       </div>
                     )}
                     {profile.static.budget_tier && (
-                      <div className="bg-gray-50 rounded-xl px-3 py-2.5">
-                        <p className="text-[10px] text-gray-400">预算档位</p>
-                        <p className="text-[13px] font-medium text-gray-800 mt-0.5">{profile.static.budget_tier}</p>
+                      <div className="rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-3 py-2.5">
+                        <p className="text-[10px] text-[color:var(--text-muted)]">预算档位</p>
+                        <p className="mt-0.5 text-[13px] font-semibold text-[color:var(--text-primary)]">{profile.static.budget_tier}</p>
                       </div>
                     )}
                   </div>
                   {profile.static.style_keywords?.length ? (
                     <div className="mt-3">
-                      <p className="text-[11px] text-gray-400 mb-1.5">偏好风格</p>
+                      <p className="mb-1.5 text-[11px] text-[color:var(--text-muted)]">偏好风格</p>
                       <div className="flex flex-wrap gap-1.5">
                         {profile.static.style_keywords.map(k => (
-                          <span key={k} className="px-2.5 py-1 text-[11px] bg-blue-50 text-blue-700 rounded-full border border-blue-100">{k}</span>
+                          <span key={k} className="chip text-[11px]">{k}</span>
                         ))}
                       </div>
                     </div>
@@ -165,14 +160,13 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
                 </div>
               )}
 
-              {/* Dynamic/Inferred */}
               {profile.dynamic?.inferred_keywords?.length ? (
                 <div>
-                  <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">AI 推断偏好</h3>
+                  <h3 className="section-label mb-3">AI 推断偏好</h3>
                   <div className="space-y-2">
                     {profile.dynamic.inferred_keywords.map((kw, i) => (
                       <div key={i} className="flex items-center gap-3 py-1.5">
-                        <span className="text-[13px] text-gray-700 flex-1">{kw.tag}</span>
+                        <span className="flex-1 text-[13px] text-[color:var(--text-primary)]">{kw.tag}</span>
                         <ConfidenceBar value={kw.confidence} />
                       </div>
                     ))}
@@ -180,25 +174,23 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
                 </div>
               ) : null}
 
-              {/* Disliked */}
               {profile.dynamic?.disliked_elements?.length ? (
                 <div>
-                  <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">设计禁区</h3>
+                  <h3 className="section-label mb-3">设计禁区</h3>
                   <div className="flex flex-wrap gap-1.5">
                     {profile.dynamic.disliked_elements.map(el => (
-                      <span key={el} className="px-2.5 py-1 text-[11px] bg-red-50 text-red-600 rounded-full border border-red-100">{el}</span>
+                      <span key={el} className="chip text-[11px] border-red-200 bg-red-50 text-red-700">{el}</span>
                     ))}
                   </div>
                 </div>
               ) : null}
 
-              {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   type="button"
                   onClick={handlePersonalAnalyze}
                   disabled={analyzing}
-                  className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="btn-secondary text-[12px] font-medium disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} />
                   手动触发 AI 分析
@@ -207,11 +199,10 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
             </div>
           )}
 
-          {/* Designer Tab */}
           {!loading && tab === 'designer' && (
             <div className="space-y-4">
               {activeProjects.length === 0 && archivedProjects.length === 0 && (
-                <div className="text-center py-12 text-gray-400">
+                <div className="py-12 text-center text-[color:var(--text-muted)]">
                   <p className="text-[14px]">还没有任何项目</p>
                   <p className="text-[12px] mt-1">在设计师模式下开始对话时新建项目</p>
                 </div>
@@ -219,7 +210,7 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
 
               {activeProjects.length > 0 && (
                 <div>
-                  <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">进行中的项目</h3>
+                  <h3 className="section-label mb-3">进行中的项目</h3>
                   <div className="space-y-3">
                     {activeProjects.map(proj => (
                       <ProjectCard
@@ -237,18 +228,18 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
 
               {archivedProjects.length > 0 && (
                 <div>
-                  <h3 className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">已归档</h3>
+                  <h3 className="section-label mb-3">已归档</h3>
                   <div className="space-y-2">
                     {archivedProjects.map(proj => (
-                      <div key={proj.id} className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl opacity-60">
+                      <div key={proj.id} className="flex items-center gap-3 rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-4 py-3 opacity-70">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-medium text-gray-700 truncate">{proj.name}</p>
-                          {proj.brief.season && <p className="text-[11px] text-gray-400">{proj.brief.season}</p>}
+                          <p className="truncate text-[13px] font-semibold text-[color:var(--text-primary)]">{proj.name}</p>
+                          {proj.brief.season && <p className="text-[11px] text-[color:var(--text-muted)]">{proj.brief.season}</p>}
                         </div>
                         <button
                           type="button"
                           onClick={() => handleSetActive(proj.id)}
-                          className="text-[11px] text-gray-500 hover:text-gray-800 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                          className="btn-ghost h-9 min-h-9 px-3 text-[11px]"
                         >
                           恢复
                         </button>
@@ -279,23 +270,23 @@ function ProjectCard({ project, onEdit, onArchive, onAnalyze, analyzing }: {
   ];
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-white">
       <div
-        className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--paper)]"
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-            <p className="text-[14px] font-semibold text-gray-900 truncate">{project.name}</p>
+            <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-[color:var(--signal-green)]" />
+            <p className="truncate text-[14px] font-semibold text-[color:var(--text-primary)]">{project.name}</p>
             {project.brief.season && (
-              <span className="text-[10px] text-gray-400 shrink-0">{project.brief.season}</span>
+              <span className="shrink-0 text-[10px] text-[color:var(--text-muted)]">{project.brief.season}</span>
             )}
           </div>
           {allAnchors.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
+            <div className="mt-1.5 flex flex-wrap gap-1">
               {allAnchors.slice(0, 5).map(a => (
-                <span key={a} className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-600 rounded-md">{a}</span>
+                <span key={a} className="rounded-md bg-[color:var(--paper)] px-2 py-0.5 text-[10px] text-[color:var(--text-secondary)]">{a}</span>
               ))}
             </div>
           )}
@@ -304,7 +295,7 @@ function ProjectCard({ project, onEdit, onArchive, onAnalyze, analyzing }: {
           <button
             type="button"
             onClick={onEdit}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition-colors"
+            className="btn-ghost btn-square h-9 min-h-9 w-9"
             title="编辑项目"
           >
             <Edit3 className="w-3.5 h-3.5" />
@@ -313,7 +304,7 @@ function ProjectCard({ project, onEdit, onArchive, onAnalyze, analyzing }: {
             type="button"
             onClick={onAnalyze}
             disabled={analyzing}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition-colors disabled:opacity-40"
+            className="btn-ghost btn-square h-9 min-h-9 w-9 disabled:opacity-40"
             title="触发 AI 分析"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} />
@@ -321,7 +312,7 @@ function ProjectCard({ project, onEdit, onArchive, onAnalyze, analyzing }: {
           <button
             type="button"
             onClick={onArchive}
-            className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+            className="btn-ghost btn-square h-9 min-h-9 w-9 hover:text-red-600"
             title="归档项目"
           >
             <Archive className="w-3.5 h-3.5" />
@@ -330,32 +321,32 @@ function ProjectCard({ project, onEdit, onArchive, onAnalyze, analyzing }: {
       </div>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
+        <div className="space-y-3 border-t border-[color:var(--border-soft)] px-4 pb-4 pt-3">
           {project.brief.target_audience && (
-            <p className="text-[12px] text-gray-600">目标客群：{project.brief.target_audience}</p>
+            <p className="text-[12px] text-[color:var(--text-secondary)]">目标客群：{project.brief.target_audience}</p>
           )}
           {project.design_language.silhouettes?.length ? (
             <div>
-              <p className="text-[11px] text-gray-400 mb-1">惯用廓形</p>
+              <p className="mb-1 text-[11px] text-[color:var(--text-muted)]">惯用廓形</p>
               <div className="flex flex-wrap gap-1">
                 {project.design_language.silhouettes.map(s => (
-                  <span key={s} className="px-2 py-0.5 text-[11px] bg-gray-50 text-gray-600 rounded-md border border-gray-200">{s}</span>
+                  <span key={s} className="rounded-md border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-2 py-0.5 text-[11px] text-[color:var(--text-secondary)]">{s}</span>
                 ))}
               </div>
             </div>
           ) : null}
           {project.dynamic.design_signatures?.length ? (
             <div>
-              <p className="text-[11px] text-gray-400 mb-1">AI 总结的设计规律</p>
+              <p className="mb-1 text-[11px] text-[color:var(--text-muted)]">AI 总结的设计规律</p>
               <div className="space-y-1.5">
                 {project.dynamic.design_signatures.map((sig, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
-                    <span className="text-gray-700 flex-1">{sig.pattern}</span>
+                    <span className="flex-1 text-[color:var(--text-primary)]">{sig.pattern}</span>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="w-10 h-1 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full bg-gray-400 rounded-full" style={{ width: `${Math.round(sig.confidence * 100)}%` }} />
+                      <div className="h-1 w-10 overflow-hidden rounded-full bg-[color:var(--paper)]">
+                        <div className="h-full rounded-full bg-[color:var(--signal-blue)]" style={{ width: `${Math.round(sig.confidence * 100)}%` }} />
                       </div>
-                      <span className="text-[10px] text-gray-400">{Math.round(sig.confidence * 100)}%</span>
+                      <span className="text-[10px] text-[color:var(--text-muted)]">{Math.round(sig.confidence * 100)}%</span>
                     </div>
                   </div>
                 ))}

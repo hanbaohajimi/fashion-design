@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Fashion Studio Avant-Garde</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+  <div class="ambient ambient-c" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#atelier" aria-label="Fashion Studio Avant-Garde">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
+      </span>
+      <span>
+        <strong>Fashion Studio</strong>
+        <small>Immersive & Fluid</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a href="#paths">路径</a>
+      <a href="#composition">编排</a>
+      <a href="#theater">剧场</a>
+    </nav>
+
+    <div class="topbar-actions">
+      <button class="icon-button" type="button" data-action="toggle-theme" title="切换展厅模式" aria-label="切换展厅模式">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      </button>
+      <button class="icon-button" type="button" data-action="play" title="播放动态层" aria-label="播放动态层">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 5v14l11-7-11-7z" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="atelier">
+      <div class="hero-copy">
+        <p class="eyebrow">Avant-Garde Digital Curatorial Space</p>
+        <h1>无界画布<br />液态流向<br />视差剧场</h1>
+        <p class="lede">
+          这不是一个管理台，而是一个让灵感在深夜继续流动的时装策展空间。
+          资产、趋势、色彩与作品不再被锁进格子，而是在空间中形成可被编排的感知流。
+        </p>
+
+        <div class="hero-actions">
+          <button class="primary-button" type="button" data-action="focus-moodboard">
+            进入情绪板
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14" />
+              <path d="M13 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button class="secondary-button" type="button" data-action="focus-theater">
+            观看剧场
+          </button>
+        </div>
+      </div>
+
+      <aside class="hero-panel">
+        <div class="panel-label">Live Field</div>
+        <div class="status-grid">
+          <article>
+            <span>情绪密度</span>
+            <strong>0.92</strong>
+          </article>
+          <article>
+            <span>色域扩散</span>
+            <strong>Active</strong>
+          </article>
+          <article>
+            <span>视差深度</span>
+            <strong>6 Layers</strong>
+          </article>
+          <article>
+            <span>创作状态</span>
+            <strong>Night Shift</strong>
+          </article>
+        </div>
+
+        <div class="hero-preview">
+          <img src="https://picsum.photos/id/1069/1200/900" alt="时装策展空间预览" />
+          <div class="preview-caption">
+            <span class="mono">Mesh / Drift / Reveal</span>
+            <span>鼠标经过时，空间会像材质一样被触发。</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="paths" id="paths">
+      <div class="section-heading">
+        <p class="eyebrow">Three Core Paths</p>
+        <h2>面向夜间创作者状态重塑的三条核心任务路径</h2>
+      </div>
+
+      <div class="path-rail">
+        <article class="path-card drift-card" data-card="moodboard">
+          <div class="path-meta">
+            <span>01</span>
+            <h3>情绪板无限编织</h3>
+          </div>
+          <p>
+            资产包不再按顺序归档，而是以流体碰撞方式拼贴。
+            参考图、注释、材质和趋势碎片会在空间中自行寻找邻接关系。
+          </p>
+          <ul>
+            <li>拖拽即编织</li>
+            <li>漂浮标签与笔记共层</li>
+            <li>卡片碰撞时产生轻微位移</li>
+          </ul>
+          <div class="path-visual collage">
+            <img src="https://picsum.photos/id/1056/600/800" alt="情绪板资产 1" />
+            <img src="https://picsum.photos/id/1062/600/800" alt="情绪板资产 2" />
+            <img src="https://picsum.photos/id/1039/600/800" alt="情绪板资产 3" />
+          </div>
+        </article>
+
+        <article class="path-card fluid-card" data-card="color">
+          <div class="path-meta">
+            <span>02</span>
+            <h3>液态色域漫延</h3>
+          </div>
+          <p>
+            鼠标滑动时，颜色在界面组件上无级扩散。
+            色彩不是静态选项，而是随着意图在表面上缓慢捕捉、过渡和沉积。
+          </p>
+          <ul>
+            <li>鼠标坐标驱动光场</li>
+            <li>CSS 变量实时扩散</li>
+            <li>组件边缘出现液态高光</li>
+          </ul>
+          <div class="path-visual color-well">
+            <div class="swatch swatch-a"></div>
+            <div class="swatch swatch-b"></div>
+            <div class="swatch swatch-c"></div>
+            <div class="swatch swatch-d"></div>
+          </div>
+        </article>
+
+        <article class="path-card theater-card" data-card="theater">
+          <div class="path-meta">
+            <span>03</span>
+            <h3>视差动态剧场</h3>
+          </div>
+          <p>
+            作品与资产沿着横向空间展开，形成可演示的沉浸式编排。
+            从设计过程到汇报展示，页面本身成为一场横向移动的展演。
+          </p>
+          <ul>
+            <li>横向视差滚动</li>
+            <li>叙事式卡段编排</li>
+            <li>适合对外展示与评审</li>
+          </ul>
+          <div class="path-visual theater-track">
+            <img src="https://picsum.photos/id/1015/800/500" alt="剧场场景 1" />
+            <img src="https://picsum.photos/id/1027/800/500" alt="剧场场景 2" />
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="composition" id="composition">
+      <div class="section-heading">
+        <p class="eyebrow">Information Architecture</p>
+        <h2>从管理台结构切换为低认知负载的流体叙事</h2>
+      </div>
+
+      <div class="compare-grid">
+        <article class="compare-panel compare-before">
+          <h3>重构前</h3>
+          <div class="diagram">
+            <div class="node wide">工具栏 / tab bar</div>
+            <div class="row">
+              <div class="node">设计</div>
+              <div class="node">趋势</div>
+              <div class="node">素材库</div>
+            </div>
+            <div class="node tall">详情面板</div>
+            <div class="node wide">弹窗 / 表单 / 过滤器</div>
+          </div>
+          <p>固定格子、面板堆叠、信息竞争注意力。</p>
+        </article>
+
+        <article class="compare-panel compare-after">
+          <h3>重构后</h3>
+          <div class="diagram fluid-diagram">
+            <div class="node wide drift">沉浸入口</div>
+            <div class="node drift">情绪板</div>
+            <div class="node drift">色域</div>
+            <div class="node drift">剧场</div>
+            <div class="node wide drift">策展状态 / 预览 / 导出</div>
+          </div>
+          <p>无界画布、渐进显影、动态转场与空间叙事。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="matrix" id="matrix">
+      <div class="section-heading">
+        <p class="eyebrow">Translation Matrix</p>
+        <h2>灵感大师方法论转译为 Web 交互语言</h2>
+      </div>
+
+      <div class="matrix-grid">
+        <article class="matrix-card">
+          <h3>Refik Anadol</h3>
+          <p>→ 全局动态 Mesh Gradient、混合模式和流体噪点层。</p>
+          <pre>mesh-gradient + mix-blend-mode: screen</pre>
+        </article>
+        <article class="matrix-card">
+          <h3>Zaha Hadid</h3>
+          <p>→ 非对称斜切容器、深度错位和纵深层级编排。</p>
+          <pre>clip-path + depth stacks + z-index choreography</pre>
+        </article>
+        <article class="matrix-card">
+          <h3>Olafur Eliasson</h3>
+          <p>→ 鼠标坐标驱动的衍射光晕、散射与环境感知。</p>
+          <pre>--mouse-x / --mouse-y + radial glow</pre>
+        </article>
+        <article class="matrix-card">
+          <h3>Teenage Engineering</h3>
+          <p>→ 极简等宽参数区与微型控制组件。</p>
+          <pre>JetBrains Mono + micro controls</pre>
+        </article>
+      </div>
+    </section>
+
+    <section class="theater" id="theater">
+      <div class="section-heading">
+        <p class="eyebrow">Parallax Theater</p>
+        <h2>作品、材质、趋势与输出报告在横向空间中展开</h2>
+      </div>
+
+      <div class="theater-stage" data-stage>
+        <article class="stage-card stage-a">
+          <img src="https://picsum.photos/id/1043/1200/800" alt="舞台作品 1" />
+          <div class="stage-copy">
+            <span class="mono">Look 01</span>
+            <h3>Silhouette studies</h3>
+          </div>
+        </article>
+        <article class="stage-card stage-b">
+          <img src="https://picsum.photos/id/1033/1200/800" alt="舞台作品 2" />
+          <div class="stage-copy">
+            <span class="mono">Look 02</span>
+            <h3>Material drift</h3>
+          </div>
+        </article>
+        <article class="stage-card stage-c">
+          <img src="https://picsum.photos/id/1019/1200/800" alt="舞台作品 3" />
+          <div class="stage-copy">
+            <span class="mono">Look 03</span>
+            <h3>Gradient capture</h3>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="tokens">
+      <div class="section-heading">
+        <p class="eyebrow">Design Tokens</p>
+        <h2>流体栅格、间距步进与交互体感</h2>
+      </div>
+      <div class="token-grid">
+        <article class="token-card">
+          <h3>Grid</h3>
+          <p>12 列桌面，8 列平板，4 列移动；容器以 max 1280px 约束，内部使用流体列与跨列占位。</p>
+        </article>
+        <article class="token-card">
+          <h3>Spacing</h3>
+          <p>8 / 12 / 16 / 24 / 32 / 48 / 64 为主步进，关键舞台空间用 96 与 128 制造呼吸感。</p>
+        </article>
+        <article class="token-card">
+          <h3>Motion</h3>
+          <p>统一使用 cubic-bezier(0.25, 1, 0.5, 1)，配合轻量视差和鼠标联动，保持物理感和柔性。</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <aside class="floating-console" aria-label="Live console">
+    <div class="console-header">
+      <span class="mono">LIVE</span>
+      <button type="button" data-action="collapse-console" class="icon-button small" aria-label="收起控制台">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+    </div>
+    <div class="console-body">
+      <div class="console-chip">Mouse field active</div>
+      <div class="console-chip">Drag enabled</div>
+      <div class="console-chip">Noise overlay on</div>
+    </div>
+  </aside>
+
+  <script type="module" src="./script.js"></script>
+</body>
+</html>

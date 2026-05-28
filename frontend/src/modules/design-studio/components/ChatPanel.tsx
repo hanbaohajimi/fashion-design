@@ -1101,13 +1101,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   if (collapsed) {
     return (
       <div
-        className={`w-12 min-w-12 shrink-0 h-full bg-white ${edgeBorder} border-gray-200/60 z-20 flex flex-col items-center py-3 gap-2 transition-[width,min-width] duration-200 ease-out`}
+        className={`w-12 min-w-12 shrink-0 h-full bg-[color:var(--bg-elevated)] ${edgeBorder} border-[color:var(--border-soft)] z-20 flex flex-col items-center py-3 gap-2 transition-[width,min-width] duration-200 ease-out`}
       >
         <button
           type="button"
           onClick={onToggleCollapse}
           title="展开 AI 对话（Ctrl+B）"
-          className="p-2 rounded-xl bg-gray-900 text-white hover:bg-gray-800 transition-colors shadow-sm"
+          className="btn-primary btn-square h-10 min-h-10 w-10"
         >
           <ExpandIcon className="w-4 h-4" />
         </button>
@@ -1117,7 +1117,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           )}
           {!isLoading && hasActivity && (
             <span
-              className="w-1.5 h-1.5 rounded-full bg-emerald-500"
+            className="w-1.5 h-1.5 rounded-full bg-[color:var(--signal-green)]"
               title="有进行中的会话或待发送参考图"
             />
           )}
@@ -1134,32 +1134,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <div
-      className={`shrink-0 bg-white flex flex-col h-full ${edgeBorder} border-gray-200/60 z-20 relative transition-[width,min-width] duration-200 ease-out overflow-x-hidden w-[clamp(420px,38vw,600px)] min-w-[380px] max-w-[min(600px,calc(100vw-320px))]`}
+      className={`shrink-0 bg-[color:var(--bg-elevated)] flex flex-col h-full ${edgeBorder} border-[color:var(--border-soft)] z-20 relative transition-[width,min-width] duration-200 ease-out overflow-x-hidden w-[clamp(420px,38vw,600px)] min-w-[380px] max-w-[min(600px,calc(100vw-320px))]`}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
       {isDragging && (
-        <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur flex items-center justify-center border border-dashed border-gray-300 rounded-lg m-3">
+        <div className="absolute inset-0 z-50 m-3 flex items-center justify-center rounded-2xl border border-dashed border-[color:var(--border-strong)] bg-white/92 backdrop-blur">
           <div className="text-center">
-            <Upload className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600 font-medium">松开上传图片</p>
+            <Upload className="mx-auto mb-2 h-6 w-6 text-[color:var(--text-muted)]" />
+            <p className="text-sm font-medium text-[color:var(--text-secondary)]">松开上传图片</p>
           </div>
         </div>
       )}
 
-      <div className="px-4 py-3 border-b border-gray-100 bg-white">
+      <div className="border-b border-[color:var(--border-soft)] bg-white px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center shrink-0">
-              <Sparkles className="w-3.5 h-3.5 text-white" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--ink)] text-white">
+              <Sparkles className="w-3.5 h-3.5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-[13px] font-semibold text-gray-900 tracking-tight truncate">Fashion Studio</h1>
-              <p className="text-[10px] text-gray-400 truncate">AI 设计助手</p>
+              <h1 className="truncate text-[13px] font-semibold tracking-tight text-[color:var(--text-primary)]">Fashion Studio</h1>
+              <p className="truncate text-[10px] text-[color:var(--text-muted)]">AI 设计助手</p>
               {messages.length > 0 && (
-                <p className="text-[11px] font-medium text-gray-500 truncate mt-0.5" title={chatSessionTitle}>
+                <p className="mt-0.5 truncate text-[11px] font-medium text-[color:var(--text-secondary)]" title={chatSessionTitle}>
                   {chatSessionTitle}
                 </p>
               )}
@@ -1170,7 +1170,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             <button
               type="button"
               onClick={addToLibrary}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10"
               title="复制最近生成图链接"
             >
               <SquarePlus className="w-3.5 h-3.5" />
@@ -1178,7 +1178,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             <button
               type="button"
               onClick={shareConversation}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10"
               title="复制页面链接"
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -1186,7 +1186,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             <button
               type="button"
               onClick={newChat}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10"
               title="新对话"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -1195,7 +1195,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               <button
                 type="button"
                 onClick={onToggleCollapse}
-                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                className="btn-ghost btn-square h-10 min-h-10 w-10"
                 title="收起侧栏（Ctrl+B）"
               >
                 <CollapseIcon className="w-3.5 h-3.5" />
@@ -1207,12 +1207,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {modeBar}
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 chat-scrollbar min-w-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 chat-scrollbar min-w-0 bg-[linear-gradient(180deg,rgba(245,243,239,0.1),rgba(245,243,239,0.2))]">
         {showWelcome && (
           <div className="fade-up-in">
             <div className="mb-8 mt-6">
-              <h2 className="text-[15px] font-semibold text-gray-900 tracking-tight mb-1">你好，设计师</h2>
-              <p className="text-[13px] text-gray-400 leading-relaxed">描述你的设计需求，AI 将为你创作</p>
+              <h2 className="mb-1 text-[15px] font-semibold tracking-tight text-[color:var(--text-primary)]">你好，设计师</h2>
+              <p className="text-[13px] leading-relaxed text-[color:var(--text-muted)]">描述你的设计需求，AI 将为你创作</p>
             </div>
             <div className="space-y-1.5">
               {WELCOME_CARDS.map((c, i) => (
@@ -1220,36 +1220,36 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   key={i}
                   type="button"
                   onClick={() => suggest(c.prompt)}
-                  className="w-full group flex items-center gap-3 px-3.5 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+                  className="w-full group flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors hover:bg-[color:var(--paper)]"
                 >
-                  <span className="w-8 h-8 rounded-lg bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center text-gray-400 group-hover:text-gray-600 transition-colors shrink-0">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--paper)] text-[color:var(--text-muted)] transition-colors group-hover:bg-[color:var(--paper-2)] group-hover:text-[color:var(--text-primary)]">
                     {c.icon}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-gray-700 group-hover:text-gray-900">{c.title}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{c.sub}</p>
+                    <p className="text-[13px] font-medium text-[color:var(--text-secondary)] group-hover:text-[color:var(--text-primary)]">{c.title}</p>
+                    <p className="truncate text-[11px] text-[color:var(--text-muted)]">{c.sub}</p>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0 text-[color:var(--text-dim)] transition-all group-hover:translate-x-0.5 group-hover:text-[color:var(--text-secondary)]" />
                 </button>
               ))}
             </div>
 
-            <div className="mt-6 rounded-2xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-              <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-gray-100/90 bg-gradient-to-r from-violet-50/70 via-white to-amber-50/35">
+            <div className="mt-6 overflow-hidden rounded-3xl border border-[color:var(--border-soft)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              <div className="flex items-center justify-between gap-2 border-b border-[color:var(--border-soft)] bg-[linear-gradient(90deg,rgba(47,107,255,0.08),rgba(255,255,255,1),rgba(179,142,95,0.08))] px-3.5 py-2.5">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shrink-0 shadow-sm">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--signal-blue)] shadow-sm">
                     <TrendingUp className="w-4 h-4 text-white" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-gray-900 tracking-tight">趋势分析</p>
-                    <p className="text-[10px] text-gray-500 truncate">按维度热词 · 选分类后刷新列表 · 点击填入提示词</p>
+                    <p className="text-[13px] font-semibold tracking-tight text-[color:var(--text-primary)]">趋势分析</p>
+                    <p className="truncate text-[10px] text-[color:var(--text-muted)]">按维度热词 · 选分类后刷新列表 · 点击填入提示词</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => void loadTrendHotTags()}
                   disabled={trendHotStatus === 'loading'}
-                  className="shrink-0 flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-gray-500 hover:text-gray-800 hover:bg-white/80 rounded-lg transition-colors disabled:opacity-50"
+                  className="btn-ghost shrink-0 px-2 text-[10px] font-medium disabled:opacity-50"
                   title="重新拉取热词"
                 >
                   <RefreshCw className={`w-3 h-3 ${trendHotStatus === 'loading' ? 'animate-spin' : ''}`} />
@@ -1258,7 +1258,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               </div>
               <div className="px-3.5 py-3 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <label htmlFor="trend-hot-cat-welcome" className="text-[10px] text-gray-500 shrink-0">
+                  <label htmlFor="trend-hot-cat-welcome" className="shrink-0 text-[10px] text-[color:var(--text-muted)]">
                     维度
                   </label>
                   <select
@@ -1266,7 +1266,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     value={trendHotCategory}
                     onChange={(e) => setTrendHotCategory(e.target.value)}
                     disabled={trendHotStatus === 'loading'}
-                    className="text-[11px] rounded-lg border border-gray-200/90 bg-white text-gray-800 px-2 py-1.5 min-w-[120px] max-w-full focus:outline-none focus:ring-1 focus:ring-violet-300 disabled:opacity-50"
+                    className="input-shell min-h-0 rounded-xl px-2 py-1.5 text-[11px] min-w-[120px] max-w-full disabled:opacity-50"
                   >
                     <option value="">全部维度</option>
                     {TREND_DIM_ORDER.map((k) => (
@@ -1277,25 +1277,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   </select>
                 </div>
                 {trendHotStatus === 'loading' && (
-                  <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                  <div className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
                     <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden />
                     正在同步热词…
                   </div>
                 )}
                 {trendHotStatus === 'error' && (
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                  <p className="text-[11px] leading-relaxed text-[color:var(--text-muted)]">
                     无法连接趋势服务。请确认趋势分析后端（端口 8002）已启动，稍后点击「刷新」。
                   </p>
                 )}
                 {trendHotStatus === 'empty' && (
-                  <p className="text-[11px] text-gray-400">暂无热词数据，可在趋势分析中心完成采集后再试。</p>
+                  <p className="text-[11px] text-[color:var(--text-muted)]">暂无热词数据，可在趋势分析中心完成采集后再试。</p>
                 )}
                 {trendHotDisplayBlocks.length > 0 && (
                   <div className="space-y-3 max-h-[min(40vh,320px)] overflow-y-auto pr-0.5">
                     {trendHotDisplayBlocks.map((block) => (
                       <div key={block.key}>
                         {!trendHotCategory && (
-                          <p className="text-[10px] font-semibold text-gray-500 tracking-wide mb-1.5">
+                            <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-[color:var(--text-muted)]">
                             {block.label}
                           </p>
                         )}
@@ -1305,7 +1305,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                               key={`${it.category}-${it.keyword}`}
                               type="button"
                               onClick={() => applyTrendHotTag(it.keyword)}
-                              className="inline-flex items-center max-w-full px-2.5 py-1.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-700 border border-gray-200/80 hover:border-violet-300 hover:bg-violet-50/60 hover:text-violet-950 transition-colors truncate"
+                              className="inline-flex max-w-full truncate rounded-full border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--text-secondary)] transition-colors hover:border-[color:var(--signal-blue)] hover:bg-[rgba(47,107,255,0.08)] hover:text-[color:var(--text-primary)]"
                               title={
                                 it.count > 0
                                   ? `${it.keyword} · ${it.categoryLabel} · ${it.count} 次`
@@ -1752,19 +1752,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               ))}
             </div>
           ) : trendHotStatus === 'error' ? (
-            <p className="text-[10px] text-gray-400 pb-1.5">热词未加载，启动趋势服务后点「刷新」</p>
+              <p className="pb-1.5 text-[10px] text-[color:var(--text-muted)]">热词未加载，启动趋势服务后点「刷新」</p>
           ) : trendHotStatus === 'empty' ? (
-            <p className="text-[10px] text-gray-400 pb-1.5">暂无热词</p>
+            <p className="pb-1.5 text-[10px] text-[color:var(--text-muted)]">暂无热词</p>
           ) : null}
         </div>
       )}
 
       <div className="p-4 border-t border-gray-100">
-        <div className="relative bg-gray-50 rounded-xl focus-within:bg-white focus-within:ring-1 focus-within:ring-gray-200 transition-all">
+        <div className="relative rounded-3xl border border-[color:var(--border-soft)] bg-white transition-all focus-within:border-[color:var(--signal-blue)] focus-within:shadow-[0_0_0_4px_rgba(47,107,255,0.1)]">
           {mentionOpen && filteredMentions.length > 0 && (
             <div
               ref={mentionMenuRef}
-              className="absolute bottom-full left-2 right-2 mb-1 max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg z-40 py-1"
+              className="absolute bottom-full left-2 right-2 z-40 mb-1 max-h-36 overflow-y-auto rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg"
             >
               {filteredMentions.map((t) => (
                 <button
@@ -1772,10 +1772,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => insertMention(`图${t.n}`)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-gray-50 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-[color:var(--paper)]"
                 >
-                  <span className="font-semibold text-gray-900 tabular-nums">图{t.n}</span>
-                  <span className="text-gray-400 truncate flex-1 min-w-0">{t.name}</span>
+                  <span className="font-semibold tabular-nums text-[color:var(--text-primary)]">图{t.n}</span>
+                  <span className="min-w-0 flex-1 truncate text-[color:var(--text-muted)]">{t.name}</span>
                 </button>
               ))}
             </div>
@@ -1788,7 +1788,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             placeholder="描述设计需求，输入 @ 引用已添加的图片（图1、图2…）"
             disabled={isLoading}
             rows={1}
-            className="w-full px-3.5 pt-2.5 pb-1 bg-transparent text-[13px] resize-none focus:outline-none disabled:text-gray-400 placeholder:text-gray-400 max-h-28"
+            className="max-h-28 w-full resize-none bg-transparent px-3.5 pt-2.5 pb-1 text-[13px] focus:outline-none disabled:text-[color:var(--text-dim)] placeholder:text-[color:var(--text-dim)]"
           />
           <div className="flex items-center justify-between px-1.5 pb-1.5 gap-1 flex-wrap">
             <div className="flex items-center gap-0.5">
@@ -1796,7 +1796,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={isLoading || attachedAssets.length >= MAX_ATTACHMENTS}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors disabled:opacity-40"
+                className="btn-ghost btn-square h-9 min-h-9 w-9 disabled:opacity-40"
                 title={`添加图片（最多 ${MAX_ATTACHMENTS} 张，可多选）`}
               >
                 <Paperclip className="w-3.5 h-3.5" />
@@ -1814,7 +1814,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-40 ${
                   trendActive && trendId
                     ? 'text-violet-600 bg-violet-50'
-                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100/80'
+                    : 'text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--paper)]'
                 }`}
                 title={
                   trendId
@@ -1834,18 +1834,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 disabled={isLoading}
                 onClick={() => {
                   const capabilities = [
-                    '🎨 文生图 — 描述即可生成服装照片/概念图',
-                    '✏️ 草图绘制 — 生成黑白线稿款式图',
-                    '🖌 图片编辑 — 基于现有图修改颜色/细节',
-                    '🧩 图案迁移 — 将花纹应用到服装上',
-                    '👤 模特生成 — 生成展示用模特',
-                    '👗 虚拟试穿 — 服装+模特合成试穿效果',
+                    '文生图 — 描述即可生成服装照片/概念图',
+                    '草图绘制 — 生成黑白线稿款式图',
+                    '图片编辑 — 基于现有图修改颜色/细节',
+                    '图案迁移 — 将花纹应用到服装上',
+                    '模特生成 — 生成展示用模特',
+                    '虚拟试穿 — 服装+模特合成试穿效果',
                   ].join('\n');
                   toast('AI 设计助手支持以下能力，直接描述需求即可调用', 'info');
                   setInput(prev => prev || '帮我设计一件');
                   taRef.current?.focus();
                 }}
-                className="flex items-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100/80 rounded-lg transition-colors disabled:opacity-40"
+                className="btn-ghost px-2 py-1.5 text-[color:var(--text-muted)] disabled:opacity-40"
                 title="智能体能力：文生图/草图/编辑/图案迁移/模特生成/试穿"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1876,8 +1876,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     return next;
                   });
                 }}
-                className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
-                  fastMode ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-gray-600'
+                className={`btn-ghost btn-square h-9 min-h-9 w-9 rounded-xl transition-colors disabled:opacity-40 ${
+                  fastMode ? 'text-[color:var(--signal-amber)] bg-amber-50' : 'text-[color:var(--text-muted)]'
                 }`}
                 title={fastMode ? '快速模式已开启（点击关闭）' : '快速模式（简洁回复）'}
               >
@@ -1887,8 +1887,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 type="button"
                 disabled={isLoading || enhancing}
                 onClick={() => void enhanceInput()}
-                className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
-                  enhancing ? 'text-blue-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'
+                className={`btn-ghost btn-square h-9 min-h-9 w-9 rounded-xl transition-colors disabled:opacity-40 ${
+                  enhancing ? 'text-[color:var(--signal-blue)] animate-pulse' : 'text-[color:var(--text-muted)]'
                 }`}
                 title="AI 增强提示词 — 自动扩展为专业英文 prompt"
               >
@@ -1908,7 +1908,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   toast('已生成版型参考 prompt，可直接发送或修改', 'info');
                   taRef.current?.focus();
                 }}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors disabled:opacity-40"
+                className="btn-ghost btn-square h-9 min-h-9 w-9 disabled:opacity-40"
                 title="版型参考 — 生成平铺图/多角度/技术规格图"
               >
                 <Box className="w-3.5 h-3.5" />
@@ -1917,7 +1917,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 type="button"
                 onClick={() => void send()}
                 disabled={isLoading || (!input.trim() && attachedAssets.length === 0 && !pendingFromCanvas)}
-                className="ml-0.5 p-2.5 bg-gray-900 text-white rounded-full hover:bg-gray-800 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed shadow-sm"
+                className="ml-0.5 h-10 w-10 rounded-full bg-[color:var(--ink)] text-white shadow-sm transition-colors hover:bg-black disabled:cursor-not-allowed disabled:bg-[color:var(--paper)] disabled:text-[color:var(--text-dim)]"
                 title="发送"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -1925,7 +1925,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
           </div>
         </div>
-        <p className="text-[10px] text-gray-300 mt-2 text-center">
+        <p className="mt-2 text-center text-[10px] text-[color:var(--text-muted)]">
           Enter 发送 · Shift+Enter 换行 · 支持一次选择多张图片
         </p>
       </div>

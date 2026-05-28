@@ -269,11 +269,11 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
   }, [editorImageDataUrl, previewImage]);
 
   return (
-    <div className="flex h-full overflow-hidden bg-[var(--bg)]">
+    <div className="flex h-full overflow-hidden bg-[color:var(--bg)]">
       <main className="flex-1 flex flex-col relative min-w-0 min-h-0">
         {designBackend === 'error' && (
           <div
-            className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 text-[12px] border-b border-amber-200/90 bg-amber-50/95 text-amber-950"
+            className="shrink-0 flex flex-wrap items-center gap-2 border-b border-amber-200/70 bg-amber-50/90 px-3 py-2 text-[12px] text-[color:var(--text-primary)]"
             role="alert"
           >
             <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" aria-hidden />
@@ -291,7 +291,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
                 void recheckDesignBackend();
                 toast('已重新检测设计服务', 'info');
               }}
-              className="ml-auto inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-white/90 border border-amber-200 text-amber-900 hover:bg-amber-100/80 transition-colors"
+              className="ml-auto inline-flex items-center gap-1 rounded-full border border-[color:var(--border)] bg-white px-3 py-1.5 text-[11px] font-semibold text-[color:var(--text-primary)] hover:border-[color:var(--border-strong)] hover:bg-[color:var(--paper)] transition-colors"
             >
               <RefreshCw className="w-3 h-3" aria-hidden />
               重试
@@ -367,40 +367,40 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
               alt="Preview"
               className="max-w-full max-h-[85vh] object-contain rounded-lg preview-image-enter"
             />
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-0.5 bg-[#18181b]/90 backdrop-blur-xl rounded-lg ring-1 ring-white/[0.05]">
+            <div className="absolute -top-14 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-white/10 bg-[rgba(16,17,20,0.92)] p-1 backdrop-blur-xl">
               <button
                 type="button"
                 onClick={() => { handleAddToCanvas(previewImage); setPreviewImage(null); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
+                className="btn-ghost h-10 min-h-10 px-3 text-[11px] text-white/72 hover:bg-white/10 hover:text-white"
               >
                 <Plus className="w-3 h-3" /> 置入画布
               </button>
               <button
                 type="button"
                 onClick={() => { handleEditImage(previewImage); setPreviewImage(null); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
+                className="btn-ghost h-10 min-h-10 px-3 text-[11px] text-white/72 hover:bg-white/10 hover:text-white"
               >
                 <PencilRuler className="w-3 h-3" /> 像素编辑
               </button>
               <button
                 type="button"
                 onClick={() => { handleSendToAI(previewImage); setPreviewImage(null); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
+                className="btn-ghost h-10 min-h-10 px-3 text-[11px] text-white/72 hover:bg-white/10 hover:text-white"
               >
                 <MessageSquare className="w-3 h-3" /> AI
               </button>
               <button
                 type="button"
                 onClick={() => { handleDownloadPreview(); setPreviewImage(null); }}
-                className="flex items-center gap-1 px-3 py-1.5 text-[11px] text-gray-400 hover:text-white hover:bg-white/8 rounded-md transition-colors"
+                className="btn-ghost h-10 min-h-10 px-3 text-[11px] text-white/72 hover:bg-white/10 hover:text-white"
               >
                 <Download className="w-3 h-3" /> 下载
               </button>
-              <div className="w-px h-4 bg-white/[0.06]" />
+              <div className="h-4 w-px bg-white/10" />
               <button
                 type="button"
                 onClick={() => setPreviewImage(null)}
-                className="p-1.5 text-gray-500 hover:text-white hover:bg-white/8 rounded-md transition-colors"
+                className="btn-ghost btn-square h-10 min-h-10 w-10 text-white/60 hover:bg-white/10 hover:text-white"
                 title="关闭"
               >
                 <X className="w-3.5 h-3.5" />

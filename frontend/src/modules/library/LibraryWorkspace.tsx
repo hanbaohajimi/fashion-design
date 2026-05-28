@@ -42,7 +42,7 @@ function ItemCard({
 
   return (
     <div
-      className="relative group rounded-xl overflow-hidden bg-gray-100 cursor-pointer"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--paper)] shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(16,17,20,0.12)]"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => { setHover(false); setMenuOpen(false); }}
       onClick={() => onClick(item)}
@@ -58,16 +58,16 @@ function ItemCard({
       {hover && (
         <div className="absolute inset-0 bg-black/20 transition-all">
           <div
-            className="absolute top-2 right-2 flex items-center gap-1"
+          className="absolute right-2 top-2 flex items-center gap-1"
             onClick={e => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => onFavorite(item.id, !item.is_favorite)}
-              className={`p-1.5 rounded-full backdrop-blur-sm transition-colors ${
+              className={`flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
                 item.is_favorite
                   ? 'bg-red-500 text-white'
-                  : 'bg-white/80 text-gray-600 hover:bg-red-50 hover:text-red-500'
+                  : 'bg-white/84 text-[color:var(--text-secondary)] hover:bg-red-50 hover:text-red-500'
               }`}
             >
               <Heart className="w-3.5 h-3.5" fill={item.is_favorite ? 'currentColor' : 'none'} />
@@ -76,16 +76,16 @@ function ItemCard({
               <button
                 type="button"
                 onClick={() => setMenuOpen(m => !m)}
-                className="p-1.5 rounded-full bg-white/80 text-gray-600 hover:bg-white backdrop-blur-sm transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/84 text-[color:var(--text-secondary)] backdrop-blur-sm transition-colors hover:bg-white"
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-28 bg-white rounded-lg shadow-lg border border-gray-100 z-10 py-1">
+                <div className="absolute right-0 top-full z-10 mt-1 w-28 rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg">
                   <button
                     type="button"
                     onClick={() => { onDelete(item.id); setMenuOpen(false); }}
-                    className="w-full px-3 py-1.5 text-left text-[12px] text-red-600 hover:bg-red-50 flex items-center gap-1.5"
+                    className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-[12px] text-red-600 hover:bg-red-50"
                   >
                     <Trash2 className="w-3 h-3" /> 删除
                   </button>
@@ -100,7 +100,7 @@ function ItemCard({
         <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/40 to-transparent">
           <div className="flex flex-wrap gap-1">
             {item.auto_tags.style_keywords.slice(0, 2).map(k => (
-              <span key={k} className="text-[9px] text-white/90 bg-black/30 px-1.5 py-0.5 rounded-full backdrop-blur-sm">{k}</span>
+              <span key={k} className="rounded-full bg-black/35 px-1.5 py-0.5 text-[9px] text-white/90 backdrop-blur-sm">{k}</span>
             ))}
           </div>
         </div>
@@ -210,30 +210,27 @@ function DetailSidebar({
   ].filter(Boolean) as string[];
 
   return (
-    <div className="w-80 border-l border-gray-100 flex flex-col h-full bg-white">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <span className="text-[13px] font-semibold text-gray-900">图片详情</span>
-        <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+    <div className="flex h-full w-80 flex-col border-l border-[color:var(--border-soft)] bg-white">
+      <div className="flex items-center justify-between border-b border-[color:var(--border-soft)] px-4 py-3">
+        <span className="text-[13px] font-semibold text-[color:var(--text-primary)]">图片详情</span>
+        <button type="button" onClick={onClose} className="btn-ghost btn-square h-9 min-h-9 w-9">
           <X className="w-4 h-4" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Image */}
         <div className="p-4">
-          <img src={item.image_url} alt="" className="w-full rounded-xl object-cover" style={{ maxHeight: 300 }} />
+          <img src={item.image_url} alt="" className="w-full rounded-2xl object-cover" style={{ maxHeight: 300 }} />
         </div>
 
-        {/* Actions */}
-        <div className="px-4 pb-3 flex items-center gap-2">
+        <div className="flex items-center gap-2 px-4 pb-3">
           <button
             type="button"
             onClick={handleFavorite}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-medium transition-colors ${
               item.is_favorite
                 ? 'bg-red-50 border-red-200 text-red-600'
-                : 'border-gray-200 text-gray-600 hover:border-red-200 hover:text-red-500'
+                : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-red-200 hover:text-red-500'
             }`}
           >
             <Heart className="w-3.5 h-3.5" fill={item.is_favorite ? 'currentColor' : 'none'} />
@@ -242,26 +239,22 @@ function DetailSidebar({
 
           {/* Add to collection */}
           <div className="relative">
-            <button
-              type="button"
-              onClick={() => setColMenuOpen(m => !m)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-600 hover:border-gray-400 transition-colors"
-            >
+            <button type="button" onClick={() => setColMenuOpen(m => !m)} className="btn-secondary px-3 text-[12px] font-medium">
               <BookOpen className="w-3.5 h-3.5" /> 加入合集
             </button>
             {colMenuOpen && (
-              <div className="absolute left-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-20 py-1 max-h-48 overflow-y-auto">
+              <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-44 overflow-y-auto rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg">
                 {collections.length === 0 && (
-                  <p className="px-3 py-2 text-[11px] text-gray-400">暂无合集</p>
+                  <p className="px-3 py-2 text-[11px] text-[color:var(--text-muted)]">暂无合集</p>
                 )}
                 {collections.map(col => (
                   <button
                     key={col.id}
                     type="button"
                     onClick={() => handleAddToCollection(col.id)}
-                    className="w-full px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]"
                   >
-                    {col.is_smart && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
+                    {col.is_smart && <Sparkles className="w-3 h-3 shrink-0 text-amber-500" />}
                     <span className="truncate">{col.name}</span>
                   </button>
                 ))}
@@ -270,30 +263,28 @@ function DetailSidebar({
           </div>
         </div>
 
-        <div className="px-4 space-y-4 pb-6">
-          {/* Auto tags */}
+        <div className="space-y-4 px-4 pb-6">
           {allAutoTags.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">风格标签</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">风格标签</p>
               <div className="flex flex-wrap gap-1.5">
                 {allAutoTags.map((tag, i) => (
-                  <span key={i} className="px-2 py-0.5 text-[11px] bg-gray-50 text-gray-700 rounded-full border border-gray-200">{tag}</span>
+                  <span key={i} className="rounded-full border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-2 py-0.5 text-[11px] text-[color:var(--text-secondary)]">{tag}</span>
                 ))}
               </div>
             </div>
           )}
 
-          {/* User tags */}
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">我的标签</p>
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">我的标签</p>
+            <div className="mb-2 flex flex-wrap gap-1.5">
               {item.user_tags.map(tag => (
                 <span
                   key={tag}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[11px] bg-blue-50 text-blue-700 rounded-full border border-blue-100"
+                  className="flex items-center gap-1 rounded-full border border-[rgba(47,107,255,0.14)] bg-[rgba(47,107,255,0.08)] px-2 py-0.5 text-[11px] text-[color:var(--signal-blue)]"
                 >
                   {tag}
-                  <button type="button" onClick={() => handleRemoveTag(tag)} className="text-blue-400 hover:text-blue-700">
+                  <button type="button" onClick={() => handleRemoveTag(tag)} className="text-[rgba(47,107,255,0.7)] hover:text-[color:var(--signal-blue)]">
                     <X className="w-2.5 h-2.5" />
                   </button>
                 </span>
@@ -306,68 +297,60 @@ function DetailSidebar({
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') void handleAddTag(); }}
                 placeholder="添加标签..."
-                className="flex-1 text-[12px] px-2.5 py-1.5 border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+                className="input-shell flex-1 text-[12px]"
               />
               <button
                 type="button"
                 onClick={() => void handleAddTag()}
-                className="p-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                className="btn-primary btn-square h-10 min-h-10 w-10"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Notes */}
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">备注</p>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">备注</p>
             <textarea
               value={notes}
               onChange={e => { setNotes(e.target.value); setNotesChanged(true); }}
               placeholder="点击添加备注..."
               rows={3}
-              className="w-full text-[12px] px-2.5 py-2 border border-gray-200 rounded-lg outline-none focus:border-gray-400 resize-none"
+              className="input-shell resize-none text-[12px]"
             />
             {notesChanged && (
               <button
                 type="button"
                 onClick={() => void handleSaveNotes()}
-                className="mt-1.5 text-[11px] text-blue-600 hover:text-blue-800"
+                className="mt-1.5 text-[11px] text-[color:var(--signal-blue)] hover:text-[color:var(--signal-blue)]"
               >
                 保存备注
               </button>
             )}
           </div>
 
-          {/* Source + actions */}
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">来源对话</p>
-            <p className="text-[12px] text-gray-500 mb-1">
+          <div className="border-t border-[color:var(--border-soft)] pt-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">来源对话</p>
+            <p className="mb-1 text-[12px] text-[color:var(--text-secondary)]">
               {new Date(item.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
             {item.generation_prompt && (
-              <p className="text-[12px] text-gray-700 line-clamp-2 mb-3">"{item.generation_prompt}"</p>
+              <p className="mb-3 line-clamp-2 text-[12px] text-[color:var(--text-primary)]">"{item.generation_prompt}"</p>
             )}
             <button
               type="button"
               onClick={() => onContinueInStudio(item)}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-900 text-white text-[12px] font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              className="btn-primary w-full text-[12px] font-semibold"
             >
               <ChevronRight className="w-3.5 h-3.5" /> 继续迭代
             </button>
           </div>
 
-          {/* Similar images */}
-          <div className="border-t border-gray-100 pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">相似图片</p>
+          <div className="border-t border-[color:var(--border-soft)] pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">相似图片</p>
               {!similar.length && (
-                <button
-                  type="button"
-                  onClick={() => void loadSimilar()}
-                  disabled={loadingSimilar}
-                  className="text-[11px] text-gray-500 hover:text-gray-800 flex items-center gap-1"
-                >
+                <button type="button" onClick={() => void loadSimilar()} disabled={loadingSimilar} className="btn-ghost h-8 min-h-8 px-2 text-[11px]">
                   {loadingSimilar ? <RefreshCw className="w-3 h-3 animate-spin" /> : '加载'}
                 </button>
               )}
@@ -379,7 +362,7 @@ function DetailSidebar({
                     key={s.id}
                     src={s.image_url}
                     alt=""
-                    className="w-full aspect-square object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                    className="aspect-square w-full cursor-pointer rounded-xl object-cover transition-opacity hover:opacity-80"
                   />
                 ))}
               </div>
@@ -396,8 +379,8 @@ function DetailSidebar({
 function VersionChain({ items }: { items: LibraryItem[] }) {
   if (items.length < 2) return null;
   return (
-    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">版本链</p>
+    <div className="border-b border-[color:var(--border-soft)] bg-[color:var(--paper)] px-4 py-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">版本链</p>
       <div className="flex items-center gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
         {items.map((item, i) => (
           <div key={item.id} className="flex items-center gap-2 shrink-0">
@@ -405,13 +388,13 @@ function VersionChain({ items }: { items: LibraryItem[] }) {
               <img
                 src={item.image_url}
                 alt=""
-                className="w-14 h-14 object-cover rounded-lg border-2 border-transparent hover:border-gray-400 transition-all"
+                className="h-14 w-14 rounded-xl border-2 border-transparent object-cover transition-all hover:border-[color:var(--border-strong)]"
               />
-              <p className="text-[9px] text-gray-400 mt-1">
+              <p className="mt-1 text-[9px] text-[color:var(--text-muted)]">
                 {new Date(item.created_at).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
               </p>
             </div>
-            {i < items.length - 1 && <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />}
+            {i < items.length - 1 && <ChevronRight className="w-3 h-3 shrink-0 text-[color:var(--text-dim)]" />}
           </div>
         ))}
       </div>
@@ -423,23 +406,23 @@ function VersionChain({ items }: { items: LibraryItem[] }) {
 
 function OutfitCard({ outfit }: { outfit: OutfitSuggestion }) {
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-white">
       <div className="flex gap-2 p-3">
         {outfit.items.slice(0, 3).map(item => (
           <img
             key={item.id}
             src={item.image_url}
             alt=""
-            className="w-16 h-20 object-cover rounded-lg shrink-0"
+            className="h-20 w-16 shrink-0 rounded-xl object-cover"
           />
         ))}
       </div>
       <div className="px-3 pb-3">
-        <p className="text-[13px] text-gray-700">{outfit.description}</p>
+        <p className="text-[13px] text-[color:var(--text-secondary)]">{outfit.description}</p>
         {outfit.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
             {outfit.tags.map(t => (
-              <span key={t} className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{t}</span>
+              <span key={t} className="rounded-full bg-[color:var(--paper)] px-2 py-0.5 text-[10px] text-[color:var(--text-muted)]">{t}</span>
             ))}
           </div>
         )}
@@ -639,25 +622,23 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
   }
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ background: 'var(--bg)' }}>
+    <div className="flex h-full overflow-hidden bg-[color:var(--bg)]">
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Header bar */}
-        <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-white">
-          {/* Tabs */}
+        <div className="flex shrink-0 items-center gap-3 border-b border-[color:var(--border-soft)] bg-white px-6 py-3">
           <div className="flex items-center gap-1">
             {([['all', '全部'], ['favorites', '收藏'], ['collections', '合集']] as [Tab, string][]).map(([t, label]) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => { setTab(t); setSelectedColId(null); }}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
-                  tab === t ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                className={`rounded-xl px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                  tab === t ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)]'
                 }`}
               >
                 {label}
                 {t === 'all' && total > 0 && (
-                  <span className={`ml-1.5 text-[10px] ${tab === t ? 'text-white/60' : 'text-gray-400'}`}>{total}</span>
+                  <span className={`ml-1.5 text-[10px] ${tab === t ? 'text-white/60' : 'text-[color:var(--text-muted)]'}`}>{total}</span>
                 )}
               </button>
             ))}
@@ -667,14 +648,14 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
           {/* Search */}
           <div className="relative w-48">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--text-muted)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={handleSearch}
               placeholder="搜索标签..."
-              className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-gray-200 rounded-lg outline-none focus:border-gray-400"
+              className="input-shell py-1.5 pl-8 pr-3 text-[12px]"
             />
           </div>
 
@@ -683,40 +664,40 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
             <button
               type="button"
               onClick={() => setFilterOpen(o => !o)}
-              className={`p-2 rounded-lg transition-colors ${filterOpen ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`btn-ghost btn-square h-10 min-h-10 w-10 ${filterOpen ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)]' : ''}`}
             >
               <SlidersHorizontal className="w-4 h-4" />
             </button>
             {filterOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-20 p-4 space-y-3">
+              <div className="dropdown-enter absolute right-0 top-full z-20 mt-2 w-64 space-y-3 rounded-3xl border border-[color:var(--border-soft)] bg-white p-4 shadow-lg">
                 <div>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-1.5">模式</p>
+                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">模式</p>
                   <div className="flex gap-2">
                     {[['', '全部'], ['personal', '个人'], ['designer', '设计师']].map(([v, l]) => (
                       <button key={v} type="button" onClick={() => setFilterMode(v)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${filterMode === v ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterMode === v ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
                         {l}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-1.5">场合</p>
+                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">场合</p>
                   <div className="flex flex-wrap gap-1.5">
                     {['职场', '休闲', '约会', '运动', '聚会'].map(o => (
                       <button key={o} type="button" onClick={() => setFilterOccasion(filterOccasion === o ? '' : o)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${filterOccasion === o ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterOccasion === o ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
                         {o}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-gray-400 mb-1.5">季节</p>
+                  <p className="mb-1.5 text-[11px] font-semibold text-[color:var(--text-muted)]">季节</p>
                   <div className="flex gap-2">
                     {['春夏', '秋冬', '全季'].map(s => (
                       <button key={s} type="button" onClick={() => setFilterSeason(filterSeason === s ? '' : s)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${filterSeason === s ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${filterSeason === s ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white' : 'border-[color:var(--border-soft)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'}`}>
                         {s}
                       </button>
                     ))}
@@ -729,12 +710,12 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
         {/* Collections sub-nav */}
         {tab === 'collections' && (
-          <div className="shrink-0 px-6 py-3 border-b border-gray-100 bg-white">
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="shrink-0 border-b border-[color:var(--border-soft)] bg-white px-6 py-3">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setSelectedColId(null)}
-                className={`px-3 py-1.5 rounded-lg text-[12px] transition-colors ${!selectedColId ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`rounded-xl px-3 py-1.5 text-[12px] transition-colors ${!selectedColId ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]'}`}
               >
                 全部合集
               </button>
@@ -743,16 +724,16 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                   <button
                     type="button"
                     onClick={() => setSelectedColId(col.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] transition-colors ${selectedColId === col.id ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] transition-colors ${selectedColId === col.id ? 'bg-[color:var(--ink)] text-white' : 'text-[color:var(--text-secondary)] hover:bg-[color:var(--paper)]'}`}
                   >
-                    {col.is_smart && <Sparkles className="w-3 h-3 text-amber-400" />}
+                    {col.is_smart && <Sparkles className="w-3 h-3 text-amber-500" />}
                     {col.name}
                     <span className="text-[10px] opacity-60">{col.item_count}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleDeleteCollection(col.id)}
-                    className="hidden group-hover:flex p-0.5 text-gray-400 hover:text-red-500"
+                    className="hidden p-0.5 text-[color:var(--text-muted)] hover:text-red-500 group-hover:flex"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -766,13 +747,13 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                   onChange={e => setNewColName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleCreateCollection(); }}
                   placeholder="新建合集..."
-                  className="text-[12px] px-2.5 py-1.5 border border-gray-200 rounded-lg outline-none focus:border-gray-400 w-28"
+                  className="input-shell w-28 text-[12px]"
                 />
                 <button
                   type="button"
                   onClick={() => void handleCreateCollection()}
                   disabled={creatingCol || !newColName.trim()}
-                  className="p-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                  className="btn-primary btn-square h-10 min-h-10 w-10 disabled:opacity-40"
                 >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
@@ -785,10 +766,10 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
         {tab === 'all' && !filterMode && (
           <div className="shrink-0 mx-6 mt-4 mb-2">
             {!showOutfits ? (
-              <div className="flex items-center gap-4 px-5 py-4 bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl">
+              <div className="flex items-center gap-4 rounded-3xl bg-[linear-gradient(135deg,var(--ink),#25282f)] px-5 py-4 text-white">
                 <div className="flex-1">
                   <p className="text-[14px] font-semibold text-white">今天穿什么？</p>
-                  <p className="text-[11px] text-white/60 mt-0.5">
+                  <p className="mt-0.5 text-[11px] text-white/60">
                     {new Date().toLocaleDateString('zh-CN', { weekday: 'long' })} · 让 AI 从你的穿搭库推荐搭配
                   </p>
                 </div>
@@ -796,30 +777,30 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                   type="button"
                   onClick={() => void handleSuggestOutfit()}
                   disabled={outfitLoading}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-white text-gray-900 text-[12px] font-semibold rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-60"
+                  className="btn-secondary px-4 text-[12px] font-semibold disabled:opacity-60"
                 >
                   {outfitLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                   让 AI 帮我搭
                 </button>
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[13px] font-semibold text-gray-900">今日搭配推荐</p>
-                  <button type="button" onClick={() => setShowOutfits(false)} className="text-gray-400 hover:text-gray-600">
+              <div className="rounded-3xl border border-[color:var(--border-soft)] bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">今日搭配推荐</p>
+                  <button type="button" onClick={() => setShowOutfits(false)} className="btn-ghost btn-square h-9 min-h-9 w-9">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
                 {outfitLoading && (
-                  <div className="flex items-center gap-2 py-4 text-gray-400 text-[12px]">
+                  <div className="flex items-center gap-2 py-4 text-[12px] text-[color:var(--text-muted)]">
                     <RefreshCw className="w-4 h-4 animate-spin" /> AI 正在分析你的穿搭库...
                   </div>
                 )}
                 {!outfitLoading && outfitMessage && (
-                  <p className="text-[12px] text-gray-500">{outfitMessage}</p>
+                  <p className="text-[12px] text-[color:var(--text-secondary)]">{outfitMessage}</p>
                 )}
                 {!outfitLoading && outfits.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {outfits.map((outfit, i) => <OutfitCard key={i} outfit={outfit} />)}
                   </div>
                 )}
@@ -831,14 +812,14 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
         {/* Image grid */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading && (
-            <div className="flex items-center justify-center py-20 text-gray-400 text-[13px]">
+            <div className="flex items-center justify-center py-20 text-[13px] text-[color:var(--text-muted)]">
               <RefreshCw className="w-4 h-4 animate-spin mr-2" /> 加载中...
             </div>
           )}
 
           {!loading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-              <Grid3X3 className="w-10 h-10 mb-3 opacity-30" />
+            <div className="flex flex-col items-center justify-center py-24 text-[color:var(--text-muted)]">
+              <Grid3X3 className="mb-3 h-10 w-10 opacity-30" />
               <p className="text-[14px]">还没有图片</p>
               <p className="text-[12px] mt-1">在设计工作台生成图片后会自动入库</p>
             </div>
@@ -846,7 +827,7 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
           {!loading && groupedItems.map(group => (
             <div key={group.date} className="mb-6">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">{group.date}</p>
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">{group.date}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {group.items.map(item => (
                   <ItemCard
@@ -862,43 +843,43 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
           ))}
 
           {/* Infinite scroll loader */}
-          <div ref={loaderRef} className="py-2 flex justify-center">
-            {loadingMore && <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />}
+          <div ref={loaderRef} className="flex justify-center py-2">
+            {loadingMore && <RefreshCw className="w-4 h-4 animate-spin text-[color:var(--text-muted)]" />}
           </div>
 
           {/* Style insights (≥20 items) */}
           {!loading && stats && stats.total_count >= 20 && (
-            <div className="mt-6 p-5 bg-white border border-gray-200 rounded-2xl">
-              <div className="flex items-center justify-between mb-3">
+            <div className="mt-6 rounded-3xl border border-[color:var(--border-soft)] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <p className="text-[14px] font-semibold text-gray-900">你的风格洞察</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">基于 {stats.total_count} 张图片分析</p>
+                  <p className="text-[14px] font-semibold text-[color:var(--text-primary)]">你的风格洞察</p>
+                  <p className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">基于 {stats.total_count} 张图片分析</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleAnalyzeLib()}
                   disabled={analyzingLib}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="btn-secondary px-3 text-[12px] disabled:opacity-50"
                 >
                   {analyzingLib ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
                   更新风格档案
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {stats.top_colors.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-400 mb-1">最常见颜色</p>
+                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">最常见颜色</p>
                     <div className="flex flex-wrap gap-1">
                       {stats.top_colors.slice(0, 3).map(c => (
-                        <span key={c.name} className="text-[11px] text-gray-700">{c.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-gray-300">·</span>] : []), el], [] as React.ReactNode[])}
+                        <span key={c.name} className="text-[11px] text-[color:var(--text-secondary)]">{c.name}</span>
+                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
                     </div>
                   </div>
                 )}
                 {stats.top_silhouettes.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-400 mb-1">偏好廓形</p>
-                    <p className="text-[11px] text-gray-700">
+                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">偏好廓形</p>
+                    <p className="text-[11px] text-[color:var(--text-secondary)]">
                       {stats.top_silhouettes[0].name}
                       {stats.total_count > 0 && ` (${Math.round(stats.top_silhouettes[0].count / stats.total_count * 100)}%)`}
                     </p>
@@ -906,21 +887,21 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                 )}
                 {stats.top_occasions.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-400 mb-1">主要场合</p>
+                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">主要场合</p>
                     <div className="flex flex-wrap gap-1">
                       {stats.top_occasions.slice(0, 2).map(o => (
-                        <span key={o.name} className="text-[11px] text-gray-700">{o.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-gray-300">·</span>] : []), el], [] as React.ReactNode[])}
+                        <span key={o.name} className="text-[11px] text-[color:var(--text-secondary)]">{o.name}</span>
+                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
                     </div>
                   </div>
                 )}
                 {stats.top_styles.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-gray-400 mb-1">风格关键词</p>
+                    <p className="mb-1 text-[10px] text-[color:var(--text-muted)]">风格关键词</p>
                     <div className="flex flex-wrap gap-1">
                       {stats.top_styles.slice(0, 2).map(s => (
-                        <span key={s.name} className="text-[11px] text-gray-700">{s.name}</span>
-                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-gray-300">·</span>] : []), el], [] as React.ReactNode[])}
+                        <span key={s.name} className="text-[11px] text-[color:var(--text-secondary)]">{s.name}</span>
+                      )).reduce((acc, el, i) => [...acc, ...(i > 0 ? [<span key={`sep-${i}`} className="text-[color:var(--text-dim)]">·</span>] : []), el], [] as React.ReactNode[])}
                     </div>
                   </div>
                 )}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowLeft, LockKeyhole, Mail, UserRound } from 'lucide-react';
 
 interface AuthPageProps {
   onLogin: (user: { email: string; name: string; auth_token: string }) => void;
@@ -54,7 +55,10 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
         body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
       });
       const data = await res.json();
-      if (!res.ok) { setSubmitError(data.detail || '登录失败'); return; }
+      if (!res.ok) {
+        setSubmitError(data.detail || '登录失败');
+        return;
+      }
       onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
     } catch {
       setSubmitError('网络错误，请稍后重试');
@@ -83,7 +87,10 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
         body: JSON.stringify({ email: email.toLowerCase().trim(), name: name.trim(), password }),
       });
       const data = await res.json();
-      if (!res.ok) { setSubmitError(data.detail || '注册失败'); return; }
+      if (!res.ok) {
+        setSubmitError(data.detail || '注册失败');
+        return;
+      }
       onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
     } catch {
       setSubmitError('网络错误，请稍后重试');
@@ -97,145 +104,139 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
     void (mode === 'login' ? handleLogin() : handleRegister());
   };
 
+  const fieldClass = (hasError?: boolean) =>
+    `auth-input pl-11 ${hasError ? 'border-red-300 focus:border-red-400 focus:shadow-red-500/10' : ''}`;
+
   return (
-    <div className="relative min-h-screen flex items-center justify-center">
-      {/* Background */}
+    <div className="entry-shell">
       <div
-        className="fixed inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=1920&q=85)`,
-        }}
+        className="entry-media"
+        style={{ backgroundImage: 'url(https://picsum.photos/id/1048/1920/1280)' }}
       />
-      <div className="fixed inset-0 bg-black/40" style={{ backdropFilter: 'blur(2px)' }} />
+      <div className="entry-overlay" />
 
-      {/* Auth Card */}
-      <div className="relative z-10 w-full max-w-[420px] mx-4">
-        <div
-          className="rounded-2xl p-10"
-          style={{
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(40px) saturate(1.5)',
-            WebkitBackdropFilter: 'blur(40px) saturate(1.5)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            boxShadow: '0 24px 80px rgba(0,0,0,0.25)',
-          }}
-        >
-          {/* Back button */}
-          <button
-            onClick={onBack}
-            className="mb-6 text-white/50 hover:text-white/80 text-[12px] flex items-center gap-1 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            返回
-          </button>
+      <main className="entry-frame">
+        <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[0.9fr_420px]">
+          <section className="hidden lg:block text-white">
+            <p className="hero-kicker w-max">
+              <LockKeyhole className="h-3.5 w-3.5" />
+              Secure creative workspace
+            </p>
+            <h1 className="mt-5 text-5xl font-extrabold leading-[0.98] tracking-[-0.03em]">
+              登录后继续你的设计上下文
+            </h1>
+            <p className="mt-5 max-w-xl text-[15px] leading-8 text-white/72">
+              系统会保留项目、偏好、趋势锚点和素材库，让 AI 生成从一次性尝试变成可持续的创作流程。
+            </p>
+          </section>
 
-          {/* Title */}
-          <h1 className="font-display text-white text-[28px] font-bold mb-1">
-            {mode === 'login' ? '欢迎回来' : '创建账号'}
-          </h1>
-          <p className="text-white/50 text-[13px] mb-8">
-            {mode === 'login' ? '登录以继续使用 AI Fashion Design Platform' : '开始你的时尚设计之旅'}
-          </p>
+          <section className="surface-card w-full p-6 md:p-8">
+            <button type="button" onClick={onBack} className="btn-ghost mb-6 -ml-2 h-10 min-h-10 px-3 text-[13px]">
+              <ArrowLeft className="h-4 w-4" />
+              返回首页
+            </button>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Name (register only) */}
-            {mode === 'register' && (
-              <div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="昵称"
-                  className="auth-input text-white placeholder:text-white/30"
-                  style={{ borderBottomColor: errors.name ? '#ef4444' : 'rgba(255,255,255,0.2)' }}
-                />
-                {errors.name && <p className="text-red-400 text-[11px] mt-1">{errors.name}</p>}
-              </div>
-            )}
+            <h2 className="text-2xl font-extrabold tracking-[-0.02em] text-[color:var(--text-primary)]">
+              {mode === 'login' ? '欢迎回来' : '创建账号'}
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-[color:var(--text-secondary)]">
+              {mode === 'login' ? '进入你的 AI 时尚设计工作台。' : '创建账号后即可保存项目和生成历史。'}
+            </p>
 
-            {/* Email */}
-            <div>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="邮箱地址"
-                className="auth-input text-white placeholder:text-white/30"
-                style={{ borderBottomColor: errors.email ? '#ef4444' : 'rgba(255,255,255,0.2)' }}
-              />
-              {errors.email && <p className="text-red-400 text-[11px] mt-1">{errors.email}</p>}
-            </div>
-
-            {/* Password */}
-            <div>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="密码"
-                className="auth-input text-white placeholder:text-white/30"
-                style={{ borderBottomColor: errors.password ? '#ef4444' : 'rgba(255,255,255,0.2)' }}
-              />
-              {errors.password && <p className="text-red-400 text-[11px] mt-1">{errors.password}</p>}
-              {mode === 'register' && password && (
-                <p className={`text-[11px] mt-1 ${pwCheck.valid ? 'text-green-400' : 'text-amber-400'}`}>
-                  {pwCheck.message}
-                </p>
+            <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+              {mode === 'register' && (
+                <div>
+                  <div className="relative">
+                    <UserRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="昵称"
+                      className={fieldClass(!!errors.name)}
+                    />
+                  </div>
+                  {errors.name && <p className="mt-1.5 text-[11px] text-red-500">{errors.name}</p>}
+                </div>
               )}
-            </div>
 
-            {/* Confirm Password (register only) */}
-            {mode === 'register' && (
               <div>
-                <input
-                  type="password"
-                  value={confirmPw}
-                  onChange={e => setConfirmPw(e.target.value)}
-                  placeholder="确认密码"
-                  className="auth-input text-white placeholder:text-white/30"
-                  style={{ borderBottomColor: errors.confirmPassword ? '#ef4444' : 'rgba(255,255,255,0.2)' }}
-                />
-                {errors.confirmPassword && <p className="text-red-400 text-[11px] mt-1">{errors.confirmPassword}</p>}
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="邮箱地址"
+                    className={fieldClass(!!errors.email)}
+                  />
+                </div>
+                {errors.email && <p className="mt-1.5 text-[11px] text-red-500">{errors.email}</p>}
               </div>
-            )}
 
-            {/* Submit error */}
-            {submitError && (
-              <div className="text-red-400 text-[13px] text-center py-2 bg-red-500/10 rounded-lg">
-                {submitError}
+              <div>
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="密码"
+                    className={fieldClass(!!errors.password)}
+                  />
+                </div>
+                {errors.password && <p className="mt-1.5 text-[11px] text-red-500">{errors.password}</p>}
+                {mode === 'register' && password && (
+                  <p className={`mt-1.5 text-[11px] ${pwCheck.valid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {pwCheck.message}
+                  </p>
+                )}
               </div>
-            )}
 
-            {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 border-[1.5px] border-white/70 text-white text-[13px] font-medium tracking-[0.12em] uppercase
-                bg-transparent hover:bg-white/[0.1] transition-all duration-300 active:scale-[0.98] disabled:opacity-50"
-            >
-              {loading ? '处理中...' : (mode === 'login' ? '登 录' : '注 册')}
-            </button>
-          </form>
+              {mode === 'register' && (
+                <div>
+                  <div className="relative">
+                    <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+                    <input
+                      type="password"
+                      value={confirmPw}
+                      onChange={e => setConfirmPw(e.target.value)}
+                      placeholder="确认密码"
+                      className={fieldClass(!!errors.confirmPassword)}
+                    />
+                  </div>
+                  {errors.confirmPassword && <p className="mt-1.5 text-[11px] text-red-500">{errors.confirmPassword}</p>}
+                </div>
+              )}
 
-          {/* Switch mode */}
-          <p className="text-center text-white/40 text-[13px] mt-8">
-            {mode === 'login' ? '还没有账号？' : '已有账号？'}
-            <button
-              onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErrors({}); setSubmitError(''); }}
-              className="text-white/80 hover:text-white ml-1 underline underline-offset-4 transition-colors"
-            >
-              {mode === 'login' ? '立即注册' : '返回登录'}
-            </button>
-          </p>
+              {submitError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-center text-[13px] text-red-600">
+                  {submitError}
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} className="btn-primary w-full font-semibold disabled:opacity-55">
+                {loading ? '处理中...' : mode === 'login' ? '登录' : '注册'}
+              </button>
+            </form>
+
+            <p className="mt-6 text-center text-[13px] text-[color:var(--text-muted)]">
+              {mode === 'login' ? '还没有账号？' : '已有账号？'}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === 'login' ? 'register' : 'login');
+                  setErrors({});
+                  setSubmitError('');
+                }}
+                className="ml-1 font-semibold text-[color:var(--text-primary)] underline underline-offset-4"
+              >
+                {mode === 'login' ? '立即注册' : '返回登录'}
+              </button>
+            </p>
+          </section>
         </div>
-
-        {/* Brand */}
-        <p className="text-center text-white/30 text-[11px] mt-6 tracking-[0.15em] uppercase">
-          AI Fashion Design Platform
-        </p>
-      </div>
+      </main>
     </div>
   );
 }

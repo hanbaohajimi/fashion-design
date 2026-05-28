@@ -53,10 +53,10 @@ function Toggle({ value, label, selected, onToggle }: {
     <button
       type="button"
       onClick={onToggle}
-      className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${
+      className={`chip min-h-[36px] px-3 py-1.5 text-[12px] font-medium transition-colors ${
         selected
-          ? 'bg-gray-900 text-white border-gray-900'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+          ? 'active'
+          : 'hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]'
       }`}
     >
       {label || value}
@@ -108,27 +108,27 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
       content: (
         <div className="space-y-5">
           <div>
-            <p className="text-[12px] text-gray-500 mb-2">体型（单选）</p>
+            <p className="mb-2 text-[12px] text-[color:var(--text-secondary)]">体型（单选）</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {BODY_SHAPES.map(s => (
                 <button
                   key={s.value}
                   type="button"
                   onClick={() => setForm(p => ({ ...p, body_shape: s.value }))}
-                  className={`px-3 py-2.5 rounded-xl border text-left text-[12px] transition-colors ${
+                  className={`rounded-2xl border px-3 py-2.5 text-left text-[12px] transition-colors ${
                     form.body_shape === s.value
-                      ? 'border-gray-900 bg-gray-50 font-semibold'
-                      : 'border-gray-200 hover:border-gray-400'
+                      ? 'border-[color:var(--ink)] bg-[color:var(--paper)] font-semibold'
+                      : 'border-[color:var(--border)] hover:border-[color:var(--border-strong)]'
                   }`}
                 >
-                  <p className="font-medium text-gray-800">{s.label}</p>
-                  <p className="text-gray-400 text-[11px] mt-0.5">{s.desc}</p>
+                  <p className="font-medium text-[color:var(--text-primary)]">{s.label}</p>
+                  <p className="mt-0.5 text-[11px] text-[color:var(--text-muted)]">{s.desc}</p>
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-[12px] text-gray-500 mb-2">穿搭关注点（多选）</p>
+            <p className="mb-2 text-[12px] text-[color:var(--text-secondary)]">穿搭关注点（多选）</p>
             <div className="flex flex-wrap gap-2">
               {CONCERN_OPTIONS.map(c => (
                 <Toggle
@@ -142,7 +142,7 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
             </div>
           </div>
           <div>
-            <p className="text-[12px] text-gray-500 mb-2">常见场合（多选）</p>
+            <p className="mb-2 text-[12px] text-[color:var(--text-secondary)]">常见场合（多选）</p>
             <div className="flex flex-wrap gap-2">
               {OCCASION_OPTIONS.map(o => (
                 <Toggle
@@ -164,7 +164,7 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
       content: (
         <div className="space-y-5">
           <div>
-            <p className="text-[12px] text-gray-500 mb-2">偏好色系（多选）</p>
+            <p className="mb-2 text-[12px] text-[color:var(--text-secondary)]">偏好色系（多选）</p>
             <div className="flex flex-wrap gap-2">
               {COLOR_OPTIONS.map(c => {
                 const selected = (form.color_palette || []).includes(c.value);
@@ -173,14 +173,14 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
                     key={c.value}
                     type="button"
                     onClick={() => toggle('color_palette', c.value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${
+                    className={`flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
                       selected
-                        ? 'border-gray-900 bg-gray-50'
-                        : 'border-gray-200 hover:border-gray-400'
+                        ? 'border-[color:var(--ink)] bg-[color:var(--paper)]'
+                        : 'border-[color:var(--border)] hover:border-[color:var(--border-strong)]'
                     }`}
                   >
                     <span
-                      className="w-3 h-3 rounded-full border border-gray-200 shrink-0"
+                      className="w-3 h-3 shrink-0 rounded-full border border-[color:var(--border)]"
                       style={{ background: c.color }}
                     />
                     {c.label}
@@ -190,17 +190,17 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
             </div>
           </div>
           <div>
-            <p className="text-[12px] text-gray-500 mb-2">预算档位（单选）</p>
+            <p className="mb-2 text-[12px] text-[color:var(--text-secondary)]">预算档位（单选）</p>
             <div className="flex flex-wrap gap-2">
               {BUDGET_OPTIONS.map(b => (
                 <button
                   key={b}
                   type="button"
                   onClick={() => setForm(p => ({ ...p, budget_tier: b }))}
-                  className={`px-4 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${
+                  className={`min-h-[36px] rounded-full border px-4 py-1.5 text-[12px] font-medium transition-colors ${
                     form.budget_tier === b
-                      ? 'bg-gray-900 text-white border-gray-900'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                      ? 'border-[color:var(--ink)] bg-[color:var(--ink)] text-white'
+                      : 'border-[color:var(--border)] text-[color:var(--text-secondary)] hover:border-[color:var(--border-strong)]'
                   }`}
                 >
                   {b}
@@ -217,45 +217,42 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
   const current = steps[step];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+      <div className="dialog-panel flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden">
+        <div className="flex items-start justify-between px-6 pb-4 pt-6">
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               {steps.map((_, i) => (
                 <span
                   key={i}
                   className={`h-1 rounded-full transition-all ${
-                    i === step ? 'w-6 bg-gray-900' : i < step ? 'w-4 bg-gray-400' : 'w-4 bg-gray-200'
+                    i === step ? 'w-6 bg-[color:var(--ink)]' : i < step ? 'w-4 bg-[color:var(--text-secondary)]' : 'w-4 bg-[color:var(--border)]'
                   }`}
                 />
               ))}
             </div>
-            <h2 className="text-[17px] font-semibold text-gray-900">{current.title}</h2>
-            <p className="text-[12px] text-gray-400 mt-0.5">{current.sub}</p>
+            <h2 className="text-[17px] font-semibold text-[color:var(--text-primary)]">{current.title}</h2>
+            <p className="mt-0.5 text-[12px] text-[color:var(--text-secondary)]">{current.sub}</p>
           </div>
           <button
             type="button"
             onClick={onSkip}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors ml-4 shrink-0"
+            className="btn-ghost btn-square h-10 min-h-10 w-10 shrink-0"
             title="跳过"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 pb-4">
           {current.content}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between border-t border-[color:var(--border-soft)] bg-[color:var(--paper)] px-6 py-4">
           <button
             type="button"
             onClick={onSkip}
-            className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-[12px] text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--text-primary)]"
           >
             跳过问卷
           </button>
@@ -264,7 +261,7 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
               <button
                 type="button"
                 onClick={() => setStep(s => s - 1)}
-                className="flex items-center gap-1 px-3 py-2 text-[12px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                className="btn-secondary px-3 text-[12px]"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 上一步
@@ -279,7 +276,7 @@ export default function OnboardingModal({ onComplete, onSkip }: OnboardingModalP
                   setStep(s => s + 1);
                 }
               }}
-              className="flex items-center gap-1 px-4 py-2 bg-gray-900 text-white text-[12px] font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              className="btn-primary px-4 text-[12px] font-semibold"
             >
               {isLast ? '完成' : '下一步'}
               {!isLast && <ChevronRight className="w-3.5 h-3.5" />}

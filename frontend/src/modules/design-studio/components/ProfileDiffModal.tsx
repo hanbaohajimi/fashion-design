@@ -37,65 +37,63 @@ export default function ProfileDiffModal({
   const label = (item: DiffItem) => item.tag || item.pattern || '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm px-4 pb-4 sm:pb-0">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-        {/* Header */}
-        <div className="flex items-start gap-3 px-5 py-4 border-b border-gray-100">
-          <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4 text-amber-500" />
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0">
+      <div className="dialog-panel w-full max-w-md overflow-hidden">
+        <div className="flex items-start gap-3 border-b border-[color:var(--border-soft)] px-5 py-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50">
+            <Sparkles className="w-4 h-4 text-amber-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[14px] font-semibold text-gray-900">
+            <p className="text-[14px] font-semibold text-[color:var(--text-primary)]">
               {type === 'personal' ? '风格档案已更新' : `「${projectName}」设计规律总结`}
             </p>
-            <p className="text-[12px] text-gray-400 mt-0.5">
+            <p className="mt-0.5 text-[12px] text-[color:var(--text-secondary)]">
               选择你认可的条目添加到档案
             </p>
           </div>
           <button
             type="button"
             onClick={onDismiss}
-            className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+            className="btn-ghost btn-square h-9 min-h-9 w-9"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Items */}
-        <div className="px-5 py-4 space-y-2 max-h-[50vh] overflow-y-auto">
+        <div className="max-h-[50vh] space-y-2 overflow-y-auto px-5 py-4">
           {newItems.map((item, i) => {
             const isAccepted = accepted.has(i);
             return (
               <div
                 key={i}
                 onClick={() => toggle(i)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
+                className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
                   isAccepted
                     ? 'border-emerald-200 bg-emerald-50/60'
-                    : 'border-gray-200 bg-gray-50/60 opacity-60'
+                    : 'border-[color:var(--border-soft)] bg-[color:var(--paper)] opacity-70'
                 }`}
               >
                 <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                     isAccepted ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'
                   }`}
                 >
                   {isAccepted && <Check className="w-3 h-3 text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-gray-800 truncate">{label(item)}</p>
+                  <p className="truncate text-[13px] font-medium text-[color:var(--text-primary)]">{label(item)}</p>
                   {item.evidence && (
-                    <p className="text-[11px] text-gray-400 truncate">{item.evidence}</p>
+                    <p className="truncate text-[11px] text-[color:var(--text-muted)]">{item.evidence}</p>
                   )}
                 </div>
                 <div className="shrink-0">
-                  <div className="w-12 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-1.5 w-12 overflow-hidden rounded-full bg-[color:var(--paper)]">
                     <div
-                      className="h-full rounded-full bg-emerald-400"
+                      className="h-full rounded-full bg-[color:var(--signal-green)]"
                       style={{ width: `${Math.round(item.confidence * 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                  <p className="mt-0.5 text-right text-[10px] text-[color:var(--text-muted)]">
                     {Math.round(item.confidence * 100)}%
                   </p>
                 </div>
@@ -104,12 +102,11 @@ export default function ProfileDiffModal({
           })}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-between border-t border-[color:var(--border-soft)] px-5 py-4 bg-[color:var(--paper)]">
           <button
             type="button"
             onClick={() => setAccepted(new Set())}
-            className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-[12px] text-[color:var(--text-muted)] transition-colors hover:text-[color:var(--text-primary)]"
           >
             全部取消
           </button>
@@ -117,14 +114,14 @@ export default function ProfileDiffModal({
             <button
               type="button"
               onClick={onDismiss}
-              className="px-3 py-1.5 text-[12px] text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+              className="btn-secondary px-3 text-[12px]"
             >
               忽略
             </button>
             <button
               type="button"
               onClick={() => onConfirm(newItems.filter((_, i) => accepted.has(i)))}
-              className="px-4 py-1.5 bg-gray-900 text-white text-[12px] font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              className="btn-primary px-4 text-[12px] font-semibold"
             >
               接受 {accepted.size > 0 ? `(${accepted.size})` : ''}
             </button>

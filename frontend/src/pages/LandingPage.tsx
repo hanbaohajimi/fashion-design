@@ -1,74 +1,62 @@
+import { ArrowRight, Sparkles, Layers3, Wand2 } from 'lucide-react';
+
 interface LandingPageProps {
   onEnter: () => void;
 }
 
 export default function LandingPage({ onEnter }: LandingPageProps) {
   return (
-    <div className="relative h-screen w-full overflow-hidden">
-      {/* Background: Art painting with gradient vignette */}
+    <div className="entry-shell">
       <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: `url(https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&q=85)`,
-        }}
+        className="entry-media"
+        style={{ backgroundImage: 'url(https://picsum.photos/id/1060/1920/1280)' }}
       />
-      {/* Vignette overlay: darkened corners, clear center */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `
-            radial-gradient(ellipse at center, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.55) 100%),
-            linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.4) 100%)
-          `,
-          backdropFilter: 'blur(0.5px)',
-        }}
-      />
+      <div className="entry-overlay" />
 
-      {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 text-center">
-        {/* Main Title */}
-        <h1
-          className="landing-title font-display text-white font-black leading-[1.1] tracking-tight"
-          style={{
-            fontSize: 'clamp(48px, 8vw, 96px)',
-            textShadow: '0 2px 24px rgba(0,0,0,0.3), 0 0 80px rgba(0,0,0,0.15)',
-          }}
-        >
-          时尚设计
-        </h1>
+      <div className="entry-frame">
+        <div className="entry-panel">
+          <section className="hero-copy">
+            <div className="hero-kicker">
+              <Sparkles className="h-3.5 w-3.5" />
+              Fashion intelligence workspace
+            </div>
 
-        {/* Subtitle */}
-        <p
-          className="landing-subtitle mt-10 max-w-lg text-white/85 leading-[2.2] font-light"
-          style={{
-            fontSize: 'clamp(14px, 2vw, 18px)',
-            textShadow: '0 1px 8px rgba(0,0,0,0.3)',
-            fontFamily: 'var(--font-body)',
-          }}
-        >
-          在布料的褶皱间，捕捉时代的呼吸<br />
-          用数据读懂美的流向<br />
-          以 AI 重新定义设计的边界
-        </p>
+            <h1 className="hero-title">AI Fashion Design Platform</h1>
+            <p className="hero-subtitle">
+              用统一的设计语言连接灵感、趋势、项目与生成。
+              进入后，你会在一个更轻、更快、更清晰的工作台里完成从洞察到创作的完整链路。
+            </p>
 
-        {/* CTA Button */}
-        <button
-          onClick={onEnter}
-          className="landing-cta mt-12 px-12 py-3.5 border-[1.5px] border-white text-white text-[14px] font-medium tracking-[0.15em] uppercase
-            bg-transparent hover:bg-white/[0.12] transition-all duration-300 ease-out active:scale-[0.97]"
-          style={{ fontFamily: 'var(--font-body)' }}
-        >
-          进入系统
-        </button>
+            <div className="hero-actions">
+              <button type="button" onClick={onEnter} className="btn-primary px-5">
+                进入系统
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button type="button" className="btn-secondary px-5">
+                <Wand2 className="h-4 w-4" />
+                查看工作流
+              </button>
+            </div>
+          </section>
 
-        {/* Scroll hint */}
-        <div className="landing-scroll absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-          <span className="text-white/60 text-[11px] tracking-[0.2em] uppercase" style={{ fontFamily: 'var(--font-body)' }}>
-            Scroll to explore
-          </span>
-          <svg className="landing-scroll-arrow w-4 h-4 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
-          </svg>
+          <aside className="surface-card p-5 md:p-6 text-[13px] text-white/86 bg-[rgba(255,255,255,0.08)] border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+            <p className="section-label text-white/60">System Overview</p>
+            <div className="mt-4 grid gap-3">
+              {[
+                ['设计工作台', '生成、编辑、预览、试穿一体化'],
+                ['趋势分析', '内容流与洞察面板统一呈现'],
+                ['我的库', '素材、合集和复用路径集中管理'],
+              ].map(([title, desc]) => (
+                <div key={title} className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
+                  <div className="flex items-center gap-2 text-white">
+                    <Layers3 className="h-4 w-4 text-[color:var(--warm-metal)]" />
+                    <span className="font-semibold">{title}</span>
+                  </div>
+                  <p className="mt-1 text-white/70 leading-6">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
       </div>
     </div>

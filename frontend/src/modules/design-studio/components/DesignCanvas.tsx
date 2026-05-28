@@ -626,17 +626,17 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
     const isEmpty = elementCount === 0;
 
     const ctxBtnClass =
-      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-gray-500 hover:text-gray-800 hover:bg-gray-100/80 transition-colors whitespace-nowrap';
+      'flex min-h-[36px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] text-[color:var(--text-secondary)] transition-colors hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)] whitespace-nowrap';
 
     return (
-      <div className="flex-1 flex flex-col min-w-0 relative bg-[#fdfcfa]">
+      <div className="flex-1 flex flex-col min-w-0 relative bg-[color:var(--paper)]">
         {/* ── Main toolbar ── */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 p-0.5 bg-white/90 backdrop-blur-lg rounded-xl border border-gray-200/50 shadow-sm transition-all">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 rounded-2xl border border-[color:var(--border-soft)] bg-white/90 p-1 shadow-sm backdrop-blur-lg transition-all">
           <div className="flex items-center">
             <button
               type="button"
               onClick={() => setActiveTool('select')}
-              className={`p-2 rounded-lg transition-colors ${activeTool === 'select' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'}`}
+              className={`btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl ${activeTool === 'select' ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)] hover:text-white' : ''}`}
               title="选择 (V)"
             >
               <MousePointer2 className="w-3.5 h-3.5" />
@@ -644,18 +644,18 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={() => setActiveTool('hand')}
-              className={`p-2 rounded-lg transition-colors ${activeTool === 'hand' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'}`}
+              className={`btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl ${activeTool === 'hand' ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)] hover:text-white' : ''}`}
               title="平移 (H)"
             >
               <Hand className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="w-px h-4 bg-gray-200/60 mx-0.5" />
+          <div className="w-px h-4 bg-[color:var(--border-soft)] mx-0.5" />
           <div className="flex items-center">
             <button
               type="button"
               onClick={addTextElement}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="文字"
             >
               <Type className="w-3.5 h-3.5" />
@@ -663,7 +663,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={addRectElement}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="矩形"
             >
               <Square className="w-3.5 h-3.5" />
@@ -671,7 +671,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={addCircleElement}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="圆形"
             >
               <CircleIcon className="w-3.5 h-3.5" />
@@ -679,18 +679,18 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={insertImageFromFile}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="上传图片"
             >
               <ImagePlus className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="w-px h-4 bg-gray-200/60 mx-0.5" />
+          <div className="w-px h-4 bg-[color:var(--border-soft)] mx-0.5" />
           <div className="flex items-center">
             <button
               type="button"
               onClick={zoomOut}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="缩小"
             >
               <ZoomOut className="w-3.5 h-3.5" />
@@ -706,7 +706,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
                   updateToolbar();
                 }
               }}
-              className="text-[11px] font-medium text-gray-400 hover:text-gray-700 tabular-nums w-9 text-center rounded py-0.5 hover:bg-gray-50 transition-colors"
+              className="h-8 w-11 rounded-xl text-center text-[11px] font-medium tabular-nums text-[color:var(--text-muted)] transition-colors hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)]"
               title="重置缩放"
             >
               {Math.round(zoomLevel * 100)}%
@@ -714,7 +714,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={zoomIn}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="放大"
             >
               <ZoomIn className="w-3.5 h-3.5" />
@@ -722,7 +722,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             <button
               type="button"
               onClick={zoomToFit}
-              className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
               title="适应画布"
             >
               <Maximize className="w-3.5 h-3.5" />
@@ -733,19 +733,19 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         {/* ── Context toolbar + Info bar (when object selected) ── */}
         {selectedInfo && (
           <div className="absolute top-[52px] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 canvas-toolbar-enter">
-            <div className="flex items-center gap-0.5 px-1.5 py-1 bg-white/95 backdrop-blur-lg rounded-xl border border-gray-200/60 shadow-sm">
+            <div className="flex items-center gap-0.5 rounded-2xl border border-[color:var(--border-soft)] bg-white/95 px-1.5 py-1 shadow-sm backdrop-blur-lg">
               {selectedInfo.isImage && onEditInEditor && (
                 <>
                   <button
                     type="button"
                     onClick={() => handleExportSelected('edit')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[12px] font-medium hover:bg-blue-100 transition-colors whitespace-nowrap"
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-xl bg-[rgba(47,107,255,0.09)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--signal-blue)] transition-colors hover:bg-[rgba(47,107,255,0.14)] whitespace-nowrap"
                   >
                     <PencilRuler className="w-3.5 h-3.5" />
                     快捷编辑
-                    <kbd className="text-[9px] px-1 py-0.5 bg-white rounded text-blue-400 font-normal ml-0.5">Tab</kbd>
+                    <kbd className="ml-0.5 rounded bg-white px-1 py-0.5 text-[9px] font-normal text-[color:var(--signal-blue)]">Tab</kbd>
                   </button>
-                  <div className="w-px h-5 bg-gray-200/60 mx-0.5" />
+                  <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
                 </>
               )}
               <button type="button" onClick={() => flipSelected('x')} className={ctxBtnClass} title="水平翻转">
@@ -758,18 +758,18 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
               </button>
               {selectedInfo.isImage && onSendToAI && (
                 <>
-                  <div className="w-px h-5 bg-gray-200/60 mx-0.5" />
+                  <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
                   <button type="button" onClick={() => handleExportSelected('ai')} className={ctxBtnClass} title="发送到 AI">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">发送 AI</span>
                   </button>
                 </>
               )}
-              <div className="w-px h-5 bg-gray-200/60 mx-0.5" />
+              <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
               <button
                 type="button"
                 onClick={deleteSelected}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors whitespace-nowrap"
+                className="flex min-h-[36px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] text-[color:var(--text-secondary)] transition-colors hover:bg-red-50 hover:text-red-600 whitespace-nowrap"
                 title="删除"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -780,12 +780,12 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             </div>
 
             {/* Info bar: label + dimensions */}
-            <div className="flex items-center justify-between gap-8 min-w-[280px] px-3 py-1 bg-white/80 backdrop-blur-sm rounded-lg border border-gray-200/40 shadow-xs">
-              <div className="flex items-center gap-1.5 text-[12px] text-gray-500">
-                <ImageIcon className="w-3.5 h-3.5 text-gray-400" />
+            <div className="flex min-w-[280px] items-center justify-between gap-8 rounded-xl border border-[color:var(--border-soft)] bg-white/80 px-3 py-1 shadow-sm backdrop-blur-sm">
+              <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--text-secondary)]">
+                <ImageIcon className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
                 <span className="font-medium">{selectedInfo.name}</span>
               </div>
-              <span className="text-[12px] text-gray-400 tabular-nums font-medium tracking-wide">
+              <span className="text-[12px] text-[color:var(--text-muted)] tabular-nums font-medium tracking-wide">
                 {selectedInfo.naturalWidth} &times; {selectedInfo.naturalHeight}
               </span>
             </div>

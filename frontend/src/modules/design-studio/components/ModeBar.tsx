@@ -56,22 +56,20 @@ export default function ModeBar({
   };
 
   return (
-    <div className="flex items-center gap-1 px-3 py-2 bg-gray-50 border-b border-gray-100">
-      {/* Personal mode button */}
+    <div className="flex items-center gap-2 border-b border-[color:var(--border-soft)] bg-[color:var(--paper)] px-3 py-2">
       <button
         type="button"
         onClick={handleSelectPersonal}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+        className={`chip min-h-[34px] text-[12px] font-semibold ${
           selectedMode === 'personal'
-            ? 'bg-gray-900 text-white'
-            : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+            ? 'active'
+            : 'hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]'
         }`}
       >
         <User className="w-3.5 h-3.5" />
         个人穿搭
       </button>
 
-      {/* Designer mode button + dropdown */}
       <div className="relative" ref={dropRef}>
         <button
           type="button"
@@ -82,10 +80,10 @@ export default function ModeBar({
               setDropOpen(o => !o);
             }
           }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+          className={`chip min-h-[34px] text-[12px] font-semibold ${
             selectedMode === 'designer'
-              ? 'bg-gray-900 text-white'
-              : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              ? 'active'
+              : 'hover:border-[color:var(--border-strong)] hover:text-[color:var(--text-primary)]'
           }`}
         >
           <Palette className="w-3.5 h-3.5" />
@@ -103,25 +101,25 @@ export default function ModeBar({
         </button>
 
         {dropOpen && selectedMode === 'designer' && (
-          <div className="absolute top-full left-0 mt-1 w-56 rounded-xl border border-gray-200 bg-white shadow-lg z-50 py-1">
+          <div className="dropdown-enter absolute top-full left-0 mt-2 w-64 rounded-3xl border border-[color:var(--border-soft)] bg-white shadow-[0_18px_42px_rgba(16,17,20,0.14)] z-50 p-2">
             {activeProjects.map(proj => (
               <button
                 key={proj.id}
                 type="button"
                 onClick={() => handleSelectProject(proj.id)}
-                className={`w-full text-left px-3 py-2 text-[12px] hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                  proj.id === selectedProjectId ? 'font-semibold text-gray-900' : 'text-gray-700'
+                className={`w-full text-left px-3 py-2.5 text-[12px] rounded-2xl hover:bg-[color:var(--paper)] transition-colors flex items-center gap-2 ${
+                  proj.id === selectedProjectId ? 'font-semibold text-[color:var(--text-primary)]' : 'text-[color:var(--text-secondary)]'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--signal-green)] shrink-0" />
                 <span className="truncate">{proj.name}</span>
               </button>
             ))}
-            <div className="border-t border-gray-100 mt-1 pt-1">
+            <div className="border-t border-[color:var(--border-soft)] mt-1 pt-1">
               <button
                 type="button"
                 onClick={() => { setDropOpen(false); onNewProject(); }}
-                className="w-full text-left px-3 py-2 text-[12px] text-gray-500 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-2.5 text-[12px] text-[color:var(--text-secondary)] rounded-2xl hover:bg-[color:var(--paper)] transition-colors flex items-center gap-2"
               >
                 <Plus className="w-3.5 h-3.5" />
                 新建项目
