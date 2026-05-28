@@ -1,11 +1,13 @@
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
-import { Boxes, Plus, ArrowLeft, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect, Suspense, lazy, type ReactNode } from 'react';
+import { Boxes, Plus, ArrowLeft, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal } from 'lucide-react';
 import ErrorBoundary from '../components/ErrorBoundary';
-import DesignStudioWorkspace from '../modules/design-studio/DesignStudioWorkspace';
-import TrendAnalysisWorkspace from '../modules/trend-analysis/TrendAnalysisWorkspace';
-import LibraryWorkspace from '../modules/library/LibraryWorkspace';
-import TrendBoardWorkspace from '../modules/trends/TrendBoardWorkspace';
 import type { Trend } from '../types/profile';
+
+const DesignStudioWorkspace = lazy(() => import('../modules/design-studio/DesignStudioWorkspace'));
+const TrendAnalysisWorkspace = lazy(() => import('../modules/trend-analysis/TrendAnalysisWorkspace'));
+const LibraryWorkspace = lazy(() => import('../modules/library/LibraryWorkspace'));
+const TrendBoardWorkspace = lazy(() => import('../modules/trends/TrendBoardWorkspace'));
+const SettingsPanel = lazy(() => import('../modules/design-studio/components/SettingsPanel'));
 
 type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library' | 'trends';
 
@@ -52,6 +54,17 @@ const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: ReactN
 let _c = 0;
 const nid = () => `ws-${++_c}`;
 
+function WorkspaceFallback({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center bg-[color:var(--bg)]">
+      <div className="rounded-3xl border border-[color:var(--border-soft)] bg-white px-5 py-4 shadow-[var(--shadow-md)]">
+        <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">{label}</p>
+        <p className="mt-1 text-[12px] text-[color:var(--text-muted)]">正在加载工作区...</p>
+      </div>
+    </div>
+  );
+}
+
 export default function MainApp({ user, onLogout, onBackToTools, initialTool }: MainAppProps) {
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
     const first: WorkspaceType = initialTool || 'design-studio';
@@ -60,6 +73,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
   const [activeId, setActiveId] = useState(tabs[0].id);
   const [showMenu, setShowMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [mounted, setMounted] = useState<Set<string>>(new Set([tabs[0].id]));
   const [pendingTrend, setPendingTrend] = useState<Map<string, Trend>>(new Map());
   const menuRef = useRef<HTMLDivElement>(null);
@@ -281,6 +295,15 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                 </button>
               )}
               <button
+                type="button"
+                onClick={() => { setShowUserMenu(false); setShowSettings(true); }}
+                className="btn-ghost"
+                style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                个性化档案
+              </button>
+              <button
                 type="button" onClick={onLogout}
                 className="btn-ghost"
                 style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
@@ -293,19 +316,31 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
         </div>
       </header>
 
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsPanel
+            authToken={user.auth_token}
+            onClose={() => setShowSettings(false)}
+            onEditProject={() => setShowSettings(false)}
+          />
+        </Suspense>
+      )}
+
       <div className="flex-1 relative min-h-0">
         {tabs.map(tab => (
           <div key={tab.id} className={`absolute inset-0 ${activeId === tab.id ? 'z-10 workspace-enter' : 'z-0 invisible'}`}>
             {mounted.has(tab.id) && (
               <ErrorBoundary fallbackLabel={tab.title}>
-                {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} initialTrend={pendingTrend.get(tab.id)} />}
-                {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
-                {tab.type === 'library' && (
-                  <LibraryWorkspace user={user} onSwitchToDesignStudio={() => addTab('design-studio')} />
-                )}
-                {tab.type === 'trends' && (
-                  <TrendBoardWorkspace user={user} onDesignThis={trend => addDesignTabWithTrend(trend)} />
-                )}
+                <Suspense fallback={<WorkspaceFallback label={tab.title} />}>
+                  {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} initialTrend={pendingTrend.get(tab.id)} />}
+                  {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
+                  {tab.type === 'library' && (
+                    <LibraryWorkspace user={user} onSwitchToDesignStudio={() => addTab('design-studio')} />
+                  )}
+                  {tab.type === 'trends' && (
+                    <TrendBoardWorkspace user={user} onDesignThis={trend => addDesignTabWithTrend(trend)} />
+                  )}
+                </Suspense>
               </ErrorBoundary>
             )}
           </div>
