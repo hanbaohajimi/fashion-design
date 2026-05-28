@@ -794,6 +794,13 @@ button:disabled {
   animation: workspaceReveal 240ms var(--ease-out);
 }
 
+.trend-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
 .chat-dot {
   animation: dotPulse 1.2s ease-in-out infinite;
 }
