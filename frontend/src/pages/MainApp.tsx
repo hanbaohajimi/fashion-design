@@ -139,7 +139,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
           onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
           title="返回工具选择"
         >
-          <div style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-gold)', color: 'var(--color-void)' }}>
+          <div style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-accent)', color: '#FFFFFF' }}>
             <Boxes className="h-4 w-4" />
           </div>
           <div className="hidden sm:block">
@@ -162,8 +162,8 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                 <span style={{
                   display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
                   borderRadius: 'var(--radius-sm)',
-                  background: active ? 'var(--color-gold)' : 'var(--overlay-medium)',
-                  color: active ? 'var(--color-void)' : 'var(--color-ink-3)',
+                  background: active ? 'var(--color-accent)' : 'var(--overlay-medium)',
+                  color: active ? '#FFFFFF' : 'var(--color-ink-3)',
                 }}>
                   {preset.icon}
                 </span>
@@ -196,7 +196,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
           <button
             type="button"
             onClick={() => setShowMenu(v => !v)}
-            className="btn-ghost btn-square text-white/70 hover:bg-white/10 hover:text-white"
+            className="btn-ghost btn-square"
             title="新建工作区"
           >
             <Plus className="h-4 w-4" />
@@ -233,7 +233,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                     display: 'flex', width: 40, height: 40, flexShrink: 0,
                     alignItems: 'center', justifyContent: 'center',
                     borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-gold)', color: 'var(--color-void)',
+                    background: 'var(--color-accent)', color: '#FFFFFF',
                   }}>
                     {preset.icon}
                   </span>
@@ -261,7 +261,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
             onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             title={user.name}
           >
-            <span style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--color-gold)', fontSize: 12, fontWeight: 'var(--weight-medium)', color: 'var(--color-void)' }}>
+            <span style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--color-accent)', fontSize: 12, fontWeight: 'var(--weight-medium)', color: '#FFFFFF' }}>
               {initials}
             </span>
             <span className="hidden sm:block">

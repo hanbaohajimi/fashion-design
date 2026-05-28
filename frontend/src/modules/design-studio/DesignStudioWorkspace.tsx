@@ -1,15 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import ChatPanel from './components/ChatPanel';
-import FabricEditor from './components/FabricEditor';
-import DesignCanvas, { type DesignCanvasHandle } from './components/DesignCanvas';
-import ModeBar from './components/ModeBar';
-import OnboardingModal from './components/OnboardingModal';
-import NewProjectForm from './components/NewProjectForm';
-import ProfileDiffModal from './components/ProfileDiffModal';
-import SettingsPanel from './components/SettingsPanel';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { useToast } from '../../components/Toast';
 import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
 import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject, Trend } from '../../types/profile';
+import type { DesignCanvasHandle } from './components/DesignCanvas';
 import {
   fetchPersonalProfile,
   fetchDesignerWorkspace,
@@ -21,6 +14,15 @@ import {
   patchDesignerProject,
 } from '../../api/profileApi';
 
+const ChatPanel = lazy(() => import('./components/ChatPanel'));
+const FabricEditor = lazy(() => import('./components/FabricEditor'));
+const DesignCanvas = lazy(() => import('./components/DesignCanvas'));
+const ModeBar = lazy(() => import('./components/ModeBar'));
+const OnboardingModal = lazy(() => import('./components/OnboardingModal'));
+const NewProjectForm = lazy(() => import('./components/NewProjectForm'));
+const ProfileDiffModal = lazy(() => import('./components/ProfileDiffModal'));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
+
 interface HistoryImage {
   url: string;
   type: string;
@@ -31,6 +33,21 @@ type DesignBackendState = 'checking' | 'ok' | 'error';
 interface DesignStudioWorkspaceProps {
   user: { email: string; name: string; auth_token: string };
   initialTrend?: Trend;
+}
+
+function SectionLoader({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="flex h-full min-h-[240px] items-center justify-center bg-[color:var(--bg)]">
+      <div className="rounded-2xl border border-[color:var(--border-soft)] bg-[color:var(--surface)] px-5 py-4 shadow-[var(--shadow-md)]">
+        <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">{label}</p>
+        <p className="mt-1 text-[12px] text-[color:var(--text-muted)]">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function ModalLoader({ label }: { label: string }) {
+  return <SectionLoader label={label} detail="正在按需加载内容..." />;
 }
 
 export default function DesignStudioWorkspace({ user, initialTrend }: DesignStudioWorkspaceProps) {
@@ -298,62 +315,70 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
             </button>
           </div>
         )}
-        <DesignCanvas
-          ref={canvasRef}
-          onEditInEditor={handleEditImage}
-          onSendToAI={handleSendToAI}
-        />
+        <Suspense fallback={<SectionLoader label="设计画布" detail="正在加载编辑器..." />}>
+          <DesignCanvas
+            ref={canvasRef}
+            onEditInEditor={handleEditImage}
+            onSendToAI={handleSendToAI}
+          />
+        </Suspense>
       </main>
 
-      <ChatPanel
-        side="right"
-        authToken={user.auth_token}
-        mode={selectedMode}
-        designerProjectId={selectedProjectId}
-        trendId={activeTrendId}
-        trendEnabled={trendEnabled}
-        onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
-        modeBar={
-          <ModeBar
-            authToken={user.auth_token}
-            workspace={workspace}
-            selectedMode={selectedMode}
-            selectedProjectId={selectedProjectId}
-            onModeChange={handleModeChange}
-            onNewProject={() => setShowNewProject(true)}
-            onNeedProject={() => setShowNewProject(true)}
-          />
-        }
-        settingsButton={
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-            title="档案管理"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-        }
-        onEditImage={handleEditImage}
-        onPreviewImage={handlePreviewImage}
-        onImageGenerated={handleImageGenerated}
-        onAddToCanvas={handleAddToCanvas}
-        pendingFromCanvas={pendingAIImage}
-        onClearPendingFromCanvas={() => setPendingAIImage(null)}
-        onSessionIdChange={setChatSessionId}
-        externalSessionId={chatSessionId}
-        collapsed={chatCollapsed}
-        onToggleCollapse={() => setChatCollapsed((c) => !c)}
-      />
+      <Suspense fallback={<SectionLoader label="对话侧栏" detail="正在加载会话面板..." />}>
+        <ChatPanel
+          side="right"
+          authToken={user.auth_token}
+          mode={selectedMode}
+          designerProjectId={selectedProjectId}
+          trendId={activeTrendId}
+          trendEnabled={trendEnabled}
+          onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
+          modeBar={
+            <Suspense fallback={<span className="block h-9 w-40 rounded-xl bg-[color:var(--overlay-medium)]" />}>
+              <ModeBar
+                authToken={user.auth_token}
+                workspace={workspace}
+                selectedMode={selectedMode}
+                selectedProjectId={selectedProjectId}
+                onModeChange={handleModeChange}
+                onNewProject={() => setShowNewProject(true)}
+                onNeedProject={() => setShowNewProject(true)}
+              />
+            </Suspense>
+          }
+          settingsButton={
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              title="档案管理"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          }
+          onEditImage={handleEditImage}
+          onPreviewImage={handlePreviewImage}
+          onImageGenerated={handleImageGenerated}
+          onAddToCanvas={handleAddToCanvas}
+          pendingFromCanvas={pendingAIImage}
+          onClearPendingFromCanvas={() => setPendingAIImage(null)}
+          onSessionIdChange={setChatSessionId}
+          externalSessionId={chatSessionId}
+          collapsed={chatCollapsed}
+          onToggleCollapse={() => setChatCollapsed((c) => !c)}
+        />
+      </Suspense>
 
       {editorImageDataUrl && (
-        <FabricEditor
-          imageDataUrl={editorImageDataUrl}
-          mode="image"
-          sessionId={chatSessionId}
-          onClose={() => setEditorImageDataUrl(null)}
-          onSendToAI={handleSendToAI}
-        />
+        <Suspense fallback={<ModalLoader label="像素编辑器" />}>
+          <FabricEditor
+            imageDataUrl={editorImageDataUrl}
+            mode="image"
+            sessionId={chatSessionId}
+            onClose={() => setEditorImageDataUrl(null)}
+            onSendToAI={handleSendToAI}
+          />
+        </Suspense>
       )}
 
       {previewImage && (
@@ -412,42 +437,52 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
 
       {/* Modals */}
       {showOnboarding && (
-        <OnboardingModal
-          onComplete={handleOnboardingComplete}
-          onSkip={() => setShowOnboarding(false)}
-        />
+        <Suspense fallback={<ModalLoader label="新手问卷" />}>
+          <OnboardingModal
+            onComplete={handleOnboardingComplete}
+            onSkip={() => setShowOnboarding(false)}
+          />
+        </Suspense>
       )}
 
       {(showNewProject || editingProject) && !showOnboarding && (
         editingProject ? (
-          <NewProjectForm
-            onComplete={handleEditProjectComplete}
-            onCancel={() => setEditingProject(null)}
-          />
+          <Suspense fallback={<ModalLoader label="项目编辑" />}>
+            <NewProjectForm
+              onComplete={handleEditProjectComplete}
+              onCancel={() => setEditingProject(null)}
+            />
+          </Suspense>
         ) : (
-          <NewProjectForm
-            onComplete={handleNewProjectComplete}
-            onCancel={() => setShowNewProject(false)}
-          />
+          <Suspense fallback={<ModalLoader label="新建项目" />}>
+            <NewProjectForm
+              onComplete={handleNewProjectComplete}
+              onCancel={() => setShowNewProject(false)}
+            />
+          </Suspense>
         )
       )}
 
       {pendingReview && (
-        <ProfileDiffModal
-          type={pendingReview.type}
-          projectName={pendingReview.projectName}
-          newItems={pendingReview.items}
-          onConfirm={handleConfirmReview}
-          onDismiss={() => setPendingReview(null)}
-        />
+        <Suspense fallback={<ModalLoader label="档案确认" />}>
+          <ProfileDiffModal
+            type={pendingReview.type}
+            projectName={pendingReview.projectName}
+            newItems={pendingReview.items}
+            onConfirm={handleConfirmReview}
+            onDismiss={() => setPendingReview(null)}
+          />
+        </Suspense>
       )}
 
       {showSettings && (
-        <SettingsPanel
-          authToken={user.auth_token}
-          onClose={() => setShowSettings(false)}
-          onEditProject={(proj) => { setShowSettings(false); setEditingProject(proj); }}
-        />
+        <Suspense fallback={<ModalLoader label="个性化档案" />}>
+          <SettingsPanel
+            authToken={user.auth_token}
+            onClose={() => setShowSettings(false)}
+            onEditProject={(proj) => { setShowSettings(false); setEditingProject(proj); }}
+          />
+        </Suspense>
       )}
     </div>
   );

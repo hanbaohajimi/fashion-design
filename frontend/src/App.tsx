@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import './index.css';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
-import LandingPage from './pages/LandingPage';
-import AuthPage from './pages/AuthPage';
-import ToolSelector from './pages/ToolSelector';
-import MainApp from './pages/MainApp';
+
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const ToolSelector = lazy(() => import('./pages/ToolSelector'));
+const MainApp = lazy(() => import('./pages/MainApp'));
 
 export type AppView = 'landing' | 'auth' | 'tools' | 'design-studio' | 'trend-analysis';
 export interface AppUser { email: string; name: string; auth_token: string; }
 
 function AppRouter() {
-  // Clear legacy localStorage-only user store from old version
-  localStorage.removeItem('af_users');
+  useEffect(() => {
+    localStorage.removeItem('af_users');
+  }, []);
 
   const [view, setView] = useState<AppView>(() => {
     const token = localStorage.getItem('af_token');
@@ -73,12 +75,23 @@ function AppRouter() {
 
   return (
     <>
-      {view === 'landing' && <LandingPage onEnter={handleEnter} />}
-      {view === 'auth' && <AuthPage onLogin={handleLogin} onBack={() => setView('landing')} />}
-      {view === 'tools' && user && <ToolSelector user={user} onSelect={handleSelectTool} onLogout={handleLogout} />}
-      {(view === 'design-studio' || view === 'trend-analysis') && user && (
-        <MainApp user={user} onLogout={handleLogout} onBackToTools={() => setView('tools')} initialTool={view} />
-      )}
+      <Suspense
+        fallback={
+          <div className="app-shell flex h-full items-center justify-center">
+            <div className="flex items-center gap-3 rounded-2xl border border-[color:var(--border-soft)] bg-white px-4 py-3 shadow-[var(--shadow-md)]">
+              <span className="h-3 w-3 animate-pulse rounded-full bg-[color:var(--signal-blue)]" />
+              <span className="text-[13px] text-[color:var(--text-secondary)]">加载中...</span>
+            </div>
+          </div>
+        }
+      >
+        {view === 'landing' && <LandingPage onEnter={handleEnter} />}
+        {view === 'auth' && <AuthPage onLogin={handleLogin} onBack={() => setView('landing')} />}
+        {view === 'tools' && user && <ToolSelector user={user} onSelect={handleSelectTool} onLogout={handleLogout} />}
+        {(view === 'design-studio' || view === 'trend-analysis') && user && (
+          <MainApp user={user} onLogout={handleLogout} onBackToTools={() => setView('tools')} initialTool={view} />
+        )}
+      </Suspense>
     </>
   );
 }

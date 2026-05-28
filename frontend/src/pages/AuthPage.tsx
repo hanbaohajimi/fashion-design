@@ -109,23 +109,17 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
 
   return (
     <div className="entry-shell">
-      <div
-        className="entry-media"
-        style={{ backgroundImage: 'url(https://picsum.photos/id/1048/1920/1280)' }}
-      />
-      <div className="entry-overlay" />
-
       <main className="entry-frame">
         <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[0.9fr_420px]">
-          <section className="hidden lg:block text-white">
-            <p className="hero-kicker w-max">
+          <section className="hidden lg:block" style={{ color: 'var(--color-ink)' }}>
+            <p className="hero-kicker w-max" style={{ color: 'var(--color-ink-3)', borderColor: 'rgba(0,0,0,0.10)', background: 'var(--color-surface-2)' }}>
               <LockKeyhole className="h-3.5 w-3.5" />
               Secure creative workspace
             </p>
-            <h1 className="mt-5 text-5xl font-extrabold leading-[0.98] tracking-[-0.03em]">
+            <h1 className="mt-5 text-5xl font-extrabold leading-[0.98] tracking-[-0.03em]" style={{ color: 'var(--color-ink)' }}>
               登录后继续你的设计上下文
             </h1>
-            <p className="mt-5 max-w-xl text-[15px] leading-8 text-white/72">
+            <p className="mt-5 max-w-xl text-[15px] leading-8" style={{ color: 'var(--color-ink-2)' }}>
               系统会保留项目、偏好、趋势锚点和素材库，让 AI 生成从一次性尝试变成可持续的创作流程。
             </p>
           </section>
@@ -210,7 +204,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
               )}
 
               {submitError && (
-                <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid rgba(168,88,88,0.3)', background: 'rgba(168,88,88,0.1)', padding: '10px 16px', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>
+                <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid rgba(234,67,53,0.2)', background: 'rgba(234,67,53,0.06)', padding: '10px 16px', textAlign: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-danger)', fontFamily: 'var(--font-ui)' }}>
                   {submitError}
                 </div>
               )}
@@ -229,7 +223,7 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
                   setErrors({});
                   setSubmitError('');
                 }}
-                style={{ marginLeft: 4, fontWeight: 'var(--weight-medium)', color: 'var(--color-gold)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)' }}
+                style={{ marginLeft: 4, fontWeight: 'var(--weight-medium)', color: 'var(--color-accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)' }}
               >
                 {mode === 'login' ? '立即注册' : '返回登录'}
               </button>

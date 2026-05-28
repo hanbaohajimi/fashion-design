@@ -18,40 +18,34 @@ export default function ToolSelector({ user, onSelect, onLogout }: ToolSelectorP
 
   return (
     <div className="entry-shell">
-      <div
-        className="entry-media"
-        style={{ backgroundImage: 'url(https://picsum.photos/id/1011/1920/1280)' }}
-      />
-      <div className="entry-overlay" />
-
       {transitioning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(16,17,20,0.95)]">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/8 backdrop-blur-xl">
-            <Sparkles className="h-6 w-6 text-[color:var(--warm-metal)]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(240,244,249,0.95)' }}>
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', backdropFilter: 'blur(24px)' }}>
+            <Sparkles className="h-6 w-6" style={{ color: 'var(--color-accent)' }} />
           </div>
         </div>
       )}
 
       <div className="entry-frame">
         <div className="mx-auto w-full max-w-6xl">
-          <div className="flex items-center justify-between gap-4 pb-8 text-white/80">
+          <div className="flex items-center justify-between gap-4 pb-8" style={{ color: 'var(--color-ink-2)' }}>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/8">
-                <Boxes className="h-5 w-5 text-[color:var(--warm-metal)]" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: 'var(--color-accent)', color: '#FFFFFF' }}>
+                <Boxes className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/40">Workspace</p>
-                <p className="text-[14px] font-semibold">{user.name}</p>
+                <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: 'var(--color-ink-3)' }}>Workspace</p>
+                <p className="text-[14px] font-semibold" style={{ color: 'var(--color-ink)' }}>{user.name}</p>
               </div>
             </div>
-            <button type="button" onClick={onLogout} className="btn-ghost border border-white/10 bg-white/6 px-4 text-white/75 hover:bg-white/12 hover:text-white">
+            <button type="button" onClick={onLogout} className="btn-ghost px-4">
               退出
             </button>
           </div>
 
           <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="hero-copy text-white">
-              <p className="hero-kicker w-max">
+            <div className="hero-copy" style={{ color: 'var(--color-ink)' }}>
+              <p className="hero-kicker w-max" style={{ color: 'var(--color-ink-3)', borderColor: 'var(--color-border-medium)', background: 'var(--color-surface-2)' }}>
                 <ChartColumn className="h-3.5 w-3.5" />
                 Choose your workspace
               </p>
@@ -68,7 +62,7 @@ export default function ToolSelector({ user, onSelect, onLogout }: ToolSelectorP
                 className="surface-card group flex min-h-[180px] flex-col justify-between p-5 text-left transition-transform duration-200 hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-gold)', color: 'var(--color-void)' }}>
+                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-accent)', color: '#FFFFFF' }}>
                     <Sparkles className="h-5 w-5" />
                   </div>
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" style={{ color: 'var(--color-ink-3)' }} />
@@ -87,7 +81,7 @@ export default function ToolSelector({ user, onSelect, onLogout }: ToolSelectorP
                 className="surface-card group flex min-h-[180px] flex-col justify-between p-5 text-left transition-transform duration-200 hover:-translate-y-1"
               >
                 <div className="flex items-center justify-between">
-                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-info)' }}>
+                  <div style={{ display: 'flex', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border-medium)', color: 'var(--color-accent)' }}>
                     <ChartColumn className="h-5 w-5" />
                   </div>
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" style={{ color: 'var(--color-ink-3)' }} />

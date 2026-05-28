@@ -7,22 +7,16 @@ interface LandingPageProps {
 export default function LandingPage({ onEnter }: LandingPageProps) {
   return (
     <div className="entry-shell">
-      <div
-        className="entry-media"
-        style={{ backgroundImage: 'url(https://picsum.photos/id/1060/1920/1280)' }}
-      />
-      <div className="entry-overlay" />
-
       <div className="entry-frame">
         <div className="entry-panel">
-          <section className="hero-copy">
-            <div className="hero-kicker">
-              <Sparkles className="h-3.5 w-3.5" />
+          <section className="hero-copy" style={{ color: 'var(--color-ink)' }}>
+            <div className="hero-kicker" style={{ color: 'var(--color-ink-3)', borderColor: 'var(--color-border-medium)', background: 'var(--color-surface-2)' }}>
+              <Sparkles className="h-3.5 w-3.5" style={{ color: 'var(--color-accent)' }} />
               Fashion intelligence workspace
             </div>
 
             <h1 className="hero-title">AI Fashion Design Platform</h1>
-            <p className="hero-subtitle">
+            <p className="hero-subtitle" style={{ color: 'var(--color-ink-2)' }}>
               用统一的设计语言连接灵感、趋势、项目与生成。
               进入后，你会在一个更轻、更快、更清晰的工作台里完成从洞察到创作的完整链路。
             </p>
@@ -39,20 +33,20 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
             </div>
           </section>
 
-          <aside className="surface-card p-5 md:p-6 text-[13px] text-white/86 bg-[rgba(255,255,255,0.08)] border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-            <p className="section-label text-white/60">System Overview</p>
+          <aside className="surface-card p-5 md:p-6 text-[13px]">
+            <p className="section-label" style={{ color: 'var(--color-ink-3)' }}>System Overview</p>
             <div className="mt-4 grid gap-3">
               {[
                 ['设计工作台', '生成、编辑、预览、试穿一体化'],
                 ['趋势分析', '内容流与洞察面板统一呈现'],
                 ['我的库', '素材、合集和复用路径集中管理'],
               ].map(([title, desc]) => (
-                <div key={title} className="rounded-2xl border border-white/10 bg-white/6 px-4 py-3">
-                  <div className="flex items-center gap-2 text-white">
-                    <Layers3 className="h-4 w-4 text-[color:var(--warm-metal)]" />
-                    <span className="font-semibold">{title}</span>
+                <div key={title} className="rounded-2xl px-4 py-3" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+                  <div className="flex items-center gap-2">
+                    <Layers3 className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
+                    <span className="font-semibold" style={{ color: 'var(--color-ink)' }}>{title}</span>
                   </div>
-                  <p className="mt-1 text-white/70 leading-6">{desc}</p>
+                  <p className="mt-1 leading-6" style={{ color: 'var(--color-ink-2)' }}>{desc}</p>
                 </div>
               ))}
             </div>
