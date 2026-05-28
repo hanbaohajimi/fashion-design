@@ -9,13 +9,13 @@ import ProfileDiffModal from './components/ProfileDiffModal';
 import SettingsPanel from './components/SettingsPanel';
 import { useToast } from '../../components/Toast';
 import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
-import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject } from '../../types/profile';
+import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject, Trend } from '../../types/profile';
 import {
   fetchPersonalProfile,
   fetchDesignerWorkspace,
   submitPersonalOnboarding,
   createDesignerProject,
-  createConversationSession,
+  createConversationSessionWithTrend,
   confirmPersonalReview,
   confirmDesignerReview,
   patchDesignerProject,
@@ -30,9 +30,10 @@ type DesignBackendState = 'checking' | 'ok' | 'error';
 
 interface DesignStudioWorkspaceProps {
   user: { email: string; name: string; auth_token: string };
+  initialTrend?: Trend;
 }
 
-export default function DesignStudioWorkspace({ user }: DesignStudioWorkspaceProps) {
+export default function DesignStudioWorkspace({ user, initialTrend }: DesignStudioWorkspaceProps) {
   const { toast } = useToast();
   const canvasRef = useRef<DesignCanvasHandle>(null);
 
@@ -46,6 +47,8 @@ export default function DesignStudioWorkspace({ user }: DesignStudioWorkspacePro
     typeof window !== 'undefined' && localStorage.getItem('fashion-studio-chat-collapsed') === '1',
   );
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(undefined);
+  const [activeTrendId, setActiveTrendId] = useState<string | undefined>(initialTrend?.id);
+  const [trendEnabled, setTrendEnabled] = useState(!!initialTrend);
 
   // ── Personalization state ──────────────────────────────
   const [selectedMode, setSelectedMode] = useState<SessionMode>('personal');
@@ -149,14 +152,16 @@ export default function DesignStudioWorkspace({ user }: DesignStudioWorkspacePro
     setSelectedProjectId(projectId);
     // Create a new personalized session
     try {
-      const result = await createConversationSession(
+      const result = await createConversationSessionWithTrend(
         user.auth_token,
         mode,
         projectId || undefined,
+        activeTrendId,
+        trendEnabled,
       );
       setChatSessionId(result.session_id);
     } catch { /* fall back to random session — ChatPanel handles this */ }
-  }, [user.auth_token]);
+  }, [user.auth_token, activeTrendId, trendEnabled]);
 
   const handleOnboardingComplete = useCallback(async (staticData: object) => {
     try {
@@ -305,6 +310,9 @@ export default function DesignStudioWorkspace({ user }: DesignStudioWorkspacePro
         authToken={user.auth_token}
         mode={selectedMode}
         designerProjectId={selectedProjectId}
+        trendId={activeTrendId}
+        trendEnabled={trendEnabled}
+        onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
         modeBar={
           <ModeBar
             authToken={user.auth_token}

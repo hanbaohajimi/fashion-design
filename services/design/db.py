@@ -88,7 +88,54 @@ def _migrate(conn: sqlite3.Connection) -> None:
         sort_order      INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (collection_id, item_id)
     );
+
+    CREATE TABLE IF NOT EXISTS trends (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL,
+        name_zh         TEXT,
+        season          TEXT,
+        status          TEXT NOT NULL DEFAULT 'active',
+        cover_image     TEXT,
+        image_gallery   TEXT NOT NULL DEFAULT '[]',
+        keywords        TEXT NOT NULL DEFAULT '[]',
+        description     TEXT,
+        color_palette   TEXT NOT NULL DEFAULT '[]',
+        design_language TEXT NOT NULL DEFAULT '{}',
+        style_tags      TEXT NOT NULL DEFAULT '[]',
+        occasion_tags   TEXT NOT NULL DEFAULT '[]',
+        sort_order      INTEGER NOT NULL DEFAULT 0,
+        source_report_id TEXT,
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_trends_season ON trends(season, status);
+
+    CREATE TABLE IF NOT EXISTS user_trend_favorites (
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        trend_id        TEXT NOT NULL REFERENCES trends(id) ON DELETE CASCADE,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_email, trend_id)
+    );
     """)
+    conn.commit()
+    _migrate_incremental(conn)
+
+
+def _migrate_incremental(conn: sqlite3.Connection) -> None:
+    """Add columns to existing tables without recreating them."""
+    def existing_cols(table: str) -> set:
+        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+    li_cols = existing_cols("library_items")
+    if "trend_alignments" not in li_cols:
+        conn.execute("ALTER TABLE library_items ADD COLUMN trend_alignments TEXT NOT NULL DEFAULT '[]'")
+
+    cs_cols = existing_cols("chat_sessions")
+    if "trend_id" not in cs_cols:
+        conn.execute("ALTER TABLE chat_sessions ADD COLUMN trend_id TEXT")
+    if "trend_enabled" not in cs_cols:
+        conn.execute("ALTER TABLE chat_sessions ADD COLUMN trend_enabled INTEGER NOT NULL DEFAULT 0")
+
     conn.commit()
 
 
@@ -529,3 +576,124 @@ def get_collection_cover(col_id: str) -> Optional[str]:
             (col_id,),
         ).fetchone()
         return item["image_url"] if item else None
+
+
+# ─── Trends ───
+
+def upsert_trend(
+    trend_id: str,
+    name: str,
+    name_zh: str,
+    season: str,
+    cover_image: str,
+    image_gallery: list,
+    keywords: list,
+    description: str,
+    color_palette: list,
+    design_language: dict,
+    style_tags: list,
+    occasion_tags: list,
+    source_report_id: str = "",
+) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT INTO trends
+               (id, name, name_zh, season, cover_image, image_gallery, keywords, description,
+                color_palette, design_language, style_tags, occasion_tags, source_report_id, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+               ON CONFLICT(id) DO UPDATE SET
+               name=excluded.name, name_zh=excluded.name_zh, season=excluded.season,
+               cover_image=excluded.cover_image, image_gallery=excluded.image_gallery,
+               keywords=excluded.keywords, description=excluded.description,
+               color_palette=excluded.color_palette, design_language=excluded.design_language,
+               style_tags=excluded.style_tags, occasion_tags=excluded.occasion_tags,
+               source_report_id=excluded.source_report_id, updated_at=datetime('now')""",
+            (
+                trend_id, name, name_zh, season, cover_image,
+                json.dumps(image_gallery, ensure_ascii=False),
+                json.dumps(keywords, ensure_ascii=False),
+                description,
+                json.dumps(color_palette, ensure_ascii=False),
+                json.dumps(design_language, ensure_ascii=False),
+                json.dumps(style_tags, ensure_ascii=False),
+                json.dumps(occasion_tags, ensure_ascii=False),
+                source_report_id,
+            ),
+        )
+        conn.commit()
+
+
+def list_trends(season: Optional[str] = None, status: str = "active") -> list[sqlite3.Row]:
+    with _lock:
+        if season:
+            return _get_conn().execute(
+                "SELECT * FROM trends WHERE status=? AND season=? ORDER BY sort_order ASC, updated_at DESC",
+                (status, season),
+            ).fetchall()
+        return _get_conn().execute(
+            "SELECT * FROM trends WHERE status=? ORDER BY sort_order ASC, updated_at DESC",
+            (status,),
+        ).fetchall()
+
+
+def get_trend(trend_id: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute("SELECT * FROM trends WHERE id=?", (trend_id,)).fetchone()
+
+
+def get_latest_trend_season() -> Optional[str]:
+    with _lock:
+        row = _get_conn().execute(
+            "SELECT season FROM trends WHERE status='active' ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+        return row["season"] if row else None
+
+
+def add_trend_favorite(user_email: str, trend_id: str) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO user_trend_favorites (user_email, trend_id) VALUES (?,?)",
+            (user_email, trend_id),
+        )
+        conn.commit()
+
+
+def remove_trend_favorite(user_email: str, trend_id: str) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "DELETE FROM user_trend_favorites WHERE user_email=? AND trend_id=?",
+            (user_email, trend_id),
+        )
+        conn.commit()
+
+
+def get_trend_favorite_ids(user_email: str) -> set:
+    with _lock:
+        rows = _get_conn().execute(
+            "SELECT trend_id FROM user_trend_favorites WHERE user_email=?", (user_email,)
+        ).fetchall()
+        return {r["trend_id"] for r in rows}
+
+
+def update_session_trend(session_id: str, trend_id: Optional[str], trend_enabled: bool) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "UPDATE chat_sessions SET trend_id=?, trend_enabled=? WHERE id=?",
+            (trend_id, 1 if trend_enabled else 0, session_id),
+        )
+        conn.commit()
+
+
+def update_library_item_trend_alignments(item_id: str, alignments: list) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "UPDATE library_items SET trend_alignments=? WHERE id=?",
+            (json.dumps(alignments, ensure_ascii=False), item_id),
+        )
+        conn.commit()
+

@@ -139,3 +139,45 @@ export interface OutfitSuggestion {
   items: LibraryItem[];
   tags: string[];
 }
+
+// ── Trends ────────────────────────────────────────────────
+
+export interface TrendColorPalette {
+  name: string;
+  hex: string;
+}
+
+export interface TrendDesignLanguage {
+  silhouettes?: string[];
+  fabrics?: string[];
+  details?: string[];
+  style_prompt?: string;
+}
+
+export interface TrendAnchor {
+  trend_id: string;
+  trend_name: string;
+  alignment_note?: string;
+  added_at: string;
+}
+
+export interface Trend {
+  id: string;
+  name: string;
+  name_zh?: string;
+  season?: string;
+  status: string;
+  cover_image?: string;
+  image_gallery: string[];
+  keywords: string[];
+  description?: string;
+  color_palette: TrendColorPalette[];
+  design_language: TrendDesignLanguage;
+  style_tags: string[];
+  occasion_tags: string[];
+  sort_order: number;
+  updated_at: string;
+  // client-side additions
+  match_score?: number | null;
+  is_favorite?: boolean;
+}

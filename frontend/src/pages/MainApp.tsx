@@ -3,8 +3,10 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import DesignStudioWorkspace from '../modules/design-studio/DesignStudioWorkspace';
 import TrendAnalysisWorkspace from '../modules/trend-analysis/TrendAnalysisWorkspace';
 import LibraryWorkspace from '../modules/library/LibraryWorkspace';
+import TrendBoardWorkspace from '../modules/trends/TrendBoardWorkspace';
+import type { Trend } from '../types/profile';
 
-type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library';
+type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library' | 'trends';
 
 interface WorkspaceTab { id: string; type: WorkspaceType; title: string; }
 
@@ -19,6 +21,7 @@ const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: string
   'design-studio': { title: 'AI 设计工作台', desc: '对话生图 · 画布编辑 · 虚拟试穿', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
   'trend-analysis': { title: '趋势分析中心', desc: '趋势报告 · 热词追踪 · 季节分析', icon: 'M3 3v18h18M9 17V9m4 8V5m4 12v-4' },
   'library': { title: '我的库', desc: '生成图片 · 合集管理 · 风格分析', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
+  'trends': { title: '趋势探索', desc: '流行趋势 · 个性化推荐 · 设计灵感', icon: 'M3 17l4-8 4 4 4-6 4 10' },
 };
 
 let _c = 0;
@@ -33,6 +36,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
   const [showMenu, setShowMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mounted, setMounted] = useState<Set<string>>(new Set([tabs[0].id]));
+  const [pendingTrend, setPendingTrend] = useState<Map<string, Trend>>(new Map());
   const menuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +56,13 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
     setTabs(p => [...p, t]);
     setActiveId(t.id);
     setShowMenu(false);
+  }, []);
+
+  const addDesignTabWithTrend = useCallback((trend: Trend) => {
+    const t: WorkspaceTab = { id: nid(), type: 'design-studio', title: `设计 · ${trend.name_zh || trend.name}` };
+    setPendingTrend(p => new Map(p).set(t.id, trend));
+    setTabs(p => [...p, t]);
+    setActiveId(t.id);
   }, []);
 
   const closeTab = useCallback((id: string) => {
@@ -186,12 +197,18 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
           <div key={tab.id} className={`absolute inset-0 ${activeId === tab.id ? 'z-10 workspace-enter' : 'z-0 invisible'}`}>
             {mounted.has(tab.id) && (
               <ErrorBoundary fallbackLabel={tab.title}>
-                {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} />}
+                {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} initialTrend={pendingTrend.get(tab.id)} />}
                 {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
                 {tab.type === 'library' && (
                   <LibraryWorkspace
                     user={user}
                     onSwitchToDesignStudio={() => addTab('design-studio')}
+                  />
+                )}
+                {tab.type === 'trends' && (
+                  <TrendBoardWorkspace
+                    user={user}
+                    onDesignThis={(trend) => addDesignTabWithTrend(trend)}
                   />
                 )}
               </ErrorBoundary>

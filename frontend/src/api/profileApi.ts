@@ -11,6 +11,7 @@ import type {
   LibraryCollection,
   LibraryStats,
   OutfitSuggestion,
+  Trend,
 } from '../types/profile';
 
 const BASE = '/api/design';
@@ -303,3 +304,99 @@ export async function removeItemFromCollection(
     headers: authHeader(token),
   });
 }
+
+// ── Trends ────────────────────────────────────────────────
+
+export async function fetchTrends(
+  token: string,
+  params: { season?: string; recommended?: boolean; search?: string } = {},
+): Promise<{ trends: Trend[]; season: string }> {
+  const q = new URLSearchParams();
+  if (params.season) q.set('season', params.season);
+  if (params.recommended) q.set('recommended', 'true');
+  if (params.search) q.set('search', params.search);
+  const res = await fetch(`${BASE}/trends?${q}`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function fetchTrendSeasons(token: string): Promise<{ seasons: string[] }> {
+  const res = await fetch(`${BASE}/trends/seasons`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function fetchTrendDetail(token: string, trendId: string): Promise<{ trend: Trend }> {
+  const res = await fetch(`${BASE}/trends/${trendId}`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function favoriteTrend(token: string, trendId: string): Promise<void> {
+  await fetch(`${BASE}/trends/${trendId}/favorite`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token }),
+  });
+}
+
+export async function unfavoriteTrend(token: string, trendId: string): Promise<void> {
+  await fetch(`${BASE}/trends/${trendId}/favorite`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+}
+
+export async function syncTrends(token: string): Promise<{ synced: number }> {
+  const res = await fetch(`${BASE}/trends/sync`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token }),
+  });
+  return handle(res);
+}
+
+export async function addTrendToProject(
+  token: string,
+  projectId: string,
+  trendId: string,
+  alignmentNote?: string,
+): Promise<{ workspace: DesignerWorkspace }> {
+  const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/trends`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ auth_token: token, trend_id: trendId, alignment_note: alignmentNote }),
+  });
+  return handle(res);
+}
+
+export async function removeTrendFromProject(
+  token: string,
+  projectId: string,
+  trendId: string,
+): Promise<{ workspace: DesignerWorkspace }> {
+  const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/trends/${trendId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+  return handle(res);
+}
+
+export async function createConversationSessionWithTrend(
+  token: string,
+  mode: 'personal' | 'designer',
+  designerProjectId?: string,
+  trendId?: string,
+  trendEnabled?: boolean,
+): Promise<{ session_id: string; mode: string; trend_id?: string; trend_enabled: boolean }> {
+  const res = await fetch(`${BASE}/conversations`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({
+      auth_token: token,
+      mode,
+      designer_project_id: designerProjectId,
+      trend_id: trendId,
+      trend_enabled: trendEnabled ?? false,
+    }),
+  });
+  return handle(res);
+}
+

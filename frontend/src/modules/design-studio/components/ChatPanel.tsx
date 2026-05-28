@@ -108,6 +108,9 @@ interface ChatPanelProps {
   authToken?: string;
   mode?: 'personal' | 'designer';
   designerProjectId?: string | null;
+  trendId?: string;
+  trendEnabled?: boolean;
+  onTrendToggle?: (trendId: string | undefined, enabled: boolean) => void;
   modeBar?: React.ReactNode;
   settingsButton?: React.ReactNode;
 }
@@ -279,6 +282,8 @@ async function streamChat(
   authToken?: string,
   mode?: string,
   designerProjectId?: string | null,
+  trendId?: string,
+  trendEnabled?: boolean,
 ) {
   const res = await fetch('/api/design/chat', {
     method: 'POST',
@@ -289,6 +294,8 @@ async function streamChat(
       ...(authToken ? { auth_token: authToken } : {}),
       mode: mode || 'personal',
       designer_project_id: designerProjectId || undefined,
+      trend_id: trendId || undefined,
+      trend_enabled: trendEnabled ?? false,
     }),
     signal,
   });
@@ -436,6 +443,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   authToken,
   mode = 'personal',
   designerProjectId,
+  trendId,
+  trendEnabled: trendEnabledProp = false,
+  onTrendToggle,
   modeBar,
   settingsButton,
 }) => {
@@ -468,6 +478,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [lastImageType, setLastImageType] = useState<string | undefined>();
   const [isDragging, setIsDragging] = useState(false);
   const [fastMode, setFastMode] = useState(false);
+  const [trendActive, setTrendActive] = useState(trendEnabledProp);
   const [enhancing, setEnhancing] = useState(false);
   const [trendHotItems, setTrendHotItems] = useState<TrendHotItem[]>([]);
   const [trendHotCategory, setTrendHotCategory] = useState('');
@@ -994,7 +1005,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             );
             break;
         }
-      }, ctrl.signal, authToken, mode, designerProjectId);
+      }, ctrl.signal, authToken, mode, designerProjectId, trendId, trendActive);
     } catch (err: unknown) {
       if (statusRaf != null) {
         cancelAnimationFrame(statusRaf);
@@ -1791,6 +1802,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 <Paperclip className="w-3.5 h-3.5" />
               </button>
               <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileSelect} />
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => {
+                  const next = !trendActive;
+                  setTrendActive(next);
+                  onTrendToggle?.(trendId, next);
+                  toast(next ? '趋势感知已开启 — AI 将参考当前趋势风格' : '趋势感知已关闭', 'info');
+                }}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-40 ${
+                  trendActive && trendId
+                    ? 'text-violet-600 bg-violet-50'
+                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100/80'
+                }`}
+                title={
+                  trendId
+                    ? trendActive
+                      ? '趋势感知已开启（点击关闭）'
+                      : '趋势感知已关闭（点击开启）'
+                    : '在趋势探索页选择趋势后可开启'
+                }
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-medium hidden sm:inline">
+                  {trendActive && trendId ? '趋势 ✦' : '趋势'}
+                </span>
+              </button>
               <button
                 type="button"
                 disabled={isLoading}

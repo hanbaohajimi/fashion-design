@@ -924,6 +924,8 @@ class ChatRequest(BaseModel):
     mode: str = "personal"
     designer_project_id: Optional[str] = None
     auth_token: Optional[str] = None
+    trend_id: Optional[str] = None
+    trend_enabled: bool = False
 
 class ResetRequest(BaseModel):
     session_id: str
@@ -1184,6 +1186,11 @@ async def chat(req: ChatRequest):
                 personalization_ctx = _build_personalization_context(
                     req.mode, personal_profile, designer_project
                 )
+                # Append trend context (session-level; designer project trends already in profile ctx)
+                if req.mode == "personal":
+                    trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
+                    if trend_ctx:
+                        personalization_ctx = (personalization_ctx + "\n\n" + trend_ctx).strip()
 
         session = get_session(req.session_id, personalization_ctx)
         if user_email:
@@ -1714,6 +1721,10 @@ def _build_personalization_context(
             lines.append(f"本项目设计规律：{'；'.join(sigs)}")
         if b.get("avoid_directions"):
             lines.append(f"本项目回避方向：{'、'.join(b['avoid_directions'][:5])}")
+        # Project-level trend anchors
+        trend_ctx = _build_project_trend_context(designer_project)
+        if trend_ctx:
+            lines.append(trend_ctx)
         lines += [
             "",
             "原则：以上是该项目已建立的设计语言，在生成时保持风格一致性。",
@@ -1866,6 +1877,8 @@ async def _auto_tag_image(item_id: str, image_url: str, prompt: str) -> None:
             raw = raw.rsplit("```", 1)[0]
         tags = json.loads(raw)
         db.update_library_item_tags(item_id, tags, "completed")
+        # Detect trend alignment after tagging
+        asyncio.create_task(_detect_trend_alignment(item_id, tags))
     except Exception as e:
         print(f"[WARN] auto_tag_image failed for {item_id}: {e}")
         db.update_library_item_tags(item_id, {}, "failed")
@@ -2086,6 +2099,8 @@ class CreateSessionRequest(BaseModel):
     auth_token: str
     mode: str = "personal"
     designer_project_id: Optional[str] = None
+    trend_id: Optional[str] = None
+    trend_enabled: bool = False
 
 
 @app.get("/api/profile/personal")
@@ -2264,11 +2279,19 @@ async def create_conversation(req: CreateSessionRequest):
             (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
         )
     ctx = _build_personalization_context(req.mode, personal_profile, designer_project)
+    if req.mode == "personal":
+        trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
+        if trend_ctx:
+            ctx = (ctx + "\n\n" + trend_ctx).strip()
     get_session(session_id, ctx)  # pre-create with context
+    if req.trend_id or req.trend_enabled:
+        db.update_session_trend(session_id, req.trend_id, req.trend_enabled)
     return {
         "session_id": session_id,
         "mode": req.mode,
         "designer_project_id": req.designer_project_id,
+        "trend_id": req.trend_id,
+        "trend_enabled": req.trend_enabled,
     }
 
 
@@ -2711,6 +2734,376 @@ async def _generate_smart_collections(email: str) -> None:
                 break
     except Exception as e:
         print(f"[WARN] _generate_smart_collections failed: {e}")
+
+
+# ═══════════════════════════════════════════════════
+# Trends — data sync from trend system
+# ═══════════════════════════════════════════════════
+
+TREND_API_BASE = os.environ.get("TREND_API_URL", "http://127.0.0.1:8002")
+
+# Map trend system season_bucket_id (e.g. "2025_SS") to display label
+def _season_label(bucket_id: str) -> str:
+    if not bucket_id:
+        return ""
+    parts = bucket_id.split("_")
+    if len(parts) == 2:
+        year, code = parts
+        mapping = {"SS": "春夏", "FW": "秋冬", "RESORT": "度假", "CRUISE": "早春", "PREFALL": "早秋"}
+        return f"{year}{mapping.get(code, code)}"
+    return bucket_id
+
+
+def _trend_item_to_db(item: dict, report: dict) -> dict:
+    """Convert a TrendItem from FashionTrendReport to db.upsert_trend args."""
+    import hashlib
+    trend_id = hashlib.sha256(f"{report.get('report_id','')}:{item.get('name','')}".encode()).hexdigest()[:16]
+    season = _season_label(report.get("season_bucket_id", ""))
+    colors = item.get("related_colors", [])
+    color_palette = [{"name": c, "hex": ""} for c in colors[:6]]
+    fabrics = item.get("related_fabrics", [])
+    silhouettes = item.get("related_silhouettes", [])
+    keywords = item.get("related_items", []) + item.get("related_patterns", [])
+    style_keywords = item.get("style_keywords", []) if "style_keywords" in item else []  # type: ignore[index]
+    design_language = {
+        "silhouettes": silhouettes[:5],
+        "fabrics": fabrics[:5],
+        "details": keywords[:5],
+        "style_prompt": item.get("description", ""),
+    }
+    images = item.get("selected_images", [])
+    return dict(
+        trend_id=trend_id,
+        name=item.get("name", ""),
+        name_zh=item.get("name", ""),
+        season=season,
+        cover_image=images[0] if images else "",
+        image_gallery=images[:6],
+        keywords=style_keywords[:8],
+        description=item.get("description", ""),
+        color_palette=color_palette,
+        design_language=design_language,
+        style_tags=style_keywords[:6],
+        occasion_tags=[],
+        source_report_id=report.get("report_id", ""),
+    )
+
+
+async def _sync_trends_from_report() -> int:
+    """Fetch latest report from trend system and upsert key_trends into DB. Returns count synced."""
+    try:
+        import urllib.request as _req
+        with _req.urlopen(f"{TREND_API_BASE}/api/reports/latest", timeout=5) as resp:
+            report = json.loads(resp.read())
+        items = report.get("key_trends", [])
+        count = 0
+        for item in items:
+            if not item.get("name"):
+                continue
+            args = _trend_item_to_db(item, report)
+            db.upsert_trend(**args)
+            count += 1
+        print(f"[INFO] Trend sync: upserted {count} trends from report {report.get('report_id','')}")
+        return count
+    except Exception as e:
+        print(f"[WARN] Trend sync failed: {e}")
+        return 0
+
+
+# Background sync task — run on startup + hourly
+_last_trend_sync: float = 0.0
+
+async def _trend_sync_loop() -> None:
+    global _last_trend_sync
+    await asyncio.sleep(2)  # let server fully start first
+    while True:
+        await _sync_trends_from_report()
+        _last_trend_sync = asyncio.get_event_loop().time()
+        await asyncio.sleep(3600)  # sync every hour
+
+
+@app.on_event("startup")
+async def _start_trend_sync():
+    asyncio.create_task(_trend_sync_loop())
+
+
+# ═══════════════════════════════════════════════════
+# Trends — request models
+# ═══════════════════════════════════════════════════
+
+class TrendFavoriteRequest(BaseModel):
+    auth_token: str
+
+class TrendSyncRequest(BaseModel):
+    auth_token: str
+
+class ProjectTrendAddRequest(BaseModel):
+    auth_token: str
+    trend_id: str
+    alignment_note: Optional[str] = None
+
+class ProjectTrendRemoveRequest(BaseModel):
+    auth_token: str
+
+
+def _row_to_trend(row) -> dict:
+    d = dict(row)
+    for field in ("image_gallery", "keywords", "color_palette", "design_language", "style_tags", "occasion_tags"):
+        try:
+            d[field] = json.loads(d.get(field) or ("[]" if field != "design_language" else "{}"))
+        except Exception:
+            d[field] = [] if field != "design_language" else {}
+    return d
+
+
+def _compute_match_score(trend: dict, user_keywords: list) -> float:
+    if not user_keywords:
+        return 0.0
+    trend_kws = trend.get("style_tags", []) + trend.get("occasion_tags", []) + trend.get("keywords", [])
+    if not trend_kws:
+        return 0.0
+    score = 0
+    for uk in user_keywords:
+        for tk in trend_kws:
+            if tk and uk and (tk in uk or uk in tk):
+                score += 1
+    return min(score / (len(trend_kws) * 2), 1.0)
+
+
+# ═══════════════════════════════════════════════════
+# Trends — API endpoints
+# ═══════════════════════════════════════════════════
+
+@app.get("/api/trends")
+async def get_trends(
+    authorization: Optional[str] = Header(None),
+    season: Optional[str] = None,
+    recommended: bool = False,
+    search: Optional[str] = None,
+):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user_email: Optional[str] = None
+    user_keywords: list = []
+    fav_ids: set = set()
+
+    if token:
+        user_row = db.get_user_by_token(token)
+        if user_row:
+            user_email = user_row["email"]
+            profile = db.get_personal_profile(user_email)
+            s = profile.get("static", {})
+            d = profile.get("dynamic", {})
+            user_keywords = list(s.get("style_keywords") or [])
+            user_keywords += list(s.get("occasions") or [])
+            user_keywords += list(s.get("color_palette") or [])
+            for k in (d.get("inferred_keywords") or []):
+                if k.get("confidence", 0) >= 0.5:
+                    user_keywords.append(k["tag"])
+                    if k.get("source") == "library" and k.get("confidence", 0) >= 0.4:
+                        user_keywords.append(k["tag"])  # 2x weight
+            fav_ids = db.get_trend_favorite_ids(user_email)
+
+    rows = db.list_trends(season=season)
+    trends = [_row_to_trend(r) for r in rows]
+
+    if search:
+        q = search.lower()
+        trends = [t for t in trends if q in (t.get("name") or "").lower() or
+                  any(q in kw.lower() for kw in t.get("keywords", []))]
+
+    for t in trends:
+        t["match_score"] = _compute_match_score(t, user_keywords) if user_keywords else None
+        t["is_favorite"] = t["id"] in fav_ids
+
+    if recommended and user_keywords:
+        trends.sort(key=lambda t: t.get("match_score") or 0, reverse=True)
+
+    current_season = season or db.get_latest_trend_season() or ""
+    return {"trends": trends, "season": current_season}
+
+
+@app.get("/api/trends/seasons")
+async def get_trend_seasons():
+    with db._lock:
+        rows = db._get_conn().execute(
+            "SELECT DISTINCT season FROM trends WHERE status='active' AND season != '' ORDER BY season DESC"
+        ).fetchall()
+    return {"seasons": [r["season"] for r in rows]}
+
+
+@app.post("/api/trends/sync")
+async def trigger_trend_sync(req: TrendSyncRequest):
+    _require_user(req.auth_token)
+    count = await _sync_trends_from_report()
+    return {"status": "ok", "synced": count}
+
+
+@app.get("/api/trends/{trend_id}")
+async def get_trend_detail(trend_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    row = db.get_trend(trend_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="趋势不存在")
+    trend = _row_to_trend(row)
+    if token:
+        user_row = db.get_user_by_token(token)
+        if user_row:
+            fav_ids = db.get_trend_favorite_ids(user_row["email"])
+            trend["is_favorite"] = trend_id in fav_ids
+    return {"trend": trend}
+
+
+@app.post("/api/trends/{trend_id}/favorite")
+async def favorite_trend(trend_id: str, req: TrendFavoriteRequest):
+    user = _require_user(req.auth_token)
+    if not db.get_trend(trend_id):
+        raise HTTPException(status_code=404, detail="趋势不存在")
+    db.add_trend_favorite(user["email"], trend_id)
+    return {"status": "ok"}
+
+
+@app.delete("/api/trends/{trend_id}/favorite")
+async def unfavorite_trend(trend_id: str, authorization: Optional[str] = Header(None)):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    db.remove_trend_favorite(user["email"], trend_id)
+    return {"status": "ok"}
+
+
+# ═══════════════════════════════════════════════════
+# Trends — designer project anchors
+# ═══════════════════════════════════════════════════
+
+@app.post("/api/profile/designer/projects/{project_id}/trends")
+async def add_trend_to_project(project_id: str, req: ProjectTrendAddRequest):
+    user = _require_user(req.auth_token)
+    trend_row = db.get_trend(req.trend_id)
+    if not trend_row:
+        raise HTTPException(status_code=404, detail="趋势不存在")
+    workspace = db.get_designer_workspace(user["email"])
+    for proj in workspace.get("projects", []):
+        if proj.get("id") == project_id:
+            anchors = proj.setdefault("brief", {}).setdefault("trend_anchors", [])
+            if len(anchors) >= 3:
+                raise HTTPException(status_code=400, detail="每个项目最多添加3个趋势锚点")
+            if any(a["trend_id"] == req.trend_id for a in anchors):
+                return {"workspace": workspace}  # already added
+            anchors.append({
+                "trend_id": req.trend_id,
+                "trend_name": trend_row["name"],
+                "alignment_note": req.alignment_note or "",
+                "added_at": datetime.now().isoformat(),
+            })
+            break
+    else:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    db.save_designer_workspace(user["email"], workspace)
+    return {"workspace": workspace}
+
+
+@app.delete("/api/profile/designer/projects/{project_id}/trends/{trend_id}")
+async def remove_trend_from_project(
+    project_id: str, trend_id: str, authorization: Optional[str] = Header(None)
+):
+    token = (authorization or "").removeprefix("Bearer ").strip() or None
+    user = _require_user(token)
+    workspace = db.get_designer_workspace(user["email"])
+    for proj in workspace.get("projects", []):
+        if proj.get("id") == project_id:
+            anchors = proj.get("brief", {}).get("trend_anchors", [])
+            proj["brief"]["trend_anchors"] = [a for a in anchors if a["trend_id"] != trend_id]
+            break
+    db.save_designer_workspace(user["email"], workspace)
+    return {"workspace": workspace}
+
+
+# ═══════════════════════════════════════════════════
+# Trends — trend context in personalization
+# ═══════════════════════════════════════════════════
+
+def _build_trend_context(trend_id: Optional[str], trend_enabled: bool) -> str:
+    if not trend_enabled or not trend_id:
+        return ""
+    row = db.get_trend(trend_id)
+    if not row:
+        return ""
+    trend = _row_to_trend(row)
+    dl = trend.get("design_language", {})
+    color_names = [c["name"] for c in trend.get("color_palette", [])[:4] if c.get("name")]
+    lines = [f"=== 当前趋势参考：{trend['name']} ==="]
+    if trend.get("description"):
+        lines.append(f"趋势概述：{trend['description']}")
+    if dl.get("style_prompt"):
+        lines.append(f"设计语感：{dl['style_prompt']}")
+    if dl.get("silhouettes"):
+        lines.append(f"代表廓形：{'、'.join(dl['silhouettes'][:4])}")
+    if dl.get("fabrics"):
+        lines.append(f"代表面料：{'、'.join(dl['fabrics'][:4])}")
+    if dl.get("details"):
+        lines.append(f"设计细节：{'、'.join(dl['details'][:4])}")
+    if color_names:
+        lines.append(f"色彩方向：{'、'.join(color_names)}")
+    lines += [
+        "",
+        "原则：在满足用户具体需求的前提下，让设计隐性地呼应以上趋势方向。",
+        "注意：趋势方向是参考灵感，不应覆盖用户的个人风格档案偏好。",
+        "当趋势与档案存在明显方向冲突时，以档案为主，趋势作为局部细节参考。",
+        "不需要在回复中点名提及趋势名称，自然融入即可。",
+        "=== 趋势参考结束 ===",
+    ]
+    return "\n".join(lines)
+
+
+def _build_project_trend_context(designer_project: dict) -> str:
+    """Build trend context from project-level trend_anchors."""
+    anchors = designer_project.get("brief", {}).get("trend_anchors", [])
+    if not anchors:
+        return ""
+    lines = []
+    for anchor in anchors[:3]:
+        row = db.get_trend(anchor["trend_id"])
+        if not row:
+            continue
+        trend = _row_to_trend(row)
+        dl = trend.get("design_language", {})
+        desc = dl.get("style_prompt") or ", ".join(trend.get("keywords", [])[:4])
+        note = f"（{anchor['alignment_note']}）" if anchor.get("alignment_note") else ""
+        lines.append(f"- {trend['name']}{note}：{desc}")
+    if not lines:
+        return ""
+    return "\n参考趋势方向：\n" + "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════
+# Trends — detect trend alignment for library items
+# ═══════════════════════════════════════════════════
+
+async def _detect_trend_alignment(item_id: str, auto_tags: dict) -> None:
+    """Fire-and-forget: compute trend alignment scores for a library item."""
+    try:
+        rows = db.list_trends()
+        if not rows:
+            return
+        item_kws = (
+            (auto_tags.get("style_keywords") or [])
+            + (auto_tags.get("occasions") or [])
+            + ([auto_tags["silhouette"]] if auto_tags.get("silhouette") else [])
+            + (auto_tags.get("garment_types") or [])
+        )
+        if not item_kws:
+            return
+        alignments = []
+        for row in rows:
+            trend = _row_to_trend(row)
+            trend_kws = trend.get("style_tags", []) + trend.get("occasion_tags", []) + trend.get("keywords", [])
+            overlap = sum(1 for ik in item_kws for tk in trend_kws if tk and ik and (tk in ik or ik in tk))
+            score = overlap / max(len(trend_kws), 1)
+            if score >= 0.25:
+                alignments.append({"trend_id": trend["id"], "trend_name": trend["name"], "score": round(score, 3)})
+        alignments.sort(key=lambda x: -x["score"])
+        db.update_library_item_trend_alignments(item_id, alignments[:3])
+    except Exception as e:
+        print(f"[WARN] _detect_trend_alignment failed: {e}")
 
 
 if __name__ == "__main__":
