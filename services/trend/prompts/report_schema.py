@@ -10,7 +10,8 @@ TREND_REPORT_JSON_SCHEMA = {
     "required": [
         "report_date", "time_range", "summary", "key_trends",
         "colors", "fabrics", "silhouettes", "items", "patterns",
-        "style_keywords", "consumer_signals", "confidence", "evidence"
+        "style_keywords", "consumer_signals", "confidence", "evidence",
+        "style_details", "item_details", "silhouette_details", "color_details"
     ],
     "properties": {
         "report_date": {
@@ -31,7 +32,7 @@ TREND_REPORT_JSON_SCHEMA = {
             "description": "关键趋势列表",
             "items": {
                 "type": "object",
-                "required": ["name", "description", "confidence"],
+                "required": ["name", "description", "confidence", "selected_images"],
                 "properties": {
                     "name": {"type": "string", "description": "趋势名称"},
                     "description": {"type": "string", "description": "详细描述"},
@@ -58,6 +59,11 @@ TREND_REPORT_JSON_SCHEMA = {
                         "minimum": 0.0,
                         "maximum": 1.0,
                         "description": "置信度 0.0~1.0"
+                    },
+                    "selected_images": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uri"},
+                        "description": "从输入文章图片中选取的代表图"
                     }
                 }
             }
@@ -114,6 +120,70 @@ TREND_REPORT_JSON_SCHEMA = {
                     "article_title": {"type": "string"},
                     "article_url": {"type": "string"},
                     "snippet": {"type": "string"}
+                }
+            }
+        },
+        "style_details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "trend_direction", "confidence", "selected_images"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "trend_direction": {"type": "string"},
+                    "representative_brands": {"type": "array", "items": {"type": "string"}},
+                    "style_tips": {"type": "array", "items": {"type": "string"}},
+                    "selected_images": {"type": "array", "items": {"type": "string", "format": "uri"}},
+                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+                }
+            }
+        },
+        "item_details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "trend_direction", "confidence", "selected_images"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "trend_direction": {"type": "string"},
+                    "representative_brands": {"type": "array", "items": {"type": "string"}},
+                    "style_tips": {"type": "array", "items": {"type": "string"}},
+                    "selected_images": {"type": "array", "items": {"type": "string", "format": "uri"}},
+                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+                }
+            }
+        },
+        "silhouette_details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "trend_direction", "confidence", "selected_images"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "trend_direction": {"type": "string"},
+                    "representative_brands": {"type": "array", "items": {"type": "string"}},
+                    "style_tips": {"type": "array", "items": {"type": "string"}},
+                    "selected_images": {"type": "array", "items": {"type": "string", "format": "uri"}},
+                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+                }
+            }
+        },
+        "color_details": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["name", "description", "trend_direction", "confidence", "selected_images"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "trend_direction": {"type": "string"},
+                    "representative_brands": {"type": "array", "items": {"type": "string"}},
+                    "style_tips": {"type": "array", "items": {"type": "string"}},
+                    "selected_images": {"type": "array", "items": {"type": "string", "format": "uri"}},
+                    "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0}
                 }
             }
         }

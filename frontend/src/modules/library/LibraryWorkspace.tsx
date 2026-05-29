@@ -88,7 +88,7 @@ function ItemCard({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'linear-gradient(to top, rgba(8,8,8,0.85) 0%, rgba(8,8,8,0.3) 50%, transparent 100%)',
+          background: 'linear-gradient(to top, rgba(8,8,8,0.70) 0%, rgba(8,8,8,0.15) 50%, transparent 100%)',
           opacity: hover ? 1 : 0,
           transition: 'opacity 200ms',
           pointerEvents: hover ? 'auto' : 'none',
@@ -106,12 +106,12 @@ function ItemCard({
             style={{
               width: 32, height: 32,
               borderRadius: 'var(--radius-pill)',
-              background: 'rgba(8,8,8,0.6)',
+              background: 'rgba(255,255,255,0.85)',
               backdropFilter: 'blur(8px)',
               border: 'none',
               cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: item.is_favorite ? 'var(--color-gold)' : 'var(--color-ink-2)',
+              color: item.is_favorite ? 'var(--color-gold)' : 'var(--color-ink-3)',
               transform: favAnimating ? 'scale(1.4)' : 'scale(1)',
               transition: 'transform 400ms var(--ease-out), color 150ms',
             }}
@@ -130,12 +130,12 @@ function ItemCard({
               style={{
                 width: 32, height: 32,
                 borderRadius: 'var(--radius-pill)',
-                background: 'rgba(8,8,8,0.6)',
+                background: 'rgba(255,255,255,0.85)',
                 backdropFilter: 'blur(8px)',
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--color-ink-2)',
+                color: 'var(--color-ink-3)',
               }}
             >
               <MoreHorizontal size={14} />
@@ -518,7 +518,7 @@ function DetailSidebar({
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {/* Image */}
-        <div style={{ background: 'var(--color-void)', padding: 'var(--space-4)' }}>
+        <div style={{ background: 'var(--color-surface-3)', padding: 'var(--space-4)' }}>
           <img
             src={item.image_url} alt=""
             style={{ width: '100%', borderRadius: 'var(--radius-md)', objectFit: 'contain', maxHeight: 300 }}
@@ -666,7 +666,7 @@ function DetailSidebar({
                 type="button"
                 onClick={() => void handleAddTag()}
                 className="btn-icon"
-                style={{ width: 32, height: 32, background: 'var(--color-gold)', color: 'var(--color-void)', borderRadius: 'var(--radius-md)' }}
+                style={{ width: 32, height: 32, background: 'var(--color-gold)', color: '#FFFFFF', borderRadius: 'var(--radius-md)' }}
               >
                 <Plus size={12} />
               </button>
@@ -1193,12 +1193,12 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
                             padding: '4px 10px',
                             borderRadius: 'var(--radius-sm)',
                             border: group.current === v
-                              ? '1px solid var(--color-gold)'
+                              ? '1px solid var(--color-accent)'
                               : '1px solid var(--color-border)',
                             background: group.current === v
-                              ? 'rgba(201,169,110,0.1)'
+                              ? 'rgba(66,133,244,0.08)'
                               : 'transparent',
-                            color: group.current === v ? 'var(--color-gold)' : 'var(--color-ink-3)',
+                            color: group.current === v ? 'var(--color-accent)' : 'var(--color-ink-3)',
                             fontSize: 'var(--text-xs)',
                             fontFamily: 'var(--font-ui)',
                             cursor: 'pointer',

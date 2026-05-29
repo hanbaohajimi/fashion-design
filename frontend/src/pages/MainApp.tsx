@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, Suspense, lazy, type ReactNode } from 'react';
-import { Boxes, Plus, ArrowLeft, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal } from 'lucide-react';
+import { Boxes, Plus, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal } from 'lucide-react';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { Trend } from '../types/profile';
 
@@ -20,8 +20,6 @@ interface WorkspaceTab {
 interface MainAppProps {
   user: { email: string; name: string; auth_token: string };
   onLogout: () => void;
-  onBackToTools?: () => void;
-  initialTool?: WorkspaceType;
 }
 
 const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: ReactNode; tone: string }> = {
@@ -65,11 +63,13 @@ function WorkspaceFallback({ label }: { label: string }) {
   );
 }
 
-export default function MainApp({ user, onLogout, onBackToTools, initialTool }: MainAppProps) {
-  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => {
-    const first: WorkspaceType = initialTool || 'design-studio';
-    return [{ id: nid(), type: first, title: PRESETS[first].title }];
-  });
+export default function MainApp({ user, onLogout }: MainAppProps) {
+  const [tabs, setTabs] = useState<WorkspaceTab[]>(() => [
+    { id: nid(), type: 'design-studio', title: PRESETS['design-studio'].title },
+    { id: nid(), type: 'trends', title: PRESETS['trends'].title },
+    { id: nid(), type: 'library', title: PRESETS['library'].title },
+    { id: nid(), type: 'trend-analysis', title: PRESETS['trend-analysis'].title },
+  ]);
   const [activeId, setActiveId] = useState(tabs[0].id);
   const [showMenu, setShowMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -130,14 +130,9 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
   return (
     <div className="app-shell flex h-full flex-col overflow-hidden">
       <header className="topbar">
-        <button
-          type="button"
-          onClick={onBackToTools}
+        <div
           className="flex items-center gap-3 px-3 py-2 text-left"
-          style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', transition: 'background 150ms' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          title="返回工具选择"
+          style={{ borderRadius: 'var(--radius-md)' }}
         >
           <div style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-accent)', color: '#FFFFFF' }}>
             <Boxes className="h-4 w-4" />
@@ -146,7 +141,7 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
             <p style={{ fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-widest)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>AI Fashion</p>
             <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>Creative OS</p>
           </div>
-        </button>
+        </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-visible">
           {tabs.map(tab => {
@@ -284,16 +279,6 @@ export default function MainApp({ user, onLogout, onBackToTools, initialTool }: 
                 <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>{user.name}</p>
                 <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>{user.email}</p>
               </div>
-              {onBackToTools && (
-                <button
-                  type="button" onClick={onBackToTools}
-                  className="btn-ghost"
-                  style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  工具选择
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => { setShowUserMenu(false); setShowSettings(true); }}

@@ -424,7 +424,7 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
       disabled={busy}
       title={label}
       className={`flex flex-col items-center gap-1 p-2.5 rounded-xl text-[10px] font-medium transition-colors disabled:opacity-40 ${
-        tool === t ? 'bg-violet-600 text-white' : 'bg-white/10 text-white/70 hover:bg-white/15'
+        tool === t ? 'bg-[color:var(--color-accent)] text-white' : 'bg-white/10 text-white/70 hover:bg-white/15'
       }`}
     >
       {icon}
@@ -455,7 +455,7 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
               type="button"
               onClick={sendAi}
               disabled={busy}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--color-accent)] hover:opacity-90 text-xs disabled:opacity-40"
             >
               <Sparkles className="w-3.5 h-3.5" /> 发送到 AI
             </button>
@@ -530,7 +530,7 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
               max={120}
               value={brushSize}
               onChange={(e) => setBrushSize(Number(e.target.value))}
-              className="w-full accent-violet-500"
+              className="w-full accent-[color:var(--color-accent)]"
             />
             <p className="text-[10px] text-white/40 mt-1 tabular-nums">{brushSize}px</p>
           </div>
@@ -544,13 +544,13 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
               onChange={(e) => setSmartPrompt(e.target.value)}
               disabled={applying}
               placeholder="描述希望如何修改已涂抹区域，例如：去掉帽子上的毛球、把袖子改成短袖…"
-              className="flex-1 min-h-[100px] w-full rounded-xl bg-white/8 border border-white/10 px-3 py-2 text-[13px] text-white/90 placeholder:text-white/35 resize-none focus:outline-none focus:ring-1 focus:ring-violet-500/50 disabled:opacity-50"
+              className="flex-1 min-h-[100px] w-full rounded-xl bg-white/8 border border-white/10 px-3 py-2 text-[13px] text-white/90 placeholder:text-white/35 resize-none focus:outline-none focus:ring-1 focus:ring-[color:var(--color-accent)]/50 disabled:opacity-50"
             />
             <button
               type="button"
               onClick={() => void applySmartEdit()}
               disabled={busy || applying}
-              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-sm font-medium disabled:opacity-40"
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[color:var(--color-accent)] hover:opacity-90 text-sm font-medium disabled:opacity-40"
             >
               {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               {applying ? '处理中…' : '应用智能修改'}

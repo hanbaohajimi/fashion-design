@@ -807,6 +807,24 @@ body.app-ready { opacity: 1; }
   line-height: 1.35;
   color: var(--text);
 }
+.report-hero-note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.report-hero-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wine);
+}
+.report-hero-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .report-meta {
   display: flex;
@@ -852,6 +870,11 @@ body.app-ready { opacity: 1; }
   padding: 18px 20px;
   margin-bottom: 12px;
   transition: border-color 0.2s, box-shadow 0.2s;
+}
+.report-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
 }
 
 .trend-card:hover {
@@ -1742,6 +1765,7 @@ a {
 
 .report-prose-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 14px;
 }
 
@@ -1774,10 +1798,13 @@ a {
 }
 
 .report-prose-images {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   margin-top: 12px;
+}
+.report-prose-images .report-img-box {
+  min-height: 112px;
 }
 
 .archived-report-block {
@@ -1800,21 +1827,19 @@ a {
 
 /* ─── Trend Images ───────────────────────────────────────────── */
 .trend-images {
-  display: flex;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
   margin: 12px 0;
-  overflow-x: auto;
-  padding-bottom: 4px;
 }
 
 .trend-images img {
-  height: 140px;
-  width: auto;
-  max-width: 220px;
+  height: 132px;
+  width: 100%;
+  max-width: none;
   object-fit: cover;
   border-radius: var(--radius-xs);
   border: 1px solid var(--border-soft);
-  flex-shrink: 0;
 }
 
 /* ─── Four Detail Sections ───────────────────────────────────── */
@@ -1853,19 +1878,17 @@ a {
 }
 
 .detail-images {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
-  overflow: hidden;
-  border-radius: var(--radius-xs);
 }
 
 .detail-images img {
-  flex: 1;
   height: 110px;
+  width: 100%;
   object-fit: cover;
   border-radius: 8px;
-  min-width: 0;
 }
 
 .detail-desc {
@@ -2519,6 +2542,9 @@ a {
   gap: 6px;
   border-radius: 12px;
   overflow: hidden;
+}
+.moodboard-grid > div {
+  min-height: 140px;
 }
 .moodboard-grid img {
   width: 100%;

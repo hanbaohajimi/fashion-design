@@ -168,6 +168,60 @@ def _collect_representative_images(report: FashionTrendReport, max_n: int = 5) -
     return _dedupe_preserve(ordered)[:max_n]
 
 
+def _build_article_image_lookup(articles: list[Article]) -> tuple[dict[str, list[str]], list[str]]:
+    """按文章 URL/标题建立图片索引，并返回全局去重图片池。"""
+    lookup: dict[str, list[str]] = {}
+    all_images: list[str] = []
+
+    def add_key(key: str, urls: list[str]) -> None:
+        k = (key or "").strip().lower()
+        if not k:
+            return
+        existing = lookup.setdefault(k, [])
+        for url in urls:
+            if url not in existing:
+                existing.append(url)
+
+    for art in articles:
+        urls = _dedupe_preserve([
+            img.original_url.strip()
+            for img in art.images
+            if (img.original_url or "").strip().startswith(("http://", "https://"))
+        ])
+        if not urls:
+            continue
+        all_images.extend(urls)
+        add_key(art.article_url, urls)
+        add_key(_normalize_image_url(art.article_url), urls)
+        add_key(art.title, urls)
+        add_key(art.unique_key, urls)
+
+    return lookup, _dedupe_preserve(all_images)
+
+
+def _fallback_images_for_evidence(
+    evidence_items: list[EvidenceItem],
+    article_image_lookup: dict[str, list[str]],
+    all_images: list[str],
+    max_n: int,
+) -> list[str]:
+    """优先从证据文章取图，缺失时从全局图片池取图，保证卡片有可追溯视觉材料。"""
+    out: list[str] = []
+    for ev in evidence_items:
+        for key in (ev.article_url, _normalize_image_url(ev.article_url), ev.article_title):
+            for url in article_image_lookup.get((key or "").strip().lower(), []):
+                if url not in out:
+                    out.append(url)
+                if len(out) >= max_n:
+                    return out
+    for url in all_images:
+        if url not in out:
+            out.append(url)
+        if len(out) >= max_n:
+            return out
+    return out
+
+
 # ─────────────────────────────────────────────
 # LiteLLM 初始化
 # ─────────────────────────────────────────────
@@ -892,6 +946,7 @@ class FashionTrendAnalyzer:
             return []
 
         exact, by_norm, by_host_path = _build_image_url_indexes(articles)
+        article_image_lookup, all_article_images = _build_article_image_lookup(articles)
 
         # 解析 key_trends
         key_trends: list[TrendItem] = []
@@ -914,6 +969,13 @@ class FashionTrendAnalyzer:
             selected_images = _resolve_selected_list(
                 raw_selected, exact, by_norm, by_host_path, max_n=3
             )
+            if not selected_images:
+                selected_images = _fallback_images_for_evidence(
+                    evidence_list,
+                    article_image_lookup,
+                    all_article_images,
+                    max_n=3,
+                )
 
             key_trends.append(
                 TrendItem(
@@ -957,6 +1019,13 @@ class FashionTrendAnalyzer:
                 imgs = _resolve_selected_list(
                     raw_imgs, exact, by_norm, by_host_path, max_n=2
                 )
+                if not imgs:
+                    imgs = _fallback_images_for_evidence(
+                        [],
+                        article_image_lookup,
+                        all_article_images,
+                        max_n=2,
+                    )
                 result.append(StyleDetail(
                     name=d.get("name", ""),
                     description=d.get("description", ""),

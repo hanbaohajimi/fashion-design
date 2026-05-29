@@ -1124,44 +1124,28 @@ function renderReportDetail(r, el) {
   }
 
   const proseBlocks = [];
-  if (trends.length) {
-    proseBlocks.push(
-      renderNarrativeSection(
-        'DeepSeek 汇总趋势解读',
-        '以下内容以 DeepSeek 汇总后的文字分析为主，并配对应代表图片。',
-        trends.map(t => ({
-          name: t.trend_name || t.name || '未命名趋势',
-          description: t.description || t.desc || '',
-          category: t.category || '',
-          selected_images: t.selected_images || [],
-        })),
-        { badgeKey: 'category' }
-      )
-    );
-  }
   if ((r.style_details || []).length) {
     proseBlocks.push(
-      renderNarrativeSection('款式观察', '围绕款式方向的汇总文字解读。', r.style_details)
+      renderNarrativeSection('款式板块', '', r.style_details)
     );
   }
   if ((r.item_details || []).length) {
     proseBlocks.push(
-      renderNarrativeSection('单品观察', '围绕重点单品的汇总文字解读。', r.item_details)
+      renderNarrativeSection('单品板块', '', r.item_details)
     );
   }
   if ((r.silhouette_details || []).length) {
     proseBlocks.push(
-      renderNarrativeSection('廓形观察', '围绕版型和轮廓变化的汇总文字解读。', r.silhouette_details)
+      renderNarrativeSection('版型板块', '', r.silhouette_details)
     );
   }
   if ((r.color_details || []).length) {
     proseBlocks.push(
-      renderNarrativeSection('色彩观察', '围绕色彩方向的汇总文字解读。', r.color_details)
+      renderNarrativeSection('颜色板块', '', r.color_details)
     );
   }
 
   el.innerHTML = `
-    ${renderReportHeaderImage(r)}
     <div class="report-detail-header">
       ${r.season_label_zh ? `<div class="report-season-banner">${r.season_label_zh}</div>` : ''}
       <h1>${r.summary ? r.summary.slice(0, 80) : 'DeepSeek 汇总分析'}</h1>
@@ -1180,14 +1164,28 @@ function renderReportDetail(r, el) {
       </div>
     </div>
 
-    <!-- Color Palette Board -->
-    ${renderColorPaletteBoard(r.colors)}
-
     <!-- Moodboard from representative images -->
     ${(r.representative_images && r.representative_images.length) ? `
       <div class="trends-section">
         <h2>趋势视觉板 · Moodboard</h2>
         ${renderMoodboard(r.representative_images, 8)}
+      </div>
+    ` : ''}
+
+    <!-- Color Palette Board -->
+    ${renderColorPaletteBoard(r.colors) ? `
+      <div class="trends-section">
+        <h2>色彩板</h2>
+        ${renderColorPaletteBoard(r.colors)}
+      </div>
+    ` : ''}
+
+    ${trends.length ? `
+      <div class="trends-section">
+        <h2>关键趋势 (${trends.length})</h2>
+        <div class="report-trend-grid">
+          ${trends.map(t => renderTrendCard(t)).join('')}
+        </div>
       </div>
     ` : ''}
 
@@ -1222,13 +1220,6 @@ function renderReportDetail(r, el) {
                   </div>
                 </div>`).join('')}
             </div>
-          </div>
-        ` : ''}
-
-        ${trends.length ? `
-          <div class="trends-section">
-            <h2>关键趋势 (${trends.length})</h2>
-            ${trends.map(t => renderTrendCard(t)).join('')}
           </div>
         ` : ''}
 
@@ -2266,75 +2257,15 @@ function renderConsumerSignals(signals) {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════
-// TASK 3: LLM Intelligent Image Insertion in Reports
-// Parses {{IMAGE: keyword | description | position}} markers
-// and injects Unsplash images
-// ═══════════════════════════════════════════════════════
-
-function parseAndInjectReportImages(text) {
-  if (!text) return text;
-  // Regex to find {{IMAGE: keyword | description | position}}
-  const imageRegex = /\{\{IMAGE:\s*([^|]+?)(?:\s*\|\s*([^|]*?))?(?:\s*\|\s*([^}]*?))?\s*\}\}/g;
-  let result = text;
-  let match;
-  const replacements = [];
-
-  while ((match = imageRegex.exec(text)) !== null) {
-    const keyword = (match[1] || '').trim();
-    const description = (match[2] || '').trim();
-    const position = (match[3] || '段后').trim();
-    if (!keyword) continue;
-
-    const encodedKw = encodeURIComponent(keyword.replace(/\s+/g, ','));
-    const imgUrl = `https://source.unsplash.com/featured/800x500/?${encodedKw}`;
-    const figureHtml = `
-      <figure style="margin:24px 0;position:relative;border-radius:12px;overflow:hidden;background:#f5f2ee">
-        <img src="${imgUrl}" alt="${escapeHtml(description || keyword)}" loading="lazy"
-          style="width:100%;height:auto;display:block;border-radius:12px;min-height:200px;object-fit:cover"
-          onerror="this.closest('figure').style.display='none'" />
-        ${description ? `
-        <figcaption style="position:absolute;bottom:0;left:0;right:0;padding:16px 20px 14px;
-          background:linear-gradient(transparent,rgba(0,0,0,0.6));color:white;font-size:12px;
-          font-style:italic;border-radius:0 0 12px 12px">${escapeHtml(description)}</figcaption>` : ''}
-      </figure>`;
-
-    replacements.push({ original: match[0], replacement: figureHtml });
-  }
-
-  for (const r of replacements) {
-    result = result.replace(r.original, r.replacement);
-  }
-
-  return result;
-}
-
 // Enhance report description rendering to support image markers
 function renderEnhancedDescription(text) {
   if (!text) return '';
-  // First try to parse image markers
-  const processed = parseAndInjectReportImages(text);
-  if (processed !== text) return processed;
-  // No markers found - return escaped text
-  return escapeHtml(text);
+  return escapeHtml(String(text).replace(/\{\{IMAGE:[^}]*\}\}/g, '').trim());
 }
 
-// Auto-generate a header image for reports without images
+// Report images must come from crawled article assets; keep this as a no-op for old callers.
 function renderReportHeaderImage(report) {
-  if (!report) return '';
-  const hasImages = (report.representative_images || []).length > 0;
-  if (hasImages) return '';
-  // Generate from report title keywords
-  const summary = report.summary || '';
-  const keywords = summary.replace(/[，。、！？；：（）]/g, ' ').split(/\s+/).filter(w => w.length > 1).slice(0, 3).join(',');
-  if (!keywords) return '';
-  const url = `https://source.unsplash.com/featured/1200x400/?fashion,${encodeURIComponent(keywords)}`;
-  return `
-    <figure style="margin:0 0 20px;border-radius:12px;overflow:hidden;background:#f5f2ee;max-height:300px">
-      <img src="${url}" alt="趋势报告配图" loading="lazy"
-        style="width:100%;height:300px;object-fit:cover;display:block"
-        onerror="this.closest('figure').style.display='none'" />
-    </figure>`;
+  return '';
 }
 
 // ═══════════════════════════════════════════════════════

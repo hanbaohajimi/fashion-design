@@ -101,7 +101,7 @@ export default function ModeBar({
         </button>
 
         {dropOpen && selectedMode === 'designer' && (
-          <div className="dropdown-enter absolute top-full left-0 mt-2 w-64 rounded-3xl border border-[color:var(--border-soft)] bg-white shadow-[0_18px_42px_rgba(16,17,20,0.14)] z-50 p-2">
+          <div className="dropdown-enter absolute top-full left-0 mt-2 w-64 rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[var(--shadow-xl)] z-50 p-2">
             {activeProjects.map(proj => (
               <button
                 key={proj.id}

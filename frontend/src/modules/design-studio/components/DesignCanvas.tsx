@@ -739,11 +739,11 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
                   <button
                     type="button"
                     onClick={() => handleExportSelected('edit')}
-                    className="flex min-h-[36px] items-center gap-1.5 rounded-xl bg-[rgba(47,107,255,0.09)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--signal-blue)] transition-colors hover:bg-[rgba(47,107,255,0.14)] whitespace-nowrap"
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-xl bg-[rgba(66,133,244,0.09)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--color-accent)] transition-colors hover:bg-[rgba(66,133,244,0.14)] whitespace-nowrap"
                   >
                     <PencilRuler className="w-3.5 h-3.5" />
                     快捷编辑
-                    <kbd className="ml-0.5 rounded bg-white px-1 py-0.5 text-[9px] font-normal text-[color:var(--signal-blue)]">Tab</kbd>
+                    <kbd className="ml-0.5 rounded bg-[color:var(--color-surface-3)] px-1 py-0.5 text-[9px] font-normal text-[color:var(--color-accent)]">Tab</kbd>
                   </button>
                   <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
                 </>
@@ -813,13 +813,13 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           {isEmpty && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[3]">
               <div className="text-center px-8 fade-up-in max-w-[320px]">
-                <p className="text-[15px] font-semibold text-gray-300 mb-2 tracking-tight">设计画布</p>
-                <p className="text-[12px] text-gray-300 leading-relaxed text-balance mb-3">
-                  <span className="text-gray-400">路径 A：</span>
+                <p className="text-[15px] font-semibold text-[color:var(--text-muted)] mb-2 tracking-tight">设计画布</p>
+                <p className="text-[12px] text-[color:var(--text-muted)] leading-relaxed text-balance mb-3">
+                  <span className="text-[color:var(--text-dim)]">路径 A：</span>
                   在右侧对话描述需求，生成后点击「置入画布」编排
                 </p>
-                <p className="text-[12px] text-gray-300 leading-relaxed text-balance">
-                  <span className="text-gray-400">路径 B：</span>
+                <p className="text-[12px] text-[color:var(--text-muted)] leading-relaxed text-balance">
+                  <span className="text-[color:var(--text-dim)]">路径 B：</span>
                   拖入图片到此处，或点击工具栏「上传图片」开始
                 </p>
                 <div className="flex justify-center gap-4 mt-6 flex-wrap">
@@ -828,8 +828,8 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
                     { label: 'V', desc: '选择' },
                     { label: 'H', desc: '抓手' },
                   ].map((k) => (
-                    <span key={k.label} className="text-[10px] text-gray-300">
-                      <kbd className="px-1 py-0.5 bg-white/60 rounded text-[9px] font-medium text-gray-400">
+                    <span key={k.label} className="text-[10px] text-[color:var(--text-muted)]">
+                      <kbd className="px-1 py-0.5 bg-[color:var(--color-surface-3)] rounded text-[9px] font-medium text-[color:var(--text-dim)]">
                         {k.label}
                       </kbd>
                       <span className="ml-1">{k.desc}</span>
@@ -841,10 +841,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           )}
 
           {isDragOver && (
-            <div className="absolute inset-4 z-[10] bg-white/90 backdrop-blur flex items-center justify-center border border-dashed border-gray-300 rounded-2xl">
+            <div className="absolute inset-4 z-[10] bg-[color:var(--color-surface)]/90 backdrop-blur flex items-center justify-center border border-dashed border-[color:var(--color-border-medium)] rounded-2xl">
               <div className="text-center">
-                <Upload className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600 font-medium">松开添加到画布</p>
+                <Upload className="w-6 h-6 text-[color:var(--text-muted)] mx-auto mb-2" />
+                <p className="text-sm text-[color:var(--text-secondary)] font-medium">松开添加到画布</p>
               </div>
             </div>
           )}

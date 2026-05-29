@@ -350,7 +350,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
             <button
               type="button"
               onClick={() => setShowSettings(true)}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="p-2 text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] hover:bg-[color:var(--overlay-hover)] rounded-lg transition-colors"
               title="档案管理"
             >
               <Settings className="w-3.5 h-3.5" />

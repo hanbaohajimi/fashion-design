@@ -57,6 +57,8 @@ MULTIMODAL_SYSTEM_PROMPT = """
 3. style_details / item_details / silhouette_details / color_details 每个条目的 description 至少 3 句，不能只写概述，要说明“视觉特征 + 搭配关系 + 适用场景/商业含义”。
 4. 若原文出现品牌名、系列名、秀场主题、工艺名称、官方色名、年代风格指向，请优先保留，不要泛化。
 5. 不要把不同层级混写：例如把“黄油白”写成款式，或把“宽肩收腰”写成颜色。
+6. key_trends 与 style_details / item_details / silhouette_details / color_details 的每个条目都必须包含 selected_images 字段；有可用文章图片时优先填 1~3 张，确无合适图片才填 []。
+7. selected_images 只能从输入中的【可用图片URL列表】逐字复制，不得使用搜索图、图库图、占位图或自行改写 URL。
 
 【输出要求】
 - 必须且只能输出 JSON，不要输出任何 markdown 或说明文字
@@ -92,6 +94,7 @@ TEXT_ONLY_SYSTEM_PROMPT = """
 2. key_trends 至少输出 6 条；若证据足够，不设上限。每条 description 至少 3 句，写清楚“趋势定义 + 证据组合 + 场景或商业含义”。
 3. 四大核心板块中每条 description 至少 3 句，并优先保留品牌、系列、工艺、配色关系等具体名词。
 4. evidence 和 supporting_evidence 优先覆盖不同文章，不要反复引用同一条片段。
+5. key_trends 与四大核心板块每个条目都必须包含 selected_images；有可用图片时从文章图片 URL 中直接复制，确无图片才填 []。
 
 【输出要求】
 - 必须且只能输出 JSON，不要输出 markdown 或说明文字
@@ -192,17 +195,11 @@ JSON_SCHEMA_HINT = """
 
 【selected_images 填写规则】
 - 必须从文章的【可用图片URL列表】中直接复制URL，不得伪造或修改URL
-- 每个条目挑选1~2张，优先选择：商品特写图、穿搭图、色彩/面料细节图
+- key_trends 每条挑选1~3张；style_details/item_details/silhouette_details/color_details 每个条目挑选1~2张
+- 优先选择：商品特写图、穿搭图、色彩/面料细节图；图片应能支撑该条目的文字结论
 - 若无合适图片，则填写空数组 []
 - style_details/item_details/silhouette_details/color_details 各板块至少输出2~4个条目
-
-【description 中的配图标记（可选）】
-- 当你认为某段 description 需要配图辅助说明时，可在描述文字的末尾插入：
-  {{IMAGE: <英文搜索关键词> | <图片用途说明> | 段后}}
-- 关键词需精准描述图片内容，优先使用英文以提升搜索质量
-- 示例：{{IMAGE: minimalist beige fashion editorial 2025 | 展示本段极简主义色调趋势 | 段后}}
-- 每篇报告中此标记总数控制在 3-6 个，仅在最有表现力的段落使用，避免堆砌
-- 这些标记会被前端替换为实际图片，不会直接展示给用户
+- 不要在 description 中插入 {{IMAGE: ...}} 或任何外部搜索图片标记
 """
 
 

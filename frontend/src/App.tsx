@@ -5,10 +5,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const AuthPage = lazy(() => import('./pages/AuthPage'));
-const ToolSelector = lazy(() => import('./pages/ToolSelector'));
 const MainApp = lazy(() => import('./pages/MainApp'));
 
-export type AppView = 'landing' | 'auth' | 'tools' | 'design-studio' | 'trend-analysis';
+export type AppView = 'landing' | 'auth' | 'main';
 export interface AppUser { email: string; name: string; auth_token: string; }
 
 function AppRouter() {
@@ -24,7 +23,7 @@ function AppRouter() {
         const { expires } = JSON.parse(token);
         const user = JSON.parse(userRaw);
         // Reject old sessions that have no auth_token (pre-server-auth format)
-        if (expires && Date.now() < expires && user?.auth_token) return 'tools';
+        if (expires && Date.now() < expires && user?.auth_token) return 'main';
       } catch { /* fall through */ }
     }
     return 'landing';
@@ -45,7 +44,7 @@ function AppRouter() {
     setUser(u);
     localStorage.setItem('af_user', JSON.stringify(u));
     localStorage.setItem('af_token', JSON.stringify({ expires: Date.now() + 7 * 86400000 }));
-    setView('tools');
+    setView('main');
   };
 
   const handleLogout = () => {
@@ -62,13 +61,9 @@ function AppRouter() {
     setView('landing');
   };
 
-  const handleSelectTool = (tool: 'design-studio' | 'trend-analysis') => {
-    setView(tool);
-  };
-
   // Guard: redirect to login if not authenticated
   useEffect(() => {
-    if ((view === 'tools' || view === 'design-studio' || view === 'trend-analysis') && !user) {
+    if (view === 'main' && !user) {
       setView('auth');
     }
   }, [view, user]);
@@ -87,10 +82,7 @@ function AppRouter() {
       >
         {view === 'landing' && <LandingPage onEnter={handleEnter} />}
         {view === 'auth' && <AuthPage onLogin={handleLogin} onBack={() => setView('landing')} />}
-        {view === 'tools' && user && <ToolSelector user={user} onSelect={handleSelectTool} onLogout={handleLogout} />}
-        {(view === 'design-studio' || view === 'trend-analysis') && user && (
-          <MainApp user={user} onLogout={handleLogout} onBackToTools={() => setView('tools')} initialTool={view} />
-        )}
+        {view === 'main' && user && <MainApp user={user} onLogout={handleLogout} />}
       </Suspense>
     </>
   );

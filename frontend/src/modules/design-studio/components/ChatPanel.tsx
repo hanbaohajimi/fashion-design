@@ -378,7 +378,7 @@ function formatMessageDate(d: Date): string {
 function fmtContent(text: string): React.ReactNode {
   return text.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
     p.startsWith('**') && p.endsWith('**') ? (
-      <strong key={i} className="font-semibold text-gray-900">
+      <strong key={i} className="font-semibold text-[color:var(--text-primary)]">
         {p.slice(2, -2)}
       </strong>
     ) : (
@@ -392,7 +392,7 @@ function fmtLine(line: string, i: number): React.ReactNode {
   if (num)
     return (
       <div key={i} className="flex gap-2 items-start py-0.5">
-        <span className="text-[10px] font-semibold text-gray-400 w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5">
+        <span className="text-[10px] font-semibold text-[color:var(--text-muted)] w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5">
           {num[1]}.
         </span>
         <span className="flex-1">{fmtContent(num[2])}</span>
@@ -402,7 +402,7 @@ function fmtLine(line: string, i: number): React.ReactNode {
   if (bul)
     return (
       <div key={i} className="flex gap-2 items-start py-0.5">
-        <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0 mt-[7px]" />
+        <span className="w-1 h-1 rounded-full bg-[color:var(--color-border-medium)] shrink-0 mt-[7px]" />
         <span className="flex-1">{fmtContent(bul[1])}</span>
       </div>
     );
@@ -420,7 +420,7 @@ function TypingDots() {
       {[0, 150, 300].map((d) => (
         <span
           key={d}
-          className="chat-dot w-1 h-1 rounded-full bg-gray-400"
+          className="chat-dot w-1 h-1 rounded-full bg-[color:var(--color-ink-3)]"
           style={{ animationDelay: `${d}ms` }}
         />
       ))}
@@ -1113,7 +1113,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </button>
         <div className="flex flex-col items-center gap-1.5 mt-1 min-h-[24px]">
           {isLoading && (
-            <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" aria-label="生成中" />
+            <Loader2 className="w-3.5 h-3.5 text-[color:var(--text-muted)] animate-spin" aria-label="生成中" />
           )}
           {!isLoading && hasActivity && (
             <span
@@ -1123,7 +1123,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           )}
         </div>
         <span
-          className="mt-2 text-[10px] font-medium text-gray-400 tracking-wider"
+          className="mt-2 text-[10px] font-medium text-[color:var(--text-muted)] tracking-wider"
           style={{ writingMode: 'vertical-rl' }}
         >
           对话
@@ -1149,10 +1149,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       )}
 
-      <div className="border-b border-[color:var(--border-soft)] bg-white px-4 py-3">
+      <div className="border-b border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)] px-4 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--ink)] text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--color-accent)] text-white">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
             <div className="min-w-0">
@@ -1234,8 +1234,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               ))}
             </div>
 
-            <div className="mt-6 overflow-hidden rounded-3xl border border-[color:var(--border-soft)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-              <div className="flex items-center justify-between gap-2 border-b border-[color:var(--border-soft)] bg-[linear-gradient(90deg,rgba(47,107,255,0.08),rgba(255,255,255,1),rgba(179,142,95,0.08))] px-3.5 py-2.5">
+            <div className="mt-6 overflow-hidden rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] shadow-[var(--shadow-sm)]">
+              <div className="flex items-center justify-between gap-2 border-b border-[color:var(--color-border-subtle)] bg-[linear-gradient(90deg,rgba(66,133,244,0.06),rgba(255,255,255,1),rgba(66,133,244,0.03))] px-3.5 py-2.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--signal-blue)] shadow-sm">
                     <TrendingUp className="w-4 h-4 text-white" aria-hidden />
@@ -1305,7 +1305,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                               key={`${it.category}-${it.keyword}`}
                               type="button"
                               onClick={() => applyTrendHotTag(it.keyword)}
-                              className="inline-flex max-w-full truncate rounded-full border border-[color:var(--border-soft)] bg-[color:var(--paper)] px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--text-secondary)] transition-colors hover:border-[color:var(--signal-blue)] hover:bg-[rgba(47,107,255,0.08)] hover:text-[color:var(--text-primary)]"
+                              className="inline-flex max-w-full truncate rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-surface)] px-2.5 py-1.5 text-[11px] font-medium text-[color:var(--text-secondary)] transition-colors hover:border-[color:var(--color-accent)] hover:bg-[rgba(66,133,244,0.06)] hover:text-[color:var(--text-primary)]"
                               title={
                                 it.count > 0
                                   ? `${it.keyword} · ${it.categoryLabel} · ${it.count} 次`
@@ -1340,22 +1340,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             if (msg.role === 'user') {
               return (
                 <div key={msg.id} className="chat-message-enter flex gap-2.5 flex-row-reverse group">
-                  <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="w-3.5 h-3.5 text-gray-500" />
+                  <div className="w-7 h-7 rounded-full bg-[color:var(--color-surface-3)] flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
                   </div>
                   <div className="max-w-[min(92%,420px)] flex flex-col items-end">
-                    <div className="rounded-2xl border border-gray-200/90 bg-gray-50/95 text-gray-900 shadow-sm overflow-hidden w-full">
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface-2)] text-[color:var(--color-ink)] shadow-sm overflow-hidden w-full">
                       {previews.length > 0 && (
-                        <div className="flex gap-2 px-3 pt-3 pb-2 overflow-x-auto border-b border-gray-200/60 scrollbar-thin">
+                        <div className="flex gap-2 px-3 pt-3 pb-2 overflow-x-auto border-b border-[color:var(--color-border-subtle)] scrollbar-thin">
                           {previews.map((src, i) => (
                             <div
                               key={i}
-                              className="flex items-center gap-2 pl-1 pr-2 py-1.5 bg-white rounded-xl border border-gray-200/80 shadow-sm shrink-0 min-w-0 max-w-[200px]"
+                              className="flex items-center gap-2 pl-1 pr-2 py-1.5 bg-[color:var(--color-surface)] rounded-xl border border-[color:var(--color-border)] shadow-sm shrink-0 min-w-0 max-w-[200px]"
                             >
                               <img src={src} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                               <div className="min-w-0">
-                                <p className="text-[11px] font-medium text-gray-700 truncate">图{i + 1}</p>
-                                <p className="text-[10px] text-gray-400 truncate">参考图</p>
+                                <p className="text-[11px] font-medium text-[color:var(--text-secondary)] truncate">图{i + 1}</p>
+                                <p className="text-[10px] text-[color:var(--text-muted)] truncate">参考图</p>
                               </div>
                             </div>
                           ))}
@@ -1375,12 +1375,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             /* assistant / system */
             return (
               <div key={msg.id} className="chat-message-enter group">
-                <div className="text-[11px] text-gray-400 mb-1">{formatMessageDate(msg.timestamp)}</div>
-                <div className="flex items-center gap-1.5 text-[12px] text-gray-600 mb-2">
-                  <Eye className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="font-semibold text-gray-800">{MODEL_DISPLAY}</span>
-                  <span className="text-gray-300">·</span>
-                  <span className="text-gray-400">设计助手</span>
+                <div className="text-[11px] text-[color:var(--text-muted)] mb-1">{formatMessageDate(msg.timestamp)}</div>
+                <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--text-secondary)] mb-2">
+                  <Eye className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
+                  <span className="font-semibold text-[color:var(--text-primary)]">{MODEL_DISPLAY}</span>
+                  <span className="text-[color:var(--color-border-medium)]">·</span>
+                  <span className="text-[color:var(--text-muted)]">设计助手</span>
                 </div>
 
                 {msg.isError ? (
@@ -1399,21 +1399,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 ) : (
                   <>
                     {assistantTitle && (
-                      <h3 className="text-[15px] font-semibold text-gray-900 tracking-tight mb-2 pr-2">
+                      <h3 className="text-[15px] font-semibold text-[color:var(--text-primary)] tracking-tight mb-2 pr-2">
                         {assistantTitle}
                       </h3>
                     )}
 
                     {(msg.isStreaming || msg.status || msg.images?.length) && (
                       <details className="mb-3">
-                        <summary className="flex items-center gap-2 text-[11px] text-gray-500 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-                          <span className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center">
-                            <Sparkles className="w-3 h-3 text-gray-500" />
+                        <summary className="flex items-center gap-2 text-[11px] text-[color:var(--text-muted)] cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+                          <span className="w-5 h-5 rounded-md bg-[color:var(--color-surface-3)] flex items-center justify-center">
+                            <Sparkles className="w-3 h-3 text-[color:var(--text-muted)]" />
                           </span>
                           图片分析
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-400 opacity-70" />
+                          <ChevronDown className="w-3.5 h-3.5 text-[color:var(--text-muted)] opacity-70" />
                         </summary>
-                        <div className="mt-2 ml-1 pl-3 border-l-2 border-gray-100 text-[11px] text-gray-500 leading-relaxed">
+                        <div className="mt-2 ml-1 pl-3 border-l-2 border-[color:var(--color-border)] text-[11px] text-[color:var(--text-muted)] leading-relaxed">
                           {msg.status ||
                             (msg.isStreaming ? '正在解析需求并调用模型…' : '已根据对话与参考图完成本步生成。')}
                         </div>
@@ -1426,20 +1426,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         (k) => msg.status!.includes(k),
                       ) &&
                       !msg.images?.length && (
-                        <div className="mb-3 rounded-2xl overflow-hidden border border-gray-100 bg-gray-50/80">
-                          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100/80 bg-white/60">
-                            <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1.5">
+                        <div className="mb-3 rounded-2xl overflow-hidden border border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface-2)]">
+                          <div className="flex items-center justify-between px-3 py-2 border-b border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)]">
+                            <span className="text-[11px] font-medium text-[color:var(--text-muted)] flex items-center gap-1.5">
                               <ImageIcon className="w-3.5 h-3.5" />
                               生成中
                             </span>
-                            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 text-[color:var(--text-muted)] animate-spin" />
                           </div>
                           <div className="skeleton w-full" style={{ height: 200 }} />
                         </div>
                       )}
 
                     {msg.isStreaming && !msg.status && !msg.content && !msg.images?.length && (
-                      <div className="flex items-center gap-2 py-2 text-[13px] text-gray-400">
+                      <div className="flex items-center gap-2 py-2 text-[13px] text-[color:var(--text-muted)]">
                         <TypingDots />
                       </div>
                     )}
@@ -1451,12 +1451,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           return (
                             <div key={idx} className="scale-in relative" style={{ animationDelay: `${idx * 60}ms` }}>
                               {meta && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 text-[10px] font-medium text-gray-500 bg-gray-100 rounded-md">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 mb-2 text-[10px] font-medium text-[color:var(--text-muted)] bg-[color:var(--color-surface-3)] rounded-md">
                                   {meta.icon}
                                   {meta.label}
                                 </span>
                               )}
-                              <div className="relative rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 shadow-sm">
+                              <div className="relative rounded-2xl overflow-hidden bg-[color:var(--color-surface-2)] border border-[color:var(--color-border)] shadow-sm">
                                 <img
                                   src={img.url}
                                   alt={meta?.label || ''}
@@ -1471,7 +1471,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                         e.stopPropagation();
                                         onAddToCanvas(img.url);
                                       }}
-                                      className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm border border-gray-200/80 shadow-md flex items-center justify-center text-gray-600 hover:bg-white hover:text-gray-900 transition-colors"
+                                      className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm border border-[color:var(--color-border)] shadow-md flex items-center justify-center text-[color:var(--text-secondary)] hover:bg-white hover:text-[color:var(--text-primary)] transition-colors"
                                       title="置入画布"
                                     >
                                       <LayoutGrid className="w-4 h-4" />
@@ -1483,7 +1483,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                       e.stopPropagation();
                                       onEditImage(img.url);
                                     }}
-                                    className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm border border-gray-200/80 shadow-md flex items-center justify-center text-gray-600 hover:bg-white hover:text-gray-900 transition-colors"
+                                    className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm border border-[color:var(--color-border)] shadow-md flex items-center justify-center text-[color:var(--text-secondary)] hover:bg-white hover:text-[color:var(--text-primary)] transition-colors"
                                     title="像素编辑（全屏编辑器）"
                                   >
                                     <PencilRuler className="w-4 h-4" />
@@ -1494,7 +1494,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onEditImage(img.url)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-[color:var(--color-ink)] text-white rounded-lg hover:opacity-90 transition-opacity"
                                   title="打开全屏像素编辑器，可缩放裁切后下载或发回 AI"
                                 >
                                   <PencilRuler className="w-3 h-3" />
@@ -1504,7 +1504,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => onAddToCanvas(img.url)}
-                                    className="px-2.5 py-1 text-[11px] font-medium bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200/80 transition-colors"
+                                    className="px-2.5 py-1 text-[11px] font-medium bg-[color:var(--color-surface-3)] text-[color:var(--text-secondary)] rounded-lg hover:bg-[color:var(--color-surface-2)] transition-colors"
                                   >
                                     置入画布
                                   </button>
@@ -1512,7 +1512,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => dlImg(img.url)}
-                                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+                                  className="p-1.5 text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] rounded-lg transition-colors"
                                   title="下载"
                                 >
                                   <Download className="w-3.5 h-3.5" />
@@ -1526,8 +1526,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                     {msg.content && (
                       <div
-                        className={`text-[13px] leading-relaxed text-gray-600 mt-3 space-y-0.5 ${
-                          assistantTitle ? 'pt-1 border-t border-gray-100' : ''
+                        className={`text-[13px] leading-relaxed text-[color:var(--text-secondary)] mt-3 space-y-0.5 ${
+                          assistantTitle ? 'pt-1 border-t border-[color:var(--color-border-subtle)]' : ''
                         }`}
                       >
                         {msg.content.split('\n').map((l, i) => fmtLine(l, i))}
@@ -1535,7 +1535,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     )}
 
                     {!msg.isStreaming && msg.content && !msg.isError && (
-                      <div className="flex items-center gap-3 mt-3 pt-2 border-t border-gray-50">
+                      <div className="flex items-center gap-3 mt-3 pt-2 border-t border-[color:var(--color-border-subtle)]">
                         <button
                           type="button"
                           onClick={() =>
@@ -1547,7 +1547,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             })
                           }
                           className={`p-1 rounded-lg transition-colors ${
-                            msgFeedback[msg.id] === 'up' ? 'text-gray-900 bg-gray-100' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
+                            msgFeedback[msg.id] === 'up' ? 'text-[color:var(--text-primary)] bg-[color:var(--color-surface-3)]' : 'text-[color:var(--color-border-medium)] hover:text-[color:var(--text-muted)] hover:bg-[color:var(--color-surface-2)]'
                           }`}
                           title="有帮助"
                         >
@@ -1565,21 +1565,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           }
                           className={`p-1 rounded-lg transition-colors ${
                             msgFeedback[msg.id] === 'down'
-                              ? 'text-gray-900 bg-gray-100'
-                              : 'text-gray-300 hover:text-gray-500 hover:bg-gray-50'
+                              ? 'text-[color:var(--text-primary)] bg-[color:var(--color-surface-3)]'
+                              : 'text-[color:var(--color-border-medium)] hover:text-[color:var(--text-muted)] hover:bg-[color:var(--color-surface-2)]'
                           }`}
                           title="需改进"
                         >
                           <ThumbsDown className="w-4 h-4" />
                         </button>
-                        <span className="text-[10px] text-gray-300 ml-auto flex items-center gap-1">
+                        <span className="text-[10px] text-[color:var(--color-border-medium)] ml-auto flex items-center gap-1">
                           <Clock className="w-2.5 h-2.5" />
                           {msg.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                         <button
                           type="button"
                           onClick={() => copyText(msg.content, msg.id)}
-                          className="p-1 text-gray-300 hover:text-gray-500 rounded"
+                          className="p-1 text-[color:var(--color-border-medium)] hover:text-[color:var(--text-muted)] rounded"
                           title="复制全文"
                         >
                           {copiedId === msg.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1595,14 +1595,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
         {showCtx && (
           <div className="mt-4 chat-message-enter">
-            <p className="text-[10px] text-gray-400 mb-2">点击填入输入框，确认后按 Enter 发送</p>
+            <p className="text-[10px] text-[color:var(--text-muted)] mb-2">点击填入输入框，确认后按 Enter 发送</p>
             <div className="flex flex-wrap gap-1.5">
               {ctx.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => suggest(s)}
-                  className="px-2.5 py-1.5 text-[11px] text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                  className="px-2.5 py-1.5 text-[11px] text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] hover:bg-[color:var(--color-surface-2)] rounded-lg transition-colors"
                 >
                   {s}
                 </button>
@@ -1615,10 +1615,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       </div>
 
       {(pendingFromCanvas || attachedAssets.length > 0) && (
-        <div className="px-5 py-3 border-t border-gray-100 space-y-2">
-          <p className="text-[10px] text-gray-400 flex items-center gap-1">
+        <div className="px-5 py-3 border-t border-[color:var(--color-border-subtle)] space-y-2">
+          <p className="text-[10px] text-[color:var(--text-muted)] flex items-center gap-1">
             <AtSign className="w-3 h-3 shrink-0" />
-            输入 <kbd className="px-1 py-px bg-gray-100 rounded text-[9px]">@</kbd>{' '}
+            输入 <kbd className="px-1 py-px bg-[color:var(--color-surface-3)] rounded text-[9px]">@</kbd>{' '}
             可引用下图顺序（与上传后资源表「第N张」一致）
           </p>
           <div className="flex flex-wrap gap-2">
@@ -1627,7 +1627,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 <img
                   src={pendingFromCanvas}
                   alt=""
-                  className="h-16 w-full object-cover rounded-lg ring-1 ring-gray-200"
+                  className="h-16 w-full object-cover rounded-lg ring-1 ring-[color:var(--color-border)]"
                 />
                 <span className="absolute bottom-0.5 left-0.5 text-[9px] font-semibold text-white bg-black/55 px-1 rounded">
                   图1
@@ -1635,12 +1635,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => onClearPendingFromCanvas?.()}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-900 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[color:var(--color-ink)] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   title="移除画布参考"
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
-                <p className="text-[9px] text-gray-400 mt-0.5 truncate" title="画布">
+                <p className="text-[9px] text-[color:var(--text-muted)] mt-0.5 truncate" title="画布">
                   画布
                 </p>
               </div>
@@ -1649,19 +1649,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               const figNum = idx + 1 + (pendingFromCanvas ? 1 : 0);
               return (
                 <div key={a.localId} className="relative group w-[72px]">
-                  <img src={a.preview} alt="" className="h-16 w-full object-cover rounded-lg ring-1 ring-gray-200" />
+                  <img src={a.preview} alt="" className="h-16 w-full object-cover rounded-lg ring-1 ring-[color:var(--color-border)]" />
                   <span className="absolute bottom-0.5 left-0.5 text-[9px] font-semibold text-white bg-black/55 px-1 rounded">
                     图{figNum}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeAttachment(a.localId)}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-900 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[color:var(--color-ink)] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     title="移除"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
-                  <p className="text-[9px] text-gray-400 mt-0.5 truncate" title={a.displayName}>
+                  <p className="text-[9px] text-[color:var(--text-muted)] mt-0.5 truncate" title={a.displayName}>
                     {a.displayName}
                   </p>
                 </div>
@@ -1679,7 +1679,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               abortRef.current?.abort();
               toast('已停止', 'info');
             }}
-            className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-medium text-white bg-gray-900 rounded-full shadow-lg hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-medium text-white bg-[color:var(--color-ink)] rounded-full shadow-lg hover:opacity-90 transition-opacity"
           >
             <StopCircle className="w-3 h-3" /> 停止
           </button>
@@ -1687,12 +1687,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       )}
 
       {!showWelcome && (
-        <div className="shrink-0 px-4 pt-2 pb-1 border-t border-gray-100 bg-gradient-to-b from-gray-50/50 to-white">
+        <div className="shrink-0 px-4 pt-2 pb-1 border-t border-[color:var(--color-border-subtle)] bg-[color:var(--color-surface)]">
           <div className="flex flex-wrap items-center gap-2 mb-1 min-h-[22px]">
-            <span className="w-6 h-6 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
+            <span className="w-6 h-6 rounded-md bg-[color:var(--color-accent)] flex items-center justify-center shrink-0">
               <TrendingUp className="w-3.5 h-3.5 text-white" aria-hidden />
             </span>
-            <span className="text-[11px] font-semibold text-gray-800">趋势分析</span>
+            <span className="text-[11px] font-semibold text-[color:var(--text-primary)]">趋势分析</span>
             <label htmlFor="trend-hot-cat-inline" className="sr-only">
               热词维度
             </label>
@@ -1701,7 +1701,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               value={trendHotCategory}
               onChange={(e) => setTrendHotCategory(e.target.value)}
               disabled={trendHotStatus === 'loading'}
-              className="text-[10px] rounded-md border border-gray-200/90 bg-white text-gray-700 px-1.5 py-0.5 max-w-[100px] sm:max-w-[140px] focus:outline-none focus:ring-1 focus:ring-violet-300 disabled:opacity-50"
+              className="text-[10px] rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--text-secondary)] px-1.5 py-0.5 max-w-[100px] sm:max-w-[140px] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-accent)] disabled:opacity-50"
             >
               <option value="">全部</option>
               {TREND_DIM_ORDER.map((k) => (
@@ -1711,13 +1711,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               ))}
             </select>
             {trendHotStatus === 'loading' && (
-              <Loader2 className="w-3 h-3 animate-spin text-gray-400 shrink-0" aria-label="加载中" />
+              <Loader2 className="w-3 h-3 animate-spin text-[color:var(--text-muted)] shrink-0" aria-label="加载中" />
             )}
             <button
               type="button"
               onClick={() => void loadTrendHotTags()}
               disabled={trendHotStatus === 'loading'}
-              className="ml-auto flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100/80 transition-colors disabled:opacity-50"
+              className="ml-auto flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] rounded-md hover:bg-[color:var(--color-surface-2)] transition-colors disabled:opacity-50"
               title="刷新热词"
             >
               <RefreshCw className={`w-3 h-3 ${trendHotStatus === 'loading' ? 'animate-spin' : ''}`} />
@@ -1728,8 +1728,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             <div className="max-h-28 overflow-y-auto pb-1.5 -mx-1 px-1 scrollbar-thin [scrollbar-width:thin] space-y-2">
               {trendHotDisplayBlocks.map((block) => (
                 <div key={block.key}>
-                  {!trendHotCategory && (
-                    <p className="text-[9px] font-medium text-gray-400 mb-1">{block.label}</p>
+                    {!trendHotCategory && (
+                    <p className="text-[9px] font-medium text-[color:var(--text-muted)] mb-1">{block.label}</p>
                   )}
                   <div className="flex flex-wrap gap-1">
                     {block.items.map((it) => (
@@ -1737,7 +1737,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         key={`${it.category}-${it.keyword}`}
                         type="button"
                         onClick={() => applyTrendHotTag(it.keyword)}
-                        className="shrink-0 max-w-[160px] sm:max-w-[200px] truncate px-2 py-0.5 rounded-full text-[10px] font-medium border border-gray-200/90 bg-white text-gray-700 hover:border-violet-300 hover:bg-violet-50/50 transition-colors"
+                        className="shrink-0 max-w-[160px] sm:max-w-[200px] truncate px-2 py-0.5 rounded-full text-[10px] font-medium border border-[color:var(--color-border)] bg-[color:var(--color-surface)] text-[color:var(--text-secondary)] hover:border-[color:var(--color-accent)] hover:bg-[rgba(66,133,244,0.06)] transition-colors"
                         title={
                           it.count > 0
                             ? `${it.keyword} · ${it.categoryLabel} · ${it.count}`
@@ -1759,12 +1759,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       )}
 
-      <div className="p-4 border-t border-gray-100">
-        <div className="relative rounded-3xl border border-[color:var(--border-soft)] bg-white transition-all focus-within:border-[color:var(--signal-blue)] focus-within:shadow-[0_0_0_4px_rgba(47,107,255,0.1)]">
+      <div className="p-4 border-t border-[color:var(--color-border-subtle)]">
+        <div className="relative rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] transition-all focus-within:border-[color:var(--color-accent)] focus-within:shadow-[0_0_0_4px_rgba(66,133,244,0.10)]">
           {mentionOpen && filteredMentions.length > 0 && (
             <div
               ref={mentionMenuRef}
-              className="absolute bottom-full left-2 right-2 z-40 mb-1 max-h-36 overflow-y-auto rounded-2xl border border-[color:var(--border-soft)] bg-white py-1 shadow-lg"
+              className="absolute bottom-full left-2 right-2 z-40 mb-1 max-h-36 overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] py-1 shadow-lg"
             >
               {filteredMentions.map((t) => (
                 <button
@@ -1861,7 +1861,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     ? suggest(ctx[0])
                     : toast('生成图片后，这里会显示追问建议', 'info')
                 }
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors disabled:opacity-40"
+                className="p-1.5 text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] rounded-lg transition-colors disabled:opacity-40"
                 title="灵感 / 快捷追问"
               >
                 <Lightbulb className="w-3.5 h-3.5" />

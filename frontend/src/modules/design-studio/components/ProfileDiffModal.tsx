@@ -40,8 +40,8 @@ export default function ProfileDiffModal({
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-4 pb-4 backdrop-blur-sm sm:items-center sm:pb-0">
       <div className="dialog-panel w-full max-w-md overflow-hidden">
         <div className="flex items-start gap-3 border-b border-[color:var(--border-soft)] px-5 py-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50">
-            <Sparkles className="w-4 h-4 text-amber-600" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[rgba(66,133,244,0.10)]">
+            <Sparkles className="w-4 h-4 text-[color:var(--color-accent)]" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[14px] font-semibold text-[color:var(--text-primary)]">
@@ -69,13 +69,13 @@ export default function ProfileDiffModal({
                 onClick={() => toggle(i)}
                 className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors ${
                   isAccepted
-                    ? 'border-emerald-200 bg-emerald-50/60'
-                    : 'border-[color:var(--border-soft)] bg-[color:var(--paper)] opacity-70'
+                    ? 'border-[color:var(--color-success)] bg-[rgba(52,168,83,0.06)]'
+                    : 'border-[color:var(--color-border)] bg-[color:var(--color-surface)] opacity-70'
                 }`}
               >
                 <div
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                    isAccepted ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'
+                    isAccepted ? 'border-[color:var(--color-success)] bg-[color:var(--color-success)]' : 'border-[color:var(--color-border-medium)]'
                   }`}
                 >
                   {isAccepted && <Check className="w-3 h-3 text-white" />}

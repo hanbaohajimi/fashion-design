@@ -45,7 +45,7 @@ function TagInput({ label, options, value, onChange }: {
           ))}
         </div>
       )}
-      <div className="flex flex-wrap gap-1.5 items-center border border-[color:var(--border)] rounded-2xl bg-white px-3 py-2 min-h-[44px] focus-within:border-[color:var(--signal-blue)] focus-within:shadow-[0_0_0_4px_rgba(47,107,255,0.12)]">
+      <div className="flex flex-wrap gap-1.5 items-center border border-[color:var(--color-border)] rounded-2xl bg-[color:var(--color-surface)] px-3 py-2 min-h-[44px] focus-within:border-[color:var(--color-accent)] focus-within:shadow-[0_0_0_4px_rgba(66,133,244,0.12)]">
         {value.map(tag => (
           <span
             key={tag}

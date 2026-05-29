@@ -173,7 +173,7 @@ function TrendCard({
             position: 'absolute', top: 10, right: 10,
             width: 32, height: 32,
             borderRadius: 'var(--radius-pill)',
-            background: 'rgba(8,8,8,0.65)',
+            background: 'rgba(255,255,255,0.85)',
             backdropFilter: 'blur(8px)',
             border: 'none',
             cursor: 'pointer',
@@ -365,7 +365,7 @@ function TrendDetailPanel({
             <img
               src={trend.image_gallery[activeImg]}
               alt=""
-              style={{ width: '100%', objectFit: 'cover', maxHeight: 280, background: 'var(--color-void)' }}
+              style={{ width: '100%', objectFit: 'cover', maxHeight: 280, background: 'var(--color-surface-3)' }}
             />
             {trend.image_gallery.length > 1 && (
               <div style={{ display: 'flex', gap: 6, padding: 'var(--space-3) var(--space-4)', overflowX: 'auto', scrollbarWidth: 'none' }}>
@@ -667,7 +667,7 @@ function AddToProjectModal({
                   fontSize: 'var(--text-sm)',
                   color: selectedProject === proj.id ? 'var(--color-gold)' : 'var(--color-ink-2)',
                   background: selectedProject === proj.id
-                    ? 'rgba(201,169,110,0.08)'
+                    ? 'rgba(66,133,244,0.08)'
                     : 'transparent',
                   cursor: 'pointer',
                   fontFamily: 'var(--font-ui)',
@@ -799,7 +799,7 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
         <div style={{
           height: 200, flexShrink: 0,
           position: 'relative',
-          background: 'linear-gradient(135deg, var(--color-void) 0%, rgba(17,17,17,0.8) 60%, transparent 100%), var(--color-void)',
+          background: 'linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-canvas) 100%)',
           display: 'flex', alignItems: 'flex-end',
           padding: 'var(--space-10)',
           overflow: 'hidden',
@@ -807,7 +807,7 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
           {/* Subtle texture overlay */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'radial-gradient(ellipse at 70% 50%, rgba(201,169,110,0.04) 0%, transparent 60%)',
+            background: 'radial-gradient(ellipse at 70% 50%, rgba(66,133,244,0.04) 0%, transparent 60%)',
             pointerEvents: 'none',
           }} />
 

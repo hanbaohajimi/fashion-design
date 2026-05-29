@@ -21,10 +21,10 @@ type Tab = 'personal' | 'designer';
 function ConfidenceBar({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-1.5">
-      <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-        <div className="h-full rounded-full bg-gray-400" style={{ width: `${Math.round(value * 100)}%` }} />
+      <div className="w-16 h-1.5 rounded-full bg-[color:var(--color-surface-3)] overflow-hidden">
+        <div className="h-full rounded-full bg-[color:var(--color-accent)]" style={{ width: `${Math.round(value * 100)}%` }} />
       </div>
-      <span className="text-[10px] text-gray-400">{Math.round(value * 100)}%</span>
+      <span className="text-[10px] text-[color:var(--text-muted)]">{Math.round(value * 100)}%</span>
     </div>
   );
 }
