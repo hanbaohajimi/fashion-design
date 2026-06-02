@@ -39,6 +39,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useToast } from '../../../components/Toast';
+import CapabilityHub, { type SessionImage as CapSessionImage } from './CapabilityHub';
+import { CAPABILITIES, deriveResourcesFromImages, type CapabilityId } from '../utils/capabilities';
 
 const MAX_ATTACHMENTS = 12;
 
@@ -124,32 +126,14 @@ const TYPE_LABEL: Record<string, { label: string; icon: React.ReactNode }> = {
   try_on: { label: '试穿', icon: <Shirt className="w-3 h-3" /> },
 };
 
-const WELCOME_CARDS = [
-  {
-    icon: <Wand2 className="w-4 h-4" />,
-    title: '设计草图',
-    sub: '从零开始绘制服装线稿',
-    prompt: '设计一件红色晚礼服款式线稿，正面视图，线条清晰，留白背景',
-  },
-  {
-    icon: <Palette className="w-4 h-4" />,
-    title: '渲染编辑',
-    sub: '将草图渲染为成品效果',
-    prompt: '把我上传的服装线稿渲染成写实成衣效果图，面料质感自然，棚拍柔光',
-  },
-  {
-    icon: <Layers className="w-4 h-4" />,
-    title: '图案迁移',
-    sub: '将花纹 / Logo 应用到服装',
-    prompt: '把上传的参考图案迁移到这件服装上，保持款式不变，图案随衣身褶皱自然变形',
-  },
-  {
-    icon: <UserCircle className="w-4 h-4" />,
-    title: '虚拟试穿',
-    sub: '把服装穿到模特身上展示',
-    prompt: '把这件服装虚拟穿到模特身上，全身展示，自然站姿，中性棚拍光线',
-  },
-];
+const WELCOME_ICON_MAP: Record<CapabilityId, React.ReactNode> = {
+  text_to_image: <Sparkles className="w-4 h-4" />,
+  draw_sketch: <Wand2 className="w-4 h-4" />,
+  edit_image: <Palette className="w-4 h-4" />,
+  transfer_pattern: <Layers className="w-4 h-4" />,
+  generate_model: <UserCircle className="w-4 h-4" />,
+  try_on: <Shirt className="w-4 h-4" />,
+};
 
 const TREND_DIM_ORDER = [
   'colors',
@@ -255,23 +239,10 @@ async function fetchTrendHotItems(
   return parseTrendHotItems(json);
 }
 
-function getContextSuggestions(t?: string): string[] {
-  switch (t) {
-    case 'text_to_image':
-      return ['换个背景或光线', '生成配套单品', '改成线稿款式图', '生成模特试穿'];
-    case 'draw_sketch':
-      return ['把它渲染为真实照片', '修改颜色为蓝色', '生成一个女模特', '修改为短裙款式'];
-    case 'edit_image':
-      return ['继续调整细节', '换个颜色试试', '生成模特来试穿', '再设计一件新的'];
-    case 'generate_model':
-      return ['把当前设计穿到模特身上', '换个男模特', '修改模特造型'];
-    case 'try_on':
-      return ['换个角度看看', '修改服装颜色', '换一个模特', '再设计一件新的'];
-    case 'transfer_pattern':
-      return ['调整图案位置', '换个颜色', '生成模特试穿'];
-    default:
-      return [];
-  }
+function getContextSuggestions(_t?: string): string[] {
+  // 已废弃 — 旧的「按上一步图类型推线性下一步」逻辑被资源雷达 (CapabilityHub) 取代。
+  // 保留空函数仅为向后兼容内部引用，将由后续 cleanup 删除。
+  return [];
 }
 
 async function streamChat(
@@ -1089,6 +1060,56 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const hasActivity =
     isLoading || messages.length > 0 || !!pendingFromCanvas || attachedAssets.length > 0;
 
+  // ── 能力面板（CapabilityHub）派生数据 ──────────────────────
+  // 收集 session 内所有已生成图，给 picker 用
+  const capabilitySessionImages = useMemo<CapSessionImage[]>(() => {
+    const out: CapSessionImage[] = [];
+    for (const m of messages) {
+      if (!m.images) continue;
+      for (const img of m.images) out.push({ url: img.url, type: img.type });
+    }
+    return out;
+  }, [messages]);
+
+  // 用户已上传的图（包括来自画布的 pendingFromCanvas）— 编号与正文里 @图N 一致
+  const capabilityUploaded = useMemo(() => {
+    const list: { index: number; preview: string; displayName: string }[] = [];
+    let i = 1;
+    if (pendingFromCanvas) {
+      list.push({ index: i++, preview: pendingFromCanvas, displayName: '画布' });
+    }
+    for (const a of attachedAssets) {
+      list.push({ index: i++, preview: a.preview, displayName: a.displayName });
+    }
+    return list;
+  }, [pendingFromCanvas, attachedAssets]);
+
+  // 资源雷达 — 决定哪些能力按钮高亮
+  const capabilityResources = useMemo(
+    () =>
+      deriveResourcesFromImages(
+        capabilitySessionImages.map((i) => i.type),
+        attachedAssets.length > 0 || !!pendingFromCanvas,
+      ),
+    [capabilitySessionImages, attachedAssets, pendingFromCanvas],
+  );
+
+  // 用户点击能力按钮 → 把模板 prompt 填入输入框，光标聚焦，等用户补完发送
+  const handleCapabilityPick = useCallback(
+    (_capId: CapabilityId, finalPrompt: string) => {
+      setInput((cur) => (cur.trim() ? cur : finalPrompt));
+      taRef.current?.focus();
+      // 光标跳到末尾
+      requestAnimationFrame(() => {
+        if (taRef.current) {
+          const len = taRef.current.value.length;
+          taRef.current.setSelectionRange(len, len);
+        }
+      });
+    },
+    [],
+  );
+
   const mentionTargets = getMentionTargets();
   const filteredMentions = mentionFilter
     ? mentionTargets.filter(
@@ -1210,26 +1231,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 chat-scrollbar min-w-0 bg-[linear-gradient(180deg,rgba(245,243,239,0.1),rgba(245,243,239,0.2))]">
         {showWelcome && (
           <div className="fade-up-in">
-            <div className="mb-8 mt-6">
+            <div className="mb-6 mt-6">
               <h2 className="mb-1 text-[15px] font-semibold tracking-tight text-[color:var(--text-primary)]">你好，设计师</h2>
-              <p className="text-[13px] leading-relaxed text-[color:var(--text-muted)]">描述你的设计需求，AI 将为你创作</p>
+              <p className="text-[13px] leading-relaxed text-[color:var(--text-muted)]">任选一个能力开始 — 无需按顺序。</p>
             </div>
-            <div className="space-y-1.5">
-              {WELCOME_CARDS.map((c, i) => (
+            <div className="grid grid-cols-2 gap-2">
+              {CAPABILITIES.map((cap) => (
                 <button
-                  key={i}
+                  key={cap.id}
                   type="button"
-                  onClick={() => suggest(c.prompt)}
-                  className="w-full group flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors hover:bg-[color:var(--paper)]"
+                  onClick={() => suggest(cap.promptTemplate)}
+                  className="group flex flex-col items-start gap-1.5 rounded-2xl border border-[color:var(--border-soft)] bg-white px-3.5 py-3 text-left transition-colors hover:border-[color:var(--ink)]/30 hover:bg-[color:var(--paper)]"
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[color:var(--paper)] text-[color:var(--text-muted)] transition-colors group-hover:bg-[color:var(--paper-2)] group-hover:text-[color:var(--text-primary)]">
-                    {c.icon}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[color:var(--paper)] text-[color:var(--text-secondary)] transition-colors group-hover:bg-[color:var(--ink)] group-hover:text-white">
+                    {WELCOME_ICON_MAP[cap.id]}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-[color:var(--text-secondary)] group-hover:text-[color:var(--text-primary)]">{c.title}</p>
-                    <p className="truncate text-[11px] text-[color:var(--text-muted)]">{c.sub}</p>
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-semibold text-[color:var(--text-primary)]">{cap.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-[11px] text-[color:var(--text-muted)]">{cap.subtitle}</p>
                   </div>
-                  <ArrowRight className="w-3.5 h-3.5 shrink-0 text-[color:var(--text-dim)] transition-all group-hover:translate-x-0.5 group-hover:text-[color:var(--text-secondary)]" />
                 </button>
               ))}
             </div>
@@ -1593,23 +1613,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           })}
         </div>
 
-        {showCtx && (
-          <div className="mt-4 chat-message-enter">
-            <p className="text-[10px] text-[color:var(--text-muted)] mb-2">点击填入输入框，确认后按 Enter 发送</p>
-            <div className="flex flex-wrap gap-1.5">
-              {ctx.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => suggest(s)}
-                  className="px-2.5 py-1.5 text-[11px] text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] hover:bg-[color:var(--color-surface-2)] rounded-lg transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {showCtx && null /* 线性「下一步」建议已被资源雷达 (CapabilityHub) 取代 */}
 
         <div ref={endRef} />
       </div>
@@ -1759,6 +1763,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       )}
 
+      {!showWelcome && (
+        <div className="shrink-0 px-4 pt-3 pb-1 border-t border-[color:var(--color-border-subtle)]">
+          <CapabilityHub
+            sessionImages={capabilitySessionImages}
+            uploadedAssets={capabilityUploaded}
+            resources={capabilityResources}
+            disabled={isLoading}
+            onPick={handleCapabilityPick}
+            onRequestUpload={() => fileRef.current?.click()}
+          />
+        </div>
+      )}
+
       <div className="p-4 border-t border-[color:var(--color-border-subtle)]">
         <div className="relative rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--color-surface)] transition-all focus-within:border-[color:var(--color-accent)] focus-within:shadow-[0_0_0_4px_rgba(66,133,244,0.10)]">
           {mentionOpen && filteredMentions.length > 0 && (
@@ -1857,9 +1874,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 type="button"
                 disabled={isLoading}
                 onClick={() =>
-                  ctx.length
-                    ? suggest(ctx[0])
-                    : toast('生成图片后，这里会显示追问建议', 'info')
+                  toast('上方的能力按钮可一键发起任意生成，不必按顺序', 'info')
                 }
                 className="p-1.5 text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] rounded-lg transition-colors disabled:opacity-40"
                 title="灵感 / 快捷追问"
