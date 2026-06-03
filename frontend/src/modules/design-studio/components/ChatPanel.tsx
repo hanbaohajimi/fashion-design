@@ -41,6 +41,7 @@ import {
 import { useToast } from '../../../components/Toast';
 import CapabilityHub, { type SessionImage as CapSessionImage } from './CapabilityHub';
 import { CAPABILITIES, deriveResourcesFromImages, type CapabilityId } from '../utils/capabilities';
+import { addToWardrobeFromDesign } from '../../../api/profileApi';
 
 const MAX_ATTACHMENTS = 12;
 
@@ -237,12 +238,6 @@ async function fetchTrendHotItems(
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json: unknown = await res.json();
   return parseTrendHotItems(json);
-}
-
-function getContextSuggestions(_t?: string): string[] {
-  // 已废弃 — 旧的「按上一步图类型推线性下一步」逻辑被资源雷达 (CapabilityHub) 取代。
-  // 保留空函数仅为向后兼容内部引用，将由后续 cleanup 删除。
-  return [];
 }
 
 async function streamChat(
@@ -446,7 +441,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [mentionFilter, setMentionFilter] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [msgFeedback, setMsgFeedback] = useState<Record<string, 'up' | 'down'>>({});
-  const [lastImageType, setLastImageType] = useState<string | undefined>();
   const [isDragging, setIsDragging] = useState(false);
   const [fastMode, setFastMode] = useState(false);
   const [trendActive, setTrendActive] = useState(trendEnabledProp);
@@ -639,7 +633,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     setSessionId(id);
     setMessages([]);
     setInput('');
-    setLastImageType(undefined);
     clearAttachedAssets();
     toast('已开始新对话', 'info');
     try {
@@ -929,7 +922,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 'image';
               const ni = { url, type: t };
               imgs.push(ni);
-              setLastImageType(t);
               onImageGenerated?.(ni);
               imgLoading = false;
               setMessages((p) => p.map((m) => (m.id === aId ? { ...m, images: [...imgs] } : m)));
@@ -1054,9 +1046,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     toast('开始下载', 'success');
   };
 
-  const ctx = getContextSuggestions(lastImageType);
   const showWelcome = messages.length === 0 && !isLoading;
-  const showCtx = !isLoading && ctx.length > 0 && messages.length > 0;
   const hasActivity =
     isLoading || messages.length > 0 || !!pendingFromCanvas || attachedAssets.length > 0;
 
@@ -1529,6 +1519,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                     置入画布
                                   </button>
                                 )}
+                                {authToken && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        await addToWardrobeFromDesign(authToken, img.url, sessionId);
+                                        toast('已收入衣橱', 'success');
+                                      } catch { toast('收入衣橱失败', 'error'); }
+                                    }}
+                                    className="px-2.5 py-1 text-[11px] font-medium bg-[color:var(--color-surface-3)] text-[color:var(--text-secondary)] rounded-lg hover:bg-[color:var(--color-surface-2)] transition-colors"
+                                  >
+                                    收入衣橱
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => dlImg(img.url)}
@@ -1612,8 +1616,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             );
           })}
         </div>
-
-        {showCtx && null /* 线性「下一步」建议已被资源雷达 (CapabilityHub) 取代 */}
 
         <div ref={endRef} />
       </div>
