@@ -140,6 +140,55 @@ export interface OutfitSuggestion {
   tags: string[];
 }
 
+// ── Wardrobe ──────────────────────────────────────────────
+
+export type WardrobeCategory = 'top' | 'bottom' | 'suit' | 'shoes' | 'bag' | 'jewelry' | 'accessory' | 'uncategorized';
+export type WardrobeSourceType = 'trend' | 'design' | 'upload';
+
+export interface WardrobeItem {
+  id: string;
+  user_email: string;
+  name: string;
+  category: WardrobeCategory;
+  sub_category?: string;
+  colors: string[];
+  style_tags: string[];
+  season?: string;
+  fabric?: string;
+  image_url: string;
+  thumbnail_url?: string;
+  source_type: WardrobeSourceType;
+  source_label: string;
+  source_ref?: string;
+  source_image_url?: string;
+  ai_analysis: Record<string, unknown>;
+  ai_status: 'pending' | 'completed' | 'failed';
+  notes?: string;
+  favorite: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Outfit {
+  id: string;
+  user_email: string;
+  name: string;
+  description?: string;
+  occasion?: string;
+  season?: string;
+  style?: string;
+  cover_image_url?: string;
+  items: WardrobeItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WardrobeStats {
+  total: number;
+  by_category: Record<string, number>;
+  by_source: Record<string, number>;
+}
+
 // ── Trends ────────────────────────────────────────────────
 
 export interface TrendColorPalette {

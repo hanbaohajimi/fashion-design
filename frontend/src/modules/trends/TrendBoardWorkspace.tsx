@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { Search, Heart, Sparkles, TrendingUp, RefreshCw, X, ChevronRight, Bookmark, Check } from 'lucide-react';
+import { Search, Heart, Sparkles, TrendingUp, RefreshCw, X, ChevronRight, Bookmark, Check, Shirt } from 'lucide-react';
 import type { Trend, TrendAnchor } from '../../types/profile';
 import {
   fetchTrends,
@@ -9,6 +9,7 @@ import {
   unfavoriteTrend,
   syncTrends,
   addTrendToProject,
+  addToWardrobeFromTrend,
 } from '../../api/profileApi';
 import { fetchDesignerWorkspace } from '../../api/profileApi';
 import type { DesignerWorkspace } from '../../types/profile';
@@ -564,6 +565,24 @@ function TrendDetailPanel({
         >
           <Sparkles size={14} /> 以此趋势开始设计
         </button>
+        {trend.image_gallery.length > 0 && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await addToWardrobeFromTrend(authToken, trend.image_gallery[activeImg], trend.name_zh || trend.name, trend.id);
+                toast('已收入衣橱', 'success');
+              } catch { toast('收入衣橱失败', 'error'); }
+            }}
+            className="btn-ghost"
+            style={{
+              width: '100%', height: 36, fontSize: 'var(--text-xs)', justifyContent: 'center',
+              color: 'var(--color-ink-2)',
+            }}
+          >
+            <Shirt size={13} /> 收入衣橱
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void handleFav()}

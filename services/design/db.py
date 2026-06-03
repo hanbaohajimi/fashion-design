@@ -116,6 +116,54 @@ def _migrate(conn: sqlite3.Connection) -> None:
         created_at      TEXT NOT NULL DEFAULT (datetime('now')),
         PRIMARY KEY (user_email, trend_id)
     );
+
+    CREATE TABLE IF NOT EXISTS wardrobe_items (
+        id              TEXT PRIMARY KEY,
+        user_email      TEXT NOT NULL REFERENCES users(email),
+        name            TEXT NOT NULL DEFAULT '',
+        category        TEXT NOT NULL DEFAULT 'uncategorized',
+        sub_category    TEXT,
+        colors          TEXT NOT NULL DEFAULT '[]',
+        style_tags      TEXT NOT NULL DEFAULT '[]',
+        season          TEXT,
+        fabric          TEXT,
+        image_url       TEXT NOT NULL,
+        thumbnail_url   TEXT,
+        source_type     TEXT NOT NULL DEFAULT 'upload',
+        source_label    TEXT NOT NULL DEFAULT '我的上传',
+        source_ref      TEXT,
+        source_image_url TEXT,
+        ai_analysis     TEXT NOT NULL DEFAULT '{}',
+        ai_status       TEXT NOT NULL DEFAULT 'pending',
+        notes           TEXT,
+        favorite        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_wardrobe_user ON wardrobe_items(user_email, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_wardrobe_category ON wardrobe_items(user_email, category);
+    CREATE INDEX IF NOT EXISTS idx_wardrobe_source ON wardrobe_items(user_email, source_type);
+
+    CREATE TABLE IF NOT EXISTS outfits (
+        id              TEXT PRIMARY KEY,
+        user_email      TEXT NOT NULL REFERENCES users(email),
+        name            TEXT NOT NULL DEFAULT '',
+        description     TEXT,
+        occasion        TEXT,
+        season          TEXT,
+        style           TEXT,
+        cover_image_url TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_outfits_user ON outfits(user_email, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS outfit_items (
+        outfit_id           TEXT NOT NULL REFERENCES outfits(id) ON DELETE CASCADE,
+        wardrobe_item_id    TEXT NOT NULL REFERENCES wardrobe_items(id) ON DELETE CASCADE,
+        layer_order         INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (outfit_id, wardrobe_item_id)
+    );
     """)
     conn.commit()
     _migrate_incremental(conn)
@@ -696,4 +744,273 @@ def update_library_item_trend_alignments(item_id: str, alignments: list) -> None
             (json.dumps(alignments, ensure_ascii=False), item_id),
         )
         conn.commit()
+
+
+# ─── Wardrobe Items ───
+
+_SOURCE_LABELS = {"trend": "时尚趋势", "design": "我的设计", "upload": "我的上传"}
+
+
+def create_wardrobe_item(
+    item_id: str,
+    user_email: str,
+    image_url: str,
+    source_type: str = "upload",
+    source_ref: Optional[str] = None,
+    source_image_url: Optional[str] = None,
+    name: str = "",
+    category: str = "uncategorized",
+) -> None:
+    label = _SOURCE_LABELS.get(source_type, "我的上传")
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT OR IGNORE INTO wardrobe_items
+               (id, user_email, image_url, source_type, source_label, source_ref, source_image_url, name, category)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (item_id, user_email, image_url, source_type, label, source_ref, source_image_url, name, category),
+        )
+        conn.commit()
+
+
+def update_wardrobe_item_ai(item_id: str, ai_result: dict, status: str = "completed") -> None:
+    with _lock:
+        conn = _get_conn()
+        updates = ["ai_analysis=?", "ai_status=?", "updated_at=datetime('now')"]
+        params: list = [json.dumps(ai_result, ensure_ascii=False), status]
+        if ai_result.get("name"):
+            updates.append("name=?")
+            params.append(ai_result["name"])
+        if ai_result.get("category"):
+            updates.append("category=?")
+            params.append(ai_result["category"])
+        if ai_result.get("sub_category"):
+            updates.append("sub_category=?")
+            params.append(ai_result["sub_category"])
+        if ai_result.get("colors"):
+            updates.append("colors=?")
+            params.append(json.dumps(ai_result["colors"], ensure_ascii=False))
+        if ai_result.get("style_tags"):
+            updates.append("style_tags=?")
+            params.append(json.dumps(ai_result["style_tags"], ensure_ascii=False))
+        if ai_result.get("season"):
+            updates.append("season=?")
+            params.append(ai_result["season"])
+        if ai_result.get("fabric"):
+            updates.append("fabric=?")
+            params.append(ai_result["fabric"])
+        params.append(item_id)
+        conn.execute(f"UPDATE wardrobe_items SET {', '.join(updates)} WHERE id=?", params)
+        conn.commit()
+
+
+def patch_wardrobe_item(item_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    allowed = {"name", "category", "sub_category", "colors", "style_tags", "season", "fabric", "notes", "favorite"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return get_wardrobe_item(item_id, user_email)
+    with _lock:
+        conn = _get_conn()
+        sets = []
+        vals: list = []
+        for k, v in updates.items():
+            sets.append(f"{k}=?")
+            if k in ("colors", "style_tags") and isinstance(v, list):
+                vals.append(json.dumps(v, ensure_ascii=False))
+            elif k == "favorite":
+                vals.append(1 if v else 0)
+            else:
+                vals.append(v)
+        sets.append("updated_at=datetime('now')")
+        vals += [item_id, user_email]
+        conn.execute(f"UPDATE wardrobe_items SET {', '.join(sets)} WHERE id=? AND user_email=?", vals)
+        conn.commit()
+    return get_wardrobe_item(item_id, user_email)
+
+
+def delete_wardrobe_item(item_id: str, user_email: str) -> bool:
+    with _lock:
+        conn = _get_conn()
+        cur = conn.execute("DELETE FROM wardrobe_items WHERE id=? AND user_email=?", (item_id, user_email))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_wardrobe_items_batch(item_ids: list, user_email: str) -> int:
+    if not item_ids:
+        return 0
+    with _lock:
+        conn = _get_conn()
+        placeholders = ",".join("?" * len(item_ids))
+        cur = conn.execute(
+            f"DELETE FROM wardrobe_items WHERE id IN ({placeholders}) AND user_email=?",
+            item_ids + [user_email],
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def get_wardrobe_item(item_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM wardrobe_items WHERE id=? AND user_email=?", (item_id, user_email)
+        ).fetchone()
+
+
+def list_wardrobe_items(
+    user_email: str,
+    category: Optional[str] = None,
+    source_type: Optional[str] = None,
+    season: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 30,
+) -> tuple[list[sqlite3.Row], int]:
+    conditions = ["user_email=?"]
+    params: list = [user_email]
+    if category and category != "all":
+        conditions.append("category=?")
+        params.append(category)
+    if source_type:
+        conditions.append("source_type=?")
+        params.append(source_type)
+    if season:
+        conditions.append("season=?")
+        params.append(season)
+    if search:
+        conditions.append("(name LIKE ? OR style_tags LIKE ? OR notes LIKE ?)")
+        q = f"%{search}%"
+        params.extend([q, q, q])
+    where = " AND ".join(conditions)
+    with _lock:
+        conn = _get_conn()
+        total = conn.execute(f"SELECT COUNT(*) as c FROM wardrobe_items WHERE {where}", params).fetchone()["c"]
+        rows = conn.execute(
+            f"SELECT * FROM wardrobe_items WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [limit, (page - 1) * limit],
+        ).fetchall()
+    return rows, total
+
+
+def get_wardrobe_stats(user_email: str) -> dict:
+    with _lock:
+        conn = _get_conn()
+        total = conn.execute("SELECT COUNT(*) as c FROM wardrobe_items WHERE user_email=?", (user_email,)).fetchone()["c"]
+        cats = conn.execute(
+            "SELECT category, COUNT(*) as c FROM wardrobe_items WHERE user_email=? GROUP BY category", (user_email,)
+        ).fetchall()
+        sources = conn.execute(
+            "SELECT source_type, COUNT(*) as c FROM wardrobe_items WHERE user_email=? GROUP BY source_type", (user_email,)
+        ).fetchall()
+    return {
+        "total": total,
+        "by_category": {r["category"]: r["c"] for r in cats},
+        "by_source": {r["source_type"]: r["c"] for r in sources},
+    }
+
+
+# ─── Outfits ───
+
+def create_outfit(outfit_id: str, user_email: str, name: str, item_ids: list, **kwargs) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT INTO outfits (id, user_email, name, description, occasion, season, style)
+               VALUES (?,?,?,?,?,?,?)""",
+            (outfit_id, user_email, name, kwargs.get("description"), kwargs.get("occasion"),
+             kwargs.get("season"), kwargs.get("style")),
+        )
+        for i, iid in enumerate(item_ids):
+            conn.execute(
+                "INSERT OR IGNORE INTO outfit_items (outfit_id, wardrobe_item_id, layer_order) VALUES (?,?,?)",
+                (outfit_id, iid, i),
+            )
+        if item_ids:
+            first = conn.execute("SELECT image_url FROM wardrobe_items WHERE id=?", (item_ids[0],)).fetchone()
+            if first:
+                conn.execute("UPDATE outfits SET cover_image_url=? WHERE id=?", (first["image_url"], outfit_id))
+        conn.commit()
+
+
+def list_outfits(user_email: str, occasion: Optional[str] = None, season: Optional[str] = None) -> list[dict]:
+    conditions = ["o.user_email=?"]
+    params: list = [user_email]
+    if occasion:
+        conditions.append("o.occasion=?")
+        params.append(occasion)
+    if season:
+        conditions.append("o.season=?")
+        params.append(season)
+    where = " AND ".join(conditions)
+    with _lock:
+        conn = _get_conn()
+        rows = conn.execute(f"SELECT * FROM outfits o WHERE {where} ORDER BY o.created_at DESC", params).fetchall()
+        result = []
+        for r in rows:
+            items = conn.execute(
+                """SELECT wi.* FROM wardrobe_items wi
+                   JOIN outfit_items oi ON oi.wardrobe_item_id = wi.id
+                   WHERE oi.outfit_id=? ORDER BY oi.layer_order""",
+                (r["id"],),
+            ).fetchall()
+            result.append({**dict(r), "items": [dict(i) for i in items]})
+    return result
+
+
+def get_outfit(outfit_id: str, user_email: str) -> Optional[dict]:
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute("SELECT * FROM outfits WHERE id=? AND user_email=?", (outfit_id, user_email)).fetchone()
+        if not row:
+            return None
+        items = conn.execute(
+            """SELECT wi.* FROM wardrobe_items wi
+               JOIN outfit_items oi ON oi.wardrobe_item_id = wi.id
+               WHERE oi.outfit_id=? ORDER BY oi.layer_order""",
+            (outfit_id,),
+        ).fetchall()
+        return {**dict(row), "items": [dict(i) for i in items]}
+
+
+def patch_outfit(outfit_id: str, user_email: str, **kwargs) -> Optional[dict]:
+    allowed = {"name", "description", "occasion", "season", "style"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return get_outfit(outfit_id, user_email)
+    with _lock:
+        conn = _get_conn()
+        sets = ", ".join(f"{k}=?" for k in updates)
+        vals = list(updates.values()) + [outfit_id, user_email]
+        conn.execute(f"UPDATE outfits SET {sets}, updated_at=datetime('now') WHERE id=? AND user_email=?", vals)
+        conn.commit()
+    return get_outfit(outfit_id, user_email)
+
+
+def delete_outfit(outfit_id: str, user_email: str) -> bool:
+    with _lock:
+        conn = _get_conn()
+        cur = conn.execute("DELETE FROM outfits WHERE id=? AND user_email=?", (outfit_id, user_email))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def add_outfit_item(outfit_id: str, wardrobe_item_id: str, layer_order: int = 0) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO outfit_items (outfit_id, wardrobe_item_id, layer_order) VALUES (?,?,?)",
+            (outfit_id, wardrobe_item_id, layer_order),
+        )
+        conn.commit()
+
+
+def remove_outfit_item(outfit_id: str, wardrobe_item_id: str) -> bool:
+    with _lock:
+        conn = _get_conn()
+        cur = conn.execute(
+            "DELETE FROM outfit_items WHERE outfit_id=? AND wardrobe_item_id=?",
+            (outfit_id, wardrobe_item_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
 

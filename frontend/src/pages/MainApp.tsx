@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, Suspense, lazy, type ReactNode } from 'react';
-import { Boxes, Plus, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal } from 'lucide-react';
+import { Boxes, Plus, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal, Shirt } from 'lucide-react';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { Trend } from '../types/profile';
 
@@ -7,9 +7,10 @@ const DesignStudioWorkspace = lazy(() => import('../modules/design-studio/Design
 const TrendAnalysisWorkspace = lazy(() => import('../modules/trend-analysis/TrendAnalysisWorkspace'));
 const LibraryWorkspace = lazy(() => import('../modules/library/LibraryWorkspace'));
 const TrendBoardWorkspace = lazy(() => import('../modules/trends/TrendBoardWorkspace'));
+const WardrobeWorkspace = lazy(() => import('../modules/wardrobe/WardrobeWorkspace'));
 const SettingsPanel = lazy(() => import('../modules/design-studio/components/SettingsPanel'));
 
-type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library' | 'trends';
+type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library' | 'trends' | 'wardrobe';
 
 interface WorkspaceTab {
   id: string;
@@ -47,6 +48,12 @@ const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: ReactN
     icon: <LayoutGrid className="h-4 w-4" />,
     tone: 'bg-[color:var(--signal-green)] text-white',
   },
+  wardrobe: {
+    title: '我的衣橱',
+    desc: '衣物收纳 · AI 分类 · 穿搭组合',
+    icon: <Shirt className="h-4 w-4" />,
+    tone: 'bg-[color:var(--warm-metal)] text-white',
+  },
 };
 
 let _c = 0;
@@ -67,6 +74,7 @@ export default function MainApp({ user, onLogout }: MainAppProps) {
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => [
     { id: nid(), type: 'design-studio', title: PRESETS['design-studio'].title },
     { id: nid(), type: 'trends', title: PRESETS['trends'].title },
+    { id: nid(), type: 'wardrobe', title: PRESETS['wardrobe'].title },
     { id: nid(), type: 'library', title: PRESETS['library'].title },
     { id: nid(), type: 'trend-analysis', title: PRESETS['trend-analysis'].title },
   ]);
@@ -325,6 +333,7 @@ export default function MainApp({ user, onLogout }: MainAppProps) {
                   {tab.type === 'trends' && (
                     <TrendBoardWorkspace user={user} onDesignThis={trend => addDesignTabWithTrend(trend)} />
                   )}
+                  {tab.type === 'wardrobe' && <WardrobeWorkspace user={user} />}
                 </Suspense>
               </ErrorBoundary>
             )}

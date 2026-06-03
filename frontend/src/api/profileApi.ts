@@ -12,6 +12,9 @@ import type {
   LibraryStats,
   OutfitSuggestion,
   Trend,
+  WardrobeItem,
+  Outfit,
+  WardrobeStats,
 } from '../types/profile';
 
 const BASE = '/api/design';
@@ -396,6 +399,136 @@ export async function createConversationSessionWithTrend(
       trend_id: trendId,
       trend_enabled: trendEnabled ?? false,
     }),
+  });
+  return handle(res);
+}
+
+// ── Wardrobe ──────────────────────────────────────────────
+
+export async function fetchWardrobeItems(
+  token: string,
+  opts: { category?: string; source_type?: string; season?: string; search?: string; page?: number; limit?: number } = {},
+): Promise<{ items: WardrobeItem[]; total: number; page: number }> {
+  const params = new URLSearchParams();
+  if (opts.category && opts.category !== 'all') params.set('category', opts.category);
+  if (opts.source_type) params.set('source_type', opts.source_type);
+  if (opts.season) params.set('season', opts.season);
+  if (opts.search) params.set('search', opts.search);
+  if (opts.page) params.set('page', String(opts.page));
+  if (opts.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/wardrobe/items${qs ? '?' + qs : ''}`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function addToWardrobeFromTrend(
+  token: string,
+  imageUrl: string,
+  name: string,
+  sourceRef?: string,
+): Promise<{ id: string; image_url: string; source_label: string }> {
+  const res = await fetch(`${BASE}/wardrobe/items/from-trend`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ image_url: imageUrl, name, source_ref: sourceRef, auth_token: token }),
+  });
+  return handle(res);
+}
+
+export async function addToWardrobeFromDesign(
+  token: string,
+  imageUrl: string,
+  sessionId?: string,
+  name?: string,
+): Promise<{ id: string; image_url: string; source_label: string }> {
+  const res = await fetch(`${BASE}/wardrobe/items/from-design`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ image_url: imageUrl, session_id: sessionId, name, auth_token: token }),
+  });
+  return handle(res);
+}
+
+export async function uploadToWardrobe(
+  token: string,
+  file: File,
+  name?: string,
+): Promise<{ id: string; image_url: string; source_label: string }> {
+  const fd = new FormData();
+  fd.append('file', file);
+  if (name) fd.append('name', name);
+  const res = await fetch(`${BASE}/wardrobe/items`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  return handle(res);
+}
+
+export async function patchWardrobeItem(
+  token: string,
+  itemId: string,
+  updates: Partial<Pick<WardrobeItem, 'name' | 'category' | 'sub_category' | 'colors' | 'style_tags' | 'season' | 'fabric' | 'notes' | 'favorite'>>,
+): Promise<{ item: WardrobeItem }> {
+  const res = await fetch(`${BASE}/wardrobe/items/${itemId}`, {
+    method: 'PATCH',
+    headers: authHeader(token),
+    body: JSON.stringify(updates),
+  });
+  return handle(res);
+}
+
+export async function deleteWardrobeItem(token: string, itemId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/wardrobe/items/${itemId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+  return handle(res);
+}
+
+export async function reAnalyzeWardrobeItem(token: string, itemId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/wardrobe/items/${itemId}/re-analyze`, {
+    method: 'POST',
+    headers: authHeader(token),
+  });
+  return handle(res);
+}
+
+export async function fetchWardrobeStats(token: string): Promise<WardrobeStats> {
+  const res = await fetch(`${BASE}/wardrobe/stats`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function createOutfit(
+  token: string,
+  name: string,
+  itemIds: string[],
+  opts: { description?: string; occasion?: string; season?: string; style?: string } = {},
+): Promise<{ outfit: Outfit }> {
+  const res = await fetch(`${BASE}/wardrobe/outfits`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ name, item_ids: itemIds, ...opts }),
+  });
+  return handle(res);
+}
+
+export async function fetchOutfits(
+  token: string,
+  opts: { occasion?: string; season?: string } = {},
+): Promise<{ outfits: Outfit[] }> {
+  const params = new URLSearchParams();
+  if (opts.occasion) params.set('occasion', opts.occasion);
+  if (opts.season) params.set('season', opts.season);
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/wardrobe/outfits${qs ? '?' + qs : ''}`, { headers: authHeader(token) });
+  return handle(res);
+}
+
+export async function deleteOutfit(token: string, outfitId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/wardrobe/outfits/${outfitId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
   });
   return handle(res);
 }

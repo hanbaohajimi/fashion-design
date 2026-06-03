@@ -3106,6 +3106,349 @@ async def _detect_trend_alignment(item_id: str, auto_tags: dict) -> None:
         print(f"[WARN] _detect_trend_alignment failed: {e}")
 
 
+# ═══════════════════════════════════════════════════════════
+# Wardrobe API
+# ═══════════════════════════════════════════════════════════
+
+WARDROBE_DIR = os.path.join(OUTPUTS_DIR, "wardrobe")
+os.makedirs(WARDROBE_DIR, exist_ok=True)
+
+WARDROBE_CATEGORIES = ["top", "bottom", "suit", "shoes", "bag", "jewelry", "accessory", "uncategorized"]
+
+_WARDROBE_TAG_SYSTEM = (
+    "你是时尚图像分析师。分析这张衣物图片，严格按以下JSON返回，不输出任何其他内容：\n"
+    '{"name":"衣物名称","category":"top","sub_category":"T恤","colors":["白色"],'
+    '"fabric":"棉","style_tags":["休闲"],"season":"春夏","description":"简要描述"}\n'
+    "category选项：top(上装)/bottom(下装)/suit(套装)/shoes(鞋子)/bag(包包)/jewelry(首饰)/accessory(配饰)/uncategorized(未分类)\n"
+    "season选项：spring/summer/fall/winter/all-season"
+)
+
+
+def _wardrobe_user_dir(user_email: str) -> str:
+    h = hashlib.md5(user_email.encode()).hexdigest()[:10]
+    d = os.path.join(WARDROBE_DIR, h)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _save_wardrobe_image(user_email: str, item_id: str, data: bytes, ext: str = "png") -> tuple[str, str]:
+    d = _wardrobe_user_dir(user_email)
+    fname = f"{item_id}.{ext}"
+    fpath = os.path.join(d, fname)
+    with open(fpath, "wb") as f:
+        f.write(data)
+    thumb_name = f"{item_id}_thumb.jpg"
+    thumb_path = os.path.join(d, thumb_name)
+    try:
+        im = Image.open(fpath)
+        im.thumbnail((300, 300))
+        im.save(thumb_path, "JPEG", quality=85)
+    except Exception:
+        thumb_path = fpath
+    rel = os.path.relpath(fpath, OUTPUTS_DIR).replace(os.sep, "/")
+    thumb_rel = os.path.relpath(thumb_path, OUTPUTS_DIR).replace(os.sep, "/")
+    return f"/api/images/{rel}", f"/api/images/{thumb_rel}"
+
+
+async def _wardrobe_auto_tag(item_id: str, image_url: str) -> None:
+    try:
+        abs_url = image_url
+        if abs_url.startswith("/api/images/"):
+            rel = abs_url.removeprefix("/api/images/")
+            abs_path = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
+            if os.path.exists(abs_path):
+                import base64
+                with open(abs_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                ext = os.path.splitext(abs_path)[1].lower().lstrip(".")
+                mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+                abs_url = f"data:{mime};base64,{b64}"
+            else:
+                db.update_wardrobe_item_ai(item_id, {}, "failed")
+                return
+
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=VISION_MODEL,
+            messages=[
+                {"role": "system", "content": _WARDROBE_TAG_SYSTEM},
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": abs_url}},
+                    {"type": "text", "text": "请分析这张衣物图片。"},
+                ]},
+            ],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+            raw = raw.rsplit("```", 1)[0]
+        tags = json.loads(raw)
+        if tags.get("category") not in WARDROBE_CATEGORIES:
+            tags["category"] = "uncategorized"
+        db.update_wardrobe_item_ai(item_id, tags, "completed")
+    except Exception as e:
+        print(f"[WARN] wardrobe_auto_tag failed for {item_id}: {e}")
+        db.update_wardrobe_item_ai(item_id, {}, "failed")
+
+
+def _require_wardrobe_user(authorization: Optional[str]) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing auth token")
+    token = authorization[7:]
+    user = db.get_user_by_token(token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    return user["email"]
+
+
+def _wardrobe_row_to_dict(row) -> dict:
+    d = dict(row)
+    for k in ("colors", "style_tags", "ai_analysis"):
+        if k in d and isinstance(d[k], str):
+            try:
+                d[k] = json.loads(d[k])
+            except Exception:
+                pass
+    d["favorite"] = bool(d.get("favorite"))
+    return d
+
+
+@app.get("/api/wardrobe/items")
+async def wardrobe_list_items(
+    authorization: Optional[str] = Header(None),
+    category: Optional[str] = None,
+    source_type: Optional[str] = None,
+    season: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 30,
+):
+    email = _require_wardrobe_user(authorization)
+    rows, total = db.list_wardrobe_items(email, category, source_type, season, search, page, limit)
+    return {"items": [_wardrobe_row_to_dict(r) for r in rows], "total": total, "page": page}
+
+
+class WardrobeFromTrendRequest(BaseModel):
+    image_url: str
+    name: str = ""
+    source_ref: Optional[str] = None
+    auth_token: Optional[str] = None
+
+
+@app.post("/api/wardrobe/items/from-trend")
+async def wardrobe_from_trend(req: WardrobeFromTrendRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    item_id = uuid.uuid4().hex[:12]
+    try:
+        img_data = await asyncio.to_thread(lambda: urllib.request.urlopen(req.image_url).read())
+    except Exception:
+        raise HTTPException(400, "Failed to download image")
+    image_url, thumb_url = _save_wardrobe_image(email, item_id, img_data)
+    db.create_wardrobe_item(item_id, email, image_url, "trend", req.source_ref, req.image_url, req.name)
+    db.patch_wardrobe_item(item_id, email, thumbnail_url=thumb_url) if thumb_url else None
+    asyncio.create_task(_wardrobe_auto_tag(item_id, image_url))
+    return {"id": item_id, "image_url": image_url, "source_label": "时尚趋势"}
+
+
+class WardrobeFromDesignRequest(BaseModel):
+    image_url: str
+    session_id: Optional[str] = None
+    name: str = ""
+    auth_token: Optional[str] = None
+
+
+@app.post("/api/wardrobe/items/from-design")
+async def wardrobe_from_design(req: WardrobeFromDesignRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    item_id = uuid.uuid4().hex[:12]
+    src_rel = req.image_url.removeprefix("/api/images/")
+    src_path = os.path.join(OUTPUTS_DIR, src_rel.replace("/", os.sep))
+    if not os.path.exists(src_path):
+        raise HTTPException(404, "Source image not found")
+    with open(src_path, "rb") as f:
+        img_data = f.read()
+    ext = os.path.splitext(src_path)[1].lstrip(".") or "png"
+    image_url, thumb_url = _save_wardrobe_image(email, item_id, img_data, ext)
+    db.create_wardrobe_item(item_id, email, image_url, "design", req.session_id, req.image_url, req.name)
+    asyncio.create_task(_wardrobe_auto_tag(item_id, image_url))
+    return {"id": item_id, "image_url": image_url, "source_label": "我的设计"}
+
+
+@app.post("/api/wardrobe/items")
+async def wardrobe_upload(
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    authorization: Optional[str] = Header(None),
+):
+    email = _require_wardrobe_user(authorization)
+    item_id = uuid.uuid4().hex[:12]
+    data = await file.read()
+    ext = (file.filename or "image.png").rsplit(".", 1)[-1].lower() or "png"
+    image_url, thumb_url = _save_wardrobe_image(email, item_id, data, ext)
+    db.create_wardrobe_item(item_id, email, image_url, "upload", name=name)
+    asyncio.create_task(_wardrobe_auto_tag(item_id, image_url))
+    return {"id": item_id, "image_url": image_url, "source_label": "我的上传"}
+
+
+@app.get("/api/wardrobe/items/{item_id}")
+async def wardrobe_get_item(item_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    row = db.get_wardrobe_item(item_id, email)
+    if not row:
+        raise HTTPException(404, "Item not found")
+    return {"item": _wardrobe_row_to_dict(row)}
+
+
+class WardrobePatchRequest(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    sub_category: Optional[str] = None
+    colors: Optional[list] = None
+    style_tags: Optional[list] = None
+    season: Optional[str] = None
+    fabric: Optional[str] = None
+    notes: Optional[str] = None
+    favorite: Optional[bool] = None
+
+
+@app.patch("/api/wardrobe/items/{item_id}")
+async def wardrobe_patch_item(item_id: str, req: WardrobePatchRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    row = db.patch_wardrobe_item(item_id, email, **updates)
+    if not row:
+        raise HTTPException(404, "Item not found")
+    return {"item": _wardrobe_row_to_dict(row)}
+
+
+@app.delete("/api/wardrobe/items/{item_id}")
+async def wardrobe_delete_item(item_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    ok = db.delete_wardrobe_item(item_id, email)
+    if not ok:
+        raise HTTPException(404, "Item not found")
+    return {"ok": True}
+
+
+class WardrobeBatchDeleteRequest(BaseModel):
+    item_ids: list[str]
+
+
+@app.post("/api/wardrobe/items/batch-delete")
+async def wardrobe_batch_delete(req: WardrobeBatchDeleteRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    removed = db.delete_wardrobe_items_batch(req.item_ids, email)
+    return {"removed": removed}
+
+
+@app.post("/api/wardrobe/items/{item_id}/re-analyze")
+async def wardrobe_re_analyze(item_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    row = db.get_wardrobe_item(item_id, email)
+    if not row:
+        raise HTTPException(404, "Item not found")
+    db.update_wardrobe_item_ai(item_id, {}, "pending")
+    asyncio.create_task(_wardrobe_auto_tag(item_id, row["image_url"]))
+    return {"ok": True}
+
+
+@app.get("/api/wardrobe/stats")
+async def wardrobe_stats(authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    return db.get_wardrobe_stats(email)
+
+
+# ── Outfits ──
+
+class OutfitCreateRequest(BaseModel):
+    name: str
+    item_ids: list[str]
+    description: Optional[str] = None
+    occasion: Optional[str] = None
+    season: Optional[str] = None
+    style: Optional[str] = None
+
+
+@app.post("/api/wardrobe/outfits")
+async def wardrobe_create_outfit(req: OutfitCreateRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    outfit_id = uuid.uuid4().hex[:12]
+    db.create_outfit(outfit_id, email, req.name, req.item_ids,
+                     description=req.description, occasion=req.occasion, season=req.season, style=req.style)
+    outfit = db.get_outfit(outfit_id, email)
+    return {"outfit": outfit}
+
+
+@app.get("/api/wardrobe/outfits")
+async def wardrobe_list_outfits(
+    authorization: Optional[str] = Header(None),
+    occasion: Optional[str] = None,
+    season: Optional[str] = None,
+):
+    email = _require_wardrobe_user(authorization)
+    return {"outfits": db.list_outfits(email, occasion, season)}
+
+
+@app.get("/api/wardrobe/outfits/{outfit_id}")
+async def wardrobe_get_outfit(outfit_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    outfit = db.get_outfit(outfit_id, email)
+    if not outfit:
+        raise HTTPException(404, "Outfit not found")
+    return {"outfit": outfit}
+
+
+class OutfitPatchRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    occasion: Optional[str] = None
+    season: Optional[str] = None
+    style: Optional[str] = None
+
+
+@app.patch("/api/wardrobe/outfits/{outfit_id}")
+async def wardrobe_patch_outfit(outfit_id: str, req: OutfitPatchRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    updates = {k: v for k, v in req.dict().items() if v is not None}
+    outfit = db.patch_outfit(outfit_id, email, **updates)
+    if not outfit:
+        raise HTTPException(404, "Outfit not found")
+    return {"outfit": outfit}
+
+
+@app.delete("/api/wardrobe/outfits/{outfit_id}")
+async def wardrobe_delete_outfit(outfit_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    ok = db.delete_outfit(outfit_id, email)
+    if not ok:
+        raise HTTPException(404, "Outfit not found")
+    return {"ok": True}
+
+
+class OutfitAddItemRequest(BaseModel):
+    wardrobe_item_id: str
+    layer_order: int = 0
+
+
+@app.post("/api/wardrobe/outfits/{outfit_id}/items")
+async def wardrobe_add_outfit_item(outfit_id: str, req: OutfitAddItemRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    outfit = db.get_outfit(outfit_id, email)
+    if not outfit:
+        raise HTTPException(404, "Outfit not found")
+    db.add_outfit_item(outfit_id, req.wardrobe_item_id, req.layer_order)
+    return db.get_outfit(outfit_id, email)
+
+
+@app.delete("/api/wardrobe/outfits/{outfit_id}/items/{wardrobe_item_id}")
+async def wardrobe_remove_outfit_item(outfit_id: str, wardrobe_item_id: str, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    ok = db.remove_outfit_item(outfit_id, wardrobe_item_id)
+    if not ok:
+        raise HTTPException(404, "Item not in outfit")
+    return {"ok": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     print(f"[INFO] Starting AI Fashion Design Backend...")
