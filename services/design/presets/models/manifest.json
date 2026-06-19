@@ -1,0 +1,16 @@
+[
+  {
+    "id": "model_female_default",
+    "name": "亚洲女模 · 默认 (REPLACE_ME)",
+    "thumbnail": "default_female.png",
+    "prompt": "asian female fashion model, full body, neutral standing pose, soft studio lighting",
+    "gender": "female"
+  },
+  {
+    "id": "model_male_default",
+    "name": "亚洲男模 · 默认 (REPLACE_ME)",
+    "thumbnail": "default_male.png",
+    "prompt": "asian male fashion model, full body, neutral standing pose, soft studio lighting",
+    "gender": "male"
+  }
+]

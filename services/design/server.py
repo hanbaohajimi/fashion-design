@@ -8,7 +8,6 @@ import time
 import urllib.request
 import traceback
 from datetime import datetime, timedelta
-from http import HTTPStatus
 from typing import Optional, AsyncGenerator, Tuple
 from collections import defaultdict
 
@@ -16,17 +15,21 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Hea
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from PIL import Image
-
-from dashscope.aigc.image_generation import ImageGeneration
-from dashscope import MultiModalConversation
-import dashscope
-from openai import OpenAI
 
 import sqlite3 as _sqlite3
 
 import db
+from ai_clients import (
+    TEXT_MODEL,
+    IMAGE_MODEL,
+    chat_with_tools,
+    generate_image,
+    simple_chat,
+    vision_analyze,
+)
 
 app = FastAPI(title="AI Fashion Design Backend")
 
@@ -38,21 +41,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = os.environ.get("DASHSCOPE_API_KEY", "sk-84a7430369064d0daa73c568b9b19a1d")
-dashscope.api_key = API_KEY
-
-client = OpenAI(
-    api_key=API_KEY or "unset",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-)
-
 OUTPUTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
-SKETCH_MODEL = "wan2.6-t2i"
-EDIT_MODEL = "qwen-image-edit-max"
-LLM_MODEL = "qwen-plus"
-VISION_MODEL = "qwen-vl-max"
 MAX_HISTORY = 56
 MAX_RETRIES = 2
 SESSION_TTL_HOURS = 4
@@ -69,12 +60,6 @@ NEGATIVE_PROMPTS = {
     "text_to_image": "watermark, text overlay, blurry, low quality, deformed anatomy, extra fingers, cropped, out of frame",
     "draw_sketch": "color, photo, watermark, text, blurry, low quality, deformed anatomy",
     "generate_model": "watermark, text, blurry, low quality, deformed anatomy, extra fingers, disfigured face",
-}
-
-IMAGE_SIZES = {
-    "square": "1024*1024",
-    "portrait": "720*1280",
-    "landscape": "1280*720",
 }
 
 # 附加给图像编辑模型：防止「仅改色」被扩写成写实棚拍
@@ -333,9 +318,20 @@ class Session:
                     time.sleep(1)
         return None
 
+    def save_image_bytes(self, data: bytes, prefix: str = "image") -> Optional[str]:
+        try:
+            unique_name = f"{prefix}_{uuid.uuid4().hex[:8]}.png"
+            file_path = os.path.join(self.run_folder, unique_name)
+            with open(file_path, "wb") as f:
+                f.write(data)
+            return os.path.abspath(file_path)
+        except Exception as e:
+            print(f"[ERROR] save_image_bytes failed: {e}")
+            return None
+
     def get_image_url(self, abs_path: str) -> str:
         rel = os.path.relpath(abs_path, OUTPUTS_DIR)
-        return f"/api/images/{rel.replace(os.sep, '/')}"
+        return f"/api/design/images/{rel.replace(os.sep, '/')}"
 
     def trim_history(self):
         if len(self.chat_history) <= MAX_HISTORY:
@@ -570,29 +566,20 @@ def tool_text_to_image(session: Session, prompt: str, style_hint: str = "", aspe
     text = prompt.strip()
     if hint:
         text = f"{text}, {hint}"
-    size = IMAGE_SIZES.get(aspect, IMAGE_SIZES["square"])
     neg = NEGATIVE_PROMPTS["text_to_image"]
-    print(f"[TOOL] text_to_image [{size}]: {text[:80]}...")
+    full_prompt = f"{text}\n\nAvoid: {neg}"
+    print(f"[TOOL] text_to_image [{aspect}]: {text[:80]}...")
     try:
-        rsp = _call_with_retry(
-            ImageGeneration.call,
-            model=SKETCH_MODEL,
-            messages=[{"role": "user", "content": [{"text": text}]}],
-            n=1, size=size, negative_prompt=neg,
-        )
-        if rsp.status_code == HTTPStatus.OK:
-            img_url = rsp.output.choices[0].message.content[0]["image"]
-            path = session.save_image(img_url, "t2i")
-            if path:
-                session.current_image_path = path
-                url = session.get_image_url(path)
-                entry = session.record_image(url, "text_to_image", path)
-                session.stats["tool_calls"] += 1
-                return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
-        msg = getattr(rsp, "message", "API调用失败")
-        print(f"[ERROR] text_to_image failed: {msg}")
+        img_bytes = _call_with_retry(generate_image, full_prompt, aspect=aspect)
+        path = session.save_image_bytes(img_bytes, "t2i")
+        if path:
+            session.current_image_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "text_to_image", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": msg}
+        return {"status": "error", "message": "图片保存失败"}
     except Exception as e:
         print(f"[ERROR] text_to_image exception: {e}")
         session.stats["errors"] += 1
@@ -601,27 +588,19 @@ def tool_text_to_image(session: Session, prompt: str, style_hint: str = "", aspe
 
 def tool_draw_sketch(session: Session, detailed_prompt: str) -> dict:
     neg = NEGATIVE_PROMPTS["draw_sketch"]
+    full_prompt = f"{detailed_prompt}\n\nAvoid: {neg}"
     print(f"[TOOL] draw_sketch: {detailed_prompt[:80]}...")
     try:
-        rsp = _call_with_retry(
-            ImageGeneration.call,
-            model=SKETCH_MODEL,
-            messages=[{"role": "user", "content": [{"text": detailed_prompt}]}],
-            n=1, size="1024*1024", negative_prompt=neg,
-        )
-        if rsp.status_code == HTTPStatus.OK:
-            img_url = rsp.output.choices[0].message.content[0]['image']
-            path = session.save_image(img_url, "sketch")
-            if path:
-                session.current_image_path = path
-                url = session.get_image_url(path)
-                entry = session.record_image(url, "draw_sketch", path)
-                session.stats["tool_calls"] += 1
-                return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
-        msg = getattr(rsp, 'message', 'API调用失败')
-        print(f"[ERROR] draw_sketch failed: {msg}")
+        img_bytes = _call_with_retry(generate_image, full_prompt, aspect="square")
+        path = session.save_image_bytes(img_bytes, "sketch")
+        if path:
+            session.current_image_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "draw_sketch", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": msg}
+        return {"status": "error", "message": "图片保存失败"}
     except Exception as e:
         print(f"[ERROR] draw_sketch exception: {e}")
         session.stats["errors"] += 1
@@ -725,27 +704,16 @@ def tool_edit_image(
         print(f"[TOOL] edit_image: {instruction[:80]}...")
 
     try:
-        messages = [{
-            "role": "user",
-            "content": [
-                {"image": f"file://{os.path.abspath(real_path)}"},
-                {"text": final_instruction}
-            ]
-        }]
-        rsp = _call_with_retry(MultiModalConversation.call, model=EDIT_MODEL, messages=messages, n=1)
-        if rsp.status_code == HTTPStatus.OK:
-            content = rsp.output.choices[0].message.content
-            for item in content:
-                if 'image' in item:
-                    path = session.save_image(item['image'], "edit")
-                    if path:
-                        session.current_image_path = path
-                        url = session.get_image_url(path)
-                        entry = session.record_image(url, "edit_image", path)
-                        session.stats["tool_calls"] += 1
-                        return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+        img_bytes = _call_with_retry(generate_image, final_instruction, reference_paths=[real_path])
+        path = session.save_image_bytes(img_bytes, "edit")
+        if path:
+            session.current_image_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "edit_image", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": "图片编辑API调用失败"}
+        return {"status": "error", "message": "图片编辑保存失败"}
     except Exception as e:
         print(f"[ERROR] edit_image exception: {e}")
         session.stats["errors"] += 1
@@ -777,28 +745,19 @@ def tool_transfer_pattern(session: Session, target_dress_path: str, pattern_ref_
 
     print(f"[TOOL] transfer_pattern: {instruction[:80]}...")
     try:
-        messages = [{
-            "role": "user",
-            "content": [
-                {"image": f"file://{os.path.abspath(real_dress)}"},
-                {"image": f"file://{os.path.abspath(real_pattern)}"},
-                {"text": instruction}
-            ]
-        }]
-        rsp = _call_with_retry(MultiModalConversation.call, model=EDIT_MODEL, messages=messages, n=1)
-        if rsp.status_code == HTTPStatus.OK:
-            content = rsp.output.choices[0].message.content
-            for item in content:
-                if 'image' in item:
-                    path = session.save_image(item['image'], "pattern")
-                    if path:
-                        session.current_image_path = path
-                        url = session.get_image_url(path)
-                        entry = session.record_image(url, "transfer_pattern", path)
-                        session.stats["tool_calls"] += 1
-                        return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+        img_bytes = _call_with_retry(
+            generate_image, instruction,
+            reference_paths=[real_dress, real_pattern],
+        )
+        path = session.save_image_bytes(img_bytes, "pattern")
+        if path:
+            session.current_image_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "transfer_pattern", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": "图案迁移API调用失败"}
+        return {"status": "error", "message": "图案迁移保存失败"}
     except Exception as e:
         print(f"[ERROR] transfer_pattern exception: {e}")
         session.stats["errors"] += 1
@@ -807,27 +766,19 @@ def tool_transfer_pattern(session: Session, target_dress_path: str, pattern_ref_
 
 def tool_generate_model(session: Session, model_prompt: str) -> dict:
     neg = NEGATIVE_PROMPTS["generate_model"]
+    full_prompt = f"{model_prompt}\n\nAvoid: {neg}"
     print(f"[TOOL] generate_model: {model_prompt[:80]}...")
     try:
-        rsp = _call_with_retry(
-            ImageGeneration.call,
-            model=SKETCH_MODEL,
-            messages=[{"role": "user", "content": [{"text": model_prompt}]}],
-            n=1, size="720*1280", negative_prompt=neg,
-        )
-        if rsp.status_code == HTTPStatus.OK:
-            img_url = rsp.output.choices[0].message.content[0]['image']
-            path = session.save_image(img_url, "model")
-            if path:
-                session.current_model_path = path
-                url = session.get_image_url(path)
-                entry = session.record_image(url, "generate_model", path)
-                session.stats["tool_calls"] += 1
-                return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
-        msg = getattr(rsp, 'message', 'API调用失败')
-        print(f"[ERROR] generate_model failed: {msg}")
+        img_bytes = _call_with_retry(generate_image, full_prompt, aspect="portrait")
+        path = session.save_image_bytes(img_bytes, "model")
+        if path:
+            session.current_model_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "generate_model", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": msg}
+        return {"status": "error", "message": "模特生成保存失败"}
     except Exception as e:
         print(f"[ERROR] generate_model exception: {e}")
         session.stats["errors"] += 1
@@ -855,28 +806,19 @@ def tool_try_on(session: Session, dress_path: str, model_path: str, instruction:
 
     print(f"[TOOL] try_on: {instruction[:80]}...")
     try:
-        messages = [{
-            "role": "user",
-            "content": [
-                {"image": f"file://{os.path.abspath(model_path)}"},
-                {"image": f"file://{os.path.abspath(dress_path)}"},
-                {"text": instruction}
-            ]
-        }]
-        rsp = _call_with_retry(MultiModalConversation.call, model=EDIT_MODEL, messages=messages, n=1)
-        if rsp.status_code == HTTPStatus.OK:
-            content = rsp.output.choices[0].message.content
-            for item in content:
-                if 'image' in item:
-                    path = session.save_image(item['image'], "tryon")
-                    if path:
-                        session.current_tryon_path = path
-                        url = session.get_image_url(path)
-                        entry = session.record_image(url, "try_on", path)
-                        session.stats["tool_calls"] += 1
-                        return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+        img_bytes = _call_with_retry(
+            generate_image, instruction,
+            reference_paths=[model_path, dress_path],
+        )
+        path = session.save_image_bytes(img_bytes, "tryon")
+        if path:
+            session.current_tryon_path = path
+            url = session.get_image_url(path)
+            entry = session.record_image(url, "try_on", path)
+            session.stats["tool_calls"] += 1
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
         session.stats["errors"] += 1
-        return {"status": "error", "message": "虚拟试穿API调用失败"}
+        return {"status": "error", "message": "虚拟试穿保存失败"}
     except Exception as e:
         print(f"[ERROR] try_on exception: {e}")
         session.stats["errors"] += 1
@@ -946,32 +888,23 @@ class AnalyzeRequest(BaseModel):
 
 # ─── Helpers ───
 
-def _msg_to_dict(assistant_msg) -> dict:
-    if assistant_msg.tool_calls:
-        return {
-            "role": "assistant",
-            "content": assistant_msg.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    }
-                }
-                for tc in assistant_msg.tool_calls
-            ]
-        }
+def _normalize_tool_call(tc) -> dict:
+    """统一 tool_call 为 dict 形式(chat_with_tools 直接返回 dict;此函数对 dict 无副作用)。"""
+    if isinstance(tc, dict):
+        return tc
     return {
-        "role": "assistant",
-        "content": assistant_msg.content or "",
+        "id": tc.id,
+        "type": "function",
+        "function": {
+            "name": tc.function.name,
+            "arguments": tc.function.arguments,
+        },
     }
 
 
 def _can_run_parallel(tool_calls) -> bool:
     """Check if all tool calls are independent (no image dependencies between them)."""
-    names = [tc.function.name for tc in tool_calls]
+    names = [tc["function"]["name"] for tc in tool_calls]
     gen_tools = {"tool_text_to_image", "tool_draw_sketch", "tool_generate_model"}
     return all(n in gen_tools for n in names)
 
@@ -979,8 +912,8 @@ def _can_run_parallel(tool_calls) -> bool:
 async def _execute_tool_calls_parallel(session, tool_calls):
     """Execute independent tool calls concurrently."""
     async def run_one(tc):
-        func_name = tc.function.name
-        args, perr = _parse_tool_arguments(getattr(tc.function, "arguments", None))
+        func_name = tc["function"]["name"]
+        args, perr = _parse_tool_arguments(tc["function"].get("arguments"))
         if args is None:
             return tc, {"status": "error", "message": perr or "参数解析失败"}
         executor = TOOL_EXECUTORS.get(func_name)
@@ -999,46 +932,35 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
 
     yield json.dumps({"type": "status", "content": "正在思考..."}, ensure_ascii=False) + "\n"
 
-    if not API_KEY:
-        yield json.dumps(
-            {"type": "error", "content": "服务端未配置 DASHSCOPE_API_KEY，无法调用模型"},
-            ensure_ascii=False,
-        ) + "\n"
-        yield json.dumps({"type": "done"}, ensure_ascii=False) + "\n"
-        return
-
     ctx = session.build_workflow_context_block() + session.build_assets_context_block()
     session.chat_history.append({"role": "user", "content": message + ctx})
     session.trim_history()
 
     try:
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=LLM_MODEL,
-            messages=session.chat_history,
-            tools=TOOLS,
+        assistant_msg = await asyncio.to_thread(
+            chat_with_tools, session.chat_history, TOOLS,
         )
-
-        assistant_msg = response.choices[0].message
-        session.chat_history.append(_msg_to_dict(assistant_msg))
+        session.chat_history.append(assistant_msg)
 
         images: list[dict] = []
 
-        if assistant_msg.tool_calls:
-            parallel = _can_run_parallel(assistant_msg.tool_calls)
+        if assistant_msg.get("tool_calls"):
+            tool_calls = assistant_msg["tool_calls"]
+            parallel = _can_run_parallel(tool_calls)
 
-            if parallel and len(assistant_msg.tool_calls) > 1:
-                names_cn = [TOOL_NAMES_CN.get(tc.function.name, tc.function.name) for tc in assistant_msg.tool_calls]
+            if parallel and len(tool_calls) > 1:
+                names_cn = [TOOL_NAMES_CN.get(tc["function"]["name"], tc["function"]["name"]) for tc in tool_calls]
                 yield json.dumps({"type": "status", "content": f"并行执行: {', '.join(names_cn)}..."}, ensure_ascii=False) + "\n"
 
-                results = await _execute_tool_calls_parallel(session, assistant_msg.tool_calls)
+                results = await _execute_tool_calls_parallel(session, tool_calls)
                 for tc, result in results:
                     result_json = json.dumps(result, ensure_ascii=False)
                     session.chat_history.append({
-                        "role": "tool", "tool_call_id": tc.id, "content": result_json
+                        "role": "tool", "tool_call_id": tc["id"],
+                        "name": tc["function"]["name"], "content": result_json
                     })
                     if result.get("status") == "success" and result.get("url"):
-                        info = {"url": result["url"], "type": tc.function.name.replace("tool_", "")}
+                        info = {"url": result["url"], "type": tc["function"]["name"].replace("tool_", "")}
                         images.append(info)
                         yield json.dumps({"type": "image", **info}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
@@ -1049,9 +971,9 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
                 _append_tool_round_sync(session)
                 session.trim_history()
             else:
-                for tool_call in assistant_msg.tool_calls:
-                    func_name = tool_call.function.name
-                    args, perr = _parse_tool_arguments(getattr(tool_call.function, "arguments", None))
+                for tool_call in tool_calls:
+                    func_name = tool_call["function"]["name"]
+                    args, perr = _parse_tool_arguments(tool_call["function"].get("arguments"))
                     cn_name = TOOL_NAMES_CN.get(func_name, func_name)
                     yield json.dumps({"type": "status", "content": f"正在{cn_name}..."}, ensure_ascii=False) + "\n"
 
@@ -1066,7 +988,8 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
 
                     result_json = json.dumps(result, ensure_ascii=False)
                     session.chat_history.append({
-                        "role": "tool", "tool_call_id": tool_call.id, "content": result_json
+                        "role": "tool", "tool_call_id": tool_call["id"],
+                        "name": func_name, "content": result_json
                     })
 
                     if result.get("status") == "success" and result.get("url"):
@@ -1084,23 +1007,19 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
             for _round in range(MAX_TOOL_ROUNDS):
                 yield json.dumps({"type": "status", "content": "正在生成回复..."}, ensure_ascii=False) + "\n"
 
-                follow_up = await asyncio.to_thread(
-                    client.chat.completions.create,
-                    model=LLM_MODEL,
-                    messages=session.chat_history,
-                    tools=TOOLS,
+                follow_msg = await asyncio.to_thread(
+                    chat_with_tools, session.chat_history, TOOLS,
                 )
-                follow_msg = follow_up.choices[0].message
-                session.chat_history.append(_msg_to_dict(follow_msg))
+                session.chat_history.append(follow_msg)
 
-                if not follow_msg.tool_calls:
-                    final_text = follow_msg.content or ""
+                if not follow_msg.get("tool_calls"):
+                    final_text = follow_msg.get("content") or ""
                     yield json.dumps({"type": "message", "content": final_text, "images": images}, ensure_ascii=False) + "\n"
                     break
 
-                for tool_call in follow_msg.tool_calls:
-                    func_name = tool_call.function.name
-                    args, perr = _parse_tool_arguments(getattr(tool_call.function, "arguments", None))
+                for tool_call in follow_msg["tool_calls"]:
+                    func_name = tool_call["function"]["name"]
+                    args, perr = _parse_tool_arguments(tool_call["function"].get("arguments"))
                     cn_name = TOOL_NAMES_CN.get(func_name, func_name)
                     yield json.dumps({"type": "status", "content": f"正在{cn_name}..."}, ensure_ascii=False) + "\n"
 
@@ -1115,7 +1034,8 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
 
                     result_json = json.dumps(result, ensure_ascii=False)
                     session.chat_history.append({
-                        "role": "tool", "tool_call_id": tool_call.id, "content": result_json
+                        "role": "tool", "tool_call_id": tool_call["id"],
+                        "name": func_name, "content": result_json
                     })
 
                     if result.get("status") == "success" and result.get("url"):
@@ -1132,7 +1052,7 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
             else:
                 yield json.dumps({"type": "message", "content": "操作已完成。", "images": images}, ensure_ascii=False) + "\n"
         else:
-            text = assistant_msg.content or ""
+            text = assistant_msg.get("content") or ""
             yield json.dumps({"type": "message", "content": text, "images": []}, ensure_ascii=False) + "\n"
 
     except Exception as e:
@@ -1151,8 +1071,7 @@ async def health():
         "status": "ok",
         "sessions": len(sessions),
         "time": datetime.now().isoformat(),
-        "api_key_configured": bool(API_KEY),
-        "models": {"sketch": SKETCH_MODEL, "edit": EDIT_MODEL, "llm": LLM_MODEL, "vision": VISION_MODEL},
+        "models": {"image": IMAGE_MODEL, "llm": TEXT_MODEL},
     }
 
 
@@ -1355,54 +1274,45 @@ async def edit_with_mask(
 
         print(f"[API] edit_with_mask: base={abs_base}, mask={abs_mask}, instruction={instruction[:80]}...")
 
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"image": f"file://{abs_base}"},
-                    {"image": f"file://{abs_mask}"},
-                    {
-                        "text": (
-                            "Only modify the regions that are white in the second image (mask). "
-                            "Keep all black / unmasked areas as close to the original as possible. "
-                            + instruction
-                        )
-                    },
-                ],
-            }
-        ]
+        mask_instruction = (
+            "Use the second image as a mask. Only modify the regions that are white in the mask. "
+            "Keep all black / unmasked areas as close to the original as possible. "
+            + instruction
+        )
 
-        rsp = _call_with_retry(MultiModalConversation.call, model=EDIT_MODEL, messages=messages, n=1)
-        if rsp.status_code != HTTPStatus.OK:
-            msg = getattr(rsp, "message", "图片编辑API调用失败")
-            print(f"[ERROR] edit_with_mask failed: {msg}")
-            raise HTTPException(status_code=500, detail=msg)
+        try:
+            img_bytes = await asyncio.to_thread(
+                _call_with_retry, generate_image, mask_instruction,
+                reference_paths=[abs_base, abs_mask],
+            )
+        except Exception as e:
+            print(f"[ERROR] edit_with_mask failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
-        content = rsp.output.choices[0].message.content
-        for item in content:
-            if "image" in item:
-                result_path = session.save_image(item["image"], "region_edit")
-                if result_path:
-                    try:
-                        base_img = Image.open(abs_base).convert("RGBA")
-                        edited_img = Image.open(result_path).convert("RGBA")
-                        mask_img = Image.open(abs_mask).convert("L")
+        result_path = session.save_image_bytes(img_bytes, "region_edit")
+        if not result_path:
+            raise HTTPException(status_code=500, detail="未从模型返回图片结果")
 
-                        if mask_img.size != base_img.size:
-                            mask_img = mask_img.resize(base_img.size, Image.BILINEAR)
+        try:
+            base_img = Image.open(abs_base).convert("RGBA")
+            edited_img = Image.open(result_path).convert("RGBA")
+            mask_img = Image.open(abs_mask).convert("L")
 
-                        mask_bin = mask_img.point(lambda v: 255 if v > 128 else 0)
-                        composited = Image.composite(edited_img, base_img, mask_bin)
-                        composited.save(result_path)
-                    except Exception as e:
-                        print(f"[WARN] edit_with_mask compositing failed: {e}")
+            if mask_img.size != base_img.size:
+                mask_img = mask_img.resize(base_img.size, Image.BILINEAR)
+            if edited_img.size != base_img.size:
+                edited_img = edited_img.resize(base_img.size, Image.BILINEAR)
 
-                    url = session.get_image_url(result_path)
-                    session.current_image_path = result_path
-                    session.record_image(url, "edit_with_mask", result_path)
-                    return {"url": url, "path": result_path}
+            mask_bin = mask_img.point(lambda v: 255 if v > 128 else 0)
+            composited = Image.composite(edited_img, base_img, mask_bin)
+            composited.save(result_path)
+        except Exception as e:
+            print(f"[WARN] edit_with_mask compositing failed: {e}")
 
-        raise HTTPException(status_code=500, detail="未从模型返回图片结果")
+        url = session.get_image_url(result_path)
+        session.current_image_path = result_path
+        session.record_image(url, "edit_with_mask", result_path)
+        return {"url": url, "path": result_path}
     except HTTPException:
         raise
     except Exception as e:
@@ -1427,12 +1337,8 @@ async def enhance_prompt(req: EnhancePromptRequest):
             },
             {"role": "user", "content": f"请将以下描述扩展为专业英文提示词：「{req.prompt}」{style_ctx}"},
         ]
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=LLM_MODEL,
-            messages=messages,
-        )
-        enhanced = response.choices[0].message.content or req.prompt
+        response_text = await asyncio.to_thread(simple_chat, messages)
+        enhanced = response_text or req.prompt
         return {"original": req.prompt, "enhanced": enhanced.strip()}
     except Exception as e:
         print(f"[ERROR] enhance_prompt: {e}")
@@ -1452,54 +1358,30 @@ async def analyze_image(req: AnalyzeRequest):
         if not img_path or not os.path.exists(img_path):
             raise HTTPException(status_code=400, detail="没有可分析的图片")
 
-        messages = [{
-            "role": "user",
-            "content": [
-                {"image": f"file://{os.path.abspath(img_path)}"},
-                {"text": (
-                    f"{req.question}\n\n"
-                    "请以JSON格式返回分析结果，包含以下字段：\n"
-                    "- style: 风格描述\n"
-                    "- colors: 主要配色列表\n"
-                    "- fabric: 推测面料\n"
-                    "- silhouette: 剪裁/廓形\n"
-                    "- occasion: 适合场合\n"
-                    "- summary: 一句话总结\n"
-                    "- suggestions: 改进建议列表"
-                )},
-            ]
-        }]
-
-        rsp = await asyncio.to_thread(
-            _call_with_retry,
-            MultiModalConversation.call,
-            model=VISION_MODEL,
-            messages=messages,
+        vision_prompt = (
+            f"{req.question}\n\n"
+            "请以JSON格式返回分析结果，包含以下字段：\n"
+            "- style: 风格描述\n"
+            "- colors: 主要配色列表\n"
+            "- fabric: 推测面料\n"
+            "- silhouette: 剪裁/廓形\n"
+            "- occasion: 适合场合\n"
+            "- summary: 一句话总结\n"
+            "- suggestions: 改进建议列表"
         )
-        if rsp.status_code == HTTPStatus.OK:
-            content = rsp.output.choices[0].message.content
-            text = ""
-            for item in content:
-                if isinstance(item, dict) and "text" in item:
-                    text = item["text"]
-                    break
-                elif isinstance(item, str):
-                    text = item
-                    break
 
-            try:
-                cleaned = text.strip()
-                if cleaned.startswith("```"):
-                    cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-                    cleaned = cleaned.rsplit("```", 1)[0]
-                analysis = json.loads(cleaned)
-            except (json.JSONDecodeError, IndexError):
-                analysis = {"summary": text, "raw": True}
+        text = await asyncio.to_thread(_call_with_retry, vision_analyze, img_path, vision_prompt)
 
-            return {"status": "ok", "analysis": analysis, "image_path": img_path}
+        try:
+            cleaned = text.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                cleaned = cleaned.rsplit("```", 1)[0]
+            analysis = json.loads(cleaned)
+        except (json.JSONDecodeError, IndexError):
+            analysis = {"summary": text, "raw": True}
 
-        msg = getattr(rsp, "message", "分析失败")
-        raise HTTPException(status_code=500, detail=msg)
+        return {"status": "ok", "analysis": analysis, "image_path": img_path}
     except HTTPException:
         raise
     except Exception as e:
@@ -1842,36 +1724,18 @@ async def _auto_tag_image(item_id: str, image_url: str, prompt: str) -> None:
     """Async fire-and-forget: call vision LLM to tag the image, then update DB."""
     try:
         tag_prompt = f"生成该图的描述：{prompt}\n请分析图片内容并返回风格标签。" if prompt else "请分析图片内容并返回风格标签。"
-        # Build absolute URL for the image if needed
-        abs_url = image_url
-        if abs_url.startswith("/api/images/"):
-            # Use local file path instead for vision model
-            rel = abs_url.removeprefix("/api/images/")
-            abs_url = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
-            # Convert to file:// or use base64
-            if os.path.exists(abs_url):
-                import base64
-                with open(abs_url, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                ext = os.path.splitext(abs_url)[1].lower().lstrip(".")
-                mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
-                abs_url = f"data:{mime};base64,{b64}"
-            else:
-                db.update_library_item_tags(item_id, {}, "failed")
-                return
+        local_path = image_url
+        if local_path.startswith("/api/design/images/"):
+            rel = local_path.removeprefix("/api/design/images/")
+            local_path = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
+        if not os.path.exists(local_path):
+            db.update_library_item_tags(item_id, {}, "failed")
+            return
 
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=VISION_MODEL,
-            messages=[
-                {"role": "system", "content": _AUTO_TAG_SYSTEM},
-                {"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": abs_url}},
-                    {"type": "text", "text": tag_prompt},
-                ]},
-            ],
+        raw = await asyncio.to_thread(
+            vision_analyze, local_path, _AUTO_TAG_SYSTEM + "\n\n" + tag_prompt,
         )
-        raw = (response.choices[0].message.content or "").strip()
+        raw = (raw or "").strip()
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
             raw = raw.rsplit("```", 1)[0]
@@ -1963,15 +1827,14 @@ _DESIGNER_SUMMARY_SYSTEM = (
 
 async def _run_llm_summary(system_prompt: str, user_prompt: str) -> Optional[dict]:
     try:
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=LLM_MODEL,
-            messages=[
+        raw = await asyncio.to_thread(
+            simple_chat,
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         )
-        raw = (response.choices[0].message.content or "").strip()
+        raw = (raw or "").strip()
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
             raw = raw.rsplit("```", 1)[0]
@@ -3116,11 +2979,35 @@ os.makedirs(WARDROBE_DIR, exist_ok=True)
 WARDROBE_CATEGORIES = ["top", "bottom", "suit", "shoes", "bag", "jewelry", "accessory", "uncategorized"]
 
 _WARDROBE_TAG_SYSTEM = (
-    "你是时尚图像分析师。分析这张衣物图片，严格按以下JSON返回，不输出任何其他内容：\n"
-    '{"name":"衣物名称","category":"top","sub_category":"T恤","colors":["白色"],'
-    '"fabric":"棉","style_tags":["休闲"],"season":"春夏","description":"简要描述"}\n'
-    "category选项：top(上装)/bottom(下装)/suit(套装)/shoes(鞋子)/bag(包包)/jewelry(首饰)/accessory(配饰)/uncategorized(未分类)\n"
-    "season选项：spring/summer/fall/winter/all-season"
+    "你是时尚图像分析师。任务：判断衣物属于哪个具体类别。\n\n"
+    "**前置判断（最重要！必须先做这一步）**：\n"
+    "如果图中是穿着衣服的**完整真人/模特**(可见上半身或全身的人脸/躯干/四肢)，"
+    "说明这张图是「人物展示图」而非单品图，**不适合作为衣橱单品归类**。\n"
+    "此时直接输出（且仅输出）：\n"
+    '{"category":"uncategorized","confidence":0.05,"name":"含人物的展示图",'
+    '"sub_category":"","colors":[],"fabric":"","style_tags":[],"season":"all-season",'
+    '"description":"图中是穿着衣物的人物模特，建议保存到作品集而非衣橱单品库"}\n'
+    "**例外**：图中只有局部身体且仅展示单件首饰/配饰（如只露出手腕戴手表、只露出脖子戴项链），"
+    "继续按下面流程判断；图中只有衣物平铺/挂拍/线稿/插画/特写（无真人穿着）也继续。\n\n"
+    "**类别定义（仅在通过前置判断后才使用）**：\n"
+    "- top: 上装(T恤/衬衫/卫衣/毛衣/外套/西装上衣/风衣/大衣/吊带/背心)\n"
+    "- bottom: 下装(裤子/裙子/短裤/牛仔裤/西裤/半身裙)\n"
+    "- suit: 套装/连体(连衣裙/连体裤/西装套装) — 注意：只有「单件衣物本身就是连体的」才用此类\n"
+    "- shoes: 鞋子(高跟/球鞋/靴子/凉鞋/拖鞋)\n"
+    "- bag: 包(手提包/双肩包/腰包/钱包/手拿包)\n"
+    "- jewelry: 首饰(项链/耳环/戒指/手链/胸针)\n"
+    "- accessory: 其它配饰(帽子/围巾/腰带/手套/袜子/眼镜)\n"
+    "- uncategorized: 仅在图片无法识别为任何衣物时使用\n\n"
+    "**判断步骤（仅单品图）**：\n"
+    "1. 识别图中主体是身体哪部分穿戴（上半身=top，下半身=bottom，整体=suit，脚=shoes，等等）\n"
+    "2. 若图中是连衣裙、连体裤，选 suit 而不是 top 或 bottom\n"
+    "3. 若同时出现多件，以**画面主体**为准\n"
+    "4. confidence 范围 0.0-1.0，表示对 category 判断的把握（0.9=几乎确定；0.5=模棱两可）\n\n"
+    "**输出格式（必须是严格合法的 JSON，不要包 markdown 代码块，不要任何前后文字）**：\n"
+    '{"category":"top","confidence":0.92,"sub_category":"T恤","name":"白色印花T恤",'
+    '"colors":["白","黑"],"fabric":"棉","style_tags":["休闲","街头"],'
+    '"season":"summer","description":"宽松版型白色短袖,胸前黑色字母印花"}\n\n'
+    "season 必须是 spring/summer/fall/winter/all-season 之一。"
 )
 
 
@@ -3147,48 +3034,69 @@ def _save_wardrobe_image(user_email: str, item_id: str, data: bytes, ext: str = 
         thumb_path = fpath
     rel = os.path.relpath(fpath, OUTPUTS_DIR).replace(os.sep, "/")
     thumb_rel = os.path.relpath(thumb_path, OUTPUTS_DIR).replace(os.sep, "/")
-    return f"/api/images/{rel}", f"/api/images/{thumb_rel}"
+    return f"/api/design/images/{rel}", f"/api/design/images/{thumb_rel}"
 
 
 async def _wardrobe_auto_tag(item_id: str, image_url: str) -> None:
-    try:
-        abs_url = image_url
-        if abs_url.startswith("/api/images/"):
-            rel = abs_url.removeprefix("/api/images/")
-            abs_path = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
-            if os.path.exists(abs_path):
-                import base64
-                with open(abs_path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                ext = os.path.splitext(abs_path)[1].lower().lstrip(".")
-                mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
-                abs_url = f"data:{mime};base64,{b64}"
-            else:
-                db.update_wardrobe_item_ai(item_id, {}, "failed")
-                return
+    local_path = image_url
+    if local_path.startswith("/api/design/images/"):
+        rel = local_path.removeprefix("/api/design/images/")
+        local_path = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
+    if not os.path.exists(local_path):
+        db.update_wardrobe_item_ai(item_id, {"error": "image_not_found"}, "failed")
+        return
 
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=VISION_MODEL,
-            messages=[
-                {"role": "system", "content": _WARDROBE_TAG_SYSTEM},
-                {"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": abs_url}},
-                    {"type": "text", "text": "请分析这张衣物图片。"},
-                ]},
-            ],
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
-            raw = raw.rsplit("```", 1)[0]
-        tags = json.loads(raw)
-        if tags.get("category") not in WARDROBE_CATEGORIES:
-            tags["category"] = "uncategorized"
-        db.update_wardrobe_item_ai(item_id, tags, "completed")
-    except Exception as e:
-        print(f"[WARN] wardrobe_auto_tag failed for {item_id}: {e}")
-        db.update_wardrobe_item_ai(item_id, {}, "failed")
+    last_raw = ""
+    last_err = ""
+    for attempt in range(2):  # 1 initial + 1 retry
+        try:
+            prompt = _WARDROBE_TAG_SYSTEM + "\n\n请分析这张衣物图片。"
+            if attempt > 0 and last_raw:
+                prompt += (
+                    f"\n\n上次你的输出无法解析为合法 JSON 或 category 不在白名单内。"
+                    f"上次原始输出：\n```\n{last_raw[:500]}\n```\n"
+                    f"错误：{last_err}\n"
+                    f"请严格按上面定义的 JSON 格式重新输出，只输出 JSON，不要 markdown 代码块，不要任何解释文字。"
+                )
+            raw = await asyncio.to_thread(vision_analyze, local_path, prompt)
+            last_raw = (raw or "").strip()
+
+            cleaned = last_raw
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+                cleaned = cleaned.rsplit("```", 1)[0].strip()
+            if not cleaned.startswith("{"):
+                m = re.search(r"\{.*\}", cleaned, re.S)
+                if m:
+                    cleaned = m.group(0)
+
+            tags = json.loads(cleaned)
+
+            cat = tags.get("category")
+            if cat not in WARDROBE_CATEGORIES:
+                last_err = f"category '{cat}' not in whitelist"
+                continue
+
+            try:
+                tags["confidence"] = max(0.0, min(1.0, float(tags.get("confidence", 0.5))))
+            except (TypeError, ValueError):
+                tags["confidence"] = 0.5
+
+            db.update_wardrobe_item_ai(item_id, tags, "completed")
+            return
+        except json.JSONDecodeError as e:
+            last_err = f"JSON parse error: {e}"
+            print(f"[WARN] wardrobe_auto_tag attempt {attempt+1} JSON failed for {item_id}: {e}")
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+            print(f"[WARN] wardrobe_auto_tag attempt {attempt+1} failed for {item_id}: {e}")
+
+    db.update_wardrobe_item_ai(
+        item_id,
+        {"error": last_err, "raw_output": last_raw[:1000]},
+        "failed",
+    )
+    print(f"[WARN] wardrobe_auto_tag exhausted retries for {item_id}: {last_err}")
 
 
 def _require_wardrobe_user(authorization: Optional[str]) -> str:
@@ -3210,6 +3118,14 @@ def _wardrobe_row_to_dict(row) -> dict:
             except Exception:
                 pass
     d["favorite"] = bool(d.get("favorite"))
+    # 把 ai_analysis.confidence 提升到顶层供前端直接读
+    if isinstance(d.get("ai_analysis"), dict):
+        c = d["ai_analysis"].get("confidence")
+        if c is not None:
+            try:
+                d["confidence"] = max(0.0, min(1.0, float(c)))
+            except (TypeError, ValueError):
+                pass
     return d
 
 
@@ -3255,13 +3171,23 @@ class WardrobeFromDesignRequest(BaseModel):
     session_id: Optional[str] = None
     name: str = ""
     auth_token: Optional[str] = None
+    image_type: Optional[str] = None   # "generate_model" / "try_on" / "text_to_image" / ...
+
+
+# 人物类图片(非单品),禁止入衣橱
+_PERSON_IMAGE_TYPES = {"generate_model", "try_on"}
 
 
 @app.post("/api/wardrobe/items/from-design")
 async def wardrobe_from_design(req: WardrobeFromDesignRequest, authorization: Optional[str] = Header(None)):
     email = _require_wardrobe_user(authorization)
+    if req.image_type in _PERSON_IMAGE_TYPES:
+        raise HTTPException(
+            400,
+            "模特图/试穿图属于人物展示，不适合加入衣橱。衣橱只用于单品(衣服/鞋/包)，请改用「收藏到作品集」。",
+        )
     item_id = uuid.uuid4().hex[:12]
-    src_rel = req.image_url.removeprefix("/api/images/")
+    src_rel = req.image_url.removeprefix("/api/design/images/")
     src_path = os.path.join(OUTPUTS_DIR, src_rel.replace("/", os.sep))
     if not os.path.exists(src_path):
         raise HTTPException(404, "Source image not found")
@@ -3449,9 +3375,544 @@ async def wardrobe_remove_outfit_item(outfit_id: str, wardrobe_item_id: str, aut
     return {"ok": True}
 
 
+# ═══════════════════════════════════════════════════════════
+# Try-On Station API
+# ═══════════════════════════════════════════════════════════
+
+PRESETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets")
+TRYON_DIR = os.path.join(OUTPUTS_DIR, "tryon")
+_TRYON_CATEGORIES = ("clothes", "models", "backgrounds", "actions", "beauty")
+TRYON_MAX_INPUT_LONG_EDGE = 1024  # downscale wardrobe/preset images before DashScope call
+
+
+def _ensure_presets_layout() -> None:
+    """Create preset directories + empty manifests at startup (idempotent)."""
+    os.makedirs(PRESETS_DIR, exist_ok=True)
+    os.makedirs(TRYON_DIR, exist_ok=True)
+    for cat in _TRYON_CATEGORIES:
+        cat_dir = os.path.join(PRESETS_DIR, cat)
+        os.makedirs(cat_dir, exist_ok=True)
+        manifest = os.path.join(cat_dir, "manifest.json")
+        if not os.path.exists(manifest):
+            with open(manifest, "w", encoding="utf-8") as f:
+                f.write("[]\n")
+
+
+_ensure_presets_layout()
+
+# Static serving of preset thumbnails: /api/tryon/preset-images/clothes/foo.png
+app.mount("/api/tryon/preset-images", StaticFiles(directory=PRESETS_DIR), name="tryon-presets")
+
+
+# ── Manifest cache (mtime-aware) ──
+_manifest_cache: dict[str, tuple[float, list[dict]]] = {}
+
+
+def _load_preset_manifest(category: str) -> list[dict]:
+    """Cached manifest loader. Re-reads only when mtime changes."""
+    if category not in _TRYON_CATEGORIES:
+        raise HTTPException(404, f"Unknown preset category: {category}")
+    path = os.path.join(PRESETS_DIR, category, "manifest.json")
+    if not os.path.exists(path):
+        return []
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return []
+    cached = _manifest_cache.get(category)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            data = []
+    except Exception as e:
+        print(f"[WARN] failed to load preset manifest {category}: {e}")
+        _manifest_cache[category] = (mtime, [])
+        return []
+    out = []
+    for entry in data:
+        if not isinstance(entry, dict) or not entry.get("id") or not entry.get("thumbnail"):
+            continue
+        item = dict(entry)
+        item["image_url"] = f"/api/tryon/preset-images/{category}/{entry['thumbnail']}"
+        item["category_group"] = category
+        out.append(item)
+    _manifest_cache[category] = (mtime, out)
+    return out
+
+
+def _validate_presets_at_startup() -> None:
+    """Print warnings for missing files / duplicate IDs so builders catch problems early."""
+    for cat in _TRYON_CATEGORIES:
+        items = _load_preset_manifest(cat)
+        seen_ids: set[str] = set()
+        missing = 0
+        for it in items:
+            if it["id"] in seen_ids:
+                print(f"[WARN] preset {cat}: duplicate id {it['id']!r}")
+            seen_ids.add(it["id"])
+            fp = os.path.join(PRESETS_DIR, cat, it["thumbnail"])
+            if not os.path.exists(fp):
+                missing += 1
+                print(f"[WARN] preset {cat}: file not found {it['thumbnail']!r} for id {it['id']!r}")
+        if items:
+            print(f"[INFO] preset {cat}: loaded {len(items)} item(s), {missing} missing file(s)")
+
+
+_TRYON_USER_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _get_user_tryon_lock(email: str) -> asyncio.Lock:
+    lk = _TRYON_USER_LOCKS.get(email)
+    if lk is None:
+        lk = asyncio.Lock()
+        _TRYON_USER_LOCKS[email] = lk
+    return lk
+
+
+_validate_presets_at_startup()
+
+
+def _resolve_preset_file(category: str, preset_id: str) -> tuple[dict, str]:
+    """Return (manifest entry, absolute file path) or raise HTTPException."""
+    items = _load_preset_manifest(category)
+    entry = next((it for it in items if it["id"] == preset_id), None)
+    if not entry:
+        raise HTTPException(404, f"Preset not found: {category}/{preset_id}")
+    path = os.path.join(PRESETS_DIR, category, entry["thumbnail"])
+    if not os.path.exists(path):
+        raise HTTPException(404, f"Preset image missing on disk: {category}/{entry['thumbnail']}")
+    return entry, path
+
+
+def _resolve_wardrobe_file(item_id: str, user_email: str) -> str:
+    """Return absolute file path for a wardrobe item or raise."""
+    row = db.get_wardrobe_item(item_id, user_email)
+    if not row:
+        raise HTTPException(404, f"Wardrobe item not found: {item_id}")
+    image_url = row["image_url"]
+    rel = image_url.removeprefix("/api/design/images/")
+    abs_path = os.path.join(OUTPUTS_DIR, rel.replace("/", os.sep))
+    if not os.path.exists(abs_path):
+        raise HTTPException(404, f"Wardrobe image missing on disk: {image_url}")
+    return abs_path
+
+
+def _tryon_user_dir(user_email: str) -> str:
+    h = hashlib.md5(user_email.encode()).hexdigest()[:10]
+    d = os.path.join(TRYON_DIR, h)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+# Cache: src abs path → (mtime, shrunk abs path). Once a file is shrunk, reuse it.
+_TRYON_INPUT_CACHE_DIR = os.path.join(TRYON_DIR, "_inputs")
+os.makedirs(_TRYON_INPUT_CACHE_DIR, exist_ok=True)
+_input_shrink_cache: dict[str, tuple[float, str]] = {}
+
+
+def _shrink_for_tryon(src_path: str) -> str:
+    """Resize src image (in place cache) so long edge ≤ TRYON_MAX_INPUT_LONG_EDGE.
+
+    DashScope multimodal accepts large images but they slow round-trip noticeably.
+    Returns absolute path to the shrunk file (may equal src_path if already small).
+    """
+    try:
+        mtime = os.path.getmtime(src_path)
+    except OSError:
+        return src_path
+    cached = _input_shrink_cache.get(src_path)
+    if cached and cached[0] == mtime and os.path.exists(cached[1]):
+        return cached[1]
+    try:
+        with Image.open(src_path) as im:
+            w, h = im.size
+            long_edge = max(w, h)
+            if long_edge <= TRYON_MAX_INPUT_LONG_EDGE:
+                _input_shrink_cache[src_path] = (mtime, src_path)
+                return src_path
+            scale = TRYON_MAX_INPUT_LONG_EDGE / float(long_edge)
+            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+            key = hashlib.md5(f"{src_path}:{mtime}".encode()).hexdigest()[:16]
+            out_path = os.path.join(_TRYON_INPUT_CACHE_DIR, f"{key}.jpg")
+            shrunk = im.convert("RGB") if im.mode not in ("RGB", "L") else im
+            shrunk = shrunk.resize(new_size, Image.LANCZOS)
+            shrunk.save(out_path, "JPEG", quality=88, optimize=True)
+        _input_shrink_cache[src_path] = (mtime, out_path)
+        return out_path
+    except Exception as e:
+        print(f"[WARN] _shrink_for_tryon failed for {src_path}: {e}")
+        return src_path
+
+
+def _save_tryon_image_from_url(user_email: str, image_url: str) -> str:
+    """Download a remote output URL into outputs/tryon/{hash}/ and return /api/design/images/... path."""
+    d = _tryon_user_dir(user_email)
+    fname = f"{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}.png"
+    fpath = os.path.join(d, fname)
+    urllib.request.urlretrieve(image_url, fpath)
+    rel = os.path.relpath(fpath, OUTPUTS_DIR).replace(os.sep, "/")
+    return f"/api/design/images/{rel}"
+
+
+def _save_tryon_image_bytes(user_email: str, data: bytes) -> str:
+    d = _tryon_user_dir(user_email)
+    fname = f"{int(time.time()*1000)}_{uuid.uuid4().hex[:6]}.png"
+    fpath = os.path.join(d, fname)
+    with open(fpath, "wb") as f:
+        f.write(data)
+    rel = os.path.relpath(fpath, OUTPUTS_DIR).replace(os.sep, "/")
+    return f"/api/design/images/{rel}"
+
+
+@app.get("/api/tryon/presets/{category}")
+async def tryon_list_presets(
+    category: str,
+    gender: Optional[str] = None,
+    type: Optional[str] = None,
+    sub_category: Optional[str] = None,
+):
+    items = _load_preset_manifest(category)
+    if gender:
+        items = [it for it in items if it.get("gender") == gender]
+    if type:
+        items = [it for it in items if it.get("type") == type]
+    if sub_category:
+        items = [it for it in items if it.get("category") == sub_category]
+    return {"category": category, "items": items}
+
+
+class TryOnClothes(BaseModel):
+    kind: str  # 'wardrobe' | 'preset'
+    id: str
+
+
+class TryOnPresetSel(BaseModel):
+    id: str
+    prompt: Optional[str] = None
+    name: Optional[str] = None
+
+
+class TryOnBeauty(BaseModel):
+    hairstyle: Optional[TryOnPresetSel] = None
+    color: Optional[TryOnPresetSel] = None
+
+
+class TryOnGenerateRequest(BaseModel):
+    clothes: list[TryOnClothes] = []
+    model: Optional[TryOnPresetSel] = None
+    background: Optional[TryOnPresetSel] = None
+    action: Optional[TryOnPresetSel] = None
+    beauty: Optional[TryOnBeauty] = None
+    extra_prompt: str = ""
+
+
+def _build_tryon_prompt(
+    primary_clothes: list[dict],
+    extra_clothes: list[dict],
+    background: Optional[dict],
+    action: Optional[dict],
+    beauty_hair: Optional[dict],
+    beauty_color: Optional[dict],
+    extra_prompt: str,
+) -> str:
+    """
+    按衣物类别构建英文试穿 prompt，避免同类型冲突堆叠。
+    类别优先级与穿着逻辑：
+      suit / uncategorized  → 作为整体主套装
+      top                   → 上装（衬衫/毛衣/外套等）
+      bottom                → 下装（裤/裙）
+      shoes                 → 鞋子
+      bag                   → 包
+      jewelry / accessory   → 首饰/配饰（可多件）
+    规则：若已有 suit，忽略 top/bottom；若有多件 top 只取第一件。
+    """
+    # ── 按类别分组，处理冲突 ──
+    cats: dict[str, list[dict]] = {
+        "suit": [], "top": [], "bottom": [],
+        "shoes": [], "bag": [], "accessory": [], "jewelry": [],
+        "uncategorized": [],
+    }
+    for item in primary_clothes:
+        cat = item.get("category") or "uncategorized"
+        cats.setdefault(cat, []).append(item)
+
+    has_suit = bool(cats["suit"] or cats["uncategorized"])
+
+    parts: list[str] = []
+
+    # Suit / full-outfit
+    for item in cats["suit"] + cats["uncategorized"]:
+        name = item.get("name") or item.get("prompt") or "outfit"
+        parts.append(f"wearing {name} (shown in reference image)")
+
+    # Top — 有 suit 时忽略 top
+    if not has_suit:
+        for item in cats["top"][:1]:
+            name = item.get("name") or item.get("prompt") or "top"
+            parts.append(f"paired with {name} on top (shown in reference image)")
+
+    # Bottom — 有 suit 时忽略
+    if not has_suit:
+        for item in cats["bottom"][:1]:
+            name = item.get("name") or item.get("prompt") or "bottom"
+            parts.append(f"wearing {name} on the bottom (shown in reference image)")
+
+    # Shoes
+    for item in cats["shoes"][:1]:
+        name = item.get("name") or item.get("prompt") or "shoes"
+        parts.append(f"wearing {name} (shown in reference image)")
+
+    # Bag
+    for item in cats["bag"][:1]:
+        name = item.get("name") or item.get("prompt") or "bag"
+        parts.append(f"carrying {name} (shown in reference image)")
+
+    # Accessories / jewelry
+    for item in (cats["jewelry"] + cats["accessory"])[:3]:
+        name = item.get("name") or item.get("prompt") or "accessory"
+        parts.append(f"accessorized with {name}")
+
+    # Extra (text-only, beyond image limit)
+    for item in extra_clothes:
+        name = item.get("name") or item.get("prompt") or ""
+        if name:
+            parts.append(f"also wearing {name}")
+
+    outfit_desc = ", ".join(parts) if parts else "the provided outfit"
+
+    lines = [
+        f"Fashion editorial photo: a model {outfit_desc}.",
+        "Keep the model's facial features, skin tone, and body proportions exactly as in the reference photo.",
+        "Clothes fit naturally, fabric drapes realistically, no distortion.",
+    ]
+
+    if background and background.get("prompt"):
+        lines.append(f"Background: {background['prompt']}.")
+    if action and action.get("prompt"):
+        lines.append(f"Pose: {action['prompt']}.")
+    if beauty_hair and beauty_hair.get("prompt"):
+        lines.append(f"Hairstyle: {beauty_hair['prompt']}.")
+    if beauty_color and beauty_color.get("prompt"):
+        lines.append(f"Hair color: {beauty_color['prompt']}.")
+    if extra_prompt and extra_prompt.strip():
+        lines.append(extra_prompt.strip())
+
+    return " ".join(lines)
+
+
+def _pick_default_model() -> tuple[dict, str]:
+    items = _load_preset_manifest("models")
+    if not items:
+        raise HTTPException(400, "系统尚未配置默认模特，请联系建造者添加 presets/models/")
+    entry = items[0]
+    path = os.path.join(PRESETS_DIR, "models", entry["thumbnail"])
+    if not os.path.exists(path):
+        raise HTTPException(500, f"默认模特图片缺失: {entry['thumbnail']}")
+    return entry, path
+
+
+@app.post("/api/tryon/generate")
+async def tryon_generate(req: TryOnGenerateRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+
+    if not req.clothes:
+        raise HTTPException(400, "请至少选择一件衣物")
+
+    # Serialize concurrent generate calls per user — avoids burning DashScope budget
+    # if the user double-clicks or hits the API twice from two tabs.
+    user_lock = _get_user_tryon_lock(email)
+    if user_lock.locked():
+        raise HTTPException(429, "上一次生成尚未完成，请稍候")
+
+    async with user_lock:
+        return await _tryon_generate_impl(email, req)
+
+
+async def _tryon_generate_impl(email: str, req: TryOnGenerateRequest) -> dict:
+    # Resolve model
+    if req.model and req.model.id:
+        model_entry, model_path = _resolve_preset_file("models", req.model.id)
+    else:
+        model_entry, model_path = _pick_default_model()
+
+    # Resolve clothes: first 2 → image inputs, rest → text descriptions
+    primary_clothes: list[dict] = []  # has 'name','prompt' + 'file_path'
+    extra_clothes: list[dict] = []
+    for idx, c in enumerate(req.clothes):
+        if c.kind == "wardrobe":
+            row = db.get_wardrobe_item(c.id, email)
+            if not row:
+                raise HTTPException(404, f"衣橱衣物不存在: {c.id}")
+            entry = {
+                "name": row["name"] or "衣物",
+                "prompt": row["name"] or "",
+                "id": c.id,
+                "category": row.get("category") or "uncategorized",
+                "sub_category": row.get("sub_category") or "",
+            }
+            try:
+                entry["file_path"] = _resolve_wardrobe_file(c.id, email)
+            except HTTPException:
+                continue
+        elif c.kind == "preset":
+            try:
+                p_entry, p_path = _resolve_preset_file("clothes", c.id)
+            except HTTPException:
+                continue
+            entry = {
+                "name": p_entry.get("name") or c.id,
+                "prompt": p_entry.get("prompt") or p_entry.get("name") or "",
+                "id": c.id,
+                "category": p_entry.get("category") or "uncategorized",
+                "sub_category": p_entry.get("sub_category") or "",
+                "file_path": p_path,
+            }
+        else:
+            continue
+        if idx < 8:                    # GPT Image 2 支持多图; 合理上限 8 件衣物
+            primary_clothes.append(entry)
+        else:
+            extra_clothes.append(entry)
+
+    if not primary_clothes:
+        raise HTTPException(400, "没有可用的衣物图片，请重新选择")
+
+    # Resolve background/action/beauty prompts (no images — pure text)
+    bg_entry = None
+    if req.background and req.background.id:
+        bg_entry, _ = _resolve_preset_file("backgrounds", req.background.id)
+    act_entry = None
+    if req.action and req.action.id:
+        act_entry, _ = _resolve_preset_file("actions", req.action.id)
+    hair_entry = None
+    color_entry = None
+    if req.beauty:
+        if req.beauty.hairstyle and req.beauty.hairstyle.id:
+            hair_entry, _ = _resolve_preset_file("beauty", req.beauty.hairstyle.id)
+        if req.beauty.color and req.beauty.color.id:
+            color_entry, _ = _resolve_preset_file("beauty", req.beauty.color.id)
+
+    prompt = _build_tryon_prompt(
+        primary_clothes, extra_clothes,
+        bg_entry, act_entry, hair_entry, color_entry,
+        req.extra_prompt,
+    )
+
+    # Pre-shrink images in parallel — eliminates seconds of upload latency for large photos.
+    paths_to_shrink = [model_path] + [c["file_path"] for c in primary_clothes]
+    shrunk = await asyncio.gather(*(asyncio.to_thread(_shrink_for_tryon, p) for p in paths_to_shrink))
+    model_path_send, *cloth_paths_send = shrunk
+
+    refs = [model_path_send] + cloth_paths_send
+
+    t0 = time.time()
+    try:
+        img_bytes = await asyncio.to_thread(
+            _call_with_retry, generate_image, prompt,
+            reference_paths=refs,
+        )
+    except Exception as e:
+        print(f"[ERROR] tryon generate exception: {e}")
+        raise HTTPException(500, f"生图失败: {e}")
+
+    try:
+        local_url = await asyncio.to_thread(_save_tryon_image_bytes, email, img_bytes)
+    except Exception as e:
+        raise HTTPException(500, f"保存生成图失败: {e}")
+
+    elapsed = round(time.time() - t0, 1)
+    print(f"[INFO] tryon generate ok user={email[:10]} elapsed={elapsed}s clothes={len(req.clothes)}")
+    return {
+        "image_url": local_url,
+        "prompt": prompt,
+        "model_used": model_entry.get("id"),
+        "primary_clothes": [c["id"] for c in primary_clothes],
+        "extra_clothes": [c["id"] for c in extra_clothes],
+        "elapsed_seconds": elapsed,
+    }
+
+
+def _ingest_preset_clothes_to_wardrobe(email: str, preset_ids: list[str]) -> list[str]:
+    """Copy each system preset cloth into the user's wardrobe; return new wardrobe item IDs."""
+    new_ids: list[str] = []
+    for pid in preset_ids:
+        try:
+            entry, src_path = _resolve_preset_file("clothes", pid)
+        except HTTPException as e:
+            print(f"[WARN] save-outfit ingest skip {pid}: {e.detail}")
+            continue
+        try:
+            with open(src_path, "rb") as f:
+                data = f.read()
+        except Exception as e:
+            print(f"[WARN] save-outfit ingest read failed {pid}: {e}")
+            continue
+        item_id = uuid.uuid4().hex[:12]
+        ext = os.path.splitext(src_path)[1].lstrip(".") or "png"
+        image_url, thumb_url = _save_wardrobe_image(email, item_id, data, ext)
+        db.create_wardrobe_item(
+            item_id, email, image_url,
+            source_type="preset",
+            source_ref=pid,
+            source_image_url=None,
+            name=entry.get("name") or "",
+            category=entry.get("category") or "uncategorized",
+        )
+        if thumb_url:
+            db.patch_wardrobe_item(item_id, email, thumbnail_url=thumb_url)
+        asyncio.create_task(_wardrobe_auto_tag(item_id, image_url))
+        new_ids.append(item_id)
+    return new_ids
+
+
+class SaveTryOnOutfitRequest(BaseModel):
+    name: str
+    generated_image_url: str
+    wardrobe_item_ids: list[str] = []
+    preset_clothing_ids: list[str] = []
+    description: Optional[str] = None
+    occasion: Optional[str] = None
+    season: Optional[str] = None
+    style: Optional[str] = None
+
+
+@app.post("/api/tryon/save-outfit")
+async def tryon_save_outfit(req: SaveTryOnOutfitRequest, authorization: Optional[str] = Header(None)):
+    email = _require_wardrobe_user(authorization)
+    if not req.wardrobe_item_ids and not req.preset_clothing_ids:
+        raise HTTPException(400, "请至少包含一件衣物")
+    if not (req.name or "").strip():
+        raise HTTPException(400, "请提供穿搭名称")
+
+    # Validate existing wardrobe IDs belong to this user
+    for wid in req.wardrobe_item_ids:
+        if not db.get_wardrobe_item(wid, email):
+            raise HTTPException(404, f"衣橱衣物不存在: {wid}")
+
+    new_ids = _ingest_preset_clothes_to_wardrobe(email, req.preset_clothing_ids)
+    all_ids = list(req.wardrobe_item_ids) + new_ids
+    if not all_ids:
+        raise HTTPException(400, "没有可保存的衣物")
+
+    outfit_id = uuid.uuid4().hex[:12]
+    db.create_outfit(
+        outfit_id, email, req.name.strip(), all_ids,
+        description=req.description,
+        occasion=req.occasion,
+        season=req.season,
+        style=req.style,
+        cover_image_url=req.generated_image_url,
+    )
+    outfit = db.get_outfit(outfit_id, email)
+    return {"outfit_id": outfit_id, "outfit": outfit, "ingested_preset_ids": new_ids}
+
+
 if __name__ == "__main__":
     import uvicorn
     print(f"[INFO] Starting AI Fashion Design Backend...")
     print(f"[INFO] Outputs dir: {OUTPUTS_DIR}")
-    print(f"[INFO] Models: sketch={SKETCH_MODEL}, edit={EDIT_MODEL}, llm={LLM_MODEL}, vision={VISION_MODEL}")
+    print(f"[INFO] Models: image={IMAGE_MODEL}, llm={TEXT_MODEL}")
     uvicorn.run(app, host="0.0.0.0", port=8000)

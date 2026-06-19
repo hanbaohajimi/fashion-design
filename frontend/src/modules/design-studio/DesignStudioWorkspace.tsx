@@ -290,17 +290,17 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
       <main className="flex-1 flex flex-col relative min-w-0 min-h-0">
         {designBackend === 'error' && (
           <div
-            className="shrink-0 flex flex-wrap items-center gap-2 border-b border-amber-200/70 bg-amber-50/90 px-3 py-2 text-[12px] text-[color:var(--text-primary)]"
+            className="editorial-alert"
             role="alert"
           >
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" aria-hidden />
-            <span className="font-medium">设计服务未连接</span>
-            <span className="text-amber-900/80">
-              对话与上传依赖本机 <code className="px-1 rounded bg-white/70 text-[11px]">127.0.0.1:8001</code>
+            <AlertCircle className="w-4 h-4 shrink-0" style={{ color: 'var(--color-warning)' }} strokeWidth={1.5} aria-hidden />
+            <span className="kicker" style={{ fontSize: 10, letterSpacing: '0.22em', color: 'var(--color-warning)' }}>设计服务未连接</span>
+            <span style={{ color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
+              对话与上传依赖本机 <code className="editorial-code">127.0.0.1:8001</code>
               {designBackendDetail ? `（${designBackendDetail}）` : ''}。请在项目根执行{' '}
-              <code className="px-1 rounded bg-white/70 text-[11px]">python start.py</code>
-              ，或配置 <code className="px-1 rounded bg-white/70 text-[11px]">FASHION_DESIGN_BACKEND</code>{' '}
-              指向含 <code className="px-1 rounded bg-white/70 text-[11px]">server.py</code> 的目录后单独启动设计进程。
+              <code className="editorial-code">python start.py</code>
+              ，或配置 <code className="editorial-code">FASHION_DESIGN_BACKEND</code>{' '}
+              指向含 <code className="editorial-code">server.py</code> 的目录后单独启动设计进程。
             </span>
             <button
               type="button"
@@ -392,7 +392,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
               alt="Preview"
               className="max-w-full max-h-[85vh] object-contain rounded-lg preview-image-enter"
             />
-            <div className="absolute -top-14 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-white/10 bg-[rgba(16,17,20,0.92)] p-1 backdrop-blur-xl">
+            <div className="absolute -top-14 left-1/2 flex -translate-x-1/2 items-center gap-0.5 border p-1 backdrop-blur-xl" style={{ background: 'rgba(26, 24, 21, 0.94)', borderColor: 'rgba(245, 242, 236, 0.14)' }}>
               <button
                 type="button"
                 onClick={() => { handleAddToCanvas(previewImage); setPreviewImage(null); }}

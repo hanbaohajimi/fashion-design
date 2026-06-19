@@ -433,7 +433,7 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-[50] flex flex-col bg-[#0f1419] text-white/90">
+    <div className="fixed inset-0 z-[50] flex flex-col" style={{ background: 'var(--color-paper-ink)', color: 'rgba(245, 242, 236, 0.92)' }}>
       <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
         <div>
           <p className="text-sm font-semibold">智能编辑</p>

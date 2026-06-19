@@ -14,6 +14,7 @@ import {
 import { fetchDesignerWorkspace } from '../../api/profileApi';
 import type { DesignerWorkspace } from '../../types/profile';
 import { useToast } from '../../components/Toast';
+import './trends.css';
 
 interface TrendBoardProps {
   user: { email: string; name: string; auth_token: string };
@@ -113,27 +114,20 @@ function TrendCard({
     onFavorite(trend.id, !trend.is_favorite);
   };
 
+  const excerpt = trend.description?.slice(0, 80) || trend.keywords.slice(0, 2).join(' · ');
+
   return (
     <div
       onClick={() => onClick(trend)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      className="trend-card"
       style={{
-        borderRadius: 'var(--radius-xl)',
-        overflow: 'hidden',
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border-subtle)',
-        cursor: 'pointer',
-        transition: 'transform 300ms var(--ease-out), box-shadow 300ms var(--ease-out), border-color 300ms',
-        transform: hover ? 'translateY(-4px)' : 'translateY(0)',
-        boxShadow: hover ? 'var(--shadow-lg)' : 'none',
-        borderColor: hover ? 'var(--color-border)' : undefined,
-        animation: `cardEnter 300ms var(--ease-out) both`,
         animationDelay: `${Math.min(index * 60, 480)}ms`,
+        transform: hover ? 'translateY(-2px)' : undefined,
       }}
     >
-      {/* Image collage — 220px */}
-      <div style={{ position: 'relative', height: 220, overflow: 'hidden', background: 'var(--color-surface-2)' }}>
+      <div className="trend-card-img">
         {images.length === 0 && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <TrendingUp size={32} style={{ color: 'var(--color-ink-3)' }} />
@@ -170,100 +164,49 @@ function TrendCard({
         <button
           type="button"
           onClick={handleFav}
-          style={{
-            position: 'absolute', top: 10, right: 10,
-            width: 32, height: 32,
-            borderRadius: 'var(--radius-pill)',
-            background: 'rgba(255,255,255,0.85)',
-            backdropFilter: 'blur(8px)',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: trend.is_favorite ? 'var(--color-gold)' : 'var(--color-ink-2)',
-            transform: favAnim ? 'scale(1.4)' : 'scale(1)',
-            transition: 'transform 400ms var(--ease-out), color 150ms',
-          }}
+          className={`trend-card-fav ${trend.is_favorite ? 'fav' : ''}`}
+          style={{ transform: favAnim ? 'scale(1.15)' : undefined }}
         >
-          <Heart size={13} fill={trend.is_favorite ? 'currentColor' : 'none'} />
+          <Heart size={13} strokeWidth={1.5} fill={trend.is_favorite ? 'currentColor' : 'none'} />
         </button>
       </div>
 
-      {/* Body */}
-      <div style={{ padding: 'var(--space-5)' }}>
-        {/* Name */}
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 24,
-          fontWeight: 'var(--weight-light)',
-          letterSpacing: 'var(--tracking-tight)',
-          color: 'var(--color-ink)',
-          lineHeight: 'var(--leading-tight)',
-        }}>
-          {trend.name}
-        </h3>
+      <div className="trend-card-body">
+        {trend.season && <p className="trend-card-kicker">{trend.season}</p>}
+        <h3 className="trend-card-name">{trend.name}</h3>
         {trend.name_zh && trend.name_zh !== trend.name && (
-          <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
-            {trend.name_zh}
-          </p>
+          <p className="trend-card-name-zh">{trend.name_zh}</p>
         )}
+        {excerpt && <p className="trend-card-lede">{excerpt}</p>}
 
         {/* Color swatches */}
         {colors.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'var(--space-3)' }}>
+          <div className="trend-card-swatches">
             {colors.map((c, i) => <ColorSwatch key={i} color={c} />)}
           </div>
         )}
 
         {/* Keywords */}
         {kws.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+          <div className="trend-card-keywords">
             {kws.map(k => (
-              <span key={k} className="tag">{k}</span>
+              <span key={k} className="trend-card-keyword">{k}</span>
             ))}
           </div>
         )}
 
-        {/* Season badge */}
-        {trend.season && (
-          <div style={{ marginTop: 'var(--space-3)' }}>
-            <span style={{
-              fontSize: 'var(--text-2xs)',
-              letterSpacing: 'var(--tracking-widest)',
-              textTransform: 'uppercase',
-              color: 'var(--color-ink-3)',
-              fontFamily: 'var(--font-ui)',
-            }}>
-              {trend.season}
-            </span>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => onDesignThis(trend)}
-            className="btn-primary"
-            style={{ flex: 1, fontSize: 'var(--text-xs)', height: 36 }}
-          >
-            <Sparkles size={12} /> 设计这个
+        <div className="trend-card-actions" onClick={e => e.stopPropagation()}>
+          <button type="button" onClick={() => onDesignThis(trend)} className="trend-card-cta">
+            <Sparkles size={12} strokeWidth={1.5} /> 设计这个
           </button>
           {showAddToProject && (
             <button
               type="button"
               onClick={() => onAddToProject(trend)}
-              className="btn-icon"
-              style={{
-                width: 36, height: 36,
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-              }}
+              className="trend-card-icon-btn"
               title="加入项目 Brief"
             >
-              <Bookmark size={14} />
+              <Bookmark size={14} strokeWidth={1.5} />
             </button>
           )}
         </div>
@@ -321,14 +264,8 @@ function TrendDetailPanel({
   const activeProjects = workspace?.projects.filter(p => p.status === 'active') ?? [];
 
   if (loading) return (
-    <div style={{
-      display: 'flex', width: 384, alignItems: 'center', justifyContent: 'center',
-      borderLeft: '1px solid var(--color-border)',
-      background: 'var(--color-surface)',
-      animation: 'drawerSlide var(--duration-slow) var(--ease-out)',
-      flexShrink: 0,
-    }}>
-      <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--color-ink-3)' }} />
+    <div className="trend-drawer-loading">
+      <RefreshCw size={18} className="animate-spin" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
     </div>
   );
 
@@ -337,57 +274,36 @@ function TrendDetailPanel({
   const dl = trend.design_language;
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      height: '100%', width: 384, flexShrink: 0,
-      borderLeft: '1px solid var(--color-border)',
-      background: 'var(--color-surface)',
-      animation: 'drawerSlide var(--duration-slow) var(--ease-out)',
-    }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '1px solid var(--color-border)',
-        padding: 'var(--space-4) var(--space-5)',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
-          趋势详情
-        </span>
-        <button type="button" onClick={onClose} className="btn-icon">
-          <X size={16} />
+    <>
+      <div className="trend-drawer-overlay" onClick={onClose} aria-hidden />
+      <aside className="trend-drawer" role="dialog" aria-label="趋势详情">
+      <div className="trend-drawer-header">
+        <div>
+          <div className="trend-drawer-kicker">Trend · Detail</div>
+          <h2 className="trend-drawer-title">{trend.name}</h2>
+        </div>
+        <button type="button" onClick={onClose} className="trend-drawer-x" aria-label="关闭">
+          <X size={16} strokeWidth={1.5} />
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {/* Gallery — horizontal scroll */}
+      <div className="trend-drawer-body">
         {trend.image_gallery.length > 0 && (
           <div>
             <img
               src={trend.image_gallery[activeImg]}
               alt=""
-              style={{ width: '100%', objectFit: 'cover', maxHeight: 280, background: 'var(--color-surface-3)' }}
+              className="trend-drawer-hero-img"
             />
             {trend.image_gallery.length > 1 && (
-              <div style={{ display: 'flex', gap: 6, padding: 'var(--space-3) var(--space-4)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+              <div className="trend-drawer-thumbs">
                 {trend.image_gallery.map((img, i) => (
                   <img
                     key={i}
                     src={img}
                     alt=""
                     onClick={() => setActiveImg(i)}
-                    style={{
-                      width: 56, height: 56, flexShrink: 0,
-                      cursor: 'pointer',
-                      objectFit: 'cover',
-                      borderRadius: 'var(--radius-md)',
-                      border: activeImg === i
-                        ? '1px solid var(--color-gold)'
-                        : '1px solid var(--color-border)',
-                      opacity: activeImg === i ? 1 : 0.5,
-                      boxShadow: activeImg === i ? 'var(--shadow-gold)' : 'none',
-                      transition: 'opacity 150ms, border-color 150ms',
-                    }}
+                    className={`trend-drawer-thumb ${activeImg === i ? 'active' : ''}`}
                   />
                 ))}
               </div>
@@ -395,51 +311,24 @@ function TrendDetailPanel({
           </div>
         )}
 
-        <div style={{ padding: 'var(--space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-          {/* Header */}
+        <div className="trend-drawer-section">
           <div>
-            <h2 style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 26,
-              fontWeight: 'var(--weight-light)',
-              letterSpacing: 'var(--tracking-tight)',
-              color: 'var(--color-ink)',
-              lineHeight: 'var(--leading-tight)',
-            }}>
-              {trend.name}
-            </h2>
+            <h2 className="trend-drawer-headline">{trend.name}</h2>
             {trend.name_zh && trend.name_zh !== trend.name && (
-              <p style={{ marginTop: 4, fontSize: 'var(--text-sm)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
-                {trend.name_zh}
-              </p>
+              <p className="trend-card-name-zh" style={{ marginTop: 6 }}>{trend.name_zh}</p>
             )}
             {trend.season && (
-              <span style={{
-                display: 'inline-block', marginTop: 6,
-                fontSize: 'var(--text-2xs)',
-                letterSpacing: 'var(--tracking-widest)',
-                textTransform: 'uppercase',
-                color: 'var(--color-ink-3)',
-                fontFamily: 'var(--font-ui)',
-              }}>
-                {trend.season}
-              </span>
+              <p className="trend-card-kicker" style={{ marginTop: 10 }}>{trend.season}</p>
             )}
             {trend.description && (
-              <p style={{
-                marginTop: 'var(--space-3)',
-                fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)',
-                color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)',
-              }}>
-                {trend.description}
-              </p>
+              <p className="trend-drawer-dek" style={{ marginTop: 14 }}>{trend.description}</p>
             )}
           </div>
 
           {/* Color palette — bar style */}
           {trend.color_palette.length > 0 && (
             <div>
-              <p className="subsection-title">色彩体系</p>
+              <p className="trend-subsection-title">色彩体系</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 {trend.color_palette.map((c, i) => (
                   <div key={i} style={{
@@ -466,7 +355,7 @@ function TrendDetailPanel({
           {/* Design language */}
           {(dl.silhouettes?.length || dl.fabrics?.length || dl.details?.length || dl.style_prompt) && (
             <div>
-              <p className="subsection-title">设计语言</p>
+              <p className="trend-subsection-title">设计语言</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 {dl.style_prompt && (
                   <p style={{ fontSize: 'var(--text-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--color-ink-2)', fontFamily: 'var(--font-ui)' }}>
@@ -494,7 +383,7 @@ function TrendDetailPanel({
           {/* Keywords */}
           {trend.keywords.length > 0 && (
             <div>
-              <p className="subsection-title">关键词</p>
+              <p className="trend-subsection-title">关键词</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                 {trend.keywords.map(k => (
                   <span key={k} className="tag" style={{ height: 28, fontSize: 'var(--text-sm)', padding: '0 var(--space-3)' }}>
@@ -508,7 +397,7 @@ function TrendDetailPanel({
           {/* Add to project */}
           {activeProjects.length > 0 && (
             <div>
-              <p className="subsection-title">加入设计项目</p>
+              <p className="trend-subsection-title">加入设计项目</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 {activeProjects.map(proj => {
                   const anchors: TrendAnchor[] = (proj.brief as any)?.trend_anchors ?? [];
@@ -551,19 +440,9 @@ function TrendDetailPanel({
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{
-        display: 'flex', flexShrink: 0, flexDirection: 'column', gap: 'var(--space-2)',
-        borderTop: '1px solid var(--color-border)',
-        padding: 'var(--space-4) var(--space-5)',
-      }}>
-        <button
-          type="button"
-          onClick={() => onDesignThis(trend)}
-          className="btn-primary"
-          style={{ width: '100%', height: 48, fontSize: 'var(--text-base)', justifyContent: 'center' }}
-        >
-          <Sparkles size={14} /> 以此趋势开始设计
+      <div className="trend-drawer-footer">
+        <button type="button" onClick={() => onDesignThis(trend)} className="trend-drawer-cta">
+          <Sparkles size={14} strokeWidth={1.5} /> 以此趋势开始设计
         </button>
         {trend.image_gallery.length > 0 && (
           <button
@@ -574,29 +453,22 @@ function TrendDetailPanel({
                 toast('已收入衣橱', 'success');
               } catch { toast('收入衣橱失败', 'error'); }
             }}
-            className="btn-ghost"
-            style={{
-              width: '100%', height: 36, fontSize: 'var(--text-xs)', justifyContent: 'center',
-              color: 'var(--color-ink-2)',
-            }}
+            className="trend-drawer-ghost"
           >
-            <Shirt size={13} /> 收入衣橱
+            <Shirt size={13} strokeWidth={1.5} /> 收入衣橱
           </button>
         )}
         <button
           type="button"
           onClick={() => void handleFav()}
-          className="btn-ghost"
-          style={{
-            width: '100%', height: 36, fontSize: 'var(--text-xs)', justifyContent: 'center',
-            color: trend.is_favorite ? 'var(--color-gold)' : 'var(--color-ink-3)',
-          }}
+          className={`trend-drawer-ghost ${trend.is_favorite ? 'fav' : ''}`}
         >
-          <Heart size={13} fill={trend.is_favorite ? 'currentColor' : 'none'} />
+          <Heart size={13} strokeWidth={1.5} fill={trend.is_favorite ? 'currentColor' : 'none'} />
           {trend.is_favorite ? '已收藏' : '收藏趋势'}
         </button>
       </div>
-    </div>
+    </aside>
+    </>
   );
 }
 
@@ -636,30 +508,9 @@ function AddToProjectModal({
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      zIndex: 'var(--z-modal)' as any,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '0 16px',
-      background: 'rgba(0,0,0,0.7)',
-      backdropFilter: 'blur(8px)',
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 440,
-        borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-        boxShadow: 'var(--shadow-xl)',
-        padding: 'var(--space-6)',
-        animation: 'fadeInUp 400ms var(--ease-out)',
-      }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 20,
-          fontWeight: 'var(--weight-light)',
-          color: 'var(--color-ink)',
-          marginBottom: 'var(--space-5)',
-        }}>
+    <div className="trend-modal-overlay" onClick={onClose}>
+      <div className="trend-modal-card" onClick={e => e.stopPropagation()}>
+        <h3 className="trend-modal-title">
           将「{trend.name}」加入项目 Brief
         </h3>
 
@@ -679,14 +530,14 @@ function AddToProjectModal({
                   marginBottom: 6,
                   borderRadius: 'var(--radius-md)',
                   border: selectedProject === proj.id
-                    ? '1px solid var(--color-gold)'
-                    : '1px solid var(--color-border)',
+                    ? '1px solid var(--color-accent)'
+                    : '1px solid var(--rule)',
                   padding: 'var(--space-3)',
                   textAlign: 'left',
                   fontSize: 'var(--text-sm)',
-                  color: selectedProject === proj.id ? 'var(--color-gold)' : 'var(--color-ink-2)',
+                  color: selectedProject === proj.id ? 'var(--color-accent-deep)' : 'var(--color-ink-2)',
                   background: selectedProject === proj.id
-                    ? 'rgba(66,133,244,0.08)'
+                    ? 'var(--color-accent-soft)'
                     : 'transparent',
                   cursor: 'pointer',
                   fontFamily: 'var(--font-ui)',
@@ -811,123 +662,41 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
   ];
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--color-ground)' }}>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+    <div className="trend-board-shell">
+      <div className="trend-board-main">
 
-        {/* Hero section */}
-        <div style={{
-          height: 200, flexShrink: 0,
-          position: 'relative',
-          background: 'linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-canvas) 100%)',
-          display: 'flex', alignItems: 'flex-end',
-          padding: 'var(--space-10)',
-          overflow: 'hidden',
-        }}>
-          {/* Subtle texture overlay */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'radial-gradient(ellipse at 70% 50%, rgba(66,133,244,0.04) 0%, transparent 60%)',
-            pointerEvents: 'none',
-          }} />
-
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <p style={{
-              fontSize: 'var(--text-2xs)',
-              letterSpacing: 'var(--tracking-widest)',
-              textTransform: 'uppercase',
-              color: 'var(--color-gold)',
-              fontFamily: 'var(--font-ui)',
-              fontWeight: 'var(--weight-medium)',
-              marginBottom: 'var(--space-2)',
-            }}>
-              {currentSeason || '2025 A/W'}
+        <header className="trend-hero">
+          <div>
+            <p className="trend-hero-kicker">{currentSeason || '2025 A/W'} · Season</p>
+            <h1 className="trend-hero-title">Trend Board</h1>
+            <p className="trend-hero-lede">
+              &ldquo;Every season writes itself in silhouette, fabric, and the quiet grammar of color.&rdquo;
             </p>
-            <h1 style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 52,
-              fontWeight: 'var(--weight-light)',
-              letterSpacing: 'var(--tracking-tight)',
-              color: 'var(--color-ink)',
-              lineHeight: 'var(--leading-tight)',
-              marginBottom: 'var(--space-2)',
-            }}>
-              Trend Board
-            </h1>
             {trends.length > 0 && (
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
-                {trends.length} 个本季趋势
-              </p>
+              <p className="trend-hero-meta">{trends.length} trends in this issue</p>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Sticky tab bar */}
-        <div style={{
-          position: 'sticky', top: 0,
-          zIndex: 'var(--z-raised)' as any,
-          display: 'flex', flexShrink: 0, alignItems: 'center',
-          borderBottom: '1px solid var(--color-border-subtle)',
-          background: 'var(--color-ground)',
-          padding: '0 var(--space-6)',
-          height: 52,
-          gap: 'var(--space-4)',
-        }}>
-          {/* Tabs */}
-          <div style={{ display: 'flex', alignItems: 'stretch', height: '100%' }}>
+        <div className="trend-controls">
+          <div className="trend-controls-tabs">
             {TABS.map(t => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                style={{
-                  position: 'relative',
-                  display: 'flex', alignItems: 'center',
-                  padding: '0 var(--space-5)',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm)',
-                  fontFamily: 'var(--font-ui)',
-                  fontWeight: tab === t.id ? 'var(--weight-medium)' : 'var(--weight-regular)',
-                  color: tab === t.id ? 'var(--color-ink)' : 'var(--color-ink-3)',
-                  transition: 'color 150ms',
-                  whiteSpace: 'nowrap',
-                  gap: 4,
-                }}
+                className={`trend-controls-tab ${tab === t.id ? 'active' : ''}`}
               >
-                {t.label}
-                {t.id === 'recommended' && (
-                  <span style={{
-                    color: tab === t.id ? 'var(--color-gold)' : 'var(--color-ink-3)',
-                    fontSize: 11,
-                    transition: 'color 150ms',
-                  }}>
-                    ✦
-                  </span>
-                )}
-                {tab === t.id && (
-                  <span style={{
-                    position: 'absolute', bottom: 0, left: '15%', right: '15%',
-                    height: 2, borderRadius: 'var(--radius-pill)',
-                    background: 'var(--color-gold)',
-                  }} />
-                )}
+                {t.label}{t.suffix}
               </button>
             ))}
           </div>
 
-          {/* Season filter */}
           {seasons.length > 0 && (
             <select
               value={selectedSeason}
               onChange={e => setSelectedSeason(e.target.value)}
-              className="input"
-              style={{
-                width: 'auto', height: 32, minHeight: 32,
-                padding: '0 var(--space-3)',
-                fontSize: 'var(--text-xs)',
-                cursor: 'pointer',
-              }}
+              className="trend-controls-select"
             >
               <option value="">全部季节</option>
               {seasons.map(s => <option key={s} value={s}>{s}</option>)}
@@ -936,9 +705,8 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
 
           <div style={{ flex: 1 }} />
 
-          {/* Search */}
-          <div style={{ position: 'relative', width: 160 }}>
-            <Search size={12} style={{
+          <div className="trend-controls-search">
+            <Search size={12} strokeWidth={1.5} style={{
               position: 'absolute', left: 10, top: '50%',
               transform: 'translateY(-50%)',
               color: 'var(--color-ink-3)', pointerEvents: 'none',
@@ -948,57 +716,48 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={handleSearch}
-              placeholder="搜索趋势..."
-              className="input"
-              style={{ paddingLeft: 30, height: 32, minHeight: 32, fontSize: 'var(--text-xs)' }}
+              placeholder="搜索趋势…"
             />
           </div>
 
-          {/* Sync */}
           <button
             type="button"
             onClick={() => void handleSync()}
             disabled={syncing}
-            className="btn-ghost"
-            style={{ height: 32, fontSize: 'var(--text-xs)', padding: '0 var(--space-3)' }}
+            className="trend-controls-sync"
           >
-            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            <RefreshCw size={12} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
             同步最新
           </button>
         </div>
 
-        {/* Grid */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)' }}>
+        <div className="trend-grid-wrap">
           {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '96px 0', gap: 8, fontSize: 'var(--text-sm)', color: 'var(--color-ink-3)' }}>
-              <RefreshCw size={14} className="animate-spin" /> 加载中...
+            <div className="trend-loading">
+              <RefreshCw size={14} strokeWidth={1.5} className="animate-spin" /> Loading…
             </div>
           )}
 
           {!loading && trends.length === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '96px 0', color: 'var(--color-ink-3)' }}>
-              <TrendingUp size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
-              <p style={{ fontSize: 'var(--text-base)', fontFamily: 'var(--font-ui)' }}>暂无趋势数据</p>
-              <p style={{ fontSize: 'var(--text-sm)', marginTop: 4, color: 'var(--color-ink-3)' }}>点击「同步最新」从趋势分析系统获取数据</p>
+            <div className="trend-empty">
+              <TrendingUp size={36} strokeWidth={1.2} style={{ color: 'var(--color-ink-4)' }} />
+              <p className="trend-empty-quote">&ldquo;The board awaits its first signal.&rdquo;</p>
+              <p className="trend-empty-hint">Sync from trend analysis pipeline</p>
               <button
                 type="button"
                 onClick={() => void handleSync()}
                 disabled={syncing}
-                className="btn-primary"
-                style={{ marginTop: 'var(--space-5)', fontSize: 'var(--text-sm)' }}
+                className="trend-card-cta"
+                style={{ marginTop: 8, padding: '0 24px', flex: 'none', width: 'auto' }}
               >
-                <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+                <RefreshCw size={13} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
                 同步趋势数据
               </button>
             </div>
           )}
 
           {!loading && trends.length > 0 && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 'var(--space-6)',
-            }}>
+            <div className="trend-grid">
               {trends.map((trend, i) => (
                 <TrendCard
                   key={trend.id}
@@ -1016,7 +775,6 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
         </div>
       </div>
 
-      {/* Detail panel */}
       {detailId && (
         <TrendDetailPanel
           trendId={detailId}

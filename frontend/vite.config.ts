@@ -20,6 +20,15 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/design/, '/api'),
         },
+        // 后端直接返回 /api/images/*、/api/tryon/*（不经 /api/design 前缀），开发时需单独代理
+        '/api/images': {
+          target: designTarget,
+          changeOrigin: true,
+        },
+        '/api/tryon': {
+          target: designTarget,
+          changeOrigin: true,
+        },
         '/api/trend': {
           target: trendTarget,
           changeOrigin: true,

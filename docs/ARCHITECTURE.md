@@ -34,9 +34,9 @@ React App (统一壳)
 服务网格（独立进程）
 ├── Gateway (port 8000) — 可选，提供服务发现
 ├── Design Studio (port 8001)
-│   └── 引用 `FASHION_DESIGN_BACKEND` 或 `backend/vendor/design-backend`，否则 `G:\时尚平台\backend`
+│   └── 内置 `services/design/server.py`，可通过 `FASHION_DESIGN_BACKEND` 覆盖路径
 └── Trend Analysis (port 8002)
-    └── 引用 `AI_FASHION_BACKEND` 或 `backend/vendor/ai_fashion`，否则 `G:\ai_fashion\ai_fashion`；不可用时为占位服务
+    └── 内置 `services/trend/`，可通过 `AI_FASHION_BACKEND` 覆盖路径；不可用时为占位服务
 ```
 
 ### 通信架构
@@ -90,7 +90,7 @@ App
 | 8001 | Design Studio | AI 设计后端 |
 | 8002 | Trend Analysis | 趋势分析后端 |
 
-项目根 `.env`（由 `start.py` 预加载）可配置 `FASHION_DESIGN_BACKEND`、`AI_FASHION_BACKEND`、`FASHION_FRONTEND_PORT` 等，详见根目录 `env.example`。
+所有服务配置统一在项目根 `.env` 文件中（`config.py` 也读取根 `.env`），包含 AI API 密钥、模型选择、端口等，详见 `env.example`。
 
 ## 日志系统
 

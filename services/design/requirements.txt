@@ -1,6 +1,5 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.22.0
-dashscope
-openai
+openai>=1.50
 python-multipart
 Pillow

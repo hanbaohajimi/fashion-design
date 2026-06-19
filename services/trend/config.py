@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     未设置的项保持空字符串，运行时 validate-config 命令会检查必填项。
     """
 
+    # env_file 指向项目根 .env 作为 fallback：
+    # - 启动器已通过 _load_dotenv() 将根 .env 注入 os.environ 并优先
+    # - env_file 仅用于独立运行 config.py（无启动器）时兜底
     model_config = SettingsConfigDict(
-        env_file=str(BASE_DIR / ".env"),
+        env_file=str(BASE_DIR.parent.parent / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

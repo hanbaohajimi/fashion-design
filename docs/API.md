@@ -45,7 +45,7 @@ Response: { "url": "...", "path": "..." }
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /api/design/health | 健康检查 |
+| GET | /api/design/health | 健康检查（返回模型配置信息） |
 | POST | /api/design/session/reset | 重置会话 |
 | GET | /api/design/session/{id}/images | 获取会话图片 |
 | GET | /api/design/session/{id}/state | 获取会话状态 |

@@ -1,0 +1,89 @@
+/* Trends Hub shell · Editorial */
+
+.trends-hub-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-canvas);
+  font-family: var(--font-ui);
+}
+
+.trends-hub-bar {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  height: 48px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--color-surface);
+  gap: 0;
+}
+
+.trends-hub-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--color-ink-3);
+  letter-spacing: 0.01em;
+  transition: color 200ms ease-out;
+}
+
+.trends-hub-tab .tab-numeral {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--color-ink-4);
+}
+
+.trends-hub-tab.active {
+  color: var(--color-ink);
+}
+
+.trends-hub-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 1px;
+  background: var(--color-accent);
+}
+
+.trends-hub-tab:hover:not(.active) {
+  color: var(--color-ink-2);
+}
+
+.trends-hub-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.trends-hub-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.trends-hub-fallback {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-canvas);
+}
+
+.trends-hub-fallback p {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}

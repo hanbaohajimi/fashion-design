@@ -30,7 +30,7 @@ ai_fashion/
 ├── logs/                     # 日志文件
 ├── storage/                  # SQLite 数据库
 ├── storage_states/           # Playwright 登录状态
-├── .env.example              # 环境变量模板
+├── (配置已统一到项目根 .env)   # 详见项目根 env.example
 ├── pyproject.toml
 ├── Dockerfile
 └── docker-compose.yml
@@ -55,10 +55,18 @@ playwright install chromium
 
 ### 2. 配置环境变量
 
+趋势服务的配置已统一到**项目根目录** `.env` 文件（与设计服务共用）：
+
 ```bash
-cp .env.example .env
-# 编辑 .env，填写 LLM_PROVIDER / LLM_MODEL / API_KEY
+# 在项目根目录执行
+cp env.example .env
+# 编辑 .env，填写：
+#   - 设计 AI: AMUX_API_KEY（api.amux.ai）
+#   - 趋势 LLM: LLM_PROVIDER / LLM_MODEL / API_KEY（platform.deepseek.com）
+#   - 趋势搜索: QWEN_API_KEY（可选，dashscope.aliyuncs.com）
 ```
+
+`config.py` 通过 `env_file` 自动读取根 `.env`，无需在 `services/trend/` 下单独创建。
 
 ### 3. 配置站点
 
@@ -127,10 +135,10 @@ python main.py login --site MySiteName
 
 ## Web 控制台与 API
 
-启动后端后，浏览器访问根路径即可打开仪表盘（静态资源由 FastAPI 挂载）：
+趋势服务由项目根 `start.py` 一键启动（端口 8002），或单独启动：
 
 ```bash
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+cd services && python trend_runner.py     # port 8002
 ```
 
 常用端点：
@@ -164,13 +172,13 @@ docker exec ai_fashion_pipeline python main.py run-once
 
 ## 存储说明
 
-| 存储类型 | 内容 | 路径 |
+| 存储类型 | 内容 | 路径（均相对于项目根） |
 |---------|------|------|
-| SQLite  | 文章、图片映射、任务记录、报告索引 | `storage/fashion_pipeline.db` |
-| JSON    | 原始抓取结果 | `data/raw/crawl_*.json` |
-| JSON    | 趋势报告数据 | `data/reports/report_*.json` |
-| Markdown| 人可读趋势报告 | `output/trend_report_*.md` |
-| 图片    | 下载的图片文件 | `data/images/{日期}/` |
+| SQLite  | 文章、图片映射、任务记录、报告索引 | `services/trend/storage/fashion_pipeline.db` |
+| JSON    | 原始抓取结果 | `services/trend/data/raw/crawl_*.json` |
+| JSON    | 趋势报告数据 | `services/trend/data/reports/report_*.json` |
+| Markdown| 人可读趋势报告 | `services/trend/output/trend_report_*.md` |
+| 图片    | 下载的图片文件 | `services/trend/data/images/{日期}/` |
 
 ---
 
@@ -201,7 +209,7 @@ docker exec ai_fashion_pipeline python main.py run-once
 
 ```cron
 # 每天 09:00 运行（北京时间）
-0 9 * * * cd /g/ai_fashion && /path/to/.venv/bin/python main.py run-once >> logs/cron.log 2>&1
+0 9 * * * cd /path/to/fashion-design && /path/to/.venv/bin/python services/trend/main.py run-once >> services/trend/logs/cron.log 2>&1
 ```
 
 ---

@@ -179,7 +179,7 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
                   <h3 className="section-label mb-3">设计禁区</h3>
                   <div className="flex flex-wrap gap-1.5">
                     {profile.dynamic.disliked_elements.map(el => (
-                      <span key={el} className="chip text-[11px] border-red-200 bg-red-50 text-red-700">{el}</span>
+                      <span key={el} className="chip text-[11px]" style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)', background: 'transparent' }}>{el}</span>
                     ))}
                   </div>
                 </div>

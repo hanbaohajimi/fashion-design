@@ -143,7 +143,7 @@ export interface OutfitSuggestion {
 // ── Wardrobe ──────────────────────────────────────────────
 
 export type WardrobeCategory = 'top' | 'bottom' | 'suit' | 'shoes' | 'bag' | 'jewelry' | 'accessory' | 'uncategorized';
-export type WardrobeSourceType = 'trend' | 'design' | 'upload';
+export type WardrobeSourceType = 'trend' | 'design' | 'upload' | 'preset' | 'tryon';
 
 export interface WardrobeItem {
   id: string;
@@ -163,6 +163,7 @@ export interface WardrobeItem {
   source_image_url?: string;
   ai_analysis: Record<string, unknown>;
   ai_status: 'pending' | 'completed' | 'failed';
+  confidence?: number;
   notes?: string;
   favorite: boolean;
   created_at: string;
@@ -187,6 +188,65 @@ export interface WardrobeStats {
   total: number;
   by_category: Record<string, number>;
   by_source: Record<string, number>;
+}
+
+// ── Try-On Station ────────────────────────────────────────
+
+export type TryOnPresetCategory = 'clothes' | 'models' | 'backgrounds' | 'actions' | 'beauty';
+export type TryOnBeautyType = 'hairstyle' | 'color';
+export type TryOnGender = 'male' | 'female';
+
+export interface TryOnPreset {
+  id: string;
+  name: string;
+  thumbnail: string;
+  image_url: string;
+  prompt: string;
+  category_group: TryOnPresetCategory;
+  category?: WardrobeCategory;
+  gender?: TryOnGender;
+  type?: TryOnBeautyType;
+  tags?: string[];
+}
+
+export interface WardrobeRef {
+  kind: 'wardrobe';
+  id: string;
+  image_url: string;
+  name: string;
+  source_label: string;
+}
+
+export interface PresetRef {
+  kind: 'preset';
+  id: string;
+  image_url: string;
+  name: string;
+  prompt: string;
+  group: TryOnPresetCategory;
+}
+
+export type TryOnClothing = WardrobeRef | PresetRef;
+
+export interface TryOnSelection {
+  clothes: TryOnClothing[];
+  model: PresetRef | null;
+  background: PresetRef | null;
+  action: PresetRef | null;
+  beauty: {
+    hairstyle: PresetRef | null;
+    color: PresetRef | null;
+  };
+  extra_prompt: string;
+}
+
+export interface TryOnGenerationResult {
+  image_url: string;
+  prompt: string;
+  model_used?: string;
+  primary_clothes: string[];
+  extra_clothes: string[];
+  elapsed_seconds?: number;
 }
 
 // ── Trends ────────────────────────────────────────────────

@@ -15,6 +15,10 @@ import type {
   WardrobeItem,
   Outfit,
   WardrobeStats,
+  TryOnPreset,
+  TryOnPresetCategory,
+  TryOnSelection,
+  TryOnGenerationResult,
 } from '../types/profile';
 
 const BASE = '/api/design';
@@ -440,11 +444,18 @@ export async function addToWardrobeFromDesign(
   imageUrl: string,
   sessionId?: string,
   name?: string,
+  imageType?: string,
 ): Promise<{ id: string; image_url: string; source_label: string }> {
   const res = await fetch(`${BASE}/wardrobe/items/from-design`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ image_url: imageUrl, session_id: sessionId, name, auth_token: token }),
+    body: JSON.stringify({
+      image_url: imageUrl,
+      session_id: sessionId,
+      name,
+      auth_token: token,
+      image_type: imageType,
+    }),
   });
   return handle(res);
 }
@@ -529,6 +540,74 @@ export async function deleteOutfit(token: string, outfitId: string): Promise<{ o
   const res = await fetch(`${BASE}/wardrobe/outfits/${outfitId}`, {
     method: 'DELETE',
     headers: authHeader(token),
+  });
+  return handle(res);
+}
+
+// ── Try-On Station ────────────────────────────────────────
+
+export async function fetchTryOnPresets(
+  token: string,
+  category: TryOnPresetCategory,
+  filters: { gender?: 'male' | 'female'; type?: 'hairstyle' | 'color'; sub_category?: string } = {},
+): Promise<{ category: TryOnPresetCategory; items: TryOnPreset[] }> {
+  const params = new URLSearchParams();
+  if (filters.gender) params.set('gender', filters.gender);
+  if (filters.type) params.set('type', filters.type);
+  if (filters.sub_category) params.set('sub_category', filters.sub_category);
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/tryon/presets/${category}${qs ? '?' + qs : ''}`, {
+    headers: authHeader(token),
+  });
+  return handle(res);
+}
+
+export async function generateTryOn(
+  token: string,
+  selection: TryOnSelection,
+  signal?: AbortSignal,
+): Promise<TryOnGenerationResult> {
+  const body = {
+    clothes: selection.clothes.map(c => ({ kind: c.kind, id: c.id })),
+    model: selection.model ? { id: selection.model.id, prompt: selection.model.prompt, name: selection.model.name } : null,
+    background: selection.background ? { id: selection.background.id, prompt: selection.background.prompt, name: selection.background.name } : null,
+    action: selection.action ? { id: selection.action.id, prompt: selection.action.prompt, name: selection.action.name } : null,
+    beauty: {
+      hairstyle: selection.beauty.hairstyle ? { id: selection.beauty.hairstyle.id, prompt: selection.beauty.hairstyle.prompt, name: selection.beauty.hairstyle.name } : null,
+      color: selection.beauty.color ? { id: selection.beauty.color.id, prompt: selection.beauty.color.prompt, name: selection.beauty.color.name } : null,
+    },
+    extra_prompt: selection.extra_prompt,
+  };
+  const res = await fetch(`${BASE}/tryon/generate`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify(body),
+    signal,
+  });
+  return handle(res);
+}
+
+export async function saveTryOnOutfit(
+  token: string,
+  payload: {
+    name: string;
+    generated_image_url: string;
+    wardrobe_item_ids?: string[];
+    preset_clothing_ids?: string[];
+    description?: string;
+    occasion?: string;
+    season?: string;
+    style?: string;
+  },
+): Promise<{ outfit_id: string; outfit: Outfit; ingested_preset_ids: string[] }> {
+  const res = await fetch(`${BASE}/tryon/save-outfit`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({
+      ...payload,
+      wardrobe_item_ids: payload.wardrobe_item_ids || [],
+      preset_clothing_ids: payload.preset_clothing_ids || [],
+    }),
   });
   return handle(res);
 }

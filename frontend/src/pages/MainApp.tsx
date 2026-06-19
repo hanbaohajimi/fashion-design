@@ -1,16 +1,21 @@
 import { useState, useCallback, useRef, useEffect, Suspense, lazy, type ReactNode } from 'react';
-import { Boxes, Plus, ChevronDown, LayoutGrid, ChartColumn, LibraryBig, Sparkles, UserRound, SlidersHorizontal, Shirt } from 'lucide-react';
+import { Plus, ChevronDown, X, SlidersHorizontal, LogOut, Sparkles, Wand2, Shirt, LayoutGrid } from 'lucide-react';
 import ErrorBoundary from '../components/ErrorBoundary';
 import type { Trend } from '../types/profile';
 
 const DesignStudioWorkspace = lazy(() => import('../modules/design-studio/DesignStudioWorkspace'));
-const TrendAnalysisWorkspace = lazy(() => import('../modules/trend-analysis/TrendAnalysisWorkspace'));
-const LibraryWorkspace = lazy(() => import('../modules/library/LibraryWorkspace'));
-const TrendBoardWorkspace = lazy(() => import('../modules/trends/TrendBoardWorkspace'));
+const TryOnWorkspace = lazy(() => import('../modules/tryon/TryOnWorkspace'));
 const WardrobeWorkspace = lazy(() => import('../modules/wardrobe/WardrobeWorkspace'));
+const TrendsHubWorkspace = lazy(() => import('../modules/trends-hub/TrendsHubWorkspace'));
 const SettingsPanel = lazy(() => import('../modules/design-studio/components/SettingsPanel'));
 
-type WorkspaceType = 'design-studio' | 'trend-analysis' | 'library' | 'trends' | 'wardrobe';
+type WorkspaceType = 'design-studio' | 'tryon' | 'wardrobe' | 'trends-hub';
+const KNOWN_TYPES: ReadonlySet<WorkspaceType> = new Set<WorkspaceType>([
+  'design-studio',
+  'tryon',
+  'wardrobe',
+  'trends-hub',
+]);
 
 interface WorkspaceTab {
   id: string;
@@ -23,37 +28,50 @@ interface MainAppProps {
   onLogout: () => void;
 }
 
-const PRESETS: Record<WorkspaceType, { title: string; desc: string; icon: ReactNode; tone: string }> = {
+interface PresetMeta {
+  numeral: string;
+  title: string;
+  italicTitle: string;
+  desc: string;
+  icon: ReactNode;
+}
+
+const PRESETS: Record<WorkspaceType, PresetMeta> = {
   'design-studio': {
-    title: 'AI 设计工作台',
-    desc: '对话生图 · 画布编辑 · 虚拟试穿',
-    icon: <Sparkles className="h-4 w-4" />,
-    tone: 'bg-[color:var(--ink)] text-white',
+    numeral: '01',
+    title: 'Design Studio',
+    italicTitle: 'L\u2019Atelier',
+    desc: '对话生图 · 画布编辑 · 设计探索',
+    icon: <Sparkles className="h-4 w-4" strokeWidth={1.5} />,
   },
-  'trend-analysis': {
-    title: '趋势分析中心',
-    desc: '趋势报告 · 热词追踪 · 季节分析',
-    icon: <ChartColumn className="h-4 w-4" />,
-    tone: 'bg-[color:var(--signal-blue)] text-white',
-  },
-  library: {
-    title: '我的库',
-    desc: '生成图片 · 合集管理 · 风格分析',
-    icon: <LibraryBig className="h-4 w-4" />,
-    tone: 'bg-[color:var(--warm-metal)] text-white',
-  },
-  trends: {
-    title: '趋势探索',
-    desc: '流行趋势 · 个性化推荐 · 设计灵感',
-    icon: <LayoutGrid className="h-4 w-4" />,
-    tone: 'bg-[color:var(--signal-green)] text-white',
+  tryon: {
+    numeral: '02',
+    title: 'Try-On',
+    italicTitle: 'La Pose',
+    desc: '穿搭 · 模特 · 背景 · 动作 · 美颜',
+    icon: <Wand2 className="h-4 w-4" strokeWidth={1.5} />,
   },
   wardrobe: {
-    title: '我的衣橱',
-    desc: '衣物收纳 · AI 分类 · 穿搭组合',
-    icon: <Shirt className="h-4 w-4" />,
-    tone: 'bg-[color:var(--warm-metal)] text-white',
+    numeral: '03',
+    title: 'Wardrobe',
+    italicTitle: 'La Garde-Robe',
+    desc: '衣物收纳 · AI 分类 · 穿搭方案',
+    icon: <Shirt className="h-4 w-4" strokeWidth={1.5} />,
   },
+  'trends-hub': {
+    numeral: '04',
+    title: 'Trends',
+    italicTitle: 'L\u2019Air du Temps',
+    desc: '趋势探索 · 趋势分析 · 灵感来源',
+    icon: <LayoutGrid className="h-4 w-4" strokeWidth={1.5} />,
+  },
+};
+
+const PRESET_LABEL_ZH: Record<WorkspaceType, string> = {
+  'design-studio': '画布工作台',
+  tryon: '试衣台',
+  wardrobe: '我的衣橱',
+  'trends-hub': '时尚趋势',
 };
 
 let _c = 0;
@@ -61,10 +79,17 @@ const nid = () => `ws-${++_c}`;
 
 function WorkspaceFallback({ label }: { label: string }) {
   return (
-    <div className="flex h-full items-center justify-center bg-[color:var(--bg)]">
-      <div className="rounded-3xl border border-[color:var(--border-soft)] bg-white px-5 py-4 shadow-[var(--shadow-md)]">
-        <p className="text-[13px] font-semibold text-[color:var(--text-primary)]">{label}</p>
-        <p className="mt-1 text-[12px] text-[color:var(--text-muted)]">正在加载工作区...</p>
+    <div className="flex h-full items-center justify-center" style={{ background: 'var(--color-canvas)' }}>
+      <div
+        style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          padding: '20px 28px',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        <p className="kicker">Loading workspace</p>
+        <p className="headline headline-sm" style={{ marginTop: 8 }}>{label}</p>
       </div>
     </div>
   );
@@ -72,11 +97,10 @@ function WorkspaceFallback({ label }: { label: string }) {
 
 export default function MainApp({ user, onLogout }: MainAppProps) {
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => [
-    { id: nid(), type: 'design-studio', title: PRESETS['design-studio'].title },
-    { id: nid(), type: 'trends', title: PRESETS['trends'].title },
-    { id: nid(), type: 'wardrobe', title: PRESETS['wardrobe'].title },
-    { id: nid(), type: 'library', title: PRESETS['library'].title },
-    { id: nid(), type: 'trend-analysis', title: PRESETS['trend-analysis'].title },
+    { id: nid(), type: 'design-studio', title: PRESET_LABEL_ZH['design-studio'] },
+    { id: nid(), type: 'tryon', title: PRESET_LABEL_ZH.tryon },
+    { id: nid(), type: 'wardrobe', title: PRESET_LABEL_ZH.wardrobe },
+    { id: nid(), type: 'trends-hub', title: PRESET_LABEL_ZH['trends-hub'] },
   ]);
   const [activeId, setActiveId] = useState(tabs[0].id);
   const [showMenu, setShowMenu] = useState(false);
@@ -101,7 +125,7 @@ export default function MainApp({ user, onLogout }: MainAppProps) {
   }, []);
 
   const addTab = useCallback((type: WorkspaceType) => {
-    const t: WorkspaceTab = { id: nid(), type, title: PRESETS[type].title };
+    const t: WorkspaceTab = { id: nid(), type, title: PRESET_LABEL_ZH[type] };
     setTabs(prev => [...prev, t]);
     setActiveId(t.id);
     setShowMenu(false);
@@ -137,175 +161,134 @@ export default function MainApp({ user, onLogout }: MainAppProps) {
 
   return (
     <div className="app-shell flex h-full flex-col overflow-hidden">
-      <header className="topbar">
-        <div
-          className="flex items-center gap-3 px-3 py-2 text-left"
-          style={{ borderRadius: 'var(--radius-md)' }}
-        >
-          <div style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)', background: 'var(--color-accent)', color: '#FFFFFF' }}>
-            <Boxes className="h-4 w-4" />
-          </div>
-          <div className="hidden sm:block">
-            <p style={{ fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-widest)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>AI Fashion</p>
-            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>Creative OS</p>
-          </div>
+      <header className="topbar editorial-topbar">
+        <div className="brand-mark">
+          <span className="brand-glyph">A&middot;F</span>
+          <span className="brand-meta">
+            <span className="kicker" style={{ fontSize: 9, letterSpacing: '0.28em' }}>AI Fashion</span>
+            <span className="brand-issue">Atelier &middot; Vol. I</span>
+          </span>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-visible">
+        <span className="topbar-divider" aria-hidden />
+
+        <nav className="tab-rail" aria-label="Workspace tabs">
           {tabs.map(tab => {
             const preset = PRESETS[tab.type];
             const active = tab.id === activeId;
+            const isCustom = tab.title !== PRESET_LABEL_ZH[tab.type];
             return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveId(tab.id)}
-                className={`tab-item relative ${active ? 'active' : ''}`}
+                className={`tab-editorial ${active ? 'active' : ''}`}
+                title={tab.title}
               >
-                <span style={{
-                  display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 'var(--radius-sm)',
-                  background: active ? 'var(--color-accent)' : 'var(--overlay-medium)',
-                  color: active ? '#FFFFFF' : 'var(--color-ink-3)',
-                }}>
-                  {preset.icon}
+                <span className="tab-numeral">{preset.numeral}</span>
+                <span className="tab-label">
+                  {isCustom ? tab.title : preset.title}
                 </span>
-                <span className="truncate max-w-[140px]">{tab.title}</span>
                 {tabs.length > 1 && (
                   <span
+                    className="tab-close"
+                    role="button"
+                    tabIndex={-1}
+                    aria-label="Close tab"
                     onClick={e => {
                       e.stopPropagation();
                       closeTab(tab.id);
                     }}
-                    style={{
-                      marginLeft: 4,
-                      borderRadius: 'var(--radius-pill)',
-                      padding: '1px 5px',
-                      fontSize: 10,
-                      background: 'var(--overlay-medium)',
-                      color: 'var(--color-ink-3)',
-                      cursor: 'pointer',
-                    }}
                   >
-                    ×
+                    <X className="h-3 w-3" strokeWidth={1.5} />
                   </span>
                 )}
               </button>
             );
           })}
-        </div>
+        </nav>
 
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            onClick={() => setShowMenu(v => !v)}
-            className="btn-ghost btn-square"
-            title="新建工作区"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          {showMenu && (
-            <div className="dropdown-enter" style={{
-              position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-              zIndex: 999, width: 300,
-              borderRadius: 'var(--radius-xl)',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-surface)',
-              boxShadow: 'var(--shadow-xl)',
-              padding: 'var(--space-2)',
-            }}>
-              <div style={{ padding: 'var(--space-2) var(--space-3)', marginBottom: 'var(--space-2)' }}>
-                <p className="subsection-title" style={{ marginBottom: 2 }}>新建工作区</p>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>选择一个新的工作入口。</p>
+        <div className="topbar-actions">
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setShowMenu(v => !v)}
+              className="icon-btn-editorial"
+              title="新建工作区"
+              aria-label="新建工作区"
+            >
+              <Plus className="h-4 w-4" strokeWidth={1.5} />
+            </button>
+            {showMenu && (
+              <div className="dropdown-enter editorial-dropdown" style={{ width: 320 }}>
+                <div style={{ padding: '14px 18px 12px' }}>
+                  <p className="kicker">New Workspace</p>
+                  <p className="headline headline-sm" style={{ marginTop: 4 }}>选择一个新入口</p>
+                </div>
+                <hr className="rule-thin" />
+                {(Object.entries(PRESETS) as [WorkspaceType, PresetMeta][]).map(([type, preset]) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => addTab(type)}
+                    className="editorial-menu-row"
+                  >
+                    <span className="editorial-menu-numeral">{preset.numeral}</span>
+                    <span className="editorial-menu-body">
+                      <span className="editorial-menu-title">
+                        {preset.title}{' '}
+                        <em>/ {preset.italicTitle}</em>
+                      </span>
+                      <span className="editorial-menu-desc">{preset.desc}</span>
+                    </span>
+                    <span className="editorial-menu-icon">{preset.icon}</span>
+                  </button>
+                ))}
               </div>
-              {(Object.entries(PRESETS) as [WorkspaceType, typeof PRESETS[WorkspaceType]][]).map(([type, preset]) => (
+            )}
+          </div>
+
+          <div className="relative" ref={userMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowUserMenu(v => !v)}
+              className="user-chip"
+              title={user.name}
+            >
+              <span className="user-avatar">{initials}</span>
+              <span className="user-meta">
+                <span className="kicker" style={{ fontSize: 9, letterSpacing: '0.28em' }}>Account</span>
+                <span className="user-name">{user.name}</span>
+              </span>
+              <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
+            </button>
+            {showUserMenu && (
+              <div className="dropdown-enter editorial-dropdown" style={{ width: 260 }}>
+                <div style={{ padding: '16px 18px' }}>
+                  <p className="kicker">Signed in as</p>
+                  <p className="headline headline-sm" style={{ marginTop: 4 }}>{user.name}</p>
+                  <p className="dek" style={{ marginTop: 4, fontSize: 12, color: 'var(--color-ink-3)' }}>{user.email}</p>
+                </div>
+                <hr className="rule-thin" />
                 <button
-                  key={type}
                   type="button"
-                  onClick={() => addTab(type)}
-                  style={{
-                    display: 'flex', width: '100%', alignItems: 'flex-start', gap: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)', padding: 'var(--space-3)',
-                    textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
-                    transition: 'background 150ms',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  onClick={() => { setShowUserMenu(false); setShowSettings(true); }}
+                  className="editorial-menu-row compact"
                 >
-                  <span style={{
-                    display: 'flex', width: 40, height: 40, flexShrink: 0,
-                    alignItems: 'center', justifyContent: 'center',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-accent)', color: '#FFFFFF',
-                  }}>
-                    {preset.icon}
-                  </span>
-                  <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>
-                      {preset.title}
-                    </span>
-                    <span style={{ marginTop: 2, display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>
-                      {preset.desc}
-                    </span>
-                  </span>
+                  <SlidersHorizontal className="h-4 w-4" strokeWidth={1.5} style={{ color: 'var(--color-ink-2)' }} />
+                  <span className="editorial-menu-title sans" style={{ fontSize: 13, fontFamily: 'var(--font-ui)', fontWeight: 'var(--weight-regular)', letterSpacing: '0.02em' }}>个性化档案</span>
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="relative ml-2" ref={userMenuRef}>
-          <button
-            type="button"
-            onClick={() => setShowUserMenu(v => !v)}
-            className="flex items-center gap-3 px-3 py-2 text-left"
-            style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', transition: 'background 150ms' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--overlay-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            title={user.name}
-          >
-            <span style={{ display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--color-accent)', fontSize: 12, fontWeight: 'var(--weight-medium)', color: '#FFFFFF' }}>
-              {initials}
-            </span>
-            <span className="hidden sm:block">
-              <span style={{ display: 'block', fontSize: 'var(--text-2xs)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-widest)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>Account</span>
-              <span style={{ display: 'block', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>{user.name}</span>
-            </span>
-            <ChevronDown className="h-4 w-4" style={{ color: 'var(--color-ink-3)' }} />
-          </button>
-          {showUserMenu && (
-            <div className="dropdown-enter" style={{
-              position: 'absolute', right: 0, top: 'calc(100% + 8px)',
-              zIndex: 999, width: 240,
-              borderRadius: 'var(--radius-xl)',
-              border: '1px solid var(--color-border)',
-              background: 'var(--color-surface)',
-              boxShadow: 'var(--shadow-xl)',
-              padding: 'var(--space-2)',
-            }}>
-              <div style={{ padding: 'var(--space-3)', borderBottom: '1px solid var(--color-border-subtle)', marginBottom: 4 }}>
-                <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)', color: 'var(--color-ink)', fontFamily: 'var(--font-ui)' }}>{user.name}</p>
-                <p style={{ marginTop: 2, fontSize: 'var(--text-xs)', color: 'var(--color-ink-3)', fontFamily: 'var(--font-ui)' }}>{user.email}</p>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="editorial-menu-row compact"
+                >
+                  <LogOut className="h-4 w-4" strokeWidth={1.5} style={{ color: 'var(--color-ink-2)' }} />
+                  <span className="editorial-menu-title sans" style={{ fontSize: 13, fontFamily: 'var(--font-ui)', fontWeight: 'var(--weight-regular)', letterSpacing: '0.02em' }}>退出登录</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => { setShowUserMenu(false); setShowSettings(true); }}
-                className="btn-ghost"
-                style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                个性化档案
-              </button>
-              <button
-                type="button" onClick={onLogout}
-                className="btn-ghost"
-                style={{ width: '100%', justifyContent: 'flex-start', height: 36, padding: '0 var(--space-3)', fontSize: 'var(--text-sm)' }}
-              >
-                <UserRound className="h-4 w-4" />
-                退出登录
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
@@ -320,27 +303,27 @@ export default function MainApp({ user, onLogout }: MainAppProps) {
       )}
 
       <div className="flex-1 relative min-h-0">
-        {tabs.map(tab => (
-          <div key={tab.id} className={`absolute inset-0 ${activeId === tab.id ? 'z-10 workspace-enter' : 'z-0 invisible'}`}>
-            {mounted.has(tab.id) && (
-              <ErrorBoundary fallbackLabel={tab.title}>
-                <Suspense fallback={<WorkspaceFallback label={tab.title} />}>
-                  {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} initialTrend={pendingTrend.get(tab.id)} />}
-                  {tab.type === 'trend-analysis' && <TrendAnalysisWorkspace />}
-                  {tab.type === 'library' && (
-                    <LibraryWorkspace user={user} onSwitchToDesignStudio={() => addTab('design-studio')} />
-                  )}
-                  {tab.type === 'trends' && (
-                    <TrendBoardWorkspace user={user} onDesignThis={trend => addDesignTabWithTrend(trend)} />
-                  )}
-                  {tab.type === 'wardrobe' && <WardrobeWorkspace user={user} />}
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
-        ))}
+        {tabs.map(tab => {
+          if (!KNOWN_TYPES.has(tab.type)) return null;
+          return (
+            <div key={tab.id} className={`absolute inset-0 ${activeId === tab.id ? 'z-10 workspace-enter' : 'z-0 invisible'}`}>
+              {mounted.has(tab.id) && (
+                <ErrorBoundary fallbackLabel={tab.title}>
+                  <Suspense fallback={<WorkspaceFallback label={tab.title} />}>
+                    {tab.type === 'design-studio' && <DesignStudioWorkspace user={user} initialTrend={pendingTrend.get(tab.id)} />}
+                    {tab.type === 'tryon' && <TryOnWorkspace user={user} />}
+                    {tab.type === 'wardrobe' && <WardrobeWorkspace user={user} />}
+                    {tab.type === 'trends-hub' && (
+                      <TrendsHubWorkspace user={user} onDesignThis={trend => addDesignTabWithTrend(trend)} />
+                    )}
+                  </Suspense>
+                </ErrorBoundary>
+              )}
+            </div>
+          );
+        })}
         {!activeTab && (
-          <div className="flex h-full items-center justify-center text-[color:var(--text-muted)]">
+          <div className="flex h-full items-center justify-center" style={{ color: 'var(--color-ink-3)' }}>
             没有可用工作区
           </div>
         )}

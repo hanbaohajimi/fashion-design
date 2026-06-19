@@ -57,20 +57,20 @@ interface SelectedObjectInfo {
   elementType: string;
 }
 
-const BLUE = '#3b82f6';
+const ACCENT_INK = '#1A1815';
 
 function applySelectionStyle(obj: FabricObject) {
   obj.set({ selectable: true, evented: true });
   obj.lockRotation = true;
   obj.setControlVisible('mtr', false);
   obj.set({
-    cornerColor: '#ffffff',
-    cornerStrokeColor: BLUE,
-    borderColor: BLUE,
-    cornerSize: 9,
+    cornerColor: '#FBFAF6',
+    cornerStrokeColor: ACCENT_INK,
+    borderColor: ACCENT_INK,
+    cornerSize: 8,
     transparentCorners: false,
     cornerStyle: 'rect' as const,
-    borderScaleFactor: 1.6,
+    borderScaleFactor: 1.4,
   });
 }
 
@@ -139,7 +139,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         return;
       }
       const dot = Math.max(0.8, Math.min(1.2, zoom));
-      gridRef.current.style.backgroundImage = `radial-gradient(circle, #d4cfc8 ${dot}px, transparent ${dot}px)`;
+      gridRef.current.style.backgroundImage = `radial-gradient(circle, rgba(26, 24, 21, 0.12) ${dot}px, transparent ${dot}px)`;
       gridRef.current.style.backgroundSize = `${spacing}px ${spacing}px`;
       gridRef.current.style.backgroundPosition = `${vpt[4] % spacing}px ${vpt[5] % spacing}px`;
     }, []);
@@ -153,14 +153,14 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       const canvas = new Canvas(el, {
         width: Math.max(1, Math.round(rect.width)),
         height: Math.max(1, Math.round(rect.height)),
-        backgroundColor: '#fdfcfa',
+        backgroundColor: '#FBFAF6',
         selection: true,
         preserveObjectStacking: true,
       });
       fabricRef.current = canvas;
 
-      canvas.selectionColor = 'rgba(59, 130, 246, 0.05)';
-      canvas.selectionBorderColor = BLUE;
+      canvas.selectionColor = 'rgba(26, 24, 21, 0.04)';
+      canvas.selectionBorderColor = ACCENT_INK;
       canvas.selectionLineWidth = 1;
 
       let resizeRaf: number | null = null;
@@ -626,74 +626,49 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
     const isEmpty = elementCount === 0;
 
     const ctxBtnClass =
-      'flex min-h-[36px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] text-[color:var(--text-secondary)] transition-colors hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)] whitespace-nowrap';
+      'editorial-canvas-btn whitespace-nowrap';
 
     return (
-      <div className="flex-1 flex flex-col min-w-0 relative bg-[color:var(--paper)]">
-        {/* ── Main toolbar ── */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 rounded-2xl border border-[color:var(--border-soft)] bg-white/90 p-1 shadow-sm backdrop-blur-lg transition-all">
+      <div className="flex-1 flex flex-col min-w-0 relative" style={{ background: 'var(--color-canvas)' }}>
+        {/* ── Main toolbar (杂志黑底象牙字) ── */}
+        <div className="canvas-main-toolbar">
           <div className="flex items-center">
             <button
               type="button"
               onClick={() => setActiveTool('select')}
-              className={`btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl ${activeTool === 'select' ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)] hover:text-white' : ''}`}
+              className={`canvas-tb-btn ${activeTool === 'select' ? 'is-active' : ''}`}
               title="选择 (V)"
             >
-              <MousePointer2 className="w-3.5 h-3.5" />
+              <MousePointer2 className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
             <button
               type="button"
               onClick={() => setActiveTool('hand')}
-              className={`btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl ${activeTool === 'hand' ? 'bg-[color:var(--ink)] text-white hover:bg-[color:var(--ink)] hover:text-white' : ''}`}
+              className={`canvas-tb-btn ${activeTool === 'hand' ? 'is-active' : ''}`}
               title="平移 (H)"
             >
-              <Hand className="w-3.5 h-3.5" />
+              <Hand className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
           </div>
-          <div className="w-px h-4 bg-[color:var(--border-soft)] mx-0.5" />
+          <span className="canvas-tb-sep" />
           <div className="flex items-center">
-            <button
-              type="button"
-              onClick={addTextElement}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="文字"
-            >
-              <Type className="w-3.5 h-3.5" />
+            <button type="button" onClick={addTextElement} className="canvas-tb-btn" title="文字">
+              <Type className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
-            <button
-              type="button"
-              onClick={addRectElement}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="矩形"
-            >
-              <Square className="w-3.5 h-3.5" />
+            <button type="button" onClick={addRectElement} className="canvas-tb-btn" title="矩形">
+              <Square className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
-            <button
-              type="button"
-              onClick={addCircleElement}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="圆形"
-            >
-              <CircleIcon className="w-3.5 h-3.5" />
+            <button type="button" onClick={addCircleElement} className="canvas-tb-btn" title="圆形">
+              <CircleIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
-            <button
-              type="button"
-              onClick={insertImageFromFile}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="上传图片"
-            >
-              <ImagePlus className="w-3.5 h-3.5" />
+            <button type="button" onClick={insertImageFromFile} className="canvas-tb-btn" title="上传图片">
+              <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
           </div>
-          <div className="w-px h-4 bg-[color:var(--border-soft)] mx-0.5" />
+          <span className="canvas-tb-sep" />
           <div className="flex items-center">
-            <button
-              type="button"
-              onClick={zoomOut}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="缩小"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
+            <button type="button" onClick={zoomOut} className="canvas-tb-btn" title="缩小">
+              <ZoomOut className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
             <button
               type="button"
@@ -706,86 +681,80 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
                   updateToolbar();
                 }
               }}
-              className="h-8 w-11 rounded-xl text-center text-[11px] font-medium tabular-nums text-[color:var(--text-muted)] transition-colors hover:bg-[color:var(--paper)] hover:text-[color:var(--text-primary)]"
+              className="canvas-tb-zoom"
               title="重置缩放"
             >
               {Math.round(zoomLevel * 100)}%
             </button>
-            <button
-              type="button"
-              onClick={zoomIn}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="放大"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
+            <button type="button" onClick={zoomIn} className="canvas-tb-btn" title="放大">
+              <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
-            <button
-              type="button"
-              onClick={zoomToFit}
-              className="btn-ghost btn-square h-10 min-h-10 w-10 rounded-xl"
-              title="适应画布"
-            >
-              <Maximize className="w-3.5 h-3.5" />
+            <button type="button" onClick={zoomToFit} className="canvas-tb-btn" title="适应画布">
+              <Maximize className="w-3.5 h-3.5" strokeWidth={1.5} />
             </button>
           </div>
         </div>
 
         {/* ── Context toolbar + Info bar (when object selected) ── */}
         {selectedInfo && (
-          <div className="absolute top-[52px] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 canvas-toolbar-enter">
-            <div className="flex items-center gap-0.5 rounded-2xl border border-[color:var(--border-soft)] bg-white/95 px-1.5 py-1 shadow-sm backdrop-blur-lg">
+          <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 canvas-toolbar-enter">
+            <div className="canvas-context-toolbar">
               {selectedInfo.isImage && onEditInEditor && (
                 <>
                   <button
                     type="button"
                     onClick={() => handleExportSelected('edit')}
-                    className="flex min-h-[36px] items-center gap-1.5 rounded-xl bg-[rgba(66,133,244,0.09)] px-3 py-1.5 text-[12px] font-medium text-[color:var(--color-accent)] transition-colors hover:bg-[rgba(66,133,244,0.14)] whitespace-nowrap"
+                    className="editorial-canvas-btn primary"
                   >
-                    <PencilRuler className="w-3.5 h-3.5" />
+                    <PencilRuler className="w-3.5 h-3.5" strokeWidth={1.5} />
                     快捷编辑
-                    <kbd className="ml-0.5 rounded bg-[color:var(--color-surface-3)] px-1 py-0.5 text-[9px] font-normal text-[color:var(--color-accent)]">Tab</kbd>
+                    <kbd className="canvas-kbd">Tab</kbd>
                   </button>
-                  <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
+                  <span className="canvas-tb-divider" />
                 </>
               )}
               <button type="button" onClick={() => flipSelected('x')} className={ctxBtnClass} title="水平翻转">
-                <FlipHorizontal className="w-3.5 h-3.5" />
+                <FlipHorizontal className="w-3.5 h-3.5" strokeWidth={1.5} />
                 <span className="hidden sm:inline">水平翻转</span>
               </button>
               <button type="button" onClick={() => flipSelected('y')} className={ctxBtnClass} title="垂直翻转">
-                <FlipVertical className="w-3.5 h-3.5" />
+                <FlipVertical className="w-3.5 h-3.5" strokeWidth={1.5} />
                 <span className="hidden sm:inline">垂直翻转</span>
               </button>
               {selectedInfo.isImage && onSendToAI && (
                 <>
-                  <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
+                  <span className="canvas-tb-divider" />
                   <button type="button" onClick={() => handleExportSelected('ai')} className={ctxBtnClass} title="发送到 AI">
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} />
                     <span className="hidden sm:inline">发送 AI</span>
                   </button>
                 </>
               )}
-              <div className="w-px h-5 bg-[color:var(--border-soft)] mx-0.5" />
+              <span className="canvas-tb-divider" />
               <button
                 type="button"
                 onClick={deleteSelected}
-                className="flex min-h-[36px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] text-[color:var(--text-secondary)] transition-colors hover:bg-red-50 hover:text-red-600 whitespace-nowrap"
+                className="editorial-canvas-btn danger whitespace-nowrap"
                 title="删除"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
               <button type="button" onClick={downloadSelected} className={ctxBtnClass} title="下载">
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
               </button>
             </div>
 
-            {/* Info bar: label + dimensions */}
-            <div className="flex min-w-[280px] items-center justify-between gap-8 rounded-xl border border-[color:var(--border-soft)] bg-white/80 px-3 py-1 shadow-sm backdrop-blur-sm">
-              <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--text-secondary)]">
-                <ImageIcon className="w-3.5 h-3.5 text-[color:var(--text-muted)]" />
-                <span className="font-medium">{selectedInfo.name}</span>
+            {/* Info bar: caption 排版 */}
+            <div className="canvas-info-bar">
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span className="kicker" style={{ fontSize: 9, letterSpacing: '0.22em' }}>
+                  {selectedInfo.elementType === 'image' ? 'Fig' : 'Object'}
+                </span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--color-ink)', letterSpacing: '-0.005em' }}>
+                  {selectedInfo.name}
+                </span>
               </div>
-              <span className="text-[12px] text-[color:var(--text-muted)] tabular-nums font-medium tracking-wide">
+              <span className="numeral" style={{ fontSize: 11, color: 'var(--color-ink-3)', letterSpacing: '0.06em' }}>
                 {selectedInfo.naturalWidth} &times; {selectedInfo.naturalHeight}
               </span>
             </div>
@@ -804,7 +773,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             ref={gridRef}
             className="absolute inset-0 pointer-events-none z-[1]"
             style={{
-              backgroundImage: 'radial-gradient(circle, #d4cfc8 0.6px, transparent 0.6px)',
+              backgroundImage: 'radial-gradient(circle, rgba(26, 24, 21, 0.10) 0.6px, transparent 0.6px)',
               backgroundSize: '20px 20px',
             }}
           />
@@ -812,27 +781,30 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
 
           {isEmpty && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[3]">
-              <div className="text-center px-8 fade-up-in max-w-[320px]">
-                <p className="text-[15px] font-semibold text-[color:var(--text-muted)] mb-2 tracking-tight">设计画布</p>
-                <p className="text-[12px] text-[color:var(--text-muted)] leading-relaxed text-balance mb-3">
-                  <span className="text-[color:var(--text-dim)]">路径 A：</span>
-                  在右侧对话描述需求，生成后点击「置入画布」编排
+              <div className="canvas-empty fade-up-in">
+                <p className="kicker">Atelier &middot; Canvas</p>
+                <p className="canvas-empty-quote">
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 60, lineHeight: 0.6, fontStyle: 'italic', color: 'var(--color-ink-4)', verticalAlign: 'top' }}>&ldquo;</span>
+                  让灵感在此处落笔。
                 </p>
-                <p className="text-[12px] text-[color:var(--text-muted)] leading-relaxed text-balance">
-                  <span className="text-[color:var(--text-dim)]">路径 B：</span>
-                  拖入图片到此处，或点击工具栏「上传图片」开始
+                <p className="dek" style={{ marginTop: 16, color: 'var(--color-ink-3)' }}>
+                  <span style={{ fontStyle: 'italic', color: 'var(--color-ink)' }}>路径 A &mdash;&mdash;</span>
+                  &nbsp;在右侧对话描述需求，生成后点击「置入画布」编排。
                 </p>
-                <div className="flex justify-center gap-4 mt-6 flex-wrap">
+                <p className="dek" style={{ marginTop: 8, color: 'var(--color-ink-3)' }}>
+                  <span style={{ fontStyle: 'italic', color: 'var(--color-ink)' }}>路径 B &mdash;&mdash;</span>
+                  &nbsp;拖入图片到此处，或点击工具栏「上传图片」开始。
+                </p>
+                <hr className="rule-thin" style={{ marginTop: 28, marginBottom: 16 }} />
+                <div className="canvas-empty-keys">
                   {[
                     { label: 'Space', desc: '平移' },
                     { label: 'V', desc: '选择' },
                     { label: 'H', desc: '抓手' },
-                  ].map((k) => (
-                    <span key={k.label} className="text-[10px] text-[color:var(--text-muted)]">
-                      <kbd className="px-1 py-0.5 bg-[color:var(--color-surface-3)] rounded text-[9px] font-medium text-[color:var(--text-dim)]">
-                        {k.label}
-                      </kbd>
-                      <span className="ml-1">{k.desc}</span>
+                  ].map(k => (
+                    <span key={k.label} className="canvas-empty-key">
+                      <kbd>{k.label}</kbd>
+                      <span>{k.desc}</span>
                     </span>
                   ))}
                 </div>
@@ -841,11 +813,9 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           )}
 
           {isDragOver && (
-            <div className="absolute inset-4 z-[10] bg-[color:var(--color-surface)]/90 backdrop-blur flex items-center justify-center border border-dashed border-[color:var(--color-border-medium)] rounded-2xl">
-              <div className="text-center">
-                <Upload className="w-6 h-6 text-[color:var(--text-muted)] mx-auto mb-2" />
-                <p className="text-sm text-[color:var(--text-secondary)] font-medium">松开添加到画布</p>
-              </div>
+            <div className="canvas-dragover">
+              <Upload className="w-6 h-6 mb-2" style={{ color: 'var(--color-ink-3)' }} strokeWidth={1.5} />
+              <p className="kicker" style={{ fontSize: 11, letterSpacing: '0.22em' }}>松开添加到画布</p>
             </div>
           )}
         </div>

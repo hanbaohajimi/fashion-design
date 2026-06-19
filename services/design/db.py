@@ -748,7 +748,13 @@ def update_library_item_trend_alignments(item_id: str, alignments: list) -> None
 
 # ─── Wardrobe Items ───
 
-_SOURCE_LABELS = {"trend": "时尚趋势", "design": "我的设计", "upload": "我的上传"}
+_SOURCE_LABELS = {
+    "trend": "时尚趋势",
+    "design": "我的设计",
+    "upload": "我的上传",
+    "preset": "系统衣物",
+    "tryon": "试衣台",
+}
 
 
 def create_wardrobe_item(
@@ -912,6 +918,7 @@ def get_wardrobe_stats(user_email: str) -> dict:
 # ─── Outfits ───
 
 def create_outfit(outfit_id: str, user_email: str, name: str, item_ids: list, **kwargs) -> None:
+    cover_override = kwargs.get("cover_image_url")
     with _lock:
         conn = _get_conn()
         conn.execute(
@@ -925,7 +932,9 @@ def create_outfit(outfit_id: str, user_email: str, name: str, item_ids: list, **
                 "INSERT OR IGNORE INTO outfit_items (outfit_id, wardrobe_item_id, layer_order) VALUES (?,?,?)",
                 (outfit_id, iid, i),
             )
-        if item_ids:
+        if cover_override:
+            conn.execute("UPDATE outfits SET cover_image_url=? WHERE id=?", (cover_override, outfit_id))
+        elif item_ids:
             first = conn.execute("SELECT image_url FROM wardrobe_items WHERE id=?", (item_ids[0],)).fetchone()
             if first:
                 conn.execute("UPDATE outfits SET cover_image_url=? WHERE id=?", (first["image_url"], outfit_id))

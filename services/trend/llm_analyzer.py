@@ -250,6 +250,10 @@ def _build_model_id() -> str:
         return model
     elif provider == "anthropic":
         return f"anthropic/{model}"
+    elif provider == "deepseek":
+        if "/" not in model:
+            return f"deepseek/{model}"
+        return model
     elif provider == "local":
         return f"ollama/{model}"  # 默认用 ollama，可按需修改
     else:

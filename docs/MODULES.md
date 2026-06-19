@@ -38,11 +38,11 @@
 - `DesignCanvas.tsx` — Fabric.js 画布（图层、缩放、拖放）
 - `FabricEditor.tsx` — 像素编辑器（画笔涂抹 + AI 局部修改）
 
-**AI 能力**（通过 DashScope API）:
-- 文生图 (wan2.6-t2i)
-- 图像编辑 (qwen-image-edit-max)
-- 对话理解 (qwen-plus)
-- 视觉分析 (qwen-vl-max)
+**AI 能力**（通过 amux.ai 代理，OpenAI 兼容）:
+- 文生图 (gpt-image-2)
+- 图像编辑 / 试穿 / 图案迁移
+- 对话 + 视觉理解 (gemini-3-pro-preview / claude-sonnet-4-6)
+- 提示词优化
 
 **API 前缀**: `/api/design/`
 
