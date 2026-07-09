@@ -13,9 +13,7 @@ interface ToolPageLayoutProps {
 export default function ToolPageLayout({ user, onLogout, children }: ToolPageLayoutProps) {
   return (
     <AppShell user={user} onLogout={onLogout}>
-      <div className="h-full overflow-hidden">
-        {children}
-      </div>
+      {children}
     </AppShell>
   );
 }

@@ -1201,17 +1201,14 @@ def patch_project(project_id: str, user_email: str, **kwargs) -> Optional[sqlite
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return get_project(project_id, user_email)
+    # Coerce bool → int for SQLite INTEGER columns
+    vals = [1 if (k == "starred" and v) else (0 if k == "starred" else v) for k, v in updates.items()]
+    set_clause = ", ".join(f"{k}=?" for k in updates) + ", updated_at=datetime('now')"
     with _lock:
         conn = _get_conn()
-        sets = ", ".join(f"{k}=?" for k in updates)
-        vals = [1 if (k == "starred" and v) else v for k, v in updates.items()]
-        vals.append("datetime('now')")
-        vals = list(updates.values()) + ["datetime('now')"]
-        # build proper update query
-        set_clause = ", ".join(f"{k}=?" for k in updates) + ", updated_at=datetime('now')"
         conn.execute(
             f"UPDATE projects SET {set_clause} WHERE id=? AND user_email=?",
-            list(updates.values()) + [project_id, user_email],
+            vals + [project_id, user_email],
         )
         conn.commit()
     return get_project(project_id, user_email)

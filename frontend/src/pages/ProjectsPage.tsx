@@ -2,19 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, FolderOpen, Clock } from 'lucide-react';
 import { fetchProjects, createProject, type Project } from '../api/designsApi';
+import { formatDate } from '../utils/date';
 import './projects.css';
 
 interface ProjectsPageProps {
   user: { email: string; name: string; auth_token: string };
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
 }
 
 function NewProjectModal({

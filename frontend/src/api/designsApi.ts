@@ -1,18 +1,4 @@
-// API helpers for projects and designs
-const BASE = '/api/design';
-
-function authHeader(token: string) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function handle<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    if (res.status === 401) window.dispatchEvent(new Event('af:session-expired'));
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail || `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
+import { authHeader, handle, BASE } from './http';
 
 // ── Projects ────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus,
@@ -33,8 +33,21 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
   const [recents, setRecents] = useState<RecentDesign[]>([]);
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const initials = (user.name || user.email)[0]?.toUpperCase() || 'U';
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const h = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [userMenuOpen]);
 
   const loadRecents = useCallback(async () => {
     try {
@@ -151,12 +164,12 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
       )}
 
       {/* User area */}
-      <div className="sidebar-user" onClick={() => setUserMenuOpen(v => !v)}>
+      <div className="sidebar-user" ref={userMenuRef} onClick={() => setUserMenuOpen(v => !v)}>
         <span className="sidebar-user-avatar">{initials}</span>
         <span className="sidebar-user-name">{user.name}</span>
         <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} strokeWidth={1.5} />
         {userMenuOpen && (
-          <div className="sidebar-user-menu" onClick={e => e.stopPropagation()}>
+          <div className="sidebar-user-menu">
             <div className="sidebar-user-menu-info">
               <p className="sidebar-user-menu-name">{user.name}</p>
               <p className="sidebar-user-menu-email">{user.email}</p>

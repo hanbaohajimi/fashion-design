@@ -2,19 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Clock } from 'lucide-react';
 import { fetchDesigns, createDesign, type DesignThread } from '../api/designsApi';
+import { formatDate } from '../utils/date';
 import './designs.css';
 
 interface DesignsPageProps {
   user: { email: string; name: string; auth_token: string };
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
 }
 
 export default function DesignsPage({ user }: DesignsPageProps) {

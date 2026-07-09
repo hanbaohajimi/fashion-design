@@ -21,22 +21,7 @@ import type {
   TryOnGenerationResult,
 } from '../types/profile';
 
-const BASE = '/api/design';
-
-function authHeader(token: string) {
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
-
-async function handle<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    if (res.status === 401) {
-      window.dispatchEvent(new Event('af:session-expired'));
-    }
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail || `HTTP ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
+import { authHeader, handle, BASE } from './http';
 
 async function ensureOk(res: Response): Promise<void> {
   if (!res.ok) {

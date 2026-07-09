@@ -2,19 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Edit2, FileText, BookOpen, Image, Clock } from 'lucide-react';
 import { fetchProject, patchProject, createDesign, type Project, type DesignThread } from '../api/designsApi';
+import { formatDate } from '../utils/date';
 import './project-detail.css';
 
 interface ProjectDetailPageProps {
   user: { email: string; name: string; auth_token: string };
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-  } catch {
-    return iso;
-  }
 }
 
 function RightPanel({
