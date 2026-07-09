@@ -282,8 +282,13 @@ def wait_for_platform() -> list[StatusLine]:
 def monitor_processes() -> None:
     while True:
         for proc in processes:
-            if proc.poll() is not None:
-                continue
+            rc = proc.poll()
+            if rc is not None:
+                name = " ".join(proc.args[:3]) if isinstance(proc.args, list) else str(proc.args)
+                print(
+                    f"\n[WARN] 子进程已退出（退出码 {rc}）: {name}",
+                    flush=True,
+                )
         time.sleep(2)
 
 

@@ -123,17 +123,3 @@ async def export_session(session_id: str):
         "state": session.get_state_summary(),
     }
 
-
-@router.get("/api/session/{session_id}/export")
-async def export_session(session_id: str):
-    """Export all session images and metadata as a JSON manifest."""
-    session = get_session(session_id)
-    return {
-        "session_id": session_id,
-        "exported_at": datetime.now().isoformat(),
-        "stats": session.stats,
-        "images": session.generated_images,
-        "favorites": session.favorites,
-        "state": session.get_state_summary(),
-    }
-
