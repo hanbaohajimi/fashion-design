@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import runtime
-from routes import auth, chat, health, images, library, profile, trends, tryon, wardrobe
+from routes import auth, chat, designs, health, images, library, profile, projects, trends, tryon, wardrobe
 
 
 def create_app() -> FastAPI:
@@ -42,6 +42,8 @@ def create_app() -> FastAPI:
     app.include_router(trends.router)
     app.include_router(wardrobe.router)
     app.include_router(tryon.router)
+    app.include_router(projects.router)
+    app.include_router(designs.router)
 
     app.mount(
         "/api/tryon/preset-images",

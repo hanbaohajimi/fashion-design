@@ -198,6 +198,51 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
     if "trend_enabled" not in cs_cols:
         conn.execute("ALTER TABLE chat_sessions ADD COLUMN trend_enabled INTEGER NOT NULL DEFAULT 0")
 
+    # New: standalone projects + designs tables (2026-07 refactor)
+    existing_tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+
+    if "projects" not in existing_tables:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id          TEXT PRIMARY KEY,
+            user_email  TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+            name        TEXT NOT NULL,
+            description TEXT,
+            brief       TEXT,
+            instructions TEXT,
+            starred     INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_email, updated_at DESC);
+        """)
+
+    if "designs" not in existing_tables:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS designs (
+            id          TEXT PRIMARY KEY,
+            user_email  TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+            project_id  TEXT REFERENCES projects(id) ON DELETE SET NULL,
+            title       TEXT,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_designs_user ON designs(user_email, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_designs_project ON designs(project_id) WHERE project_id IS NOT NULL;
+        """)
+
+    if "messages" not in existing_tables:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id          TEXT PRIMARY KEY,
+            design_id   TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+            role        TEXT NOT NULL,
+            content     TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_messages_design ON messages(design_id, created_at ASC);
+        """)
+
     conn.commit()
 
 
@@ -1108,3 +1153,187 @@ def remove_outfit_item(outfit_id: str, wardrobe_item_id: str) -> bool:
         )
         conn.commit()
         return cur.rowcount > 0
+
+
+# ─── Projects (standalone, 2026-07 refactor) ───
+
+def create_project(
+    project_id: str,
+    user_email: str,
+    name: str,
+    description: str = "",
+) -> sqlite3.Row:
+    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT INTO projects (id, user_email, name, description, created_at, updated_at)
+               VALUES (?,?,?,?,?,?)""",
+            (project_id, user_email, name, description, now, now),
+        )
+        conn.commit()
+    return get_project(project_id, user_email)
+
+
+def get_project(project_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM projects WHERE id=? AND user_email=?",
+            (project_id, user_email),
+        ).fetchone()
+
+
+def list_projects(user_email: str, search: str = "") -> list[sqlite3.Row]:
+    with _lock:
+        if search:
+            return _get_conn().execute(
+                "SELECT * FROM projects WHERE user_email=? AND name LIKE ? ORDER BY updated_at DESC",
+                (user_email, f"%{search}%"),
+            ).fetchall()
+        return _get_conn().execute(
+            "SELECT * FROM projects WHERE user_email=? ORDER BY updated_at DESC",
+            (user_email,),
+        ).fetchall()
+
+
+def patch_project(project_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    allowed = {"name", "description", "brief", "instructions", "starred"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return get_project(project_id, user_email)
+    with _lock:
+        conn = _get_conn()
+        sets = ", ".join(f"{k}=?" for k in updates)
+        vals = [1 if (k == "starred" and v) else v for k, v in updates.items()]
+        vals.append("datetime('now')")
+        vals = list(updates.values()) + ["datetime('now')"]
+        # build proper update query
+        set_clause = ", ".join(f"{k}=?" for k in updates) + ", updated_at=datetime('now')"
+        conn.execute(
+            f"UPDATE projects SET {set_clause} WHERE id=? AND user_email=?",
+            list(updates.values()) + [project_id, user_email],
+        )
+        conn.commit()
+    return get_project(project_id, user_email)
+
+
+def delete_project(project_id: str, user_email: str) -> bool:
+    with _lock:
+        conn = _get_conn()
+        cur = conn.execute("DELETE FROM projects WHERE id=? AND user_email=?", (project_id, user_email))
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def touch_project(project_id: str) -> None:
+    """Update project.updated_at to now (called when a new design is created under it)."""
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "UPDATE projects SET updated_at=datetime('now') WHERE id=?",
+            (project_id,),
+        )
+        conn.commit()
+
+
+# ─── Designs (conversation threads, 2026-07 refactor) ───
+
+def create_design(
+    design_id: str,
+    user_email: str,
+    title: str = "",
+    project_id: Optional[str] = None,
+) -> sqlite3.Row:
+    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT INTO designs (id, user_email, project_id, title, created_at, updated_at)
+               VALUES (?,?,?,?,?,?)""",
+            (design_id, user_email, project_id, title, now, now),
+        )
+        conn.commit()
+    if project_id:
+        touch_project(project_id)
+    return get_design(design_id, user_email)
+
+
+def get_design(design_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM designs WHERE id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+
+
+def list_designs(
+    user_email: str,
+    project_id: Optional[str] = None,
+    limit: int = 50,
+) -> list[sqlite3.Row]:
+    with _lock:
+        if project_id is not None:
+            return _get_conn().execute(
+                "SELECT * FROM designs WHERE user_email=? AND project_id=? ORDER BY updated_at DESC LIMIT ?",
+                (user_email, project_id, limit),
+            ).fetchall()
+        # standalone designs (no project)
+        return _get_conn().execute(
+            "SELECT * FROM designs WHERE user_email=? AND project_id IS NULL ORDER BY updated_at DESC LIMIT ?",
+            (user_email, limit),
+        ).fetchall()
+
+
+def list_recent_designs(user_email: str, limit: int = 10) -> list[sqlite3.Row]:
+    """All recent designs regardless of project, for Sidebar recents."""
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM designs WHERE user_email=? ORDER BY updated_at DESC LIMIT ?",
+            (user_email, limit),
+        ).fetchall()
+
+
+def touch_design(design_id: str) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "UPDATE designs SET updated_at=datetime('now') WHERE id=?",
+            (design_id,),
+        )
+        conn.commit()
+
+
+def update_design_title(design_id: str, title: str) -> None:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "UPDATE designs SET title=?, updated_at=datetime('now') WHERE id=?",
+            (title, design_id),
+        )
+        conn.commit()
+
+
+# ─── Messages ───
+
+def add_message(
+    message_id: str,
+    design_id: str,
+    role: str,
+    content: str,
+) -> None:
+    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "INSERT INTO messages (id, design_id, role, content, created_at) VALUES (?,?,?,?,?)",
+            (message_id, design_id, role, content, now),
+        )
+        conn.commit()
+
+
+def list_messages(design_id: str) -> list[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM messages WHERE design_id=? ORDER BY created_at ASC",
+            (design_id,),
+        ).fetchall()

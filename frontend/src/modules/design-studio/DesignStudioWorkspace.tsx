@@ -33,6 +33,12 @@ type DesignBackendState = 'checking' | 'ok' | 'error';
 interface DesignStudioWorkspaceProps {
   user: { email: string; name: string; auth_token: string };
   initialTrend?: Trend;
+  /** Route param: project this chat belongs to (optional). */
+  projectId?: string;
+  /** Route param: existing design/chat ID to resume. */
+  designId?: string;
+  /** Prompt pre-filled from navigation state (NewDesignPage / ProjectDetailPage). */
+  starterPrompt?: string;
 }
 
 function SectionLoader({ label, detail }: { label: string; detail: string }) {
@@ -50,7 +56,7 @@ function ModalLoader({ label }: { label: string }) {
   return <SectionLoader label={label} detail="正在按需加载内容..." />;
 }
 
-export default function DesignStudioWorkspace({ user, initialTrend }: DesignStudioWorkspaceProps) {
+export default function DesignStudioWorkspace({ user, initialTrend, projectId, designId, starterPrompt: starterPromptProp }: DesignStudioWorkspaceProps) {
   const { toast } = useToast();
   const canvasRef = useRef<DesignCanvasHandle>(null);
 
@@ -68,15 +74,17 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
   const [trendEnabled, setTrendEnabled] = useState(!!initialTrend);
 
   // ── Personalization state ──────────────────────────────
-  const [selectedMode, setSelectedMode] = useState<SessionMode>('personal');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  // Derive initial mode: if projectId passed from route, start in designer mode
+  const [selectedMode, setSelectedMode] = useState<SessionMode>(projectId ? 'designer' : 'personal');
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null);
   const [personalProfile, setPersonalProfile] = useState<PersonalProfile | null>(null);
   const [workspace, setWorkspace] = useState<DesignerWorkspace | null>(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [showQuickStart, setShowQuickStart] = useState(false);
-  const [starterPrompt, setStarterPrompt] = useState<string | undefined>(undefined);
+  // starterPromptProp comes from router navigate() state (NewDesignPage / ProjectDetailPage)
+  const [starterPrompt, setStarterPrompt] = useState<string | undefined>(starterPromptProp);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editingProject, setEditingProject] = useState<DesignerProject | null>(null);
