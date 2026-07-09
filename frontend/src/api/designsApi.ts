@@ -5,9 +5,12 @@ import { authHeader, handle, BASE } from './http';
 export interface Project {
   id: string;
   name: string;
+  status?: 'active' | 'archived';
   description: string;
-  brief: string;
+  brief: Record<string, unknown>;
   instructions: string;
+  design_language?: Record<string, unknown>;
+  dynamic?: Record<string, unknown>;
   starred: boolean;
   created_at: string;
   updated_at: string;
@@ -19,6 +22,14 @@ export interface DesignThread {
   project_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DesignMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  images?: Array<{ url: string; type: string }>;
+  created_at: string;
 }
 
 export async function fetchProjects(token: string, search = ''): Promise<Project[]> {
@@ -82,4 +93,12 @@ export async function createDesign(token: string, opts: { title?: string; projec
   });
   const data = await handle<{ design: DesignThread }>(res);
   return data.design;
+}
+
+export async function fetchDesign(
+  token: string,
+  designId: string,
+): Promise<{ design: DesignThread; messages: DesignMessage[] }> {
+  const res = await fetch(`${BASE}/designs/${designId}`, { headers: authHeader(token) });
+  return handle<{ design: DesignThread; messages: DesignMessage[] }>(res);
 }

@@ -17,6 +17,8 @@ services/trend/logs/
 services/trend/output/
 services/trend/storage/
 services/trend/storage_states/
+services/design/data/*.db
+services/design/data/tool_traces/
 services/design/outputs/
 
 # Env & secrets

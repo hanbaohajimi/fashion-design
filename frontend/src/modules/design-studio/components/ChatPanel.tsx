@@ -52,6 +52,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onClearPendingFromCanvas,
   onSessionIdChange,
   externalSessionId,
+  designId,
+  initialMessages,
   collapsed = false,
   onToggleCollapse,
   side = 'left',
@@ -71,7 +73,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const ExpandIcon = isRight ? ChevronLeft : ChevronRight;
 
   const { toast } = useToast();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages || []);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(() => externalSessionId || crypto.randomUUID());
@@ -89,6 +91,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalSessionId]);
+
+  useEffect(() => {
+    if (initialMessages) setMessages(initialMessages);
+  }, [initialMessages]);
 
   useEffect(() => {
     onSessionIdChange?.(sessionId);
@@ -653,6 +659,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         designerProjectId,
         trendId,
         trendActive,
+        designId,
       );
     } catch (err: unknown) {
       if (statusRaf != null) {

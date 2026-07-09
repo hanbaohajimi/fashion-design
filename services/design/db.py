@@ -8,7 +8,7 @@ import sqlite3
 import threading
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 DB_PATH = Path(__file__).parent / "data" / "profiles.db"
 DB_PATH.parent.mkdir(exist_ok=True)
@@ -47,6 +47,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         expires_at      TEXT NOT NULL,
         revoked_at      TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+        version         TEXT PRIMARY KEY,
+        applied_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
         ON auth_sessions(user_email, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
@@ -57,6 +62,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         user_email          TEXT NOT NULL REFERENCES users(email),
         mode                TEXT NOT NULL DEFAULT 'personal',
         designer_project_id TEXT,
+        design_id           TEXT,
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -188,6 +194,10 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
     def existing_cols(table: str) -> set:
         return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
+    def add_col(table: str, column: str, ddl: str) -> None:
+        if column not in existing_cols(table):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
     li_cols = existing_cols("library_items")
     if "trend_alignments" not in li_cols:
         conn.execute("ALTER TABLE library_items ADD COLUMN trend_alignments TEXT NOT NULL DEFAULT '[]'")
@@ -197,6 +207,8 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE chat_sessions ADD COLUMN trend_id TEXT")
     if "trend_enabled" not in cs_cols:
         conn.execute("ALTER TABLE chat_sessions ADD COLUMN trend_enabled INTEGER NOT NULL DEFAULT 0")
+    if "design_id" not in cs_cols:
+        conn.execute("ALTER TABLE chat_sessions ADD COLUMN design_id TEXT")
 
     # New: standalone projects + designs tables (2026-07 refactor)
     existing_tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
@@ -207,9 +219,12 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
             id          TEXT PRIMARY KEY,
             user_email  TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
             name        TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'active',
             description TEXT,
             brief       TEXT,
             instructions TEXT,
+            design_language TEXT NOT NULL DEFAULT '{}',
+            dynamic     TEXT NOT NULL DEFAULT '{}',
             starred     INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -238,12 +253,126 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
             design_id   TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
             role        TEXT NOT NULL,
             content     TEXT NOT NULL,
+            images      TEXT NOT NULL DEFAULT '[]',
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_messages_design ON messages(design_id, created_at ASC);
         """)
 
+    if "projects" in existing_tables:
+        add_col("projects", "status", "status TEXT NOT NULL DEFAULT 'active'")
+        add_col("projects", "design_language", "design_language TEXT NOT NULL DEFAULT '{}'")
+        add_col("projects", "dynamic", "dynamic TEXT NOT NULL DEFAULT '{}'")
+
+    if "messages" in existing_tables:
+        add_col("messages", "images", "images TEXT NOT NULL DEFAULT '[]'")
+
+    _migrate_legacy_designer_workspace(conn)
+    _record_schema_migration(conn, "2026-07-unified-projects-design-sessions")
+
     conn.commit()
+
+
+def _migrate_legacy_designer_workspace(conn: sqlite3.Connection) -> None:
+    users = conn.execute("SELECT email, designer_workspace FROM users").fetchall()
+    for user in users:
+        try:
+            workspace = json.loads(user["designer_workspace"] or "{}")
+        except Exception:
+            continue
+        projects = workspace.get("projects") if isinstance(workspace, dict) else None
+        if not isinstance(projects, list):
+            continue
+        for project in projects:
+            if not isinstance(project, dict) or not project.get("id"):
+                continue
+            exists = conn.execute(
+                "SELECT 1 FROM projects WHERE id=? AND user_email=?",
+                (project["id"], user["email"]),
+            ).fetchone()
+            if exists:
+                continue
+            extra = {}
+            if project.get("pending_review"):
+                extra["pending_review"] = project.get("pending_review")
+            now = project.get("created_at") or __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+            conn.execute(
+                """INSERT INTO projects
+                   (id, user_email, name, status, description, brief, instructions, design_language, dynamic, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+                (
+                    project["id"],
+                    user["email"],
+                    project.get("name") or "未命名项目",
+                    project.get("status") or "active",
+                    project.get("description") or "",
+                    _json_dump(project.get("brief") or {}, {}),
+                    _json_dump(extra, {}),
+                    _json_dump(project.get("design_language") or {}, {}),
+                    _json_dump(project.get("dynamic") or _empty_project_dynamic(), _empty_project_dynamic()),
+                    now,
+                ),
+            )
+
+
+def _record_schema_migration(conn: sqlite3.Connection, version: str) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)",
+        (version,),
+    )
+
+
+def _json_load(value: Any, default: Any) -> Any:
+    if value is None or value == "":
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        parsed = json.loads(str(value))
+        return parsed if parsed is not None else default
+    except Exception:
+        return default
+
+
+def _json_dump(value: Any, default: Any) -> str:
+    payload = value if value is not None else default
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def _empty_project_dynamic() -> dict:
+    return {
+        "design_signatures": [],
+        "recurring_elements": [],
+        "sessions_analyzed": 0,
+    }
+
+
+def _project_row_to_workspace_project(row: sqlite3.Row) -> dict:
+    brief = _json_load(row["brief"], {})
+    if not isinstance(brief, dict):
+        brief = {"summary": str(row["brief"] or "")}
+    design_language = _json_load(row["design_language"], {})
+    if not isinstance(design_language, dict):
+        design_language = {}
+    dynamic = _json_load(row["dynamic"], _empty_project_dynamic())
+    if not isinstance(dynamic, dict):
+        dynamic = _empty_project_dynamic()
+    dynamic.setdefault("design_signatures", [])
+    dynamic.setdefault("recurring_elements", [])
+    dynamic.setdefault("sessions_analyzed", 0)
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "status": row["status"] or "active",
+        "created_at": row["created_at"],
+        "brief": brief,
+        "design_language": design_language,
+        "dynamic": dynamic,
+        **({"pending_review": _json_load(row["instructions"], {}).get("pending_review")}
+           if isinstance(_json_load(row["instructions"], {}), dict)
+           and _json_load(row["instructions"], {}).get("pending_review")
+           else {}),
+    }
 
 
 # ─── Auth ───
@@ -387,20 +516,64 @@ def save_personal_profile(email: str, profile: dict) -> None:
 
 def get_designer_workspace(email: str) -> dict:
     with _lock:
-        row = _get_conn().execute(
-            "SELECT designer_workspace FROM users WHERE email=?", (email,)
-        ).fetchone()
-        if not row:
+        conn = _get_conn()
+        user = conn.execute("SELECT email FROM users WHERE email=?", (email,)).fetchone()
+        if not user:
             return {"projects": []}
-        try:
-            return json.loads(row["designer_workspace"]) or {"projects": []}
-        except Exception:
-            return {"projects": []}
+        rows = conn.execute(
+            "SELECT * FROM projects WHERE user_email=? ORDER BY updated_at DESC",
+            (email,),
+        ).fetchall()
+        projects = [_project_row_to_workspace_project(row) for row in rows]
+        active = next((p["id"] for p in projects if p.get("status") == "active"), None)
+        return {
+            "active_project_id": active,
+            "projects": projects,
+            "meta": {"onboarding_completed": bool(projects), "updated_at": __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')},
+        }
 
 
 def save_designer_workspace(email: str, workspace: dict) -> None:
     with _lock:
         conn = _get_conn()
+        for project in workspace.get("projects", []):
+            project_id = project.get("id") or uuid.uuid4().hex
+            name = project.get("name") or "未命名项目"
+            status = project.get("status") or "active"
+            brief = project.get("brief") or {}
+            design_language = project.get("design_language") or {}
+            dynamic = project.get("dynamic") or _empty_project_dynamic()
+            extra = {}
+            if project.get("pending_review"):
+                extra["pending_review"] = project.get("pending_review")
+            description = project.get("description") or brief.get("summary") or ""
+            created_at = project.get("created_at") or __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+            conn.execute(
+                """INSERT INTO projects
+                   (id, user_email, name, status, description, brief, instructions, design_language, dynamic, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                   ON CONFLICT(id) DO UPDATE SET
+                   name=excluded.name,
+                   status=excluded.status,
+                   description=excluded.description,
+                   brief=excluded.brief,
+                   instructions=excluded.instructions,
+                   design_language=excluded.design_language,
+                   dynamic=excluded.dynamic,
+                   updated_at=datetime('now')""",
+                (
+                    project_id,
+                    email,
+                    name,
+                    status,
+                    description,
+                    _json_dump(brief, {}),
+                    _json_dump(extra, {}),
+                    _json_dump(design_language, {}),
+                    _json_dump(dynamic, _empty_project_dynamic()),
+                    created_at,
+                ),
+            )
         conn.execute(
             "UPDATE users SET designer_workspace=? WHERE email=?",
             (json.dumps(workspace, ensure_ascii=False), email),
@@ -411,13 +584,23 @@ def save_designer_workspace(email: str, workspace: dict) -> None:
 # ─── Chat Sessions ───
 
 def create_chat_session(
-    session_id: str, user_email: str, mode: str, designer_project_id: Optional[str]
+    session_id: str,
+    user_email: str,
+    mode: str,
+    designer_project_id: Optional[str],
+    design_id: Optional[str] = None,
 ) -> None:
     with _lock:
         conn = _get_conn()
         conn.execute(
-            "INSERT OR IGNORE INTO chat_sessions (id, user_email, mode, designer_project_id) VALUES (?,?,?,?)",
-            (session_id, user_email, mode, designer_project_id),
+            """INSERT INTO chat_sessions (id, user_email, mode, designer_project_id, design_id)
+               VALUES (?,?,?,?,?)
+               ON CONFLICT(id) DO UPDATE SET
+               user_email=excluded.user_email,
+               mode=excluded.mode,
+               designer_project_id=excluded.designer_project_id,
+               design_id=COALESCE(excluded.design_id, chat_sessions.design_id)""",
+            (session_id, user_email, mode, designer_project_id, design_id),
         )
         conn.commit()
 
@@ -426,6 +609,14 @@ def get_chat_session(session_id: str) -> Optional[sqlite3.Row]:
     with _lock:
         return _get_conn().execute(
             "SELECT * FROM chat_sessions WHERE id=?", (session_id,)
+        ).fetchone()
+
+
+def get_owned_chat_session(session_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM chat_sessions WHERE id=? AND user_email=?",
+            (session_id, user_email),
         ).fetchone()
 
 
@@ -1162,14 +1353,31 @@ def create_project(
     user_email: str,
     name: str,
     description: str = "",
+    *,
+    status: str = "active",
+    brief: Optional[dict] = None,
+    design_language: Optional[dict] = None,
+    dynamic: Optional[dict] = None,
 ) -> sqlite3.Row:
     now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
     with _lock:
         conn = _get_conn()
         conn.execute(
-            """INSERT INTO projects (id, user_email, name, description, created_at, updated_at)
-               VALUES (?,?,?,?,?,?)""",
-            (project_id, user_email, name, description, now, now),
+            """INSERT INTO projects
+               (id, user_email, name, status, description, brief, design_language, dynamic, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                project_id,
+                user_email,
+                name,
+                status,
+                description,
+                _json_dump(brief or {}, {}),
+                _json_dump(design_language or {}, {}),
+                _json_dump(dynamic or _empty_project_dynamic(), _empty_project_dynamic()),
+                now,
+                now,
+            ),
         )
         conn.commit()
     return get_project(project_id, user_email)
@@ -1197,12 +1405,19 @@ def list_projects(user_email: str, search: str = "") -> list[sqlite3.Row]:
 
 
 def patch_project(project_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
-    allowed = {"name", "description", "brief", "instructions", "starred"}
+    allowed = {"name", "description", "brief", "instructions", "starred", "status", "design_language", "dynamic"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
         return get_project(project_id, user_email)
     # Coerce bool → int for SQLite INTEGER columns
-    vals = [1 if (k == "starred" and v) else (0 if k == "starred" else v) for k, v in updates.items()]
+    vals = []
+    for k, v in updates.items():
+        if k == "starred":
+            vals.append(1 if v else 0)
+        elif k in ("brief", "design_language", "dynamic") and not isinstance(v, str):
+            vals.append(_json_dump(v, {} if k != "dynamic" else _empty_project_dynamic()))
+        else:
+            vals.append(v)
     set_clause = ", ".join(f"{k}=?" for k in updates) + ", updated_at=datetime('now')"
     with _lock:
         conn = _get_conn()
@@ -1317,13 +1532,18 @@ def add_message(
     design_id: str,
     role: str,
     content: str,
+    images: Optional[list] = None,
 ) -> None:
     now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
     with _lock:
         conn = _get_conn()
         conn.execute(
-            "INSERT INTO messages (id, design_id, role, content, created_at) VALUES (?,?,?,?,?)",
-            (message_id, design_id, role, content, now),
+            "INSERT INTO messages (id, design_id, role, content, images, created_at) VALUES (?,?,?,?,?,?)",
+            (message_id, design_id, role, content, _json_dump(images or [], []), now),
+        )
+        conn.execute(
+            "UPDATE designs SET updated_at=? WHERE id=?",
+            (now, design_id),
         )
         conn.commit()
 

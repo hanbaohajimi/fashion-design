@@ -305,6 +305,7 @@ class Session:
         self.user_email: Optional[str] = None
         self.mode: str = "personal"
         self.designer_project_id: Optional[str] = None
+        self.design_id: Optional[str] = None
 
     def touch(self):
         self.last_active = datetime.now()
@@ -940,6 +941,7 @@ class ChatRequest(BaseModel):
     message: str
     mode: str = "personal"
     designer_project_id: Optional[str] = None
+    design_id: Optional[str] = None
     trend_id: Optional[str] = None
     trend_enabled: bool = False
 
@@ -1042,7 +1044,7 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": tc["function"]["name"].replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", **info}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1073,7 +1075,7 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": func_name.replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", **info}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1117,7 +1119,7 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": func_name.replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", **info}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         err_text = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1273,6 +1275,41 @@ def _require_user(auth_token: Optional[str] = None) -> _sqlite3.Row:
     if not user:
         raise HTTPException(status_code=401, detail="Token 无效或已过期")
     return user
+
+
+def _ensure_owned_session(
+    user_email: str,
+    session_id: str,
+    *,
+    mode: str = "personal",
+    designer_project_id: Optional[str] = None,
+    design_id: Optional[str] = None,
+    create_if_missing: bool = True,
+) -> Optional[str]:
+    """Return the design id bound to this session after checking ownership."""
+    existing = db.get_chat_session(session_id)
+    if existing:
+        if existing["user_email"] != user_email:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        return existing["design_id"] or design_id
+
+    target_design_id = design_id or session_id
+    design = db.get_design(target_design_id, user_email)
+    if design:
+        db.create_chat_session(
+            session_id,
+            user_email,
+            mode,
+            designer_project_id or design["project_id"],
+            design_id=target_design_id,
+        )
+        return target_design_id
+
+    if create_if_missing:
+        db.create_chat_session(session_id, user_email, mode, designer_project_id, design_id=design_id)
+        return design_id
+
+    raise HTTPException(status_code=404, detail="会话不存在")
 
 
 _PUBLIC_API_PATHS = {
@@ -1750,6 +1787,7 @@ class DesignerProjectPatchRequest(BaseModel):
     name: Optional[str] = None
     brief: Optional[dict] = None
     design_language: Optional[dict] = None
+    status: Optional[str] = None
     status: Optional[str] = None
 
 class DesignerProjectAnalyzeRequest(BaseModel):

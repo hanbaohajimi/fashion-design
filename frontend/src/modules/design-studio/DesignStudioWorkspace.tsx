@@ -3,6 +3,8 @@ import { useToast } from '../../components/Toast';
 import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings, Sparkles } from 'lucide-react';
 import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject, Trend } from '../../types/profile';
 import type { DesignCanvasHandle } from './components/DesignCanvas';
+import { fetchDesign } from '../../api/designsApi';
+import type { ChatMessage } from './components/chat-panel/types';
 import {
   fetchPersonalProfile,
   fetchDesignerWorkspace,
@@ -69,7 +71,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
   const [chatCollapsed, setChatCollapsed] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('fashion-studio-chat-collapsed') === '1',
   );
-  const [chatSessionId, setChatSessionId] = useState<string | undefined>(undefined);
+  const [chatSessionId, setChatSessionId] = useState<string | undefined>(designId);
+  const [initialChatMessages, setInitialChatMessages] = useState<ChatMessage[] | undefined>(undefined);
   const [activeTrendId, setActiveTrendId] = useState<string | undefined>(initialTrend?.id);
   const [trendEnabled, setTrendEnabled] = useState(!!initialTrend);
 
@@ -174,6 +177,25 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
   useEffect(() => {
     void recheckDesignBackend();
   }, [recheckDesignBackend]);
+
+  useEffect(() => {
+    if (!designId) {
+      setInitialChatMessages(undefined);
+      return;
+    }
+    setChatSessionId(designId);
+    fetchDesign(user.auth_token, designId)
+      .then(({ messages }) => {
+        setInitialChatMessages(messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          images: m.images,
+          timestamp: new Date(m.created_at),
+        })));
+      })
+      .catch(() => setInitialChatMessages(undefined));
+  }, [designId, user.auth_token]);
 
   // ── Mode/session management ────────────────────────────
 
@@ -359,6 +381,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
           designerProjectId={selectedProjectId}
           trendId={activeTrendId}
           trendEnabled={trendEnabled}
+          designId={designId}
+          initialMessages={initialChatMessages}
           onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
           modeBar={
             <Suspense fallback={<span className="block h-9 w-40 rounded-xl bg-[color:var(--overlay-medium)]" />}>

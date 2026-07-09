@@ -1,6 +1,28 @@
-from fastapi import APIRouter
+import asyncio
+import os
+import urllib.request
+import uuid
+from typing import Optional
 
-from runtime import *
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
+
+import db
+from runtime import (
+    OUTPUTS_DIR,
+    OutfitAddItemRequest,
+    OutfitCreateRequest,
+    OutfitPatchRequest,
+    WardrobeBatchDeleteRequest,
+    WardrobeFromDesignRequest,
+    WardrobeFromTrendRequest,
+    WardrobePatchRequest,
+    _PERSON_IMAGE_TYPES,
+    _ensure_owned_session,
+    _require_wardrobe_user,
+    _save_wardrobe_image,
+    _wardrobe_auto_tag,
+    _wardrobe_row_to_dict,
+)
 
 router = APIRouter()
 
@@ -38,6 +60,8 @@ async def wardrobe_from_trend(req: WardrobeFromTrendRequest, authorization: Opti
 @router.post("/api/wardrobe/items/from-design")
 async def wardrobe_from_design(req: WardrobeFromDesignRequest, authorization: Optional[str] = Header(None)):
     email = _require_wardrobe_user(authorization)
+    if req.session_id:
+        _ensure_owned_session(email, req.session_id, create_if_missing=False)
     if req.image_type in _PERSON_IMAGE_TYPES:
         raise HTTPException(
             400,
@@ -45,7 +69,10 @@ async def wardrobe_from_design(req: WardrobeFromDesignRequest, authorization: Op
         )
     item_id = uuid.uuid4().hex[:12]
     src_rel = req.image_url.removeprefix("/api/design/images/")
-    src_path = os.path.join(OUTPUTS_DIR, src_rel.replace("/", os.sep))
+    base_dir = os.path.abspath(OUTPUTS_DIR)
+    src_path = os.path.abspath(os.path.join(base_dir, src_rel.replace("/", os.sep)))
+    if os.path.commonpath([base_dir, src_path]) != base_dir:
+        raise HTTPException(404, "Source image not found")
     if not os.path.exists(src_path):
         raise HTTPException(404, "Source image not found")
     with open(src_path, "rb") as f:
@@ -190,4 +217,3 @@ async def wardrobe_remove_outfit_item(outfit_id: str, wardrobe_item_id: str, aut
     if not ok:
         raise HTTPException(404, "Item not in outfit")
     return {"ok": True}
-

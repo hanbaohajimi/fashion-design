@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
-from runtime import *
+from fastapi import HTTPException
+
+from runtime import APP_VERSION, _health_payload, get_storage, logger, settings
 
 router = APIRouter()
 
@@ -46,4 +48,3 @@ async def get_stats():
         return get_storage().get_stats()
     except Exception as exc:
         raise HTTPException(500, str(exc))
-

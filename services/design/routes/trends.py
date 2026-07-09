@@ -1,6 +1,16 @@
-from fastapi import APIRouter
+from typing import Optional
 
-from runtime import *
+from fastapi import APIRouter, Header, HTTPException
+
+import db
+from runtime import (
+    TrendFavoriteRequest,
+    TrendSyncRequest,
+    _compute_match_score,
+    _require_user,
+    _row_to_trend,
+    _sync_trends_from_report,
+)
 
 router = APIRouter()
 
@@ -90,4 +100,3 @@ async def unfavorite_trend(trend_id: str, authorization: Optional[str] = Header(
     user = _require_user(token)
     db.remove_trend_favorite(user["email"], trend_id)
     return {"status": "ok"}
-

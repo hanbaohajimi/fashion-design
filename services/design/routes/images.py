@@ -1,6 +1,26 @@
-from fastapi import APIRouter
+import asyncio
+import json
+import os
+import traceback
+import uuid
+from typing import Optional
 
-from runtime import *
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
+from PIL import Image
+from starlette.datastructures import UploadFile as StarletteUploadFile
+
+from ai_clients import generate_image, simple_chat, vision_analyze
+from runtime import (
+    MAX_UPLOAD_BATCH,
+    OUTPUTS_DIR,
+    AnalyzeRequest,
+    EnhancePromptRequest,
+    Session,
+    _ensure_owned_session,
+    _require_user,
+    get_session,
+)
 
 router = APIRouter()
 
@@ -33,6 +53,8 @@ async def upload_file(request: Request):
             detail="未收到图片文件。请用字段名 file 或 files 上传；多图可多次使用 files。",
         )
 
+    user = _require_user()
+    _ensure_owned_session(user["email"], str(session_id))
     session = get_session(str(session_id))
     if len(files_list) > MAX_UPLOAD_BATCH:
         raise HTTPException(status_code=400, detail=f"最多同时上传 {MAX_UPLOAD_BATCH} 张图片")
@@ -81,7 +103,10 @@ async def upload_file(request: Request):
 
 @router.get("/api/images/{path:path}")
 async def serve_image(path: str):
-    file_path = os.path.join(OUTPUTS_DIR, path)
+    base_dir = os.path.abspath(OUTPUTS_DIR)
+    file_path = os.path.abspath(os.path.join(base_dir, path))
+    if os.path.commonpath([base_dir, file_path]) != base_dir:
+        raise HTTPException(status_code=404, detail="Image not found")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(file_path, media_type="image/png")
@@ -96,6 +121,8 @@ async def edit_with_mask(
 ):
     try:
         if session_id:
+            user = _require_user()
+            _ensure_owned_session(user["email"], session_id)
             session = get_session(session_id)
         else:
             session = Session(session_id=str(uuid.uuid4()))
@@ -192,6 +219,8 @@ async def enhance_prompt(req: EnhancePromptRequest):
 async def analyze_image(req: AnalyzeRequest):
     """Use vision model to analyze a fashion image and return structured insights."""
     try:
+        user = _require_user()
+        _ensure_owned_session(user["email"], req.session_id, create_if_missing=False)
         session = get_session(req.session_id)
         img_path = req.image_path
         if not img_path or not os.path.exists(img_path):
@@ -228,4 +257,3 @@ async def analyze_image(req: AnalyzeRequest):
     except Exception as e:
         print(f"[ERROR] analyze_image: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
-

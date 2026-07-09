@@ -5,6 +5,7 @@
 ───────────────────────────────────────────────────────────────── */
 
 const API = '';          // same origin; change to 'http://localhost:8000' for dev
+const IS_EMBEDDED = new URLSearchParams(location.search).get('embedded') === '1';
 const PAGE_TITLES = {
   dashboard : '仪表盘',
   reports   : '趋势报告',
@@ -119,6 +120,8 @@ let pipelineLastData = null;
 let _pendingSeasonTag = null;
 /** 从季节趋势点标签进入时：列表加载后自动打开该筛选下第一条报告的详情 */
 let _autoOpenFirstReportAfterLoad = false;
+/** 嵌入模式下通过 URL hash #report/<id> 直接定位的报告 id */
+let _pendingReportId = null;
 
 const PIPELINE_STAGE_FLOW = [
   { key: 'boot', label: '初始化' },
@@ -132,15 +135,38 @@ const PIPELINE_STAGE_FLOW = [
 ];
 
 // ── Boot ─────────────────────────────────────────────────────────
+
+function getReportIdFromHash() {
+  const m = location.hash.match(/^#report\/(.+)$/);
+  return m ? decodeURIComponent(m[1]).trim() : null;
+}
+
+function handleReportHashNavigation() {
+  const reportId = getReportIdFromHash();
+  if (!reportId) return;
+  _pendingReportId = reportId;
+  nav('reports');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   createToastContainer();
   setupNav();
   setupImageLightbox();
   setupArticleHtmlModal();
-  connectWS();
+  if (!IS_EMBEDDED) connectWS();
   loadMeta();
-  loadDashboard();
+
+  if (IS_EMBEDDED) {
+    handleReportHashNavigation();
+    if (!getReportIdFromHash()) loadDashboard();
+  } else {
+    loadDashboard();
+  }
   requestAnimationFrame(() => document.body.classList.add('app-ready'));
+});
+
+window.addEventListener('hashchange', () => {
+  if (IS_EMBEDDED) handleReportHashNavigation();
 });
 
 // ── Image lightbox（报告/仪表盘/文章缩略图点击放大）────────────────
@@ -909,12 +935,12 @@ async function loadReports(offset) {
     renderReportsList(data.reports);
     renderPagination('reportsPagination', reportsTotal, 20, offset, loadReports);
 
-    if (_autoOpenFirstReportAfterLoad) {
+    if (_autoOpenFirstReportAfterLoad || _pendingReportId) {
       _autoOpenFirstReportAfterLoad = false;
       const rows = data.reports || [];
-      if (rows.length && rows[0].report_id) {
-        await selectReport(rows[0].report_id);
-      }
+      const targetId = _pendingReportId || (rows.length && rows[0].report_id);
+      _pendingReportId = null;
+      if (targetId) await selectReport(targetId);
     }
   } catch (e) {
     document.getElementById('reportsList').innerHTML =

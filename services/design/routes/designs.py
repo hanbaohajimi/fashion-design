@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import uuid
-from fastapi import APIRouter
+import json
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from runtime import *
+import db
+from runtime import _require_user
 
 router = APIRouter()
 
@@ -29,6 +31,20 @@ def _design_to_dict(row) -> dict:
         "project_id": row["project_id"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+    }
+
+
+def _message_to_dict(row) -> dict:
+    try:
+        images = json.loads(row["images"] or "[]")
+    except Exception:
+        images = []
+    return {
+        "id": row["id"],
+        "role": row["role"],
+        "content": row["content"],
+        "images": images if isinstance(images, list) else [],
+        "created_at": row["created_at"],
     }
 
 
@@ -74,15 +90,7 @@ async def get_design(design_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="设计不存在")
     messages = db.list_messages(design_id)
-    msgs = [
-        {
-            "id": m["id"],
-            "role": m["role"],
-            "content": m["content"],
-            "created_at": m["created_at"],
-        }
-        for m in messages
-    ]
+    msgs = [_message_to_dict(m) for m in messages]
     return {"design": _design_to_dict(row), "messages": msgs}
 
 

@@ -2,13 +2,23 @@
 from __future__ import annotations
 
 import uuid
-from fastapi import APIRouter
+import json
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from runtime import *
+import db
+from runtime import _require_user
 
 router = APIRouter()
+
+
+def _json_obj(raw, default):
+    try:
+        parsed = json.loads(raw or "{}")
+        return parsed if isinstance(parsed, type(default)) else default
+    except Exception:
+        return default
 
 
 class CreateProjectRequest(BaseModel):
@@ -19,9 +29,12 @@ class CreateProjectRequest(BaseModel):
 class PatchProjectRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    brief: Optional[str] = None
+    brief: Optional[object] = None
     instructions: Optional[str] = None
     starred: Optional[bool] = None
+    status: Optional[str] = None
+    design_language: Optional[dict] = None
+    dynamic: Optional[dict] = None
 
 
 def _project_to_dict(row) -> dict:
@@ -30,9 +43,12 @@ def _project_to_dict(row) -> dict:
     return {
         "id": row["id"],
         "name": row["name"],
+        "status": row["status"] or "active",
         "description": row["description"] or "",
-        "brief": row["brief"] or "",
+        "brief": _json_obj(row["brief"], {}),
         "instructions": row["instructions"] or "",
+        "design_language": _json_obj(row["design_language"], {}),
+        "dynamic": _json_obj(row["dynamic"], {}),
         "starred": bool(row["starred"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],

@@ -1,6 +1,28 @@
-from fastapi import APIRouter
+import uuid
+from datetime import datetime
+from typing import Optional
 
-from runtime import *
+from fastapi import APIRouter, Header, HTTPException
+
+import db
+from runtime import (
+    CreateSessionRequest,
+    DesignerProjectAnalyzeRequest,
+    DesignerProjectConfirmRequest,
+    DesignerProjectCreateRequest,
+    DesignerProjectPatchRequest,
+    PersonalAnalyzeRequest,
+    PersonalOnboardingRequest,
+    PersonalStaticPatchRequest,
+    ProfileConfirmRequest,
+    ProjectTrendAddRequest,
+    _build_personalization_context,
+    _build_trend_context,
+    _maybe_analyze_designer,
+    _maybe_analyze_personal,
+    _require_user,
+    get_session,
+)
 
 router = APIRouter()
 
@@ -104,6 +126,8 @@ async def patch_designer_project(project_id: str, req: DesignerProjectPatchReque
         if proj["id"] == project_id:
             if req.name is not None:
                 proj["name"] = req.name
+            if req.status is not None:
+                proj["status"] = req.status
             if req.brief is not None:
                 proj.setdefault("brief", {}).update(req.brief)
             if req.design_language is not None:
@@ -172,6 +196,8 @@ async def create_conversation(req: CreateSessionRequest):
         designer_project = next(
             (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
         )
+        if not designer_project:
+            raise HTTPException(status_code=404, detail="项目不存在")
     ctx = _build_personalization_context(req.mode, personal_profile, designer_project)
     if req.mode == "personal":
         trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
@@ -230,4 +256,3 @@ async def remove_trend_from_project(
             break
     db.save_designer_workspace(user["email"], workspace)
     return {"workspace": workspace}
-

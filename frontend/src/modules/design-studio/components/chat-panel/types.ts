@@ -65,6 +65,9 @@ export interface ChatPanelProps {
   onSessionIdChange?: (sessionId: string) => void;
   /** 外部控制的 session_id（个性化模式由 Workspace 预创建） */
   externalSessionId?: string;
+  /** 当前设计线程 id；通常与 route chatId 相同，用于后端消息持久化。 */
+  designId?: string;
+  initialMessages?: ChatMessage[];
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   side?: 'left' | 'right';

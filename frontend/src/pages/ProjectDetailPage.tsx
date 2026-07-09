@@ -20,12 +20,12 @@ function RightPanel({
 }) {
   const [editingBrief, setEditingBrief] = useState(false);
   const [editingRules, setEditingRules] = useState(false);
-  const [briefVal, setBriefVal] = useState(project.brief || '');
+  const [briefVal, setBriefVal] = useState(project.description || '');
   const [rulesVal, setRulesVal] = useState(project.instructions || '');
 
   const saveBrief = async () => {
-    await patchProject(authToken, project.id, { brief: briefVal });
-    onSave({ brief: briefVal });
+    await patchProject(authToken, project.id, { description: briefVal });
+    onSave({ description: briefVal });
     setEditingBrief(false);
   };
   const saveRules = async () => {
@@ -62,7 +62,7 @@ function RightPanel({
           </div>
         ) : (
           <p className="project-panel-text">
-            {project.brief || <span className="project-panel-placeholder">点击编辑添加项目简介...</span>}
+            {project.description || <span className="project-panel-placeholder">点击编辑添加项目简介...</span>}
           </p>
         )}
       </div>
