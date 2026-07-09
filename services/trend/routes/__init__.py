@@ -1,0 +1,1 @@
+"""Trend API route modules."""

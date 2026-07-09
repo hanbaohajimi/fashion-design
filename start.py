@@ -1,178 +1,329 @@
 """
-AI Fashion Design Platform — Single-command startup
-Usage: python start.py
-Starts Frontend (port 3100) + Design Studio (port 8001) + Trend Analysis (port 8002)
+AI Fashion Design Platform local console.
+
+Usage:
+  python start.py
+  python start.py --check-only
+
+Starts Frontend (port 3100 by default) + Design API (8001) + Trend API (8002),
+then prints a compact platform health summary.
 """
-import subprocess
-import sys
+from __future__ import annotations
+
+import argparse
 import os
 import signal
-import time
+import socket
+import subprocess
+import sys
 import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
 
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_DIR = os.path.join(PROJECT_DIR, "frontend")
-DESIGN_DIR = os.path.join(PROJECT_DIR, "services", "design")
-TREND_DIR = os.path.join(PROJECT_DIR, "services")
+
+PROJECT_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = PROJECT_DIR / "frontend"
+DESIGN_DIR = PROJECT_DIR / "services" / "design"
+TREND_RUNNER_DIR = PROJECT_DIR / "services"
+
+PROFILES_DB = DESIGN_DIR / "data" / "profiles.db"
+TREND_DB = PROJECT_DIR / "services" / "trend" / "storage" / "fashion_pipeline.db"
+
+processes: list[subprocess.Popen] = []
+
+
+@dataclass(frozen=True)
+class StatusLine:
+    level: str
+    message: str
 
 
 def _load_dotenv() -> None:
-    """加载项目根目录 .env（KEY=VALUE），不覆盖已存在的环境变量。"""
-    path = os.path.join(PROJECT_DIR, ".env")
-    if not os.path.isfile(path):
+    """Load root .env without overriding existing environment variables."""
+    path = PROJECT_DIR / ".env"
+    if not path.is_file():
         return
+
     try:
-        with open(path, encoding="utf-8") as f:
-            for raw in f:
-                line = raw.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" not in line:
-                    continue
-                key, _, val = line.partition("=")
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = val
-    except OSError:
-        pass
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+    except OSError as exc:
+        print(f"[WARN] Could not read .env: {exc}")
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        print(f"[WARN] Invalid {name}={raw!r}; using {default}")
+        return default
 
 
 _load_dotenv()
-FRONTEND_PORT = int(os.environ.get("FASHION_FRONTEND_PORT", "3100"))
+FRONTEND_PORT = _int_env("FASHION_FRONTEND_PORT", 3100)
+DESIGN_PORT = _int_env("DESIGN_STUDIO_PORT", 8001)
+TREND_PORT = _int_env("TREND_ANALYSIS_PORT", 8002)
 
-processes = []
 
-
-def stream_output(proc, prefix, color):
-    """Stream subprocess output with a colored prefix."""
-    colors = {"red": "\033[91m", "green": "\033[92m", "blue": "\033[94m", "reset": "\033[0m"}
-    c = colors.get(color, "")
-    r = colors["reset"]
+def stream_output(proc: subprocess.Popen, prefix: str) -> None:
+    """Stream subprocess output with a stable service prefix."""
+    if proc.stdout is None:
+        return
     try:
         for line in iter(proc.stdout.readline, b""):
             text = line.decode("utf-8", errors="replace").rstrip()
             if text:
-                print(f"{c}[{prefix}]{r} {text}")
+                print(f"[{prefix}] {text}", flush=True)
     except Exception:
         pass
 
 
-def start_service(name, cmd, cwd, color):
+def start_service(name: str, cmd: str, cwd: Path) -> subprocess.Popen | None:
     """Start a subprocess and stream its output."""
-    env = os.environ.copy()
     try:
         proc = subprocess.Popen(
             cmd,
-            cwd=cwd,
+            cwd=str(cwd),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            env=env,
+            env=os.environ.copy(),
             shell=True,
         )
         processes.append(proc)
-        thread = threading.Thread(target=stream_output, args=(proc, name, color), daemon=True)
+        thread = threading.Thread(target=stream_output, args=(proc, name), daemon=True)
         thread.start()
         return proc
-    except Exception as e:
-        print(f"\033[91m[ERROR]\033[0m Failed to start {name}: {e}")
+    except Exception as exc:
+        print(f"[ERROR] Failed to start {name}: {exc}")
         return None
 
 
-def check_port(port, timeout=8):
-    """Wait for a port to become available."""
-    import socket
-    start = time.time()
-    while time.time() - start < timeout:
+def check_port(port: int, timeout: float = 8.0) -> bool:
+    """Wait for a local TCP port to accept connections."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=1):
                 return True
-        except (ConnectionRefusedError, OSError):
+        except OSError:
             time.sleep(0.5)
     return False
 
 
-def cleanup(*args):
-    print("\n\033[93m[PLATFORM]\033[0m Shutting down all services...")
-    for p in processes:
+def check_file(path: Path, ok_message: str, warn_message: str) -> StatusLine:
+    if path.is_file():
+        return StatusLine("OK", ok_message)
+    return StatusLine("WARN", f"{warn_message}: {path}")
+
+
+def check_amux_key() -> StatusLine:
+    if os.environ.get("AMUX_API_KEY", "").strip():
+        return StatusLine("OK", "AMUX_API_KEY configured")
+    return StatusLine("WARN", "AMUX_API_KEY missing, design AI will use stub mode")
+
+
+def _extract_playwright_chromium_locations(output: str) -> list[Path]:
+    locations: list[Path] = []
+    in_chromium_block = False
+
+    for raw in output.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+
+        if "playwright chromium" in line:
+            in_chromium_block = True
+            continue
+        if line.startswith(("FFmpeg", "Winldd")):
+            in_chromium_block = False
+            continue
+
+        if in_chromium_block and line.startswith("Install location:"):
+            _, _, value = line.partition(":")
+            location = value.strip()
+            if location:
+                locations.append(Path(location))
+
+    return locations
+
+
+def check_playwright_chromium() -> StatusLine:
+    try:
+        import playwright  # noqa: F401
+    except Exception:
+        return StatusLine(
+            "WARN",
+            "Playwright package missing, run: python -m pip install playwright",
+        )
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium", "--dry-run"],
+            cwd=str(PROJECT_DIR),
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+        )
+    except Exception as exc:
+        return StatusLine("WARN", f"Playwright Chromium check failed: {exc}")
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip().splitlines()
+        suffix = f": {detail[-1]}" if detail else ""
+        return StatusLine("WARN", f"Playwright Chromium check failed{suffix}")
+
+    locations = _extract_playwright_chromium_locations(result.stdout)
+    if any(path.is_dir() for path in locations):
+        return StatusLine("OK", "Playwright Chromium installed")
+
+    return StatusLine(
+        "WARN",
+        "Playwright Chromium missing, run: python -m playwright install chromium",
+    )
+
+
+def service_port_status(name: str, port: int, ready: bool) -> StatusLine:
+    if ready:
+        return StatusLine("OK", f"{name} port: {port}")
+    return StatusLine("WARN", f"{name} port: {port} not responding yet")
+
+
+def print_status(lines: list[StatusLine]) -> None:
+    print("Fashion Design Platform")
+    print()
+    for line in lines:
+        print(f"[{line.level}] {line.message}")
+    print()
+    print(f"Open: http://localhost:{FRONTEND_PORT}")
+
+
+def build_preflight_status() -> list[StatusLine]:
+    return [
+        check_file(PROFILES_DB, "profiles.db found", "profiles.db missing"),
+        check_file(TREND_DB, "fashion_pipeline.db found", "fashion_pipeline.db missing"),
+        check_amux_key(),
+        check_playwright_chromium(),
+    ]
+
+
+def ensure_frontend_dependencies() -> None:
+    node_modules = FRONTEND_DIR / "node_modules"
+    if node_modules.is_dir():
+        return
+
+    print("[PLATFORM] Installing frontend dependencies...")
+    subprocess.run("npm install", cwd=str(FRONTEND_DIR), shell=True, check=True)
+    print()
+
+
+def cleanup(*_args: object) -> None:
+    print("\n[PLATFORM] Shutting down all services...")
+    for proc in processes:
         try:
-            p.terminate()
+            proc.terminate()
         except Exception:
             pass
+
     time.sleep(1)
-    for p in processes:
+
+    for proc in processes:
         try:
-            p.kill()
+            if proc.poll() is None:
+                proc.kill()
         except Exception:
             pass
-    print("\033[93m[PLATFORM]\033[0m All services stopped.")
-    sys.exit(0)
+
+    print("[PLATFORM] All services stopped.")
+    raise SystemExit(0)
 
 
-def main():
-    signal.signal(signal.SIGINT, cleanup)
-    signal.signal(signal.SIGTERM, cleanup)
-
-    print()
-    print("\033[1m╔══════════════════════════════════════════════════╗\033[0m")
-    print("\033[1m║       AI Fashion Design Platform  v1.0           ║\033[0m")
-    print("\033[1m╚══════════════════════════════════════════════════╝\033[0m")
-    print()
-
-    # Check node_modules
-    if not os.path.isdir(os.path.join(FRONTEND_DIR, "node_modules")):
-        print("\033[93m[PLATFORM]\033[0m Installing frontend dependencies...")
-        subprocess.run("npm install", cwd=FRONTEND_DIR, shell=True, check=True)
-        print()
-
-    # Start services
+def start_platform() -> None:
     python_cmd = sys.executable
 
-    print("\033[92m[1/3]\033[0m Starting Design Studio (port 8001)...")
-    start_service("Design", f'"{python_cmd}" run.py', DESIGN_DIR, "green")
+    print("[PLATFORM] Starting Design API...")
+    start_service("Design", f'"{python_cmd}" run.py', DESIGN_DIR)
 
-    print("\033[94m[2/3]\033[0m Starting Trend Analysis (port 8002)...")
-    start_service("Trend", f'"{python_cmd}" trend_runner.py', TREND_DIR, "blue")
+    print("[PLATFORM] Starting Trend API...")
+    start_service("Trend", f'"{python_cmd}" trend_runner.py', TREND_RUNNER_DIR)
 
     time.sleep(2)
 
-    print(f"\033[91m[3/3]\033[0m Starting Frontend (port {FRONTEND_PORT})...")
-    start_service("Front", f"npx vite --port {FRONTEND_PORT} --host", FRONTEND_DIR, "red")
+    print("[PLATFORM] Starting Frontend...")
+    start_service("Frontend", f"npx vite --port {FRONTEND_PORT} --host 0.0.0.0", FRONTEND_DIR)
 
-    # Wait for services
-    time.sleep(3)
+
+def wait_for_platform() -> list[StatusLine]:
+    frontend_ready = check_port(FRONTEND_PORT, timeout=12)
+    design_ready = check_port(DESIGN_PORT, timeout=8)
+    trend_ready = check_port(TREND_PORT, timeout=8)
+
+    return [
+        service_port_status("Frontend", FRONTEND_PORT, frontend_ready),
+        service_port_status("Design API", DESIGN_PORT, design_ready),
+        service_port_status("Trend API", TREND_PORT, trend_ready),
+        *build_preflight_status(),
+    ]
+
+
+def monitor_processes() -> None:
+    while True:
+        for proc in processes:
+            if proc.poll() is not None:
+                continue
+        time.sleep(2)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Start the local Fashion Design Platform.")
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Print platform checks without starting services.",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
+    if args.check_only:
+        lines = [
+            StatusLine("OK", f"Frontend port: {FRONTEND_PORT}"),
+            StatusLine("OK", f"Design API port: {DESIGN_PORT}"),
+            StatusLine("OK", f"Trend API port: {TREND_PORT}"),
+            *build_preflight_status(),
+        ]
+        print_status(lines)
+        return
+
+    ensure_frontend_dependencies()
+    start_platform()
+
     print()
-    print("\033[1m┌──────────────────────────────────────────────────┐\033[0m")
-
-    if check_port(8001, 5):
-        print("\033[1m│  \033[92m●\033[0m\033[1m Design Studio   http://localhost:8001       │\033[0m")
-    else:
-        print("\033[1m│  \033[91m○\033[0m\033[1m Design Studio   启动中...                   │\033[0m")
-
-    if check_port(8002, 3):
-        print("\033[1m│  \033[92m●\033[0m\033[1m Trend Analysis  http://localhost:8002       │\033[0m")
-    else:
-        print("\033[1m│  \033[93m○\033[0m\033[1m Trend Analysis  需要 ai_fashion 依赖        │\033[0m")
-
-    if check_port(FRONTEND_PORT, 5):
-        print(f"\033[1m│  \033[92m●\033[0m\033[1m Frontend        http://localhost:{FRONTEND_PORT}       │\033[0m")
-    else:
-        print("\033[1m│  \033[91m○\033[0m\033[1m Frontend        启动中...                   │\033[0m")
-
-    print("\033[1m├──────────────────────────────────────────────────┤\033[0m")
-    print(f"\033[1m│  \033[96m→ 打开浏览器访问 http://localhost:{FRONTEND_PORT}\033[0m\033[1m        │\033[0m")
-    print("\033[1m│  \033[90mCtrl+C 停止所有服务\033[0m\033[1m                         │\033[0m")
-    print("\033[1m└──────────────────────────────────────────────────┘\033[0m")
+    lines = wait_for_platform()
+    print_status(lines)
+    print("Press Ctrl+C to stop all services.")
     print()
 
-    # Keep running
     try:
-        while True:
-            # Check if any process died
-            for p in processes:
-                if p.poll() is not None:
-                    pass  # Don't crash if one service exits
-            time.sleep(2)
+        monitor_processes()
     except KeyboardInterrupt:
         cleanup()
 

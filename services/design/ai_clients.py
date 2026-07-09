@@ -13,15 +13,26 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from openai import OpenAI
 
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from model_router import model_router
+
 AMUX_API_KEY = os.environ["AMUX_API_KEY"]
 AMUX_BASE_URL = os.environ.get("AMUX_BASE_URL", "https://api.amux.ai/v1")
 
-TEXT_MODEL = os.environ.get("AMUX_TEXT_MODEL", "gemini-3-pro-preview")
-IMAGE_MODEL = os.environ.get("AMUX_IMAGE_MODEL", "gpt-image-2")
+TEXT_MODEL = model_router.text_model("design_chat").model
+VISION_MODEL = model_router.vision_model("vision_tagging").model
+IMAGE_MODEL = model_router.image_model("image_generation").model
+IMAGE_EDIT_MODEL = model_router.image_edit_model("image_edit").model
+TRYON_MODEL = model_router.tryon_model("virtual_tryon").model
 
 _client = OpenAI(api_key=AMUX_API_KEY, base_url=AMUX_BASE_URL)
 
@@ -58,10 +69,11 @@ def generate_image(
             n=1,
         )
     else:
+        model = TRYON_MODEL if len(reference_paths) >= 2 else IMAGE_EDIT_MODEL
         files = [open(p, "rb") for p in reference_paths]
         try:
             resp = _client.images.edit(
-                model=IMAGE_MODEL,
+                model=model,
                 image=files if len(files) > 1 else files[0],
                 prompt=prompt,
                 size=size,
@@ -100,7 +112,7 @@ def _image_to_data_url(path: str) -> str:
 def vision_analyze(image_path: str, prompt: str) -> str:
     """读一张图 + 一段文字,返回模型文本回复(用于 tag、analyze、enhance)。"""
     resp = _client.chat.completions.create(
-        model=TEXT_MODEL,
+        model=VISION_MODEL,
         messages=[{
             "role": "user",
             "content": [

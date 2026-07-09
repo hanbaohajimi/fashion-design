@@ -11,16 +11,24 @@ llm_analyzer.py — LLM 趋势分析模块
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
 
 from loguru import logger
 
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
 from config import settings
+from model_router import model_router
 from models import (
     Article,
     ArticleTrendInsight,
@@ -43,6 +51,16 @@ from prompts.trend_analysis import (
     build_text_only_messages,
 )
 from time_utils import local_now
+
+
+def _trend_route():
+    return model_router.route(
+        "trend_analysis",
+        default_primary=settings.llm_model,
+        default_fallback=os.environ.get("LLM_FALLBACK_MODEL"),
+        default_provider=settings.llm_provider,
+        default_api_base=settings.llm_base_url,
+    )
 
 
 # ─────────────────────────────────────────────
@@ -239,30 +257,17 @@ def _get_litellm():
 
 def _build_model_id() -> str:
     """构建 LiteLLM 格式的 model id"""
-    provider = settings.llm_provider.lower()
-    model = settings.llm_model
+    return model_router.litellm_model_id(_trend_route())
 
-    if provider == "openai":
-        # 若模型名不带 provider 前缀，加上 openai/ 强制走 OpenAI/兼容接口路由
-        # 防止 LiteLLM 按模型名自动路由到 Vertex AI（如 gemini-*）
-        if "/" not in model:
-            return f"openai/{model}"
-        return model
-    elif provider == "anthropic":
-        return f"anthropic/{model}"
-    elif provider == "deepseek":
-        if "/" not in model:
-            return f"deepseek/{model}"
-        return model
-    elif provider == "local":
-        return f"ollama/{model}"  # 默认用 ollama，可按需修改
-    else:
-        return model  # 直接传，litellm 自动识别
+
+def _build_fallback_model_id() -> Optional[str]:
+    """返回 LiteLLM 格式的 fallback model id，没有配置则为 None。"""
+    return model_router.litellm_fallback_model_id(_trend_route())
 
 
 def _supports_vision() -> bool:
     """粗判断当前模型是否支持视觉输入"""
-    model = settings.llm_model.lower()
+    model = _trend_route().model.lower()
     vision_models = (
         "gpt-4o", "gpt-4-vision", "gpt-4-turbo", "gpt-4.1", "o4",
         "claude-3", "claude-sonnet", "claude-opus", "claude-haiku",
@@ -288,66 +293,95 @@ async def _call_llm(
     """
     import asyncio
     litellm = _get_litellm()
-    model_id = _build_model_id()
+    primary_model_id = _build_model_id()
+    fallback_model_id = _build_fallback_model_id()
 
-    kwargs: dict[str, Any] = {
-        "model": model_id,
+    kwargs_base: dict[str, Any] = {
         "messages": messages,
         "max_tokens": settings.llm_max_tokens,
         "temperature": settings.llm_temperature,
         "api_key": settings.api_key,
         "timeout": float(settings.llm_request_timeout),
     }
-    if settings.llm_base_url:
-        kwargs["api_base"] = settings.llm_base_url
+    route = _trend_route()
+    api_base = route.api_base or settings.llm_base_url
+    if api_base:
+        kwargs_base["api_base"] = api_base
 
     # 若模型支持 JSON 结构化输出，强制开启
     if response_format:
-        kwargs["response_format"] = response_format
+        kwargs_base["response_format"] = response_format
 
-    wait = 5.0
-    for attempt in range(1, max_retries + 1):
-        try:
-            t0 = time.time()
-            response = await litellm.acompletion(**kwargs)
-            elapsed = time.time() - t0
+    model_sequence = [primary_model_id]
+    if fallback_model_id and fallback_model_id != primary_model_id:
+        model_sequence.append(fallback_model_id)
 
-            content = response.choices[0].message.content or ""
-            usage: dict[str, int] = {}
-            if hasattr(response, "usage") and response.usage:
-                usage = {
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens,
-                }
-            logger.info(
-                "LLM call success | model={} elapsed={:.1f}s usage={}",
-                model_id,
-                elapsed,
-                usage,
+    last_exc: Optional[Exception] = None
+    for model_index, model_id in enumerate(model_sequence):
+        wait = 5.0
+        attempts = max_retries if model_index == 0 else 1
+        if model_index > 0:
+            logger.warning(
+                "LLM primary model failed; trying fallback model={}", model_id
             )
-            return content, usage
 
-        except Exception as exc:
-            exc_str = str(exc)
-            if "429" in exc_str or "rate_limit" in exc_str.lower():
-                logger.warning(
-                    "LLM rate limited (attempt {}/{}), waiting {:.0f}s…",
-                    attempt,
-                    max_retries,
-                    wait,
+        for attempt in range(1, attempts + 1):
+            kwargs = dict(kwargs_base)
+            kwargs["model"] = model_id
+            try:
+                t0 = time.time()
+                response = await litellm.acompletion(**kwargs)
+                elapsed = time.time() - t0
+
+                content = response.choices[0].message.content or ""
+                usage: dict[str, int] = {}
+                if hasattr(response, "usage") and response.usage:
+                    usage = {
+                        "prompt_tokens": response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    }
+                logger.info(
+                    "LLM call success | model={} elapsed={:.1f}s usage={}",
+                    model_id,
+                    elapsed,
+                    usage,
                 )
-                await asyncio.sleep(wait)
-                wait = min(wait * 2, 120)
-            elif attempt == max_retries:
-                logger.error("LLM call failed after {} attempts: {}", max_retries, exc)
-                raise
-            else:
-                logger.warning(
-                    "LLM call attempt {}/{} failed: {}", attempt, max_retries, exc
-                )
-                await asyncio.sleep(wait)
-                wait = min(wait * 2, 60)
+                return content, usage
+
+            except Exception as exc:
+                last_exc = exc
+                exc_str = str(exc)
+                if "429" in exc_str or "rate_limit" in exc_str.lower():
+                    logger.warning(
+                        "LLM rate limited | model={} attempt {}/{}, waiting {:.0f}s…",
+                        model_id,
+                        attempt,
+                        attempts,
+                        wait,
+                    )
+                    await asyncio.sleep(wait)
+                    wait = min(wait * 2, 120)
+                elif attempt == attempts:
+                    logger.error(
+                        "LLM call failed | model={} attempts={} error={}",
+                        model_id,
+                        attempts,
+                        exc,
+                    )
+                else:
+                    logger.warning(
+                        "LLM call attempt failed | model={} attempt {}/{} error={}",
+                        model_id,
+                        attempt,
+                        attempts,
+                        exc,
+                    )
+                    await asyncio.sleep(wait)
+                    wait = min(wait * 2, 60)
+
+    if last_exc:
+        raise last_exc
 
     return "", {}
 
@@ -492,10 +526,11 @@ class FashionTrendAnalyzer:
     def __init__(self, progress_callback=None) -> None:
         self.vision_mode = _supports_vision() and settings.image_input_mode != "none"
         self.progress_callback = progress_callback
+        route = _trend_route()
         logger.info(
             "Analyzer initialized | provider={} model={} vision={}",
-            settings.llm_provider,
-            settings.llm_model,
+            route.provider or settings.llm_provider,
+            route.model,
             self.vision_mode,
         )
 
@@ -1067,8 +1102,8 @@ class FashionTrendAnalyzer:
             evidence=global_evidence,
             source_articles=[art.unique_key for art in articles],
             covered_sites=covered_sites,
-            llm_provider=settings.llm_provider,
-            llm_model=settings.llm_model,
+            llm_provider=_trend_route().provider or settings.llm_provider,
+            llm_model=_trend_route().model,
             token_usage=token_usage,
             batch_id=batch_id,
             style_details=style_details,
