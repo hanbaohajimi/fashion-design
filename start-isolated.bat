@@ -1,20 +1,28 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================
-echo   AI Fashion Design Platform (隔离环境)
+echo   AI Fashion Design Platform (isolated)
 echo ============================================
 echo.
 
-REM 激活 Python 虚拟环境
-echo [1/2] 激活 Python 虚拟环境...
-call .venv\Scripts\activate.bat
-echo       虚拟环境已激活: %VIRTUAL_ENV%
+REM Check if venv exists
+if not exist ".venv\Scripts\python.exe" (
+    echo [ERROR] .venv not found. Run: python -m venv .venv
+    echo         Then: .venv\Scripts\pip install -r services/design/requirements.txt
+    echo         Then: .venv\Scripts\pip install -r services/trend_requirements.txt
+    echo         Then: .venv\Scripts\python -m playwright install chromium
+    pause
+    exit /b 1
+)
 
+echo [OK] Using isolated Python: .venv\Scripts\python.exe
 echo.
-echo [2/2] 启动所有服务...
+echo Starting all services...
 echo.
-python start.py
+
+REM Force Python to output UTF-8 (CMD default GBK would garble Chinese logs)
+set PYTHONIOENCODING=utf-8
+.venv\Scripts\python.exe start.py
 
 pause

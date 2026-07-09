@@ -9,3 +9,4 @@ apscheduler
 click
 openai
 playwright
+beautifulsoup4

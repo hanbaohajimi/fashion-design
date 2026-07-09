@@ -4,6 +4,7 @@ import {
   HelpCircle, LayoutGrid, Palette, RefreshCw,
 } from 'lucide-react';
 import { useToast } from '../../components/Toast';
+import { WorkspaceSkeleton, WorkspaceState } from '../../components/ErrorBoundary';
 import type { WardrobeItem, Outfit, WardrobeStats, WardrobeCategory } from '../../types/profile';
 import {
   fetchWardrobeItems,
@@ -59,10 +60,12 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [stats, setStats] = useState<WardrobeStats | null>(null);
 
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [outfitsLoading, setOutfitsLoading] = useState(false);
+  const [outfitsError, setOutfitsError] = useState<string | null>(null);
 
   const [showUpload, setShowUpload] = useState(false);
   const [selectedItem, setSelectedItem] = useState<WardrobeItem | null>(null);
@@ -73,6 +76,7 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
 
   const loadItems = useCallback(async (p = 1) => {
     setLoading(true);
+    setItemsError(null);
     try {
       const data = await fetchWardrobeItems(authToken, {
         category: category === 'all' ? undefined : category,
@@ -84,7 +88,10 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
       setItems(p === 1 ? data.items : prev => [...prev, ...data.items]);
       setTotal(data.total);
       setPage(p);
-    } catch { toast('加载衣橱失败', 'error'); }
+    } catch (error) {
+      setItemsError(error instanceof Error ? error.message : '无法加载衣橱内容');
+      toast('加载衣橱失败', 'error');
+    }
     setLoading(false);
   }, [authToken, category, sourceFilter, search, toast]);
 
@@ -96,10 +103,14 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
 
   const loadOutfits = useCallback(async () => {
     setOutfitsLoading(true);
+    setOutfitsError(null);
     try {
       const data = await fetchOutfits(authToken);
       setOutfits(data.outfits);
-    } catch { toast('加载穿搭失败', 'error'); }
+    } catch (error) {
+      setOutfitsError(error instanceof Error ? error.message : '无法加载穿搭方案');
+      toast('加载穿搭失败', 'error');
+    }
     setOutfitsLoading(false);
   }, [authToken, toast]);
 
@@ -156,6 +167,13 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
   };
 
   const catCounts = stats?.by_category ?? {};
+  const hasWardrobeFilters = category !== 'all' || Boolean(sourceFilter) || Boolean(search.trim());
+
+  const clearWardrobeFilters = () => {
+    setCategory('all');
+    setSourceFilter('');
+    setSearch('');
+  };
 
   return (
     <div className="wardrobe-shell">
@@ -205,17 +223,31 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
         {viewTab === 'wardrobe' && (
           <>
             {loading && items.length === 0 ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 96 }}>
-                <RefreshCw className="w-5 h-5 animate-spin" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
-              </div>
+              <WorkspaceSkeleton count={8} label="正在加载衣橱" />
+            ) : itemsError && items.length === 0 ? (
+              <WorkspaceState
+                kind="error"
+                eyebrow="我的衣橱"
+                title="衣橱内容没有加载成功"
+                description={itemsError}
+                action={{
+                  label: '重新加载',
+                  icon: <RefreshCw size={14} strokeWidth={1.5} />,
+                  onClick: () => void loadItems(1),
+                }}
+              />
             ) : items.length === 0 ? (
-              <div className="wardrobe-empty">
-                <Shirt className="w-10 h-10" strokeWidth={1} style={{ color: 'var(--color-ink-4)' }} />
-                <p className="wardrobe-empty-quote">
-                  &ldquo;A closet without intention is just laundry.&rdquo;
-                </p>
-                <p className="wardrobe-empty-hint">Upload to begin your archive</p>
-              </div>
+              <WorkspaceState
+                eyebrow="我的衣橱"
+                icon={<Shirt size={21} strokeWidth={1.5} />}
+                title={hasWardrobeFilters ? '没有符合当前条件的单品' : '从第一件单品开始整理衣橱'}
+                description={hasWardrobeFilters
+                  ? '调整分类、来源或搜索条件，查看其他衣物。'
+                  : '上传衣物后可以自动识别分类、颜色与风格，并用于创建穿搭。'}
+                action={hasWardrobeFilters
+                  ? { label: '清除筛选', onClick: clearWardrobeFilters }
+                  : { label: '上传单品', onClick: () => setShowUpload(true) }}
+              />
             ) : (
               <>
                 <div className="wardrobe-grid">
@@ -260,17 +292,40 @@ export default function WardrobeWorkspace({ user }: WardrobeProps) {
         {viewTab === 'outfits' && (
           <>
             {outfitsLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 96 }}>
-                <RefreshCw className="w-5 h-5 animate-spin" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
-              </div>
+              <WorkspaceSkeleton count={6} label="正在加载穿搭方案" />
+            ) : outfitsError ? (
+              <WorkspaceState
+                kind="error"
+                eyebrow="穿搭方案"
+                title="穿搭方案没有加载成功"
+                description={outfitsError}
+                action={{
+                  label: '重新加载',
+                  icon: <RefreshCw size={14} strokeWidth={1.5} />,
+                  onClick: () => void loadOutfits(),
+                }}
+              />
             ) : outfits.length === 0 ? (
-              <div className="wardrobe-empty">
-                <Palette className="w-10 h-10" strokeWidth={1} style={{ color: 'var(--color-ink-4)' }} />
-                <p className="wardrobe-empty-quote">
-                  &ldquo;An outfit is an idea wearing clothes.&rdquo;
-                </p>
-                <p className="wardrobe-empty-hint">Curate from your closet</p>
-              </div>
+              <WorkspaceState
+                eyebrow="穿搭方案"
+                icon={<Palette size={21} strokeWidth={1.5} />}
+                title="还没有保存的穿搭方案"
+                description="从衣橱选择一件或多件单品，组合并保存为可重复使用的穿搭。"
+                action={{
+                  label: '选择衣物',
+                  onClick: () => {
+                    setViewTab('wardrobe');
+                    setShowOutfitCreate(true);
+                  },
+                }}
+                secondaryAction={{
+                  label: '上传单品',
+                  onClick: () => {
+                    setViewTab('wardrobe');
+                    setShowUpload(true);
+                  },
+                }}
+              />
             ) : (
               <div className="wardrobe-grid-outfits">
                 {outfits.map(outfit => (

@@ -24,6 +24,7 @@ services/design/outputs/
 services/trend/.env
 
 # Tooling
+.codegraph/
 scripts/docgen/node_modules/
 docs/~*.docx
 frontend/tsconfig.tsbuildinfo

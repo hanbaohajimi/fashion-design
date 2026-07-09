@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { BarChart3, ExternalLink, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { WorkspaceSkeleton, WorkspaceState } from '../../components/ErrorBoundary';
 import './trend-analysis.css';
 
 type Status = 'checking' | 'loading' | 'ready' | 'error';
@@ -63,40 +64,40 @@ export default function TrendAnalysisWorkspace() {
     }
   };
 
-  if (status === 'error' || status === 'checking') {
+  if (status === 'checking') {
     return (
       <div className="ta-state">
-        <div className="ta-state-inner">
-          <p className="ta-state-kicker">Trend Analysis · Embedded</p>
-          <h2 className="ta-state-title">
-            {status === 'checking' ? 'Connecting…' : 'Service unavailable'}
-          </h2>
-          {status === 'checking' ? (
-            <RefreshCw className="mx-auto h-6 w-6 animate-spin" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
-          ) : (
-            <>
-              <p className="ta-state-quote">
-                &ldquo;The pipeline waits at the door until port 8002 answers.&rdquo;
-              </p>
-              <p className="ta-state-hint">{errorMsg}</p>
-              <p className="ta-state-hint">
-                请在本机启动趋势服务（端口 8002）。在项目目录执行{' '}
-                <code>python start.py</code>，或进入 <code>services/trend</code> 后执行{' '}
-                <code>python -m trend_runner</code>。
-              </p>
-              <div className="ta-terminal">
-                <code>
-                  <span className="prompt">$</span> cd fashion-design<br />
-                  <span className="prompt">$</span> python start.py
-                </code>
-              </div>
-              <button type="button" onClick={refresh} className="ta-retry">
-                <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
-                重新检查
-              </button>
-            </>
-          )}
-        </div>
+        <WorkspaceState
+          kind="loading"
+          eyebrow="趋势分析"
+          title="正在连接分析服务"
+          description="连接成功后会自动打开趋势流水线。"
+          compact
+        />
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="ta-state">
+        <WorkspaceState
+          kind="error"
+          eyebrow="趋势分析"
+          title="趋势分析服务暂时不可用"
+          description={errorMsg || '无法连接趋势分析服务，请稍后重试。'}
+          icon={<BarChart3 size={21} strokeWidth={1.5} />}
+          action={{
+            label: '重新检测',
+            icon: <RefreshCw size={14} strokeWidth={1.5} />,
+            onClick: refresh,
+          }}
+          secondaryAction={{
+            label: '在新窗口打开',
+            icon: <ExternalLink size={14} strokeWidth={1.5} />,
+            onClick: () => window.open('http://localhost:8002', '_blank'),
+          }}
+        />
       </div>
     );
   }
@@ -150,10 +151,7 @@ export default function TrendAnalysisWorkspace() {
         />
         {status === 'loading' && (
           <div className="ta-loading-overlay">
-            <div style={{ textAlign: 'center' }}>
-              <RefreshCw className="mx-auto h-6 w-6 animate-spin" strokeWidth={1.5} style={{ color: 'var(--color-ink-3)' }} />
-              <p>Loading pipeline…</p>
-            </div>
+            <WorkspaceSkeleton variant="rows" count={5} label="正在加载趋势分析页面" />
           </div>
         )}
       </div>

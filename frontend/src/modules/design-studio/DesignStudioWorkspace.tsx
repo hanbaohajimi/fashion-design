@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import { useToast } from '../../components/Toast';
-import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings } from 'lucide-react';
+import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings, Sparkles } from 'lucide-react';
 import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject, Trend } from '../../types/profile';
 import type { DesignCanvasHandle } from './components/DesignCanvas';
 import {
@@ -74,6 +74,9 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
   const [workspace, setWorkspace] = useState<DesignerWorkspace | null>(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [showQuickStart, setShowQuickStart] = useState(false);
+  const [starterPrompt, setStarterPrompt] = useState<string | undefined>(undefined);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editingProject, setEditingProject] = useState<DesignerProject | null>(null);
@@ -83,6 +86,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
     projectName?: string;
     items: Array<{ tag?: string; pattern?: string; confidence: number; evidence?: string }>;
   } | null>(null);
+  const quickStartDismissKey = `fashion-quick-start-dismissed:${user.email}`;
 
   // Load profile + workspace on mount
   useEffect(() => {
@@ -90,7 +94,8 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
       fetchPersonalProfile(user.auth_token).then(p => {
         setPersonalProfile(p);
         if (!p?.meta?.onboarding_completed) {
-          setShowOnboarding(true);
+          setNeedsOnboarding(true);
+          setShowQuickStart(sessionStorage.getItem(quickStartDismissKey) !== '1');
         } else if (p.pending_review) {
           const r = p.pending_review.result as Record<string, unknown>;
           const items = (r.top_style_keywords as Array<{ tag: string; confidence: number; evidence?: string }> | undefined) || [];
@@ -112,7 +117,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
         }
       }).catch(() => {}),
     ]);
-  }, [user.auth_token]);
+  }, [user.auth_token, quickStartDismissKey]);
 
   // Init default project selection
   useEffect(() => {
@@ -184,10 +189,24 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
     try {
       const p = await submitPersonalOnboarding(user.auth_token, staticData as Parameters<typeof submitPersonalOnboarding>[1]);
       setPersonalProfile(p);
+      setNeedsOnboarding(false);
+      setShowQuickStart(false);
+      sessionStorage.removeItem(quickStartDismissKey);
       toast('个人档案已保存', 'success');
     } catch { toast('保存失败，请重试', 'error'); }
     setShowOnboarding(false);
-  }, [user.auth_token, toast]);
+  }, [user.auth_token, toast, quickStartDismissKey]);
+
+  const dismissQuickStart = useCallback(() => {
+    sessionStorage.setItem(quickStartDismissKey, '1');
+    setShowQuickStart(false);
+  }, [quickStartDismissKey]);
+
+  const handleQuickStart = useCallback((prompt: string) => {
+    setStarterPrompt(prompt);
+    setChatCollapsed(false);
+    dismissQuickStart();
+  }, [dismissQuickStart]);
 
   const handleNewProjectComplete = useCallback(async (data: { name: string; brief: object; design_language: object }) => {
     try {
@@ -356,6 +375,51 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
               <Settings className="w-3.5 h-3.5" />
             </button>
           }
+          firstRunPanel={needsOnboarding && showQuickStart ? (
+            <aside className="quick-start-dock quick-start-dock--inline" aria-label="快速开始">
+              <button
+                type="button"
+                className="quick-start-dock__close"
+                onClick={dismissQuickStart}
+                title="关闭"
+              >
+                <X size={14} strokeWidth={1.5} />
+              </button>
+              <div className="quick-start-dock__heading">
+                <span className="quick-start-dock__mark"><Sparkles size={15} strokeWidth={1.5} /></span>
+                <div>
+                  <p className="quick-start-dock__eyebrow">第一次创作</p>
+                  <h2>先做一版，再完善偏好</h2>
+                </div>
+              </div>
+              <p className="quick-start-dock__description">
+                选择一个方向，需求会直接放入对话框，你可以修改后发送。
+              </p>
+              <div className="quick-start-dock__prompts">
+                <button type="button" onClick={() => handleQuickStart('设计一件适合通勤的极简连衣裙，廓形利落，使用低饱和中性色，并生成完整成衣效果图。')}>
+                  极简通勤
+                </button>
+                <button type="button" onClick={() => handleQuickStart('设计一套具有轻复古气质的春秋女装，强调层次、面料质感和日常可穿性。')}>
+                  轻复古日常
+                </button>
+                <button type="button" onClick={() => handleQuickStart('从当季趋势中提取一个明确方向，设计一件具有视觉记忆点但可实际穿着的概念成衣。')}>
+                  当季趋势
+                </button>
+              </div>
+              <button
+                type="button"
+                className="quick-start-dock__profile"
+                onClick={() => {
+                  dismissQuickStart();
+                  setShowOnboarding(true);
+                }}
+              >
+                先完善我的偏好
+              </button>
+            </aside>
+          ) : null}
+          starterPrompt={starterPrompt}
+          onStarterPromptConsumed={() => setStarterPrompt(undefined)}
           onEditImage={handleEditImage}
           onPreviewImage={handlePreviewImage}
           onImageGenerated={handleImageGenerated}
@@ -375,6 +439,7 @@ export default function DesignStudioWorkspace({ user, initialTrend }: DesignStud
             imageDataUrl={editorImageDataUrl}
             mode="image"
             sessionId={chatSessionId}
+            authToken={user.auth_token}
             onClose={() => setEditorImageDataUrl(null)}
             onSendToAI={handleSendToAI}
           />

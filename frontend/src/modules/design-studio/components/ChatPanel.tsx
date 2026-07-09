@@ -7,6 +7,7 @@ import type {
   ChatImage,
   ChatMessage,
   ChatPanelProps,
+  ChatTaskPhase,
   LocalAttachment,
   TrendHotBlock,
   TrendHotItem,
@@ -29,6 +30,19 @@ import { MessageItem } from './chat-panel/MessageItem';
 import { TrendHotInline } from './chat-panel/TrendHotInline';
 import { Composer } from './chat-panel/Composer';
 
+function taskPhaseFromStatus(status: string): ChatTaskPhase {
+  if (/绘制|编辑|图案|生成模特|虚拟|文生图|生图|生成中|排队|调用/.test(status)) {
+    return 'generation';
+  }
+  if (/分析|解析|识别|读取|参考图|素材|上传/.test(status)) {
+    return 'analysis';
+  }
+  if (/整理|总结|完善|输出|收尾/.test(status)) {
+    return 'finalizing';
+  }
+  return 'request';
+}
+
 const ChatPanel: React.FC<ChatPanelProps> = ({
   onEditImage,
   onPreviewImage,
@@ -49,6 +63,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onTrendToggle,
   modeBar,
   settingsButton,
+  firstRunPanel,
+  starterPrompt,
+  onStarterPromptConsumed,
 }) => {
   const isRight = side === 'right';
   const ExpandIcon = isRight ? ChevronLeft : ChevronRight;
@@ -58,6 +75,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(() => externalSessionId || crypto.randomUUID());
+
+  useEffect(() => {
+    if (!starterPrompt) return;
+    setInput(starterPrompt);
+    onStarterPromptConsumed?.();
+    requestAnimationFrame(() => taRef.current?.focus());
+  }, [starterPrompt, onStarterPromptConsumed]);
 
   useEffect(() => {
     if (externalSessionId && externalSessionId !== sessionId) {
@@ -255,7 +279,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     try {
       await fetch('/api/design/session/reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ session_id: id }),
       });
     } catch {
@@ -383,7 +410,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     try {
       const res = await fetch('/api/design/enhance-prompt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ prompt: raw, style: '' }),
       });
       if (!res.ok) throw new Error(designApiFailureMessage(res.status, res.statusText));
@@ -435,6 +465,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           : {}),
     };
     const aId = crypto.randomUUID();
+    const taskStartedAt = Date.now();
     const aMsg: ChatMessage = {
       id: aId,
       role: 'assistant',
@@ -442,6 +473,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       timestamp: new Date(),
       isStreaming: true,
       status: '连接中...',
+      taskPhase: 'request',
+      startedAt: taskStartedAt,
     };
     setMessages(p => [...p, uMsg, aMsg]);
     if (!direct) setInput('');
@@ -453,7 +486,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         const fd = new FormData();
         fd.append('session_id', sessionId);
         for (const f of filesToUpload) fd.append('files', f);
-        const res = await fetch('/api/design/upload', { method: 'POST', body: fd });
+        const res = await fetch('/api/design/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` },
+          body: fd,
+        });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           const msg =
@@ -506,7 +543,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       pendingStatus = undefined;
       if (s === undefined || s === lastAppliedStatus) return;
       lastAppliedStatus = s;
-      setMessages(p => p.map(m => (m.id === aId ? { ...m, status: s } : m)));
+      setMessages(p => p.map(m => (
+        m.id === aId ? { ...m, status: s, taskPhase: taskPhaseFromStatus(s) } : m
+      )));
     };
 
     const queueStatus = (s: string) => {
@@ -518,7 +557,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         pendingStatus = undefined;
         if (next === undefined || next === lastAppliedStatus) return;
         lastAppliedStatus = next;
-        setMessages(p => p.map(m => (m.id === aId ? { ...m, status: next } : m)));
+        setMessages(p => p.map(m => (
+          m.id === aId ? { ...m, status: next, taskPhase: taskPhaseFromStatus(next) } : m
+        )));
       });
     };
 
@@ -549,7 +590,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 imgs.push(ni);
                 onImageGenerated?.(ni);
                 imgLoading = false;
-                setMessages(p => p.map(m => (m.id === aId ? { ...m, images: [...imgs] } : m)));
+                setMessages(p => p.map(m => (
+                  m.id === aId ? { ...m, images: [...imgs], taskPhase: 'finalizing' } : m
+                )));
               }
               break;
             case 'message':
@@ -563,6 +606,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         images: (ev.images as ChatImage[]) || imgs,
                         isStreaming: false,
                         status: undefined,
+                        taskPhase: undefined,
+                        durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                       }
                     : m,
                 ),
@@ -578,6 +623,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         content: `${ev.content}`,
                         isStreaming: false,
                         status: undefined,
+                        taskPhase: undefined,
+                        durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                         isError: true,
                         failedMessage: uMsg.content,
                       }
@@ -589,7 +636,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             case 'done':
               flushPendingStatus();
               setMessages(p =>
-                p.map(m => (m.id === aId ? { ...m, isStreaming: false, status: undefined } : m)),
+                p.map(m => (m.id === aId ? {
+                  ...m,
+                  isStreaming: false,
+                  status: undefined,
+                  taskPhase: undefined,
+                  durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
+                } : m)),
               );
               break;
           }
@@ -616,6 +669,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   content: err.message.includes('500') ? err.message : `连接失败: ${err.message}`,
                   isStreaming: false,
                   status: undefined,
+                  taskPhase: undefined,
+                  durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                   isError: true,
                   failedMessage: uMsg.content,
                 }
@@ -627,7 +682,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         setMessages(p =>
           p.map(m =>
             m.id === aId
-              ? { ...m, content: '已取消生成', isStreaming: false, status: undefined }
+              ? {
+                  ...m,
+                  content: '已取消生成',
+                  isStreaming: false,
+                  status: undefined,
+                  taskPhase: undefined,
+                  durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
+                }
               : m,
           ),
         );
@@ -804,6 +866,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       {modeBar}
 
       <div className="chat-scroll chat-scrollbar">
+        {showWelcome && firstRunPanel}
         {showWelcome && (
           <WelcomePanel
             onSuggest={suggest}

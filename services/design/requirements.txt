@@ -3,3 +3,4 @@ uvicorn[standard]>=0.22.0
 openai>=1.50
 python-multipart
 Pillow
+pwdlib[argon2]>=0.3.0

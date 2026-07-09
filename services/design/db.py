@@ -22,6 +22,7 @@ def _get_conn() -> sqlite3.Connection:
     if _conn is None:
         _conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         _conn.row_factory = sqlite3.Row
+        _conn.execute("PRAGMA foreign_keys=ON")
         _migrate(_conn)
     return _conn
 
@@ -32,11 +33,24 @@ def _migrate(conn: sqlite3.Connection) -> None:
         email           TEXT PRIMARY KEY,
         name            TEXT NOT NULL DEFAULT '',
         password_hash   TEXT NOT NULL DEFAULT '',
-        auth_token      TEXT UNIQUE,
         personal_profile TEXT NOT NULL DEFAULT '{}',
         designer_workspace TEXT NOT NULL DEFAULT '{"projects":[]}',
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+        id              TEXT PRIMARY KEY,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        token_hash      TEXT NOT NULL UNIQUE,
+        created_at      TEXT NOT NULL,
+        last_seen_at    TEXT NOT NULL,
+        expires_at      TEXT NOT NULL,
+        revoked_at      TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+        ON auth_sessions(user_email, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry
+        ON auth_sessions(expires_at, revoked_at);
 
     CREATE TABLE IF NOT EXISTS chat_sessions (
         id                  TEXT PRIMARY KEY,
@@ -206,25 +220,97 @@ def get_user_by_email(email: str) -> Optional[sqlite3.Row]:
         ).fetchone()
 
 
-def get_user_by_token(token: str) -> Optional[sqlite3.Row]:
+def create_auth_session(
+    session_id: str,
+    user_email: str,
+    token_hash: str,
+    created_at: str,
+    expires_at: str,
+) -> None:
     with _lock:
-        return _get_conn().execute(
-            "SELECT * FROM users WHERE auth_token=?", (token,)
+        conn = _get_conn()
+        conn.execute(
+            """
+            INSERT INTO auth_sessions (
+                id, user_email, token_hash, created_at, last_seen_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, user_email, token_hash, created_at, created_at, expires_at),
+        )
+        conn.commit()
+
+
+def get_user_by_session(
+    token_hash: str,
+    now_iso: str,
+    idle_cutoff_iso: str,
+) -> Optional[sqlite3.Row]:
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            """
+            SELECT
+                u.*,
+                s.id AS auth_session_id,
+                s.created_at AS auth_created_at,
+                s.last_seen_at AS auth_last_seen_at,
+                s.expires_at AS auth_expires_at
+            FROM auth_sessions s
+            JOIN users u ON u.email = s.user_email
+            WHERE s.token_hash = ?
+              AND s.revoked_at IS NULL
+              AND s.expires_at > ?
+              AND s.last_seen_at > ?
+            """,
+            (token_hash, now_iso, idle_cutoff_iso),
         ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE auth_sessions SET last_seen_at=? WHERE id=?",
+            (now_iso, row["auth_session_id"]),
+        )
+        conn.commit()
+        return row
 
 
-def set_auth_token(email: str, token: str) -> None:
+def revoke_auth_session(token_hash: str, revoked_at: str) -> None:
     with _lock:
         conn = _get_conn()
-        conn.execute("UPDATE users SET auth_token=? WHERE email=?", (token, email))
+        conn.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at=?
+            WHERE token_hash=? AND revoked_at IS NULL
+            """,
+            (revoked_at, token_hash),
+        )
         conn.commit()
 
 
-def revoke_token(token: str) -> None:
+def revoke_all_auth_sessions(user_email: str, revoked_at: str) -> None:
     with _lock:
         conn = _get_conn()
-        conn.execute("UPDATE users SET auth_token=NULL WHERE auth_token=?", (token,))
+        conn.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at=?
+            WHERE user_email=? AND revoked_at IS NULL
+            """,
+            (revoked_at, user_email),
+        )
         conn.commit()
+
+
+def delete_expired_auth_sessions(now_iso: str) -> int:
+    with _lock:
+        conn = _get_conn()
+        cursor = conn.execute(
+            "DELETE FROM auth_sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL",
+            (now_iso,),
+        )
+        conn.commit()
+        return cursor.rowcount
 
 
 # ─── Personal Profile ───
@@ -1022,4 +1108,3 @@ def remove_outfit_item(outfit_id: str, wardrobe_item_id: str) -> bool:
         )
         conn.commit()
         return cur.rowcount > 0
-

@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import './index.css';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -8,58 +8,83 @@ const AuthPage = lazy(() => import('./pages/AuthPage'));
 const MainApp = lazy(() => import('./pages/MainApp'));
 
 export type AppView = 'landing' | 'auth' | 'main';
-export interface AppUser { email: string; name: string; auth_token: string; }
+export interface AppUser {
+  email: string;
+  name: string;
+  auth_token: string;
+  expires_at: string;
+}
+
+function readSessionUser(): AppUser | null {
+  try {
+    const raw = sessionStorage.getItem('af_user');
+    const parsed = raw ? JSON.parse(raw) as AppUser : null;
+    if (
+      parsed?.auth_token
+      && parsed.expires_at
+      && Date.parse(parsed.expires_at) > Date.now()
+    ) {
+      return parsed;
+    }
+  } catch {
+    // Invalid browser state is treated as a signed-out session.
+  }
+  sessionStorage.removeItem('af_user');
+  return null;
+}
 
 function AppRouter() {
   useEffect(() => {
+    // Remove all data created by the legacy client-side login implementation.
     localStorage.removeItem('af_users');
+    localStorage.removeItem('af_user');
+    localStorage.removeItem('af_token');
   }, []);
 
-  const [view, setView] = useState<AppView>(() => {
-    const token = localStorage.getItem('af_token');
-    const userRaw = localStorage.getItem('af_user');
-    if (token && userRaw) {
-      try {
-        const { expires } = JSON.parse(token);
-        const user = JSON.parse(userRaw);
-        // Reject old sessions that have no auth_token (pre-server-auth format)
-        if (expires && Date.now() < expires && user?.auth_token) return 'main';
-      } catch { /* fall through */ }
-    }
-    return 'landing';
-  });
-
-  const [user, setUser] = useState<AppUser | null>(() => {
-    try {
-      const raw = localStorage.getItem('af_user');
-      const parsed = raw ? JSON.parse(raw) : null;
-      // Reject old format that has no server-issued auth_token
-      return parsed?.auth_token ? parsed : null;
-    } catch { return null; }
-  });
+  const [user, setUser] = useState<AppUser | null>(readSessionUser);
+  const [view, setView] = useState<AppView>(() => readSessionUser() ? 'main' : 'landing');
 
   const handleEnter = () => setView('auth');
 
   const handleLogin = (u: AppUser) => {
     setUser(u);
-    localStorage.setItem('af_user', JSON.stringify(u));
-    localStorage.setItem('af_token', JSON.stringify({ expires: Date.now() + 7 * 86400000 }));
+    sessionStorage.setItem('af_user', JSON.stringify(u));
     setView('main');
   };
+
+  const clearSession = useCallback(() => {
+    setUser(null);
+    sessionStorage.removeItem('af_user');
+    setView('landing');
+  }, []);
 
   const handleLogout = () => {
     if (user?.auth_token) {
       fetch('/api/design/auth/logout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ auth_token: user.auth_token }),
+        headers: { Authorization: `Bearer ${user.auth_token}` },
       }).catch(() => {});
     }
-    setUser(null);
-    localStorage.removeItem('af_user');
-    localStorage.removeItem('af_token');
-    setView('landing');
+    clearSession();
   };
+
+  useEffect(() => {
+    const handleSessionExpired = () => clearSession();
+    window.addEventListener('af:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('af:session-expired', handleSessionExpired);
+  }, [clearSession]);
+
+  useEffect(() => {
+    if (!user?.auth_token) return;
+    const controller = new AbortController();
+    fetch('/api/design/auth/session', {
+      headers: { Authorization: `Bearer ${user.auth_token}` },
+      signal: controller.signal,
+    }).then((res) => {
+      if (res.status === 401) clearSession();
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [user?.auth_token, clearSession]);
 
   // Guard: redirect to login if not authenticated
   useEffect(() => {

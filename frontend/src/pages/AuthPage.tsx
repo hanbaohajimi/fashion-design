@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, LockKeyhole, Mail, UserRound } from 'lucide-react';
 
 interface AuthPageProps {
-  onLogin: (user: { email: string; name: string; auth_token: string }) => void;
+  onLogin: (user: { email: string; name: string; auth_token: string; expires_at: string }) => void;
   onBack: () => void;
 }
 
@@ -59,7 +59,12 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
         setSubmitError(data.detail || '登录失败');
         return;
       }
-      onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
+      onLogin({
+        email: data.email,
+        name: data.name,
+        auth_token: data.auth_token,
+        expires_at: data.expires_at,
+      });
     } catch {
       setSubmitError('网络错误，请稍后重试');
     } finally {
@@ -91,7 +96,12 @@ export default function AuthPage({ onLogin, onBack }: AuthPageProps) {
         setSubmitError(data.detail || '注册失败');
         return;
       }
-      onLogin({ email: data.email, name: data.name, auth_token: data.auth_token });
+      onLogin({
+        email: data.email,
+        name: data.name,
+        auth_token: data.auth_token,
+        expires_at: data.expires_at,
+      });
     } catch {
       setSubmitError('网络错误，请稍后重试');
     } finally {

@@ -240,11 +240,13 @@ export async function streamChat(
 ) {
   const res = await fetch('/api/design/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
     body: JSON.stringify({
       session_id: sessionId,
       message,
-      ...(authToken ? { auth_token: authToken } : {}),
       mode: mode || 'personal',
       designer_project_id: designerProjectId || undefined,
       trend_id: trendId || undefined,
@@ -253,6 +255,9 @@ export async function streamChat(
     signal,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('af:session-expired'));
+    }
     throw new Error(designApiFailureMessage(res.status, res.statusText));
   }
   const reader = res.body!.getReader();

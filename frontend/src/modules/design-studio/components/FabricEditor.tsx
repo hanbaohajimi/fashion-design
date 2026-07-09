@@ -21,6 +21,7 @@ interface FabricEditorProps {
   onClose: () => void;
   onSendToAI?: (dataUrl: string) => void;
   sessionId?: string;
+  authToken: string;
 }
 
 function hasMaskContent(mask: HTMLCanvasElement): boolean {
@@ -73,6 +74,7 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
   onClose,
   onSendToAI,
   sessionId,
+  authToken,
 }) => {
   const { toast } = useToast();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -231,7 +233,11 @@ const FabricEditor: React.FC<FabricEditorProps> = ({
       fd.append('mask_image', maskFile);
       if (sessionId) fd.append('session_id', sessionId);
 
-      const res = await fetch('/api/design/edit_with_mask', { method: 'POST', body: fd });
+      const res = await fetch('/api/design/edit_with_mask', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+        body: fd,
+      });
       const data = (await res.json().catch(() => ({}))) as { url?: string; detail?: string };
       if (!res.ok) {
         throw new Error(typeof data.detail === 'string' ? data.detail : `请求失败 ${res.status}`);

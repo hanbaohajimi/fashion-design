@@ -12,6 +12,8 @@ export interface ChatImage {
   type: string;
 }
 
+export type ChatTaskPhase = 'request' | 'analysis' | 'generation' | 'finalizing';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -20,6 +22,9 @@ export interface ChatMessage {
   timestamp: Date;
   isStreaming?: boolean;
   status?: string;
+  taskPhase?: ChatTaskPhase;
+  startedAt?: number;
+  durationSeconds?: number;
   uploadPreview?: string;
   uploadPreviews?: string[];
   isError?: boolean;
@@ -71,4 +76,7 @@ export interface ChatPanelProps {
   onTrendToggle?: (trendId: string | undefined, enabled: boolean) => void;
   modeBar?: React.ReactNode;
   settingsButton?: React.ReactNode;
+  firstRunPanel?: React.ReactNode;
+  starterPrompt?: string;
+  onStarterPromptConsumed?: () => void;
 }

@@ -1,4 +1,105 @@
 import React from 'react';
+import { AlertCircle, Inbox, LoaderCircle, RefreshCw } from 'lucide-react';
+
+type WorkspaceStateKind = 'empty' | 'error' | 'loading';
+
+interface WorkspaceStateAction {
+  label: string;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+}
+
+interface WorkspaceStateProps {
+  kind?: WorkspaceStateKind;
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;
+  action?: WorkspaceStateAction;
+  secondaryAction?: WorkspaceStateAction;
+  compact?: boolean;
+}
+
+export function WorkspaceState({
+  kind = 'empty',
+  eyebrow,
+  title,
+  description,
+  icon,
+  action,
+  secondaryAction,
+  compact = false,
+}: WorkspaceStateProps) {
+  const defaultIcon = kind === 'error'
+    ? <AlertCircle size={21} strokeWidth={1.5} />
+    : kind === 'loading'
+      ? <LoaderCircle size={21} strokeWidth={1.5} className="animate-spin" />
+      : <Inbox size={21} strokeWidth={1.5} />;
+
+  return (
+    <section
+      className={`workspace-state workspace-state--${kind} ${compact ? 'workspace-state--compact' : ''}`}
+      role={kind === 'error' ? 'alert' : 'status'}
+      aria-live={kind === 'error' ? 'assertive' : 'polite'}
+    >
+      <div className="workspace-state__mark">{icon || defaultIcon}</div>
+      {eyebrow && <p className="workspace-state__eyebrow">{eyebrow}</p>}
+      <h2 className="workspace-state__title">{title}</h2>
+      {description && <p className="workspace-state__description">{description}</p>}
+      {(action || secondaryAction) && (
+        <div className="workspace-state__actions">
+          {action && (
+            <button
+              type="button"
+              className="workspace-state__action workspace-state__action--primary"
+              onClick={action.onClick}
+              disabled={action.disabled}
+            >
+              {action.icon}
+              {action.label}
+            </button>
+          )}
+          {secondaryAction && (
+            <button
+              type="button"
+              className="workspace-state__action workspace-state__action--secondary"
+              onClick={secondaryAction.onClick}
+              disabled={secondaryAction.disabled}
+            >
+              {secondaryAction.icon}
+              {secondaryAction.label}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface WorkspaceSkeletonProps {
+  variant?: 'grid' | 'rows';
+  count?: number;
+  label?: string;
+}
+
+export function WorkspaceSkeleton({
+  variant = 'grid',
+  count = 6,
+  label = '正在加载内容',
+}: WorkspaceSkeletonProps) {
+  return (
+    <div className={`workspace-skeleton workspace-skeleton--${variant}`} role="status" aria-label={label}>
+      {Array.from({ length: count }, (_, index) => (
+        <div className="workspace-skeleton__item" key={index}>
+          <div className="skeleton workspace-skeleton__media" />
+          <div className="skeleton workspace-skeleton__line workspace-skeleton__line--strong" />
+          <div className="skeleton workspace-skeleton__line" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface Props {
   children: React.ReactNode;
@@ -24,36 +125,22 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex items-center justify-center h-full" style={{ background: 'var(--surface-2)' }}>
-          <div className="text-center max-w-sm px-8 py-12">
-            {/* Error icon */}
-            <div className="mx-auto mb-6 w-14 h-14 rounded-2xl flex items-center justify-center"
-              style={{ background: 'var(--accent-primary-subtle)' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)"
-                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 8v4M12 16h.01" />
-              </svg>
-            </div>
-            <h2 className="text-[15px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              {this.props.fallbackLabel || '模块'}加载异常
-            </h2>
-            <p className="text-[13px] leading-relaxed mb-6" style={{ color: 'var(--text-tertiary)' }}>
-              {this.state.error?.message || '发生了未预期的错误'}
-            </p>
-            <button
-              onClick={() => this.setState({ hasError: false, error: undefined })}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-[13px] font-medium text-white rounded-lg transition-all hover:opacity-90"
-              style={{ background: 'var(--accent-primary)' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 4v6h6M23 20v-6h-6" />
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
-              </svg>
-              重新加载
-            </button>
-          </div>
+        <div className="workspace-state-boundary">
+          <WorkspaceState
+            kind="error"
+            eyebrow={this.props.fallbackLabel || '工作区'}
+            title="这个工作区暂时无法显示"
+            description={this.state.error?.message || '页面运行时发生异常，可以先重试当前工作区。'}
+            action={{
+              label: '重试',
+              icon: <RefreshCw size={14} strokeWidth={1.5} />,
+              onClick: () => this.setState({ hasError: false, error: undefined }),
+            }}
+            secondaryAction={{
+              label: '刷新页面',
+              onClick: () => window.location.reload(),
+            }}
+          />
         </div>
       );
     }

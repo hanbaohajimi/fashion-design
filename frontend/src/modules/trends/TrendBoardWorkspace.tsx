@@ -14,6 +14,7 @@ import {
 import { fetchDesignerWorkspace } from '../../api/profileApi';
 import type { DesignerWorkspace } from '../../types/profile';
 import { useToast } from '../../components/Toast';
+import { WorkspaceSkeleton, WorkspaceState } from '../../components/ErrorBoundary';
 import './trends.css';
 
 interface TrendBoardProps {
@@ -595,7 +596,8 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
   const [committedSearch, setCommittedSearch] = useState('');
   const [trends, setTrends] = useState<Trend[]>([]);
   const [currentSeason, setCurrentSeason] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<DesignerWorkspace | null>(null);
@@ -605,6 +607,7 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [trendsRes, seasonsRes, wsRes] = await Promise.all([
         fetchTrends(user.auth_token, {
@@ -619,11 +622,14 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
       setCurrentSeason(trendsRes.season);
       setSeasons(seasonsRes.seasons);
       setWorkspace(wsRes);
-    } catch { /* ignore */ }
-    setLoading(false);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '无法加载趋势数据');
+    } finally {
+      setLoading(false);
+    }
   }, [user.auth_token, tab, selectedSeason, committedSearch]);
 
-  useEffect(() => { void load(); }, [tab, selectedSeason, committedSearch]);
+  useEffect(() => { void load(); }, [load]);
 
   const handleSearch = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') setCommittedSearch(search);
@@ -660,6 +666,13 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
     { id: 'recommended' as const, label: '为你推荐', suffix: ' ✦' },
     { id: 'all' as const, label: '全部趋势', suffix: '' },
   ];
+  const hasActiveFilters = Boolean(selectedSeason || committedSearch.trim());
+
+  const clearFilters = () => {
+    setSelectedSeason('');
+    setSearch('');
+    setCommittedSearch('');
+  };
 
   return (
     <div className="trend-board-shell">
@@ -732,31 +745,50 @@ export default function TrendBoardWorkspace({ user, onDesignThis }: TrendBoardPr
         </div>
 
         <div className="trend-grid-wrap">
-          {loading && (
-            <div className="trend-loading">
-              <RefreshCw size={14} strokeWidth={1.5} className="animate-spin" /> Loading…
-            </div>
+          {loading && trends.length === 0 && (
+            <WorkspaceSkeleton count={8} label="正在加载趋势" />
           )}
 
-          {!loading && trends.length === 0 && (
-            <div className="trend-empty">
-              <TrendingUp size={36} strokeWidth={1.2} style={{ color: 'var(--color-ink-4)' }} />
-              <p className="trend-empty-quote">&ldquo;The board awaits its first signal.&rdquo;</p>
-              <p className="trend-empty-hint">Sync from trend analysis pipeline</p>
-              <button
-                type="button"
-                onClick={() => void handleSync()}
-                disabled={syncing}
-                className="trend-card-cta"
-                style={{ marginTop: 8, padding: '0 24px', flex: 'none', width: 'auto' }}
-              >
-                <RefreshCw size={13} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />
-                同步趋势数据
-              </button>
-            </div>
+          {!loading && loadError && trends.length === 0 && (
+            <WorkspaceState
+              kind="error"
+              eyebrow="趋势探索"
+              title="趋势数据没有加载成功"
+              description={loadError}
+              action={{
+                label: '重新加载',
+                icon: <RefreshCw size={14} strokeWidth={1.5} />,
+                onClick: () => void load(),
+              }}
+              secondaryAction={{
+                label: '同步最新数据',
+                icon: <RefreshCw size={14} strokeWidth={1.5} />,
+                onClick: () => void handleSync(),
+                disabled: syncing,
+              }}
+            />
           )}
 
-          {!loading && trends.length > 0 && (
+          {!loading && !loadError && trends.length === 0 && (
+            <WorkspaceState
+              eyebrow="趋势探索"
+              icon={<TrendingUp size={21} strokeWidth={1.5} />}
+              title={hasActiveFilters ? '没有符合当前条件的趋势' : '趋势板还没有内容'}
+              description={hasActiveFilters
+                ? '清除季节和搜索条件，查看完整趋势集合。'
+                : '从趋势分析服务同步最新报告后，可以收藏趋势或直接进入设计。'}
+              action={hasActiveFilters
+                ? { label: '清除筛选', onClick: clearFilters }
+                : {
+                    label: syncing ? '正在同步' : '同步趋势数据',
+                    icon: <RefreshCw size={14} strokeWidth={1.5} className={syncing ? 'animate-spin' : ''} />,
+                    onClick: () => void handleSync(),
+                    disabled: syncing,
+                  }}
+            />
+          )}
+
+          {trends.length > 0 && (
             <div className="trend-grid">
               {trends.map((trend, i) => (
                 <TrendCard

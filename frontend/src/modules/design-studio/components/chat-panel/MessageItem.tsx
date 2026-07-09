@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   Check,
@@ -26,6 +26,13 @@ import {
 } from './utils';
 import type { ChatMessage } from './types';
 import { addToWardrobeFromDesign } from '../../../../api/profileApi';
+
+const TASK_PHASES = [
+  { id: 'request', label: '理解需求' },
+  { id: 'analysis', label: '分析素材' },
+  { id: 'generation', label: '生成设计' },
+  { id: 'finalizing', label: '整理结果' },
+] as const;
 
 interface MessageItemProps {
   msg: ChatMessage;
@@ -59,6 +66,21 @@ export function MessageItem({
   copiedId,
 }: MessageItemProps) {
   const [savingToWardrobe, setSavingToWardrobe] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!msg.isStreaming || !msg.startedAt) return;
+    setClock(Date.now());
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [msg.isStreaming, msg.startedAt]);
+
+  const elapsedSeconds = msg.durationSeconds
+    ?? (msg.startedAt ? Math.max(0, Math.floor((clock - msg.startedAt) / 1000)) : 0);
+  const activePhaseIndex = Math.max(
+    0,
+    TASK_PHASES.findIndex(phase => phase.id === (msg.taskPhase || 'request')),
+  );
 
   const previews = msg.uploadPreviews?.length
     ? msg.uploadPreviews
@@ -178,7 +200,46 @@ export function MessageItem({
             </h3>
           )}
 
-          {(msg.isStreaming || msg.status || msg.images?.length) && (
+          {msg.isStreaming && (
+            <div className="ai-task-progress">
+              <div className="ai-task-progress__header">
+                <div>
+                  <p className="ai-task-progress__eyebrow">AI 任务进行中</p>
+                  <p className="ai-task-progress__title">{TASK_PHASES[activePhaseIndex].label}</p>
+                </div>
+                <span className="ai-task-progress__elapsed">
+                  <Clock size={12} strokeWidth={1.5} />
+                  {elapsedSeconds} 秒
+                </span>
+              </div>
+              <div className="ai-task-progress__steps" aria-label="生成进度">
+                {TASK_PHASES.map((phase, index) => (
+                  <div
+                    key={phase.id}
+                    className={`ai-task-progress__step ${
+                      index < activePhaseIndex ? 'is-done' : index === activePhaseIndex ? 'is-active' : ''
+                    }`}
+                  >
+                    <span className="ai-task-progress__step-mark">
+                      {index < activePhaseIndex ? <Check size={10} strokeWidth={2} /> : index + 1}
+                    </span>
+                    <span>{phase.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="ai-task-progress__status">
+                <span className="ai-task-progress__pulse" />
+                <span>{msg.status || '正在解析需求并准备模型…'}</span>
+              </div>
+              <p className="ai-task-progress__hint">
+                {elapsedSeconds >= 30
+                  ? '任务仍在处理，复杂图像可能需要更长时间。'
+                  : '图像任务通常需要 10–30 秒，可随时停止。'}
+              </p>
+            </div>
+          )}
+
+          {!msg.isStreaming && (msg.status || msg.images?.length) && (
             <details style={{ marginBottom: 12 }}>
               <summary
                 style={{
@@ -196,7 +257,7 @@ export function MessageItem({
                 className="[&::-webkit-details-marker]:hidden"
               >
                 <Sparkles className="w-3 h-3" style={{ color: 'var(--color-ink-3)' }} strokeWidth={1.5} />
-                图片分析
+                任务记录{msg.durationSeconds ? ` · ${msg.durationSeconds} 秒` : ''}
                 <ChevronDown className="w-3.5 h-3.5 opacity-70" strokeWidth={1.5} />
               </summary>
               <div

@@ -29,10 +29,19 @@ function authHeader(token: string) {
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('af:session-expired'));
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { detail?: string }).detail || `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
+}
+
+async function ensureOk(res: Response): Promise<void> {
+  if (!res.ok) {
+    await handle<never>(res);
+  }
 }
 
 // ── Personal Profile ──────────────────────────────────────
@@ -50,7 +59,7 @@ export async function submitPersonalOnboarding(
   const res = await fetch(`${BASE}/profile/personal/onboarding`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, static: staticData }),
+    body: JSON.stringify({ static: staticData }),
   });
   const data = await handle<{ profile: PersonalProfile }>(res);
   return data.profile;
@@ -60,7 +69,7 @@ export async function triggerPersonalAnalyze(token: string): Promise<PersonalPro
   const res = await fetch(`${BASE}/profile/personal/analyze`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token }),
+    body: JSON.stringify({}),
   });
   const data = await handle<{ profile: PersonalProfile }>(res);
   return data.profile;
@@ -73,7 +82,7 @@ export async function confirmPersonalReview(
   const res = await fetch(`${BASE}/profile/personal/confirm`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, accepted_items: acceptedItems }),
+    body: JSON.stringify({ accepted_items: acceptedItems }),
   });
   const data = await handle<{ profile: PersonalProfile }>(res);
   return data.profile;
@@ -94,7 +103,7 @@ export async function createDesignerProject(
   const res = await fetch(`${BASE}/profile/designer/projects`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, ...payload }),
+    body: JSON.stringify(payload),
   });
   return handle<{ project: DesignerProject; workspace: DesignerWorkspace }>(res);
 }
@@ -107,7 +116,7 @@ export async function patchDesignerProject(
   const res = await fetch(`${BASE}/profile/designer/projects/${projectId}`, {
     method: 'PATCH',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, ...patch }),
+    body: JSON.stringify(patch),
   });
   const data = await handle<{ workspace: DesignerWorkspace }>(res);
   return data.workspace;
@@ -117,10 +126,11 @@ export async function archiveDesignerProject(
   token: string,
   projectId: string,
 ): Promise<void> {
-  await fetch(`${BASE}/profile/designer/projects/${projectId}`, {
+  const res = await fetch(`${BASE}/profile/designer/projects/${projectId}`, {
     method: 'DELETE',
     headers: authHeader(token),
   });
+  await ensureOk(res);
 }
 
 export async function triggerDesignerAnalyze(
@@ -130,7 +140,7 @@ export async function triggerDesignerAnalyze(
   const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/analyze`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token }),
+    body: JSON.stringify({}),
   });
   const data = await handle<{ workspace: DesignerWorkspace }>(res);
   return data.workspace;
@@ -144,7 +154,7 @@ export async function confirmDesignerReview(
   const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/confirm`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, accepted_items: acceptedItems }),
+    body: JSON.stringify({ accepted_items: acceptedItems }),
   });
   const data = await handle<{ workspace: DesignerWorkspace }>(res);
   return data.workspace;
@@ -161,7 +171,6 @@ export async function createConversationSession(
     method: 'POST',
     headers: authHeader(token),
     body: JSON.stringify({
-      auth_token: token,
       mode,
       designer_project_id: designerProjectId,
     }),
@@ -205,16 +214,17 @@ export async function patchLibraryItem(
   const res = await fetch(`${BASE}/library/${itemId}`, {
     method: 'PATCH',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, ...patch }),
+    body: JSON.stringify(patch),
   });
   return handle(res);
 }
 
 export async function deleteLibraryItem(token: string, itemId: string): Promise<void> {
-  await fetch(`${BASE}/library/${itemId}`, {
+  const res = await fetch(`${BASE}/library/${itemId}`, {
     method: 'DELETE',
     headers: authHeader(token),
   });
+  await ensureOk(res);
 }
 
 export async function fetchLibraryStats(token: string): Promise<LibraryStats> {
@@ -228,11 +238,12 @@ export async function fetchSimilarItems(token: string, itemId: string): Promise<
 }
 
 export async function triggerLibraryAnalyze(token: string): Promise<void> {
-  await fetch(`${BASE}/library/analyze`, {
+  const res = await fetch(`${BASE}/library/analyze`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token }),
+    body: JSON.stringify({}),
   });
+  await ensureOk(res);
 }
 
 export async function suggestOutfit(
@@ -243,7 +254,7 @@ export async function suggestOutfit(
   const res = await fetch(`${BASE}/library/suggest-outfit`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, occasion, weather }),
+    body: JSON.stringify({ occasion, weather }),
   });
   return handle(res);
 }
@@ -264,7 +275,7 @@ export async function createCollection(
   const res = await fetch(`${BASE}/library/collections`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, name, mode, designer_project_id: designerProjectId }),
+    body: JSON.stringify({ name, mode, designer_project_id: designerProjectId }),
   });
   return handle(res);
 }
@@ -277,16 +288,17 @@ export async function patchCollection(
   const res = await fetch(`${BASE}/library/collections/${colId}`, {
     method: 'PATCH',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, ...patch }),
+    body: JSON.stringify(patch),
   });
   return handle(res);
 }
 
 export async function deleteCollection(token: string, colId: string): Promise<void> {
-  await fetch(`${BASE}/library/collections/${colId}`, {
+  const res = await fetch(`${BASE}/library/collections/${colId}`, {
     method: 'DELETE',
     headers: authHeader(token),
   });
+  await ensureOk(res);
 }
 
 export async function addItemsToCollection(
@@ -294,11 +306,12 @@ export async function addItemsToCollection(
   colId: string,
   itemIds: string[],
 ): Promise<void> {
-  await fetch(`${BASE}/library/collections/${colId}/items`, {
+  const res = await fetch(`${BASE}/library/collections/${colId}/items`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, item_ids: itemIds }),
+    body: JSON.stringify({ item_ids: itemIds }),
   });
+  await ensureOk(res);
 }
 
 export async function removeItemFromCollection(
@@ -306,10 +319,11 @@ export async function removeItemFromCollection(
   colId: string,
   itemId: string,
 ): Promise<void> {
-  await fetch(`${BASE}/library/collections/${colId}/items/${itemId}`, {
+  const res = await fetch(`${BASE}/library/collections/${colId}/items/${itemId}`, {
     method: 'DELETE',
     headers: authHeader(token),
   });
+  await ensureOk(res);
 }
 
 // ── Trends ────────────────────────────────────────────────
@@ -337,25 +351,27 @@ export async function fetchTrendDetail(token: string, trendId: string): Promise<
 }
 
 export async function favoriteTrend(token: string, trendId: string): Promise<void> {
-  await fetch(`${BASE}/trends/${trendId}/favorite`, {
+  const res = await fetch(`${BASE}/trends/${trendId}/favorite`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token }),
+    body: JSON.stringify({}),
   });
+  await ensureOk(res);
 }
 
 export async function unfavoriteTrend(token: string, trendId: string): Promise<void> {
-  await fetch(`${BASE}/trends/${trendId}/favorite`, {
+  const res = await fetch(`${BASE}/trends/${trendId}/favorite`, {
     method: 'DELETE',
     headers: authHeader(token),
   });
+  await ensureOk(res);
 }
 
 export async function syncTrends(token: string): Promise<{ synced: number }> {
   const res = await fetch(`${BASE}/trends/sync`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token }),
+    body: JSON.stringify({}),
   });
   return handle(res);
 }
@@ -369,7 +385,7 @@ export async function addTrendToProject(
   const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/trends`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ auth_token: token, trend_id: trendId, alignment_note: alignmentNote }),
+    body: JSON.stringify({ trend_id: trendId, alignment_note: alignmentNote }),
   });
   return handle(res);
 }
@@ -397,7 +413,6 @@ export async function createConversationSessionWithTrend(
     method: 'POST',
     headers: authHeader(token),
     body: JSON.stringify({
-      auth_token: token,
       mode,
       designer_project_id: designerProjectId,
       trend_id: trendId,
@@ -434,7 +449,7 @@ export async function addToWardrobeFromTrend(
   const res = await fetch(`${BASE}/wardrobe/items/from-trend`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ image_url: imageUrl, name, source_ref: sourceRef, auth_token: token }),
+    body: JSON.stringify({ image_url: imageUrl, name, source_ref: sourceRef }),
   });
   return handle(res);
 }
@@ -453,7 +468,6 @@ export async function addToWardrobeFromDesign(
       image_url: imageUrl,
       session_id: sessionId,
       name,
-      auth_token: token,
       image_type: imageType,
     }),
   });
@@ -611,4 +625,3 @@ export async function saveTryOnOutfit(
   });
   return handle(res);
 }
-
