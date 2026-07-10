@@ -76,8 +76,17 @@ async def chat(req: ChatRequest):
                         if event.get("type") == "image" and event.get("url"):
                             img = {
                                 "url": event.get("url"),
+                                "originalUrl": event.get("original_url") or event.get("url"),
                                 "type": event.get("image_type") or event.get("capability") or "image",
                             }
+                            for source_key, target_key in (
+                                ("preview_url", "previewUrl"),
+                                ("thumbnail_url", "thumbnailUrl"),
+                                ("original_width", "originalWidth"),
+                                ("original_height", "originalHeight"),
+                            ):
+                                if event.get(source_key) is not None:
+                                    img[target_key] = event[source_key]
                             if img not in assistant_images:
                                 assistant_images.append(img)
                         elif event.get("type") == "message":

@@ -14,6 +14,17 @@ from runtime import _require_user
 router = APIRouter()
 
 
+def _utc_iso(value: str) -> str:
+    """Normalize legacy SQLite UTC timestamps to an explicit ISO-8601 UTC value."""
+    raw = str(value or "").strip()
+    if not raw:
+        return raw
+    normalized = raw.replace(" ", "T", 1)
+    if normalized.endswith("Z") or re.search(r"[+-]\d{2}:\d{2}$", normalized):
+        return normalized
+    return f"{normalized}Z"
+
+
 class CreateDesignRequest(BaseModel):
     title: Optional[str] = ""
     project_id: Optional[str] = None
@@ -33,8 +44,8 @@ def _design_to_dict(row) -> dict:
         "title": row["title"] or "无标题设计",
         "project_id": row["project_id"],
         "starred": bool(row["starred"]),
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
+        "created_at": _utc_iso(row["created_at"]),
+        "updated_at": _utc_iso(row["updated_at"]),
     }
 
 
@@ -48,7 +59,7 @@ def _message_to_dict(row) -> dict:
         "role": row["role"],
         "content": row["content"],
         "images": images if isinstance(images, list) else [],
-        "created_at": row["created_at"],
+        "created_at": _utc_iso(row["created_at"]),
     }
 
 

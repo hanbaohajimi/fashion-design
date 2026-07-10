@@ -30,7 +30,7 @@ export function ChatHeader({
           <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} />
         </div>
         <div style={{ minWidth: 0 }}>
-          <p className="kicker" style={{ fontSize: 9, letterSpacing: '0.28em' }}>Atelier Studio</p>
+          <p className="kicker" style={{ fontSize: 9, letterSpacing: '0.28em' }}>AI DESIGN ASSISTANT</p>
           <h1
             style={{
               fontFamily: 'var(--font-display)',

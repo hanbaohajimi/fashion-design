@@ -1084,7 +1084,7 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": tc["function"]["name"].replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1115,7 +1115,7 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": func_name.replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1159,7 +1159,7 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                     if result.get("status") == "success" and result.get("url"):
                         info = {"url": result["url"], "type": func_name.replace("tool_", "")}
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         err_text = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -2243,8 +2243,33 @@ def _compute_match_score(trend: dict, user_keywords: list) -> float:
 # ═══════════════════════════════════════════════════
 
 def _build_trend_context(trend_id: Optional[str], trend_enabled: bool) -> str:
-    if not trend_enabled or not trend_id:
+    if not trend_enabled:
         return ""
+    if not trend_id:
+        latest_season = db.get_latest_trend_season()
+        rows = db.list_trends(season=latest_season)[:3] if latest_season else db.list_trends()[:3]
+        if not rows:
+            return ""
+        lines = [f"=== 当前趋势脉冲参考{f' · {latest_season}' if latest_season else ''} ==="]
+        for row in rows:
+            current = _row_to_trend(row)
+            design_language = current.get("design_language", {})
+            signals = (
+                design_language.get("style_prompt")
+                or "、".join(current.get("keywords", [])[:5])
+                or current.get("description", "")
+            )
+            if signals:
+                lines.append(f"- {current['name']}：{signals}")
+        if len(lines) == 1:
+            return ""
+        lines += [
+            "",
+            "原则：综合以上最新趋势信号，但优先满足用户的具体需求与个人风格档案。",
+            "不需要在回复中逐条复述趋势名称，将其自然融入色彩、廓形、面料或细节。",
+            "=== 趋势脉冲参考结束 ===",
+        ]
+        return "\n".join(lines)
     row = db.get_trend(trend_id)
     if not row:
         return ""

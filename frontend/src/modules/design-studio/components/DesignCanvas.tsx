@@ -41,6 +41,8 @@ export interface DesignCanvasHandle {
 }
 
 interface DesignCanvasProps {
+  currentModeLabel?: string;
+  onDescribeDesign?: () => void;
   onEditInEditor?: (dataUrl: string) => void;
   onSendToAI?: (dataUrl: string) => void;
   /** 画布选中图片时回调；选中非图片或取消选中时传 null */
@@ -61,6 +63,35 @@ interface SelectedObjectInfo {
 
 const ACCENT_INK = '#1A1815';
 
+interface CanvasToolbarButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  label: string;
+  shortcut?: string;
+}
+
+/** 画布主工具栏按钮：统一鼠标与键盘可见的轻量提示。 */
+function CanvasToolbarButton({
+  label,
+  shortcut,
+  className = 'canvas-tb-btn',
+  children,
+  ...buttonProps
+}: CanvasToolbarButtonProps) {
+  const tooltip = shortcut ? `${label} · ${shortcut}` : label;
+
+  return (
+    <span className="canvas-tb-tooltip" data-tooltip={tooltip}>
+      <button
+        type="button"
+        className={className}
+        aria-label={label}
+        {...buttonProps}
+      >
+        {children}
+      </button>
+    </span>
+  );
+}
+
 function applySelectionStyle(obj: FabricObject) {
   obj.set({ selectable: true, evented: true });
   obj.lockRotation = true;
@@ -76,8 +107,60 @@ function applySelectionStyle(obj: FabricObject) {
   });
 }
 
+function applyHighQualityRendering(canvas: Canvas) {
+  const contexts = [canvas.getContext(), canvas.contextTop];
+  for (const context of contexts) {
+    if (!context) continue;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+  }
+}
+
+/**
+ * 直接解码原始图片元素后再交给 Fabric，避免先经过 DOM 预览尺寸或缩略图画布。
+ * decode() 完成后 naturalWidth / naturalHeight 即为稳定的原始像素尺寸。
+ */
+async function loadOriginalImageElement(url: string): Promise<HTMLImageElement> {
+  const element = new Image();
+  element.decoding = 'async';
+  if (!url.startsWith('data:') && !url.startsWith('blob:')) {
+    element.crossOrigin = 'anonymous';
+  }
+  element.src = url;
+
+  try {
+    await element.decode();
+  } catch {
+    await new Promise<void>((resolve, reject) => {
+      if (element.complete) {
+        if (element.naturalWidth > 0) resolve();
+        else reject(new Error('图片解码失败'));
+        return;
+      }
+      element.onload = () => resolve();
+      element.onerror = () => reject(new Error('图片解码失败'));
+    });
+  }
+
+  if (!element.naturalWidth || !element.naturalHeight) {
+    throw new Error('无法读取图片原始尺寸');
+  }
+  return element;
+}
+
+function getObjectExportMultiplier(object: FabricObject): number {
+  const meta = object as FabricObject & { _naturalWidth?: number; _naturalHeight?: number };
+  const displayWidth = Math.max(1, object.getScaledWidth());
+  const displayHeight = Math.max(1, object.getScaledHeight());
+  const sourceRatio = Math.max(
+    (meta._naturalWidth || displayWidth) / displayWidth,
+    (meta._naturalHeight || displayHeight) / displayHeight,
+  );
+  return Math.min(8, Math.max(window.devicePixelRatio || 1, sourceRatio, 1));
+}
+
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
-  ({ onEditInEditor, onSendToAI, onSelectionChange }, ref) => {
+  ({ currentModeLabel = '生成成衣效果图', onDescribeDesign, onEditInEditor, onSendToAI, onSelectionChange }, ref) => {
     const { toast } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasElRef = useRef<HTMLCanvasElement>(null);
@@ -153,7 +236,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         return;
       }
       const dot = Math.max(0.8, Math.min(1.2, zoom));
-      gridRef.current.style.backgroundImage = `radial-gradient(circle, rgba(26, 24, 21, 0.12) ${dot}px, transparent ${dot}px)`;
+      gridRef.current.style.backgroundImage = `radial-gradient(circle, rgba(26, 24, 21, 0.055) ${dot}px, transparent ${dot}px)`;
       gridRef.current.style.backgroundSize = `${spacing}px ${spacing}px`;
       gridRef.current.style.backgroundPosition = `${vpt[4] % spacing}px ${vpt[5] % spacing}px`;
     }, []);
@@ -167,11 +250,14 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       const canvas = new Canvas(el, {
         width: Math.max(1, Math.round(rect.width)),
         height: Math.max(1, Math.round(rect.height)),
-        backgroundColor: '#FBFAF6',
+        backgroundColor: 'transparent',
         selection: true,
         preserveObjectStacking: true,
+        enableRetinaScaling: true,
+        imageSmoothingEnabled: true,
       });
       fabricRef.current = canvas;
+      applyHighQualityRendering(canvas);
 
       canvas.selectionColor = 'rgba(26, 24, 21, 0.04)';
       canvas.selectionBorderColor = ACCENT_INK;
@@ -194,6 +280,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           return;
         }
         c.setDimensions({ width: w, height: h });
+        applyHighQualityRendering(c);
         c.requestRenderAll();
         updateGrid();
       };
@@ -356,15 +443,30 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         const canvas = fabricRef.current;
         if (!canvas) return;
         try {
-          const img = await FabricImage.fromURL(url, { crossOrigin: 'anonymous' });
+          const sourceElement = await loadOriginalImageElement(url);
+          const img = new FabricImage(sourceElement, {
+            objectCaching: false,
+            noScaleCache: true,
+            imageSmoothing: true,
+          });
           const center = getViewportCenter();
           const offset = addOffsetRef.current * 30;
           addOffsetRef.current = (addOffsetRef.current + 1) % 10;
           const zoom = canvas.getZoom();
-          const maxSize = (Math.min(canvas.getWidth(), canvas.getHeight()) * 0.4) / zoom;
-          const imgW = img.width || 300;
-          const imgH = img.height || 300;
-          const scale = Math.min(maxSize / imgW, maxSize / imgH, 1);
+          const imgW = sourceElement.naturalWidth;
+          const imgH = sourceElement.naturalHeight;
+          // 按可视区域分别约束宽高，避免把高分辨率竖图压缩成很小的缩略图观感。
+          const maxWidth = (canvas.getWidth() * 0.72) / zoom;
+          const maxHeight = (canvas.getHeight() * 0.72) / zoom;
+          const scale = Math.min(maxWidth / imgW, maxHeight / imgH, 1);
+          img.set({
+            width: imgW,
+            height: imgH,
+            objectCaching: false,
+            // Fabric 默认应在缩放结束后用原始像素重绘；不要复用低分辨率缩放缓存。
+            noScaleCache: true,
+            imageSmoothing: true,
+          });
           img.scale(scale);
           const eId = `el-${nextElementId++}`;
           const imgNum = nextImageNumber++;
@@ -391,6 +493,9 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           applySelectionStyle(img);
           canvas.add(img);
           canvas.setActiveObject(img);
+          img.setCoords();
+          img.dirty = true;
+          applyHighQualityRendering(canvas);
           canvas.requestRenderAll();
           toast(`已添加: ${ext._elementName}`, 'success');
         } catch (err) {
@@ -484,7 +589,11 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       input.accept = 'image/*';
       input.onchange = (e) => {
         const f = (e.target as HTMLInputElement).files?.[0];
-        if (f) addImageToCanvas(URL.createObjectURL(f), f.name.replace(/\.[^/.]+$/, ''));
+        if (f) {
+          const objectUrl = URL.createObjectURL(f);
+          void addImageToCanvas(objectUrl, f.name.replace(/\.[^/.]+$/, ''))
+            .finally(() => URL.revokeObjectURL(objectUrl));
+        }
       };
       input.click();
     }, [addImageToCanvas]);
@@ -520,7 +629,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         const url =
           src && !src.startsWith('blob:')
             ? src
-            : a.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
+            : a.toDataURL({ format: 'png', quality: 1, multiplier: getObjectExportMultiplier(a) });
         if (action === 'edit') onEditInEditor?.(url);
         if (action === 'ai') onSendToAI?.(url);
       },
@@ -536,7 +645,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       const url =
         src && !src.startsWith('blob:')
           ? src
-          : a.toDataURL({ format: 'png', quality: 1, multiplier: 2 });
+          : a.toDataURL({ format: 'png', quality: 1, multiplier: getObjectExportMultiplier(a) });
       const link = document.createElement('a');
       link.href = url;
       link.download = `${selectedInfo?.name || 'design'}-${Date.now()}.png`;
@@ -630,8 +739,11 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         setIsDragOver(false);
         dragCounterRef.current = 0;
         Array.from(e.dataTransfer.files).forEach((f) => {
-          if (f.type.startsWith('image/'))
-            addImageToCanvas(URL.createObjectURL(f), f.name.replace(/\.[^/.]+$/, ''));
+          if (f.type.startsWith('image/')) {
+            const objectUrl = URL.createObjectURL(f);
+            void addImageToCanvas(objectUrl, f.name.replace(/\.[^/.]+$/, ''))
+              .finally(() => URL.revokeObjectURL(objectUrl));
+          }
         });
       },
       [addImageToCanvas],
@@ -644,46 +756,53 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
 
     return (
       <div className="flex-1 flex flex-col min-w-0 relative" style={{ background: 'var(--color-canvas)' }}>
+        <div className="canvas-mode-label" aria-label={`当前设计状态：${currentModeLabel}`}>
+          <strong>{currentModeLabel}</strong>
+        </div>
         {/* ── Main toolbar (杂志黑底象牙字) ── */}
-        <div className="canvas-main-toolbar">
+        <div className={`canvas-main-toolbar ${isEmpty ? 'is-empty' : ''}`}>
           <div className="flex items-center">
-            <button
-              type="button"
+            <CanvasToolbarButton
+              label="选择"
+              shortcut="V"
               onClick={() => setActiveTool('select')}
               className={`canvas-tb-btn ${activeTool === 'select' ? 'is-active' : ''}`}
-              title="选择 (V)"
             >
               <MousePointer2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
-            <button
-              type="button"
+            </CanvasToolbarButton>
+            <CanvasToolbarButton
+              label="平移"
+              shortcut="H"
               onClick={() => setActiveTool('hand')}
               className={`canvas-tb-btn ${activeTool === 'hand' ? 'is-active' : ''}`}
-              title="平移 (H)"
             >
               <Hand className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
+            </CanvasToolbarButton>
           </div>
           <span className="canvas-tb-sep" />
           <div className="flex items-center">
-            <button type="button" onClick={addTextElement} className="canvas-tb-btn" title="文字">
+            <CanvasToolbarButton label="文字" onClick={addTextElement}>
               <Type className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
-            <button type="button" onClick={addRectElement} className="canvas-tb-btn" title="矩形">
+            </CanvasToolbarButton>
+            <CanvasToolbarButton label="矩形" onClick={addRectElement}>
               <Square className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
-            <button type="button" onClick={addCircleElement} className="canvas-tb-btn" title="圆形">
+            </CanvasToolbarButton>
+            <CanvasToolbarButton label="圆形" onClick={addCircleElement}>
               <CircleIcon className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
-            <button type="button" onClick={insertImageFromFile} className="canvas-tb-btn" title="上传图片">
+            </CanvasToolbarButton>
+            <CanvasToolbarButton
+              label="添加图片"
+              onClick={insertImageFromFile}
+              className={`canvas-tb-btn ${isEmpty ? 'is-emphasized' : ''}`}
+            >
               <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
+            </CanvasToolbarButton>
           </div>
           <span className="canvas-tb-sep" />
           <div className="flex items-center">
-            <button type="button" onClick={zoomOut} className="canvas-tb-btn" title="缩小">
+            <CanvasToolbarButton label="缩小" onClick={zoomOut}>
               <ZoomOut className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
+            </CanvasToolbarButton>
             <button
               type="button"
               onClick={() => {
@@ -700,12 +819,12 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
             >
               {Math.round(zoomLevel * 100)}%
             </button>
-            <button type="button" onClick={zoomIn} className="canvas-tb-btn" title="放大">
+            <CanvasToolbarButton label="放大" onClick={zoomIn}>
               <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
-            <button type="button" onClick={zoomToFit} className="canvas-tb-btn" title="适应画布">
+            </CanvasToolbarButton>
+            <CanvasToolbarButton label="适应画布" onClick={zoomToFit}>
               <Maximize className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </button>
+            </CanvasToolbarButton>
           </div>
         </div>
 
@@ -783,44 +902,40 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
+          <div className="canvas-paper-texture" aria-hidden />
           <div
             ref={gridRef}
-            className="absolute inset-0 pointer-events-none z-[1]"
+            className="canvas-structure-grid"
             style={{
-              backgroundImage: 'radial-gradient(circle, rgba(26, 24, 21, 0.10) 0.6px, transparent 0.6px)',
+              backgroundImage: 'radial-gradient(circle, rgba(26, 24, 21, 0.055) 0.6px, transparent 0.6px)',
               backgroundSize: '20px 20px',
             }}
           />
+          <div className="canvas-ruler canvas-ruler-top" aria-hidden />
+          <div className="canvas-ruler canvas-ruler-left" aria-hidden />
+          <div className="canvas-center-guide canvas-center-guide-x" aria-hidden />
+          <div className="canvas-center-guide canvas-center-guide-y" aria-hidden />
+          <div className="canvas-crop-mark canvas-crop-mark-tl" aria-hidden />
+          <div className="canvas-crop-mark canvas-crop-mark-tr" aria-hidden />
+          <div className="canvas-crop-mark canvas-crop-mark-bl" aria-hidden />
+          <div className="canvas-crop-mark canvas-crop-mark-br" aria-hidden />
           <canvas ref={canvasElRef} className="absolute inset-0 z-[2]" />
 
           {isEmpty && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[3]">
-              <div className="canvas-empty fade-up-in">
+              <div className="canvas-empty fade-up-in pointer-events-auto">
                 <p className="kicker">Atelier &middot; Canvas</p>
-                <p className="canvas-empty-quote">
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 60, lineHeight: 0.6, fontStyle: 'italic', color: 'var(--color-ink-4)', verticalAlign: 'top' }}>&ldquo;</span>
-                  让灵感在此处落笔。
-                </p>
-                <p className="dek" style={{ marginTop: 16, color: 'var(--color-ink-3)' }}>
-                  <span style={{ fontStyle: 'italic', color: 'var(--color-ink)' }}>路径 A &mdash;&mdash;</span>
-                  &nbsp;在右侧对话描述需求，生成后点击「置入画布」编排。
-                </p>
-                <p className="dek" style={{ marginTop: 8, color: 'var(--color-ink-3)' }}>
-                  <span style={{ fontStyle: 'italic', color: 'var(--color-ink)' }}>路径 B &mdash;&mdash;</span>
-                  &nbsp;拖入图片到此处，或点击工具栏「上传图片」开始。
-                </p>
-                <hr className="rule-thin" style={{ marginTop: 28, marginBottom: 16 }} />
-                <div className="canvas-empty-keys">
-                  {[
-                    { label: 'Space', desc: '平移' },
-                    { label: 'V', desc: '选择' },
-                    { label: 'H', desc: '抓手' },
-                  ].map(k => (
-                    <span key={k.label} className="canvas-empty-key">
-                      <kbd>{k.label}</kbd>
-                      <span>{k.desc}</span>
-                    </span>
-                  ))}
+                <h2 className="canvas-empty-quote">让灵感在此处落笔。</h2>
+                <p className="canvas-empty-description">描述服装设计，或添加参考图片开始。</p>
+                <div className="canvas-empty-actions">
+                  <button type="button" className="canvas-empty-action primary" onClick={onDescribeDesign}>
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden />
+                    描述设计想法
+                  </button>
+                  <button type="button" className="canvas-empty-action" onClick={insertImageFromFile}>
+                    <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden />
+                    上传参考图片
+                  </button>
                 </div>
               </div>
             </div>

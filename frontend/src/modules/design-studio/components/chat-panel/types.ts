@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { CapabilityId } from '../../utils/capabilities';
 
 /** 附件在当前能力中的角色 */
 export type AttachmentRole = 'dress' | 'pattern' | 'model' | 'reference';
@@ -41,6 +42,16 @@ export type CapabilityStatus =
 export interface ChatImage {
   url: string;
   type: string;
+  /** 原始高清资源；置入画布和下载时优先使用。 */
+  originalUrl?: string;
+  /** 中等尺寸预览；聊天消息列表可优先使用。 */
+  previewUrl?: string;
+  /** 小尺寸缩略图；仅用于紧凑列表。 */
+  thumbnailUrl?: string;
+  /** 兼容外部图片源字段。 */
+  sourceUrl?: string;
+  originalWidth?: number;
+  originalHeight?: number;
 }
 
 export type ChatTaskPhase = 'request' | 'analysis' | 'generation' | 'finalizing';
@@ -50,7 +61,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   images?: ChatImage[];
-  timestamp: Date;
+  timestamp: Date | null;
   isStreaming?: boolean;
   status?: string;
   taskPhase?: ChatTaskPhase;
@@ -85,6 +96,8 @@ export interface TrendHotBlock {
   items: TrendHotItem[];
 }
 
+export type CanvasBottomPanel = 'design-task' | 'trend-pulse' | null;
+
 export interface ChatPanelProps {
   onEditImage: (imageUrl: string) => void;
   onPreviewImage: (imageUrl: string) => void;
@@ -108,9 +121,15 @@ export interface ChatPanelProps {
   projectId?: string | null;
   trendId?: string;
   trendEnabled?: boolean;
-  onTrendToggle?: (trendId: string | undefined, enabled: boolean) => void;
+  activeBottomPanel?: CanvasBottomPanel;
+  canvasBottomPanelHost?: HTMLDivElement | null;
+  onBottomPanelToggle?: (panel: Exclude<CanvasBottomPanel, null>) => void;
+  onTrendToggle?: (trendId: string | undefined) => void;
+  onActiveCapabilityChange?: (capabilityId: CapabilityId, displayTitle: string) => void;
   settingsButton?: React.ReactNode;
   firstRunPanel?: React.ReactNode;
   starterPrompt?: string;
   onStarterPromptConsumed?: () => void;
+  /** 外部动作触发输入框聚焦；每次递增表示一次新的聚焦请求。 */
+  focusComposerRequest?: number;
 }

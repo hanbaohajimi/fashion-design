@@ -2,16 +2,13 @@ import React, { useRef } from 'react';
 import {
   AtSign,
   Box,
+  ChevronDown,
   Globe,
-  Lightbulb,
   Loader2,
   Paperclip,
   Send,
-  Sparkles,
-  TrendingUp,
   Upload,
   X,
-  Zap,
 } from 'lucide-react';
 import { MAX_ATTACHMENTS } from './utils';
 import type { LocalAttachment } from './types';
@@ -41,11 +38,11 @@ interface ComposerProps {
   onInsertMention: (figLabel: string) => void;
 
   trendActive: boolean;
-  trendId?: string;
+  trendPanelActive: boolean;
   onToggleTrend: () => void;
 
-  fastMode: boolean;
-  onToggleFastMode: () => void;
+  designTaskActive: boolean;
+  onToggleDesignTask: () => void;
 
   enhancing: boolean;
   onEnhanceInput: () => void;
@@ -57,6 +54,12 @@ interface ComposerProps {
 
   /** 当前激活的能力定义（用于动态 placeholder、当前任务标签） */
   activeCapability?: CapabilityDef;
+
+  /** 当前任务对应的可点击示例提示词 */
+  examplePrompt?: string;
+
+  /** 用户明确点击示例后，将提示词填入输入框 */
+  onUseExamplePrompt: (prompt: string) => void;
 
   /** 当前生成状态描述（generating 时显示）*/
   generatingStatus?: string;
@@ -84,16 +87,18 @@ export function Composer({
   filteredMentions,
   onInsertMention,
   trendActive,
-  trendId,
+  trendPanelActive,
   onToggleTrend,
-  fastMode,
-  onToggleFastMode,
+  designTaskActive,
+  onToggleDesignTask,
   enhancing,
   onEnhanceInput,
   onSuggest,
   onShowTip,
   onAbort,
   activeCapability,
+  examplePrompt,
+  onUseExamplePrompt,
   generatingStatus,
 }: ComposerProps) {
   const mentionMenuRef = useRef<HTMLDivElement>(null);
@@ -107,52 +112,65 @@ export function Composer({
 
   return (
     <>
-      {/* 当前任务标签 */}
+      {/* 当前任务切换条：让任务选择与提示词输入形成明确关系 */}
       {activeCapability && (
-        <div
-          style={{
-            padding: '6px 20px 0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              color: 'var(--color-ink-3)',
-              fontFamily: 'var(--font-ui)',
-              letterSpacing: '0.04em',
-            }}
+        <div className="composer-task-context">
+          <button
+            type="button"
+            className="composer-task-switch"
+            data-active={designTaskActive}
+            aria-pressed={designTaskActive}
+            aria-expanded={designTaskActive}
+            aria-haspopup="listbox"
+            onClick={onToggleDesignTask}
+            disabled={isLoading}
+            title="选择设计任务"
           >
-            当前任务：
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              color: 'var(--color-ink)',
-              fontFamily: 'var(--font-ui)',
-              fontWeight: 500,
-              letterSpacing: '-0.005em',
-            }}
+            <span className="composer-task-kicker"><span aria-hidden="true">✦</span> 当前设计任务</span>
+            <span className="composer-task-row">
+              <strong>{activeCapability.displayTitle}</strong>
+              <span className="composer-task-change" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 10, letterSpacing: '0.06em' }}>切换</span>
+                <ChevronDown className="composer-task-chevron" strokeWidth={1.5} aria-hidden />
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="composer-trend-toggle"
+            data-active={trendPanelActive}
+            data-enabled={trendActive}
+            aria-pressed={trendPanelActive}
+            onClick={onToggleTrend}
+            disabled={isLoading}
+            title={trendActive ? '趋势感知已启用 — 点击打开面板' : '开启趋势感知'}
           >
-            {activeCapability.displayTitle}
-          </span>
+            <span>TREND PULSE</span>
+            <span className="composer-trend-status">
+              {trendActive ? (
+                <>
+                  <span className="composer-trend-dot" aria-hidden="true" />
+                  已开启
+                </>
+              ) : (
+                <span style={{ opacity: 0.6 }}>关闭</span>
+              )}
+            </span>
+          </button>
+          {examplePrompt && !input.trim() && (
+            <button
+              type="button"
+              className="composer-example-prompt"
+              onClick={() => onUseExamplePrompt(examplePrompt)}
+              disabled={isLoading}
+              title="点击填入输入框"
+            >
+              <span>试试：</span>{examplePrompt}
+            </button>
+          )}
           {/* 生成中状态 */}
           {isLoading && generatingStatus && (
-            <>
-              <span style={{ width: 1, height: 10, background: 'var(--color-border)', flexShrink: 0 }} />
-              <span
-                style={{
-                  fontSize: 10,
-                  color: 'var(--color-ink-3)',
-                  fontFamily: 'var(--font-ui)',
-                  fontStyle: 'italic',
-                }}
-              >
-                {generatingStatus}
-              </span>
-            </>
+            <span className="composer-task-status">{generatingStatus}</span>
           )}
         </div>
       )}
@@ -299,10 +317,11 @@ export function Composer({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isLoading || attachedAssets.length >= MAX_ATTACHMENTS}
-                className="composer-icon-btn"
+                className="composer-text-btn composer-upload-btn"
                 title={`添加图片（最多 ${MAX_ATTACHMENTS} 张，可多选）`}
               >
                 <Paperclip className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <span className="hidden sm:inline">上传</span>
               </button>
               <input
                 ref={fileInputRef}
@@ -312,57 +331,8 @@ export function Composer({
                 className="hidden"
                 onChange={onFileSelect}
               />
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={onToggleTrend}
-                className="composer-text-btn"
-                data-active={trendActive && !!trendId}
-                title={
-                  trendId
-                    ? trendActive
-                      ? '趋势感知已开启（点击关闭）'
-                      : '趋势感知已关闭（点击开启）'
-                    : '在趋势探索页选择趋势后可开启'
-                }
-              >
-                <TrendingUp className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span className="hidden sm:inline">{trendActive && trendId ? '趋势 ✦' : '趋势'}</span>
-              </button>
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={() => {
-                  onShowTip('AI 设计助手支持以下能力，直接描述需求即可调用', 'info');
-                  onSuggest('帮我设计一件');
-                }}
-                className="composer-text-btn"
-                title="智能体能力：文生图/草图/编辑/图案迁移/模特生成/试穿"
-              >
-                <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} />
-                <span className="hidden sm:inline">智能体</span>
-              </button>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={() => onShowTip('上方的能力按钮可一键发起任意生成，不必按顺序', 'info')}
-                className="composer-icon-btn"
-                title="灵感 / 快捷追问"
-              >
-                <Lightbulb className="w-3.5 h-3.5" strokeWidth={1.5} />
-              </button>
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={onToggleFastMode}
-                className="composer-icon-btn"
-                data-active={fastMode}
-                title={fastMode ? '快速模式已开启（点击关闭）' : '快速模式（简洁回复）'}
-              >
-                <Zap className="w-3.5 h-3.5" strokeWidth={1.5} />
-              </button>
               <button
                 type="button"
                 disabled={isLoading || enhancing}

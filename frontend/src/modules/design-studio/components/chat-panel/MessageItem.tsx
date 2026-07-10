@@ -22,7 +22,10 @@ import {
   TypingDots,
   extractMessageTitle,
   fmtLine,
-  formatMessageDate,
+  formatMessageDateTime,
+  formatMessageTime,
+  getOriginalImageUrl,
+  getPreviewImageUrl,
 } from './utils';
 import type { ChatMessage } from './types';
 import { addToWardrobeFromDesign } from '../../../../api/profileApi';
@@ -129,6 +132,12 @@ export function MessageItem({
               )}
             </div>
           </div>
+          {formatMessageTime(msg.timestamp) && (
+            <span className="message-local-time">
+              <Clock className="w-2.5 h-2.5" strokeWidth={1.5} />
+              {formatMessageTime(msg.timestamp)}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -154,7 +163,7 @@ export function MessageItem({
         }}
       >
         <Eye className="inline w-3 h-3 mr-1" strokeWidth={1.5} />
-        设计助手 · {formatMessageDate(msg.timestamp)}
+        设计助手{formatMessageDateTime(msg.timestamp) ? ` · ${formatMessageDateTime(msg.timestamp)}` : ''}
       </div>
 
       {msg.isError ? (
@@ -333,6 +342,8 @@ export function MessageItem({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
               {msg.images.map((img, idx) => {
                 const meta = TYPE_LABEL[img.type];
+                const originalUrl = getOriginalImageUrl(img);
+                const previewUrl = getPreviewImageUrl(img);
                 return (
                   <div
                     key={idx}
@@ -369,8 +380,8 @@ export function MessageItem({
                       }}
                     >
                       <img
-                        src={img.url}
-                        alt={meta?.label || ''}
+                        src={previewUrl}
+                        alt={meta?.label ? `${meta.label}生成结果` : 'AI 生成的服装设计图'}
                         style={{
                           width: '100%',
                           height: 'auto',
@@ -378,7 +389,7 @@ export function MessageItem({
                           display: 'block',
                           transition: 'opacity 0.2s',
                         }}
-                        onClick={() => onPreviewImage(img.url)}
+                        onClick={() => onPreviewImage(originalUrl)}
                       />
                       <div
                         style={{
@@ -396,7 +407,7 @@ export function MessageItem({
                             type="button"
                             onClick={e => {
                               e.stopPropagation();
-                              onAddToCanvas(img.url);
+                              onAddToCanvas(originalUrl);
                             }}
                             className="img-float-btn"
                             title="置入画布"
@@ -408,7 +419,7 @@ export function MessageItem({
                           type="button"
                           onClick={e => {
                             e.stopPropagation();
-                            onEditImage(img.url);
+                            onEditImage(originalUrl);
                           }}
                           className="img-float-btn"
                           title="像素编辑（全屏编辑器）"
@@ -420,7 +431,7 @@ export function MessageItem({
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <button
                         type="button"
-                        onClick={() => onEditImage(img.url)}
+                        onClick={() => onEditImage(originalUrl)}
                         className="msg-action-btn dark"
                         title="打开全屏像素编辑器"
                       >
@@ -430,7 +441,7 @@ export function MessageItem({
                       {onAddToCanvas && (
                         <button
                           type="button"
-                          onClick={() => onAddToCanvas(img.url)}
+                          onClick={() => onAddToCanvas(originalUrl)}
                           className="msg-action-btn"
                         >
                           置入画布
@@ -443,7 +454,7 @@ export function MessageItem({
                           onClick={async () => {
                             try {
                               setSavingToWardrobe(true);
-                              await addToWardrobeFromDesign(authToken, img.url, sessionId, undefined, img.type);
+                              await addToWardrobeFromDesign(authToken, originalUrl, sessionId, undefined, img.type);
                               onToast('已收入衣橱', 'success');
                             } catch {
                               onToast('收入衣橱失败', 'error');
@@ -458,7 +469,7 @@ export function MessageItem({
                       )}
                       <button
                         type="button"
-                        onClick={() => onDownload(img.url)}
+                        onClick={() => onDownload(originalUrl)}
                         className="icon-btn-editorial"
                         style={{ width: 28, height: 28, marginLeft: 'auto' }}
                         title="下载"
@@ -533,7 +544,7 @@ export function MessageItem({
                 }}
               >
                 <Clock className="w-2.5 h-2.5" strokeWidth={1.5} />
-                {msg.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                {formatMessageTime(msg.timestamp)}
               </span>
               <button
                 type="button"

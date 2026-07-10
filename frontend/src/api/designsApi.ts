@@ -29,7 +29,16 @@ export interface DesignMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  images?: Array<{ url: string; type: string }>;
+  images?: Array<{
+    url: string;
+    type: string;
+    originalUrl?: string;
+    previewUrl?: string;
+    thumbnailUrl?: string;
+    sourceUrl?: string;
+    originalWidth?: number;
+    originalHeight?: number;
+  }>;
   created_at: string;
 }
 

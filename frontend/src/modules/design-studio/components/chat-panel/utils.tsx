@@ -6,9 +6,7 @@ import {
   ImageIcon,
   UserCircle,
   Shirt,
-  Layers,
 } from 'lucide-react';
-import type { CapabilityId } from '../../utils/capabilities';
 import type { ChatImage, StreamEvent, TrendHotItem } from './types';
 
 export const MAX_ATTACHMENTS = 12;
@@ -21,15 +19,6 @@ export const TYPE_LABEL: Record<string, { label: string; icon: React.ReactNode }
   transfer_pattern: { label: '图案', icon: <ImageIcon className="w-3 h-3" strokeWidth={1.5} /> },
   generate_model: { label: '模特', icon: <UserCircle className="w-3 h-3" strokeWidth={1.5} /> },
   try_on: { label: '试穿', icon: <Shirt className="w-3 h-3" strokeWidth={1.5} /> },
-};
-
-export const WELCOME_ICON_MAP: Record<CapabilityId, React.ReactNode> = {
-  text_to_image: <Sparkles className="w-4 h-4" strokeWidth={1.5} />,
-  draw_sketch: <Wand2 className="w-4 h-4" strokeWidth={1.5} />,
-  edit_image: <Palette className="w-4 h-4" strokeWidth={1.5} />,
-  transfer_pattern: <Layers className="w-4 h-4" strokeWidth={1.5} />,
-  generate_model: <UserCircle className="w-4 h-4" strokeWidth={1.5} />,
-  try_on: <Shirt className="w-4 h-4" strokeWidth={1.5} />,
 };
 
 export const TREND_DIM_ORDER = [
@@ -84,7 +73,62 @@ export function extractMessageTitle(content: string): string | null {
 }
 
 export function formatMessageDate(d: Date): string {
-  return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+}
+
+export function parseTimestamp(value: string | number | Date | null | undefined): Date | null {
+  if (value == null) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  if (typeof value === 'number') {
+    const timestamp = value < 1e12 ? value * 1000 : value;
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // SQLite datetime('now') 和历史记录是无时区 UTC；显式补 Z，避免浏览器按本地时间解释。
+  const normalized = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(trimmed)
+    ? `${trimmed.replace(' ', 'T')}Z`
+    : trimmed;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function formatMessageTime(value: string | number | Date | null | undefined): string {
+  const date = parseTimestamp(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+export function formatMessageDateTime(value: string | number | Date | null | undefined): string {
+  const date = parseTimestamp(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
+
+export function getOriginalImageUrl(image: ChatImage): string {
+  return image.originalUrl || image.sourceUrl || image.url;
+}
+
+export function getPreviewImageUrl(image: ChatImage): string {
+  return image.previewUrl || image.thumbnailUrl || image.url || getOriginalImageUrl(image);
 }
 
 export function fmtContent(text: string): React.ReactNode {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useToast } from '../../../components/Toast';
 import CapabilityHub, { type SessionImage as CapSessionImage } from './CapabilityHub';
@@ -19,26 +20,18 @@ import type {
   ChatTaskPhase,
   LocalAttachment,
   AttachmentRole,
-  TrendHotBlock,
-  TrendHotItem,
-  TrendHotStatus,
 } from './chat-panel/types';
 import { autoTitleDesign } from '../../../api/designsApi';
 import {
   MAX_ATTACHMENTS,
-  TREND_DIM_LABELS,
-  TREND_DIM_ORDER,
   dataUrlToFile,
   designApiFailureMessage,
-  fetchTrendHotItems,
   formatApiDetail,
   isImageFile,
   streamChat,
 } from './chat-panel/utils';
 import { ChatHeader } from './chat-panel/ChatHeader';
-import { WelcomePanel } from './chat-panel/WelcomePanel';
 import { MessageItem } from './chat-panel/MessageItem';
-import { TrendHotInline } from './chat-panel/TrendHotInline';
 import { Composer } from './chat-panel/Composer';
 
 function taskPhaseFromStatus(status: string): ChatTaskPhase {
@@ -86,11 +79,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   projectId,
   trendId,
   trendEnabled: trendEnabledProp = false,
+  activeBottomPanel = null,
+  canvasBottomPanelHost = null,
+  onBottomPanelToggle,
   onTrendToggle,
+  onActiveCapabilityChange,
   settingsButton,
   firstRunPanel,
   starterPrompt,
   onStarterPromptConsumed,
+  focusComposerRequest = 0,
   selectedCanvasImageUrl = null,
 }) => {
   const isRight = side === 'right';
@@ -99,14 +97,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>(() => initialMessages || []);
   const [input, setInput] = useState('');
+  const [starterSuggestion, setStarterSuggestion] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(() => externalSessionId || crypto.randomUUID());
 
   useEffect(() => {
     if (!starterPrompt) return;
-    setInput(starterPrompt);
+    setStarterSuggestion(starterPrompt);
     onStarterPromptConsumed?.();
-    requestAnimationFrame(() => taRef.current?.focus());
   }, [starterPrompt, onStarterPromptConsumed]);
 
   useEffect(() => {
@@ -130,12 +128,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [msgFeedback, setMsgFeedback] = useState<Record<string, 'up' | 'down'>>({});
   const [isDragging, setIsDragging] = useState(false);
-  const [fastMode, setFastMode] = useState(false);
-  const [trendActive, setTrendActive] = useState(trendEnabledProp);
   const [enhancing, setEnhancing] = useState(false);
-  const [trendHotItems, setTrendHotItems] = useState<TrendHotItem[]>([]);
-  const [trendHotCategory, setTrendHotCategory] = useState('');
-  const [trendHotStatus, setTrendHotStatus] = useState<TrendHotStatus>('loading');
 
   // 当前激活能力 & 最后生成结果的能力（用于 ResultNextActions）
   const [activeCapabilityId, setActiveCapabilityId] = useState<CapabilityId>(DEFAULT_CAPABILITY_ID);
@@ -151,14 +144,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const addedCanvasUrlsRef = useRef<Set<string>>(new Set());
   /**
    * 任务快照：每次正常发送时保存，供 retry/regenerate 完整恢复。
-   * 保存 capabilityId、原始 message、trendId 以及附件数组快照。
+   * 保存 capabilityId、原始 message、趋势开关以及附件数组快照。
    * 重试时使用快照素材，不受用户之后切换能力或更换附件的影响。
    */
   const lastTaskSnapshotRef = useRef<{
     capabilityId: CapabilityId;
     message: string;
     trendId?: string;
-    trendActive: boolean;
+    trendEnabled: boolean;
     attachments: LocalAttachment[];  // 浅拷贝；File 引用不可变，保留即可
   } | null>(null);
 
@@ -167,6 +160,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const dragCnt = useRef(0);
+
+  useEffect(() => {
+    if (!focusComposerRequest || collapsed) return;
+    requestAnimationFrame(() => taRef.current?.focus());
+  }, [focusComposerRequest, collapsed]);
 
   const scroll = useCallback(() => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }));
@@ -185,66 +183,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   useEffect(() => {
     if (pendingFromCanvas) taRef.current?.focus();
   }, [pendingFromCanvas]);
-
-  const loadTrendHotTags = useCallback(async () => {
-    setTrendHotStatus('loading');
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => ac.abort(), 8000);
-    try {
-      const items = await fetchTrendHotItems(trendHotCategory, ac.signal);
-      window.clearTimeout(timer);
-      setTrendHotItems(items);
-      setTrendHotStatus(items.length ? 'ok' : 'empty');
-    } catch {
-      window.clearTimeout(timer);
-      setTrendHotItems([]);
-      setTrendHotStatus('error');
-    }
-  }, [trendHotCategory]);
-
-  useEffect(() => {
-    void loadTrendHotTags();
-  }, [loadTrendHotTags]);
-
-  const trendHotDisplayBlocks: TrendHotBlock[] = useMemo(() => {
-    if (!trendHotItems.length) return [];
-    const perGroup = trendHotCategory ? 28 : 10;
-    if (trendHotCategory) {
-      return [
-        {
-          key: trendHotCategory,
-          label: TREND_DIM_LABELS[trendHotCategory] || trendHotCategory,
-          items: trendHotItems.slice(0, perGroup),
-        },
-      ];
-    }
-    const byCat = new Map<string, TrendHotItem[]>();
-    for (const it of trendHotItems) {
-      const c = it.category || 'other';
-      if (!byCat.has(c)) byCat.set(c, []);
-      byCat.get(c)!.push(it);
-    }
-    const blocks: TrendHotBlock[] = [];
-    for (const cat of TREND_DIM_ORDER) {
-      const list = byCat.get(cat);
-      if (list?.length) {
-        blocks.push({
-          key: cat,
-          label: TREND_DIM_LABELS[cat] || cat,
-          items: list.slice(0, perGroup),
-        });
-      }
-    }
-    for (const [cat, list] of byCat) {
-      if ((TREND_DIM_ORDER as readonly string[]).includes(cat)) continue;
-      blocks.push({
-        key: cat,
-        label: list[0]?.categoryLabel || cat,
-        items: list.slice(0, perGroup),
-      });
-    }
-    return blocks;
-  }, [trendHotItems, trendHotCategory]);
 
   const revokeAttachmentPreview = useCallback((a: LocalAttachment) => {
     if (a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview);
@@ -550,7 +488,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
-  const send = async (direct?: string, directCapabilityId?: CapabilityId, snapshotAttachments?: LocalAttachment[]) => {
+  const send = async (
+    direct?: string,
+    directCapabilityId?: CapabilityId,
+    snapshotAttachments?: LocalAttachment[],
+    snapshotTrend?: { trendId?: string; enabled: boolean },
+  ) => {
     const rawTxt = direct || input.trim();
     const hasCanvas = !!pendingFromCanvas;
     // 重试时使用快照附件；正常发送使用当前 UI 附件
@@ -560,6 +503,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
     // 本次发送使用的能力（direct 调用时从快照恢复，否则用当前激活能力）
     const sendCapId = directCapabilityId ?? activeCapabilityId;
+    const sendTrendId = snapshotTrend?.trendId ?? trendId;
+    const sendTrendEnabled = snapshotTrend?.enabled ?? trendEnabledProp;
 
     // 清除上次结果操作面板
     setLastGeneratedCapabilityId(null);
@@ -570,8 +515,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       lastTaskSnapshotRef.current = {
         capabilityId: sendCapId,
         message: rawTxt,
-        trendId: trendId,
-        trendActive,
+        trendId: sendTrendId,
+        trendEnabled: sendTrendEnabled,
         // 浅拷贝：File 引用不可变，对象引用安全；防止后续 UI 变化影响快照
         attachments: activeAssets.map(a => ({ ...a })),
       };
@@ -594,7 +539,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       ? rawTxt
       : buildCapabilityMessage(sendCapId, rawTxt, imageInfos);
 
-    const txt = finalMessage + (fastMode && finalMessage ? ' [请简洁快速回复，不必详细解释]' : '');
+    const txt = finalMessage;
 
     // ── 按能力强制排序附件 ────────────────────────────────────────────────
     let orderedAssets = [...activeAssets];
@@ -771,7 +716,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     try {
       await streamChat(
         sessionId,
-        txt, // 发送带能力前缀的完整指令消息（txt = finalMessage + fastMode suffix）
+        txt,
         ev => {
           switch (ev.type) {
             case 'status': {
@@ -794,7 +739,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   (typeof ex.capability === 'string' && ex.capability) ||
                   (typeof ex.tool === 'string' && ex.tool) ||
                   'image';
-                const ni = { url, type: t };
+                const ni: ChatImage = {
+                  url,
+                  type: t,
+                  ...(typeof ex.original_url === 'string' ? { originalUrl: ex.original_url } : {}),
+                  ...(typeof ex.preview_url === 'string' ? { previewUrl: ex.preview_url } : {}),
+                  ...(typeof ex.thumbnail_url === 'string' ? { thumbnailUrl: ex.thumbnail_url } : {}),
+                  ...(typeof ex.original_width === 'number' ? { originalWidth: ex.original_width } : {}),
+                  ...(typeof ex.original_height === 'number' ? { originalHeight: ex.original_height } : {}),
+                };
                 imgs.push(ni);
                 onImageGenerated?.(ni);
                 imgLoading = false;
@@ -819,6 +772,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         isStreaming: false,
                         status: undefined,
                         taskPhase: undefined,
+                        timestamp: new Date(),
                         durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                       }
                     : m,
@@ -836,6 +790,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         isStreaming: false,
                         status: undefined,
                         taskPhase: undefined,
+                        timestamp: new Date(),
                         durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                         isError: true,
                         failedMessage: uMsg.content,
@@ -853,6 +808,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   isStreaming: false,
                   status: undefined,
                   taskPhase: undefined,
+                  timestamp: new Date(),
                   durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                 } : m)),
               );
@@ -862,8 +818,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         ctrl.signal,
         authToken,
         projectId,
-        trendId,
-        trendActive,
+        sendTrendId,
+        sendTrendEnabled,
         designId,
         // 传递 capability_id：使用 sendCapId（含快照恢复值），而非当前 activeCapabilityId
         sendCapId,
@@ -884,6 +840,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   isStreaming: false,
                   status: undefined,
                   taskPhase: undefined,
+                  timestamp: new Date(),
                   durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                   isError: true,
                   failedMessage: uMsg.content,
@@ -902,6 +859,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   isStreaming: false,
                   status: undefined,
                   taskPhase: undefined,
+                  timestamp: new Date(),
                   durationSeconds: Math.max(1, Math.round((Date.now() - taskStartedAt) / 1000)),
                 }
               : m,
@@ -945,7 +903,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       const l = p.length - 1;
       return l >= 1 ? p.slice(0, l - 1) : p;
     });
-    setTimeout(() => send(msg, snapshotCapId, snapshotAttachments), 50);
+    setTimeout(() => send(
+      msg,
+      snapshotCapId,
+      snapshotAttachments,
+      snap ? { trendId: snap.trendId, enabled: snap.trendEnabled } : undefined,
+    ), 50);
   };
 
   const suggest = (t: string) => {
@@ -957,13 +920,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         taRef.current.setSelectionRange(len, len);
       }
     });
-  };
-
-  const applyTrendHotTag = (word: string) => {
-    setInput(
-      `结合「${word}」流行趋势热点，设计一件女装方向的概念成衣效果图，造型完整清晰、中性棚拍柔光、突出该趋势风格特征`,
-    );
-    taRef.current?.focus();
   };
 
   const dlImg = (u: string) => {
@@ -980,6 +936,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   // 当前激活能力的完整定义
   const activeCapabilityDef = getCapabilityById(activeCapabilityId);
+
+  useEffect(() => {
+    onActiveCapabilityChange?.(
+      activeCapabilityId,
+      activeCapabilityDef?.displayTitle ?? '生成成衣效果图',
+    );
+  }, [activeCapabilityId, activeCapabilityDef?.displayTitle, onActiveCapabilityChange]);
 
   // CapabilityHub 派生数据
   const capabilitySessionImages = useMemo<CapSessionImage[]>(() => {
@@ -1013,6 +976,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const handleCapabilityPick = useCallback((capId: CapabilityId, finalPrompt: string) => {
     setActiveCapabilityId(capId);
+    setStarterSuggestion(null);
     setInput(cur => (cur.trim() ? cur : finalPrompt));
     taRef.current?.focus();
     requestAnimationFrame(() => {
@@ -1035,10 +999,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   /** 结果后操作：切换到指定能力，自动将最后生成图作为 dress 素材（sourceUrl，不创建空File）*/
   const handleNextCapability = useCallback((capId: CapabilityId) => {
     setActiveCapabilityId(capId);
-    const cap = getCapabilityById(capId);
-    if (cap) {
-      setInput(cap.promptTemplate);
-    }
+    setStarterSuggestion(null);
     const needsDress = CAPABILITY_SLOTS[capId]?.includes('dress') ?? false;
     if (needsDress && lastGeneratedImageUrl) {
       setAttachedAssets(prev => {
@@ -1081,7 +1042,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleRegenerate = useCallback(() => {
     if (lastGeneratedPrompt) {
       const snap = lastTaskSnapshotRef.current;
-      void send(lastGeneratedPrompt, snap?.capabilityId, snap?.attachments);
+      void send(
+        lastGeneratedPrompt,
+        snap?.capabilityId,
+        snap?.attachments,
+        snap ? { trendId: snap.trendId, enabled: snap.trendEnabled } : undefined,
+      );
     }
     setLastGeneratedCapabilityId(null);
   }, [lastGeneratedPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1104,9 +1070,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     });
   };
 
+  const designTaskPortal = canvasBottomPanelHost && activeBottomPanel === 'design-task'
+    ? createPortal(
+        <section className="canvas-bottom-panel-body design-task-panel" aria-label="设计任务选择">
+          <CapabilityHub
+            sessionImages={capabilitySessionImages}
+            uploadedAssets={capabilityUploaded}
+            resources={capabilityResources}
+            disabled={isLoading}
+            activeCapabilityId={activeCapabilityId}
+            onCapabilityChange={(capId) => {
+              setActiveCapabilityId(capId);
+              setStarterSuggestion(null);
+              setLastGeneratedCapabilityId(null);
+            }}
+            onPick={handleCapabilityPick}
+            onRequestUpload={handleMaterialUpload}
+          />
+        </section>,
+        canvasBottomPanelHost,
+      )
+    : null;
+
   if (collapsed) {
     return (
-      <div className="chat-rail-collapsed">
+      <>
+        {designTaskPortal}
+        <div className="chat-rail-collapsed">
         <button
           type="button"
           onClick={onToggleCollapse}
@@ -1136,18 +1126,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         >
           Conversation
         </span>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div
-      className={`chat-panel-shell ${isRight ? 'chat-panel-right' : 'chat-panel-left'}`}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+    <>
+      {designTaskPortal}
+      <div
+        className={`chat-panel-shell ${isRight ? 'chat-panel-right' : 'chat-panel-left'}`}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+      >
       <ChatHeader
         messagesCount={messages.length}
         chatSessionTitle={chatSessionTitle}
@@ -1161,30 +1154,30 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       <div className="chat-scroll chat-scrollbar">
         {showWelcome && firstRunPanel}
         {showWelcome && (
-          <>
-            <WelcomePanel
-              onSuggest={suggest}
-              onApplyHotTag={applyTrendHotTag}
-              onCategoryChange={setTrendHotCategory}
-              onReloadHot={() => void loadTrendHotTags()}
-              trendHotCategory={trendHotCategory}
-              trendHotStatus={trendHotStatus}
-              trendHotDisplayBlocks={trendHotDisplayBlocks}
-            />
-            {/* 初始引导：告知用户当前能力和操作流程 */}
-            <div
+          <div className="chat-welcome-block">
+            <h2 className="headline headline-md">你好，设计师</h2>
+            <p
               style={{
-                padding: '0 20px 12px',
-                fontSize: 11,
+                marginTop: 12,
                 fontFamily: 'var(--font-ui)',
+                fontSize: 13,
+                lineHeight: 1.7,
                 color: 'var(--color-ink-3)',
-                letterSpacing: '0.02em',
-                lineHeight: 1.6,
+                maxWidth: 280,
               }}
             >
-              已选择「{activeCapabilityDef?.displayTitle ?? '生成成衣效果图'}」，在下方描述服装即可开始。结果将自动出现在左侧画布。
+              描述你的设计想法，AI 将生成方案。
+              <br />
+              完成后可将结果置入左侧画布继续编辑。
+            </p>
+            <div className="chat-welcome-steps">
+              <span>描述设计</span>
+              <span style={{ opacity: 0.45 }}>·</span>
+              <span>生成方案</span>
+              <span style={{ opacity: 0.45 }}>·</span>
+              <span>置入画布</span>
             </div>
-          </>
+          </div>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
@@ -1211,24 +1204,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         <div ref={endRef} />
       </div>
 
-      {!showWelcome && (
-        <TrendHotInline
-          trendHotCategory={trendHotCategory}
-          trendHotStatus={trendHotStatus}
-          trendHotDisplayBlocks={trendHotDisplayBlocks}
-          onCategoryChange={setTrendHotCategory}
-          onReloadHot={() => void loadTrendHotTags()}
-          onApplyHotTag={applyTrendHotTag}
-        />
-      )}
+      {/* ── Composer Dock：画布选图 + 结果操作 + 素材面板 + 输入框归组为底部输入坞 ── */}
+      <div className="assistant-composer-dock">
 
-      {/* CapabilityHub 始终可见 */}
-      <div
-        className="shrink-0"
-        style={{ padding: '12px 16px 4px', borderTop: '1px solid var(--color-border)' }}
-      >
-        {/* 画布选中图片提示 */}
-        {selectedCanvasImageUrl && (
+      {/* 画布选中图片提示；任务选择器已移入画布底部 Portal */}
+      {selectedCanvasImageUrl && (
+        <div
+          className="shrink-0"
+          style={{ padding: '12px 16px 4px', borderTop: '1px solid var(--color-border)' }}
+        >
           <div
             style={{
               display: 'flex',
@@ -1303,21 +1287,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             )}
           </div>
-        )}
-        <CapabilityHub
-          sessionImages={capabilitySessionImages}
-          uploadedAssets={capabilityUploaded}
-          resources={capabilityResources}
-          disabled={isLoading}
-          activeCapabilityId={activeCapabilityId}
-          onCapabilityChange={(capId) => {
-            setActiveCapabilityId(capId);
-            setLastGeneratedCapabilityId(null);
-          }}
-          onPick={handleCapabilityPick}
-          onRequestUpload={() => fileRef.current?.click()}
-        />
-      </div>
+        </div>
+      )}
 
       {/* 生成结果后的下一步操作面板 */}
       {lastGeneratedCapabilityId && !isLoading && (
@@ -1362,28 +1333,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         mentionOpen={mentionOpen}
         filteredMentions={filteredMentions}
         onInsertMention={insertMention}
-        trendActive={trendActive}
-        trendId={trendId}
-        onToggleTrend={() => {
-          const next = !trendActive;
-          setTrendActive(next);
-          onTrendToggle?.(trendId, next);
-          toast(
-            next ? '趋势感知已开启 — AI 将参考当前趋势风格' : '趋势感知已关闭',
-            'info',
-          );
-        }}
-        fastMode={fastMode}
-        onToggleFastMode={() => {
-          setFastMode(f => {
-            const next = !f;
-            toast(
-              next ? '快速模式已开启 — AI 将简洁回复' : '快速模式已关闭 — AI 将详细回复',
-              'info',
-            );
-            return next;
-          });
-        }}
+        trendActive={trendEnabledProp}
+        trendPanelActive={activeBottomPanel === 'trend-pulse'}
+        onToggleTrend={() => onTrendToggle?.(trendId)}
+        designTaskActive={activeBottomPanel === 'design-task'}
+        onToggleDesignTask={() => onBottomPanelToggle?.('design-task')}
         enhancing={enhancing}
         onEnhanceInput={() => void enhanceInput()}
         onSuggest={suggest}
@@ -1393,9 +1347,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           toast('已停止', 'info');
         }}
         activeCapability={activeCapabilityDef}
+        examplePrompt={starterSuggestion ?? activeCapabilityDef?.examplePrompt}
+        onUseExamplePrompt={(prompt) => {
+          suggest(prompt);
+          setStarterSuggestion(null);
+        }}
         generatingStatus={isLoading ? generatingStatus : undefined}
       />
-    </div>
+
+      </div>{/* end .assistant-composer-dock */}
+      </div>
+    </>
   );
 };
 

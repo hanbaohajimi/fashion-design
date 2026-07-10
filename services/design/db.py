@@ -7,6 +7,7 @@ import json
 import sqlite3
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -1603,7 +1604,7 @@ def add_message(
     content: str,
     images: Optional[list] = None,
 ) -> None:
-    now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     with _lock:
         conn = _get_conn()
         conn.execute(

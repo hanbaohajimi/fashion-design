@@ -28,6 +28,8 @@ export interface CapabilityDef {
   promptTemplate: string;
   /** Composer 输入框 placeholder */
   placeholder: string;
+  /** Composer 上方可点击的示例提示词；仅在用户点击后写入输入框 */
+  examplePrompt: string;
   /** 发送按钮旁辅助文案 */
   submitLabel: string;
   /** 画布空状态提示文字（当此能力被选中时显示）*/
@@ -50,6 +52,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '根据文字描述生成完整服装或成衣效果图',
     promptTemplate: '生成一张：',
     placeholder: '描述服装类型、风格、颜色、面料和使用场景……',
+    examplePrompt: '生成一件带不对称剪裁的黑色秋季长风衣',
     submitLabel: '生成效果图',
     emptyStateText: '在右侧描述想设计的服装，\n生成结果将自动出现在这里。',
     needs: [],
@@ -65,6 +68,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '根据设计描述生成黑白或专业服装款式草图',
     promptTemplate: '画一张服装款式线稿：',
     placeholder: '描述服装廓形、结构、剪裁和设计细节……',
+    examplePrompt: '绘制一件立体肩线、收腰结构的双排扣西装草图',
     submitLabel: '生成草图',
     emptyStateText: '描述服装结构和设计细节，\n生成的草图将出现在画布中。',
     needs: [],
@@ -80,6 +84,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '修改当前服装图片的颜色、面料、版型或细节',
     promptTemplate: '把这张图修改为：',
     placeholder: '描述需要修改的内容，例如更换颜色、面料或版型……',
+    examplePrompt: '将服装改为深酒红色丝绒面料，并保留原有廓形',
     submitLabel: '应用修改',
     emptyStateText: '拖入一张服装图片，或点击上传图片开始。',
     needs: ['dress'],
@@ -95,6 +100,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '把花纹、Logo 或图案应用到服装图片上',
     promptTemplate: '把图案迁移到服装上：',
     placeholder: '描述图案在服装上的位置、大小和排列方式……',
+    examplePrompt: '将图案缩小后沿袖口连续排列，保留面料自然褶皱',
     submitLabel: '应用图案',
     emptyStateText: '先添加服装图片和图案图片。',
     needs: ['dress', 'pattern'],
@@ -110,6 +116,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '根据文字描述生成独立模特形象图。不会自动使用当前服装图片，请在描述中说明服装特征。',
     promptTemplate: '生成一位模特：',
     placeholder: '描述模特性别、体型、姿势、服装特征、背景和风格……',
+    examplePrompt: '生成一位自然站姿的亚洲女模特，纯灰背景与柔和棚拍光线',
     submitLabel: '生成模特形象',
     emptyStateText: '描述想要的模特风格和服装特征，\n生成的模特图将出现在画布中。',
     needs: [],
@@ -125,6 +132,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     description: '将服装穿到指定人物或模特身上',
     promptTemplate: '把服装穿到模特身上展示。',
     placeholder: '描述试穿效果、搭配方式或需要保留的细节……',
+    examplePrompt: '保持人物姿势和面部不变，自然呈现服装的垂坠与腰线',
     submitLabel: '开始虚拟试穿',
     emptyStateText: '先添加人物图片和服装图片。',
     needs: ['dress', 'model'],

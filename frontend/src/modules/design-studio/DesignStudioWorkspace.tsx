@@ -1,10 +1,26 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useToast } from '../../components/Toast';
 import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import type { PersonalProfile, Trend } from '../../types/profile';
 import type { DesignCanvasHandle } from './components/DesignCanvas';
+import type { CapabilityId } from './utils/capabilities';
 import { fetchDesign } from '../../api/designsApi';
-import type { ChatMessage } from './components/chat-panel/types';
+import type {
+  CanvasBottomPanel,
+  ChatImage,
+  ChatMessage,
+  TrendHotBlock,
+  TrendHotItem,
+  TrendHotStatus,
+} from './components/chat-panel/types';
+import {
+  TREND_DIM_LABELS,
+  TREND_DIM_ORDER,
+  fetchTrendHotItems,
+  getOriginalImageUrl,
+  parseTimestamp,
+} from './components/chat-panel/utils';
+import { TrendHotInline } from './components/chat-panel/TrendHotInline';
 import {
   fetchPersonalProfile,
   fetchDesignerWorkspace,
@@ -18,11 +34,6 @@ const FabricEditor = lazy(() => import('./components/FabricEditor'));
 const DesignCanvas = lazy(() => import('./components/DesignCanvas'));
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'));
 const ProfileDiffModal = lazy(() => import('./components/ProfileDiffModal'));
-
-interface HistoryImage {
-  url: string;
-  type: string;
-}
 
 type DesignBackendState = 'checking' | 'ok' | 'error';
 
@@ -65,10 +76,20 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
   const [chatCollapsed, setChatCollapsed] = useState(() =>
     typeof window !== 'undefined' && localStorage.getItem('fashion-studio-chat-collapsed') === '1',
   );
+  const [focusComposerRequest, setFocusComposerRequest] = useState(0);
   const [chatSessionId, setChatSessionId] = useState<string | undefined>(designId);
   const [initialChatMessages, setInitialChatMessages] = useState<ChatMessage[] | undefined>(undefined);
   const [activeTrendId, setActiveTrendId] = useState<string | undefined>(initialTrend?.id);
   const [trendEnabled, setTrendEnabled] = useState(!!initialTrend);
+  const [activeBottomPanel, setActiveBottomPanel] = useState<CanvasBottomPanel>(
+    initialTrend ? 'trend-pulse' : null,
+  );
+  const [currentModeLabel, setCurrentModeLabel] = useState('生成成衣效果图');
+  const [canvasBottomPanelHost, setCanvasBottomPanelHost] = useState<HTMLDivElement | null>(null);
+  const [trendHotItems, setTrendHotItems] = useState<TrendHotItem[]>([]);
+  const [trendHotCategory, setTrendHotCategory] = useState('');
+  const [trendHotStatus, setTrendHotStatus] = useState<TrendHotStatus>('loading');
+  const trendRequestRef = useRef<AbortController | null>(null);
   // 画布当前选中图片 URL（用于 ChatPanel 素材联动）
   const [selectedCanvasImageUrl, setSelectedCanvasImageUrl] = useState<string | null>(null);
 
@@ -123,6 +144,99 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
     localStorage.setItem('fashion-studio-chat-collapsed', chatCollapsed ? '1' : '0');
   }, [chatCollapsed]);
 
+  useEffect(() => {
+    setActiveTrendId(initialTrend?.id);
+    setTrendEnabled(!!initialTrend);
+    setActiveBottomPanel(initialTrend ? 'trend-pulse' : null);
+    setTrendHotCategory('');
+  }, [designId, projectId, initialTrend?.id]);
+
+  const loadTrendHotTags = useCallback(async () => {
+    trendRequestRef.current?.abort();
+    const controller = new AbortController();
+    trendRequestRef.current = controller;
+    setTrendHotStatus('loading');
+    try {
+      const items = await fetchTrendHotItems(trendHotCategory, controller.signal);
+      if (controller.signal.aborted) return;
+      setTrendHotItems(items);
+      setTrendHotStatus(items.length ? 'ok' : 'empty');
+    } catch {
+      if (controller.signal.aborted) return;
+      setTrendHotItems([]);
+      setTrendHotStatus('error');
+    } finally {
+      if (trendRequestRef.current === controller) trendRequestRef.current = null;
+    }
+  }, [trendHotCategory]);
+
+  useEffect(() => {
+    if (!trendEnabled) {
+      trendRequestRef.current?.abort();
+      trendRequestRef.current = null;
+      return;
+    }
+    void loadTrendHotTags();
+    return () => trendRequestRef.current?.abort();
+  }, [trendEnabled, loadTrendHotTags]);
+
+  const trendHotDisplayBlocks = useMemo<TrendHotBlock[]>(() => {
+    if (!trendHotItems.length) return [];
+    const perGroup = trendHotCategory ? 28 : 10;
+    if (trendHotCategory) {
+      return [{
+        key: trendHotCategory,
+        label: TREND_DIM_LABELS[trendHotCategory] || trendHotCategory,
+        items: trendHotItems.slice(0, perGroup),
+      }];
+    }
+    const byCategory = new Map<string, TrendHotItem[]>();
+    for (const item of trendHotItems) {
+      const category = item.category || 'other';
+      const group = byCategory.get(category) || [];
+      group.push(item);
+      byCategory.set(category, group);
+    }
+    const blocks: TrendHotBlock[] = [];
+    for (const category of TREND_DIM_ORDER) {
+      const items = byCategory.get(category);
+      if (!items?.length) continue;
+      blocks.push({
+        key: category,
+        label: TREND_DIM_LABELS[category] || category,
+        items: items.slice(0, perGroup),
+      });
+      byCategory.delete(category);
+    }
+    for (const [category, items] of byCategory) {
+      blocks.push({
+        key: category,
+        label: items[0]?.categoryLabel || category,
+        items: items.slice(0, perGroup),
+      });
+    }
+    return blocks;
+  }, [trendHotItems, trendHotCategory]);
+
+  const toggleBottomPanel = useCallback((panel: Exclude<CanvasBottomPanel, null>) => {
+    setActiveBottomPanel(current => current === panel ? null : panel);
+  }, []);
+
+  const toggleTrendPanel = useCallback((trendId?: string) => {
+    if (trendId) setActiveTrendId(trendId);
+    const closingTrendPanel = activeBottomPanel === 'trend-pulse';
+    setActiveBottomPanel(closingTrendPanel ? null : 'trend-pulse');
+    setTrendEnabled(!closingTrendPanel);
+  }, [activeBottomPanel]);
+
+  const bindCanvasBottomPanelHost = useCallback((node: HTMLDivElement | null) => {
+    setCanvasBottomPanelHost(node);
+  }, []);
+
+  const handleActiveCapabilityChange = useCallback((_capabilityId: CapabilityId, displayTitle: string) => {
+    setCurrentModeLabel(displayTitle);
+  }, []);
+
   const recheckDesignBackend = useCallback(async () => {
     setDesignBackend('checking');
     setDesignBackendDetail('');
@@ -173,7 +287,7 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
           role: m.role,
           content: m.content,
           images: m.images,
-          timestamp: new Date(m.created_at),
+          timestamp: parseTimestamp(m.created_at),
         })));
       })
       .catch(() => setInitialChatMessages(undefined));
@@ -201,6 +315,11 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
     setChatCollapsed(false);
     dismissQuickStart();
   }, [dismissQuickStart]);
+
+  const handleDescribeDesign = useCallback(() => {
+    setChatCollapsed(false);
+    setFocusComposerRequest(request => request + 1);
+  }, []);
 
   const handleConfirmReview = useCallback(async (accepted: Array<{ tag?: string; pattern?: string; confidence: number }>) => {
     if (!pendingReview) return;
@@ -235,8 +354,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
     setPreviewImage(imageUrl);
   }, []);
 
-  const handleImageGenerated = useCallback((image: HistoryImage) => {
-    canvasRef.current?.addImage(image.url);
+  const handleImageGenerated = useCallback((image: ChatImage) => {
+    canvasRef.current?.addImage(getOriginalImageUrl(image));
   }, []);
 
   const handleAddToCanvas = useCallback((imageUrl: string) => {
@@ -276,8 +395,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
   }, [editorImageDataUrl, previewImage]);
 
   return (
-    <div className="flex h-full overflow-hidden bg-[color:var(--bg)]">
-      <main className="flex-1 flex flex-col relative min-w-0 min-h-0">
+    <div className="studio-layout">
+      <main className="studio-canvas-area">
         {designBackend === 'error' && (
           <div
             className="editorial-alert"
@@ -305,15 +424,55 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
             </button>
           </div>
         )}
-        <Suspense fallback={<SectionLoader label="设计画布" detail="正在加载编辑器..." />}>
-          <DesignCanvas
-            ref={canvasRef}
-            onEditInEditor={handleEditImage}
-            onSendToAI={handleSendToAI}
-            onSelectionChange={setSelectedCanvasImageUrl}
-          />
-        </Suspense>
+        <div className="canvas-workspace-scroll">
+          <div className="canvas-workspace-main">
+            <Suspense fallback={<SectionLoader label="设计画布" detail="正在加载编辑器..." />}>
+              <DesignCanvas
+                ref={canvasRef}
+                currentModeLabel={currentModeLabel}
+                onDescribeDesign={handleDescribeDesign}
+                onEditInEditor={handleEditImage}
+                onSendToAI={handleSendToAI}
+                onSelectionChange={setSelectedCanvasImageUrl}
+              />
+            </Suspense>
+          </div>
+          <section
+            className="canvas-bottom-panel-host"
+            data-open={activeBottomPanel !== null}
+            aria-label="画布辅助面板"
+          >
+            <div className="canvas-bottom-panel-content">
+              {activeBottomPanel === 'trend-pulse' && (
+                <TrendHotInline
+                  trendHotCategory={trendHotCategory}
+                  trendHotStatus={trendHotStatus}
+                  trendHotDisplayBlocks={trendHotDisplayBlocks}
+                  onCategoryChange={setTrendHotCategory}
+                  onReloadHot={() => void loadTrendHotTags()}
+                  onApplyHotTag={(word) => {
+                    setStarterPrompt(
+                      `结合「${word}」流行趋势热点，设计一件女装方向的概念成衣效果图，造型完整清晰、中性棚拍柔光、突出该趋势风格特征`,
+                    );
+                    setChatCollapsed(false);
+                  }}
+                />
+              )}
+              <div ref={bindCanvasBottomPanelHost} className="canvas-bottom-panel-portal" />
+            </div>
+          </section>
+        </div>
       </main>
+
+      {/* 画布与对话区的视觉分界 */}
+      {!chatCollapsed && (
+        <div
+          className="studio-workspace-divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="画布与 AI 对话区分界"
+        />
+      )}
 
       <Suspense fallback={<SectionLoader label="对话侧栏" detail="正在加载会话面板..." />}>
         <ChatPanel
@@ -322,10 +481,14 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
           projectId={selectedProjectId}
           trendId={activeTrendId}
           trendEnabled={trendEnabled}
+          activeBottomPanel={activeBottomPanel}
+          canvasBottomPanelHost={canvasBottomPanelHost}
+          onBottomPanelToggle={toggleBottomPanel}
+          onActiveCapabilityChange={handleActiveCapabilityChange}
           designId={designId}
           initialMessages={initialChatMessages}
           selectedCanvasImageUrl={selectedCanvasImageUrl}
-          onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
+          onTrendToggle={toggleTrendPanel}
           firstRunPanel={needsOnboarding && showQuickStart ? (
             <aside className="quick-start-dock quick-start-dock--inline" aria-label="快速开始">
               <button
@@ -371,6 +534,7 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
           ) : null}
           starterPrompt={starterPrompt}
           onStarterPromptConsumed={() => setStarterPrompt(undefined)}
+          focusComposerRequest={focusComposerRequest}
           onEditImage={handleEditImage}
           onPreviewImage={handlePreviewImage}
           onImageGenerated={handleImageGenerated}

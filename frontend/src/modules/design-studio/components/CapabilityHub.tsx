@@ -73,7 +73,6 @@ export default function CapabilityHub({
   const blockedRef = useRef<HTMLDivElement>(null);
 
   const hints = useMemo(() => getCapabilityHints(resources), [resources]);
-
   // 点击外部关闭 blocked 说明
   useEffect(() => {
     if (!blockedCapId) return;
@@ -98,8 +97,7 @@ export default function CapabilityHub({
     onCapabilityChange?.(cap.id);
 
     if (hint.ready || cap.needs.length === 0) {
-      // 资源充足或不需要底图 — 直接填入 prompt 模板
-      onPick(cap.id, cap.promptTemplate);
+      // 只切换任务，不把模板伪装成用户已输入的内容。
       setBlockedCapId(null);
     } else {
       // 资源不足 — 展开 inline 说明
@@ -564,7 +562,7 @@ export default function CapabilityHub({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div className="capability-hub">
       {renderCreateGroup()}
       {renderCompactGroup('edit')}
       {renderCompactGroup('showcase')}
