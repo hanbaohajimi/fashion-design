@@ -119,8 +119,7 @@ class BaseTool:
                 output=output,
                 created_at=created_at,
                 metadata={
-                    "mode": getattr(context.session, "mode", None),
-                    "designer_project_id": getattr(context.session, "designer_project_id", None),
+                    "project_id": getattr(context.session, "project_id", None),
                     "user_email": getattr(context.session, "user_email", None),
                 },
             )

@@ -204,7 +204,7 @@ export default function SettingsPanel({ authToken, onClose, onEditProject }: Set
               {activeProjects.length === 0 && archivedProjects.length === 0 && (
                 <div className="py-12 text-center text-[color:var(--text-muted)]">
                   <p className="text-[14px]">还没有任何项目</p>
-                  <p className="text-[12px] mt-1">在设计师模式下开始对话时新建项目</p>
+                  <p className="text-[12px] mt-1">从项目页开始创作时可使用项目档案</p>
                 </div>
               )}
 

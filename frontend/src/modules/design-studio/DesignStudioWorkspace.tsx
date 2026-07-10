@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useToast } from '../../components/Toast';
-import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Settings, Sparkles } from 'lucide-react';
-import type { DesignerWorkspace, PersonalProfile, SessionMode, DesignerProject, Trend } from '../../types/profile';
+import { Download, PencilRuler, X, MessageSquare, Plus, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
+import type { PersonalProfile, Trend } from '../../types/profile';
 import type { DesignCanvasHandle } from './components/DesignCanvas';
 import { fetchDesign } from '../../api/designsApi';
 import type { ChatMessage } from './components/chat-panel/types';
@@ -9,21 +9,15 @@ import {
   fetchPersonalProfile,
   fetchDesignerWorkspace,
   submitPersonalOnboarding,
-  createDesignerProject,
-  createConversationSessionWithTrend,
   confirmPersonalReview,
   confirmDesignerReview,
-  patchDesignerProject,
 } from '../../api/profileApi';
 
 const ChatPanel = lazy(() => import('./components/ChatPanel'));
 const FabricEditor = lazy(() => import('./components/FabricEditor'));
 const DesignCanvas = lazy(() => import('./components/DesignCanvas'));
-const ModeBar = lazy(() => import('./components/ModeBar'));
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'));
-const NewProjectForm = lazy(() => import('./components/NewProjectForm'));
 const ProfileDiffModal = lazy(() => import('./components/ProfileDiffModal'));
-const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
 
 interface HistoryImage {
   url: string;
@@ -75,22 +69,18 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
   const [initialChatMessages, setInitialChatMessages] = useState<ChatMessage[] | undefined>(undefined);
   const [activeTrendId, setActiveTrendId] = useState<string | undefined>(initialTrend?.id);
   const [trendEnabled, setTrendEnabled] = useState(!!initialTrend);
+  // 画布当前选中图片 URL（用于 ChatPanel 素材联动）
+  const [selectedCanvasImageUrl, setSelectedCanvasImageUrl] = useState<string | null>(null);
 
   // ── Personalization state ──────────────────────────────
-  // Derive initial mode: if projectId passed from route, start in designer mode
-  const [selectedMode, setSelectedMode] = useState<SessionMode>(projectId ? 'designer' : 'personal');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null);
   const [personalProfile, setPersonalProfile] = useState<PersonalProfile | null>(null);
-  const [workspace, setWorkspace] = useState<DesignerWorkspace | null>(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [showQuickStart, setShowQuickStart] = useState(false);
   // starterPromptProp comes from router navigate() state (NewDesignPage / ProjectDetailPage)
   const [starterPrompt, setStarterPrompt] = useState<string | undefined>(starterPromptProp);
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [editingProject, setEditingProject] = useState<DesignerProject | null>(null);
   const [pendingReview, setPendingReview] = useState<{
     type: 'personal' | 'designer';
     projectId?: string;
@@ -114,7 +104,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
         }
       }).catch(() => {}),
       fetchDesignerWorkspace(user.auth_token).then(w => {
-        setWorkspace(w);
         // Check any project pending review
         for (const proj of w.projects || []) {
           if (proj.pending_review) {
@@ -129,14 +118,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
       }).catch(() => {}),
     ]);
   }, [user.auth_token, quickStartDismissKey]);
-
-  // Init default project selection
-  useEffect(() => {
-    if (workspace && !selectedProjectId) {
-      const active = workspace.projects.find(p => p.status === 'active');
-      if (active) setSelectedProjectId(active.id);
-    }
-  }, [workspace]);
 
   useEffect(() => {
     localStorage.setItem('fashion-studio-chat-collapsed', chatCollapsed ? '1' : '0');
@@ -185,7 +166,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
     }
     setChatSessionId(designId);
     fetchDesign(user.auth_token, designId)
-      .then(({ messages }) => {
+      .then(({ design, messages }) => {
+        setSelectedProjectId(design.project_id);
         setInitialChatMessages(messages.map(m => ({
           id: m.id,
           role: m.role,
@@ -196,24 +178,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
       })
       .catch(() => setInitialChatMessages(undefined));
   }, [designId, user.auth_token]);
-
-  // ── Mode/session management ────────────────────────────
-
-  const handleModeChange = useCallback(async (mode: SessionMode, projectId: string | null) => {
-    setSelectedMode(mode);
-    setSelectedProjectId(projectId);
-    // Create a new personalized session
-    try {
-      const result = await createConversationSessionWithTrend(
-        user.auth_token,
-        mode,
-        projectId || undefined,
-        activeTrendId,
-        trendEnabled,
-      );
-      setChatSessionId(result.session_id);
-    } catch { /* fall back to random session — ChatPanel handles this */ }
-  }, [user.auth_token, activeTrendId, trendEnabled]);
 
   const handleOnboardingComplete = useCallback(async (staticData: object) => {
     try {
@@ -238,28 +202,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
     dismissQuickStart();
   }, [dismissQuickStart]);
 
-  const handleNewProjectComplete = useCallback(async (data: { name: string; brief: object; design_language: object }) => {
-    try {
-      const result = await createDesignerProject(user.auth_token, data);
-      setWorkspace(result.workspace);
-      setSelectedProjectId(result.project.id);
-      setSelectedMode('designer');
-      toast(`项目「${data.name}」已创建`, 'success');
-    } catch { toast('创建失败，请重试', 'error'); }
-    setShowNewProject(false);
-    setEditingProject(null);
-  }, [user.auth_token, toast]);
-
-  const handleEditProjectComplete = useCallback(async (data: { name: string; brief: object; design_language: object }) => {
-    if (!editingProject) return;
-    try {
-      const w = await patchDesignerProject(user.auth_token, editingProject.id, data);
-      setWorkspace(w);
-      toast('项目已更新', 'success');
-    } catch { toast('更新失败', 'error'); }
-    setEditingProject(null);
-  }, [editingProject, user.auth_token, toast]);
-
   const handleConfirmReview = useCallback(async (accepted: Array<{ tag?: string; pattern?: string; confidence: number }>) => {
     if (!pendingReview) return;
     try {
@@ -268,8 +210,7 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
         setPersonalProfile(p);
         toast('风格档案已更新', 'success');
       } else if (pendingReview.projectId) {
-        const w = await confirmDesignerReview(user.auth_token, pendingReview.projectId, accepted);
-        setWorkspace(w);
+        await confirmDesignerReview(user.auth_token, pendingReview.projectId, accepted);
         toast('设计规律已更新', 'success');
       }
     } catch { /* ignore */ }
@@ -369,6 +310,7 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
             ref={canvasRef}
             onEditInEditor={handleEditImage}
             onSendToAI={handleSendToAI}
+            onSelectionChange={setSelectedCanvasImageUrl}
           />
         </Suspense>
       </main>
@@ -377,36 +319,13 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
         <ChatPanel
           side="right"
           authToken={user.auth_token}
-          mode={selectedMode}
-          designerProjectId={selectedProjectId}
+          projectId={selectedProjectId}
           trendId={activeTrendId}
           trendEnabled={trendEnabled}
           designId={designId}
           initialMessages={initialChatMessages}
+          selectedCanvasImageUrl={selectedCanvasImageUrl}
           onTrendToggle={(id, enabled) => { setActiveTrendId(id); setTrendEnabled(enabled); }}
-          modeBar={
-            <Suspense fallback={<span className="block h-9 w-40 rounded-xl bg-[color:var(--overlay-medium)]" />}>
-              <ModeBar
-                authToken={user.auth_token}
-                workspace={workspace}
-                selectedMode={selectedMode}
-                selectedProjectId={selectedProjectId}
-                onModeChange={handleModeChange}
-                onNewProject={() => setShowNewProject(true)}
-                onNeedProject={() => setShowNewProject(true)}
-              />
-            </Suspense>
-          }
-          settingsButton={
-            <button
-              type="button"
-              onClick={() => setShowSettings(true)}
-              className="p-2 text-[color:var(--text-muted)] hover:text-[color:var(--text-secondary)] hover:bg-[color:var(--overlay-hover)] rounded-lg transition-colors"
-              title="档案管理"
-            >
-              <Settings className="w-3.5 h-3.5" />
-            </button>
-          }
           firstRunPanel={needsOnboarding && showQuickStart ? (
             <aside className="quick-start-dock quick-start-dock--inline" aria-label="快速开始">
               <button
@@ -542,24 +461,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
         </Suspense>
       )}
 
-      {(showNewProject || editingProject) && !showOnboarding && (
-        editingProject ? (
-          <Suspense fallback={<ModalLoader label="项目编辑" />}>
-            <NewProjectForm
-              onComplete={handleEditProjectComplete}
-              onCancel={() => setEditingProject(null)}
-            />
-          </Suspense>
-        ) : (
-          <Suspense fallback={<ModalLoader label="新建项目" />}>
-            <NewProjectForm
-              onComplete={handleNewProjectComplete}
-              onCancel={() => setShowNewProject(false)}
-            />
-          </Suspense>
-        )
-      )}
-
       {pendingReview && (
         <Suspense fallback={<ModalLoader label="档案确认" />}>
           <ProfileDiffModal
@@ -572,15 +473,6 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
         </Suspense>
       )}
 
-      {showSettings && (
-        <Suspense fallback={<ModalLoader label="个性化档案" />}>
-          <SettingsPanel
-            authToken={user.auth_token}
-            onClose={() => setShowSettings(false)}
-            onEditProject={(proj) => { setShowSettings(false); setEditingProject(proj); }}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

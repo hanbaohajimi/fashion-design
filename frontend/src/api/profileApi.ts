@@ -145,28 +145,9 @@ export async function confirmDesignerReview(
   return data.workspace;
 }
 
-// ── Conversation Session ──────────────────────────────────
-
-export async function createConversationSession(
-  token: string,
-  mode: 'personal' | 'designer',
-  designerProjectId?: string,
-): Promise<{ session_id: string; mode: string; designer_project_id?: string }> {
-  const res = await fetch(`${BASE}/conversations`, {
-    method: 'POST',
-    headers: authHeader(token),
-    body: JSON.stringify({
-      mode,
-      designer_project_id: designerProjectId,
-    }),
-  });
-  return handle(res);
-}
-
 // ── Library ───────────────────────────────────────────────
 
 export interface LibraryListParams {
-  mode?: string;
   project_id?: string;
   collection_id?: string;
   is_favorite?: boolean;
@@ -180,7 +161,6 @@ export async function fetchLibraryItems(
   params: LibraryListParams = {},
 ): Promise<{ items: LibraryItem[]; total: number; page: number; has_more: boolean }> {
   const q = new URLSearchParams();
-  if (params.mode) q.set('mode', params.mode);
   if (params.project_id) q.set('project_id', params.project_id);
   if (params.collection_id) q.set('collection_id', params.collection_id);
   if (params.is_favorite != null) q.set('is_favorite', String(params.is_favorite));
@@ -254,13 +234,11 @@ export async function fetchCollections(token: string): Promise<{ collections: Li
 export async function createCollection(
   token: string,
   name: string,
-  mode?: string,
-  designerProjectId?: string,
 ): Promise<{ collection: LibraryCollection }> {
   const res = await fetch(`${BASE}/library/collections`, {
     method: 'POST',
     headers: authHeader(token),
-    body: JSON.stringify({ name, mode, designer_project_id: designerProjectId }),
+    body: JSON.stringify({ name }),
   });
   return handle(res);
 }
@@ -383,26 +361,6 @@ export async function removeTrendFromProject(
   const res = await fetch(`${BASE}/profile/designer/projects/${projectId}/trends/${trendId}`, {
     method: 'DELETE',
     headers: authHeader(token),
-  });
-  return handle(res);
-}
-
-export async function createConversationSessionWithTrend(
-  token: string,
-  mode: 'personal' | 'designer',
-  designerProjectId?: string,
-  trendId?: string,
-  trendEnabled?: boolean,
-): Promise<{ session_id: string; mode: string; trend_id?: string; trend_enabled: boolean }> {
-  const res = await fetch(`${BASE}/conversations`, {
-    method: 'POST',
-    headers: authHeader(token),
-    body: JSON.stringify({
-      mode,
-      designer_project_id: designerProjectId,
-      trend_id: trendId,
-      trend_enabled: trendEnabled ?? false,
-    }),
   });
   return handle(res);
 }

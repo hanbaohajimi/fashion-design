@@ -149,7 +149,7 @@ export default function ProjectDetailPage({ user }: ProjectDetailPageProps) {
     setStarting(true);
     try {
       const design = await createDesign(user.auth_token, {
-        title: text.slice(0, 60),
+        title: '',
         projectId,
       });
       navigate(`/projects/${projectId}/chat/${design.id}`, { state: { starterPrompt: text } });

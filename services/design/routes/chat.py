@@ -34,33 +34,32 @@ async def chat(req: ChatRequest):
         user_email = user_row["email"]
         personalization_ctx = ""
         personal_profile = db.get_personal_profile(user_email)
-        designer_project = None
-        if req.mode == "designer" and req.designer_project_id:
-            ws = db.get_designer_workspace(user_email)
-            designer_project = next(
-                (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
-            )
-            if not designer_project:
-                raise HTTPException(status_code=404, detail="项目不存在")
+        if req.project_id and not db.get_project(req.project_id, user_email):
+            raise HTTPException(status_code=404, detail="项目不存在")
         bound_design_id = _ensure_owned_session(
             user_email,
             req.session_id,
-            mode=req.mode,
-            designer_project_id=req.designer_project_id,
+            project_id=req.project_id,
             design_id=req.design_id,
         )
-        personalization_ctx = _build_personalization_context(
-            req.mode, personal_profile, designer_project
-        )
-        if req.mode == "personal":
-            trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
-            if trend_ctx:
-                personalization_ctx = (personalization_ctx + "\n\n" + trend_ctx).strip()
+        session_row = db.get_owned_chat_session(req.session_id, user_email)
+        effective_project_id = session_row["project_id"] if session_row else req.project_id
+        project = None
+        if effective_project_id:
+            ws = db.get_designer_workspace(user_email)
+            project = next(
+                (p for p in ws.get("projects", []) if p["id"] == effective_project_id), None
+            )
+            if not project:
+                raise HTTPException(status_code=404, detail="项目不存在")
+        personalization_ctx = _build_personalization_context(personal_profile, project)
+        trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
+        if trend_ctx:
+            personalization_ctx = (personalization_ctx + "\n\n" + trend_ctx).strip()
 
         session = get_session(req.session_id, personalization_ctx)
         session.user_email = user_email
-        session.mode = req.mode
-        session.designer_project_id = req.designer_project_id
+        session.project_id = effective_project_id
         session.design_id = bound_design_id
         if not check_rate_limit(req.session_id):
             raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
@@ -70,7 +69,7 @@ async def chat(req: ChatRequest):
             assistant_images: list[dict] = []
             if bound_design_id:
                 db.add_message(uuid.uuid4().hex, bound_design_id, "user", req.message)
-            async for chunk in _safe_stream_chat(session, req.message):
+            async for chunk in _safe_stream_chat(session, req.message, capability_id=req.capability_id):
                 if bound_design_id:
                     try:
                         event = json.loads(chunk)
@@ -101,13 +100,17 @@ async def chat(req: ChatRequest):
                 )
             # After stream completes: signal extraction + history analysis (fire-and-forget)
             asyncio.create_task(_async_update_signals(
-                user_email, req.mode, req.designer_project_id, req.message
+                user_email, effective_project_id, req.message
             ))
-            total = db.count_user_sessions(user_email, req.mode, req.designer_project_id if req.mode == "designer" else None)
-            if req.mode == "personal":
-                asyncio.create_task(_maybe_analyze_personal(user_email, total))
-            elif req.mode == "designer" and req.designer_project_id:
-                asyncio.create_task(_maybe_analyze_designer(user_email, req.designer_project_id, total))
+            asyncio.create_task(_maybe_analyze_personal(
+                user_email, db.count_user_sessions(user_email)
+            ))
+            if effective_project_id:
+                asyncio.create_task(_maybe_analyze_designer(
+                    user_email,
+                    effective_project_id,
+                    db.count_user_sessions(user_email, effective_project_id),
+                ))
 
         return StreamingResponse(_stream_and_side_effects(), media_type="application/x-ndjson")
     except HTTPException:

@@ -62,7 +62,7 @@ async def patch_personal_static(req: PersonalStaticPatchRequest):
 @router.post("/api/profile/personal/analyze")
 async def trigger_personal_analyze(req: PersonalAnalyzeRequest):
     user = _require_user()
-    total = db.count_user_sessions(user["email"], "personal")
+    total = db.count_user_sessions(user["email"])
     await _maybe_analyze_personal(user["email"], max(total, 1))
     profile = db.get_personal_profile(user["email"])
     return {"status": "ok", "profile": profile}
@@ -160,7 +160,7 @@ async def archive_designer_project(project_id: str, authorization: Optional[str]
 @router.post("/api/profile/designer/projects/{project_id}/analyze")
 async def trigger_designer_analyze(project_id: str, req: DesignerProjectAnalyzeRequest):
     user = _require_user()
-    cnt = db.count_user_sessions(user["email"], "designer", project_id)
+    cnt = db.count_user_sessions(user["email"], project_id)
     await _maybe_analyze_designer(user["email"], project_id, max(cnt, 1))
     workspace = db.get_designer_workspace(user["email"])
     return {"status": "ok", "workspace": workspace}
@@ -187,29 +187,27 @@ async def confirm_designer_review(project_id: str, req: DesignerProjectConfirmRe
 async def create_conversation(req: CreateSessionRequest):
     user = _require_user()
     session_id = uuid.uuid4().hex
-    db.create_chat_session(session_id, user["email"], req.mode, req.designer_project_id)
     # Build personalization context now so it's baked into the session
     personal_profile = db.get_personal_profile(user["email"])
-    designer_project = None
-    if req.mode == "designer" and req.designer_project_id:
+    project = None
+    if req.project_id:
         ws = db.get_designer_workspace(user["email"])
-        designer_project = next(
-            (p for p in ws.get("projects", []) if p["id"] == req.designer_project_id), None
+        project = next(
+            (p for p in ws.get("projects", []) if p["id"] == req.project_id), None
         )
-        if not designer_project:
+        if not project:
             raise HTTPException(status_code=404, detail="项目不存在")
-    ctx = _build_personalization_context(req.mode, personal_profile, designer_project)
-    if req.mode == "personal":
-        trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
-        if trend_ctx:
-            ctx = (ctx + "\n\n" + trend_ctx).strip()
+    db.create_chat_session(session_id, user["email"], req.project_id)
+    ctx = _build_personalization_context(personal_profile, project)
+    trend_ctx = _build_trend_context(req.trend_id, req.trend_enabled)
+    if trend_ctx:
+        ctx = (ctx + "\n\n" + trend_ctx).strip()
     get_session(session_id, ctx)  # pre-create with context
     if req.trend_id or req.trend_enabled:
         db.update_session_trend(session_id, req.trend_id, req.trend_enabled)
     return {
         "session_id": session_id,
-        "mode": req.mode,
-        "designer_project_id": req.designer_project_id,
+        "project_id": req.project_id,
         "trend_id": req.trend_id,
         "trend_enabled": req.trend_enabled,
     }

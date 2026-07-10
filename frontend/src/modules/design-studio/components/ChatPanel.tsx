@@ -2,17 +2,28 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useToast } from '../../../components/Toast';
 import CapabilityHub, { type SessionImage as CapSessionImage } from './CapabilityHub';
-import { deriveResourcesFromImages, type CapabilityId } from '../utils/capabilities';
+import {
+  deriveResourcesFromImages,
+  type CapabilityId,
+  DEFAULT_CAPABILITY_ID,
+  getCapabilityById,
+  buildCapabilityMessage,
+  type AttachedImageInfo,
+} from '../utils/capabilities';
+import ResultNextActions from './chat-panel/ResultNextActions';
+import CapabilityMaterialPanel, { CAPABILITY_SLOTS } from './chat-panel/CapabilityMaterialPanel';
 import type {
   ChatImage,
   ChatMessage,
   ChatPanelProps,
   ChatTaskPhase,
   LocalAttachment,
+  AttachmentRole,
   TrendHotBlock,
   TrendHotItem,
   TrendHotStatus,
 } from './chat-panel/types';
+import { autoTitleDesign } from '../../../api/designsApi';
 import {
   MAX_ATTACHMENTS,
   TREND_DIM_LABELS,
@@ -43,6 +54,20 @@ function taskPhaseFromStatus(status: string): ChatTaskPhase {
   return 'request';
 }
 
+/**
+ * 带超时的 fetch，用于 sourceUrl 图片下载。
+ * 超时时 abort，让调用方区分 timeout vs 网络错误。
+ */
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 const ChatPanel: React.FC<ChatPanelProps> = ({
   onEditImage,
   onPreviewImage,
@@ -58,16 +83,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onToggleCollapse,
   side = 'left',
   authToken,
-  mode = 'personal',
-  designerProjectId,
+  projectId,
   trendId,
   trendEnabled: trendEnabledProp = false,
   onTrendToggle,
-  modeBar,
   settingsButton,
   firstRunPanel,
   starterPrompt,
   onStarterPromptConsumed,
+  selectedCanvasImageUrl = null,
 }) => {
   const isRight = side === 'right';
   const ExpandIcon = isRight ? ChevronLeft : ChevronRight;
@@ -112,6 +136,31 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const [trendHotItems, setTrendHotItems] = useState<TrendHotItem[]>([]);
   const [trendHotCategory, setTrendHotCategory] = useState('');
   const [trendHotStatus, setTrendHotStatus] = useState<TrendHotStatus>('loading');
+
+  // 当前激活能力 & 最后生成结果的能力（用于 ResultNextActions）
+  const [activeCapabilityId, setActiveCapabilityId] = useState<CapabilityId>(DEFAULT_CAPABILITY_ID);
+  const [lastGeneratedCapabilityId, setLastGeneratedCapabilityId] = useState<CapabilityId | null>(null);
+  const [lastGeneratedPrompt, setLastGeneratedPrompt] = useState<string>('');
+  // 当前生成状态文字（实时显示在 Composer 当前任务旁）
+  const [generatingStatus, setGeneratingStatus] = useState<string>('');
+  // 最后生成的图片 URL，用于结果后自动复用（作为下一任务 dress 素材）
+  const [lastGeneratedImageUrl, setLastGeneratedImageUrl] = useState<string | null>(null);
+  // 当前等待上传的目标 role（由 CapabilityMaterialPanel 的 onRequestUpload 触发）
+  const [pendingUploadRole, setPendingUploadRole] = useState<AttachmentRole | null>(null);
+  // 防止画布图片重复添加（记录已添加的 URL）
+  const addedCanvasUrlsRef = useRef<Set<string>>(new Set());
+  /**
+   * 任务快照：每次正常发送时保存，供 retry/regenerate 完整恢复。
+   * 保存 capabilityId、原始 message、trendId 以及附件数组快照。
+   * 重试时使用快照素材，不受用户之后切换能力或更换附件的影响。
+   */
+  const lastTaskSnapshotRef = useRef<{
+    capabilityId: CapabilityId;
+    message: string;
+    trendId?: string;
+    trendActive: boolean;
+    attachments: LocalAttachment[];  // 浅拷贝；File 引用不可变，保留即可
+  } | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -224,7 +273,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   }, [pendingFromCanvas, attachedAssets]);
 
   const attachMany = useCallback(
-    (files: FileList | File[]) => {
+    (files: FileList | File[], role?: AttachmentRole) => {
       const list = Array.from(files).filter(isImageFile);
       if (list.length === 0) {
         toast('请选择图片文件', 'error');
@@ -241,12 +290,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             toast(`最多添加 ${MAX_ATTACHMENTS} 张图片`, 'error');
             break;
           }
-          next.push({
-            localId: crypto.randomUUID(),
-            file: f,
-            preview: URL.createObjectURL(f),
-            displayName: f.name,
-          });
+          if (role) {
+            const existing = next.findIndex(a => a.role === role);
+            const newAsset: LocalAttachment = {
+              localId: crypto.randomUUID(),
+              file: f,
+              preview: URL.createObjectURL(f),
+              displayName: f.name,
+              role,
+              source: 'upload',
+            };
+            if (existing >= 0) {
+              const old = next[existing];
+              if (old.preview.startsWith('blob:')) URL.revokeObjectURL(old.preview);
+              next.splice(existing, 1, newAsset);
+            } else {
+              next.push(newAsset);
+            }
+          } else {
+            next.push({
+              localId: crypto.randomUUID(),
+              file: f,
+              preview: URL.createObjectURL(f),
+              displayName: f.name,
+              source: 'upload',
+            });
+          }
         }
         return next;
       });
@@ -300,9 +369,53 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fs = e.target.files;
-    if (fs?.length) attachMany(fs);
+    if (fs?.length) {
+      // 如果由 CapabilityMaterialPanel 触发（有 pendingUploadRole），则带 role 上传
+      attachMany(fs, pendingUploadRole ?? undefined);
+    }
     e.target.value = '';
+    setPendingUploadRole(null);
   };
+
+  /** CapabilityMaterialPanel 触发的上传：记录目标 role，再打开文件选择器 */
+  const handleMaterialUpload = useCallback((role: AttachmentRole) => {
+    setPendingUploadRole(role);
+    fileRef.current?.click();
+  }, []);
+
+  /** CapabilityMaterialPanel 触发的"从画布选择"：带 role 添加画布图片（保存 sourceUrl，发送时再下载）*/
+  const handleAddCanvasAsset = useCallback(async (role: AttachmentRole) => {
+    if (!selectedCanvasImageUrl) return;
+    // 防止重复添加同一 URL
+    if (addedCanvasUrlsRef.current.has(selectedCanvasImageUrl)) {
+      toast('该画布图片已添加', 'info');
+      return;
+    }
+    const ROLE_ZH: Record<string, string> = { dress: '服装图', model: '人物图', pattern: '图案图', reference: '参考图' };
+    // 直接存 sourceUrl，不在此处下载，避免 CORS 问题或 dataUrl 过长
+    // 发送时 send() 会判断 file.size === 0 或 file 缺失，改为从 sourceUrl 下载
+    setAttachedAssets(prev => {
+      const existing = prev.findIndex(a => a.role === role);
+      const newAsset: LocalAttachment = {
+        localId: crypto.randomUUID(),
+        sourceUrl: selectedCanvasImageUrl,
+        preview: selectedCanvasImageUrl,
+        displayName: '画布图片',
+        role,
+        source: 'canvas',
+      };
+      if (existing >= 0) {
+        const old = prev[existing];
+        if (old.preview.startsWith('blob:')) URL.revokeObjectURL(old.preview);
+        const next = [...prev];
+        next.splice(existing, 1, newAsset);
+        return next;
+      }
+      return [...prev, newAsset];
+    });
+    addedCanvasUrlsRef.current.add(selectedCanvasImageUrl);
+    toast(`已将画布图片添加为${ROLE_ZH[role] ?? role}素材`, 'success');
+  }, [selectedCanvasImageUrl, toast]);
 
   const onDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -437,13 +550,68 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
-  const send = async (direct?: string) => {
+  const send = async (direct?: string, directCapabilityId?: CapabilityId, snapshotAttachments?: LocalAttachment[]) => {
     const rawTxt = direct || input.trim();
-    const txt = rawTxt + (fastMode && rawTxt ? ' [请简洁快速回复，不必详细解释]' : '');
     const hasCanvas = !!pendingFromCanvas;
-    const hasFiles = attachedAssets.length > 0;
-    if ((!txt && !hasFiles && !hasCanvas) || isLoading) return;
+    // 重试时使用快照附件；正常发送使用当前 UI 附件
+    const activeAssets = snapshotAttachments ?? attachedAssets;
+    const hasFiles = activeAssets.length > 0;
+    if ((!rawTxt && !hasFiles && !hasCanvas) || isLoading) return;
 
+    // 本次发送使用的能力（direct 调用时从快照恢复，否则用当前激活能力）
+    const sendCapId = directCapabilityId ?? activeCapabilityId;
+
+    // 清除上次结果操作面板
+    setLastGeneratedCapabilityId(null);
+    setLastGeneratedPrompt(rawTxt);
+
+    // 保存任务快照（非 direct 时，即正常发送；direct 时保留上次快照以支持多次重试）
+    if (!direct) {
+      lastTaskSnapshotRef.current = {
+        capabilityId: sendCapId,
+        message: rawTxt,
+        trendId: trendId,
+        trendActive,
+        // 浅拷贝：File 引用不可变，对象引用安全；防止后续 UI 变化影响快照
+        attachments: activeAssets.map(a => ({ ...a })),
+      };
+    }
+
+    // Capture before send — used to decide whether to auto-title after first exchange
+    const isFirstExchange = !messages.some(m => m.role === 'assistant');
+
+    // ── 构造带能力前缀的稳定指令消息 ────────────────────────────────────────
+    const imageInfos: AttachedImageInfo[] = [];
+    let idx = 1;
+    if (hasCanvas) {
+      imageInfos.push({ index: idx++, role: 'dress', isCanvasRef: true, displayName: '画布图片' });
+    }
+    for (const a of activeAssets) {
+      imageInfos.push({ index: idx++, role: a.role, displayName: a.displayName });
+    }
+    // direct 调用不追加前缀，避免双重前缀
+    const finalMessage = direct
+      ? rawTxt
+      : buildCapabilityMessage(sendCapId, rawTxt, imageInfos);
+
+    const txt = finalMessage + (fastMode && finalMessage ? ' [请简洁快速回复，不必详细解释]' : '');
+
+    // ── 按能力强制排序附件 ────────────────────────────────────────────────
+    let orderedAssets = [...activeAssets];
+    if (sendCapId === 'transfer_pattern') {
+      const dress = activeAssets.filter(a => a.role === 'dress');
+      const pattern = activeAssets.filter(a => a.role === 'pattern');
+      const others = activeAssets.filter(a => a.role !== 'dress' && a.role !== 'pattern');
+      orderedAssets = [...dress, ...pattern, ...others];
+    } else if (sendCapId === 'try_on') {
+      const model = activeAssets.filter(a => a.role === 'model');
+      const dress = activeAssets.filter(a => a.role === 'dress');
+      const others = activeAssets.filter(a => a.role !== 'model' && a.role !== 'dress');
+      orderedAssets = [...model, ...dress, ...others];
+    }
+
+    // ── 准备上传文件 ───────────────────────────────────────────────────────
+    // 只上传有真实内容的文件；sourceUrl 来源的附件先 fetchWithTimeout 下载
     const filesToUpload: File[] = [];
     if (hasCanvas) {
       try {
@@ -453,16 +621,44 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         return;
       }
     }
-    for (const a of attachedAssets) filesToUpload.push(a.file);
+    for (const a of orderedAssets) {
+      if (a.file && a.file.size > 0) {
+        filesToUpload.push(a.file);
+      } else if (a.sourceUrl) {
+        const roleLabels: Record<string, string> = { dress: '服装图', pattern: '图案图', model: '人物图', reference: '参考图' };
+        const label = a.role ? (roleLabels[a.role] ?? a.role) : a.displayName;
+        try {
+          const resp = await fetchWithTimeout(a.sourceUrl, 8000);
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const blob = await resp.blob();
+          const ext = blob.type.includes('png') ? 'png' : 'jpg';
+          filesToUpload.push(new File([blob], `${a.displayName || 'image'}.${ext}`, { type: blob.type || 'image/png' }));
+        } catch (err) {
+          const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+          toast(
+            isTimeout
+              ? `${label}图片加载超时，请重新选择图片`
+              : `${label}图片加载失败，请检查图片是否仍可访问`,
+            'error',
+          );
+          // 失败后确保 loading 恢复、prompt 不清空、素材不清空
+          setIsLoading(false);
+          abortRef.current = null;
+          return;
+        }
+      }
+      // file 为空且无 sourceUrl → 只在消息中说明角色，不上传文件
+    }
 
     const uploadPreviews: string[] = [];
     if (pendingFromCanvas) uploadPreviews.push(pendingFromCanvas);
-    for (const a of attachedAssets) uploadPreviews.push(a.preview);
+    for (const a of orderedAssets) uploadPreviews.push(a.preview);
 
     const uMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: txt || '(上传图片)',
+      // 用户可见的消息展示原始输入，不展示系统级能力前缀
+      content: rawTxt || '(上传图片)',
       timestamp: new Date(),
       ...(uploadPreviews.length > 1
         ? { uploadPreviews }
@@ -536,6 +732,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       '调用',
     ];
 
+    // 记录当前能力用于结果面板（使用 sendCapId，不受后续能力切换影响）
+    const sendingCapabilityId = sendCapId;
+
     let lastAppliedStatus = '';
     let statusRaf: number | null = null;
     let pendingStatus: string | undefined;
@@ -572,13 +771,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     try {
       await streamChat(
         sessionId,
-        uMsg.content,
+        txt, // 发送带能力前缀的完整指令消息（txt = finalMessage + fastMode suffix）
         ev => {
           switch (ev.type) {
             case 'status': {
               const s = (ev.content || '').trim();
               if (IMG_PHASE_HINTS.some(k => s.includes(k)) && !imgLoading) imgLoading = true;
-              if (s) queueStatus(s);
+              if (s) {
+                queueStatus(s);
+                setGeneratingStatus(s);
+              }
               break;
             }
             case 'image':
@@ -596,9 +798,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 imgs.push(ni);
                 onImageGenerated?.(ni);
                 imgLoading = false;
+                // 记录最后生成的图片 URL，用于结果后自动复用
+                setLastGeneratedImageUrl(url);
                 setMessages(p => p.map(m => (
                   m.id === aId ? { ...m, images: [...imgs], taskPhase: 'finalizing' } : m
                 )));
+                // 记录这次生成的能力，用于结果后操作面板
+                setLastGeneratedCapabilityId(sendingCapabilityId);
               }
               break;
             case 'message':
@@ -655,11 +861,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         },
         ctrl.signal,
         authToken,
-        mode,
-        designerProjectId,
+        projectId,
         trendId,
         trendActive,
         designId,
+        // 传递 capability_id：使用 sendCapId（含快照恢复值），而非当前 activeCapabilityId
+        sendCapId,
       );
     } catch (err: unknown) {
       if (statusRaf != null) {
@@ -703,8 +910,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     }
     setIsLoading(false);
+    setGeneratingStatus('');
     abortRef.current = null;
     taRef.current?.focus();
+
+    // After the first exchange completes, trigger AI auto-title (fire-and-forget)
+    if (isFirstExchange && designId && authToken) {
+      void autoTitleDesign(authToken, designId).then(title => {
+        if (title) {
+          window.dispatchEvent(new CustomEvent('af:design-titled', { detail: { designId, title } }));
+        }
+      });
+    }
   };
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -720,11 +937,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   const retry = (msg: string) => {
+    // 从快照完整恢复：capability_id 和 attachments，不读取当前 UI 状态
+    const snap = lastTaskSnapshotRef.current;
+    const snapshotCapId = snap?.capabilityId;
+    const snapshotAttachments = snap?.attachments;
     setMessages(p => {
       const l = p.length - 1;
       return l >= 1 ? p.slice(0, l - 1) : p;
     });
-    setTimeout(() => send(msg), 50);
+    setTimeout(() => send(msg, snapshotCapId, snapshotAttachments), 50);
   };
 
   const suggest = (t: string) => {
@@ -757,6 +978,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const hasActivity =
     isLoading || messages.length > 0 || !!pendingFromCanvas || attachedAssets.length > 0;
 
+  // 当前激活能力的完整定义
+  const activeCapabilityDef = getCapabilityById(activeCapabilityId);
+
   // CapabilityHub 派生数据
   const capabilitySessionImages = useMemo<CapSessionImage[]>(() => {
     const out: CapSessionImage[] = [];
@@ -781,12 +1005,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     () =>
       deriveResourcesFromImages(
         capabilitySessionImages.map(i => i.type),
-        attachedAssets.length > 0 || !!pendingFromCanvas,
+        // 已上传附件、画布参考、或画布选中图片均算作可用资源
+        attachedAssets.length > 0 || !!pendingFromCanvas || !!selectedCanvasImageUrl,
       ),
-    [capabilitySessionImages, attachedAssets, pendingFromCanvas],
+    [capabilitySessionImages, attachedAssets, pendingFromCanvas, selectedCanvasImageUrl],
   );
 
-  const handleCapabilityPick = useCallback((_capId: CapabilityId, finalPrompt: string) => {
+  const handleCapabilityPick = useCallback((capId: CapabilityId, finalPrompt: string) => {
+    setActiveCapabilityId(capId);
     setInput(cur => (cur.trim() ? cur : finalPrompt));
     taRef.current?.focus();
     requestAnimationFrame(() => {
@@ -796,6 +1022,69 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       }
     });
   }, []);
+
+  /** P0-3: 将画布选中图片作为当前素材添加（方案A：不自动发送）*/
+  const handleUseCanvasImage = useCallback(async () => {
+    if (!selectedCanvasImageUrl) return;
+    const existingDress = attachedAssets.some(a => a.role === 'dress');
+    const defaultRole: 'dress' | 'model' =
+      activeCapabilityId === 'try_on' && existingDress ? 'model' : 'dress';
+    void handleAddCanvasAsset(defaultRole);
+  }, [selectedCanvasImageUrl, activeCapabilityId, attachedAssets, handleAddCanvasAsset]);
+
+  /** 结果后操作：切换到指定能力，自动将最后生成图作为 dress 素材（sourceUrl，不创建空File）*/
+  const handleNextCapability = useCallback((capId: CapabilityId) => {
+    setActiveCapabilityId(capId);
+    const cap = getCapabilityById(capId);
+    if (cap) {
+      setInput(cap.promptTemplate);
+    }
+    const needsDress = CAPABILITY_SLOTS[capId]?.includes('dress') ?? false;
+    if (needsDress && lastGeneratedImageUrl) {
+      setAttachedAssets(prev => {
+        const hasDress = prev.some(a => a.role === 'dress');
+        if (hasDress) {
+          return prev.map(a =>
+            a.role === 'dress'
+              ? {
+                  ...a,
+                  preview: lastGeneratedImageUrl,
+                  sourceUrl: lastGeneratedImageUrl,
+                  displayName: '生成结果',
+                  role: 'dress' as AttachmentRole,
+                  source: 'generated' as const,
+                }
+              : a,
+          );
+        }
+        // 使用 sourceUrl，不创建 0 字节 File placeholder
+        return [
+          ...prev,
+          {
+            localId: crypto.randomUUID(),
+            sourceUrl: lastGeneratedImageUrl,
+            preview: lastGeneratedImageUrl,
+            displayName: '生成结果',
+            role: 'dress' as AttachmentRole,
+            source: 'generated' as const,
+          },
+        ];
+      });
+      toast('已将生成结果设为服装图素材', 'success');
+    }
+    taRef.current?.focus();
+    setLastGeneratedCapabilityId(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastGeneratedImageUrl, toast]);
+
+  /** 重新生成：从快照完整恢复 capability_id + attachments，不读取当前 UI 状态 */
+  const handleRegenerate = useCallback(() => {
+    if (lastGeneratedPrompt) {
+      const snap = lastTaskSnapshotRef.current;
+      void send(lastGeneratedPrompt, snap?.capabilityId, snap?.attachments);
+    }
+    setLastGeneratedCapabilityId(null);
+  }, [lastGeneratedPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mentionTargets = getMentionTargets();
   const filteredMentions = mentionFilter
@@ -869,21 +1158,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         onToggleCollapse={onToggleCollapse}
         settingsButton={settingsButton}
       />
-
-      {modeBar}
-
       <div className="chat-scroll chat-scrollbar">
         {showWelcome && firstRunPanel}
         {showWelcome && (
-          <WelcomePanel
-            onSuggest={suggest}
-            onApplyHotTag={applyTrendHotTag}
-            onCategoryChange={setTrendHotCategory}
-            onReloadHot={() => void loadTrendHotTags()}
-            trendHotCategory={trendHotCategory}
-            trendHotStatus={trendHotStatus}
-            trendHotDisplayBlocks={trendHotDisplayBlocks}
-          />
+          <>
+            <WelcomePanel
+              onSuggest={suggest}
+              onApplyHotTag={applyTrendHotTag}
+              onCategoryChange={setTrendHotCategory}
+              onReloadHot={() => void loadTrendHotTags()}
+              trendHotCategory={trendHotCategory}
+              trendHotStatus={trendHotStatus}
+              trendHotDisplayBlocks={trendHotDisplayBlocks}
+            />
+            {/* 初始引导：告知用户当前能力和操作流程 */}
+            <div
+              style={{
+                padding: '0 20px 12px',
+                fontSize: 11,
+                fontFamily: 'var(--font-ui)',
+                color: 'var(--color-ink-3)',
+                letterSpacing: '0.02em',
+                lineHeight: 1.6,
+              }}
+            >
+              已选择「{activeCapabilityDef?.displayTitle ?? '生成成衣效果图'}」，在下方描述服装即可开始。结果将自动出现在左侧画布。
+            </div>
+          </>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
@@ -921,21 +1222,124 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         />
       )}
 
-      {!showWelcome && (
-        <div
-          className="shrink-0"
-          style={{ padding: '12px 16px 4px', borderTop: '1px solid var(--color-border)' }}
-        >
-          <CapabilityHub
-            sessionImages={capabilitySessionImages}
-            uploadedAssets={capabilityUploaded}
-            resources={capabilityResources}
-            disabled={isLoading}
-            onPick={handleCapabilityPick}
-            onRequestUpload={() => fileRef.current?.click()}
-          />
-        </div>
+      {/* CapabilityHub 始终可见 */}
+      <div
+        className="shrink-0"
+        style={{ padding: '12px 16px 4px', borderTop: '1px solid var(--color-border)' }}
+      >
+        {/* 画布选中图片提示 */}
+        {selectedCanvasImageUrl && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 8,
+              padding: '5px 8px',
+              background: 'var(--color-paper)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: 'var(--font-ui)',
+              color: 'var(--color-ink-2)',
+            }}
+          >
+            <img
+              src={selectedCanvasImageUrl}
+              alt=""
+              style={{ width: 22, height: 22, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }}
+            />
+            <span style={{ flex: 1 }}>
+              已选择画布图片
+            </span>
+            {/* 为有素材槽的能力直接提供明确角色按钮；其他情况默认添加为 dress */}
+            {activeCapabilityId === 'try_on' ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => void handleAddCanvasAsset('model')}
+                  style={{ padding: '2px 7px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', fontSize: 10, fontFamily: 'var(--font-ui)', color: 'var(--color-ink-2)', cursor: isLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  作为人物图
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => void handleAddCanvasAsset('dress')}
+                  style={{ padding: '2px 7px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', fontSize: 10, fontFamily: 'var(--font-ui)', color: 'var(--color-ink-2)', cursor: isLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  作为服装图
+                </button>
+              </>
+            ) : activeCapabilityId === 'transfer_pattern' ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => void handleAddCanvasAsset('dress')}
+                  style={{ padding: '2px 7px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', fontSize: 10, fontFamily: 'var(--font-ui)', color: 'var(--color-ink-2)', cursor: isLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  作为服装图
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => void handleAddCanvasAsset('pattern')}
+                  style={{ padding: '2px 7px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', fontSize: 10, fontFamily: 'var(--font-ui)', color: 'var(--color-ink-2)', cursor: isLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  作为图案图
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => void handleAddCanvasAsset('dress')}
+                style={{ padding: '2px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'white', fontSize: 10, fontFamily: 'var(--font-ui)', color: 'var(--color-ink)', cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.4 : 1 }}
+                title="将画布图片添加为服装图素材"
+              >
+                添加为素材
+              </button>
+            )}
+          </div>
+        )}
+        <CapabilityHub
+          sessionImages={capabilitySessionImages}
+          uploadedAssets={capabilityUploaded}
+          resources={capabilityResources}
+          disabled={isLoading}
+          activeCapabilityId={activeCapabilityId}
+          onCapabilityChange={(capId) => {
+            setActiveCapabilityId(capId);
+            setLastGeneratedCapabilityId(null);
+          }}
+          onPick={handleCapabilityPick}
+          onRequestUpload={() => fileRef.current?.click()}
+        />
+      </div>
+
+      {/* 生成结果后的下一步操作面板 */}
+      {lastGeneratedCapabilityId && !isLoading && (
+        <ResultNextActions
+          completedCapabilityId={lastGeneratedCapabilityId}
+          hasDressImage={capabilityResources.hasDress}
+          onSelectNextCapability={handleNextCapability}
+          onContinueEditing={() => handleNextCapability('edit_image')}
+          onRegenerate={handleRegenerate}
+        />
       )}
+
+      {/* 素材角色插槽（edit_image / transfer_pattern / try_on 专用）*/}
+      <CapabilityMaterialPanel
+        activeCapabilityId={activeCapabilityId}
+        attachedAssets={attachedAssets}
+        disabled={isLoading}
+        selectedCanvasImageUrl={selectedCanvasImageUrl}
+        onRequestUpload={handleMaterialUpload}
+        onRemoveAttachment={removeAttachment}
+        onAddCanvasAsset={handleAddCanvasAsset}
+      />
 
       <Composer
         input={input}
@@ -988,6 +1392,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           abortRef.current?.abort();
           toast('已停止', 'info');
         }}
+        activeCapability={activeCapabilityDef}
+        generatingStatus={isLoading ? generatingStatus : undefined}
       />
     </div>
   );

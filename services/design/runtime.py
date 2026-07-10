@@ -303,8 +303,7 @@ class Session:
         os.makedirs(self.run_folder, exist_ok=True)
         # Set by chat endpoint when user is authenticated
         self.user_email: Optional[str] = None
-        self.mode: str = "personal"
-        self.designer_project_id: Optional[str] = None
+        self.project_id: Optional[str] = None
         self.design_id: Optional[str] = None
 
     def touch(self):
@@ -384,15 +383,14 @@ class Session:
         if self.user_email:
             item_id = entry["id"]
             user_email = self.user_email
-            mode = self.mode
-            project_id = self.designer_project_id
+            project_id = self.project_id
             session_id = self.session_id
             prompt = self.last_user_text
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     asyncio.create_task(_auto_save_to_library(
-                        item_id, user_email, url, session_id, prompt, mode, project_id, img_type
+                        item_id, user_email, url, session_id, prompt, project_id, img_type
                     ))
             except Exception:
                 pass
@@ -939,11 +937,11 @@ TOOL_NAMES_CN = {
 class ChatRequest(BaseModel):
     session_id: str
     message: str
-    mode: str = "personal"
-    designer_project_id: Optional[str] = None
+    project_id: Optional[str] = None
     design_id: Optional[str] = None
     trend_id: Optional[str] = None
     trend_enabled: bool = False
+    capability_id: Optional[str] = None  # 前端明确指定的能力，后端优先按此路由工具
 
 class ResetRequest(BaseModel):
     session_id: str
@@ -1009,18 +1007,60 @@ async def _execute_tool_calls_parallel(session, tool_calls):
 
 # ─── Chat streaming ───
 
-async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, None]:
+async def stream_chat(session: Session, message: str, capability_id: Optional[str] = None) -> AsyncGenerator[str, None]:
     session.last_user_text = (message or "").strip()
 
     yield json.dumps({"type": "status", "content": "正在思考..."}, ensure_ascii=False) + "\n"
 
+    # ── capability_id 约束注入 ──────────────────────────────────────────────
+    # 当前端传入合法的 capability_id 时，在上下文中明确告知 LLM 应优先调用哪个工具。
+    # 这是方案 A（最小侵入）：不过滤工具列表，只追加强约束提示，让 LLM 确定性地选择工具。
+    VALID_CAPABILITY_IDS = {
+        "text_to_image", "draw_sketch", "edit_image",
+        "transfer_pattern", "generate_model", "try_on",
+    }
+    CAPABILITY_TOOL_NAMES = {
+        "text_to_image":   "tool_text_to_image",
+        "draw_sketch":     "tool_draw_sketch",
+        "edit_image":      "tool_edit_image",
+        "transfer_pattern":"tool_transfer_pattern",
+        "generate_model":  "tool_generate_model",
+        "try_on":          "tool_try_on",
+    }
+    capability_hint = ""
+    effective_tools = TOOLS  # 默认：完整工具列表
+    if capability_id:
+        if capability_id in VALID_CAPABILITY_IDS:
+            tool_name = CAPABILITY_TOOL_NAMES[capability_id]
+            capability_hint = (
+                f"\n\n[SYSTEM CONSTRAINT] 本次任务已由前端明确指定能力：{capability_id}。"
+                f"请优先调用工具 {tool_name}，不要调用其他核心生成工具，除非用户的文本明确要求不同的操作。"
+            )
+            # ── 工具硬约束：只暴露对应核心工具 ─────────────────────────────
+            # 六个核心生成工具名称
+            CORE_GENERATION_TOOLS = {
+                "tool_text_to_image", "tool_draw_sketch", "tool_edit_image",
+                "tool_transfer_pattern", "tool_generate_model", "tool_try_on",
+            }
+            # 过滤 TOOLS：保留指定核心工具 + 所有非核心辅助工具
+            effective_tools = [
+                t for t in TOOLS
+                if t.get("function", {}).get("name") not in CORE_GENERATION_TOOLS
+                or t.get("function", {}).get("name") == tool_name
+            ]
+        else:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[stream_chat] 收到非法 capability_id=%r，忽略并使用 LLM 意图判断", capability_id
+            )
+
     ctx = session.build_workflow_context_block() + session.build_assets_context_block()
-    session.chat_history.append({"role": "user", "content": message + ctx})
+    session.chat_history.append({"role": "user", "content": message + ctx + capability_hint})
     session.trim_history()
 
     try:
         assistant_msg = await asyncio.to_thread(
-            chat_with_tools, session.chat_history, TOOLS,
+            chat_with_tools, session.chat_history, effective_tools,
         )
         session.chat_history.append(assistant_msg)
 
@@ -1145,9 +1185,9 @@ async def stream_chat(session: Session, message: str) -> AsyncGenerator[str, Non
 
 
 
-async def _safe_stream_chat(session: Session, message: str):
+async def _safe_stream_chat(session: Session, message: str, capability_id: Optional[str] = None):
     try:
-        async for chunk in stream_chat(session, message):
+        async for chunk in stream_chat(session, message, capability_id=capability_id):
             yield chunk
     except Exception as e:
         print(f"[ERROR] stream_chat exception: {traceback.format_exc()}")
@@ -1281,8 +1321,7 @@ def _ensure_owned_session(
     user_email: str,
     session_id: str,
     *,
-    mode: str = "personal",
-    designer_project_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     design_id: Optional[str] = None,
     create_if_missing: bool = True,
 ) -> Optional[str]:
@@ -1299,14 +1338,13 @@ def _ensure_owned_session(
         db.create_chat_session(
             session_id,
             user_email,
-            mode,
-            designer_project_id or design["project_id"],
+            design["project_id"],
             design_id=target_design_id,
         )
         return target_design_id
 
     if create_if_missing:
-        db.create_chat_session(session_id, user_email, mode, designer_project_id, design_id=design_id)
+        db.create_chat_session(session_id, user_email, project_id, design_id=design_id)
         return design_id
 
     raise HTTPException(status_code=404, detail="会话不存在")
@@ -1378,13 +1416,12 @@ class LoginRequest(BaseModel):
 # ═══════════════════════════════════════════════════
 
 def _build_personalization_context(
-    mode: str,
     personal_profile: dict,
-    designer_project: Optional[dict] = None,
+    project: Optional[dict] = None,
 ) -> str:
-    if mode == "personal":
-        if not personal_profile.get("meta", {}).get("onboarding_completed"):
-            return ""
+    contexts: list[str] = []
+
+    if personal_profile.get("meta", {}).get("onboarding_completed"):
         s = personal_profile.get("static", {})
         d = personal_profile.get("dynamic", {})
         keywords = list(s.get("style_keywords") or [])
@@ -1416,19 +1453,17 @@ def _build_personalization_context(
             "不要在回复中提及【根据你的档案】等字样。",
             "=== 档案结束 ===",
         ]
-        return "\n".join(lines)
+        contexts.append("\n".join(lines))
 
-    if mode == "designer":
-        if not designer_project:
-            return ""
-        b = designer_project.get("brief", {})
-        dl = designer_project.get("design_language", {})
-        dyn = designer_project.get("dynamic", {})
+    if project:
+        b = project.get("brief", {})
+        dl = project.get("design_language", {})
+        dyn = project.get("dynamic", {})
         sigs = [
             s["pattern"] for s in (dyn.get("design_signatures") or [])
             if s.get("confidence", 0) >= 0.65
         ][:5]
-        lines = [f"=== 当前项目设计档案：{designer_project.get('name','')} ==="]
+        lines = [f"=== 当前项目设计档案：{project.get('name','')} ==="]
         if b.get("season"):
             lines.append(f"系列：{b['season']}")
         if b.get("target_audience"):
@@ -1450,7 +1485,7 @@ def _build_personalization_context(
         if b.get("avoid_directions"):
             lines.append(f"本项目回避方向：{'、'.join(b['avoid_directions'][:5])}")
         # Project-level trend anchors
-        trend_ctx = _build_project_trend_context(designer_project)
+        trend_ctx = _build_project_trend_context(project)
         if trend_ctx:
             lines.append(trend_ctx)
         lines += [
@@ -1460,9 +1495,9 @@ def _build_personalization_context(
             "回复使用专业时装设计术语，不需要解释基础概念。",
             "=== 档案结束 ===",
         ]
-        return "\n".join(lines)
+        contexts.append("\n".join(lines))
 
-    return ""
+    return "\n\n".join(contexts)
 
 
 # ═══════════════════════════════════════════════════
@@ -1600,13 +1635,12 @@ async def _auto_save_to_library(
     image_url: str,
     session_id: str,
     prompt: str,
-    mode: str,
     project_id: Optional[str],
     img_type: str,
 ) -> None:
     """Fire-and-forget: save image to library then trigger auto-tagging."""
     try:
-        db.create_library_item(item_id, user_email, image_url, session_id, prompt, mode, project_id, img_type)
+        db.create_library_item(item_id, user_email, image_url, session_id, prompt, project_id, img_type)
         asyncio.create_task(_auto_tag_image(item_id, image_url, prompt))
         # Check if smart collections should be generated
         total = db.count_library_items(user_email)
@@ -1614,32 +1648,31 @@ async def _auto_save_to_library(
             asyncio.create_task(_generate_smart_collections(user_email))
         # Trigger library-based profile analysis at thresholds
         if total in (20, 50, 100):
-            asyncio.create_task(_analyze_library_for_profile(user_email, mode))
+            asyncio.create_task(_analyze_library_for_profile(user_email))
+            if project_id:
+                asyncio.create_task(_analyze_library_for_profile(user_email, project_id))
     except Exception as e:
         print(f"[WARN] _auto_save_to_library failed: {e}")
 
 
 async def _async_update_signals(
     email: str,
-    mode: str,
     project_id: Optional[str],
     user_message: str,
 ) -> None:
     """Fire-and-forget signal extraction — never raises."""
     try:
-        if mode == "personal":
-            signals = _extract_personal_signals(user_message)
-            if not any(signals.values()):
-                return
+        signals = _extract_personal_signals(user_message)
+        if any(signals.values()):
             profile = db.get_personal_profile(email)
             profile = _apply_personal_signals(profile, signals)
             db.save_personal_profile(email, profile)
-        elif mode == "designer" and project_id:
-            signals = _extract_designer_signals(user_message)
-            if not any(signals.values()):
+        if project_id:
+            project_signals = _extract_designer_signals(user_message)
+            if not any(project_signals.values()):
                 return
             workspace = db.get_designer_workspace(email)
-            workspace = _apply_designer_signals(workspace, project_id, signals)
+            workspace = _apply_designer_signals(workspace, project_id, project_signals)
             db.save_designer_workspace(email, workspace)
     except Exception:
         pass  # never block the chat stream
@@ -1800,8 +1833,7 @@ class PersonalAnalyzeRequest(BaseModel):
     pass
 
 class CreateSessionRequest(BaseModel):
-    mode: str = "personal"
-    designer_project_id: Optional[str] = None
+    project_id: Optional[str] = None
     trend_id: Optional[str] = None
     trend_enabled: bool = False
 
@@ -1833,7 +1865,7 @@ class CreateSessionRequest(BaseModel):
 
 
 # ═══════════════════════════════════════════════════
-# Session creation with mode
+# Conversation session creation
 # ═══════════════════════════════════════════════════
 
 
@@ -1850,8 +1882,7 @@ class LibraryPatchRequest(BaseModel):
 
 class CollectionCreateRequest(BaseModel):
     name: str
-    mode: Optional[str] = None
-    designer_project_id: Optional[str] = None
+    project_id: Optional[str] = None
 
 class CollectionPatchRequest(BaseModel):
     name: Optional[str] = None
@@ -1942,10 +1973,10 @@ _LIBRARY_DESIGNER_SYSTEM = (
 )
 
 
-async def _analyze_library_for_profile(email: str, mode: str) -> None:
+async def _analyze_library_for_profile(email: str, project_id: Optional[str] = None) -> None:
     """Fire-and-forget: analyze library tags and write back to profile."""
     try:
-        stats = db.get_library_stats(email)
+        stats = db.get_library_stats(email, project_id)
         if stats["total_count"] < 5:
             return
 
@@ -1957,7 +1988,7 @@ async def _analyze_library_for_profile(email: str, mode: str) -> None:
         )
         tag_summary = ", ".join(f"{t['name']}({t['count']})" for t in top_tags)
 
-        if mode == "personal":
+        if not project_id:
             user_prompt = f"用户穿搭库共{stats['total_count']}张，收藏{stats['favorite_count']}张。\n加权标签统计：{tag_summary}\n请分析风格偏好。"
             result = await _run_llm_summary(_LIBRARY_PERSONAL_SYSTEM, user_prompt)
             if not result:
@@ -1982,22 +2013,24 @@ async def _analyze_library_for_profile(email: str, mode: str) -> None:
                 "source": "library",
             }
             db.save_personal_profile(email, profile)
-        elif mode == "designer":
+        else:
             workspace = db.get_designer_workspace(email)
-            for proj in workspace.get("projects", []):
-                if proj.get("status") != "active":
-                    continue
-                user_prompt = f"设计师项目「{proj['name']}」库分析。加权标签：{tag_summary}\n请提取设计规律。"
-                result = await _run_llm_summary(_LIBRARY_DESIGNER_SYSTEM, user_prompt)
-                if not result:
-                    continue
-                proj["pending_review"] = {
-                    "type": "designer",
-                    "result": result,
-                    "generated_at": datetime.now().isoformat(),
-                    "source": "library",
-                }
-                break
+            project = next(
+                (proj for proj in workspace.get("projects", []) if proj.get("id") == project_id),
+                None,
+            )
+            if not project:
+                return
+            user_prompt = f"项目「{project['name']}」库分析。加权标签：{tag_summary}\n请提取设计规律。"
+            result = await _run_llm_summary(_LIBRARY_DESIGNER_SYSTEM, user_prompt)
+            if not result:
+                return
+            project["pending_review"] = {
+                "type": "designer",
+                "result": result,
+                "generated_at": datetime.now().isoformat(),
+                "source": "library",
+            }
             db.save_designer_workspace(email, workspace)
     except Exception as e:
         print(f"[WARN] _analyze_library_for_profile failed: {e}")
@@ -2040,8 +2073,8 @@ async def _generate_smart_collections(email: str) -> None:
                 if name3 not in existing_names:
                     col_id3 = uuid.uuid4().hex
                     db.create_collection(col_id3, email, name3, is_smart=True,
-                                         smart_rule=f"project:{proj['id']}", designer_project_id=proj["id"])
-                    rows3, _ = db.list_library_items(email, designer_project_id=proj["id"], limit=200)
+                                         smart_rule=f"project:{proj['id']}", project_id=proj["id"])
+                    rows3, _ = db.list_library_items(email, project_id=proj["id"], limit=200)
                     if rows3:
                         db.add_items_to_collection(col_id3, [r["id"] for r in rows3])
                 break

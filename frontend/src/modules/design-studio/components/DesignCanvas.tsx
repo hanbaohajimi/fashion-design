@@ -43,6 +43,8 @@ export interface DesignCanvasHandle {
 interface DesignCanvasProps {
   onEditInEditor?: (dataUrl: string) => void;
   onSendToAI?: (dataUrl: string) => void;
+  /** 画布选中图片时回调；选中非图片或取消选中时传 null */
+  onSelectionChange?: (imageUrl: string | null) => void;
 }
 
 let nextElementId = 1;
@@ -75,7 +77,7 @@ function applySelectionStyle(obj: FabricObject) {
 }
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
-  ({ onEditInEditor, onSendToAI }, ref) => {
+  ({ onEditInEditor, onSendToAI, onSelectionChange }, ref) => {
     const { toast } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasElRef = useRef<HTMLCanvasElement>(null);
@@ -104,11 +106,13 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       const canvas = fabricRef.current;
       if (!canvas) {
         setSelectedInfo(null);
+        onSelectionChange?.(null);
         return;
       }
       const active = canvas.getActiveObject();
       if (!active || (active as FabricObject & { _elementId?: string })._elementId === undefined) {
         setSelectedInfo(null);
+        onSelectionChange?.(null);
         return;
       }
       const ext = active as FabricObject & {
@@ -117,6 +121,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         _imageNumber?: number;
         _naturalWidth?: number;
         _naturalHeight?: number;
+        _sourceUrl?: string;
       };
       setSelectedInfo({
         isImage: ext._elementType === 'image',
@@ -126,7 +131,16 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         naturalHeight: ext._naturalHeight || Math.round(active.height || 0),
         elementType: ext._elementType || 'shape',
       });
-    }, []);
+      // 如果选中的是图片，向上通知其 URL（用于 ChatPanel 素材联动）
+      if (ext._elementType === 'image') {
+        const src = ext._sourceUrl ||
+          (active as FabricObject & { toDataURL?: (o: object) => string }).toDataURL?.({ format: 'png', quality: 1, multiplier: 1 }) ||
+          null;
+        onSelectionChange?.(src);
+      } else {
+        onSelectionChange?.(null);
+      }
+    }, [onSelectionChange]);
 
     const updateGrid = useCallback(() => {
       if (!gridRef.current || !fabricRef.current) return;

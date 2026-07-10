@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MAX_ATTACHMENTS } from './utils';
 import type { LocalAttachment } from './types';
+import type { CapabilityDef } from '../../utils/capabilities';
 
 interface ComposerProps {
   input: string;
@@ -53,6 +54,12 @@ interface ComposerProps {
   onShowTip: (msg: string, kind?: 'info' | 'success' | 'error') => void;
 
   onAbort: () => void;
+
+  /** 当前激活的能力定义（用于动态 placeholder、当前任务标签） */
+  activeCapability?: CapabilityDef;
+
+  /** 当前生成状态描述（generating 时显示）*/
+  generatingStatus?: string;
 }
 
 export function Composer({
@@ -86,15 +93,75 @@ export function Composer({
   onSuggest,
   onShowTip,
   onAbort,
+  activeCapability,
+  generatingStatus,
 }: ComposerProps) {
   const mentionMenuRef = useRef<HTMLDivElement>(null);
 
+  // 动态 placeholder
+  const placeholder = activeCapability?.placeholder
+    ?? '描述设计需求，输入 @ 引用已添加的图片（图1、图2…）';
+
+  // 提交标签
+  const submitLabel = activeCapability?.submitLabel ?? '发送';
+
   return (
     <>
+      {/* 当前任务标签 */}
+      {activeCapability && (
+        <div
+          style={{
+            padding: '6px 20px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              color: 'var(--color-ink-3)',
+              fontFamily: 'var(--font-ui)',
+              letterSpacing: '0.04em',
+            }}
+          >
+            当前任务：
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              color: 'var(--color-ink)',
+              fontFamily: 'var(--font-ui)',
+              fontWeight: 500,
+              letterSpacing: '-0.005em',
+            }}
+          >
+            {activeCapability.displayTitle}
+          </span>
+          {/* 生成中状态 */}
+          {isLoading && generatingStatus && (
+            <>
+              <span style={{ width: 1, height: 10, background: 'var(--color-border)', flexShrink: 0 }} />
+              <span
+                style={{
+                  fontSize: 10,
+                  color: 'var(--color-ink-3)',
+                  fontFamily: 'var(--font-ui)',
+                  fontStyle: 'italic',
+                }}
+              >
+                {generatingStatus}
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 素材区：附件 + 画布参考 */}
       {(pendingFromCanvas || attachedAssets.length > 0) && (
         <div
           style={{
-            padding: '12px 20px',
+            padding: '10px 20px',
             borderTop: '1px solid var(--color-border)',
             display: 'flex',
             flexDirection: 'column',
@@ -113,8 +180,9 @@ export function Composer({
             }}
           >
             <AtSign className="w-3 h-3 shrink-0" strokeWidth={1.5} />
-            输入 <kbd style={{ padding: '1px 4px', background: 'var(--color-surface-3)', fontSize: 9, fontFamily: 'var(--font-ui)' }}>@</kbd>{' '}
-            可引用下图顺序（与上传后资源表「第N张」一致）
+            当前素材 — 输入{' '}
+            <kbd style={{ padding: '1px 4px', background: 'var(--color-surface-3)', fontSize: 9, fontFamily: 'var(--font-ui)' }}>@</kbd>{' '}
+            可引用图序号
           </p>
           <div className="flex flex-wrap gap-2">
             {pendingFromCanvas && (
@@ -129,11 +197,20 @@ export function Composer({
                 >
                   <X className="w-2.5 h-2.5" strokeWidth={1.5} />
                 </button>
-                <p className="composer-fig-name" title="画布">画布</p>
+                <p className="composer-fig-name" title="画布图片">画布</p>
               </div>
             )}
             {attachedAssets.map((a, idx) => {
               const figNum = idx + 1 + (pendingFromCanvas ? 1 : 0);
+              // 角色标签：role 优先，否则显示文件名
+              const ROLE_ZH: Record<string, string> = {
+                dress: '服装图',
+                pattern: '图案图',
+                model: '人物图',
+                reference: '参考图',
+              };
+              const roleLabel = a.role ? ROLE_ZH[a.role] : undefined;
+              const hasRole = !!roleLabel;
               return (
                 <div key={a.localId} className="composer-fig">
                   <img src={a.preview} alt="" />
@@ -146,8 +223,12 @@ export function Composer({
                   >
                     <X className="w-2.5 h-2.5" strokeWidth={1.5} />
                   </button>
-                  <p className="composer-fig-name" title={a.displayName}>
-                    {a.displayName}
+                  <p
+                    className="composer-fig-name"
+                    title={a.displayName}
+                    style={hasRole ? { fontWeight: 600, color: 'var(--color-ink)' } : undefined}
+                  >
+                    {roleLabel ?? a.displayName}
                   </p>
                 </div>
               );
@@ -207,7 +288,7 @@ export function Composer({
             value={input}
             onChange={onChangeInput}
             onKeyDown={onKeyDown}
-            placeholder="描述设计需求，输入 @ 引用已添加的图片（图1、图2…）"
+            placeholder={placeholder}
             disabled={isLoading}
             rows={1}
             className="composer-textarea"
@@ -318,7 +399,7 @@ export function Composer({
                   (!input.trim() && attachedAssets.length === 0 && !pendingFromCanvas)
                 }
                 className="composer-send"
-                title="发送"
+                title={submitLabel}
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" strokeWidth={1.5} />

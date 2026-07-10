@@ -78,8 +78,6 @@ export interface PendingReview {
   generated_at: string;
 }
 
-export type SessionMode = 'personal' | 'designer';
-
 // ── Library ──────────────────────────────────────────────
 
 export interface AutoTags {
@@ -97,8 +95,7 @@ export interface LibraryItem {
   image_url: string;
   session_id?: string;
   generation_prompt?: string;
-  mode: 'personal' | 'designer';
-  designer_project_id?: string;
+  project_id?: string;
   img_type?: string;
   auto_tags: AutoTags;
   tag_status: 'pending' | 'completed' | 'failed';
@@ -117,8 +114,7 @@ export interface LibraryCollection {
   cover_image?: string;
   is_smart: boolean;
   smart_rule?: string;
-  mode?: string;
-  designer_project_id?: string;
+  project_id?: string;
   sort_order: number;
   item_count: number;
   created_at: string;
@@ -131,7 +127,6 @@ export interface LibraryStats {
   top_styles: Array<{ name: string; count: number }>;
   top_occasions: Array<{ name: string; count: number }>;
   top_silhouettes: Array<{ name: string; count: number }>;
-  mode_distribution: { personal: number; designer: number };
 }
 
 export interface OutfitSuggestion {

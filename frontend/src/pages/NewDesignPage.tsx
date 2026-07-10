@@ -48,7 +48,7 @@ export default function NewDesignPage({ user }: NewDesignPageProps) {
       if (!text || loading) return;
       setLoading(true);
       try {
-        const design = await createDesign(user.auth_token, { title: text.slice(0, 60) });
+        const design = await createDesign(user.auth_token, { title: '' });
         navigate(`/chat/${design.id}`, { state: { starterPrompt: text } });
       } catch {
         setLoading(false);

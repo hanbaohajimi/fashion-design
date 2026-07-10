@@ -60,8 +60,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     CREATE TABLE IF NOT EXISTS chat_sessions (
         id                  TEXT PRIMARY KEY,
         user_email          TEXT NOT NULL REFERENCES users(email),
-        mode                TEXT NOT NULL DEFAULT 'personal',
-        designer_project_id TEXT,
+        project_id          TEXT,
         design_id           TEXT,
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -72,8 +71,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         image_url           TEXT NOT NULL,
         session_id          TEXT REFERENCES chat_sessions(id) ON DELETE SET NULL,
         generation_prompt   TEXT,
-        mode                TEXT NOT NULL DEFAULT 'personal',
-        designer_project_id TEXT,
+        project_id          TEXT,
         img_type            TEXT,
         auto_tags           TEXT NOT NULL DEFAULT '{}',
         tag_status          TEXT NOT NULL DEFAULT 'pending',
@@ -85,7 +83,6 @@ def _migrate(conn: sqlite3.Connection) -> None:
         created_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_library_user ON library_items(user_email, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_library_project ON library_items(designer_project_id) WHERE designer_project_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_library_fav ON library_items(user_email, is_favorite) WHERE is_favorite = 1;
 
     CREATE TABLE IF NOT EXISTS collections (
@@ -95,8 +92,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
         cover_item_id   TEXT REFERENCES library_items(id) ON DELETE SET NULL,
         is_smart        INTEGER NOT NULL DEFAULT 0,
         smart_rule      TEXT,
-        mode            TEXT,
-        designer_project_id TEXT,
+        project_id      TEXT,
         sort_order      INTEGER NOT NULL DEFAULT 0,
         created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -198,6 +194,27 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
         if column not in existing_cols(table):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
+    def rename_col(table: str, old: str, new: str) -> None:
+        columns = existing_cols(table)
+        if old in columns and new not in columns:
+            conn.execute(f"ALTER TABLE {table} RENAME COLUMN {old} TO {new}")
+
+    def drop_col(table: str, column: str) -> None:
+        if column in existing_cols(table):
+            conn.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+
+    conn.execute("DROP INDEX IF EXISTS idx_library_project")
+    rename_col("chat_sessions", "designer_project_id", "project_id")
+    rename_col("library_items", "designer_project_id", "project_id")
+    rename_col("collections", "designer_project_id", "project_id")
+    drop_col("chat_sessions", "mode")
+    drop_col("library_items", "mode")
+    drop_col("collections", "mode")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_library_project "
+        "ON library_items(project_id) WHERE project_id IS NOT NULL"
+    )
+
     li_cols = existing_cols("library_items")
     if "trend_alignments" not in li_cols:
         conn.execute("ALTER TABLE library_items ADD COLUMN trend_alignments TEXT NOT NULL DEFAULT '[]'")
@@ -239,6 +256,7 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
             user_email  TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
             project_id  TEXT REFERENCES projects(id) ON DELETE SET NULL,
             title       TEXT,
+            starred     INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -267,8 +285,12 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
     if "messages" in existing_tables:
         add_col("messages", "images", "images TEXT NOT NULL DEFAULT '[]'")
 
+    if "designs" in existing_tables:
+        add_col("designs", "starred", "starred INTEGER NOT NULL DEFAULT 0")
+
     _migrate_legacy_designer_workspace(conn)
     _record_schema_migration(conn, "2026-07-unified-projects-design-sessions")
+    _record_schema_migration(conn, "2026-07-remove-session-modes")
 
     conn.commit()
 
@@ -586,21 +608,19 @@ def save_designer_workspace(email: str, workspace: dict) -> None:
 def create_chat_session(
     session_id: str,
     user_email: str,
-    mode: str,
-    designer_project_id: Optional[str],
+    project_id: Optional[str],
     design_id: Optional[str] = None,
 ) -> None:
     with _lock:
         conn = _get_conn()
         conn.execute(
-            """INSERT INTO chat_sessions (id, user_email, mode, designer_project_id, design_id)
-               VALUES (?,?,?,?,?)
+            """INSERT INTO chat_sessions (id, user_email, project_id, design_id)
+               VALUES (?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET
                user_email=excluded.user_email,
-               mode=excluded.mode,
-               designer_project_id=excluded.designer_project_id,
+               project_id=excluded.project_id,
                design_id=COALESCE(excluded.design_id, chat_sessions.design_id)""",
-            (session_id, user_email, mode, designer_project_id, design_id),
+            (session_id, user_email, project_id, design_id),
         )
         conn.commit()
 
@@ -620,17 +640,17 @@ def get_owned_chat_session(session_id: str, user_email: str) -> Optional[sqlite3
         ).fetchone()
 
 
-def count_user_sessions(user_email: str, mode: str, project_id: Optional[str] = None) -> int:
+def count_user_sessions(user_email: str, project_id: Optional[str] = None) -> int:
     with _lock:
         if project_id:
             row = _get_conn().execute(
-                "SELECT COUNT(*) as c FROM chat_sessions WHERE user_email=? AND mode=? AND designer_project_id=?",
-                (user_email, mode, project_id),
+                "SELECT COUNT(*) as c FROM chat_sessions WHERE user_email=? AND project_id=?",
+                (user_email, project_id),
             ).fetchone()
         else:
             row = _get_conn().execute(
-                "SELECT COUNT(*) as c FROM chat_sessions WHERE user_email=? AND mode=?",
-                (user_email, mode),
+                "SELECT COUNT(*) as c FROM chat_sessions WHERE user_email=?",
+                (user_email,),
             ).fetchone()
         return row["c"] if row else 0
 
@@ -643,17 +663,16 @@ def create_library_item(
     image_url: str,
     session_id: Optional[str],
     generation_prompt: str,
-    mode: str,
-    designer_project_id: Optional[str],
+    project_id: Optional[str],
     img_type: str,
 ) -> None:
     with _lock:
         conn = _get_conn()
         conn.execute(
             """INSERT OR IGNORE INTO library_items
-               (id, user_email, image_url, session_id, generation_prompt, mode, designer_project_id, img_type)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            (item_id, user_email, image_url, session_id, generation_prompt, mode, designer_project_id, img_type),
+               (id, user_email, image_url, session_id, generation_prompt, project_id, img_type)
+               VALUES (?,?,?,?,?,?,?)""",
+            (item_id, user_email, image_url, session_id, generation_prompt, project_id, img_type),
         )
         conn.commit()
 
@@ -710,8 +729,7 @@ def get_library_item(item_id: str, user_email: str) -> Optional[sqlite3.Row]:
 
 def list_library_items(
     user_email: str,
-    mode: Optional[str] = None,
-    designer_project_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     collection_id: Optional[str] = None,
     is_favorite: Optional[bool] = None,
     tags: Optional[list] = None,
@@ -721,12 +739,9 @@ def list_library_items(
     conditions = ["li.user_email=?", "li.deleted_at IS NULL"]
     params: list = [user_email]
 
-    if mode and mode != "all":
-        conditions.append("li.mode=?")
-        params.append(mode)
-    if designer_project_id:
-        conditions.append("li.designer_project_id=?")
-        params.append(designer_project_id)
+    if project_id:
+        conditions.append("li.project_id=?")
+        params.append(project_id)
     if is_favorite is True:
         conditions.append("li.is_favorite=1")
     if tags:
@@ -763,46 +778,39 @@ def list_library_items(
     return rows, total
 
 
-def count_library_items(user_email: str, mode: Optional[str] = None) -> int:
+def count_library_items(user_email: str) -> int:
     with _lock:
-        if mode and mode != "all":
-            row = _get_conn().execute(
-                "SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND mode=? AND deleted_at IS NULL",
-                (user_email, mode),
-            ).fetchone()
-        else:
-            row = _get_conn().execute(
-                "SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND deleted_at IS NULL",
-                (user_email,),
-            ).fetchone()
+        row = _get_conn().execute(
+            "SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND deleted_at IS NULL",
+            (user_email,),
+        ).fetchone()
         return row["c"] if row else 0
 
 
-def get_library_stats(user_email: str) -> dict:
+def get_library_stats(user_email: str, project_id: Optional[str] = None) -> dict:
+    scope_sql = " AND project_id=?" if project_id else ""
+    params = (user_email, project_id) if project_id else (user_email,)
     with _lock:
         conn = _get_conn()
         total = conn.execute(
-            "SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND deleted_at IS NULL",
-            (user_email,),
+            f"SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND deleted_at IS NULL{scope_sql}",
+            params,
         ).fetchone()["c"]
         fav = conn.execute(
-            "SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND is_favorite=1 AND deleted_at IS NULL",
-            (user_email,),
+            f"SELECT COUNT(*) as c FROM library_items WHERE user_email=? AND is_favorite=1 AND deleted_at IS NULL{scope_sql}",
+            params,
         ).fetchone()["c"]
         rows = conn.execute(
-            "SELECT auto_tags, is_favorite, mode FROM library_items WHERE user_email=? AND deleted_at IS NULL AND tag_status='completed'",
-            (user_email,),
+            f"SELECT auto_tags, is_favorite FROM library_items WHERE user_email=? AND deleted_at IS NULL AND tag_status='completed'{scope_sql}",
+            params,
         ).fetchall()
 
     color_freq: dict = {}
     style_freq: dict = {}
     occasion_freq: dict = {}
     silhouette_freq: dict = {}
-    mode_dist: dict = {"personal": 0, "designer": 0}
-
     for row in rows:
         w = 3 if row["is_favorite"] else 1
-        mode_dist[row["mode"]] = mode_dist.get(row["mode"], 0) + 1
         try:
             tags = json.loads(row["auto_tags"] or "{}")
         except Exception:
@@ -827,7 +835,6 @@ def get_library_stats(user_email: str) -> dict:
         "top_styles": top(style_freq),
         "top_occasions": top(occasion_freq),
         "top_silhouettes": top(silhouette_freq),
-        "mode_distribution": mode_dist,
     }
 
 
@@ -839,15 +846,14 @@ def create_collection(
     name: str,
     is_smart: bool = False,
     smart_rule: Optional[str] = None,
-    mode: Optional[str] = None,
-    designer_project_id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> None:
     with _lock:
         conn = _get_conn()
         conn.execute(
-            """INSERT INTO collections (id, user_email, name, is_smart, smart_rule, mode, designer_project_id)
-               VALUES (?,?,?,?,?,?,?)""",
-            (col_id, user_email, name, 1 if is_smart else 0, smart_rule, mode, designer_project_id),
+            """INSERT INTO collections (id, user_email, name, is_smart, smart_rule, project_id)
+               VALUES (?,?,?,?,?,?)""",
+            (col_id, user_email, name, 1 if is_smart else 0, smart_rule, project_id),
         )
         conn.commit()
 
@@ -1500,7 +1506,7 @@ def list_recent_designs(user_email: str, limit: int = 10) -> list[sqlite3.Row]:
     """All recent designs regardless of project, for Sidebar recents."""
     with _lock:
         return _get_conn().execute(
-            "SELECT * FROM designs WHERE user_email=? ORDER BY updated_at DESC LIMIT ?",
+            "SELECT * FROM designs WHERE user_email=? ORDER BY starred DESC, updated_at DESC LIMIT ?",
             (user_email, limit),
         ).fetchall()
 
@@ -1523,6 +1529,69 @@ def update_design_title(design_id: str, title: str) -> None:
             (title, design_id),
         )
         conn.commit()
+
+
+def patch_design(design_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    """Update user-owned design metadata, including moving it between projects."""
+    allowed = {"title", "project_id", "starred"}
+    updates = {key: value for key, value in kwargs.items() if key in allowed}
+    if not updates:
+        return get_design(design_id, user_email)
+
+    if "starred" in updates:
+        updates["starred"] = int(bool(updates["starred"]))
+
+    with _lock:
+        conn = _get_conn()
+        existing = conn.execute(
+            "SELECT * FROM designs WHERE id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+        if not existing:
+            return None
+
+        old_project_id = existing["project_id"]
+        fields = [f"{key}=?" for key in updates]
+        values = list(updates.values())
+        conn.execute(
+            f"UPDATE designs SET {', '.join(fields)}, updated_at=datetime('now') WHERE id=? AND user_email=?",
+            values + [design_id, user_email],
+        )
+        if "project_id" in updates:
+            conn.execute(
+                """UPDATE chat_sessions
+                   SET project_id=?
+                   WHERE design_id=? AND user_email=?""",
+                (
+                    updates["project_id"],
+                    design_id,
+                    user_email,
+                ),
+            )
+        conn.commit()
+
+    if "project_id" in updates and old_project_id != updates["project_id"]:
+        if old_project_id:
+            touch_project(old_project_id)
+        if updates["project_id"]:
+            touch_project(updates["project_id"])
+    return get_design(design_id, user_email)
+
+
+def delete_design(design_id: str, user_email: str) -> bool:
+    """Delete a design and its bound chat session; messages cascade with the design."""
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "DELETE FROM chat_sessions WHERE design_id=? AND user_email=?",
+            (design_id, user_email),
+        )
+        cur = conn.execute(
+            "DELETE FROM designs WHERE id=? AND user_email=?",
+            (design_id, user_email),
+        )
+        conn.commit()
+        return cur.rowcount > 0
 
 
 # ─── Messages ───

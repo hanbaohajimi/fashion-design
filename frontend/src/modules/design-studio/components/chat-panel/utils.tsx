@@ -233,11 +233,11 @@ export async function streamChat(
   onEvent: (e: StreamEvent) => void,
   signal?: AbortSignal,
   authToken?: string,
-  mode?: string,
-  designerProjectId?: string | null,
+  projectId?: string | null,
   trendId?: string,
   trendEnabled?: boolean,
   designId?: string,
+  capabilityId?: string,
 ) {
   const res = await fetch('/api/design/chat', {
     method: 'POST',
@@ -248,11 +248,11 @@ export async function streamChat(
     body: JSON.stringify({
       session_id: sessionId,
       message,
-      mode: mode || 'personal',
-      designer_project_id: designerProjectId || undefined,
+      project_id: projectId || undefined,
       design_id: designId || undefined,
       trend_id: trendId || undefined,
       trend_enabled: trendEnabled ?? false,
+      ...(capabilityId ? { capability_id: capabilityId } : {}),
     }),
     signal,
   });

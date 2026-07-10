@@ -870,7 +870,6 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterMode, setFilterMode] = useState<string>('');
   const [filterOccasion, setFilterOccasion] = useState<string>('');
   const [filterSeason, setFilterSeason] = useState<string>('');
 
@@ -898,14 +897,13 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
     const params: Record<string, unknown> = { page: p, limit: 30 };
     if (tab === 'favorites') params.is_favorite = true;
     if (tab === 'collections' && selectedColId) params.collection_id = selectedColId;
-    if (filterMode) params.mode = filterMode;
     const tagParts = [];
     if (filterOccasion) tagParts.push(filterOccasion);
     if (filterSeason) tagParts.push(filterSeason);
     if (searchQuery.trim()) tagParts.push(searchQuery.trim());
     if (tagParts.length) params.tags = tagParts.join(',');
     return params;
-  }, [tab, selectedColId, filterMode, filterOccasion, filterSeason, searchQuery]);
+  }, [tab, selectedColId, filterOccasion, filterSeason, searchQuery]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -925,7 +923,7 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
     setLoading(false);
   }, [user.auth_token, buildParams, toast]);
 
-  useEffect(() => { void load(); }, [tab, selectedColId, filterMode, filterOccasion, filterSeason]);
+  useEffect(() => { void load(); }, [tab, selectedColId, filterOccasion, filterSeason]);
 
   const handleSearch = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') void load();
@@ -1038,7 +1036,7 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
   }, [items]);
 
   // Active filters count
-  const activeFilters = [filterMode, filterOccasion, filterSeason].filter(Boolean).length;
+  const activeFilters = [filterOccasion, filterSeason].filter(Boolean).length;
 
   const TABS: [Tab, string][] = [['all', '全部'], ['favorites', '收藏'], ['collections', '合集']];
 
@@ -1163,12 +1161,6 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
               >
                 {[
                   {
-                    title: '模式',
-                    options: [['', '全部'], ['personal', '个人'], ['designer', '设计师']] as [string, string][],
-                    current: filterMode,
-                    set: setFilterMode,
-                  },
-                  {
                     title: '场合',
                     options: ['职场', '休闲', '约会', '运动', '聚会'].map(o => [o, o] as [string, string]),
                     current: filterOccasion,
@@ -1217,7 +1209,7 @@ export default function LibraryWorkspace({ user, onSwitchToDesignStudio }: Libra
         </div>
 
         {/* Outfit banner */}
-        {tab === 'all' && !filterMode && (
+        {tab === 'all' && (
           <div style={{ flexShrink: 0, padding: 'var(--space-4) var(--space-6) var(--space-2)' }}>
             {!showOutfits ? (
               <div style={{

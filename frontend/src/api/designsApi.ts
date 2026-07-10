@@ -20,6 +20,7 @@ export interface DesignThread {
   id: string;
   title: string;
   project_id: string | null;
+  starred: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -101,4 +102,42 @@ export async function fetchDesign(
 ): Promise<{ design: DesignThread; messages: DesignMessage[] }> {
   const res = await fetch(`${BASE}/designs/${designId}`, { headers: authHeader(token) });
   return handle<{ design: DesignThread; messages: DesignMessage[] }>(res);
+}
+
+export async function patchDesign(
+  token: string,
+  designId: string,
+  patch: Partial<Pick<DesignThread, 'title' | 'project_id' | 'starred'>>,
+): Promise<DesignThread> {
+  const res = await fetch(`${BASE}/designs/${designId}`, {
+    method: 'PATCH',
+    headers: authHeader(token),
+    body: JSON.stringify(patch),
+  });
+  const data = await handle<{ design: DesignThread }>(res);
+  return data.design;
+}
+
+export async function deleteDesign(token: string, designId: string): Promise<void> {
+  const res = await fetch(`${BASE}/designs/${designId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+  await handle<unknown>(res);
+}
+
+export async function autoTitleDesign(
+  token: string,
+  designId: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/designs/${designId}/auto-title`, {
+      method: 'POST',
+      headers: authHeader(token),
+    });
+    const data = await handle<{ title: string | null }>(res);
+    return data.title;
+  } catch {
+    return null;
+  }
 }

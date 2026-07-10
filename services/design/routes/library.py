@@ -27,7 +27,6 @@ router = APIRouter()
 @router.get("/api/library")
 async def list_library(
     authorization: Optional[str] = Header(None),
-    mode: Optional[str] = None,
     project_id: Optional[str] = None,
     collection_id: Optional[str] = None,
     is_favorite: Optional[bool] = None,
@@ -40,8 +39,7 @@ async def list_library(
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     rows, total = db.list_library_items(
         user["email"],
-        mode=mode,
-        designer_project_id=project_id,
+        project_id=project_id,
         collection_id=collection_id,
         is_favorite=is_favorite,
         tags=tag_list,
@@ -70,7 +68,7 @@ async def patch_library_item(item_id: str, req: LibraryPatchRequest):
     item = _row_to_item(row)
     # If favorited, trigger library analysis
     if req.is_favorite is True:
-        asyncio.create_task(_analyze_library_for_profile(user["email"], "personal"))
+        asyncio.create_task(_analyze_library_for_profile(user["email"]))
     return {"item": item}
 
 
@@ -135,8 +133,11 @@ async def get_similar_items(item_id: str, authorization: Optional[str] = Header(
 @router.post("/api/library/analyze")
 async def trigger_library_analyze(req: LibraryAnalyzeRequest):
     user = _require_user()
-    await _analyze_library_for_profile(user["email"], "personal")
-    await _analyze_library_for_profile(user["email"], "designer")
+    await _analyze_library_for_profile(user["email"])
+    workspace = db.get_designer_workspace(user["email"])
+    for project in workspace.get("projects", []):
+        if project.get("id"):
+            await _analyze_library_for_profile(user["email"], project["id"])
     return {"status": "ok"}
 
 
@@ -162,7 +163,7 @@ async def suggest_outfit(req: SuggestOutfitRequest):
     condition = weather.get("condition", "")
 
     # Get tagged items
-    rows, _ = db.list_library_items(user["email"], mode="personal", limit=200)
+    rows, _ = db.list_library_items(user["email"], limit=200)
     tagged = [_row_to_item(r) for r in rows if r["tag_status"] == "completed"]
     if not tagged:
         return {"outfits": [], "message": "库中还没有足够的图片，先生成一些服装图片吧"}
@@ -218,8 +219,10 @@ async def list_collections(authorization: Optional[str] = Header(None)):
 @router.post("/api/library/collections")
 async def create_collection(req: CollectionCreateRequest):
     user = _require_user()
+    if req.project_id and not db.get_project(req.project_id, user["email"]):
+        raise HTTPException(status_code=404, detail="项目不存在")
     col_id = uuid.uuid4().hex
-    db.create_collection(col_id, user["email"], req.name, mode=req.mode, designer_project_id=req.designer_project_id)
+    db.create_collection(col_id, user["email"], req.name, project_id=req.project_id)
     row = db.get_collection(col_id, user["email"])
     col = dict(row)
     col["item_count"] = 0
