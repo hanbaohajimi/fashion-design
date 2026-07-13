@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
+import db
+
 
 @dataclass
 class ToolContext:
@@ -104,6 +106,23 @@ class BaseTool:
             return output
         finally:
             latency_ms = int((time.perf_counter() - started) * 1000)
+            output["trace_id"] = trace_id
+            output["model_name"] = self.model_name_for(args, context)
+            output["tool_name"] = self.name
+            asset_id = output.get("id")
+            user_email = getattr(context.session, "user_email", None)
+            if asset_id and user_email:
+                try:
+                    db.patch_generation_asset(
+                        str(asset_id),
+                        str(user_email),
+                        model_name=self.model_name_for(args, context),
+                        tool_name=self.name,
+                        trace_id=trace_id,
+                        metadata={"input_args": dict(args), "latency_ms": latency_ms},
+                    )
+                except Exception:
+                    pass
             trace = ToolTrace(
                 id=trace_id,
                 session_id=context.session_id,

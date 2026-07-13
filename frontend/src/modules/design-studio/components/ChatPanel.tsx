@@ -27,6 +27,7 @@ import {
   dataUrlToFile,
   designApiFailureMessage,
   formatApiDetail,
+  getOriginalImageUrl,
   isImageFile,
   streamChat,
 } from './chat-panel/utils';
@@ -558,9 +559,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     // ── 准备上传文件 ───────────────────────────────────────────────────────
     // 只上传有真实内容的文件；sourceUrl 来源的附件先 fetchWithTimeout 下载
     const filesToUpload: File[] = [];
+    const sourceAssetIds: string[] = [];
     if (hasCanvas) {
       try {
         filesToUpload.push(await dataUrlToFile(pendingFromCanvas!, 'canvas-reference.png'));
+        sourceAssetIds.push('');
       } catch {
         toast('画布图片处理失败，请重试', 'error');
         return;
@@ -569,6 +572,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     for (const a of orderedAssets) {
       if (a.file && a.file.size > 0) {
         filesToUpload.push(a.file);
+        sourceAssetIds.push(a.sourceAssetId || '');
       } else if (a.sourceUrl) {
         const roleLabels: Record<string, string> = { dress: '服装图', pattern: '图案图', model: '人物图', reference: '参考图' };
         const label = a.role ? (roleLabels[a.role] ?? a.role) : a.displayName;
@@ -578,6 +582,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           const blob = await resp.blob();
           const ext = blob.type.includes('png') ? 'png' : 'jpg';
           filesToUpload.push(new File([blob], `${a.displayName || 'image'}.${ext}`, { type: blob.type || 'image/png' }));
+          sourceAssetIds.push(a.sourceAssetId || '');
         } catch (err) {
           const isTimeout = err instanceof DOMException && err.name === 'AbortError';
           toast(
@@ -633,6 +638,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         const fd = new FormData();
         fd.append('session_id', sessionId);
         for (const f of filesToUpload) fd.append('files', f);
+        for (const assetId of sourceAssetIds) fd.append('source_asset_ids', assetId);
         const res = await fetch('/api/design/upload', {
           method: 'POST',
           headers: { Authorization: `Bearer ${authToken}` },
@@ -747,6 +753,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   ...(typeof ex.thumbnail_url === 'string' ? { thumbnailUrl: ex.thumbnail_url } : {}),
                   ...(typeof ex.original_width === 'number' ? { originalWidth: ex.original_width } : {}),
                   ...(typeof ex.original_height === 'number' ? { originalHeight: ex.original_height } : {}),
+                  ...(typeof ex.asset_id === 'string' ? { assetId: ex.asset_id } : {}),
+                  ...(typeof ex.parent_asset_id === 'string' ? { parentAssetId: ex.parent_asset_id } : {}),
+                  ...(typeof ex.trace_id === 'string' ? { traceId: ex.trace_id } : {}),
+                  ...(typeof ex.model_name === 'string' ? { modelName: ex.model_name } : {}),
+                  ...(typeof ex.tool_name === 'string' ? { toolName: ex.tool_name } : {}),
                 };
                 imgs.push(ni);
                 onImageGenerated?.(ni);
@@ -768,7 +779,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     ? {
                         ...m,
                         content: (ev.content as string) || '',
-                        images: (ev.images as ChatImage[]) || imgs,
+                        images: imgs.length ? [...imgs] : ((ev.images as ChatImage[]) || []),
                         isStreaming: false,
                         status: undefined,
                         taskPhase: undefined,
@@ -1038,6 +1049,29 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastGeneratedImageUrl, toast]);
 
+  const handleCreateVariant = useCallback((image: ChatImage) => {
+    const imageUrl = getOriginalImageUrl(image);
+    setActiveCapabilityId('edit_image');
+    setStarterSuggestion(null);
+    setAttachedAssets(prev => {
+      const variant: LocalAttachment = {
+        localId: crypto.randomUUID(),
+        sourceUrl: imageUrl,
+        preview: imageUrl,
+        displayName: '父版本',
+        role: 'dress',
+        source: 'generated',
+        sourceAssetId: image.assetId,
+      };
+      const withoutDress = prev.filter(asset => asset.role !== 'dress');
+      return [...withoutDress, variant];
+    });
+    setLastGeneratedImageUrl(imageUrl);
+    setLastGeneratedCapabilityId(null);
+    window.setTimeout(() => taRef.current?.focus(), 0);
+    toast('已创建变体分支，请描述要修改的内容', 'success');
+  }, [toast]);
+
   /** 重新生成：从快照完整恢复 capability_id + attachments，不读取当前 UI 状态 */
   const handleRegenerate = useCallback(() => {
     if (lastGeneratedPrompt) {
@@ -1193,6 +1227,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               onPreviewImage={onPreviewImage}
               onEditImage={onEditImage}
               onAddToCanvas={onAddToCanvas}
+              onCreateVariant={handleCreateVariant}
               onRetry={retry}
               onDownload={dlImg}
               onToast={toast}

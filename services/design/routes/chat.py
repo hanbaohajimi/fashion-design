@@ -2,7 +2,7 @@ import asyncio
 import json
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -57,16 +57,45 @@ async def chat(req: ChatRequest):
         if trend_ctx:
             personalization_ctx = (personalization_ctx + "\n\n" + trend_ctx).strip()
 
-        session = get_session(req.session_id, personalization_ctx)
-        session.user_email = user_email
-        session.project_id = effective_project_id
-        session.design_id = bound_design_id
+        session = get_session(
+            req.session_id,
+            personalization_ctx,
+            user_email=user_email,
+            design_id=bound_design_id,
+            project_id=effective_project_id,
+        )
         if not check_rate_limit(req.session_id):
             raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
+
+        job_id = uuid.uuid4().hex
+        db.create_generation_job(
+            job_id,
+            user_email,
+            req.capability_id or "design_chat",
+            design_id=bound_design_id,
+            project_id=effective_project_id,
+            session_id=req.session_id,
+            request_payload={
+                "message": req.message,
+                "capability_id": req.capability_id,
+                "trend_id": req.trend_id,
+                "trend_enabled": req.trend_enabled,
+            },
+        )
 
         async def _stream_and_side_effects():
             assistant_content = ""
             assistant_images: list[dict] = []
+            failed_error = ""
+            now = datetime.now(timezone.utc).isoformat()
+            db.update_generation_job(
+                job_id,
+                user_email,
+                status="running",
+                progress=5,
+                started_at=now,
+            )
+            yield json.dumps({"type": "job", "job_id": job_id, "status": "running", "progress": 5}, ensure_ascii=False) + "\n"
             if bound_design_id:
                 db.add_message(uuid.uuid4().hex, bound_design_id, "user", req.message)
             async for chunk in _safe_stream_chat(session, req.message, capability_id=req.capability_id):
@@ -84,11 +113,17 @@ async def chat(req: ChatRequest):
                                 ("thumbnail_url", "thumbnailUrl"),
                                 ("original_width", "originalWidth"),
                                 ("original_height", "originalHeight"),
+                                ("asset_id", "assetId"),
+                                ("parent_asset_id", "parentAssetId"),
+                                ("trace_id", "traceId"),
+                                ("model_name", "modelName"),
+                                ("tool_name", "toolName"),
                             ):
                                 if event.get(source_key) is not None:
                                     img[target_key] = event[source_key]
                             if img not in assistant_images:
                                 assistant_images.append(img)
+                            db.update_generation_job(job_id, user_email, progress=82)
                         elif event.get("type") == "message":
                             assistant_content = str(event.get("content") or "")
                             imgs = event.get("images")
@@ -96,6 +131,10 @@ async def chat(req: ChatRequest):
                                 assistant_images = imgs
                         elif event.get("type") == "error" and not assistant_content:
                             assistant_content = str(event.get("content") or "")
+                            failed_error = assistant_content
+                            db.update_generation_job(job_id, user_email, status="failed", progress=100, error=failed_error)
+                        elif event.get("type") == "status":
+                            db.update_generation_job(job_id, user_email, progress=35)
                     except Exception:
                         pass
                 yield chunk
@@ -107,6 +146,27 @@ async def chat(req: ChatRequest):
                     assistant_content or "操作已完成。",
                     assistant_images,
                 )
+            completed_at = datetime.now(timezone.utc).isoformat()
+            if failed_error:
+                db.update_generation_job(
+                    job_id,
+                    user_email,
+                    status="failed",
+                    progress=100,
+                    error=failed_error,
+                    result_json={"content": assistant_content, "images": assistant_images},
+                    completed_at=completed_at,
+                )
+            else:
+                db.update_generation_job(
+                    job_id,
+                    user_email,
+                    status="completed",
+                    progress=100,
+                    result_json={"content": assistant_content, "images": assistant_images},
+                    completed_at=completed_at,
+                )
+            yield json.dumps({"type": "job", "job_id": job_id, "status": "failed" if failed_error else "completed", "progress": 100}, ensure_ascii=False) + "\n"
             # After stream completes: signal extraction + history analysis (fire-and-forget)
             asyncio.create_task(_async_update_signals(
                 user_email, effective_project_id, req.message

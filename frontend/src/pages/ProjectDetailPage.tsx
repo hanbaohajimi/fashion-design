@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit2, FileText, BookOpen, Image, Clock } from 'lucide-react';
-import { fetchProject, patchProject, createDesign, type Project, type DesignThread } from '../api/designsApi';
+import { ArrowLeft, Plus, Edit2, FileText, BookOpen, Image, Clock, Upload, Trash2, Eye, EyeOff } from 'lucide-react';
+import {
+  createDesign,
+  deleteProjectAsset,
+  fetchProject,
+  fetchProjectAssets,
+  patchProject,
+  patchProjectAsset,
+  uploadProjectAsset,
+  type DesignThread,
+  type Project,
+  type ProjectAsset,
+} from '../api/designsApi';
+import { useToast } from '../components/Toast';
 import { formatDate } from '../utils/date';
 import './project-detail.css';
 
@@ -18,10 +30,25 @@ function RightPanel({
   authToken: string;
   onSave: (updated: Partial<Project>) => void;
 }) {
+  const { toast } = useToast();
   const [editingBrief, setEditingBrief] = useState(false);
   const [editingRules, setEditingRules] = useState(false);
   const [briefVal, setBriefVal] = useState(project.description || '');
   const [rulesVal, setRulesVal] = useState(project.instructions || '');
+  const [assets, setAssets] = useState<ProjectAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAssetsLoading(true);
+    void fetchProjectAssets(authToken, project.id)
+      .then(items => { if (!cancelled) setAssets(items); })
+      .catch(() => { if (!cancelled) toast('项目资料加载失败', 'error'); })
+      .finally(() => { if (!cancelled) setAssetsLoading(false); });
+    return () => { cancelled = true; };
+  }, [authToken, project.id, toast]);
 
   const saveBrief = async () => {
     await patchProject(authToken, project.id, { description: briefVal });
@@ -32,6 +59,41 @@ function RightPanel({
     await patchProject(authToken, project.id, { instructions: rulesVal });
     onSave({ instructions: rulesVal });
     setEditingRules(false);
+  };
+
+  const handleAssetUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const uploaded = await Promise.all(files.map(file => uploadProjectAsset(authToken, project.id, file)));
+      setAssets(current => [...uploaded, ...current]);
+      toast(`已添加 ${uploaded.length} 份项目资料`, 'success');
+    } catch {
+      toast('部分资料上传失败，请检查格式与大小', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const toggleAsset = async (asset: ProjectAsset) => {
+    try {
+      const updated = await patchProjectAsset(authToken, project.id, asset.id, { enabled: !asset.enabled });
+      setAssets(current => current.map(item => item.id === updated.id ? updated : item));
+    } catch {
+      toast('资料状态更新失败', 'error');
+    }
+  };
+
+  const removeAsset = async (asset: ProjectAsset) => {
+    try {
+      await deleteProjectAsset(authToken, project.id, asset.id);
+      setAssets(current => current.filter(item => item.id !== asset.id));
+      toast('项目资料已移除', 'success');
+    } catch {
+      toast('项目资料移除失败', 'error');
+    }
   };
 
   return (
@@ -98,15 +160,59 @@ function RightPanel({
         )}
       </div>
 
-      {/* References (placeholder) */}
+      {/* Project knowledge */}
       <div className="project-panel-section">
         <div className="project-panel-section-header">
           <Image className="w-3.5 h-3.5" strokeWidth={1.5} />
-          <span>参考资料</span>
+          <span>项目知识</span>
+          <button
+            type="button"
+            className="project-panel-edit-btn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            title="上传项目资料"
+          >
+            <Upload className="w-3 h-3" strokeWidth={1.5} />
+          </button>
         </div>
-        <p className="project-panel-placeholder project-panel-text">
-          参考图、面料图、趋势报告可通过设计对话中上传图片的方式引用。
-        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="sr-only"
+          accept="image/png,image/jpeg,image/webp,image/gif,.txt,.md,.json,.csv,.tsv"
+          onChange={event => void handleAssetUpload(event)}
+        />
+        <p className="project-knowledge-help">启用的资料会自动加入本项目的每次 AI 对话上下文。</p>
+        {assetsLoading ? (
+          <p className="project-panel-placeholder project-panel-text">正在读取项目资料…</p>
+        ) : assets.length === 0 ? (
+          <button type="button" className="project-knowledge-empty" onClick={() => fileInputRef.current?.click()}>
+            <Plus size={13} /> 上传参考图、面料说明或趋势摘要
+          </button>
+        ) : (
+          <div className="project-knowledge-list">
+            {assets.map(asset => (
+              <div className={`project-knowledge-item ${asset.enabled ? '' : 'is-disabled'}`} key={asset.id}>
+                {asset.image_url ? (
+                  <img src={asset.image_url} alt="" />
+                ) : (
+                  <span className="project-knowledge-file"><FileText size={14} /></span>
+                )}
+                <div className="project-knowledge-meta">
+                  <strong>{asset.name}</strong>
+                  <span>{asset.image_url ? '视觉参考' : `${asset.extracted_text.length} 字符`}</span>
+                </div>
+                <button type="button" onClick={() => void toggleAsset(asset)} title={asset.enabled ? '从 AI 上下文停用' : '加入 AI 上下文'}>
+                  {asset.enabled ? <Eye size={13} /> : <EyeOff size={13} />}
+                </button>
+                <button type="button" onClick={() => void removeAsset(asset)} title="移除资料">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -11,6 +11,7 @@ from PIL import Image
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from ai_clients import generate_image, simple_chat, vision_analyze
+import db
 from runtime import (
     MAX_UPLOAD_BATCH,
     OUTPUTS_DIR,
@@ -36,10 +37,13 @@ async def upload_file(request: Request):
 
     session_id: Optional[str] = None
     files_list: list = []
+    source_asset_ids: list[str] = []
     for key, val in form.multi_items():
         kl = (key or "").lower()
         if kl == "session_id" and isinstance(val, str):
             session_id = val
+        elif kl == "source_asset_ids" and isinstance(val, str):
+            source_asset_ids.append(val.strip())
         elif kl in ("file", "files") and isinstance(val, StarletteUploadFile):
             files_list.append(val)
 
@@ -54,15 +58,21 @@ async def upload_file(request: Request):
         )
 
     user = _require_user()
-    _ensure_owned_session(user["email"], str(session_id))
-    session = get_session(str(session_id))
+    bound_design_id = _ensure_owned_session(user["email"], str(session_id))
+    session_row = db.get_owned_chat_session(str(session_id), user["email"])
+    session = get_session(
+        str(session_id),
+        user_email=user["email"],
+        design_id=bound_design_id,
+        project_id=session_row["project_id"] if session_row else None,
+    )
     if len(files_list) > MAX_UPLOAD_BATCH:
         raise HTTPException(status_code=400, detail=f"最多同时上传 {MAX_UPLOAD_BATCH} 张图片")
 
     session.uploaded_assets = []
     results: list[dict] = []
 
-    for uf in files_list:
+    for file_index, uf in enumerate(files_list):
         raw_name = getattr(uf, "filename", None) or "upload.png"
         ext = os.path.splitext(raw_name)[1] or ".png"
         if ext.lower() not in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"):
@@ -76,9 +86,30 @@ async def upload_file(request: Request):
             f.write(content)
         abs_path = os.path.abspath(file_path)
         disp = os.path.basename(raw_name)[:120]
-        aid = uuid.uuid4().hex[:8]
-        session.uploaded_assets.append({"path": abs_path, "name": disp, "id": aid})
+        aid = uuid.uuid4().hex
+        requested_parent_id = source_asset_ids[file_index] if file_index < len(source_asset_ids) else ""
+        parent_asset_id = None
+        if requested_parent_id:
+            parent = db.get_generation_asset(requested_parent_id, user["email"])
+            if parent and (not bound_design_id or parent["design_id"] == bound_design_id):
+                parent_asset_id = requested_parent_id
+        session.uploaded_assets.append(
+            {"path": abs_path, "name": disp, "id": aid, "source_asset_id": parent_asset_id}
+        )
         url = session.get_image_url(abs_path)
+        db.create_generation_asset(
+            aid,
+            user["email"],
+            url,
+            design_id=bound_design_id,
+            project_id=session_row["project_id"] if session_row else None,
+            session_id=str(session_id),
+            parent_asset_id=parent_asset_id,
+            file_path=abs_path,
+            kind="upload",
+            prompt="",
+            metadata={"name": disp, "filename": unique_name},
+        )
         results.append(
             {
                 "url": url,
@@ -89,6 +120,8 @@ async def upload_file(request: Request):
                 "index": len(results) + 1,
             }
         )
+        if file_index == 0:
+            session.current_asset_id = parent_asset_id or aid
         print(f"[INFO] File uploaded: {unique_name} for session {str(session_id)[:8]} (#{len(results)})")
 
     first = results[0]

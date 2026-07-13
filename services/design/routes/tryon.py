@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Header
@@ -47,8 +48,43 @@ async def tryon_generate(req: TryOnGenerateRequest, authorization: Optional[str]
     if user_lock.locked():
         raise HTTPException(429, "上一次生成尚未完成，请稍候")
 
+    job_id = uuid.uuid4().hex
+    db.create_generation_job(
+        job_id,
+        email,
+        "try_on",
+        request_payload=req.model_dump() if hasattr(req, "model_dump") else req.dict(),
+    )
     async with user_lock:
-        return await _tryon_generate_impl(email, req)
+        db.update_generation_job(
+            job_id,
+            email,
+            status="running",
+            progress=10,
+            started_at=datetime.now(timezone.utc).isoformat(),
+        )
+        try:
+            result = await _tryon_generate_impl(email, req)
+            result["job_id"] = job_id
+            db.update_generation_job(
+                job_id,
+                email,
+                status="completed",
+                progress=100,
+                result_json=result,
+                completed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            return result
+        except Exception as exc:
+            db.update_generation_job(
+                job_id,
+                email,
+                status="failed",
+                progress=100,
+                error=str(exc),
+                completed_at=datetime.now(timezone.utc).isoformat(),
+            )
+            raise
 
 
 @router.post("/api/tryon/save-outfit")

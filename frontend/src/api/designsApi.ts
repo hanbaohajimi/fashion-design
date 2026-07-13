@@ -38,7 +38,56 @@ export interface DesignMessage {
     sourceUrl?: string;
     originalWidth?: number;
     originalHeight?: number;
+    assetId?: string;
+    parentAssetId?: string;
+    traceId?: string;
+    modelName?: string;
+    toolName?: string;
   }>;
+  created_at: string;
+}
+
+export interface ProjectAsset {
+  id: string;
+  project_id: string;
+  name: string;
+  kind: string;
+  mime_type: string;
+  image_url: string | null;
+  extracted_text: string;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CanvasDocument<TState = Record<string, unknown>> {
+  state: TState;
+  revision: number;
+  updated_at: string | null;
+}
+
+export interface CanvasRevision {
+  id: string;
+  design_id: string;
+  revision: number;
+  label: string | null;
+  created_at: string;
+}
+
+export interface GenerationAsset {
+  id: string;
+  design_id: string | null;
+  project_id: string | null;
+  session_id: string | null;
+  parent_asset_id: string | null;
+  image_url: string;
+  kind: string;
+  prompt: string;
+  model_name: string;
+  tool_name: string;
+  trace_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -149,4 +198,134 @@ export async function autoTitleDesign(
   } catch {
     return null;
   }
+}
+
+// ── Durable canvas ───────────────────────────────────────────
+
+export async function fetchCanvas<TState = Record<string, unknown>>(
+  token: string,
+  designId: string,
+): Promise<CanvasDocument<TState>> {
+  const res = await fetch(`${BASE}/designs/${designId}/canvas`, { headers: authHeader(token) });
+  return handle<CanvasDocument<TState>>(res);
+}
+
+export async function saveCanvas<TState extends Record<string, unknown>>(
+  token: string,
+  designId: string,
+  state: TState,
+  expectedRevision: number,
+): Promise<CanvasDocument<TState>> {
+  const res = await fetch(`${BASE}/designs/${designId}/canvas`, {
+    method: 'PUT',
+    headers: authHeader(token),
+    body: JSON.stringify({ state, expected_revision: expectedRevision }),
+  });
+  if (res.status === 409) {
+    throw new Error('409 画布已在其他窗口更新');
+  }
+  return handle<CanvasDocument<TState>>(res);
+}
+
+export async function fetchCanvasRevisions(token: string, designId: string): Promise<CanvasRevision[]> {
+  const res = await fetch(`${BASE}/designs/${designId}/canvas/revisions`, { headers: authHeader(token) });
+  const data = await handle<{ revisions: CanvasRevision[] }>(res);
+  return data.revisions;
+}
+
+export async function uploadCanvasAsset(
+  token: string,
+  designId: string,
+  file: File,
+): Promise<GenerationAsset> {
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch(`${BASE}/designs/${designId}/canvas/assets`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  const data = await handle<{ asset: GenerationAsset }>(res);
+  return data.asset;
+}
+
+export async function createCanvasRevision(
+  token: string,
+  designId: string,
+  label = '',
+): Promise<CanvasRevision> {
+  const res = await fetch(`${BASE}/designs/${designId}/canvas/revisions`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ label }),
+  });
+  const data = await handle<{ revision: CanvasRevision }>(res);
+  return data.revision;
+}
+
+export async function restoreCanvasRevision<TState = Record<string, unknown>>(
+  token: string,
+  designId: string,
+  revisionId: string,
+): Promise<CanvasDocument<TState>> {
+  const res = await fetch(`${BASE}/designs/${designId}/canvas/revisions/${revisionId}/restore`, {
+    method: 'POST',
+    headers: authHeader(token),
+  });
+  return handle<CanvasDocument<TState>>(res);
+}
+
+// ── Project knowledge ────────────────────────────────────────
+
+export async function fetchProjectAssets(token: string, projectId: string): Promise<ProjectAsset[]> {
+  const res = await fetch(`${BASE}/projects/${projectId}/assets`, { headers: authHeader(token) });
+  const data = await handle<{ assets: ProjectAsset[] }>(res);
+  return data.assets;
+}
+
+export async function uploadProjectAsset(
+  token: string,
+  projectId: string,
+  file: File,
+  kind = 'reference',
+): Promise<ProjectAsset> {
+  const body = new FormData();
+  body.append('file', file);
+  body.append('kind', kind);
+  const res = await fetch(`${BASE}/projects/${projectId}/assets`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+  const data = await handle<{ asset: ProjectAsset }>(res);
+  return data.asset;
+}
+
+export async function patchProjectAsset(
+  token: string,
+  projectId: string,
+  assetId: string,
+  patch: Partial<Pick<ProjectAsset, 'name' | 'kind' | 'enabled' | 'extracted_text'>>,
+): Promise<ProjectAsset> {
+  const res = await fetch(`${BASE}/projects/${projectId}/assets/${assetId}`, {
+    method: 'PATCH',
+    headers: authHeader(token),
+    body: JSON.stringify(patch),
+  });
+  const data = await handle<{ asset: ProjectAsset }>(res);
+  return data.asset;
+}
+
+export async function deleteProjectAsset(token: string, projectId: string, assetId: string): Promise<void> {
+  const res = await fetch(`${BASE}/projects/${projectId}/assets/${assetId}`, {
+    method: 'DELETE',
+    headers: authHeader(token),
+  });
+  await handle<unknown>(res);
+}
+
+export async function fetchDesignAssets(token: string, designId: string): Promise<GenerationAsset[]> {
+  const res = await fetch(`${BASE}/designs/${designId}/assets`, { headers: authHeader(token) });
+  const data = await handle<{ assets: GenerationAsset[] }>(res);
+  return data.assets;
 }

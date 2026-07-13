@@ -292,7 +292,11 @@ class Session:
         self.current_image_path: Optional[str] = None
         self.current_model_path: Optional[str] = None
         self.current_tryon_path: Optional[str] = None
+        self.current_asset_id: Optional[str] = None
+        self.current_model_asset_id: Optional[str] = None
+        self.current_tryon_asset_id: Optional[str] = None
         self.uploaded_assets: list[dict] = []
+        self.project_assets: list[dict] = []
         self.generated_images: list[dict] = []
         self.favorites: list[dict] = []
         self.stats = {"tool_calls": 0, "images_generated": 0, "errors": 0, "start_time": datetime.now().isoformat()}
@@ -305,6 +309,7 @@ class Session:
         self.user_email: Optional[str] = None
         self.project_id: Optional[str] = None
         self.design_id: Optional[str] = None
+        self._hydrated_design_id: Optional[str] = None
 
     def touch(self):
         self.last_active = datetime.now()
@@ -353,7 +358,11 @@ class Session:
         self.current_image_path = None
         self.current_model_path = None
         self.current_tryon_path = None
+        self.current_asset_id = None
+        self.current_model_asset_id = None
+        self.current_tryon_asset_id = None
         self.uploaded_assets = []
+        self.project_assets = []
         self.generated_images = []
         self.favorites = []
         self.stats = {"tool_calls": 0, "images_generated": 0, "errors": 0, "start_time": datetime.now().isoformat()}
@@ -370,6 +379,7 @@ class Session:
         return p if self._file_ok(p) else None
 
     def record_image(self, url: str, img_type: str, file_path: str):
+        parent_asset_id = self.current_asset_id if img_type in {"edit_image", "transfer_pattern", "try_on"} else None
         entry = {
             "url": url,
             "type": img_type,
@@ -378,7 +388,14 @@ class Session:
             "id": uuid.uuid4().hex[:12],
         }
         self.generated_images.append(entry)
+        entry["parent_asset_id"] = parent_asset_id
         self.stats["images_generated"] += 1
+        if img_type == "generate_model":
+            self.current_model_asset_id = entry["id"]
+        elif img_type == "try_on":
+            self.current_tryon_asset_id = entry["id"]
+        else:
+            self.current_asset_id = entry["id"]
         # Auto-save to library if user is authenticated
         if self.user_email:
             item_id = entry["id"]
@@ -386,6 +403,23 @@ class Session:
             project_id = self.project_id
             session_id = self.session_id
             prompt = self.last_user_text
+            try:
+                db.create_generation_asset(
+                    item_id,
+                    user_email,
+                    url,
+                    design_id=self.design_id,
+                    project_id=project_id,
+                    session_id=session_id,
+                    parent_asset_id=parent_asset_id,
+                    file_path=file_path,
+                    kind=img_type,
+                    prompt=prompt,
+                    model_name=IMAGE_MODEL,
+                    tool_name=img_type,
+                )
+            except Exception as exc:
+                print(f"[WARN] generation asset persist failed: {exc}")
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
@@ -395,6 +429,91 @@ class Session:
             except Exception:
                 pass
         return entry
+
+    def apply_personalization_context(self, personalization_ctx: str) -> None:
+        combined = SYSTEM_PROMPT + ("\n\n" + personalization_ctx if personalization_ctx else "")
+        if self.chat_history and self.chat_history[0].get("role") == "system":
+            self.chat_history[0] = {"role": "system", "content": combined}
+        else:
+            self.chat_history.insert(0, {"role": "system", "content": combined})
+
+    def sync_project_assets(self, user_email: str, project_id: Optional[str]) -> None:
+        """Refresh enabled visual project references without mixing them into per-message uploads."""
+        self.project_assets = []
+        if not project_id:
+            return
+        try:
+            rows = db.list_project_assets(project_id, user_email, enabled_only=True)
+        except Exception:
+            return
+        for row in rows:
+            path = row["file_path"]
+            if path and os.path.isfile(path) and row["image_url"]:
+                self.project_assets.append({
+                    "id": row["id"],
+                    "path": path,
+                    "name": row["name"],
+                    "kind": row["kind"],
+                })
+
+    def hydrate(self, user_email: str, design_id: Optional[str], project_id: Optional[str]) -> None:
+        """Rebuild durable Agent context after navigation, TTL expiry, or restart."""
+        self.user_email = user_email
+        self.design_id = design_id
+        self.project_id = project_id
+        if not design_id or self._hydrated_design_id == design_id:
+            return
+
+        rows = db.list_messages(design_id)
+        durable_history: list[dict] = [self.chat_history[0]]
+        for row in rows[-(MAX_HISTORY - 1):]:
+            role = str(row["role"] or "")
+            if role not in {"user", "assistant"}:
+                continue
+            content = str(row["content"] or "")
+            try:
+                images = json.loads(row["images"] or "[]")
+            except Exception:
+                images = []
+            if role == "assistant" and images:
+                image_refs = ", ".join(
+                    str(item.get("url")) for item in images if isinstance(item, dict) and item.get("url")
+                )
+                if image_refs:
+                    content = f"{content}\n[本轮生成资产: {image_refs}]"
+            durable_history.append({"role": role, "content": content})
+        self.chat_history = durable_history
+
+        assets = db.list_generation_assets(user_email, design_id=design_id, limit=100)
+        self.generated_images = []
+        self.uploaded_assets = []
+        for row in assets:
+            entry = {
+                "id": row["id"],
+                "url": row["image_url"],
+                "type": row["kind"],
+                "path": row["file_path"],
+                "time": row["created_at"],
+                "parent_asset_id": row["parent_asset_id"],
+            }
+            if row["kind"] == "upload":
+                self.uploaded_assets.append({
+                    "id": row["id"],
+                    "path": row["file_path"],
+                    "name": _json_safe_metadata(row["metadata"]).get("name") or "历史上传",
+                })
+                continue
+            self.generated_images.append(entry)
+            if row["kind"] == "generate_model":
+                self.current_model_path = row["file_path"]
+                self.current_model_asset_id = row["id"]
+            elif row["kind"] == "try_on":
+                self.current_tryon_path = row["file_path"]
+                self.current_tryon_asset_id = row["id"]
+            else:
+                self.current_image_path = row["file_path"]
+                self.current_asset_id = row["id"]
+        self._hydrated_design_id = design_id
 
     def add_favorite(self, image_id: str) -> bool:
         for img in self.generated_images:
@@ -430,6 +549,7 @@ class Session:
         has_design = self._file_ok(self.current_image_path)
         has_model = self._file_ok(self.current_model_path)
         n_upload = len([a for a in self.uploaded_assets if self._file_ok(a.get("path"))])
+        n_project = len([a for a in self.project_assets if self._file_ok(a.get("path"))])
         has_upload = n_upload > 0
         has_tryon = self._file_ok(self.current_tryon_path)
 
@@ -438,6 +558,7 @@ class Session:
             f"- 默认主服装图（编辑/图案目标/试穿·服装侧）: {'已就绪' if has_design else '**缺失** — 需文生图/草图/上传后再编辑或试穿'}",
             f"- 默认模特图（试穿·人物侧）: {'已就绪' if has_model else '**缺失** — 用户要试穿须先 tool_generate_model'}",
             f"- 用户本消息上传参考图: {n_upload} 张（资源表 **用户上传·第N张** 按上传顺序编号；@图N/第二张等均对应该顺序）" if has_upload else "- 用户本消息上传参考图: 无",
+            f"- 项目启用视觉参考: {n_project} 张（按需从资源表引用，不替代用户本轮明确上传）",
             f"- 最近一次试穿合成: {'有' if has_tryon else '无'}",
         ]
         if self.generated_images:
@@ -486,6 +607,15 @@ class Session:
             lines.append(
                 f"- **用户上传·第{i + 1}张** 「{disp}」 [id:{aid}] [user_upload_{i + 1}]: {up}"
             )
+        for i, a in enumerate(self.project_assets):
+            path = a.get("path")
+            if not self._file_ok(path) or path in seen:
+                continue
+            seen.add(path)
+            name = (a.get("name") or f"project_reference_{i + 1}")[:80]
+            lines.append(
+                f"- **项目参考·第{i + 1}张** 「{name}」 [id:{a.get('id') or ''}] [project_reference_{i + 1}]: {path}"
+            )
         ct = self.current_tryon_path
         if self._file_ok(ct):
             seen.add(ct)
@@ -508,11 +638,32 @@ class Session:
         return "\n".join(lines)
 
 
-def get_session(session_id: str, personalization_ctx: str = "") -> Session:
+def _json_safe_metadata(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(value or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def get_session(
+    session_id: str,
+    personalization_ctx: str = "",
+    *,
+    user_email: Optional[str] = None,
+    design_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+) -> Session:
     cleanup_expired_sessions()
     if session_id not in sessions:
         sessions[session_id] = Session(session_id, personalization_ctx)
     session = sessions[session_id]
+    session.apply_personalization_context(personalization_ctx)
+    if user_email:
+        session.hydrate(user_email, design_id, project_id)
+        session.sync_project_assets(user_email, project_id)
     session.touch()
     return session
 
@@ -583,7 +734,7 @@ def tool_text_to_image(session: Session, prompt: str, style_hint: str = "", aspe
             url = session.get_image_url(path)
             entry = session.record_image(url, "text_to_image", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "图片保存失败"}
     except Exception as e:
@@ -604,7 +755,7 @@ def tool_draw_sketch(session: Session, detailed_prompt: str) -> dict:
             url = session.get_image_url(path)
             entry = session.record_image(url, "draw_sketch", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "图片保存失败"}
     except Exception as e:
@@ -717,7 +868,7 @@ def tool_edit_image(
             url = session.get_image_url(path)
             entry = session.record_image(url, "edit_image", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "图片编辑保存失败"}
     except Exception as e:
@@ -761,7 +912,7 @@ def tool_transfer_pattern(session: Session, target_dress_path: str, pattern_ref_
             url = session.get_image_url(path)
             entry = session.record_image(url, "transfer_pattern", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "图案迁移保存失败"}
     except Exception as e:
@@ -782,7 +933,7 @@ def tool_generate_model(session: Session, model_prompt: str) -> dict:
             url = session.get_image_url(path)
             entry = session.record_image(url, "generate_model", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "模特生成保存失败"}
     except Exception as e:
@@ -822,7 +973,7 @@ def tool_try_on(session: Session, dress_path: str, model_path: str, instruction:
             url = session.get_image_url(path)
             entry = session.record_image(url, "try_on", path)
             session.stats["tool_calls"] += 1
-            return {"status": "success", "file_path": path, "url": url, "id": entry["id"]}
+            return {"status": "success", "file_path": path, "url": url, "id": entry["id"], "parent_asset_id": entry.get("parent_asset_id")}
         session.stats["errors"] += 1
         return {"status": "error", "message": "虚拟试穿保存失败"}
     except Exception as e:
@@ -1082,9 +1233,17 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                         "name": tc["function"]["name"], "content": result_json
                     })
                     if result.get("status") == "success" and result.get("url"):
-                        info = {"url": result["url"], "type": tc["function"]["name"].replace("tool_", "")}
+                        info = {
+                            "url": result["url"],
+                            "type": tc["function"]["name"].replace("tool_", ""),
+                            "asset_id": result.get("id"),
+                            "parent_asset_id": result.get("parent_asset_id"),
+                            "trace_id": result.get("trace_id"),
+                            "model_name": result.get("model_name"),
+                            "tool_name": result.get("tool_name"),
+                        }
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({**info, "type": "image", "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1113,9 +1272,17 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                     })
 
                     if result.get("status") == "success" and result.get("url"):
-                        info = {"url": result["url"], "type": func_name.replace("tool_", "")}
+                        info = {
+                            "url": result["url"],
+                            "type": func_name.replace("tool_", ""),
+                            "asset_id": result.get("id"),
+                            "parent_asset_id": result.get("parent_asset_id"),
+                            "trace_id": result.get("trace_id"),
+                            "model_name": result.get("model_name"),
+                            "tool_name": result.get("tool_name"),
+                        }
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({**info, "type": "image", "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         et = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1157,9 +1324,17 @@ async def stream_chat(session: Session, message: str, capability_id: Optional[st
                     })
 
                     if result.get("status") == "success" and result.get("url"):
-                        info = {"url": result["url"], "type": func_name.replace("tool_", "")}
+                        info = {
+                            "url": result["url"],
+                            "type": func_name.replace("tool_", ""),
+                            "asset_id": result.get("id"),
+                            "parent_asset_id": result.get("parent_asset_id"),
+                            "trace_id": result.get("trace_id"),
+                            "model_name": result.get("model_name"),
+                            "tool_name": result.get("tool_name"),
+                        }
                         images.append(info)
-                        yield json.dumps({"type": "image", "url": info["url"], "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
+                        yield json.dumps({**info, "type": "image", "original_url": info["url"], "image_type": info["type"]}, ensure_ascii=False) + "\n"
                     elif result.get("status") == "error":
                         err_text = result.get("message", "工具执行失败")
                         if result.get("workflow_hint"):
@@ -1464,6 +1639,10 @@ def _build_personalization_context(
             if s.get("confidence", 0) >= 0.65
         ][:5]
         lines = [f"=== 当前项目设计档案：{project.get('name','')} ==="]
+        if project.get("description"):
+            lines.append(f"项目简介：{str(project['description'])[:2000]}")
+        if project.get("instructions"):
+            lines.append(f"项目强制规则：{str(project['instructions'])[:3000]}")
         if b.get("season"):
             lines.append(f"系列：{b['season']}")
         if b.get("target_audience"):
@@ -1488,6 +1667,18 @@ def _build_personalization_context(
         trend_ctx = _build_project_trend_context(project)
         if trend_ctx:
             lines.append(trend_ctx)
+        try:
+            knowledge_rows = db.list_project_assets(project.get("id", ""), project.get("user_email", ""), enabled_only=True)
+        except Exception:
+            knowledge_rows = []
+        if knowledge_rows:
+            lines.append("项目知识资料：")
+            for row in knowledge_rows[:12]:
+                text = str(row["extracted_text"] or "").strip()
+                if text:
+                    lines.append(f"- {row['name']}：{text[:1800]}")
+                elif row["image_url"]:
+                    lines.append(f"- 视觉参考「{row['name']}」：{row['image_url']}")
         lines += [
             "",
             "原则：以上是该项目已建立的设计语言，在生成时保持风格一致性。",

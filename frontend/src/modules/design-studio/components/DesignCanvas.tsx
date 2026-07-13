@@ -33,14 +33,37 @@ import {
   Upload,
   Download,
   ImageIcon,
+  Undo2,
+  Redo2,
+  Layers3,
+  History,
+  Save,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  X,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { useToast } from '../../../components/Toast';
+import {
+  createCanvasRevision,
+  fetchCanvas,
+  fetchCanvasRevisions,
+  restoreCanvasRevision,
+  saveCanvas,
+  uploadCanvasAsset,
+  type CanvasRevision,
+} from '../../../api/designsApi';
 
 export interface DesignCanvasHandle {
   addImage: (url: string, name?: string) => Promise<void>;
 }
 
 interface DesignCanvasProps {
+  designId?: string;
+  authToken?: string;
   currentModeLabel?: string;
   onDescribeDesign?: () => void;
   onEditInEditor?: (dataUrl: string) => void;
@@ -48,6 +71,29 @@ interface DesignCanvasProps {
   /** 画布选中图片时回调；选中非图片或取消选中时传 null */
   onSelectionChange?: (imageUrl: string | null) => void;
 }
+
+interface PersistedCanvasState extends Record<string, unknown> {
+  fabric: Record<string, unknown>;
+  viewport?: number[];
+}
+
+interface CanvasLayer {
+  id: string;
+  name: string;
+  type: string;
+  visible: boolean;
+  locked: boolean;
+}
+
+const CANVAS_SERIALIZED_PROPERTIES = [
+  '_elementId',
+  '_elementType',
+  '_elementName',
+  '_imageNumber',
+  '_naturalWidth',
+  '_naturalHeight',
+  '_sourceUrl',
+];
 
 let nextElementId = 1;
 let nextImageNumber = 1;
@@ -160,7 +206,7 @@ function getObjectExportMultiplier(object: FabricObject): number {
 }
 
 const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
-  ({ currentModeLabel = '生成成衣效果图', onDescribeDesign, onEditInEditor, onSendToAI, onSelectionChange }, ref) => {
+  ({ designId, authToken, currentModeLabel = '生成成衣效果图', onDescribeDesign, onEditInEditor, onSendToAI, onSelectionChange }, ref) => {
     const { toast } = useToast();
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasElRef = useRef<HTMLCanvasElement>(null);
@@ -172,6 +218,16 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
     const [isDragOver, setIsDragOver] = useState(false);
     const [elementCount, setElementCount] = useState(0);
     const [selectedInfo, setSelectedInfo] = useState<SelectedObjectInfo | null>(null);
+    const [saveState, setSaveState] = useState<'local' | 'loading' | 'saved' | 'saving' | 'error' | 'conflict'>(
+      designId && authToken ? 'loading' : 'local',
+    );
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
+    const [layers, setLayers] = useState<CanvasLayer[]>([]);
+    const [layersOpen, setLayersOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [revisions, setRevisions] = useState<CanvasRevision[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     const activeToolRef = useRef(activeTool);
     activeToolRef.current = activeTool;
@@ -180,6 +236,60 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
     const lastPanPosRef = useRef({ x: 0, y: 0 });
     const addOffsetRef = useRef(0);
     const dragCounterRef = useRef(0);
+    const suppressChangesRef = useRef(false);
+    const revisionRef = useRef(0);
+    const lastSnapshotRef = useRef('');
+    const undoStackRef = useRef<string[]>([]);
+    const redoStackRef = useRef<string[]>([]);
+    const saveTimerRef = useRef<number | null>(null);
+    const savingRef = useRef(false);
+    const savePendingRef = useRef(false);
+    const persistNowRef = useRef<() => Promise<void>>(async () => {});
+    const recordMutationRef = useRef<() => void>(() => {});
+    const scheduleViewportSaveRef = useRef<() => void>(() => {});
+    const undoActionRef = useRef<() => void>(() => {});
+    const redoActionRef = useRef<() => void>(() => {});
+
+    const serializeState = useCallback((): PersistedCanvasState | null => {
+      const canvas = fabricRef.current;
+      if (!canvas) return null;
+      const fabric = (
+        canvas as Canvas & { toJSON: (propertiesToInclude?: string[]) => Record<string, unknown> }
+      ).toJSON(CANVAS_SERIALIZED_PROPERTIES);
+      return {
+        fabric,
+        viewport: canvas.viewportTransform ? [...canvas.viewportTransform] : undefined,
+      };
+    }, []);
+
+    const snapshotState = useCallback(() => {
+      const state = serializeState();
+      return state ? JSON.stringify(state) : '';
+    }, [serializeState]);
+
+    const updateLayers = useCallback(() => {
+      const canvas = fabricRef.current;
+      if (!canvas) {
+        setLayers([]);
+        return;
+      }
+      setLayers(
+        canvas.getObjects().slice().reverse().map((object, index) => {
+          const ext = object as FabricObject & {
+            _elementId?: string;
+            _elementName?: string;
+            _elementType?: string;
+          };
+          return {
+            id: ext._elementId || `layer-${index}`,
+            name: ext._elementName || `图层 ${canvas.getObjects().length - index}`,
+            type: ext._elementType || object.type || 'object',
+            visible: object.visible !== false,
+            locked: object.lockMovementX === true && object.lockMovementY === true,
+          };
+        }),
+      );
+    }, []);
 
     const updateElementCount = useCallback(() => {
       setElementCount(fabricRef.current ? fabricRef.current.getObjects().length : 0);
@@ -240,6 +350,118 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       gridRef.current.style.backgroundSize = `${spacing}px ${spacing}px`;
       gridRef.current.style.backgroundPosition = `${vpt[4] % spacing}px ${vpt[5] % spacing}px`;
     }, []);
+
+    const persistNow = useCallback(async () => {
+      if (!designId || !authToken) {
+        setSaveState('local');
+        return;
+      }
+      if (savingRef.current) {
+        savePendingRef.current = true;
+        return;
+      }
+      const state = serializeState();
+      if (!state) return;
+      savingRef.current = true;
+      setSaveState('saving');
+      try {
+        const saved = await saveCanvas(authToken, designId, state, revisionRef.current);
+        revisionRef.current = saved.revision;
+        setSaveState('saved');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        setSaveState(message.includes('其他窗口') || message.includes('409') ? 'conflict' : 'error');
+      } finally {
+        savingRef.current = false;
+        if (savePendingRef.current) {
+          savePendingRef.current = false;
+          window.setTimeout(() => void persistNowRef.current(), 0);
+        }
+      }
+    }, [authToken, designId, serializeState]);
+
+    const scheduleSave = useCallback(() => {
+      if (!designId || !authToken) return;
+      if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+      setSaveState('saving');
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        void persistNowRef.current();
+      }, 800);
+    }, [authToken, designId]);
+
+    persistNowRef.current = persistNow;
+    scheduleViewportSaveRef.current = scheduleSave;
+
+    const recordMutation = useCallback(() => {
+      if (suppressChangesRef.current) return;
+      const snapshot = snapshotState();
+      if (!snapshot || snapshot === lastSnapshotRef.current) return;
+      if (lastSnapshotRef.current) {
+        undoStackRef.current = [...undoStackRef.current.slice(-49), lastSnapshotRef.current];
+      }
+      redoStackRef.current = [];
+      lastSnapshotRef.current = snapshot;
+      setCanUndo(undoStackRef.current.length > 0);
+      setCanRedo(false);
+      updateElementCount();
+      updateLayers();
+      scheduleSave();
+    }, [scheduleSave, snapshotState, updateElementCount, updateLayers]);
+
+    recordMutationRef.current = recordMutation;
+
+    const applySnapshot = useCallback(async (snapshot: string) => {
+      const canvas = fabricRef.current;
+      if (!canvas || !snapshot) return;
+      const state = JSON.parse(snapshot) as PersistedCanvasState;
+      suppressChangesRef.current = true;
+      try {
+        await canvas.loadFromJSON(state.fabric || {});
+        canvas.forEachObject(applySelectionStyle);
+        if (Array.isArray(state.viewport) && state.viewport.length === 6) {
+          canvas.setViewportTransform(state.viewport as [number, number, number, number, number, number]);
+        }
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        setZoomLevel(canvas.getZoom());
+        updateElementCount();
+        updateLayers();
+        updateGrid();
+        updateToolbar();
+      } finally {
+        suppressChangesRef.current = false;
+      }
+    }, [updateElementCount, updateGrid, updateLayers, updateToolbar]);
+
+    const undo = useCallback(() => {
+      const previous = undoStackRef.current.pop();
+      if (!previous) return;
+      const current = snapshotState();
+      if (current) redoStackRef.current.push(current);
+      void applySnapshot(previous).then(() => {
+        lastSnapshotRef.current = previous;
+        setCanUndo(undoStackRef.current.length > 0);
+        setCanRedo(redoStackRef.current.length > 0);
+        scheduleSave();
+      });
+    }, [applySnapshot, scheduleSave, snapshotState]);
+
+    const redo = useCallback(() => {
+      const next = redoStackRef.current.pop();
+      if (!next) return;
+      const current = snapshotState();
+      if (current) undoStackRef.current.push(current);
+      void applySnapshot(next).then(() => {
+        lastSnapshotRef.current = next;
+        setCanUndo(undoStackRef.current.length > 0);
+        setCanRedo(redoStackRef.current.length > 0);
+        scheduleSave();
+      });
+    }, [applySnapshot, scheduleSave, snapshotState]);
+
+    undoActionRef.current = undo;
+    redoActionRef.current = redo;
 
     useEffect(() => {
       const el = canvasElRef.current;
@@ -317,6 +539,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         setZoomLevel(zoom);
         updateGrid();
         updateToolbar();
+        scheduleViewportSaveRef.current();
       });
 
       canvas.on('mouse:down', (opt) => {
@@ -346,6 +569,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           canvas.upperCanvasEl.style.cursor = canvas.defaultCursor;
           canvas.selection = activeToolRef.current === 'select';
         }
+        scheduleViewportSaveRef.current();
       });
 
       canvas.on('selection:created', updateToolbar);
@@ -353,8 +577,33 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       canvas.on('selection:cleared', updateToolbar);
       canvas.on('object:moving', updateToolbar);
       canvas.on('object:scaling', updateToolbar);
-      canvas.on('object:added', updateElementCount);
-      canvas.on('object:removed', updateElementCount);
+      canvas.on('object:added', () => {
+        updateElementCount();
+        recordMutationRef.current();
+      });
+      canvas.on('object:modified', () => recordMutationRef.current());
+      canvas.on('text:changed', () => recordMutationRef.current());
+      canvas.on('object:removed', (e) => {
+        updateElementCount();
+        // 清理挂在被移除对象上的 blob URL，避免内存泄漏
+        const obj = e.target as FabricObject & { _sourceUrl?: string };
+        if (obj?._sourceUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(obj._sourceUrl);
+        }
+        recordMutationRef.current();
+      });
+
+      // 每帧渲染前强制设置 imageSmoothingQuality = 'high'。
+      // Fabric 7 的 FabricImage._render 只设置 imageSmoothingEnabled 而不设置 quality，
+      // 且 setDimensions 会重置 context 状态；通过 before:render 确保每帧渲染都使用最高质量
+      // 下采样算法（对 DPR=1 的非 Retina 屏尤其重要，可显著改善图片缩放时的清晰度）。
+      canvas.on('before:render', () => {
+        const ctx = canvas.getContext();
+        if (ctx) {
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+        }
+      });
 
       updateGrid();
       return () => {
@@ -379,6 +628,55 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
     useEffect(() => {
       const canvas = fabricRef.current;
       if (!canvas) return;
+      undoStackRef.current = [];
+      redoStackRef.current = [];
+      setCanUndo(false);
+      setCanRedo(false);
+
+      if (!designId || !authToken) {
+        lastSnapshotRef.current = snapshotState();
+        setSaveState('local');
+        updateLayers();
+        return;
+      }
+
+      let cancelled = false;
+      setSaveState('loading');
+      void fetchCanvas<PersistedCanvasState>(authToken, designId)
+        .then(async (document) => {
+          if (cancelled) return;
+          revisionRef.current = document.revision;
+          const state = document.state;
+          if (state?.fabric && Object.keys(state.fabric).length) {
+            await applySnapshot(JSON.stringify(state));
+          } else {
+            suppressChangesRef.current = true;
+            canvas.clear();
+            canvas.backgroundColor = 'transparent';
+            suppressChangesRef.current = false;
+            updateElementCount();
+            updateLayers();
+          }
+          lastSnapshotRef.current = snapshotState();
+          setSaveState('saved');
+        })
+        .catch(() => {
+          if (!cancelled) setSaveState('error');
+        });
+
+      return () => {
+        cancelled = true;
+        if (saveTimerRef.current != null) {
+          void persistNow();
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+      };
+    }, [applySnapshot, authToken, designId, persistNow, snapshotState, updateElementCount, updateLayers]);
+
+    useEffect(() => {
+      const canvas = fabricRef.current;
+      if (!canvas) return;
       if (activeTool === 'hand') {
         canvas.selection = false;
         canvas.defaultCursor = 'grab';
@@ -388,7 +686,10 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         canvas.selection = true;
         canvas.defaultCursor = 'default';
         canvas.upperCanvasEl.style.cursor = 'default';
-        canvas.forEachObject((o) => o.set({ evented: true, selectable: true }));
+        canvas.forEachObject((o) => {
+          const locked = o.lockMovementX === true && o.lockMovementY === true;
+          o.set({ evented: !locked, selectable: !locked });
+        });
       }
       canvas.requestRenderAll();
     }, [activeTool]);
@@ -409,6 +710,11 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         }
         if (e.key === 'v' && !e.ctrlKey && !e.metaKey) setActiveTool('select');
         if (e.key === 'h' && !e.ctrlKey && !e.metaKey) setActiveTool('hand');
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) redoActionRef.current();
+          else undoActionRef.current();
+        }
         if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey) deleteSelected();
       };
       const up = (e: KeyboardEvent) => {
@@ -583,6 +889,23 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       canvas.requestRenderAll();
     }, [getViewportCenter]);
 
+    const addFileToCanvas = useCallback(async (file: File) => {
+      const name = file.name.replace(/\.[^/.]+$/, '');
+      if (designId && authToken) {
+        try {
+          const asset = await uploadCanvasAsset(authToken, designId, file);
+          await addImageToCanvas(asset.image_url, name);
+          return;
+        } catch (error) {
+          console.error(error);
+          toast('素材上传失败，未添加到画布', 'error');
+          return;
+        }
+      }
+      const objectUrl = URL.createObjectURL(file);
+      await addImageToCanvas(objectUrl, name);
+    }, [addImageToCanvas, authToken, designId, toast]);
+
     const insertImageFromFile = useCallback(() => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -590,13 +913,11 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       input.onchange = (e) => {
         const f = (e.target as HTMLInputElement).files?.[0];
         if (f) {
-          const objectUrl = URL.createObjectURL(f);
-          void addImageToCanvas(objectUrl, f.name.replace(/\.[^/.]+$/, ''))
-            .finally(() => URL.revokeObjectURL(objectUrl));
+          void addFileToCanvas(f);
         }
       };
       input.click();
-    }, [addImageToCanvas]);
+    }, [addFileToCanvas]);
 
     const deleteSelected = useCallback(() => {
       const c = fabricRef.current;
@@ -615,6 +936,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         a.set(axis === 'x' ? 'flipX' : 'flipY', axis === 'x' ? !a.flipX : !a.flipY);
         c.requestRenderAll();
         updateToolbar();
+        recordMutationRef.current();
       },
       [updateToolbar],
     );
@@ -661,6 +983,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       setZoomLevel(z);
       updateGrid();
       updateToolbar();
+      scheduleViewportSaveRef.current();
     }, [updateGrid, updateToolbar]);
 
     const zoomOut = useCallback(() => {
@@ -671,6 +994,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       setZoomLevel(z);
       updateGrid();
       updateToolbar();
+      scheduleViewportSaveRef.current();
     }, [updateGrid, updateToolbar]);
 
     const zoomToFit = useCallback(() => {
@@ -715,6 +1039,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
       setZoomLevel(z);
       updateGrid();
       updateToolbar();
+      scheduleViewportSaveRef.current();
     }, [updateGrid, updateToolbar]);
 
     useImperativeHandle(ref, () => ({ addImage: addImageToCanvas }), [addImageToCanvas]);
@@ -740,19 +1065,151 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
         dragCounterRef.current = 0;
         Array.from(e.dataTransfer.files).forEach((f) => {
           if (f.type.startsWith('image/')) {
-            const objectUrl = URL.createObjectURL(f);
-            void addImageToCanvas(objectUrl, f.name.replace(/\.[^/.]+$/, ''))
-              .finally(() => URL.revokeObjectURL(objectUrl));
+            void addFileToCanvas(f);
           }
         });
       },
-      [addImageToCanvas],
+      [addFileToCanvas],
     );
+
+    const findLayerObject = useCallback((id: string) => {
+      return fabricRef.current?.getObjects().find((object) => (
+        object as FabricObject & { _elementId?: string }
+      )._elementId === id);
+    }, []);
+
+    const selectLayer = useCallback((id: string) => {
+      const canvas = fabricRef.current;
+      const object = findLayerObject(id);
+      if (!canvas || !object || object.visible === false) return;
+      canvas.setActiveObject(object);
+      canvas.requestRenderAll();
+      updateToolbar();
+    }, [findLayerObject, updateToolbar]);
+
+    const toggleLayerVisibility = useCallback((id: string) => {
+      const canvas = fabricRef.current;
+      const object = findLayerObject(id);
+      if (!canvas || !object) return;
+      object.set('visible', object.visible === false);
+      if (object.visible === false && canvas.getActiveObject() === object) canvas.discardActiveObject();
+      canvas.requestRenderAll();
+      updateToolbar();
+      recordMutationRef.current();
+    }, [findLayerObject, updateToolbar]);
+
+    const toggleLayerLock = useCallback((id: string) => {
+      const canvas = fabricRef.current;
+      const object = findLayerObject(id);
+      if (!canvas || !object) return;
+      const locked = !(object.lockMovementX === true && object.lockMovementY === true);
+      object.set({
+        lockMovementX: locked,
+        lockMovementY: locked,
+        lockScalingX: locked,
+        lockScalingY: locked,
+        selectable: !locked,
+        evented: !locked,
+      });
+      if (locked && canvas.getActiveObject() === object) canvas.discardActiveObject();
+      canvas.requestRenderAll();
+      updateToolbar();
+      recordMutationRef.current();
+    }, [findLayerObject, updateToolbar]);
+
+    const moveLayer = useCallback((id: string, direction: 'up' | 'down') => {
+      const canvas = fabricRef.current;
+      const object = findLayerObject(id);
+      if (!canvas || !object) return;
+      const objects = canvas.getObjects();
+      const currentIndex = objects.indexOf(object);
+      const nextIndex = Math.max(0, Math.min(objects.length - 1, currentIndex + (direction === 'up' ? 1 : -1)));
+      if (nextIndex === currentIndex) return;
+      canvas.moveObjectTo(object, nextIndex);
+      canvas.requestRenderAll();
+      updateLayers();
+      recordMutationRef.current();
+    }, [findLayerObject, updateLayers]);
+
+    const refreshRevisions = useCallback(async () => {
+      if (!designId || !authToken) return;
+      setHistoryLoading(true);
+      try {
+        setRevisions(await fetchCanvasRevisions(authToken, designId));
+      } catch {
+        toast('版本历史加载失败', 'error');
+      } finally {
+        setHistoryLoading(false);
+      }
+    }, [authToken, designId, toast]);
+
+    useEffect(() => {
+      if (historyOpen) void refreshRevisions();
+    }, [historyOpen, refreshRevisions]);
+
+    const createNamedRevision = useCallback(async () => {
+      if (!designId || !authToken) return;
+      await persistNow();
+      try {
+        await createCanvasRevision(authToken, designId, `版本 ${new Date().toLocaleString('zh-CN')}`);
+        await refreshRevisions();
+        setHistoryOpen(true);
+        toast('已创建可恢复版本', 'success');
+      } catch {
+        toast('创建版本失败', 'error');
+      }
+    }, [authToken, designId, persistNow, refreshRevisions, toast]);
+
+    const restoreRevision = useCallback(async (revisionId: string) => {
+      if (!designId || !authToken) return;
+      try {
+        const document = await restoreCanvasRevision<PersistedCanvasState>(authToken, designId, revisionId);
+        await applySnapshot(JSON.stringify(document.state));
+        revisionRef.current = document.revision;
+        lastSnapshotRef.current = snapshotState();
+        undoStackRef.current = [];
+        redoStackRef.current = [];
+        setCanUndo(false);
+        setCanRedo(false);
+        setSaveState('saved');
+        toast('已恢复画布版本', 'success');
+      } catch {
+        toast('恢复版本失败', 'error');
+      }
+    }, [applySnapshot, authToken, designId, snapshotState, toast]);
+
+    const reloadFromServer = useCallback(async () => {
+      if (!designId || !authToken) return;
+      setSaveState('loading');
+      try {
+        const document = await fetchCanvas<PersistedCanvasState>(authToken, designId);
+        await applySnapshot(JSON.stringify(document.state));
+        revisionRef.current = document.revision;
+        lastSnapshotRef.current = snapshotState();
+        undoStackRef.current = [];
+        redoStackRef.current = [];
+        setCanUndo(false);
+        setCanRedo(false);
+        setSaveState('saved');
+        toast('已载入服务器上的最新画布', 'success');
+      } catch {
+        setSaveState('error');
+        toast('重新载入失败', 'error');
+      }
+    }, [applySnapshot, authToken, designId, snapshotState, toast]);
 
     const isEmpty = elementCount === 0;
 
     const ctxBtnClass =
       'editorial-canvas-btn whitespace-nowrap';
+    const saveLabel = {
+      local: '仅当前页面',
+      loading: '正在恢复',
+      saved: '已自动保存',
+      saving: '保存中',
+      error: '保存失败',
+      conflict: '存在版本冲突',
+    }[saveState];
 
     return (
       <div className="flex-1 flex flex-col min-w-0 relative" style={{ background: 'var(--color-canvas)' }}>
@@ -777,6 +1234,15 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
               className={`canvas-tb-btn ${activeTool === 'hand' ? 'is-active' : ''}`}
             >
               <Hand className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </CanvasToolbarButton>
+          </div>
+          <span className="canvas-tb-sep" />
+          <div className="flex items-center">
+            <CanvasToolbarButton label="撤销" shortcut="Ctrl Z" onClick={undo} disabled={!canUndo}>
+              <Undo2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </CanvasToolbarButton>
+            <CanvasToolbarButton label="重做" shortcut="Ctrl Shift Z" onClick={redo} disabled={!canRedo}>
+              <Redo2 className="w-3.5 h-3.5" strokeWidth={1.5} />
             </CanvasToolbarButton>
           </div>
           <span className="canvas-tb-sep" />
@@ -812,6 +1278,7 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
                   setZoomLevel(1);
                   updateGrid();
                   updateToolbar();
+                  scheduleViewportSaveRef.current();
                 }
               }}
               className="canvas-tb-zoom"
@@ -826,6 +1293,38 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
               <Maximize className="w-3.5 h-3.5" strokeWidth={1.5} />
             </CanvasToolbarButton>
           </div>
+          <span className="canvas-tb-sep" />
+          <div className="flex items-center">
+            <CanvasToolbarButton
+              label="图层"
+              onClick={() => { setLayersOpen(value => !value); setHistoryOpen(false); }}
+              className={`canvas-tb-btn ${layersOpen ? 'is-active' : ''}`}
+            >
+              <Layers3 className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </CanvasToolbarButton>
+            <CanvasToolbarButton
+              label="版本历史"
+              onClick={() => { setHistoryOpen(value => !value); setLayersOpen(false); }}
+              className={`canvas-tb-btn ${historyOpen ? 'is-active' : ''}`}
+              disabled={!designId || !authToken}
+            >
+              <History className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </CanvasToolbarButton>
+            <CanvasToolbarButton
+              label="立即保存"
+              onClick={() => void persistNow()}
+              disabled={!designId || !authToken || saveState === 'saving'}
+            >
+              <Save className="w-3.5 h-3.5" strokeWidth={1.5} />
+            </CanvasToolbarButton>
+          </div>
+          {saveState === 'conflict' ? (
+            <button type="button" className="canvas-save-indicator is-conflict" onClick={() => void reloadFromServer()}>
+              重新载入
+            </button>
+          ) : (
+            <span className={`canvas-save-indicator is-${saveState}`}>{saveLabel}</span>
+          )}
         </div>
 
         {/* ── Context toolbar + Info bar (when object selected) ── */}
@@ -920,6 +1419,71 @@ const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(
           <div className="canvas-crop-mark canvas-crop-mark-bl" aria-hidden />
           <div className="canvas-crop-mark canvas-crop-mark-br" aria-hidden />
           <canvas ref={canvasElRef} className="absolute inset-0 z-[2]" />
+
+          {(layersOpen || historyOpen) && (
+            <aside className="canvas-side-panel" aria-label={layersOpen ? '画布图层' : '画布版本历史'}>
+              <header className="canvas-side-panel__header">
+                <div>
+                  <span className="kicker">{layersOpen ? 'Layers' : 'History'}</span>
+                  <strong>{layersOpen ? `${layers.length} 个图层` : '可恢复版本'}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="canvas-side-panel__close"
+                  onClick={() => { setLayersOpen(false); setHistoryOpen(false); }}
+                  aria-label="关闭面板"
+                >
+                  <X size={15} strokeWidth={1.5} />
+                </button>
+              </header>
+
+              {layersOpen ? (
+                <div className="canvas-layer-list">
+                  {layers.length === 0 ? (
+                    <p className="canvas-panel-empty">添加元素后可在这里控制层级、可见性与锁定状态。</p>
+                  ) : layers.map(layer => (
+                    <div className="canvas-layer-row" key={layer.id}>
+                      <button type="button" className="canvas-layer-row__main" onClick={() => selectLayer(layer.id)}>
+                        <span className="canvas-layer-row__type">{layer.type === 'image' ? 'IMG' : layer.type.toUpperCase().slice(0, 4)}</span>
+                        <span>{layer.name}</span>
+                      </button>
+                      <button type="button" onClick={() => toggleLayerVisibility(layer.id)} aria-label={layer.visible ? '隐藏图层' : '显示图层'}>
+                        {layer.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                      </button>
+                      <button type="button" onClick={() => toggleLayerLock(layer.id)} aria-label={layer.locked ? '解锁图层' : '锁定图层'}>
+                        {layer.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                      </button>
+                      <button type="button" onClick={() => moveLayer(layer.id, 'up')} aria-label="上移图层">
+                        <ChevronUp size={13} />
+                      </button>
+                      <button type="button" onClick={() => moveLayer(layer.id, 'down')} aria-label="下移图层">
+                        <ChevronDown size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="canvas-history-list">
+                  <button type="button" className="canvas-history-create" onClick={() => void createNamedRevision()}>
+                    <Save size={13} /> 保存当前版本
+                  </button>
+                  {historyLoading ? (
+                    <p className="canvas-panel-empty">正在加载版本…</p>
+                  ) : revisions.length === 0 ? (
+                    <p className="canvas-panel-empty">尚无手动版本。自动保存会持续保护当前画布。</p>
+                  ) : revisions.map(revision => (
+                    <div className="canvas-history-row" key={revision.id}>
+                      <div>
+                        <strong>{revision.label || `版本 ${revision.revision}`}</strong>
+                        <span>{new Date(revision.created_at).toLocaleString('zh-CN')}</span>
+                      </div>
+                      <button type="button" onClick={() => void restoreRevision(revision.id)}>恢复</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
+          )}
 
           {isEmpty && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[3]">

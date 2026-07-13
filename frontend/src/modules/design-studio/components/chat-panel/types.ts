@@ -28,6 +28,8 @@ export interface LocalAttachment {
   role?: AttachmentRole;
   /** 附件来源，用于决定上传策略 */
   source: AttachmentSource;
+  /** 已持久化生成资产 ID；创建变体时用于保留父子血缘。 */
+  sourceAssetId?: string;
 }
 
 /** 能力的当前可用状态 */
@@ -52,6 +54,11 @@ export interface ChatImage {
   sourceUrl?: string;
   originalWidth?: number;
   originalHeight?: number;
+  assetId?: string;
+  parentAssetId?: string;
+  traceId?: string;
+  modelName?: string;
+  toolName?: string;
 }
 
 export type ChatTaskPhase = 'request' | 'analysis' | 'generation' | 'finalizing';

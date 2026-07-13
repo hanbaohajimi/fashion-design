@@ -429,6 +429,8 @@ export default function DesignStudioWorkspace({ user, initialTrend, projectId, d
             <Suspense fallback={<SectionLoader label="设计画布" detail="正在加载编辑器..." />}>
               <DesignCanvas
                 ref={canvasRef}
+                designId={designId}
+                authToken={user.auth_token}
                 currentModeLabel={currentModeLabel}
                 onDescribeDesign={handleDescribeDesign}
                 onEditInEditor={handleEditImage}

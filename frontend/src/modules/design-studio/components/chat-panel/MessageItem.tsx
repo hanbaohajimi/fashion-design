@@ -7,7 +7,6 @@ import {
   Download,
   Eye,
   ImageIcon,
-  LayoutGrid,
   Loader2,
   PencilRuler,
   RefreshCw,
@@ -15,6 +14,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   User,
+  GitBranch,
 } from 'lucide-react';
 import {
   MODEL_DISPLAY,
@@ -27,7 +27,7 @@ import {
   getOriginalImageUrl,
   getPreviewImageUrl,
 } from './utils';
-import type { ChatMessage } from './types';
+import type { ChatImage, ChatMessage } from './types';
 import { addToWardrobeFromDesign } from '../../../../api/profileApi';
 
 const TASK_PHASES = [
@@ -47,6 +47,7 @@ interface MessageItemProps {
   onPreviewImage: (url: string) => void;
   onEditImage: (url: string) => void;
   onAddToCanvas?: (url: string) => void;
+  onCreateVariant?: (image: ChatImage) => void;
   onRetry: (failedMessage: string) => void;
   onDownload: (url: string) => void;
   onToast: (msg: string, kind?: 'info' | 'success' | 'error') => void;
@@ -63,6 +64,7 @@ export function MessageItem({
   onPreviewImage,
   onEditImage,
   onAddToCanvas,
+  onCreateVariant,
   onRetry,
   onDownload,
   onToast,
@@ -391,42 +393,6 @@ export function MessageItem({
                         }}
                         onClick={() => onPreviewImage(originalUrl)}
                       />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: '50%',
-                          right: 8,
-                          transform: 'translateY(-50%)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                        }}
-                      >
-                        {onAddToCanvas && (
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onAddToCanvas(originalUrl);
-                            }}
-                            className="img-float-btn"
-                            title="置入画布"
-                          >
-                            <LayoutGrid className="w-4 h-4" strokeWidth={1.5} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            onEditImage(originalUrl);
-                          }}
-                          className="img-float-btn"
-                          title="像素编辑（全屏编辑器）"
-                        >
-                          <PencilRuler className="w-4 h-4" strokeWidth={1.5} />
-                        </button>
-                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <button
@@ -445,6 +411,17 @@ export function MessageItem({
                           className="msg-action-btn"
                         >
                           置入画布
+                        </button>
+                      )}
+                      {onCreateVariant && (
+                        <button
+                          type="button"
+                          onClick={() => onCreateVariant(img)}
+                          className="msg-action-btn"
+                          title="以此版本为父版本继续 AI 编辑"
+                        >
+                          <GitBranch className="w-3 h-3" strokeWidth={1.5} />
+                          创建变体
                         </button>
                       )}
                       {authToken && img.type !== 'generate_model' && img.type !== 'try_on' && (
@@ -477,6 +454,14 @@ export function MessageItem({
                         <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
                       </button>
                     </div>
+                    {(img.assetId || img.modelName || img.traceId) && (
+                      <div className="asset-lineage-meta">
+                        <span>{img.parentAssetId ? '派生版本' : '初始版本'}</span>
+                        {img.modelName && <span>{img.modelName}</span>}
+                        {img.assetId && <span title={img.assetId}>ID {img.assetId.slice(0, 8)}</span>}
+                        {img.traceId && <span title={img.traceId}>Trace {img.traceId.slice(0, 8)}</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

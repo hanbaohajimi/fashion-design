@@ -243,6 +243,7 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
             instructions TEXT,
             design_language TEXT NOT NULL DEFAULT '{}',
             dynamic     TEXT NOT NULL DEFAULT '{}',
+            pending_review TEXT NOT NULL DEFAULT '{}',
             starred     INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -282,6 +283,7 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
         add_col("projects", "status", "status TEXT NOT NULL DEFAULT 'active'")
         add_col("projects", "design_language", "design_language TEXT NOT NULL DEFAULT '{}'")
         add_col("projects", "dynamic", "dynamic TEXT NOT NULL DEFAULT '{}'")
+        add_col("projects", "pending_review", "pending_review TEXT NOT NULL DEFAULT '{}'")
 
     if "messages" in existing_tables:
         add_col("messages", "images", "images TEXT NOT NULL DEFAULT '[]'")
@@ -289,9 +291,101 @@ def _migrate_incremental(conn: sqlite3.Connection) -> None:
     if "designs" in existing_tables:
         add_col("designs", "starred", "starred INTEGER NOT NULL DEFAULT 0")
 
+    # Durable design documents, project knowledge, asset lineage, and AI jobs.
+    # These tables intentionally use JSON TEXT so the local-first SQLite file
+    # stays portable and does not require optional SQLite extensions.
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS canvas_documents (
+        design_id       TEXT PRIMARY KEY REFERENCES designs(id) ON DELETE CASCADE,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        state_json      TEXT NOT NULL DEFAULT '{}',
+        revision        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_canvas_documents_user
+        ON canvas_documents(user_email, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS canvas_revisions (
+        id              TEXT PRIMARY KEY,
+        design_id       TEXT NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        revision        INTEGER NOT NULL,
+        label           TEXT,
+        state_json      TEXT NOT NULL,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(design_id, revision)
+    );
+    CREATE INDEX IF NOT EXISTS idx_canvas_revisions_design
+        ON canvas_revisions(design_id, revision DESC);
+
+    CREATE TABLE IF NOT EXISTS project_assets (
+        id              TEXT PRIMARY KEY,
+        project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        kind            TEXT NOT NULL DEFAULT 'reference',
+        mime_type       TEXT,
+        file_path       TEXT,
+        image_url       TEXT,
+        extracted_text  TEXT NOT NULL DEFAULT '',
+        enabled         INTEGER NOT NULL DEFAULT 1,
+        metadata        TEXT NOT NULL DEFAULT '{}',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_project_assets_project
+        ON project_assets(project_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS generation_assets (
+        id              TEXT PRIMARY KEY,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        design_id       TEXT REFERENCES designs(id) ON DELETE SET NULL,
+        project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        session_id      TEXT REFERENCES chat_sessions(id) ON DELETE SET NULL,
+        parent_asset_id TEXT REFERENCES generation_assets(id) ON DELETE SET NULL,
+        image_url       TEXT NOT NULL,
+        file_path       TEXT,
+        kind            TEXT NOT NULL DEFAULT 'image',
+        prompt          TEXT,
+        model_name      TEXT,
+        tool_name       TEXT,
+        trace_id        TEXT,
+        metadata        TEXT NOT NULL DEFAULT '{}',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_generation_assets_design
+        ON generation_assets(design_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_generation_assets_parent
+        ON generation_assets(parent_asset_id, created_at ASC);
+
+    CREATE TABLE IF NOT EXISTS generation_jobs (
+        id              TEXT PRIMARY KEY,
+        user_email      TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+        design_id       TEXT REFERENCES designs(id) ON DELETE SET NULL,
+        project_id      TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        session_id      TEXT REFERENCES chat_sessions(id) ON DELETE SET NULL,
+        kind            TEXT NOT NULL,
+        status          TEXT NOT NULL DEFAULT 'queued',
+        progress        INTEGER NOT NULL DEFAULT 0,
+        request_json    TEXT NOT NULL DEFAULT '{}',
+        result_json     TEXT NOT NULL DEFAULT '{}',
+        error           TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        started_at      TEXT,
+        completed_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_generation_jobs_user
+        ON generation_jobs(user_email, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_generation_jobs_session
+        ON generation_jobs(session_id, created_at DESC);
+    """)
+
     _migrate_legacy_designer_workspace(conn)
     _record_schema_migration(conn, "2026-07-unified-projects-design-sessions")
     _record_schema_migration(conn, "2026-07-remove-session-modes")
+    _record_schema_migration(conn, "2026-07-durable-design-workflow")
 
     conn.commit()
 
@@ -383,18 +477,25 @@ def _project_row_to_workspace_project(row: sqlite3.Row) -> dict:
     dynamic.setdefault("design_signatures", [])
     dynamic.setdefault("recurring_elements", [])
     dynamic.setdefault("sessions_analyzed", 0)
+    pending_review = _json_load(row["pending_review"], {}) if "pending_review" in row.keys() else {}
+    legacy_instructions = _json_load(row["instructions"], {})
+    if not pending_review and isinstance(legacy_instructions, dict):
+        pending_review = legacy_instructions.get("pending_review") or {}
+    instructions = row["instructions"] or ""
+    if isinstance(legacy_instructions, dict):
+        instructions = ""
     return {
         "id": row["id"],
+        "user_email": row["user_email"],
         "name": row["name"],
         "status": row["status"] or "active",
         "created_at": row["created_at"],
+        "description": row["description"] or "",
+        "instructions": instructions,
         "brief": brief,
         "design_language": design_language,
         "dynamic": dynamic,
-        **({"pending_review": _json_load(row["instructions"], {}).get("pending_review")}
-           if isinstance(_json_load(row["instructions"], {}), dict)
-           and _json_load(row["instructions"], {}).get("pending_review")
-           else {}),
+        **({"pending_review": pending_review} if pending_review else {}),
     }
 
 
@@ -566,15 +667,14 @@ def save_designer_workspace(email: str, workspace: dict) -> None:
             brief = project.get("brief") or {}
             design_language = project.get("design_language") or {}
             dynamic = project.get("dynamic") or _empty_project_dynamic()
-            extra = {}
-            if project.get("pending_review"):
-                extra["pending_review"] = project.get("pending_review")
+            pending_review = project.get("pending_review") or {}
+            instructions = project.get("instructions") or ""
             description = project.get("description") or brief.get("summary") or ""
             created_at = project.get("created_at") or __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
             conn.execute(
                 """INSERT INTO projects
-                   (id, user_email, name, status, description, brief, instructions, design_language, dynamic, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                   (id, user_email, name, status, description, brief, instructions, design_language, dynamic, pending_review, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
                    ON CONFLICT(id) DO UPDATE SET
                    name=excluded.name,
                    status=excluded.status,
@@ -583,6 +683,7 @@ def save_designer_workspace(email: str, workspace: dict) -> None:
                    instructions=excluded.instructions,
                    design_language=excluded.design_language,
                    dynamic=excluded.dynamic,
+                   pending_review=excluded.pending_review,
                    updated_at=datetime('now')""",
                 (
                     project_id,
@@ -591,9 +692,10 @@ def save_designer_workspace(email: str, workspace: dict) -> None:
                     status,
                     description,
                     _json_dump(brief, {}),
-                    _json_dump(extra, {}),
+                    instructions,
                     _json_dump(design_language, {}),
                     _json_dump(dynamic, _empty_project_dynamic()),
+                    _json_dump(pending_review, {}),
                     created_at,
                 ),
             )
@@ -1623,4 +1725,350 @@ def list_messages(design_id: str) -> list[sqlite3.Row]:
         return _get_conn().execute(
             "SELECT * FROM messages WHERE design_id=? ORDER BY created_at ASC",
             (design_id,),
+        ).fetchall()
+
+
+# ─── Durable canvas documents ───
+
+def get_canvas_document(design_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM canvas_documents WHERE design_id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+
+
+def save_canvas_document(
+    design_id: str,
+    user_email: str,
+    state: dict,
+    *,
+    expected_revision: Optional[int] = None,
+) -> tuple[sqlite3.Row, bool]:
+    """Save canvas state and return (row, conflict).
+
+    A mismatched expected revision never overwrites newer work. The caller can
+    reload and explicitly retry, which keeps multiple browser tabs predictable.
+    """
+    payload = _json_dump(state, {})
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    with _lock:
+        conn = _get_conn()
+        owner = conn.execute(
+            "SELECT 1 FROM designs WHERE id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+        if not owner:
+            raise ValueError("design_not_found")
+        current = conn.execute(
+            "SELECT * FROM canvas_documents WHERE design_id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+        if current and expected_revision is not None and int(current["revision"]) != expected_revision:
+            return current, True
+        next_revision = int(current["revision"]) + 1 if current else 1
+        conn.execute(
+            """INSERT INTO canvas_documents
+               (design_id, user_email, state_json, revision, created_at, updated_at)
+               VALUES (?,?,?,?,?,?)
+               ON CONFLICT(design_id) DO UPDATE SET
+               state_json=excluded.state_json,
+               revision=excluded.revision,
+               updated_at=excluded.updated_at""",
+            (design_id, user_email, payload, next_revision, now, now),
+        )
+        conn.execute("UPDATE designs SET updated_at=? WHERE id=?", (now, design_id))
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM canvas_documents WHERE design_id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+        return row, False
+
+
+def create_canvas_revision(
+    design_id: str,
+    user_email: str,
+    label: str = "",
+) -> Optional[sqlite3.Row]:
+    with _lock:
+        conn = _get_conn()
+        current = conn.execute(
+            "SELECT * FROM canvas_documents WHERE design_id=? AND user_email=?",
+            (design_id, user_email),
+        ).fetchone()
+        if not current:
+            return None
+        revision_id = uuid.uuid4().hex
+        conn.execute(
+            """INSERT OR REPLACE INTO canvas_revisions
+               (id, design_id, user_email, revision, label, state_json)
+               VALUES (?,?,?,?,?,?)""",
+            (
+                revision_id,
+                design_id,
+                user_email,
+                int(current["revision"]),
+                label.strip() or None,
+                current["state_json"],
+            ),
+        )
+        conn.commit()
+        return conn.execute("SELECT * FROM canvas_revisions WHERE id=?", (revision_id,)).fetchone()
+
+
+def list_canvas_revisions(design_id: str, user_email: str, limit: int = 30) -> list[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            """SELECT id, design_id, revision, label, created_at
+               FROM canvas_revisions
+               WHERE design_id=? AND user_email=?
+               ORDER BY revision DESC LIMIT ?""",
+            (design_id, user_email, limit),
+        ).fetchall()
+
+
+def get_canvas_revision(revision_id: str, design_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM canvas_revisions WHERE id=? AND design_id=? AND user_email=?",
+            (revision_id, design_id, user_email),
+        ).fetchone()
+
+
+# ─── Project knowledge assets ───
+
+def create_project_asset(
+    asset_id: str,
+    project_id: str,
+    user_email: str,
+    name: str,
+    *,
+    kind: str = "reference",
+    mime_type: str = "",
+    file_path: Optional[str] = None,
+    image_url: Optional[str] = None,
+    extracted_text: str = "",
+    metadata: Optional[dict] = None,
+) -> sqlite3.Row:
+    with _lock:
+        conn = _get_conn()
+        owner = conn.execute(
+            "SELECT 1 FROM projects WHERE id=? AND user_email=?",
+            (project_id, user_email),
+        ).fetchone()
+        if not owner:
+            raise ValueError("project_not_found")
+        conn.execute(
+            """INSERT INTO project_assets
+               (id, project_id, user_email, name, kind, mime_type, file_path, image_url, extracted_text, metadata)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                asset_id, project_id, user_email, name, kind, mime_type,
+                file_path, image_url, extracted_text, _json_dump(metadata or {}, {}),
+            ),
+        )
+        conn.execute("UPDATE projects SET updated_at=datetime('now') WHERE id=?", (project_id,))
+        conn.commit()
+        return conn.execute("SELECT * FROM project_assets WHERE id=?", (asset_id,)).fetchone()
+
+
+def list_project_assets(project_id: str, user_email: str, *, enabled_only: bool = False) -> list[sqlite3.Row]:
+    with _lock:
+        sql = "SELECT * FROM project_assets WHERE project_id=? AND user_email=?"
+        params: list[Any] = [project_id, user_email]
+        if enabled_only:
+            sql += " AND enabled=1"
+        sql += " ORDER BY created_at DESC"
+        return _get_conn().execute(sql, params).fetchall()
+
+
+def patch_project_asset(asset_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    allowed = {"name", "kind", "enabled", "extracted_text", "metadata"}
+    updates = {key: value for key, value in kwargs.items() if key in allowed}
+    if "metadata" in updates and not isinstance(updates["metadata"], str):
+        updates["metadata"] = _json_dump(updates["metadata"], {})
+    if "enabled" in updates:
+        updates["enabled"] = int(bool(updates["enabled"]))
+    with _lock:
+        conn = _get_conn()
+        if updates:
+            fields = [f"{key}=?" for key in updates]
+            conn.execute(
+                f"UPDATE project_assets SET {', '.join(fields)}, updated_at=datetime('now') WHERE id=? AND user_email=?",
+                list(updates.values()) + [asset_id, user_email],
+            )
+            conn.commit()
+        return conn.execute(
+            "SELECT * FROM project_assets WHERE id=? AND user_email=?",
+            (asset_id, user_email),
+        ).fetchone()
+
+
+def delete_project_asset(asset_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT * FROM project_assets WHERE id=? AND user_email=?",
+            (asset_id, user_email),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute("DELETE FROM project_assets WHERE id=? AND user_email=?", (asset_id, user_email))
+        conn.commit()
+        return row
+
+
+# ─── Generated asset lineage ───
+
+def create_generation_asset(
+    asset_id: str,
+    user_email: str,
+    image_url: str,
+    *,
+    design_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    parent_asset_id: Optional[str] = None,
+    file_path: Optional[str] = None,
+    kind: str = "image",
+    prompt: str = "",
+    model_name: str = "",
+    tool_name: str = "",
+    trace_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> sqlite3.Row:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT OR REPLACE INTO generation_assets
+               (id, user_email, design_id, project_id, session_id, parent_asset_id,
+                image_url, file_path, kind, prompt, model_name, tool_name, trace_id, metadata)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                asset_id, user_email, design_id, project_id, session_id, parent_asset_id,
+                image_url, file_path, kind, prompt, model_name, tool_name, trace_id,
+                _json_dump(metadata or {}, {}),
+            ),
+        )
+        conn.commit()
+        return conn.execute("SELECT * FROM generation_assets WHERE id=?", (asset_id,)).fetchone()
+
+
+def list_generation_assets(
+    user_email: str,
+    *,
+    design_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    limit: int = 100,
+) -> list[sqlite3.Row]:
+    with _lock:
+        clauses = ["user_email=?"]
+        params: list[Any] = [user_email]
+        if design_id:
+            clauses.append("design_id=?")
+            params.append(design_id)
+        if session_id:
+            clauses.append("session_id=?")
+            params.append(session_id)
+        params.append(limit)
+        return _get_conn().execute(
+            f"SELECT * FROM generation_assets WHERE {' AND '.join(clauses)} ORDER BY created_at ASC LIMIT ?",
+            params,
+        ).fetchall()
+
+
+def get_generation_asset(asset_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM generation_assets WHERE id=? AND user_email=?",
+            (asset_id, user_email),
+        ).fetchone()
+
+
+def patch_generation_asset(asset_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    allowed = {"parent_asset_id", "model_name", "tool_name", "trace_id", "metadata"}
+    updates = {key: value for key, value in kwargs.items() if key in allowed}
+    if "metadata" in updates and not isinstance(updates["metadata"], str):
+        updates["metadata"] = _json_dump(updates["metadata"], {})
+    with _lock:
+        conn = _get_conn()
+        if updates:
+            fields = [f"{key}=?" for key in updates]
+            conn.execute(
+                f"UPDATE generation_assets SET {', '.join(fields)} WHERE id=? AND user_email=?",
+                list(updates.values()) + [asset_id, user_email],
+            )
+            conn.commit()
+        return conn.execute(
+            "SELECT * FROM generation_assets WHERE id=? AND user_email=?",
+            (asset_id, user_email),
+        ).fetchone()
+
+
+# ─── Durable generation jobs ───
+
+def create_generation_job(
+    job_id: str,
+    user_email: str,
+    kind: str,
+    *,
+    design_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    request_payload: Optional[dict] = None,
+) -> sqlite3.Row:
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            """INSERT INTO generation_jobs
+               (id, user_email, design_id, project_id, session_id, kind, request_json)
+               VALUES (?,?,?,?,?,?,?)""",
+            (job_id, user_email, design_id, project_id, session_id, kind, _json_dump(request_payload or {}, {})),
+        )
+        conn.commit()
+        return conn.execute("SELECT * FROM generation_jobs WHERE id=?", (job_id,)).fetchone()
+
+
+def update_generation_job(job_id: str, user_email: str, **kwargs) -> Optional[sqlite3.Row]:
+    allowed = {"status", "progress", "result_json", "error", "started_at", "completed_at"}
+    updates = {key: value for key, value in kwargs.items() if key in allowed}
+    if "result_json" in updates and not isinstance(updates["result_json"], str):
+        updates["result_json"] = _json_dump(updates["result_json"], {})
+    if "progress" in updates:
+        updates["progress"] = max(0, min(100, int(updates["progress"])))
+    with _lock:
+        conn = _get_conn()
+        if updates:
+            fields = [f"{key}=?" for key in updates]
+            conn.execute(
+                f"UPDATE generation_jobs SET {', '.join(fields)}, updated_at=datetime('now') WHERE id=? AND user_email=?",
+                list(updates.values()) + [job_id, user_email],
+            )
+            conn.commit()
+        return conn.execute(
+            "SELECT * FROM generation_jobs WHERE id=? AND user_email=?",
+            (job_id, user_email),
+        ).fetchone()
+
+
+def get_generation_job(job_id: str, user_email: str) -> Optional[sqlite3.Row]:
+    with _lock:
+        return _get_conn().execute(
+            "SELECT * FROM generation_jobs WHERE id=? AND user_email=?",
+            (job_id, user_email),
+        ).fetchone()
+
+
+def list_generation_jobs(user_email: str, *, session_id: Optional[str] = None, limit: int = 50) -> list[sqlite3.Row]:
+    with _lock:
+        if session_id:
+            return _get_conn().execute(
+                """SELECT * FROM generation_jobs
+                   WHERE user_email=? AND session_id=? ORDER BY created_at DESC LIMIT ?""",
+                (user_email, session_id, limit),
+            ).fetchall()
+        return _get_conn().execute(
+            "SELECT * FROM generation_jobs WHERE user_email=? ORDER BY created_at DESC LIMIT ?",
+            (user_email, limit),
         ).fetchall()

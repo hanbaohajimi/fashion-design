@@ -286,3 +286,102 @@
   border-color: transparent;
 }
 .project-panel-btn-save:hover { opacity: 0.88; }
+
+.project-knowledge-help {
+  margin: 0 0 10px;
+  color: var(--color-ink-3, #8a8278);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.project-knowledge-empty {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px dashed var(--color-border, #e8e4dc);
+  color: var(--color-ink-3, #8a8278);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.project-knowledge-empty:hover {
+  border-color: var(--color-ink-2, #4a4640);
+  color: var(--color-ink, #1a1814);
+}
+
+.project-knowledge-list {
+  display: grid;
+  gap: 6px;
+}
+
+.project-knowledge-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 24px 24px;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 5px;
+  border: 1px solid var(--color-border, #e8e4dc);
+  transition: opacity 120ms ease, border-color 120ms ease;
+}
+
+.project-knowledge-item.is-disabled {
+  opacity: 0.5;
+}
+
+.project-knowledge-item > img,
+.project-knowledge-file {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  background: var(--color-hover, rgba(26,24,20,0.06));
+}
+
+.project-knowledge-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink-3, #8a8278);
+}
+
+.project-knowledge-meta {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.project-knowledge-meta strong {
+  overflow: hidden;
+  color: var(--color-ink-2, #4a4640);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-knowledge-meta span {
+  color: var(--color-ink-3, #8a8278);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 9px;
+}
+
+.project-knowledge-item > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--color-ink-3, #8a8278);
+}
+
+.project-knowledge-item > button:hover {
+  background: var(--color-hover, rgba(26,24,20,0.06));
+  color: var(--color-ink, #1a1814);
+}
