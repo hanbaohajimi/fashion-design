@@ -197,6 +197,26 @@ describe("ContextCompilerService", () => {
       status: HttpStatus.FORBIDDEN,
     });
   });
+
+  it("框选生成时只查询选中的 shape id", async () => {
+    await service.compile("user-1", "project-1", "dress", [
+      "shape-1",
+      "shape-2",
+    ]);
+
+    expect(database.project.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          boardElements: expect.objectContaining({
+            where: {
+              deletedAt: null,
+              shapeId: { in: ["shape-1", "shape-2"] },
+            },
+          }),
+        }),
+      }),
+    );
+  });
 });
 
 describe("compilePaletteColor", () => {
@@ -205,4 +225,3 @@ describe("compilePaletteColor", () => {
     expect(compilePaletteColor("not-a-color", null)).toBeNull();
   });
 });
-

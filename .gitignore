@@ -3,6 +3,9 @@ node_modules/
 .next/
 dist/
 coverage/
+output/playwright/
+playwright-report/
+test-results/
 generated/
 
 .env

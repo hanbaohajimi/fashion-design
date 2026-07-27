@@ -1,0 +1,455 @@
+.generationBar {
+  --generation-x: 50vw;
+  --generation-y: 50vh;
+  position: fixed;
+  z-index: 900;
+  top: 0;
+  left: 0;
+  width: min(520px, calc(100vw - 28px));
+  border: 1px solid #24251f;
+  background: rgb(248 245 236 / 97%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 70%),
+    7px 7px 0 rgb(24 25 21 / 12%);
+  color: #24251f;
+  pointer-events: all;
+  transform: translate3d(var(--generation-x), var(--generation-y), 0)
+    translateX(-50%);
+  animation: bar-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.generationBarTopline {
+  display: flex;
+  min-height: 35px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(36 37 31 / 20%);
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+.generationBarTopline > span {
+  color: #747168;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.constraintChips {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.constraintChips span {
+  min-height: 21px;
+  border: 1px solid rgb(36 37 31 / 34%);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #ebe7dc;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.constraintChips span[data-role="palette"] {
+  background: #f2d978;
+}
+
+.constraintChips span[data-role="avoid"] {
+  border-color: #a63d28;
+  background: #a63d28;
+  color: #fffdf7;
+}
+
+.promptRow {
+  display: grid;
+  min-height: 54px;
+  grid-template-columns: minmax(0, 1fr) 76px;
+}
+
+.promptRow label {
+  display: grid;
+  min-width: 0;
+  padding: 7px 10px 8px;
+  gap: 2px;
+}
+
+.promptRow label > span,
+.localEdit label > span {
+  color: #747168;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+
+.promptRow input,
+.localEdit input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #24251f;
+  font-size: 12px;
+}
+
+.promptRow > button {
+  border: 0;
+  border-left: 1px solid #24251f;
+  background: #e9522c;
+  color: #fffdf7;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.promptRow > button:active,
+.candidateActions button:active,
+.localEdit > button:active {
+  transform: scale(0.97);
+}
+
+.advancedOptions {
+  border-top: 1px solid rgb(36 37 31 / 16%);
+}
+
+.advancedOptions summary {
+  min-height: 27px;
+  padding: 7px 10px;
+  color: #6e6b62;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  list-style-position: inside;
+}
+
+.advancedOptions > div {
+  display: grid;
+  border-top: 1px solid rgb(36 37 31 / 14%);
+  padding: 8px 10px 10px;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  gap: 8px;
+}
+
+.advancedOptions label {
+  display: grid;
+  color: #747168;
+  font-size: 8px;
+  font-weight: 800;
+  gap: 4px;
+}
+
+.advancedOptions input,
+.advancedOptions select {
+  width: 100%;
+  height: 29px;
+  border: 1px solid rgb(36 37 31 / 36%);
+  border-radius: 0;
+  padding: 0 7px;
+  background: #f8f5ec;
+  color: #24251f;
+  font: inherit;
+}
+
+.generationBar > p {
+  min-height: 28px;
+  border-top: 1px solid #a63d28;
+  margin: 0;
+  padding: 7px 10px;
+  background: #f4ddd4;
+  color: #8c2d1d;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.candidateDock {
+  position: fixed;
+  z-index: 880;
+  bottom: 18px;
+  left: 18px;
+  width: min(820px, calc(100vw - 378px));
+  min-width: 360px;
+  border: 1px solid #24251f;
+  background: rgb(248 245 236 / 97%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 70%),
+    8px 8px 0 rgb(24 25 21 / 12%);
+  color: #24251f;
+  pointer-events: all;
+}
+
+.candidateDock > header {
+  display: flex;
+  height: 43px;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 1px solid #24251f;
+}
+
+.candidateDock > header > div {
+  display: flex;
+  align-items: baseline;
+  padding: 0 12px;
+  gap: 10px;
+}
+
+.candidateDock header span {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.candidateDock header strong {
+  font-size: 13px;
+}
+
+.candidateDock header b {
+  display: grid;
+  width: 48px;
+  border-left: 1px solid #24251f;
+  font-size: 16px;
+  font-weight: 500;
+  place-items: center;
+}
+
+.candidateGrid {
+  display: grid;
+  max-height: 330px;
+  overflow-x: auto;
+  padding: 10px;
+  grid-auto-columns: minmax(210px, 260px);
+  grid-auto-flow: column;
+  gap: 9px;
+}
+
+.candidateCard {
+  position: relative;
+  display: grid;
+  min-height: 256px;
+  overflow: hidden;
+  border: 1px solid rgb(36 37 31 / 35%);
+  background: #d7d2c6;
+  opacity: 0;
+  grid-template-rows: minmax(190px, 1fr) auto;
+  transform: translate3d(0, 12px, 0);
+  animation: candidate-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.candidateCard > img {
+  width: 100%;
+  height: 100%;
+  min-height: 190px;
+  object-fit: cover;
+}
+
+.candidateActions {
+  display: grid;
+  border-top: 1px solid #24251f;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.candidateActions button {
+  min-height: 35px;
+  border: 0;
+  border-right: 1px solid rgb(36 37 31 / 23%);
+  background: #f8f5ec;
+  color: #24251f;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.candidateActions button:first-child {
+  background: #24251f;
+  color: #fffdf7;
+}
+
+.candidateActions button:hover {
+  background: #e9522c;
+  color: #fffdf7;
+}
+
+.localEdit {
+  position: absolute;
+  inset: auto 0 35px;
+  display: grid;
+  border-top: 1px solid #24251f;
+  background: rgb(248 245 236 / 98%);
+  grid-template-columns: 1fr 76px;
+}
+
+.localEdit label {
+  display: grid;
+  padding: 7px 9px;
+  gap: 2px;
+}
+
+.localEdit > button {
+  border: 0;
+  border-left: 1px solid #24251f;
+  background: #e9522c;
+  color: #fffdf7;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.taskTray {
+  position: fixed;
+  z-index: 890;
+  right: 18px;
+  bottom: 18px;
+  width: 324px;
+  border: 1px solid #24251f;
+  background: rgb(248 245 236 / 97%);
+  box-shadow: 7px 7px 0 rgb(24 25 21 / 12%);
+  color: #24251f;
+  pointer-events: all;
+}
+
+.taskTray > header {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #24251f;
+  padding: 0 10px;
+}
+
+.taskTray header span,
+.taskTray header b {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.taskTray ol {
+  max-height: 258px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskTray li {
+  display: grid;
+  min-height: 48px;
+  align-items: center;
+  border-bottom: 1px solid rgb(36 37 31 / 16%);
+  padding: 7px 9px;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.taskTray li > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #77736a;
+}
+
+.taskTray li[data-status="queued"] > i,
+.taskTray li[data-status="running"] > i {
+  background: #e9522c;
+  animation: task-breathe 1.2s ease-in-out infinite;
+}
+
+.taskTray li[data-status="succeeded"] > i {
+  background: #43755e;
+}
+
+.taskTray li[data-status="failed"] > i {
+  background: #a63d28;
+}
+
+.taskTray li > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.taskTray li strong,
+.taskTray li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTray li strong {
+  font-size: 9px;
+}
+
+.taskTray li span,
+.taskTray time {
+  color: #747168;
+  font-size: 8px;
+}
+
+@keyframes bar-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--generation-x), var(--generation-y), 0)
+      translate(-50%, -6px);
+  }
+}
+
+@keyframes candidate-enter {
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes task-breathe {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}
+
+@media (max-width: 820px) {
+  .generationBar {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    transform: none;
+  }
+
+  .candidateDock {
+    right: 12px;
+    bottom: 76px;
+    left: 12px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .taskTray {
+    top: 72px;
+    right: 12px;
+    bottom: auto;
+    width: min(310px, calc(100vw - 24px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generationBar,
+  .candidateCard,
+  .taskTray li > i {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+

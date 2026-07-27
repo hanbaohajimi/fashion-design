@@ -59,6 +59,7 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
 export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
   static override type = IMAGE_SHAPE_TYPE;
   static override props: RecordProps<ImageShape> = {
+    assetId: T.string.optional(),
     fileId: T.string.optional(),
     h: T.number,
     role: T.string,

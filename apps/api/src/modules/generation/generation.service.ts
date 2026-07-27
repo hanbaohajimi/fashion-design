@@ -65,9 +65,11 @@ export class GenerationService {
       userId,
       request.projectId,
       request.prompt,
+      request.shapeIds,
     );
     const providerRequest = { ...request };
     delete providerRequest.projectId;
+    delete providerRequest.shapeIds;
     const input: AiGenerationRequest = {
       ...providerRequest,
       negativePrompt: compiledPrompt.negativePrompt.slice(0, 3_000),

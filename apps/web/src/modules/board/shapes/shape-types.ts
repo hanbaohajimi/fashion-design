@@ -17,6 +17,7 @@ export type RoleSource = "default" | "inferred" | "manual";
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
     [IMAGE_SHAPE_TYPE]: {
+      assetId?: string;
       fileId?: string;
       h: number;
       role: string;

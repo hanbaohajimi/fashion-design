@@ -15,6 +15,10 @@ import { BoardFileDrop } from "./BoardFileDrop";
 import { ElementRolePanel } from "./ElementRolePanel";
 import { BoardSkeleton } from "./BoardSkeleton";
 import { BoardProjectContext } from "./board-context";
+import { CandidateGrid } from "./generation/CandidateGrid";
+import { GenerationBar } from "./generation/GenerationBar";
+import { GenerationWorkspace } from "./generation/GenerationWorkspace";
+import { TaskTray } from "./generation/TaskTray";
 import {
   type BoardPersistStatus,
   useBoardPersist,
@@ -37,6 +41,9 @@ function BoardCanvasOverlay() {
     <>
       <BoardFileDrop />
       <ElementRolePanel />
+      <GenerationBar />
+      <CandidateGrid />
+      <TaskTray />
     </>
   );
 }
@@ -82,13 +89,15 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
     <main className={styles.boardShell}>
       <PersistStatusContext.Provider value={persistence.status}>
         <BoardProjectContext.Provider value={projectId}>
-          <Tldraw
-            autoFocus
-            components={boardComponents}
-            {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
-            shapeUtils={boardShapeUtils}
-            store={store}
-          />
+          <GenerationWorkspace>
+            <Tldraw
+              autoFocus
+              components={boardComponents}
+              {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
+              shapeUtils={boardShapeUtils}
+              store={store}
+            />
+          </GenerationWorkspace>
         </BoardProjectContext.Provider>
       </PersistStatusContext.Provider>
     </main>

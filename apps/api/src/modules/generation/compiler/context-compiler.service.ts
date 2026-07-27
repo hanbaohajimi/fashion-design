@@ -76,9 +76,10 @@ export class ContextCompilerService {
     userId: string,
     projectId: string | undefined,
     userRequest: string,
+    shapeIds?: readonly string[],
   ): Promise<CompiledGenInput> {
     const elements = projectId
-      ? await this.loadOwnedElements(userId, projectId)
+      ? await this.loadOwnedElements(userId, projectId, shapeIds)
       : [];
     const palette = unique(
       elements
@@ -197,6 +198,7 @@ export class ContextCompilerService {
   private async loadOwnedElements(
     userId: string,
     projectId: string,
+    shapeIds?: readonly string[],
   ): Promise<BoardElement[]> {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
@@ -204,7 +206,10 @@ export class ContextCompilerService {
         deletedAt: true,
         workspace: { select: { ownerId: true } },
         boardElements: {
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            ...(shapeIds ? { shapeId: { in: [...shapeIds] } } : {}),
+          },
           select: { id: true, record: true, role: true, roleLabel: true },
         },
       },

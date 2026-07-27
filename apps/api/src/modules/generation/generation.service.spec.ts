@@ -133,17 +133,20 @@ describe("GenerationService", () => {
     await service.create("user-1", {
       ...request,
       projectId: "project-1",
+      shapeIds: ["shape-1", "shape-2"],
     });
 
     expect(compiler.compile).toHaveBeenCalledWith(
       "user-1",
       "project-1",
       "fashion editorial",
+      ["shape-1", "shape-2"],
     );
     const createData =
       database.generationTask.create.mock.calls.at(0)?.[0].data;
     expect(createData).toBeDefined();
     expect(createData.input).not.toHaveProperty("projectId");
+    expect(createData.input).not.toHaveProperty("shapeIds");
     expect(createData.compiledPrompt).toMatchObject({
       positivePrompt: "fashion editorial",
     });
