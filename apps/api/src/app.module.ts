@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 
 import { HealthController } from "./health.controller";
+import { AiModule } from "./modules/ai/ai.module";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BoardElementsModule } from "./modules/board-elements/board-elements.module";
@@ -11,6 +12,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
 
 @Module({
   imports: [
+    AiModule,
     AuthModule,
     BoardElementsModule,
     BoardsModule,
