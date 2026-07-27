@@ -5,6 +5,11 @@ import { createShapeId, type TLShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "./board-context";
 import {
+  fetchElementRole,
+  registerRoleInference,
+  type RoleInferenceResult,
+} from "./board-api";
+import {
   completeUpload,
   putOriginal,
   signImageUpload,
@@ -50,6 +55,72 @@ export function BoardFileDrop() {
     [editor],
   );
 
+  const applyInference = useCallback(
+    (result: RoleInferenceResult): void => {
+      const shape = editor.getShape<ImageShape>(result.shapeId as TLShapeId);
+      if (
+        !shape ||
+        shape.type !== IMAGE_SHAPE_TYPE ||
+        shape.props.roleSource === "manual" ||
+        shape.meta.roleSource === "manual"
+      ) {
+        return;
+      }
+      editor.updateShape({
+        id: shape.id,
+        type: IMAGE_SHAPE_TYPE,
+        props: {
+          ...shape.props,
+          role: result.role,
+          roleConfidence: result.confidence ?? undefined,
+          roleInferenceState: result.state,
+          roleLabel: result.label ?? undefined,
+          roleSource: result.source,
+        },
+      });
+    },
+    [editor],
+  );
+
+  const trackInference = useCallback(
+    async (
+      shapeId: TLShapeId,
+      fileId?: string,
+    ): Promise<void> => {
+      try {
+        let result = fileId
+          ? await registerRoleInference(projectId, shapeId, fileId)
+          : await fetchElementRole(projectId, shapeId);
+        applyInference(result);
+        for (
+          let attempt = 0;
+          result.state === "pending" && attempt < 60;
+          attempt += 1
+        ) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+          result = await fetchElementRole(projectId, shapeId);
+          applyInference(result);
+        }
+      } catch {
+        const shape = editor.getShape<ImageShape>(shapeId);
+        if (
+          shape?.type === IMAGE_SHAPE_TYPE &&
+          shape.props.roleSource !== "manual" &&
+          shape.meta.roleSource !== "manual"
+        ) {
+          updateImage(shapeId, {
+            role: "style_ref",
+            roleConfidence: undefined,
+            roleInferenceState: "failed",
+            roleLabel: undefined,
+            roleSource: "default",
+          });
+        }
+      }
+    },
+    [applyInference, editor, projectId, updateImage],
+  );
+
   const runUpload = useCallback(
     async (task: UploadTask): Promise<void> => {
       setTasks((current) =>
@@ -65,8 +136,12 @@ export function BoardFileDrop() {
         const signed = await signImageUpload(projectId, task.file);
         updateImage(task.shapeId, {
           fileId: signed.file.id,
+          role: "style_ref",
+          roleInferenceState: "pending",
+          roleSource: "default",
           uploadStatus: signed.file.status === "READY" ? "ready" : "processing",
         });
+        void trackInference(task.shapeId, signed.file.id);
         const processing = signed.upload
           ? await putOriginal(signed.upload, task.file).then(() =>
               completeUpload(signed.file.id),
@@ -96,7 +171,7 @@ export function BoardFileDrop() {
         );
       }
     },
-    [projectId, updateImage],
+    [projectId, trackInference, updateImage],
   );
 
   useEffect(() => {
@@ -122,7 +197,18 @@ export function BoardFileDrop() {
         })
         .catch(() => updateImage(shape.id, { uploadStatus: "failed" }));
     }
-  }, [editor, updateImage]);
+    const pendingRoles = editor
+      .getCurrentPageShapes()
+      .filter(
+        (shape): shape is ImageShape =>
+          shape.type === IMAGE_SHAPE_TYPE &&
+          Boolean(shape.props.fileId) &&
+          shape.props.roleInferenceState === "pending",
+      );
+    for (const shape of pendingRoles) {
+      void trackInference(shape.id);
+    }
+  }, [editor, trackInference, updateImage]);
 
   useEffect(() => {
     let dragDepth = 0;

@@ -1,18 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEditor, useValue } from "tldraw";
+import { useEditor } from "tldraw";
 
 import type { BoardPersistStatus } from "./hooks/useBoardPersist";
 import {
-  BOARD_ROLES,
   FRAME_SHAPE_TYPE,
   IMAGE_SHAPE_TYPE,
-  isBoardShape,
   NOTE_SHAPE_TYPE,
   SWATCH_SHAPE_TYPE,
-  type BoardRole,
-  type BoardShape,
 } from "./shapes";
 import styles from "./board.module.css";
 
@@ -31,17 +27,6 @@ const STATUS_LABELS: Readonly<Record<BoardPersistStatus, string>> = {
 
 export function BoardToolbar({ status }: BoardToolbarProps) {
   const editor = useEditor();
-  const selectedShape = useValue(
-    "selected-board-shape",
-    () => {
-      const selected = editor.getSelectedShapes();
-      return selected.length === 1 && selected[0] && isBoardShape(selected[0])
-        ? selected[0]
-        : null;
-    },
-    [editor],
-  );
-
   const createShape = (
     type:
       | typeof IMAGE_SHAPE_TYPE
@@ -69,17 +54,6 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
     }
   };
 
-  const updateRole = (shape: BoardShape, role: BoardRole): void => {
-    editor.updateShape({
-      id: shape.id,
-      type: shape.type,
-      props: {
-        ...shape.props,
-        role,
-      },
-    });
-  };
-
   return (
     <div className={styles.boardToolbar}>
       <div className={styles.boardIdentity}>
@@ -104,26 +78,6 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
           画框
         </button>
       </div>
-
-      <label className={styles.roleControl}>
-        <span>语义角色</span>
-        <select
-          disabled={!selectedShape}
-          onChange={(event) => {
-            if (selectedShape) {
-              updateRole(selectedShape, event.target.value as BoardRole);
-            }
-          }}
-          value={selectedShape?.props.role ?? ""}
-        >
-          {!selectedShape ? <option value="">选择一个自定义元素</option> : null}
-          {BOARD_ROLES.map((role) => (
-            <option key={role} value={role}>
-              {role}
-            </option>
-          ))}
-        </select>
-      </label>
     </div>
   );
 }

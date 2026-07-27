@@ -12,6 +12,7 @@ import {
 
 import { BoardToolbar } from "./BoardToolbar";
 import { BoardFileDrop } from "./BoardFileDrop";
+import { ElementRolePanel } from "./ElementRolePanel";
 import { BoardSkeleton } from "./BoardSkeleton";
 import { BoardProjectContext } from "./board-context";
 import {
@@ -31,8 +32,17 @@ function ConnectedBoardToolbar() {
   return <BoardToolbar status={useContext(PersistStatusContext)} />;
 }
 
+function BoardCanvasOverlay() {
+  return (
+    <>
+      <BoardFileDrop />
+      <ElementRolePanel />
+    </>
+  );
+}
+
 const boardComponents: TLComponents = {
-  InFrontOfTheCanvas: BoardFileDrop,
+  InFrontOfTheCanvas: BoardCanvasOverlay,
   TopPanel: ConnectedBoardToolbar,
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;

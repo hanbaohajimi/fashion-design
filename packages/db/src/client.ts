@@ -4,6 +4,8 @@ import {
   FileStatus,
   Prisma,
   PrismaClient,
+  RoleInferenceState,
+  RoleSource,
   type FileAsset,
   type Project,
   type User,
@@ -34,5 +36,11 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.fashionPrisma = prisma;
 }
 
-export { FileStatus, Prisma, PrismaClient };
+export {
+  FileStatus,
+  Prisma,
+  PrismaClient,
+  RoleInferenceState,
+  RoleSource,
+};
 export type { FileAsset, Project, User, Workspace };

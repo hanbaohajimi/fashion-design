@@ -29,11 +29,11 @@ describe("BoardsService ownership and semantic rows", () => {
             deletedAt: null,
             record: {
               id: "shape:one",
-              props: { role: "reference" },
+              props: { role: "style_ref" },
               type: "fashion-image",
               typeName: "shape",
             },
-            role: "output",
+            role: "avoid",
             shapeId: "shape:one",
             shapeType: "fashion-image",
             updatedAt,
@@ -48,7 +48,7 @@ describe("BoardsService ownership and semantic rows", () => {
               store: {
                 "shape:one": {
                   id: "shape:one",
-                  props: { role: "reference" },
+                  props: { role: "style_ref" },
                 },
               },
             },
@@ -68,7 +68,7 @@ describe("BoardsService ownership and semantic rows", () => {
       elements: [
         {
           deleted: false,
-          role: "output",
+          role: "avoid",
           shapeId: "shape:one",
         },
       ],

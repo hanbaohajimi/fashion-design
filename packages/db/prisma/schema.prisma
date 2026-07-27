@@ -46,10 +46,24 @@ model FileAsset {
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
   owner            User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  boardElements    BoardElement[]
 
   @@unique([ownerId, sha256])
   @@index([ownerId, status])
   @@map("file_assets")
+}
+
+enum RoleSource {
+  DEFAULT
+  INFERRED
+  MANUAL
+}
+
+enum RoleInferenceState {
+  NONE
+  PENDING
+  READY
+  FAILED
 }
 
 model Workspace {
@@ -94,17 +108,24 @@ model BoardSnapshot {
 }
 
 model BoardElement {
-  id        String    @id @default(cuid(2))
-  projectId String    @map("project_id")
-  shapeId   String    @map("shape_id")
-  shapeType String    @map("shape_type")
-  role      String
-  record    Json?
-  deletedAt DateTime? @map("deleted_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id                 String             @id @default(cuid(2))
+  projectId          String             @map("project_id")
+  shapeId            String             @map("shape_id")
+  shapeType          String             @map("shape_type")
+  role               String
+  roleSource         RoleSource         @default(DEFAULT) @map("role_source")
+  roleConfidence     Float?             @map("role_confidence")
+  roleLabel          String?            @map("role_label")
+  roleInferenceState RoleInferenceState @default(NONE) @map("role_inference_state")
+  fileAssetId        String?            @map("file_asset_id")
+  record             Json?
+  deletedAt          DateTime?          @map("deleted_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileAsset          FileAsset?         @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, shapeId])
   @@index([projectId, deletedAt])
+  @@index([fileAssetId])
   @@map("board_elements")
 }

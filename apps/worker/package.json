@@ -17,6 +17,7 @@
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "heic-decode": "^2.1.0",
+    "openai": "^6.16.0",
     "sharp": "^0.35.3"
   },
   "devDependencies": {

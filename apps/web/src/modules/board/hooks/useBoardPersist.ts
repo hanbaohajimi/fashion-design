@@ -17,7 +17,11 @@ import {
   fetchBoard,
   patchBoard,
 } from "../board-api";
-import { isBoardShape } from "../shapes";
+import {
+  IMAGE_SHAPE_TYPE,
+  isBoardShape,
+  normalizeBoardRole,
+} from "../shapes";
 
 const SAVE_DEBOUNCE_MS = 1_500;
 const RETRY_MIN_MS = 3_000;
@@ -43,11 +47,45 @@ function isShapeRecord(record: TLRecord): record is TLShape {
 
 function roleForShape(shape: TLShape): string {
   if (isBoardShape(shape)) {
-    return shape.props.role;
+    return normalizeBoardRole(shape.props.role);
   }
 
   const role = shape.meta.role;
   return typeof role === "string" ? role : "generic";
+}
+
+function semanticForShape(shape: TLShape) {
+  const candidate =
+    typeof shape.meta.roleSource === "string"
+      ? shape.meta.roleSource
+      : shape.type === IMAGE_SHAPE_TYPE
+        ? shape.props.roleSource
+        : undefined;
+  let roleSource: "default" | "inferred" | "manual" = "default";
+  if (candidate === "manual" || candidate === "inferred") {
+    roleSource = candidate;
+  }
+  if (shape.type !== IMAGE_SHAPE_TYPE) {
+    return {
+      roleInferenceState: "ready" as const,
+      roleSource,
+    };
+  }
+  const state = shape.props.roleInferenceState;
+  const roleInferenceState:
+    | "none"
+    | "pending"
+    | "ready"
+    | "failed" =
+    state === "pending" || state === "failed" || state === "ready"
+      ? state
+      : "none";
+  return {
+    roleConfidence: shape.props.roleConfidence ?? null,
+    roleInferenceState,
+    roleLabel: shape.props.roleLabel ?? null,
+    roleSource,
+  };
 }
 
 function applyElementRows(
@@ -77,7 +115,20 @@ function applyElementRows(
             props: {
               ...base.props,
               ...element.record.props,
-              role: element.role,
+              role: normalizeBoardRole(element.role),
+              ...(base.type === IMAGE_SHAPE_TYPE
+                ? {
+                    roleConfidence: element.roleConfidence ?? undefined,
+                    roleInferenceState: element.roleInferenceState,
+                    roleLabel: element.roleLabel ?? undefined,
+                    roleSource: element.roleSource,
+                  }
+                : {}),
+            },
+            meta: {
+              ...base.meta,
+              ...element.record.meta,
+              roleSource: element.roleSource,
             },
           }
         : {
@@ -205,6 +256,7 @@ export function useBoardPersist(
               deleted: false,
               record,
               role: roleForShape(record),
+              ...semanticForShape(record),
               shapeId: record.id,
               shapeType: record.type,
             },

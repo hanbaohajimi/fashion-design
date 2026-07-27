@@ -1,4 +1,9 @@
-import { Prisma, type PrismaClient } from "@fashion/db";
+import {
+  Prisma,
+  RoleInferenceState,
+  RoleSource,
+  type PrismaClient,
+} from "@fashion/db";
 import {
   ForbiddenException,
   Inject,
@@ -20,6 +25,10 @@ export interface BoardLoadResult {
     readonly deleted: boolean;
     readonly record: unknown;
     readonly role: string;
+    readonly roleConfidence: number | null;
+    readonly roleInferenceState: string;
+    readonly roleLabel: string | null;
+    readonly roleSource: string;
     readonly shapeId: string;
     readonly shapeType: string;
     readonly updatedAt: Date;
@@ -55,6 +64,11 @@ export class BoardsService {
         deleted: Boolean(element.deletedAt),
         record: element.record,
         role: element.role,
+        roleConfidence: element.roleConfidence ?? null,
+        roleInferenceState:
+          element.roleInferenceState?.toLowerCase() ?? "none",
+        roleLabel: element.roleLabel ?? null,
+        roleSource: element.roleSource?.toLowerCase() ?? "default",
         shapeId: element.shapeId,
         shapeType: element.shapeType,
         updatedAt: element.updatedAt,
@@ -120,14 +134,30 @@ export class BoardsService {
             projectId,
             record: patch.record as Prisma.InputJsonValue,
             role: patch.role,
+            roleInferenceState: toInferenceState(patch.roleInferenceState),
+            roleSource: toRoleSource(patch.roleSource),
             shapeId: patch.shapeId,
             shapeType: patch.shapeType,
+            ...(patch.roleConfidence !== undefined
+              ? { roleConfidence: patch.roleConfidence }
+              : {}),
+            ...(patch.roleLabel !== undefined
+              ? { roleLabel: patch.roleLabel }
+              : {}),
           },
           update: {
             deletedAt: null,
             record: patch.record as Prisma.InputJsonValue,
-            role: patch.role,
             shapeType: patch.shapeType,
+            ...(patch.roleSource === "manual"
+              ? {
+                  role: patch.role,
+                  roleConfidence: null,
+                  roleInferenceState: RoleInferenceState.READY,
+                  roleLabel: null,
+                  roleSource: RoleSource.MANUAL,
+                }
+              : {}),
           },
         });
       }
@@ -170,4 +200,29 @@ export class BoardsService {
       });
     }
   }
+}
+
+function toRoleSource(value: string | undefined): RoleSource {
+  if (value === "manual") {
+    return RoleSource.MANUAL;
+  }
+  if (value === "inferred") {
+    return RoleSource.INFERRED;
+  }
+  return RoleSource.DEFAULT;
+}
+
+function toInferenceState(
+  value: string | undefined,
+): RoleInferenceState {
+  if (value === "pending") {
+    return RoleInferenceState.PENDING;
+  }
+  if (value === "failed") {
+    return RoleInferenceState.FAILED;
+  }
+  if (value === "ready") {
+    return RoleInferenceState.READY;
+  }
+  return RoleInferenceState.NONE;
 }

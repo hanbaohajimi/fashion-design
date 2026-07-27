@@ -5,7 +5,6 @@ import {
   T,
 } from "tldraw";
 
-import { RoleBadge } from "./RoleBadge";
 import { FRAME_SHAPE_TYPE, type FrameShape } from "./shape-types";
 import styles from "./shapes.module.css";
 
@@ -21,7 +20,7 @@ export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
   override getDefaultProps(): FrameShape["props"] {
     return {
       h: 520,
-      role: "frame",
+      role: "note",
       title: "系列方向",
       w: 760,
     };
@@ -31,7 +30,6 @@ export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
     return (
       <HTMLContainer className={styles.frameShape}>
         <div className={styles.frameTitle}>
-          <RoleBadge role={shape.props.role} />
           <strong>{shape.props.title}</strong>
         </div>
       </HTMLContainer>

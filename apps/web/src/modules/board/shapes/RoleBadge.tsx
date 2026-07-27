@@ -5,11 +5,13 @@ interface RoleBadgeProps {
 }
 
 const ROLE_LABELS: Readonly<Record<string, string>> = {
-  frame: "画框",
-  note: "便签",
-  output: "输出",
+  avoid: "避用",
+  detail_ref: "细节",
+  fabric_ref: "面料",
+  note: "备注",
   palette: "色板",
-  reference: "参考",
+  silhouette_ref: "廓形",
+  style_ref: "风格",
 };
 
 export function RoleBadge({ role }: RoleBadgeProps) {

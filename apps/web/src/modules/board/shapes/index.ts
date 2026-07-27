@@ -8,11 +8,15 @@ export {
   FRAME_SHAPE_TYPE,
   IMAGE_SHAPE_TYPE,
   isBoardShape,
+  isRoleAssignableShape,
+  normalizeBoardRole,
   NOTE_SHAPE_TYPE,
   SWATCH_SHAPE_TYPE,
   type BoardRole,
   type BoardShape,
   type ImageShape,
+  type RoleInferenceState,
+  type RoleSource,
 } from "./shape-types";
 
 export const boardShapeUtils = [

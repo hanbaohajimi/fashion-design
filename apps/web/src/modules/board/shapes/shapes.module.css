@@ -14,17 +14,34 @@
   line-height: 1;
 }
 
-.roleBadge[data-role="output"] {
-  background: #181915;
-  color: white;
-}
-
-.roleBadge[data-role="reference"] {
+.roleBadge[data-role="style_ref"] {
   background: #dbe5df;
 }
 
 .roleBadge[data-role="palette"] {
   background: #f2d978;
+}
+
+.roleBadge[data-role="fabric_ref"] {
+  background: #d8c8af;
+}
+
+.roleBadge[data-role="silhouette_ref"] {
+  background: #cfd5dd;
+}
+
+.roleBadge[data-role="detail_ref"] {
+  background: #d9cedd;
+}
+
+.roleBadge[data-role="note"] {
+  background: #eee9dc;
+}
+
+.roleBadge[data-role="avoid"] {
+  border-color: #a52c1f;
+  background: #a52c1f;
+  color: white;
 }
 
 .imageShape,

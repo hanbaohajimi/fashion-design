@@ -1,4 +1,5 @@
 import type { TLEditorSnapshot, TLShape } from "tldraw";
+import type { BoardElementRole } from "@fashion/shared";
 
 import { readErrorMessage } from "../auth/auth-api";
 
@@ -6,6 +7,10 @@ export interface BoardElementRow {
   readonly deleted: boolean;
   readonly record: TLShape | null;
   readonly role: string;
+  readonly roleConfidence: number | null;
+  readonly roleInferenceState: RoleInferenceResult["state"];
+  readonly roleLabel: string | null;
+  readonly roleSource: RoleInferenceResult["source"];
   readonly shapeId: string;
   readonly shapeType: string;
   readonly updatedAt: string;
@@ -26,6 +31,10 @@ export type BoardElementPatch =
       readonly deleted: false;
       readonly record: TLShape;
       readonly role: string;
+      readonly roleConfidence?: number | null;
+      readonly roleInferenceState?: RoleInferenceResult["state"];
+      readonly roleLabel?: string | null;
+      readonly roleSource?: RoleInferenceResult["source"];
       readonly shapeId: string;
       readonly shapeType: string;
     };
@@ -34,6 +43,15 @@ export interface BoardPatchPayload {
   readonly batchId: string;
   readonly patches: readonly BoardElementPatch[];
   readonly snapshot: TLEditorSnapshot;
+}
+
+export interface RoleInferenceResult {
+  readonly confidence: number | null;
+  readonly label: string | null;
+  readonly role: BoardElementRole;
+  readonly shapeId: string;
+  readonly source: "default" | "inferred" | "manual";
+  readonly state: "none" | "pending" | "ready" | "failed";
 }
 
 export async function fetchBoard(projectId: string): Promise<BoardLoadResponse> {
@@ -71,5 +89,59 @@ export async function patchBoard(
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, "画布保存失败"));
+  }
+}
+
+export async function registerRoleInference(
+  projectId: string,
+  shapeId: string,
+  fileId: string,
+): Promise<RoleInferenceResult> {
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/board-elements/${encodeURIComponent(shapeId)}/infer`,
+    {
+      method: "POST",
+      body: JSON.stringify({ fileId }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "角色推断任务启动失败"));
+  }
+  return (await response.json()) as RoleInferenceResult;
+}
+
+export async function fetchElementRole(
+  projectId: string,
+  shapeId: string,
+): Promise<RoleInferenceResult> {
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/board-elements/${encodeURIComponent(shapeId)}/role`,
+    { cache: "no-store", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "角色推断状态读取失败"));
+  }
+  return (await response.json()) as RoleInferenceResult;
+}
+
+export async function setElementRoles(
+  projectId: string,
+  shapeIds: readonly string[],
+  role: BoardElementRole,
+): Promise<void> {
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/board-elements/roles`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ role, shapeIds }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "元素角色保存失败"));
   }
 }

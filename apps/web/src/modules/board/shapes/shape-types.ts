@@ -1,3 +1,7 @@
+import {
+  BOARD_ELEMENT_ROLES,
+  type BoardElementRole,
+} from "@fashion/shared";
 import type { TLShape } from "tldraw";
 
 export const IMAGE_SHAPE_TYPE = "fashion-image";
@@ -5,15 +9,10 @@ export const NOTE_SHAPE_TYPE = "fashion-note";
 export const SWATCH_SHAPE_TYPE = "fashion-swatch";
 export const FRAME_SHAPE_TYPE = "fashion-frame";
 
-export const BOARD_ROLES = [
-  "reference",
-  "note",
-  "palette",
-  "frame",
-  "output",
-] as const;
-
-export type BoardRole = (typeof BOARD_ROLES)[number];
+export const BOARD_ROLES = BOARD_ELEMENT_ROLES;
+export type BoardRole = BoardElementRole;
+export type RoleInferenceState = "none" | "pending" | "ready" | "failed";
+export type RoleSource = "default" | "inferred" | "manual";
 
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
@@ -21,6 +20,10 @@ declare module "tldraw" {
       fileId?: string;
       h: number;
       role: string;
+      roleConfidence?: number | undefined;
+      roleInferenceState?: string | undefined;
+      roleLabel?: string | undefined;
+      roleSource?: string | undefined;
       title: string;
       uploadStatus?: string;
       url: string;
@@ -62,4 +65,27 @@ export function isBoardShape(shape: TLShape): shape is BoardShape {
     shape.type === SWATCH_SHAPE_TYPE ||
     shape.type === FRAME_SHAPE_TYPE
   );
+}
+
+export function isRoleAssignableShape(
+  shape: TLShape,
+): shape is ImageShape | NoteShape | SwatchShape {
+  return (
+    shape.type === IMAGE_SHAPE_TYPE ||
+    shape.type === NOTE_SHAPE_TYPE ||
+    shape.type === SWATCH_SHAPE_TYPE
+  );
+}
+
+export function normalizeBoardRole(role: string): BoardRole {
+  if ((BOARD_ROLES as readonly string[]).includes(role)) {
+    return role as BoardRole;
+  }
+  if (role === "palette") {
+    return "palette";
+  }
+  if (role === "note" || role === "frame") {
+    return "note";
+  }
+  return "style_ref";
 }

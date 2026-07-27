@@ -86,10 +86,12 @@ describe("BoardsService persistence integration", () => {
               ...record,
               props: {
                 ...record.props,
-                role: "reference",
+                role: "avoid",
               },
             },
-            role: "output",
+            role: "avoid",
+            roleInferenceState: "ready",
+            roleSource: "manual",
             shapeId: record.id,
             shapeType: record.type,
           },
@@ -101,7 +103,7 @@ describe("BoardsService persistence integration", () => {
                 ...record,
                 props: {
                   ...record.props,
-                  role: "reference",
+                  role: "avoid",
                 },
               },
             },
@@ -114,7 +116,7 @@ describe("BoardsService persistence integration", () => {
           elements: [
             {
               deleted: false,
-              role: "output",
+              role: "avoid",
               shapeId: record.id,
             },
           ],

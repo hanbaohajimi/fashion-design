@@ -7,6 +7,12 @@ const upsertPatchSchema = z.object({
   deleted: z.literal(false).optional(),
   record: jsonObjectSchema,
   role: z.string().trim().min(1).max(64),
+  roleConfidence: z.number().min(0).max(1).nullable().optional(),
+  roleInferenceState: z
+    .enum(["none", "pending", "ready", "failed"])
+    .optional(),
+  roleLabel: z.string().trim().min(1).max(64).nullable().optional(),
+  roleSource: z.enum(["default", "inferred", "manual"]).optional(),
   shapeId: shapeIdSchema,
   shapeType: z.string().trim().min(1).max(100),
 });
