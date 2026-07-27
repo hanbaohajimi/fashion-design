@@ -3,16 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/src/client.js",
+  "types": "./dist/src/client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/client.d.ts",
+      "import": "./dist/src/client.js",
+      "default": "./dist/src/client.js"
+    }
+  },
   "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "db:validate": "prisma validate",
     "generate": "prisma generate",
-    "lint": "eslint prisma.config.ts --max-warnings=0",
+    "lint": "eslint prisma.config.ts src --max-warnings=0",
     "migrate": "prisma migrate dev --name init",
-    "typecheck": "tsc --noEmit"
+    "test:integration": "vitest run src/client.integration.spec.ts",
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "dotenv": "^17.4.2",
     "prisma": "^7.9.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.9.0",
+    "@prisma/client": "7.9.0",
+    "pg": "^8.22.0"
   }
 }

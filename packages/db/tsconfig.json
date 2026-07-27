@@ -1,9 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "declaration": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "noEmit": true
+    "outDir": "dist",
+    "rootDir": ".",
+    "sourceMap": true
   },
-  "include": ["prisma.config.ts"]
+  "include": ["prisma.config.ts", "src/**/*.ts", "generated/prisma/**/*.ts"]
 }

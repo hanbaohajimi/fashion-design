@@ -53,6 +53,7 @@ pnpm dev
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm db:test
 pnpm build
 ```
 

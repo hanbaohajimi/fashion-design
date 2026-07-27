@@ -16,6 +16,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:generate": "pnpm --filter @fashion/db generate",
     "db:migrate": "pnpm --filter @fashion/db migrate",
+    "db:test": "pnpm --filter @fashion/db test:integration",
     "db:validate": "pnpm --filter @fashion/db db:validate",
     "infra:check": "node scripts/check-ports.mjs",
     "infra:up": "pnpm infra:check && docker compose up -d",
