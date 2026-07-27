@@ -49,3 +49,33 @@ h1 {
   color: #555249;
   font-size: 1rem;
 }
+
+.session-status {
+  margin: 2rem 0 0;
+  color: #555249;
+  font-size: 0.875rem;
+}
+
+.session-status-error,
+.confirm-error {
+  color: #a6321d;
+}
+
+.confirm-page {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.confirm-page h1 {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+}
+
+.confirm-page a {
+  margin-top: 2rem;
+  color: #171714;
+  font-weight: 700;
+  text-underline-offset: 0.3em;
+}

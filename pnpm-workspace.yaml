@@ -8,4 +8,5 @@ allowBuilds:
   msgpackr-extract: true
   prisma: true
   sharp: true
+  supabase: true
   unrs-resolver: true

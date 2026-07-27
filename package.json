@@ -18,6 +18,9 @@
     "db:migrate": "pnpm --filter @fashion/db migrate",
     "db:test": "pnpm --filter @fashion/db test:integration",
     "db:validate": "pnpm --filter @fashion/db db:validate",
+    "auth:start": "supabase start",
+    "auth:status": "supabase status",
+    "auth:stop": "supabase stop",
     "infra:check": "node scripts/check-ports.mjs",
     "infra:up": "pnpm infra:check && docker compose up -d",
     "infra:down": "docker compose down"
@@ -29,6 +32,7 @@
     "eslint-config-next": "^16.2.12",
     "globals": "^16.5.0",
     "prettier": "^3.9.6",
+    "supabase": "2.76.15",
     "turbo": "^2.10.7",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0"

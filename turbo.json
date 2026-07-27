@@ -1,6 +1,15 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalPassThroughEnv": ["API_PORT", "DATABASE_URL", "REDIS_URL"],
+  "globalPassThroughEnv": [
+    "API_INTERNAL_URL",
+    "API_PORT",
+    "APP_ORIGIN",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "SESSION_COOKIE_SECURE",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

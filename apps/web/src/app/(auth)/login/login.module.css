@@ -1,0 +1,205 @@
+.page {
+  --ink: #171713;
+  --paper: #f2eee4;
+  --signal: #e24a2a;
+  display: grid;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  grid-template-columns: minmax(0, 1.08fr) minmax(22rem, 0.92fr);
+}
+
+.patternPanel {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 5rem);
+  background-color: #20211d;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 5%) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: #f3efe4;
+}
+
+.brand {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.patternPanel h1 {
+  position: relative;
+  z-index: 2;
+  max-width: 8ch;
+  margin: clamp(8rem, 22vh, 14rem) 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(3.5rem, 7vw, 7rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.88;
+}
+
+.patternPanel h1 em {
+  color: #ef7658;
+  font-style: italic;
+}
+
+.cutPiece {
+  position: absolute;
+  right: -7%;
+  bottom: -15%;
+  width: min(70%, 38rem);
+  aspect-ratio: 0.78;
+  border: 1px dashed rgb(242 238 228 / 55%);
+  border-radius: 52% 48% 18% 12% / 24% 32% 15% 18%;
+  rotate: -12deg;
+}
+
+.cutPiece::before,
+.cutPiece::after {
+  position: absolute;
+  content: "";
+}
+
+.cutPiece::before {
+  top: 18%;
+  left: -12%;
+  width: 124%;
+  border-top: 1px solid rgb(226 74 42 / 80%);
+  rotate: 21deg;
+}
+
+.cutPiece::after {
+  top: 10%;
+  left: 50%;
+  height: 82%;
+  border-left: 1px dashed rgb(242 238 228 / 35%);
+}
+
+.formPanel {
+  display: grid;
+  align-content: center;
+  padding: clamp(2rem, 8vw, 7rem);
+}
+
+.step {
+  margin: 0 0 1.5rem;
+  color: #726d61;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.formPanel h2 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.intro {
+  max-width: 30rem;
+  margin: 1.25rem 0 2.75rem;
+  color: #635f55;
+  line-height: 1.7;
+}
+
+.form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.form label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.form input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #979083;
+  border-radius: 0;
+  outline: 0;
+  padding: 1rem 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.05rem;
+}
+
+.form input:focus {
+  border-bottom-color: var(--signal);
+  box-shadow: 0 2px 0 var(--signal);
+}
+
+.form button {
+  min-height: 3.4rem;
+  margin-top: 1rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.form button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+
+.form button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.form button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.message {
+  margin: 1rem 0 0;
+  color: #4d6048;
+  line-height: 1.6;
+}
+
+.error {
+  color: #a6321d;
+}
+
+@media (max-width: 760px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .patternPanel {
+    min-height: 17rem;
+  }
+
+  .patternPanel h1 {
+    margin-top: 4.5rem;
+    font-size: clamp(3rem, 15vw, 5rem);
+  }
+
+  .formPanel {
+    min-height: calc(100vh - 17rem);
+    padding-block: 3.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .form button {
+    transition: none;
+  }
+}

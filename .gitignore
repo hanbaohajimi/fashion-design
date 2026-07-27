@@ -17,3 +17,5 @@ generated/
 Thumbs.db
 
 packages/db/prisma/dev.db*
+supabase/.temp/
+supabase/.branches/
