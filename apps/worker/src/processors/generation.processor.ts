@@ -22,7 +22,7 @@ const providerJobSchema = z.object({
   provider: z.string().min(1),
   providerJobId: z.string().min(1),
   model: z.string().min(1),
-  taskType: z.enum(["t2i", "i2i"]),
+  taskType: z.enum(["t2i", "i2i", "inpaint"]),
   submittedAt: z.iso.datetime(),
   cost: z.object({
     rawCost: z.number().nonnegative(),

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AI_TASK_TYPES = ["t2i", "i2i"] as const;
+export const AI_TASK_TYPES = ["t2i", "i2i", "inpaint"] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
 
 const commonRequestSchema = z.object({
@@ -20,6 +20,12 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
     taskType: z.literal("i2i"),
     referenceImageUrl: z.url(),
+    strength: z.number().min(0).max(1),
+  }),
+  commonRequestSchema.extend({
+    taskType: z.literal("inpaint"),
+    referenceImageUrl: z.url(),
+    maskImageUrl: z.url(),
     strength: z.number().min(0).max(1),
   }),
 ]);

@@ -10,7 +10,10 @@ export interface GenerationCandidate {
   readonly id: string;
   readonly height?: number;
   readonly taskId: string;
+  readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly url: string;
+  readonly seed?: number;
+  readonly sourceUrl?: string;
   readonly width?: number;
 }
 
@@ -31,7 +34,9 @@ export interface GenerationTaskItem {
   readonly id: string;
   readonly prompt: string;
   readonly status: GenerationStatus;
-  readonly taskType: "t2i" | "i2i";
+  readonly referenceImageUrl?: string;
+  readonly seed?: number;
+  readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly updatedAt: string;
 }
 
@@ -42,4 +47,3 @@ export interface GenerationParameters {
   readonly steps: number;
   readonly width: number;
 }
-

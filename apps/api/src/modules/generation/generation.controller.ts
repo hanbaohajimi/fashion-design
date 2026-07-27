@@ -21,6 +21,8 @@ import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { GenerationEventsService } from "./generation-events.service";
 import { generationCreateRequestSchema } from "./generation.schemas";
+import { GenerationMaskService } from "./generation-mask.service";
+import { z } from "zod";
 import {
   GenerationService,
   type GenerationTaskView,
@@ -33,7 +35,31 @@ export class GenerationController {
     private readonly generationService: GenerationService,
     @Inject(GenerationEventsService)
     private readonly events: GenerationEventsService,
+    @Inject(GenerationMaskService)
+    private readonly masks: GenerationMaskService,
   ) {}
+
+  @Post("masks/sign")
+  async signMask(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: unknown,
+  ) {
+    const parsed = z
+      .object({
+        height: z.number().int().min(64).max(2048),
+        projectId: z.string().min(1).max(128),
+        size: z.number().int().positive().max(12 * 1024 * 1024),
+        width: z.number().int().min(64).max(2048),
+      })
+      .safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_MASK",
+        message: "掩码尺寸或文件大小不合法",
+      });
+    }
+    return this.masks.sign(user.userId, parsed.data);
+  }
 
   @Post()
   @HttpCode(202)

@@ -37,8 +37,10 @@ export interface FalAdapterConfig {
   credentials: () => string | undefined;
   t2iModel: string;
   i2iModel: string;
+  inpaintModel: string;
   t2iCostPerMegapixel: number;
   i2iCostPerMegapixel: number;
+  inpaintCostPerMegapixel: number;
   creditsPerUsd: number;
 }
 
@@ -125,7 +127,11 @@ export class FalAdapter implements AiProvider {
   ) {}
 
   supports(taskType: AiGenerationRequest["taskType"]): boolean {
-    return taskType === "t2i" || taskType === "i2i";
+    return (
+      taskType === "t2i" ||
+      taskType === "i2i" ||
+      taskType === "inpaint"
+    );
   }
 
   async submit(
@@ -136,7 +142,9 @@ export class FalAdapter implements AiProvider {
     const model =
       request.taskType === "t2i"
         ? this.config.t2iModel
-        : this.config.i2iModel;
+        : request.taskType === "i2i"
+          ? this.config.i2iModel
+          : this.config.inpaintModel;
 
     try {
       const response = await this.transport.submit(
@@ -270,9 +278,12 @@ export class FalAdapter implements AiProvider {
     if (request.negativePrompt) {
       input.negative_prompt = request.negativePrompt;
     }
-    if (request.taskType === "i2i") {
+    if (request.taskType === "i2i" || request.taskType === "inpaint") {
       input.image_url = request.referenceImageUrl;
       input.strength = request.strength;
+    }
+    if (request.taskType === "inpaint") {
+      input.mask_url = request.maskImageUrl;
     }
     return input;
   }
@@ -285,7 +296,9 @@ export class FalAdapter implements AiProvider {
     const rate =
       request.taskType === "t2i"
         ? this.config.t2iCostPerMegapixel
-        : this.config.i2iCostPerMegapixel;
+        : request.taskType === "i2i"
+          ? this.config.i2iCostPerMegapixel
+          : this.config.inpaintCostPerMegapixel;
     const rawCost = Number((billableMegapixels * rate).toFixed(6));
 
     return {

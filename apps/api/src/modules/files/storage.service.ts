@@ -1,4 +1,8 @@
-import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Injectable } from "@nestjs/common";
 
@@ -9,6 +13,7 @@ export interface StoredObjectHead {
 
 export interface FileStorage {
   createUploadUrl(objectKey: string, mimeType: string): Promise<string>;
+  createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
   head(objectKey: string): Promise<StoredObjectHead>;
   publicUrl(objectKey: string): string;
 }
@@ -35,6 +40,20 @@ export class S3FileStorage implements FileStorage {
         Key: objectKey,
       }),
       { expiresIn: 10 * 60 },
+    );
+  }
+
+  async createDownloadUrl(
+    objectKey: string,
+    expiresInSeconds: number,
+  ): Promise<string> {
+    return getSignedUrl(
+      this.getClient(),
+      new GetObjectCommand({
+        Bucket: requiredEnvironment("S3_BUCKET"),
+        Key: objectKey,
+      }),
+      { expiresIn: expiresInSeconds },
     );
   }
 

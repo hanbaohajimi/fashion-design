@@ -1,10 +1,12 @@
 "use client";
 
 import { useContext, useState } from "react";
+import { createPortal } from "react-dom";
 import { createShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
 import { IMAGE_SHAPE_TYPE, type ImageShape } from "../shapes";
+import { CandidateLightbox } from "./CandidateLightbox";
 import { DEFAULT_GENERATION_PARAMETERS } from "./GenerationBar";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import type { GenerationCandidate } from "./generation-types";
@@ -14,8 +16,10 @@ export function CandidateGrid() {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
   const generation = useGenerationWorkspace();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [instruction, setInstruction] = useState("");
+  const [lightbox, setLightbox] = useState<{
+    readonly candidate: GenerationCandidate;
+    readonly mode: "view" | "inpaint";
+  } | null>(null);
   const candidates = generation.tasks.flatMap((task) => task.candidates);
 
   if (candidates.length === 0) return null;
@@ -57,24 +61,20 @@ export function CandidateGrid() {
 
   const rerun = async (
     candidate: GenerationCandidate,
-    localInstruction?: string,
   ): Promise<void> => {
     const source = generation.tasks.find((task) => task.id === candidate.taskId);
     await generation.start({
       parameters: DEFAULT_GENERATION_PARAMETERS,
       projectId,
-      prompt: localInstruction?.trim() || source?.prompt || "生成设计变体",
+      prompt: source?.prompt || "生成设计变体",
       shapeIds: editor.getSelectedShapeIds(),
-      taskType: localInstruction ? "i2i" : "t2i",
-      ...(localInstruction
-        ? { referenceImageUrl: candidate.url, strength: 0.55 }
-        : {}),
+      taskType: "i2i",
+      referenceImageUrl: candidate.url,
+      strength: 0.5,
     });
-    setEditingId(null);
-    setInstruction("");
   };
 
-  return (
+  return createPortal(
     <section className={styles.candidateDock} aria-label="生成候选">
       <header>
         <div>
@@ -90,9 +90,16 @@ export function CandidateGrid() {
             key={candidate.id}
             style={{ animationDelay: `${Math.min(index, 6) * 80}ms` }}
           >
-            {/* Provider result URLs are persisted by the generation task. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt="AI 生成候选设计" src={candidate.url} />
+            <button
+              aria-label="打开候选详情"
+              className={styles.candidateImageButton}
+              onClick={() => setLightbox({ candidate, mode: "view" })}
+              type="button"
+            >
+              {/* Provider result URLs are persisted by the generation task. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt="AI 生成候选设计" src={candidate.url} />
+            </button>
             <div className={styles.candidateActions}>
               <button onClick={() => adopt(candidate)} type="button">
                 采纳
@@ -107,42 +114,31 @@ export function CandidateGrid() {
                 再来一版
               </button>
               <button
-                onClick={() =>
-                  setEditingId((current) =>
-                    current === candidate.id ? null : candidate.id,
-                  )
-                }
+                onClick={() => setLightbox({ candidate, mode: "inpaint" })}
                 type="button"
               >
                 局部改
               </button>
             </div>
-            {editingId === candidate.id ? (
-              <form
-                className={styles.localEdit}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (instruction.trim().length >= 3) {
-                    void rerun(candidate, instruction);
-                  }
-                }}
-              >
-                <label>
-                  <span>局部修改说明</span>
-                  <input
-                    aria-label="局部修改说明"
-                    minLength={3}
-                    onChange={(event) => setInstruction(event.target.value)}
-                    placeholder="例如：缩窄领口，保留其余结构"
-                    value={instruction}
-                  />
-                </label>
-                <button type="submit">提交修改</button>
-              </form>
-            ) : null}
           </article>
         ))}
       </div>
-    </section>
+      {lightbox ? (
+        <CandidateLightbox
+          candidate={lightbox.candidate}
+          initialMode={lightbox.mode}
+          onAdopt={() => {
+            adopt(lightbox.candidate);
+            setLightbox(null);
+          }}
+          onClose={() => setLightbox(null)}
+          onDiscard={() => {
+            generation.dismissCandidate(lightbox.candidate.id);
+            setLightbox(null);
+          }}
+        />
+      ) : null}
+    </section>,
+    document.body,
   );
 }

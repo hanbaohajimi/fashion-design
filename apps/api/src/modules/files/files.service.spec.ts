@@ -47,6 +47,7 @@ describe("FilesService", () => {
     },
   };
   const storage = {
+    createDownloadUrl: vi.fn(),
     createUploadUrl: vi.fn(),
     head: vi.fn(),
     publicUrl: vi.fn((key: string) => `https://cdn.test/${key}`),

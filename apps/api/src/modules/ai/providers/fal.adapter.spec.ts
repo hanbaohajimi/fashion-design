@@ -16,8 +16,10 @@ const config: FalAdapterConfig = {
   credentials: () => "test-key",
   t2iModel: "fal-ai/flux/dev",
   i2iModel: "fal-ai/flux/dev/image-to-image",
+  inpaintModel: "fal-ai/flux-general/inpainting",
   t2iCostPerMegapixel: 0.04,
   i2iCostPerMegapixel: 0.06,
+  inpaintCostPerMegapixel: 0.02,
   creditsPerUsd: 100,
 };
 
@@ -104,6 +106,39 @@ describe("FalAdapter", () => {
       }),
       expect.any(AbortSignal),
     );
+  });
+
+  it("映射 inpaint 图片、掩码并使用独立低单价", async () => {
+    vi.mocked(transport.submit).mockResolvedValue({
+      requestId: "fal-job-inpaint",
+    });
+
+    const job = await adapter.submit(
+      {
+        taskType: "inpaint",
+        prompt: "replace collar with narrow lapel",
+        width: 1024,
+        height: 1024,
+        steps: 28,
+        cfg: 3.5,
+        referenceImageUrl: "https://cdn.test/source.png",
+        maskImageUrl: "https://cdn.test/mask.png",
+        strength: 0.82,
+      },
+      new AbortController().signal,
+    );
+
+    expect(transport.submit).toHaveBeenCalledWith(
+      "fal-ai/flux-general/inpainting",
+      expect.objectContaining({
+        image_url: "https://cdn.test/source.png",
+        mask_url: "https://cdn.test/mask.png",
+        strength: 0.82,
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(job.cost).toMatchObject({ rawCost: 0.04, credits: 4 });
+    expect(job.cost.rawCost).toBeLessThan(0.08);
   });
 
   it("把编译器负向约束映射到 Provider 参数", async () => {

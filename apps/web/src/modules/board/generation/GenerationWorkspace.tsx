@@ -27,10 +27,11 @@ interface StartGenerationInput {
   readonly parameters: GenerationParameters;
   readonly projectId: string;
   readonly prompt: string;
+  readonly maskImageUrl?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
   readonly strength?: number;
-  readonly taskType?: "t2i" | "i2i";
+  readonly taskType?: "t2i" | "i2i" | "inpaint";
 }
 
 interface GenerationWorkspaceValue {
@@ -44,9 +45,16 @@ const GenerationWorkspaceContext =
   createContext<GenerationWorkspaceValue | null>(null);
 const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
 
-function candidatesFrom(task: GenerationTaskDetail): GenerationCandidate[] {
+function candidatesFrom(
+  task: GenerationTaskDetail,
+  source: GenerationTaskItem,
+): GenerationCandidate[] {
   if (!task.output || typeof task.output !== "object") return [];
-  const images = (task.output as { readonly images?: unknown }).images;
+  const output = task.output as {
+    readonly images?: unknown;
+    readonly seed?: unknown;
+  };
+  const images = output.images;
   if (!Array.isArray(images)) return [];
   return images.flatMap((image, index) => {
     if (!image || typeof image !== "object") return [];
@@ -60,7 +68,12 @@ function candidatesFrom(task: GenerationTaskDetail): GenerationCandidate[] {
             : `${task.id}:${index}`,
         id: `${task.id}:${index}`,
         taskId: task.id,
+        taskType: source.taskType,
         url: candidate.url,
+        ...(typeof output.seed === "number" ? { seed: output.seed } : {}),
+        ...(source.referenceImageUrl
+          ? { sourceUrl: source.referenceImageUrl }
+          : {}),
         ...(typeof candidate.width === "number"
           ? { width: candidate.width }
           : {}),
@@ -100,7 +113,7 @@ export function GenerationWorkspace({
           task.id === detail.id
             ? {
                 ...task,
-                candidates: candidatesFrom(detail),
+                candidates: candidatesFrom(detail, task),
                 error: detail.error?.message ?? null,
                 status: detail.status,
                 updatedAt: detail.updatedAt,
@@ -135,6 +148,9 @@ export function GenerationWorkspace({
           ...input.parameters,
           projectId: input.projectId,
           prompt: input.prompt,
+          ...(input.maskImageUrl
+            ? { maskImageUrl: input.maskImageUrl }
+            : {}),
           shapeIds: input.shapeIds,
           taskType: input.taskType ?? "t2i",
           ...(input.referenceImageUrl
@@ -153,6 +169,9 @@ export function GenerationWorkspace({
             error: null,
             id: taskId,
             prompt: input.prompt,
+            ...(input.referenceImageUrl
+              ? { referenceImageUrl: input.referenceImageUrl }
+              : {}),
             status: "queued",
             taskType: input.taskType ?? "t2i",
             updatedAt: now,

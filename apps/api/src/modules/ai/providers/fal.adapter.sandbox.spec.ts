@@ -19,11 +19,17 @@ describeSandbox("FalAdapter sandbox", () => {
         i2iModel:
           process.env.FAL_I2I_MODEL ||
           "fal-ai/flux/dev/image-to-image",
+        inpaintModel:
+          process.env.FAL_INPAINT_MODEL ||
+          "fal-ai/flux-general/inpainting",
         t2iCostPerMegapixel: Number(
           process.env.FAL_T2I_COST_PER_MEGAPIXEL || 0,
         ),
         i2iCostPerMegapixel: Number(
           process.env.FAL_I2I_COST_PER_MEGAPIXEL || 0,
+        ),
+        inpaintCostPerMegapixel: Number(
+          process.env.FAL_INPAINT_COST_PER_MEGAPIXEL || 0,
         ),
         creditsPerUsd: Number(process.env.AI_CREDITS_PER_USD || 100),
       });

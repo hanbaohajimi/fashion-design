@@ -30,7 +30,11 @@ export class MockAdapter implements AiProvider {
   }
 
   supports(taskType: AiGenerationRequest["taskType"]): boolean {
-    return taskType === "t2i" || taskType === "i2i";
+    return (
+      taskType === "t2i" ||
+      taskType === "i2i" ||
+      taskType === "inpaint"
+    );
   }
 
   async submit(

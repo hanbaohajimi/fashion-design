@@ -2,6 +2,7 @@ import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
 import { BillingModule } from "../billing/billing.module";
+import { FilesModule } from "../files/files.module";
 import {
   COMPILER_DB,
   CONTEXT_MODEL,
@@ -16,17 +17,23 @@ import {
   GENERATION_JOBS,
   GenerationService,
 } from "./generation.service";
+import {
+  GENERATION_MASK_DB,
+  GenerationMaskService,
+} from "./generation-mask.service";
 
 @Module({
-  imports: [BillingModule],
+  imports: [BillingModule, FilesModule],
   controllers: [GenerationController],
   providers: [
     GenerationEventsService,
     GenerationService,
+    GenerationMaskService,
     ContextCompilerService,
     OpenAiContextModelGateway,
     BullGenerationJobs,
     { provide: GENERATION_DB, useValue: prisma },
+    { provide: GENERATION_MASK_DB, useValue: prisma },
     { provide: COMPILER_DB, useValue: prisma },
     {
       provide: CONTEXT_MODEL,

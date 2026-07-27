@@ -6,10 +6,11 @@ import type {
 interface CreateGenerationInput extends GenerationParameters {
   readonly projectId: string;
   readonly prompt: string;
+  readonly maskImageUrl?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
   readonly strength?: number;
-  readonly taskType: "t2i" | "i2i";
+  readonly taskType: "t2i" | "i2i" | "inpaint";
 }
 
 interface ErrorBody {
@@ -74,3 +75,40 @@ export async function fetchGenerationTask(
   return (await response.json()) as GenerationTaskDetail;
 }
 
+interface SignedMaskUpload {
+  readonly expiresAt: string;
+  readonly maskId: string;
+  readonly maskUrl: string;
+  readonly upload: {
+    readonly headers: Readonly<Record<string, string>>;
+    readonly method: "PUT";
+    readonly url: string;
+  };
+}
+
+export async function uploadTemporaryMask(
+  projectId: string,
+  blob: Blob,
+  width: number,
+  height: number,
+): Promise<string> {
+  const response = await fetch("/api/generations/masks/sign", {
+    method: "POST",
+    body: JSON.stringify({ height, projectId, size: blob.size, width }),
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw await apiError(response, "临时掩码签名失败");
+  }
+  const signed = (await response.json()) as SignedMaskUpload;
+  const uploaded = await fetch(signed.upload.url, {
+    method: signed.upload.method,
+    body: blob,
+    headers: signed.upload.headers,
+  });
+  if (!uploaded.ok) {
+    throw new GenerationApiError("掩码上传失败，请重试", "MASK_UPLOAD_FAILED");
+  }
+  return signed.maskUrl;
+}

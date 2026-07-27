@@ -21,12 +21,18 @@ export function falAdapterConfigFromEnv(): FalAdapterConfig {
     t2iModel: process.env.FAL_T2I_MODEL || "fal-ai/flux/dev",
     i2iModel:
       process.env.FAL_I2I_MODEL || "fal-ai/flux/dev/image-to-image",
+    inpaintModel:
+      process.env.FAL_INPAINT_MODEL || "fal-ai/flux-general/inpainting",
     t2iCostPerMegapixel: numberFromEnv(
       process.env.FAL_T2I_COST_PER_MEGAPIXEL,
       0,
     ),
     i2iCostPerMegapixel: numberFromEnv(
       process.env.FAL_I2I_COST_PER_MEGAPIXEL,
+      0,
+    ),
+    inpaintCostPerMegapixel: numberFromEnv(
+      process.env.FAL_INPAINT_COST_PER_MEGAPIXEL,
       0,
     ),
     creditsPerUsd: numberFromEnv(
