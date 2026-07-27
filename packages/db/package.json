@@ -1,0 +1,18 @@
+{
+  "name": "@fashion/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:validate": "prisma validate",
+    "generate": "prisma generate",
+    "lint": "eslint prisma.config.ts --max-warnings=0",
+    "migrate": "prisma migrate dev --name init",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2",
+    "prisma": "^7.9.0",
+    "typescript": "^5.9.3"
+  }
+}
