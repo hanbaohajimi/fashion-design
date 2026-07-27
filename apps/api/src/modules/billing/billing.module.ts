@@ -1,15 +1,14 @@
 import { prisma } from "@fashion/db";
 import { Global, Module } from "@nestjs/common";
 
-import { BILLING_DB, BillingService } from "./billing.service";
+import { BillingService } from "./billing.service";
 
 @Global()
 @Module({
   providers: [
-    BillingService,
     {
-      provide: BILLING_DB,
-      useValue: prisma,
+      provide: BillingService,
+      useFactory: () => new BillingService(prisma),
     },
   ],
   exports: [BillingService],

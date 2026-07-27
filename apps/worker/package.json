@@ -12,13 +12,16 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
+    "@fashion/ai": "workspace:*",
+    "@fashion/billing": "workspace:*",
     "@fashion/db": "workspace:*",
     "@fashion/shared": "workspace:*",
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "heic-decode": "^2.1.0",
     "openai": "^6.16.0",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/heic-decode": "^2.0.0",

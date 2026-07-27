@@ -1,24 +1,9 @@
+import { GenerationTaskStatus } from "@fashion/db";
 import { HttpStatus } from "@nestjs/common";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiProviderJob } from "../ai/interfaces/provider.interface";
 import { GenerationLimitExceededException } from "../billing/billing.errors";
 import { GenerationService } from "./generation.service";
-
-const job: AiProviderJob = {
-  provider: "mock",
-  providerJobId: "mock-job-1",
-  model: "mock/image-generator",
-  taskType: "t2i",
-  submittedAt: "2026-01-01T00:00:00.000Z",
-  cost: {
-    rawCost: 0,
-    credits: 0,
-    currency: "USD",
-    billableMegapixels: 1,
-    estimated: true,
-  },
-};
 
 const request = {
   taskType: "t2i" as const,
@@ -29,119 +14,157 @@ const request = {
   cfg: 3.5,
 };
 
-describe("GenerationService billing boundary", () => {
-  it("超限时返回 429 和可读错误体且不提交 Provider", async () => {
-    const aiService = {
-      getResult: vi.fn(),
-      getStatus: vi.fn(),
-      submit: vi.fn(),
-    };
-    const billingService = {
-      canGenerate: vi.fn().mockResolvedValue({
-        allowed: false,
-        code: "GEN_LIMIT_EXCEEDED",
-        limit: 100,
-        message: "本月免费生成次数已用完",
-        remaining: 0,
-        used: 100,
-      }),
-      incrementCount: vi.fn(),
-    };
-    const service = new GenerationService(
-      aiService as never,
-      billingService as never,
-    );
+function taskRecord(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    attemptCount: 0,
+    canceledAt: null,
+    completedAt: null,
+    countedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    errorCode: null,
+    errorMessage: null,
+    id: "task-1",
+    input: request,
+    output: null,
+    providerJob: null,
+    startedAt: null,
+    status: GenerationTaskStatus.QUEUED,
+    taskType: "t2i",
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    userId: "user-1",
+    ...overrides,
+  };
+}
+
+describe("GenerationService", () => {
+  const database = {
+    generationTask: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+  };
+  const jobs = {
+    cancel: vi.fn(),
+    enqueue: vi.fn(),
+  };
+  const billing = {
+    canGenerate: vi.fn(),
+  };
+  const service = new GenerationService(
+    database as never,
+    jobs,
+    billing as never,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    billing.canGenerate.mockResolvedValue({
+      allowed: true,
+      limit: 100,
+      remaining: 100,
+      used: 0,
+    });
+    database.generationTask.create.mockResolvedValue({ id: "task-1" });
+    jobs.cancel.mockResolvedValue(undefined);
+    jobs.enqueue.mockResolvedValue(undefined);
+  });
+
+  it("超限时返回 429 且不建任务、不入队", async () => {
+    billing.canGenerate.mockResolvedValue({
+      allowed: false,
+      code: "GEN_LIMIT_EXCEEDED",
+      limit: 100,
+      message: "本月免费生成次数已用完",
+      remaining: 0,
+      used: 100,
+    });
 
     const error = await service
-      .submit("user-1", request)
+      .create("user-1", request)
       .catch((cause: unknown) => cause);
 
     expect(error).toBeInstanceOf(GenerationLimitExceededException);
     expect(error).toMatchObject({
       status: HttpStatus.TOO_MANY_REQUESTS,
-      response: {
-        code: "GEN_LIMIT_EXCEEDED",
-        message: "本月免费生成次数已用完",
-        remaining: 0,
-      },
     });
-    expect(aiService.submit).not.toHaveBeenCalled();
+    expect(database.generationTask.create).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
-  it("Provider 结果失败时不触发 incrementCount", async () => {
-    const providerError = new Error("provider failed");
-    const aiService = {
-      getResult: vi.fn().mockRejectedValue(providerError),
-      getStatus: vi.fn(),
-      submit: vi.fn(),
-    };
-    const billingService = {
-      canGenerate: vi.fn(),
-      incrementCount: vi.fn(),
-    };
-    const service = new GenerationService(
-      aiService as never,
-      billingService as never,
-    );
+  it("通过额度检查后创建 queued task 并使用 task id 入队", async () => {
+    await expect(service.create("user-1", request)).resolves.toEqual({
+      taskId: "task-1",
+    });
 
-    await expect(service.getResult("user-1", job)).rejects.toBe(
-      providerError,
-    );
-    expect(billingService.incrementCount).not.toHaveBeenCalled();
+    expect(database.generationTask.create).toHaveBeenCalledWith({
+      data: {
+        input: request,
+        status: GenerationTaskStatus.QUEUED,
+        taskType: "t2i",
+        userId: "user-1",
+      },
+      select: { id: true },
+    });
+    expect(jobs.enqueue).toHaveBeenCalledWith("task-1", "user-1");
   });
 
-  it("Provider 成功返回结果后才增加一次计数", async () => {
-    const result = {
-      job,
-      images: [{ url: "https://cdn.test/generated.png" }],
-      cost: job.cost,
-    };
-    const aiService = {
-      getResult: vi.fn().mockResolvedValue(result),
-      getStatus: vi.fn(),
-      submit: vi.fn(),
-    };
-    const billingService = {
-      canGenerate: vi.fn(),
-      incrementCount: vi.fn().mockResolvedValue({
-        allowed: true,
-        limit: 100,
-        remaining: 99,
-        used: 1,
+  it("入队失败时把 task 标为 failed", async () => {
+    jobs.enqueue.mockRejectedValue(new Error("redis unavailable"));
+    database.generationTask.update.mockResolvedValue(
+      taskRecord({ status: GenerationTaskStatus.FAILED }),
+    );
+
+    await expect(service.create("user-1", request)).rejects.toMatchObject({
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+    expect(database.generationTask.update).toHaveBeenCalledWith({
+      where: { id: "task-1" },
+      data: expect.objectContaining({
+        errorCode: "QUEUE_UNAVAILABLE",
+        status: GenerationTaskStatus.FAILED,
       }),
-    };
-    const service = new GenerationService(
-      aiService as never,
-      billingService as never,
-    );
-
-    await expect(service.getResult("user-1", job)).resolves.toBe(result);
-    expect(billingService.incrementCount).toHaveBeenCalledOnce();
-    expect(billingService.incrementCount).toHaveBeenCalledWith("user-1");
+    });
   });
 
-  it("提交只通过 BillingService 判断额度，不读取字段", async () => {
-    const aiService = {
-      getResult: vi.fn(),
-      getStatus: vi.fn(),
-      submit: vi.fn().mockResolvedValue(job),
-    };
-    const billingService = {
-      canGenerate: vi.fn().mockResolvedValue({
-        allowed: true,
-        limit: 100,
-        remaining: 50,
-        used: 50,
+  it("取消 queued task 后更新数据库并移除队列任务", async () => {
+    database.generationTask.findFirst.mockResolvedValue(taskRecord());
+    database.generationTask.update.mockResolvedValue(
+      taskRecord({
+        canceledAt: new Date(),
+        completedAt: new Date(),
+        status: GenerationTaskStatus.CANCELED,
       }),
-      incrementCount: vi.fn(),
-    };
-    const service = new GenerationService(
-      aiService as never,
-      billingService as never,
     );
 
-    await expect(service.submit("user-1", request)).resolves.toBe(job);
-    expect(billingService.canGenerate).toHaveBeenCalledWith("user-1");
-    expect(aiService.submit).toHaveBeenCalledWith(request);
+    const result = await service.cancel("user-1", "task-1");
+
+    expect(result.status).toBe("canceled");
+    expect(jobs.cancel).toHaveBeenCalledWith("task-1");
+  });
+
+  it("Redis 暂时不可用时仍以数据库 canceled 状态为准", async () => {
+    database.generationTask.findFirst.mockResolvedValue(taskRecord());
+    database.generationTask.update.mockResolvedValue(
+      taskRecord({ status: GenerationTaskStatus.CANCELED }),
+    );
+    jobs.cancel.mockRejectedValue(new Error("redis unavailable"));
+
+    await expect(service.cancel("user-1", "task-1")).resolves.toMatchObject({
+      status: "canceled",
+    });
+  });
+
+  it("用户不能读取不属于自己的任务", async () => {
+    database.generationTask.findFirst.mockResolvedValue(null);
+
+    await expect(service.get("user-2", "task-1")).rejects.toMatchObject({
+      response: {
+        code: "GENERATION_TASK_NOT_FOUND",
+      },
+      status: HttpStatus.NOT_FOUND,
+    });
   });
 });

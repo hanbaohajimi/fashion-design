@@ -1,4 +1,5 @@
 export const PLATFORM_NAME = "AI 服装设计平台";
+export const GENERATION_QUEUE_NAME = "generation";
 export const THUMBNAIL_QUEUE_NAME = "thumbnail";
 export const VLM_INFERENCE_QUEUE_NAME = "vlm-inference";
 export const BOARD_ELEMENT_ROLES = [
@@ -26,6 +27,24 @@ export type VlmRoleLabel = (typeof VLM_ROLE_LABELS)[number];
 
 export interface ThumbnailJobData {
   readonly fileId: string;
+}
+
+export interface GenerationJobData {
+  readonly taskId: string;
+  readonly userId: string;
+}
+
+export type GenerationTaskEventStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+export interface GenerationTaskEvent {
+  readonly taskId: string;
+  readonly status: GenerationTaskEventStatus;
+  readonly timestamp: string;
 }
 
 export interface VlmInferenceJobData {

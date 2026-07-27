@@ -1,10 +1,8 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
 
-export const GENERATION_LIMIT_EXCEEDED = {
-  code: "GEN_LIMIT_EXCEEDED",
-  message: "本月免费生成次数已用完",
-  remaining: 0,
-} as const;
+import { GENERATION_LIMIT_EXCEEDED } from "./billing.service";
+
+export { GENERATION_LIMIT_EXCEEDED };
 
 export class GenerationLimitExceededException extends HttpException {
   constructor() {
