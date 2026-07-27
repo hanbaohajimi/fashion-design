@@ -81,6 +81,7 @@ export function InpaintPanel({
           ...(candidate.seed !== undefined ? { seed: candidate.seed } : {}),
         },
         maskImageUrl,
+        parentAssetId: candidate.assetId,
         projectId,
         prompt: prompt.trim(),
         referenceImageUrl: candidate.url,

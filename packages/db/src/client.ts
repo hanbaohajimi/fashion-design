@@ -1,12 +1,14 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
+  DesignAssetOperation,
   FileStatus,
   GenerationTaskStatus,
   Prisma,
   PrismaClient,
   RoleInferenceState,
   RoleSource,
+  type DesignAsset,
   type FileAsset,
   type GenerationTask,
   type Project,
@@ -39,6 +41,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export {
+  DesignAssetOperation,
   FileStatus,
   GenerationTaskStatus,
   Prisma,
@@ -46,4 +49,11 @@ export {
   RoleInferenceState,
   RoleSource,
 };
-export type { FileAsset, GenerationTask, Project, User, Workspace };
+export type {
+  DesignAsset,
+  FileAsset,
+  GenerationTask,
+  Project,
+  User,
+  Workspace,
+};

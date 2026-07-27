@@ -5,6 +5,8 @@ import {
 } from "@fashion/db";
 import type { AiGenerationRequest } from "@fashion/ai";
 import {
+  BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -19,7 +21,10 @@ import type { GenerationCreateRequest } from "./generation.schemas";
 export const GENERATION_DB = Symbol("GENERATION_DB");
 export const GENERATION_JOBS = Symbol("GENERATION_JOBS");
 
-type GenerationDatabase = Pick<PrismaClient, "generationTask">;
+type GenerationDatabase = Pick<
+  PrismaClient,
+  "designAsset" | "generationTask"
+>;
 
 export interface GenerationJobs {
   enqueue(taskId: string, userId: string): Promise<void>;
@@ -60,6 +65,11 @@ export class GenerationService {
     if (!quota.allowed) {
       throw new GenerationLimitExceededException();
     }
+    await this.assertParentAsset(
+      userId,
+      request.projectId,
+      request.parentAssetId,
+    );
 
     const compiledPrompt = await this.compiler.compile(
       userId,
@@ -68,6 +78,7 @@ export class GenerationService {
       request.shapeIds,
     );
     const providerRequest = { ...request };
+    delete providerRequest.parentAssetId;
     delete providerRequest.projectId;
     delete providerRequest.shapeIds;
     const input: AiGenerationRequest = {
@@ -80,6 +91,10 @@ export class GenerationService {
       data: {
         compiledPrompt: compiledPrompt as unknown as Prisma.InputJsonValue,
         input: input as Prisma.InputJsonValue,
+        ...(request.parentAssetId
+          ? { parentAssetId: request.parentAssetId }
+          : {}),
+        ...(request.projectId ? { projectId: request.projectId } : {}),
         status: GenerationTaskStatus.QUEUED,
         taskType: input.taskType,
         userId,
@@ -109,6 +124,48 @@ export class GenerationService {
     }
 
     return { taskId: task.id };
+  }
+
+  private async assertParentAsset(
+    userId: string,
+    projectId: string | undefined,
+    parentAssetId: string | undefined,
+  ): Promise<void> {
+    if (!parentAssetId) return;
+    if (!projectId) {
+      throw new BadRequestException({
+        code: "PARENT_ASSET_REQUIRES_PROJECT",
+        message: "血缘资产必须关联项目",
+      });
+    }
+    const parent = await this.database.designAsset.findUnique({
+      where: { id: parentAssetId },
+      include: {
+        project: {
+          select: {
+            workspace: { select: { ownerId: true } },
+          },
+        },
+      },
+    });
+    if (!parent) {
+      throw new NotFoundException({
+        code: "DESIGN_ASSET_NOT_FOUND",
+        message: "父资产不存在",
+      });
+    }
+    if (parent.project.workspace.ownerId !== userId) {
+      throw new ForbiddenException({
+        code: "DESIGN_ASSET_FORBIDDEN",
+        message: "无权使用该父资产",
+      });
+    }
+    if (parent.projectId !== projectId) {
+      throw new BadRequestException({
+        code: "ASSET_PROJECT_MISMATCH",
+        message: "父资产不属于当前项目",
+      });
+    }
   }
 
   async get(userId: string, taskId: string): Promise<GenerationTaskView> {

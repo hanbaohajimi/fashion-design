@@ -41,6 +41,9 @@ function taskRecord(
 
 describe("GenerationService", () => {
   const database = {
+    designAsset: {
+      findUnique: vi.fn(),
+    },
     generationTask: {
       create: vi.fn(),
       findFirst: vi.fn(),
@@ -147,9 +150,33 @@ describe("GenerationService", () => {
     expect(createData).toBeDefined();
     expect(createData.input).not.toHaveProperty("projectId");
     expect(createData.input).not.toHaveProperty("shapeIds");
+    expect(createData.projectId).toBe("project-1");
     expect(createData.compiledPrompt).toMatchObject({
       positivePrompt: "fashion editorial",
     });
+  });
+
+  it("变体任务校验父资产归属并保存 parentAssetId", async () => {
+    database.designAsset.findUnique.mockResolvedValue({
+      id: "asset-parent",
+      projectId: "project-1",
+      project: { workspace: { ownerId: "user-1" } },
+    });
+
+    await service.create("user-1", {
+      ...request,
+      parentAssetId: "asset-parent",
+      projectId: "project-1",
+    });
+
+    expect(database.generationTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentAssetId: "asset-parent",
+          projectId: "project-1",
+        }),
+      }),
+    );
   });
 
   it("入队失败时把 task 标为 failed", async () => {

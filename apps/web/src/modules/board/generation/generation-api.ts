@@ -1,4 +1,5 @@
 import type {
+  DesignAssetVersion,
   GenerationParameters,
   GenerationTaskDetail,
 } from "./generation-types";
@@ -7,10 +8,52 @@ interface CreateGenerationInput extends GenerationParameters {
   readonly projectId: string;
   readonly prompt: string;
   readonly maskImageUrl?: string;
+  readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
   readonly strength?: number;
   readonly taskType: "t2i" | "i2i" | "inpaint";
+}
+
+export async function fetchAssetVersions(
+  assetId: string,
+  cursor?: string,
+): Promise<{
+  readonly items: readonly DesignAssetVersion[];
+  readonly nextCursor: string | null;
+}> {
+  const query = new URLSearchParams({ limit: "10" });
+  if (cursor) query.set("cursor", cursor);
+  const response = await fetch(
+    `/api/design-assets/${encodeURIComponent(assetId)}/versions?${query}`,
+    { cache: "no-store", credentials: "include" },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "版本历史读取失败");
+  }
+  return (await response.json()) as {
+    readonly items: readonly DesignAssetVersion[];
+    readonly nextCursor: string | null;
+  };
+}
+
+export async function restoreAssetVersion(
+  targetAssetId: string,
+  currentAssetId: string,
+): Promise<DesignAssetVersion> {
+  const response = await fetch(
+    `/api/design-assets/${encodeURIComponent(targetAssetId)}/restore`,
+    {
+      method: "POST",
+      body: JSON.stringify({ currentAssetId }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "版本恢复失败");
+  }
+  return (await response.json()) as DesignAssetVersion;
 }
 
 interface ErrorBody {

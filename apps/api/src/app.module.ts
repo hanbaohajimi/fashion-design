@@ -8,6 +8,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { BillingModule } from "./modules/billing/billing.module";
 import { BoardElementsModule } from "./modules/board-elements/board-elements.module";
 import { BoardsModule } from "./modules/boards/boards.module";
+import { DesignAssetsModule } from "./modules/design-assets/design-assets.module";
 import { FilesModule } from "./modules/files/files.module";
 import { GenerationModule } from "./modules/generation/generation.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
@@ -19,6 +20,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
     BillingModule,
     BoardElementsModule,
     BoardsModule,
+    DesignAssetsModule,
     FilesModule,
     GenerationModule,
     ProjectsModule,

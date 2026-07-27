@@ -7,6 +7,7 @@ import {
 } from "@fashion/ai";
 import type { BillingService } from "@fashion/billing";
 import {
+  DesignAssetOperation,
   GenerationTaskStatus,
   Prisma,
   type PrismaClient,
@@ -16,6 +17,7 @@ import type {
   GenerationTaskEvent,
 } from "@fashion/shared";
 import { UnrecoverableError, type Job } from "bullmq";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 const providerJobSchema = z.object({
@@ -35,7 +37,7 @@ const providerJobSchema = z.object({
 
 type GenerationDatabase = Pick<
   PrismaClient,
-  "$transaction" | "generationTask"
+  "$transaction" | "designAsset" | "generationTask"
 >;
 
 type GenerationAi = Pick<
@@ -125,6 +127,11 @@ export function createGenerationProcessor({
         task.id,
         task.userId,
         result,
+        {
+          parentAssetId: task.parentAssetId,
+          projectId: task.projectId,
+          taskType: task.taskType,
+        },
       );
       await updateProgressSafely(job, event(task.id, finalStatus));
       return {
@@ -242,6 +249,11 @@ async function persistSuccessOnce(
   taskId: string,
   userId: string,
   result: AiProviderResult,
+  lineage: {
+    readonly parentAssetId: string | null;
+    readonly projectId: string | null;
+    readonly taskType: string;
+  },
 ): Promise<"canceled" | "succeeded"> {
   return database.$transaction(async (transaction) => {
     const completedAt = new Date();
@@ -261,6 +273,16 @@ async function persistSuccessOnce(
       },
     });
     if (claimed.count === 1) {
+      const output = await persistDesignAssets(
+        transaction,
+        taskId,
+        result,
+        lineage,
+      );
+      await transaction.generationTask.update({
+        where: { id: taskId },
+        data: { output: toJson(output) },
+      });
       await billing.incrementCount(userId, transaction);
       return "succeeded";
     }
@@ -272,6 +294,60 @@ async function persistSuccessOnce(
       ? "canceled"
       : "succeeded";
   });
+}
+
+async function persistDesignAssets(
+  transaction: Prisma.TransactionClient,
+  taskId: string,
+  result: AiProviderResult,
+  lineage: {
+    readonly parentAssetId: string | null;
+    readonly projectId: string | null;
+    readonly taskType: string;
+  },
+): Promise<AiProviderResult> {
+  if (!lineage.projectId) return result;
+
+  const parent = lineage.parentAssetId
+    ? await transaction.designAsset.findFirst({
+        where: {
+          id: lineage.parentAssetId,
+          projectId: lineage.projectId,
+        },
+        select: { rootAssetId: true },
+      })
+    : null;
+  if (lineage.parentAssetId && !parent) {
+    throw new UnrecoverableError("父资产不存在或不属于当前项目");
+  }
+
+  const images = [];
+  for (const image of result.images) {
+    const assetId = randomUUID();
+    await transaction.designAsset.create({
+      data: {
+        id: assetId,
+        generationTaskId: taskId,
+        height: image.height ?? null,
+        operation: operationFrom(lineage.taskType),
+        parentAssetId: lineage.parentAssetId,
+        projectId: lineage.projectId,
+        rootAssetId: parent?.rootAssetId ?? assetId,
+        seed: result.seed === undefined ? null : BigInt(result.seed),
+        thumbnailUrl: image.url,
+        url: image.url,
+        width: image.width ?? null,
+      },
+    });
+    images.push({ ...image, assetId });
+  }
+  return { ...result, images };
+}
+
+function operationFrom(taskType: string): DesignAssetOperation {
+  if (taskType === "inpaint") return DesignAssetOperation.INPAINT;
+  if (taskType === "i2i") return DesignAssetOperation.VARIATION;
+  return DesignAssetOperation.GENERATED;
 }
 
 async function assertActive(

@@ -7,6 +7,7 @@ import { InpaintPanel } from "./InpaintPanel";
 import type { GenerationCandidate } from "./generation-types";
 import { hasToneMismatch } from "./tone-analysis";
 import { VariationControl } from "./VariationControl";
+import { VersionTimeline } from "./VersionTimeline";
 import styles from "./generation.module.css";
 
 export function CandidateLightbox({
@@ -18,11 +19,14 @@ export function CandidateLightbox({
 }: {
   readonly candidate: GenerationCandidate;
   readonly initialMode: "view" | "inpaint";
-  readonly onAdopt: () => void;
+  readonly onAdopt: (candidate: GenerationCandidate) => void;
   readonly onClose: () => void;
   readonly onDiscard: () => void;
 }) {
-  const [mode, setMode] = useState(initialMode);
+  const [activeCandidate, setActiveCandidate] = useState(candidate);
+  const [mode, setMode] = useState<"history" | "inpaint" | "view">(
+    initialMode,
+  );
   const [toneWarning, setToneWarning] = useState(false);
 
   useEffect(() => {
@@ -35,8 +39,14 @@ export function CandidateLightbox({
 
   useEffect(() => {
     let disposed = false;
-    if (candidate.taskType === "inpaint" && candidate.sourceUrl) {
-      void hasToneMismatch(candidate.sourceUrl, candidate.url).then(
+    if (
+      activeCandidate.taskType === "inpaint" &&
+      activeCandidate.sourceUrl
+    ) {
+      void hasToneMismatch(
+        activeCandidate.sourceUrl,
+        activeCandidate.url,
+      ).then(
         (mismatch) => {
           if (!disposed) setToneWarning(mismatch === true);
         },
@@ -45,7 +55,7 @@ export function CandidateLightbox({
     return () => {
       disposed = true;
     };
-  }, [candidate]);
+  }, [activeCandidate]);
 
   return createPortal(
     <div
@@ -61,7 +71,13 @@ export function CandidateLightbox({
         <header>
           <div>
             <span>LIGHTBOX / EDIT</span>
-            <strong>{mode === "inpaint" ? "局部编辑模式" : "候选设计"}</strong>
+            <strong>
+              {mode === "inpaint"
+                ? "局部编辑模式"
+                : mode === "history"
+                  ? "版本与血缘"
+                  : "候选设计"}
+            </strong>
           </div>
           <nav aria-label="候选操作">
             <button onClick={() => setMode("view")} type="button">
@@ -70,7 +86,10 @@ export function CandidateLightbox({
             <button onClick={() => setMode("inpaint")} type="button">
               局部重绘
             </button>
-            <button onClick={onAdopt} type="button">
+            <button onClick={() => setMode("history")} type="button">
+              版本
+            </button>
+            <button onClick={() => onAdopt(activeCandidate)} type="button">
               采纳
             </button>
             <button onClick={onDiscard} type="button">
@@ -87,14 +106,28 @@ export function CandidateLightbox({
           </p>
         ) : null}
         {mode === "inpaint" ? (
-          <InpaintPanel candidate={candidate} onSubmitted={onClose} />
+          <InpaintPanel candidate={activeCandidate} onSubmitted={onClose} />
+        ) : mode === "history" ? (
+          <VersionTimeline
+            assetId={activeCandidate.assetId}
+            onRestore={(asset) =>
+              setActiveCandidate((current) => ({
+                ...current,
+                assetId: asset.id,
+                url: asset.url,
+                ...(asset.height === null ? {} : { height: asset.height }),
+                ...(asset.seed === null ? {} : { seed: asset.seed }),
+                ...(asset.width === null ? {} : { width: asset.width }),
+              }))
+            }
+          />
         ) : (
           <div className={styles.lightboxPreview}>
             <figure>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="候选设计大图" src={candidate.url} />
+              <img alt="候选设计大图" src={activeCandidate.url} />
             </figure>
-            <VariationControl candidate={candidate} />
+            <VariationControl candidate={activeCandidate} />
           </div>
         )}
       </section>

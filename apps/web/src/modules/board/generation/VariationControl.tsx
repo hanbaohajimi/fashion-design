@@ -44,6 +44,7 @@ export function VariationControl({
               seed,
               width: normalizedDimension(candidate.width),
             },
+            parentAssetId: candidate.assetId,
             projectId,
             prompt: source?.prompt ?? "生成相似设计变体",
             referenceImageUrl: candidate.url,

@@ -8,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id              String      @id @default(cuid(2))
-  authId          String?     @unique @map("auth_id")
-  email           String      @unique
+  id              String           @id @default(cuid(2))
+  authId          String?          @unique @map("auth_id")
+  email           String           @unique
   name            String?
   avatar          String?
-  generationCount Int         @default(0) @map("generation_count")
-  generationLimit Int         @default(100) @map("generation_limit")
-  deletedAt       DateTime?   @map("deleted_at")
-  createdAt       DateTime    @default(now()) @map("created_at")
+  generationCount Int              @default(0) @map("generation_count")
+  generationLimit Int              @default(100) @map("generation_limit")
+  deletedAt       DateTime?        @map("deleted_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
   files           FileAsset[]
   generationTasks GenerationTask[]
   ownedWorkspaces Workspace[]
@@ -32,29 +32,75 @@ enum GenerationTaskStatus {
   CANCELED
 }
 
+enum DesignAssetOperation {
+  GENERATED
+  VARIATION
+  INPAINT
+  UPSCALE
+  RESTORE
+}
+
 model GenerationTask {
-  id            String               @id @default(cuid(2))
-  userId        String               @map("user_id")
-  status        GenerationTaskStatus @default(QUEUED)
-  taskType      String               @map("task_type")
-  input         Json
-  compiledPrompt Json?                @map("compiled_prompt")
-  providerJob   Json?                @map("provider_job")
-  output        Json?
-  errorCode     String?              @map("error_code")
-  errorMessage  String?              @map("error_message")
-  attemptCount  Int                  @default(0) @map("attempt_count")
-  countedAt     DateTime?            @map("counted_at")
-  startedAt     DateTime?            @map("started_at")
-  completedAt   DateTime?            @map("completed_at")
-  canceledAt    DateTime?            @map("canceled_at")
-  createdAt     DateTime             @default(now()) @map("created_at")
-  updatedAt     DateTime             @updatedAt @map("updated_at")
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String               @id @default(cuid(2))
+  userId          String               @map("user_id")
+  projectId       String?              @map("project_id")
+  parentAssetId   String?              @map("parent_asset_id")
+  status          GenerationTaskStatus @default(QUEUED)
+  taskType        String               @map("task_type")
+  input           Json
+  compiledPrompt  Json?                @map("compiled_prompt")
+  providerJob     Json?                @map("provider_job")
+  output          Json?
+  errorCode       String?              @map("error_code")
+  errorMessage    String?              @map("error_message")
+  attemptCount    Int                  @default(0) @map("attempt_count")
+  countedAt       DateTime?            @map("counted_at")
+  startedAt       DateTime?            @map("started_at")
+  completedAt     DateTime?            @map("completed_at")
+  canceledAt      DateTime?            @map("canceled_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentAsset     DesignAsset?         @relation("TaskParentAsset", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  generatedAssets DesignAsset[]        @relation("TaskGeneratedAssets")
 
   @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([parentAssetId])
   @@index([status, createdAt])
   @@map("generation_tasks")
+}
+
+model DesignAsset {
+  id                  String               @id @default(cuid(2))
+  projectId           String               @map("project_id")
+  generationTaskId    String?              @map("generation_task_id")
+  parentAssetId       String?              @map("parent_asset_id")
+  rootAssetId         String               @map("root_asset_id")
+  restoredFromAssetId String?              @map("restored_from_asset_id")
+  operation           DesignAssetOperation
+  url                 String
+  thumbnailUrl        String?              @map("thumbnail_url")
+  width               Int?
+  height              Int?
+  seed                BigInt?
+  archivedAt          DateTime?            @map("archived_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generationTask      GenerationTask?      @relation("TaskGeneratedAssets", fields: [generationTaskId], references: [id], onDelete: SetNull)
+  parent              DesignAsset?         @relation("AssetLineage", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  children            DesignAsset[]        @relation("AssetLineage")
+  restoredFrom        DesignAsset?         @relation("AssetRestores", fields: [restoredFromAssetId], references: [id], onDelete: SetNull)
+  restoreCopies       DesignAsset[]        @relation("AssetRestores")
+  sourceForTasks      GenerationTask[]     @relation("TaskParentAsset")
+
+  @@index([projectId, createdAt])
+  @@index([rootAssetId, createdAt])
+  @@index([parentAssetId])
+  @@index([generationTaskId])
+  @@index([archivedAt])
+  @@map("design_assets")
 }
 
 enum FileStatus {
@@ -65,23 +111,23 @@ enum FileStatus {
 }
 
 model FileAsset {
-  id               String     @id @default(cuid(2))
-  ownerId          String     @map("owner_id")
-  originalName     String     @map("original_name")
-  mimeType         String     @map("mime_type")
-  sizeBytes        Int        @map("size_bytes")
+  id               String         @id @default(cuid(2))
+  ownerId          String         @map("owner_id")
+  originalName     String         @map("original_name")
+  mimeType         String         @map("mime_type")
+  sizeBytes        Int            @map("size_bytes")
   sha256           String
-  objectKey        String     @unique @map("object_key")
-  status           FileStatus @default(PENDING)
-  thumbnail256Key  String?    @map("thumbnail_256_key")
-  thumbnail1024Key String?    @map("thumbnail_1024_key")
+  objectKey        String         @unique @map("object_key")
+  status           FileStatus     @default(PENDING)
+  thumbnail256Key  String?        @map("thumbnail_256_key")
+  thumbnail1024Key String?        @map("thumbnail_1024_key")
   width            Int?
   height           Int?
-  errorMessage     String?    @map("error_message")
-  completedAt      DateTime?  @map("completed_at")
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
-  owner            User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  errorMessage     String?        @map("error_message")
+  completedAt      DateTime?      @map("completed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  owner            User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   boardElements    BoardElement[]
 
   @@unique([ownerId, sha256])
@@ -115,21 +161,23 @@ model Workspace {
 }
 
 model Project {
-  id             String    @id @default(cuid(2))
-  wsId           String    @map("ws_id")
-  name           String
-  coverAssetId   String?   @map("cover_asset_id")
-  idempotencyKey String?   @map("idempotency_key")
-  archived       Boolean   @default(false)
-  deletedAt      DateTime? @map("deleted_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  workspace      Workspace @relation(fields: [wsId], references: [id], onDelete: Cascade)
-  boardSnapshot  BoardSnapshot?
-  boardElements  BoardElement[]
+  id              String           @id @default(cuid(2))
+  wsId            String           @map("ws_id")
+  name            String
+  coverAssetId    String?          @map("cover_asset_id")
+  idempotencyKey  String?          @map("idempotency_key")
+  archived        Boolean          @default(false)
+  deletedAt       DateTime?        @map("deleted_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  workspace       Workspace        @relation(fields: [wsId], references: [id], onDelete: Cascade)
+  boardSnapshot   BoardSnapshot?
+  boardElements   BoardElement[]
+  designAssets    DesignAsset[]
+  generationTasks GenerationTask[]
 
-  @@index([wsId])
   @@unique([wsId, idempotencyKey])
+  @@index([wsId])
   @@map("projects")
 }
 

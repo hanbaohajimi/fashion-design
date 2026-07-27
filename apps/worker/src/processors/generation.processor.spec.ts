@@ -5,6 +5,7 @@ import {
 } from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
 import {
+  DesignAssetOperation,
   GenerationTaskStatus,
   prisma,
   type GenerationTask,
@@ -66,15 +67,29 @@ describe("Generation processor", () => {
       await process(job);
       await process(fakeJob(fixture.task));
 
-      const [task, user] = await Promise.all([
+      const [task, user, assets] = await Promise.all([
         prisma.generationTask.findUniqueOrThrow({
           where: { id: fixture.task.id },
         }),
         prisma.user.findUniqueOrThrow({ where: { id: fixture.userId } }),
+        prisma.designAsset.findMany({
+          where: { generationTaskId: fixture.task.id },
+        }),
       ]);
       expect(task.status).toBe(GenerationTaskStatus.SUCCEEDED);
       expect(task.output).toMatchObject({
-        images: [{ url: "https://cdn.test/generated.png" }],
+        images: [
+          {
+            assetId: expect.any(String),
+            url: "https://cdn.test/generated.png",
+          },
+        ],
+      });
+      expect(assets).toHaveLength(1);
+      expect(assets[0]).toMatchObject({
+        operation: DesignAssetOperation.GENERATED,
+        parentAssetId: null,
+        rootAssetId: assets[0]?.id,
       });
       expect(task.countedAt).not.toBeNull();
       expect(user.generationCount).toBe(1);
@@ -82,6 +97,30 @@ describe("Generation processor", () => {
         expect.objectContaining({ status: "running" }),
         expect.objectContaining({ status: "succeeded" }),
       ]);
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("i2i 成功后新资产继承父资产与根血缘", async () => {
+    const fixture = await createTask(GenerationTaskStatus.QUEUED, true);
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      pollIntervalMs: 1,
+    });
+
+    try {
+      await process(fakeJob(fixture.task));
+      const child = await prisma.designAsset.findFirstOrThrow({
+        where: { generationTaskId: fixture.task.id },
+      });
+      expect(child).toMatchObject({
+        operation: DesignAssetOperation.VARIATION,
+        parentAssetId: fixture.parentAssetId,
+        rootAssetId: fixture.parentAssetId,
+      });
     } finally {
       await cleanup(fixture.userId);
     }
@@ -292,25 +331,63 @@ function fakeJob(
 
 async function createTask(
   status: GenerationTaskStatus = GenerationTaskStatus.QUEUED,
-): Promise<{ task: GenerationTask; userId: string }> {
+  withParent = false,
+): Promise<{
+  task: GenerationTask;
+  userId: string;
+  parentAssetId: string | null;
+}> {
   const user = await prisma.user.create({
     data: {
       email: `generation-worker-${crypto.randomUUID()}@example.com`,
       generationLimit: 100,
+      ownedWorkspaces: {
+        create: {
+          name: "Generation worker workspace",
+          projects: { create: { name: "Generation worker project" } },
+        },
+      },
+    },
+    include: {
+      ownedWorkspaces: { include: { projects: true } },
     },
   });
+  const projectId = user.ownedWorkspaces[0]?.projects[0]?.id;
+  if (!projectId) throw new Error("测试项目创建失败");
+  const parentAssetId = withParent ? crypto.randomUUID() : null;
+  if (parentAssetId) {
+    await prisma.designAsset.create({
+      data: {
+        id: parentAssetId,
+        operation: DesignAssetOperation.GENERATED,
+        projectId,
+        rootAssetId: parentAssetId,
+        url: "https://cdn.test/parent.png",
+      },
+    });
+  }
+  const taskInput = withParent
+    ? {
+        ...request,
+        referenceImageUrl: "https://cdn.test/parent.png",
+        strength: 0.5,
+        taskType: "i2i" as const,
+      }
+    : request;
   const task = await prisma.generationTask.create({
     data: {
-      input: request,
+      input: taskInput,
+      parentAssetId,
+      projectId,
       status,
-      taskType: request.taskType,
+      taskType: taskInput.taskType,
       userId: user.id,
       ...(status === GenerationTaskStatus.CANCELED
         ? { canceledAt: new Date(), completedAt: new Date() }
         : {}),
     },
   });
-  return { task, userId: user.id };
+  return { parentAssetId, task, userId: user.id };
 }
 
 async function cleanup(userId: string): Promise<void> {

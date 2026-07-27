@@ -28,6 +28,7 @@ interface StartGenerationInput {
   readonly projectId: string;
   readonly prompt: string;
   readonly maskImageUrl?: string;
+  readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
   readonly strength?: number;
@@ -150,6 +151,9 @@ export function GenerationWorkspace({
           prompt: input.prompt,
           ...(input.maskImageUrl
             ? { maskImageUrl: input.maskImageUrl }
+            : {}),
+          ...(input.parentAssetId
+            ? { parentAssetId: input.parentAssetId }
             : {}),
           shapeIds: input.shapeIds,
           taskType: input.taskType ?? "t2i",

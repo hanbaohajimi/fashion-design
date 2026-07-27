@@ -47,3 +47,25 @@ export interface GenerationParameters {
   readonly steps: number;
   readonly width: number;
 }
+
+export type DesignAssetOperation =
+  | "generated"
+  | "variation"
+  | "inpaint"
+  | "upscale"
+  | "restore";
+
+export interface DesignAssetVersion {
+  readonly archivedAt: string | null;
+  readonly createdAt: string;
+  readonly height: number | null;
+  readonly id: string;
+  readonly operation: DesignAssetOperation;
+  readonly parentAssetId: string | null;
+  readonly projectId: string;
+  readonly restoredFromAssetId: string | null;
+  readonly seed: number | null;
+  readonly thumbnailUrl: string | null;
+  readonly url: string;
+  readonly width: number | null;
+}

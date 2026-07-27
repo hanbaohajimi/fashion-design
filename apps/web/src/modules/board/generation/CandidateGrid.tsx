@@ -65,6 +65,7 @@ export function CandidateGrid() {
     const source = generation.tasks.find((task) => task.id === candidate.taskId);
     await generation.start({
       parameters: DEFAULT_GENERATION_PARAMETERS,
+      parentAssetId: candidate.assetId,
       projectId,
       prompt: source?.prompt || "生成设计变体",
       shapeIds: editor.getSelectedShapeIds(),
@@ -127,8 +128,8 @@ export function CandidateGrid() {
         <CandidateLightbox
           candidate={lightbox.candidate}
           initialMode={lightbox.mode}
-          onAdopt={() => {
-            adopt(lightbox.candidate);
+          onAdopt={(candidate) => {
+            adopt(candidate);
             setLightbox(null);
           }}
           onClose={() => setLightbox(null)}
