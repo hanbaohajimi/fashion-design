@@ -1,0 +1,656 @@
+.library {
+  --ink: #181915;
+  --paper: #f1eee5;
+  --signal: #e9522c;
+  --muted: #69675f;
+  min-height: 100vh;
+  padding: 0 clamp(1.25rem, 4vw, 4.5rem) 5rem;
+  overflow-x: hidden;
+  background:
+    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px) 0 0 /
+      clamp(4.5rem, 8vw, 8.5rem) 100%,
+    var(--paper);
+  color: var(--ink);
+}
+
+.topbar {
+  display: flex;
+  min-height: 5.75rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--ink);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  gap: 0.8rem;
+  text-decoration: none;
+}
+
+.brand > span {
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--ink);
+  place-items: center;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.brand strong,
+.account,
+.kicker,
+.projectCount,
+.dialogIndex {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.avatar {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  place-items: center;
+}
+
+.hero {
+  display: grid;
+  min-height: clamp(18rem, 40vw, 30rem);
+  align-items: end;
+  padding: clamp(4rem, 9vw, 8rem) 0 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.35fr);
+}
+
+.kicker {
+  margin: 0 0 1.2rem;
+  color: var(--signal);
+}
+
+.hero h1 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(5rem, 14vw, 12rem);
+  font-weight: 400;
+  letter-spacing: -0.09em;
+  line-height: 0.7;
+}
+
+.hero h1 em {
+  color: var(--signal);
+  font-weight: 400;
+}
+
+.heroNote {
+  max-width: 23rem;
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-family: Georgia, "Songti SC", serif;
+  line-height: 1.8;
+}
+
+.toolbar {
+  display: grid;
+  min-height: 4.75rem;
+  align-items: center;
+  border-block: 1px solid var(--ink);
+  gap: 1.5rem;
+  grid-template-columns: minmax(13rem, 1fr) auto auto;
+}
+
+.search {
+  display: flex;
+  max-width: 28rem;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.search > span {
+  font-size: 1.3rem;
+}
+
+.search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0.8rem 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.search input::placeholder {
+  color: #8a867d;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 2.9rem;
+  border: 1px solid var(--ink);
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.primaryButton {
+  background: var(--ink);
+  color: white;
+}
+
+.secondaryButton {
+  background: transparent;
+  color: var(--ink);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-2px);
+}
+
+.primaryButton:hover {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+
+.secondaryButton:hover {
+  background: var(--ink);
+  color: white;
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.cardMenu summary:focus-visible,
+.menuPanel button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.projectGrid,
+.skeletonGrid {
+  display: grid;
+  padding-top: 2.25rem;
+  gap: clamp(1rem, 2.25vw, 2.25rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.projectCard {
+  min-width: 0;
+  animation: card-in 480ms both;
+}
+
+.projectCover {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1.25;
+  background-color: var(--cover-color);
+  background-position: center;
+  background-size: cover;
+  isolation: isolate;
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.projectCover::before,
+.projectCover::after {
+  position: absolute;
+  z-index: -1;
+  content: "";
+}
+
+.projectCover::before {
+  top: -15%;
+  left: 13%;
+  width: 66%;
+  height: 125%;
+  border: 1px solid rgb(24 25 21 / 45%);
+  border-radius: 54% 46% 16% 20% / 20% 22% 8% 12%;
+  rotate: 13deg;
+}
+
+.projectCover::after {
+  top: 38%;
+  left: -10%;
+  width: 120%;
+  border-top: 1px dashed rgb(24 25 21 / 55%);
+  rotate: -8deg;
+}
+
+.projectCard:hover .projectCover {
+  transform: translateY(-4px);
+}
+
+.coverNumber,
+.coverMark {
+  position: absolute;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.coverNumber {
+  top: 1rem;
+  left: 1rem;
+}
+
+.coverMark {
+  right: 1rem;
+  bottom: 1rem;
+  font-family: Georgia, "Songti SC", serif;
+  font-style: italic;
+}
+
+.cardBody {
+  padding: 1.1rem 0 0.5rem;
+}
+
+.cardHeading {
+  display: flex;
+  min-height: 2.2rem;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cardHeading h2 {
+  overflow: hidden;
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMenu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.cardMenu summary {
+  min-width: 2.2rem;
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+  text-align: right;
+}
+
+.cardMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menuPanel {
+  position: absolute;
+  z-index: 5;
+  top: 1.8rem;
+  right: 0;
+  display: grid;
+  min-width: 8.5rem;
+  border: 1px solid var(--ink);
+  background: #f8f5ec;
+  box-shadow: 8px 8px 0 rgb(24 25 21 / 12%);
+}
+
+.menuPanel button {
+  border: 0;
+  border-bottom: 1px solid rgb(24 25 21 / 20%);
+  padding: 0.75rem 1rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.menuPanel button:hover {
+  background: var(--ink);
+  color: white;
+}
+
+.menuPanel .deleteAction {
+  color: #a6321d;
+}
+
+.cardMeta {
+  display: flex;
+  margin-top: 0.7rem;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.optimisticCard {
+  opacity: 0.58;
+}
+
+.optimisticCard .projectCover {
+  animation: saving-pulse 1.4s ease-in-out infinite;
+}
+
+.renameForm {
+  display: flex;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.renameForm input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  border-bottom: 1px solid var(--signal);
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.renameForm button {
+  border: 0;
+  background: transparent;
+  color: var(--signal);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.emptyState,
+.errorState {
+  display: grid;
+  min-height: 24rem;
+  justify-items: center;
+  align-content: center;
+  padding: 4rem 1rem;
+  text-align: center;
+}
+
+.emptyIndex {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  place-items: center;
+  font-family: Georgia, "Songti SC", serif;
+  font-style: italic;
+}
+
+.emptyKicker {
+  color: var(--signal) !important;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.emptyState h2 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+}
+
+.emptyState p {
+  max-width: 31rem;
+  margin: 1rem 0 2rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.emptyState .emptyKicker {
+  margin: 0 0 1rem;
+}
+
+.loadMore {
+  display: flex;
+  padding: 3.5rem 0 1rem;
+  justify-content: center;
+}
+
+.notice {
+  display: flex;
+  margin-top: 1rem;
+  border-left: 3px solid var(--signal);
+  padding: 0.8rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  background: rgb(233 82 44 / 10%);
+  color: #782815;
+  font-size: 0.82rem;
+}
+
+.notice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  padding: 1.25rem;
+  background: rgb(24 25 21 / 64%);
+  backdrop-filter: blur(5px);
+  place-items: center;
+}
+
+.dialog {
+  width: min(100%, 35rem);
+  border: 1px solid var(--ink);
+  padding: clamp(1.75rem, 5vw, 3.5rem);
+  background: #f7f3e9;
+  box-shadow: 18px 18px 0 rgb(0 0 0 / 25%);
+}
+
+.dialogIndex {
+  color: var(--signal);
+}
+
+.dialog h2 {
+  margin: 1.2rem 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+}
+
+.dialog > p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.dialog label {
+  display: block;
+  margin-top: 2.25rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.dialog input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+  border-radius: 0;
+  outline: 0;
+  padding: 1rem 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 1.35rem;
+}
+
+.dialog input:focus {
+  border-color: var(--signal);
+  box-shadow: 0 2px 0 var(--signal);
+}
+
+.dialog .fieldError {
+  margin: 0.6rem 0 0;
+  color: #a6321d;
+  font-size: 0.78rem;
+}
+
+.dialogActions {
+  display: flex;
+  margin-top: 2.25rem;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.skeletonGrid > span {
+  aspect-ratio: 1.15;
+  animation: saving-pulse 1.4s ease-in-out infinite;
+  background: #d9d4c9;
+}
+
+.statePage {
+  display: grid;
+  min-height: 100vh;
+  padding: 2rem;
+  background: #f1eee5;
+  color: #181915;
+  place-content: center;
+  text-align: center;
+}
+
+.loadingRule {
+  display: block;
+  width: 9rem;
+  height: 2px;
+  margin: 0 auto 1.5rem;
+  animation: loading-rule 1.2s ease-in-out infinite;
+  background: #e9522c;
+  transform-origin: left;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes saving-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes loading-rule {
+  0%,
+  100% {
+    transform: scaleX(0.15);
+  }
+
+  50% {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 900px) {
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .heroNote {
+    margin-top: 2.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .library {
+    padding-inline: 1rem;
+  }
+
+  .account > span:first-child {
+    display: none;
+  }
+
+  .hero {
+    min-height: 20rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(4.5rem, 28vw, 7rem);
+  }
+
+  .toolbar {
+    padding: 1rem 0;
+    grid-template-columns: 1fr auto;
+  }
+
+  .search {
+    grid-column: 1 / -1;
+  }
+
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialogActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projectCard,
+  .optimisticCard .projectCover,
+  .skeletonGrid > span,
+  .loadingRule {
+    animation: none;
+  }
+
+  .primaryButton,
+  .secondaryButton,
+  .projectCover {
+    transition: none;
+  }
+}

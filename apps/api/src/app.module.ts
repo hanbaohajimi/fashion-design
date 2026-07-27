@@ -4,9 +4,10 @@ import { APP_GUARD } from "@nestjs/core";
 import { HealthController } from "./health.controller";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { AuthModule } from "./modules/auth/auth.module";
+import { ProjectsModule } from "./modules/projects/projects.module";
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, ProjectsModule],
   controllers: [HealthController],
   providers: [
     {
