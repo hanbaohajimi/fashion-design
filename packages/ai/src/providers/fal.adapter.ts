@@ -267,6 +267,9 @@ export class FalAdapter implements AiProvider {
     if (request.seed !== undefined) {
       input.seed = request.seed;
     }
+    if (request.negativePrompt) {
+      input.negative_prompt = request.negativePrompt;
+    }
     if (request.taskType === "i2i") {
       input.image_url = request.referenceImageUrl;
       input.strength = request.strength;

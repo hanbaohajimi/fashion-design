@@ -19,6 +19,7 @@ function taskRecord(
 ) {
   return {
     attemptCount: 0,
+    compiledPrompt: null,
     canceledAt: null,
     completedAt: null,
     countedAt: null,
@@ -53,10 +54,14 @@ describe("GenerationService", () => {
   const billing = {
     canGenerate: vi.fn(),
   };
+  const compiler = {
+    compile: vi.fn(),
+  };
   const service = new GenerationService(
     database as never,
     jobs,
     billing as never,
+    compiler as never,
   );
 
   beforeEach(() => {
@@ -70,6 +75,13 @@ describe("GenerationService", () => {
     database.generationTask.create.mockResolvedValue({ id: "task-1" });
     jobs.cancel.mockResolvedValue(undefined);
     jobs.enqueue.mockResolvedValue(undefined);
+    compiler.compile.mockResolvedValue({
+      enhancement: "keywords",
+      mode: "text_only",
+      negativePrompt: "watermark",
+      positivePrompt: "fashion editorial",
+      version: 1,
+    });
   });
 
   it("超限时返回 429 且不建任务、不入队", async () => {
@@ -101,7 +113,13 @@ describe("GenerationService", () => {
 
     expect(database.generationTask.create).toHaveBeenCalledWith({
       data: {
-        input: request,
+        input: {
+          ...request,
+          negativePrompt: "watermark",
+        },
+        compiledPrompt: expect.objectContaining({
+          positivePrompt: "fashion editorial",
+        }),
         status: GenerationTaskStatus.QUEUED,
         taskType: "t2i",
         userId: "user-1",
@@ -109,6 +127,26 @@ describe("GenerationService", () => {
       select: { id: true },
     });
     expect(jobs.enqueue).toHaveBeenCalledWith("task-1", "user-1");
+  });
+
+  it("保存 compiled_prompt，并把项目 id 与原始 prompt 隔离在 Provider 输入之外", async () => {
+    await service.create("user-1", {
+      ...request,
+      projectId: "project-1",
+    });
+
+    expect(compiler.compile).toHaveBeenCalledWith(
+      "user-1",
+      "project-1",
+      "fashion editorial",
+    );
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData).toBeDefined();
+    expect(createData.input).not.toHaveProperty("projectId");
+    expect(createData.compiledPrompt).toMatchObject({
+      positivePrompt: "fashion editorial",
+    });
   });
 
   it("入队失败时把 task 标为 failed", async () => {
@@ -165,6 +203,24 @@ describe("GenerationService", () => {
         code: "GENERATION_TASK_NOT_FOUND",
       },
       status: HttpStatus.NOT_FOUND,
+    });
+  });
+
+  it("任务详情返回可查询的 compiled_prompt", async () => {
+    database.generationTask.findFirst.mockResolvedValue(
+      taskRecord({
+        compiledPrompt: {
+          mode: "board_guided",
+          positivePrompt: "structured fashion prompt",
+        },
+      }),
+    );
+
+    await expect(service.get("user-1", "task-1")).resolves.toMatchObject({
+      compiledPrompt: {
+        mode: "board_guided",
+        positivePrompt: "structured fashion prompt",
+      },
     });
   });
 });

@@ -38,6 +38,7 @@ model GenerationTask {
   status        GenerationTaskStatus @default(QUEUED)
   taskType      String               @map("task_type")
   input         Json
+  compiledPrompt Json?                @map("compiled_prompt")
   providerJob   Json?                @map("provider_job")
   output        Json?
   errorCode     String?              @map("error_code")

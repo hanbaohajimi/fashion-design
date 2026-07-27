@@ -5,6 +5,7 @@ export type AiTaskType = (typeof AI_TASK_TYPES)[number];
 
 const commonRequestSchema = z.object({
   prompt: z.string().trim().min(1).max(4_000),
+  negativePrompt: z.string().trim().max(3_000).optional(),
   width: z.number().int().min(256).max(2_048).multipleOf(8),
   height: z.number().int().min(256).max(2_048).multipleOf(8),
   steps: z.number().int().min(1).max(100),

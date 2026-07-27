@@ -1,4 +1,3 @@
-import { aiGenerationRequestSchema } from "@fashion/ai";
 import type {
   GenerationTaskEvent,
   GenerationTaskEventStatus,
@@ -21,6 +20,7 @@ import type { Observable } from "rxjs";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { GenerationEventsService } from "./generation-events.service";
+import { generationCreateRequestSchema } from "./generation.schemas";
 import {
   GenerationService,
   type GenerationTaskView,
@@ -41,7 +41,7 @@ export class GenerationController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: unknown,
   ): Promise<{ task_id: string }> {
-    const parsed = aiGenerationRequestSchema.safeParse(body);
+    const parsed = generationCreateRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
         code: "INVALID_REQUEST",

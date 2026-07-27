@@ -13,6 +13,8 @@ import {
 
 import { GenerationLimitExceededException } from "../billing/billing.errors";
 import { BillingService } from "../billing/billing.service";
+import { ContextCompilerService } from "./compiler/context-compiler.service";
+import type { GenerationCreateRequest } from "./generation.schemas";
 
 export const GENERATION_DB = Symbol("GENERATION_DB");
 export const GENERATION_JOBS = Symbol("GENERATION_JOBS");
@@ -28,6 +30,7 @@ export interface GenerationTaskView {
   readonly id: string;
   readonly status: Lowercase<keyof typeof GenerationTaskStatus>;
   readonly taskType: string;
+  readonly compiledPrompt: unknown;
   readonly output: unknown;
   readonly error:
     | {
@@ -45,22 +48,38 @@ export class GenerationService {
     @Inject(GENERATION_DB) private readonly database: GenerationDatabase,
     @Inject(GENERATION_JOBS) private readonly jobs: GenerationJobs,
     @Inject(BillingService) private readonly billingService: BillingService,
+    @Inject(ContextCompilerService)
+    private readonly compiler: ContextCompilerService,
   ) {}
 
   async create(
     userId: string,
-    request: AiGenerationRequest,
+    request: GenerationCreateRequest,
   ): Promise<{ taskId: string }> {
     const quota = await this.billingService.canGenerate(userId);
     if (!quota.allowed) {
       throw new GenerationLimitExceededException();
     }
 
+    const compiledPrompt = await this.compiler.compile(
+      userId,
+      request.projectId,
+      request.prompt,
+    );
+    const providerRequest = { ...request };
+    delete providerRequest.projectId;
+    const input: AiGenerationRequest = {
+      ...providerRequest,
+      negativePrompt: compiledPrompt.negativePrompt.slice(0, 3_000),
+      prompt: compiledPrompt.positivePrompt.slice(0, 4_000),
+    };
+
     const task = await this.database.generationTask.create({
       data: {
-        input: request as Prisma.InputJsonValue,
+        compiledPrompt: compiledPrompt as unknown as Prisma.InputJsonValue,
+        input: input as Prisma.InputJsonValue,
         status: GenerationTaskStatus.QUEUED,
-        taskType: request.taskType,
+        taskType: input.taskType,
         userId,
       },
       select: { id: true },
@@ -142,6 +161,7 @@ export class GenerationService {
     id: string;
     status: GenerationTaskStatus;
     taskType: string;
+    compiledPrompt: Prisma.JsonValue | null;
     output: Prisma.JsonValue | null;
     errorCode: string | null;
     errorMessage: string | null;
@@ -152,6 +172,7 @@ export class GenerationService {
       id: task.id,
       status: task.status.toLowerCase() as GenerationTaskView["status"],
       taskType: task.taskType,
+      compiledPrompt: task.compiledPrompt,
       output: task.output,
       error:
         task.errorCode && task.errorMessage

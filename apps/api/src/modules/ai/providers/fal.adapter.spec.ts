@@ -106,6 +106,28 @@ describe("FalAdapter", () => {
     );
   });
 
+  it("把编译器负向约束映射到 Provider 参数", async () => {
+    vi.mocked(transport.submit).mockResolvedValue({
+      requestId: "fal-job-negative",
+    });
+
+    await adapter.submit(
+      {
+        ...t2iRequest,
+        negativePrompt: "watermark, oversized shoulder",
+      },
+      new AbortController().signal,
+    );
+
+    expect(transport.submit).toHaveBeenCalledWith(
+      "fal-ai/flux/dev",
+      expect.objectContaining({
+        negative_prompt: "watermark, oversized shoulder",
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it("映射队列状态并解析图片结果", async () => {
     const job = createJob();
     vi.mocked(transport.status).mockResolvedValue({
