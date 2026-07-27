@@ -5,6 +5,7 @@ import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
 
 import "./globals.css";
+import "tldraw/tldraw.css";
 
 export const metadata: Metadata = {
   title: "AI 服装设计平台",

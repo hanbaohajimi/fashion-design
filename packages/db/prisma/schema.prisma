@@ -43,8 +43,36 @@ model Project {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   workspace      Workspace @relation(fields: [wsId], references: [id], onDelete: Cascade)
+  boardSnapshot  BoardSnapshot?
+  boardElements  BoardElement[]
 
   @@index([wsId])
   @@unique([wsId, idempotencyKey])
   @@map("projects")
+}
+
+model BoardSnapshot {
+  projectId String   @id @map("project_id")
+  snapshot  Json
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("board_snapshots")
+}
+
+model BoardElement {
+  id        String    @id @default(cuid(2))
+  projectId String    @map("project_id")
+  shapeId   String    @map("shape_id")
+  shapeType String    @map("shape_type")
+  role      String
+  record    Json?
+  deletedAt DateTime? @map("deleted_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, shapeId])
+  @@index([projectId, deletedAt])
+  @@map("board_elements")
 }

@@ -1,0 +1,245 @@
+.boardShell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #ece9e0;
+}
+
+.boardShell :global(.tl-background) {
+  background-color: #ece9e0;
+  background-image:
+    linear-gradient(rgb(24 25 21 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.boardToolbar {
+  display: grid;
+  width: min(calc(100vw - 28px), 920px);
+  min-height: 48px;
+  align-items: center;
+  border: 1px solid #181915;
+  margin: 12px auto 0;
+  background: rgb(247 244 235 / 96%);
+  box-shadow: 6px 6px 0 rgb(24 25 21 / 12%);
+  color: #181915;
+  grid-template-columns: 1fr auto 1fr;
+  pointer-events: all;
+}
+
+.boardIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-left: 8px;
+  gap: 10px;
+}
+
+.boardIdentity a {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  border: 1px solid #181915;
+  place-items: center;
+  text-decoration: none;
+}
+
+.boardIdentity strong {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.boardIdentity span {
+  color: #66645d;
+  font-size: 10px;
+}
+
+.boardIdentity span[data-status="offline"],
+.boardIdentity span[data-status="error"] {
+  color: #b2381f;
+}
+
+.shapeActions {
+  display: flex;
+  height: 100%;
+}
+
+.shapeActions button {
+  min-width: 58px;
+  border: 0;
+  border-left: 1px solid rgb(24 25 21 / 22%);
+  padding: 0 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.shapeActions button:last-child {
+  border-right: 1px solid rgb(24 25 21 / 22%);
+}
+
+.shapeActions button:hover {
+  background: #181915;
+  color: white;
+}
+
+.roleControl {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px 0 12px;
+  gap: 8px;
+}
+
+.roleControl > span {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.roleControl select {
+  width: min(100%, 150px);
+  height: 31px;
+  border: 1px solid #181915;
+  border-radius: 0;
+  background: #f7f4eb;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+}
+
+.boardSkeleton,
+.boardError {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgb(24 25 21 / 4%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px),
+    #ece9e0;
+  background-size: 32px 32px;
+}
+
+.boardSkeleton > div {
+  position: absolute;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  background: #d2cec3;
+}
+
+.skeletonTopbar {
+  top: 12px;
+  left: 50%;
+  width: min(calc(100vw - 28px), 920px);
+  height: 48px;
+  transform: translateX(-50%);
+}
+
+.skeletonRail {
+  top: 30%;
+  left: 22px;
+  width: 48px;
+  height: 280px;
+}
+
+.skeletonCardOne {
+  top: 26%;
+  left: 24%;
+  width: 300px;
+  height: 220px;
+}
+
+.skeletonCardTwo {
+  right: 21%;
+  bottom: 18%;
+  width: 220px;
+  height: 180px;
+}
+
+.boardSkeleton p {
+  position: absolute;
+  right: 24px;
+  bottom: 18px;
+  margin: 0;
+  color: #66645d;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.boardError {
+  display: grid;
+  padding: 2rem;
+  align-content: center;
+  justify-items: center;
+  color: #181915;
+  text-align: center;
+}
+
+.boardError p {
+  color: #e9522c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.boardError h1 {
+  margin: 0.8rem 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  font-weight: 400;
+}
+
+.boardError span {
+  color: #68655d;
+}
+
+.boardError button {
+  min-height: 42px;
+  border: 1px solid #181915;
+  margin-top: 2rem;
+  padding: 0 20px;
+  background: #181915;
+  color: white;
+  cursor: pointer;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.48;
+  }
+}
+
+@media (max-width: 760px) {
+  .boardToolbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .shapeActions {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    border-top: 1px solid #181915;
+  }
+
+  .shapeActions button {
+    min-height: 38px;
+    flex: 1;
+  }
+
+  .roleControl {
+    min-height: 46px;
+  }
+
+  .boardIdentity span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boardSkeleton > div {
+    animation: none;
+  }
+}

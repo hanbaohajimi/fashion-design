@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type CSSProperties, useState } from "react";
 
 import type { Project } from "./project-types";
@@ -78,17 +79,25 @@ export function ProjectCard({
         project.optimistic ? styles.optimisticCard : ""
       }`}
     >
-      <div
-        aria-label={project.coverUrl ? `${project.name} 封面` : "项目封面占位色"}
-        className={styles.projectCover}
-        role="img"
-        style={coverStyle}
+      <Link
+        aria-label={`打开项目 ${project.name}`}
+        className={styles.projectOpen}
+        href={`/${project.id}`}
       >
-        <span className={styles.coverNumber}>
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <span className={styles.coverMark}>FD</span>
-      </div>
+        <div
+          aria-label={
+            project.coverUrl ? `${project.name} 封面` : "项目封面占位色"
+          }
+          className={styles.projectCover}
+          role="img"
+          style={coverStyle}
+        >
+          <span className={styles.coverNumber}>
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <span className={styles.coverMark}>FD</span>
+        </div>
+      </Link>
 
       <div className={styles.cardBody}>
         <div className={styles.cardHeading}>
@@ -114,7 +123,9 @@ export function ProjectCard({
               <button type="submit">保存</button>
             </form>
           ) : (
-            <h2>{project.name}</h2>
+            <h2>
+              <Link href={`/${project.id}`}>{project.name}</Link>
+            </h2>
           )}
 
           {!project.optimistic && !renaming ? (

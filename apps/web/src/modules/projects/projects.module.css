@@ -197,6 +197,12 @@
   animation: card-in 480ms both;
 }
 
+.projectOpen {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
 .projectCover {
   position: relative;
   overflow: hidden;
@@ -279,6 +285,17 @@
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cardHeading h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cardHeading h2 a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--signal);
+  text-underline-offset: 0.18em;
 }
 
 .cardMenu {
