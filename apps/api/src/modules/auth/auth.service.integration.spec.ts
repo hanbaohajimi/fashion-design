@@ -17,6 +17,8 @@ describe("AuthService local user synchronization", () => {
     const suffix = crypto.randomUUID();
     const authUserId = `auth-${suffix}`;
     const email = `auth-${suffix}@example.com`;
+    const previousDefaultLimit = process.env.DEFAULT_GEN_LIMIT;
+    process.env.DEFAULT_GEN_LIMIT = "137";
 
     const user = await authService.syncLocalUser({
       authUserId,
@@ -33,6 +35,8 @@ describe("AuthService local user synchronization", () => {
       expect(stored).toMatchObject({
         authId: authUserId,
         email,
+        generationCount: 0,
+        generationLimit: 137,
         name: "Pattern Designer",
       });
       expect(stored?.ownedWorkspaces).toHaveLength(1);
@@ -51,6 +55,11 @@ describe("AuthService local user synchronization", () => {
       expect(workspaceCount).toBe(1);
     } finally {
       await prisma.user.delete({ where: { id: user.id } });
+      if (previousDefaultLimit === undefined) {
+        delete process.env.DEFAULT_GEN_LIMIT;
+      } else {
+        process.env.DEFAULT_GEN_LIMIT = previousDefaultLimit;
+      }
     }
   });
 

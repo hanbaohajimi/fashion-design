@@ -10,6 +10,7 @@ import type {
   VerifiedIdentity,
 } from "./auth.types";
 import { SupabaseAuthGateway } from "./supabase-auth.gateway";
+import { resolveDefaultGenerationLimit } from "../billing/billing.config";
 
 @Injectable()
 export class AuthService {
@@ -142,6 +143,7 @@ export class AuthService {
       data: {
         authId: identity.authUserId,
         email: identity.email,
+        generationLimit: resolveDefaultGenerationLimit(),
         ...(identity.avatar ? { avatar: identity.avatar } : {}),
         ...(identity.name ? { name: identity.name } : {}),
         ownedWorkspaces: {

@@ -26,6 +26,7 @@ import { AuthService } from "./auth.service";
 import type { AuthSession, AuthenticatedUser } from "./auth.types";
 import { CurrentUser } from "./current-user.decorator";
 import { Public } from "./public.decorator";
+import { BillingService } from "../billing/billing.service";
 
 const loginRequestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -48,7 +49,10 @@ const loginRequestSchema = z.discriminatedUnion("action", [
 
 @Controller()
 export class AuthController {
-  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
+  constructor(
+    @Inject(AuthService) private readonly authService: AuthService,
+    @Inject(BillingService) private readonly billingService: BillingService,
+  ) {}
 
   @Public()
   @Post("auth/login")
@@ -104,13 +108,14 @@ export class AuthController {
     user: User;
   }> {
     const user = await this.authService.getUser(authenticatedUser.userId);
+    const quota = await this.billingService.canGenerate(user.id);
 
     return {
       user,
       credits: {
-        limit: 0,
-        remaining: 0,
-        used: 0,
+        limit: quota.limit,
+        remaining: quota.remaining,
+        used: quota.used,
       },
     };
   }

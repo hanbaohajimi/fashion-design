@@ -14,6 +14,7 @@ import {
 } from "vitest";
 
 import { AppModule } from "../../app.module";
+import { BillingService } from "../billing/billing.service";
 import { AuthService } from "./auth.service";
 
 const user: User = {
@@ -23,6 +24,8 @@ const user: User = {
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   deletedAt: null,
   email: "designer@example.com",
+  generationCount: 12,
+  generationLimit: 100,
   name: "Designer",
 };
 
@@ -36,6 +39,9 @@ describe("authentication HTTP contract", () => {
     sendMagicLink: vi.fn(),
     verifyMagicLink: vi.fn(),
   };
+  const billingService = {
+    canGenerate: vi.fn(),
+  };
 
   beforeAll(async () => {
     process.env.APP_ORIGIN = "http://localhost:3000";
@@ -46,6 +52,8 @@ describe("authentication HTTP contract", () => {
     })
       .overrideProvider(AuthService)
       .useValue(authService)
+      .overrideProvider(BillingService)
+      .useValue(billingService)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -56,6 +64,12 @@ describe("authentication HTTP contract", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authService.assertAllowedOrigin.mockImplementation(() => undefined);
+    billingService.canGenerate.mockResolvedValue({
+      allowed: true,
+      limit: 100,
+      remaining: 88,
+      used: 12,
+    });
   });
 
   afterAll(async () => {
@@ -85,9 +99,9 @@ describe("authentication HTTP contract", () => {
 
     expect(response.body).toMatchObject({
       credits: {
-        limit: 0,
-        remaining: 0,
-        used: 0,
+        limit: 100,
+        remaining: 88,
+        used: 12,
       },
       user: {
         email: user.email,
