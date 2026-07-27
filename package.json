@@ -23,7 +23,8 @@
     "auth:stop": "supabase stop",
     "infra:check": "node scripts/check-ports.mjs",
     "infra:up": "pnpm infra:check && docker compose up -d",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "verify:file-pipeline": "pnpm --filter @fashion/worker exec tsx --tsconfig ../../apps/api/tsconfig.json ../../scripts/verify-file-pipeline.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",

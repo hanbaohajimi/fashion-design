@@ -5,10 +5,11 @@ import { HealthController } from "./health.controller";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BoardsModule } from "./modules/boards/boards.module";
+import { FilesModule } from "./modules/files/files.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
 
 @Module({
-  imports: [AuthModule, BoardsModule, ProjectsModule],
+  imports: [AuthModule, BoardsModule, FilesModule, ProjectsModule],
   controllers: [HealthController],
   providers: [
     {

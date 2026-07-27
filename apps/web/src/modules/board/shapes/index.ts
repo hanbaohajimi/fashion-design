@@ -12,6 +12,7 @@ export {
   SWATCH_SHAPE_TYPE,
   type BoardRole,
   type BoardShape,
+  type ImageShape,
 } from "./shape-types";
 
 export const boardShapeUtils = [

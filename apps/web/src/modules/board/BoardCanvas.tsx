@@ -11,7 +11,9 @@ import {
 } from "tldraw";
 
 import { BoardToolbar } from "./BoardToolbar";
+import { BoardFileDrop } from "./BoardFileDrop";
 import { BoardSkeleton } from "./BoardSkeleton";
+import { BoardProjectContext } from "./board-context";
 import {
   type BoardPersistStatus,
   useBoardPersist,
@@ -30,6 +32,7 @@ function ConnectedBoardToolbar() {
 }
 
 const boardComponents: TLComponents = {
+  InFrontOfTheCanvas: BoardFileDrop,
   TopPanel: ConnectedBoardToolbar,
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
@@ -68,13 +71,15 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
   return (
     <main className={styles.boardShell}>
       <PersistStatusContext.Provider value={persistence.status}>
-        <Tldraw
-          autoFocus
-          components={boardComponents}
-          {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
-          shapeUtils={boardShapeUtils}
-          store={store}
-        />
+        <BoardProjectContext.Provider value={projectId}>
+          <Tldraw
+            autoFocus
+            components={boardComponents}
+            {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
+            shapeUtils={boardShapeUtils}
+            store={store}
+          />
+        </BoardProjectContext.Provider>
       </PersistStatusContext.Provider>
     </main>
   );

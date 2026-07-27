@@ -18,9 +18,11 @@ export type BoardRole = (typeof BOARD_ROLES)[number];
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
     [IMAGE_SHAPE_TYPE]: {
+      fileId?: string;
       h: number;
       role: string;
       title: string;
+      uploadStatus?: string;
       url: string;
       w: number;
     };

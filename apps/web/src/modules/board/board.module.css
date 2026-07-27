@@ -120,8 +120,7 @@
   overflow: hidden;
   background:
     linear-gradient(rgb(24 25 21 / 4%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px),
-    #ece9e0;
+    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px), #ece9e0;
   background-size: 32px 32px;
 }
 
@@ -202,6 +201,87 @@
   border: 1px solid #181915;
   margin-top: 2rem;
   padding: 0 20px;
+  background: #181915;
+  color: white;
+  cursor: pointer;
+}
+
+.uploadDropZone {
+  position: fixed;
+  z-index: 1000;
+  inset: 72px 18px 18px;
+  display: grid;
+  border: 2px dashed #e9522c;
+  background: rgb(247 244 235 / 88%);
+  color: #181915;
+  place-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+
+.uploadDropZone strong {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2rem, 7vw, 6rem);
+  font-weight: 400;
+}
+
+.uploadDropZone span {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.uploadTray {
+  position: fixed;
+  z-index: 1001;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  width: min(340px, calc(100vw - 36px));
+  gap: 6px;
+  pointer-events: all;
+}
+
+.uploadTray > div {
+  position: relative;
+  display: grid;
+  min-height: 58px;
+  border: 1px solid #181915;
+  padding: 10px 84px 10px 12px;
+  background: #f7f4eb;
+  box-shadow: 4px 4px 0 rgb(24 25 21 / 12%);
+  gap: 3px;
+}
+
+.uploadTray > div[data-status="failed"] {
+  border-color: #b2381f;
+}
+
+.uploadTray span,
+.uploadTray small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uploadTray span {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.uploadTray small {
+  color: #66645d;
+  font-size: 9px;
+}
+
+.uploadTray button {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  min-height: 32px;
+  border: 1px solid #181915;
+  padding: 0 12px;
   background: #181915;
   color: white;
   cursor: pointer;

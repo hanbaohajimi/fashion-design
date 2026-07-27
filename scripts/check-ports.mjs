@@ -38,6 +38,16 @@ const targets = [
     port: Number(process.env.REDIS_PORT ?? 6379),
     service: "redis",
   },
+  {
+    envName: "MINIO_API_PORT",
+    port: Number(process.env.MINIO_API_PORT ?? 9000),
+    service: "minio",
+  },
+  {
+    envName: "MINIO_CONSOLE_PORT",
+    port: Number(process.env.MINIO_CONSOLE_PORT ?? 9001),
+    service: "minio",
+  },
 ];
 
 function isPortAvailable(port) {
@@ -78,5 +88,5 @@ for (const target of targets) {
 if (hasConflict) {
   process.exitCode = 1;
 } else {
-  console.log("PostgreSQL 与 Redis 目标端口可用。");
+  console.log("PostgreSQL、Redis 与 MinIO 目标端口可用。");
 }

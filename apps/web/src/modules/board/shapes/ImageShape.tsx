@@ -9,14 +9,13 @@ import {
 } from "tldraw";
 
 import { RoleBadge } from "./RoleBadge";
-import {
-  IMAGE_SHAPE_TYPE,
-  type ImageShape,
-} from "./shape-types";
+import { useUploadPreview } from "../upload-preview-store";
+import { IMAGE_SHAPE_TYPE, type ImageShape } from "./shape-types";
 import styles from "./shapes.module.css";
 
 function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
   const editor = useEditor();
+  const uploadPreview = useUploadPreview(shape.id);
   const isNearViewport = useValue(
     `image-visible-${shape.id}`,
     () => {
@@ -33,17 +32,25 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
       <div className={styles.imagePlaceholder}>
         <span>IMAGE / CDN</span>
       </div>
-      {isNearViewport && shape.props.url ? (
+      {isNearViewport && (shape.props.url || uploadPreview) ? (
         // CDN URLs are supplied by persisted asset data.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt=""
           draggable={false}
           loading="lazy"
-          src={shape.props.url}
+          src={shape.props.url || uploadPreview}
         />
       ) : null}
       <RoleBadge role={shape.props.role} />
+      {(shape.props.uploadStatus ?? "ready") !== "ready" ? (
+        <span
+          className={styles.uploadStatus}
+          data-status={shape.props.uploadStatus}
+        >
+          {shape.props.uploadStatus === "failed" ? "上传失败" : "正在处理"}
+        </span>
+      ) : null}
       <strong>{shape.props.title || "未命名图片"}</strong>
     </HTMLContainer>
   );
@@ -52,18 +59,22 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
 export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
   static override type = IMAGE_SHAPE_TYPE;
   static override props: RecordProps<ImageShape> = {
+    fileId: T.string.optional(),
     h: T.number,
     role: T.string,
     title: T.string,
+    uploadStatus: T.string.optional(),
     url: T.string,
     w: T.number,
   };
 
   override getDefaultProps(): ImageShape["props"] {
     return {
+      fileId: "",
       h: 260,
       role: "reference",
       title: "图片参考",
+      uploadStatus: "ready",
       url: "",
       w: 340,
     };

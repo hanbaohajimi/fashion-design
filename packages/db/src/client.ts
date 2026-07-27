@@ -1,8 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
+  FileStatus,
   Prisma,
   PrismaClient,
+  type FileAsset,
   type Project,
   type User,
   type Workspace,
@@ -32,5 +34,5 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.fashionPrisma = prisma;
 }
 
-export { Prisma, PrismaClient };
-export type { Project, User, Workspace };
+export { FileStatus, Prisma, PrismaClient };
+export type { FileAsset, Project, User, Workspace };

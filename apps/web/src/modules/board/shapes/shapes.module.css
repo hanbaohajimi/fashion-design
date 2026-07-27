@@ -60,7 +60,12 @@
 .imagePlaceholder {
   display: grid;
   background:
-    linear-gradient(135deg, transparent 49.7%, rgb(24 25 21 / 22%) 50%, transparent 50.3%),
+    linear-gradient(
+      135deg,
+      transparent 49.7%,
+      rgb(24 25 21 / 22%) 50%,
+      transparent 50.3%
+    ),
     #d8d3c8;
   place-items: center;
 }
@@ -91,6 +96,24 @@
   font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.uploadStatus {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  border: 1px solid #181915;
+  padding: 5px 8px;
+  background: #f2d978;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.uploadStatus[data-status="failed"] {
+  background: #e9522c;
+  color: white;
 }
 
 .noteShape {
