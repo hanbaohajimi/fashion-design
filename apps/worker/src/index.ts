@@ -4,16 +4,23 @@ import { createAiRuntimeFromEnv } from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
 import { prisma } from "@fashion/db";
 import {
+  COLLECTION_SIMILARITY_QUEUE_NAME,
   GENERATION_QUEUE_NAME,
   PLATFORM_NAME,
   THUMBNAIL_QUEUE_NAME,
   VLM_INFERENCE_QUEUE_NAME,
+  type CollectionSimilarityJobData,
   type GenerationJobData,
   type ThumbnailJobData,
   type VlmInferenceJobData,
 } from "@fashion/shared";
-import { Worker } from "bullmq";
+import { Queue, Worker } from "bullmq";
 
+import { ClipImageEmbedder } from "./clip-embedder";
+import {
+  createCollectionSimilarityProcessor,
+  markCollectionSimilarityFailed,
+} from "./processors/collection-similarity.processor";
 import { createGenerationProcessor } from "./processors/generation.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
 import {
@@ -43,10 +50,33 @@ const processRoleInference = createVlmInferenceProcessor({
   database: prisma,
   storage,
 });
+const collectionSimilarityQueue = new Queue<CollectionSimilarityJobData>(
+  COLLECTION_SIMILARITY_QUEUE_NAME,
+  { connection: redisConnection() },
+);
+const processCollectionSimilarity = createCollectionSimilarityProcessor({
+  database: prisma,
+  embedder: new ClipImageEmbedder(),
+});
 const processGeneration = createGenerationProcessor({
   ai: createAiRuntimeFromEnv(),
   billing: new BillingService(prisma),
   database: prisma,
+  similarityJobs: {
+    async enqueue(collectionId, designAssetId) {
+      await collectionSimilarityQueue.add(
+        "analyze-collection",
+        { collectionId, designAssetId },
+        {
+          attempts: 2,
+          backoff: { delay: 2_000, type: "exponential" },
+          jobId: designAssetId,
+          removeOnComplete: { age: 7 * 24 * 60 * 60 },
+          removeOnFail: { age: 30 * 24 * 60 * 60 },
+        },
+      );
+    },
+  },
 });
 const thumbnailWorker = new Worker<ThumbnailJobData>(
   THUMBNAIL_QUEUE_NAME,
@@ -75,15 +105,26 @@ const generationWorker = new Worker<GenerationJobData>(
     stalledInterval: 30_000,
   },
 );
+const collectionSimilarityWorker = new Worker<CollectionSimilarityJobData>(
+  COLLECTION_SIMILARITY_QUEUE_NAME,
+  async (job) => processCollectionSimilarity(job.data),
+  {
+    concurrency: 1,
+    connection: redisConnection(),
+    lockDuration: 120_000,
+    maxStalledCount: 1,
+  },
+);
 
 async function start(): Promise<void> {
   await Promise.all([
     thumbnailWorker.waitUntilReady(),
     inferenceWorker.waitUntilReady(),
     generationWorker.waitUntilReady(),
+    collectionSimilarityWorker.waitUntilReady(),
   ]);
   console.log(
-    `${PLATFORM_NAME} Worker 已连接 Redis，生成、缩略图与角色推断队列并发数均为 2。`,
+    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度并发数为 1。`,
   );
 }
 
@@ -91,6 +132,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log(`收到 ${signal}，正在关闭 Worker。`);
   await Promise.all([
     generationWorker.close(),
+    collectionSimilarityWorker.close(),
+    collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),
   ]);
@@ -112,6 +155,16 @@ inferenceWorker.on("failed", (job, error) => {
 generationWorker.on("failed", (job, error) => {
   console.error(`生成任务 ${job?.id ?? "unknown"} 失败：`, error);
 });
+collectionSimilarityWorker.on("failed", (job, error) => {
+  console.error(`系列参考相似度任务 ${job?.id ?? "unknown"} 失败：`, error);
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    void markCollectionSimilarityFailed(prisma, job.data).catch(
+      (fallbackError) => {
+        console.error("系列参考相似度失败状态写入失败：", fallbackError);
+      },
+    );
+  }
+});
 
 process.once("SIGINT", () => {
   void shutdown("SIGINT");
@@ -124,6 +177,8 @@ void start().catch(async (error: unknown) => {
   console.error("Worker 启动失败：无法连接 Redis 或对象存储配置无效。", error);
   await Promise.all([
     generationWorker.close(),
+    collectionSimilarityWorker.close(),
+    collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),
   ]);

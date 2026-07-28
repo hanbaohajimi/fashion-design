@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
@@ -12,7 +13,12 @@ import type { ZodType } from "zod";
 
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
-import { createCollectionSchema, updateDnaSchema } from "./collections.schemas";
+import {
+  createCollectionLookSchema,
+  createCollectionSchema,
+  forceKeepCollectionLookSchema,
+  updateDnaSchema,
+} from "./collections.schemas";
 import { CollectionsService } from "./collections.service";
 
 @Controller("collections")
@@ -47,6 +53,51 @@ export class CollectionsController {
     @Param("id") collectionId: string,
   ) {
     return this.collections.get(user.userId, collectionId);
+  }
+
+  @Get(":id/consistency")
+  async consistency(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") collectionId: string,
+  ) {
+    return this.collections.getConsistency(user.userId, collectionId);
+  }
+
+  @Post(":id/looks")
+  @HttpCode(202)
+  async createLook(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") collectionId: string,
+    @Body() body: unknown,
+  ): Promise<{ task_id: string }> {
+    const input = this.parse(
+      createCollectionLookSchema,
+      body,
+      "INVALID_COLLECTION_LOOK_REQUEST",
+      "系列 Look 生成参数不合法",
+    );
+    const result = await this.collections.createLook(
+      user.userId,
+      collectionId,
+      input,
+    );
+    return { task_id: result.taskId };
+  }
+
+  @Patch(":id/looks/:assetId/keep")
+  async forceKeep(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") collectionId: string,
+    @Param("assetId") assetId: string,
+    @Body() body: unknown,
+  ) {
+    this.parse(
+      forceKeepCollectionLookSchema,
+      body,
+      "INVALID_FORCE_KEEP_REQUEST",
+      "强制保留参数不合法",
+    );
+    return this.collections.forceKeep(user.userId, collectionId, assetId);
   }
 
   @Patch(":id/dna")

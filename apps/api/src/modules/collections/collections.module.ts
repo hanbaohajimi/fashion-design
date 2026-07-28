@@ -1,6 +1,7 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
+import { GenerationModule } from "../generation/generation.module";
 import { CollectionsController } from "./collections.controller";
 import {
   COLLECTIONS_DB,
@@ -10,6 +11,7 @@ import {
 import { OpenAiDnaExtractor } from "./dna-extractor";
 
 @Module({
+  imports: [GenerationModule],
   controllers: [CollectionsController],
   providers: [
     CollectionsService,

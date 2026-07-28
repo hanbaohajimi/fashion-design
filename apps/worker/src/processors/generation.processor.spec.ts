@@ -5,6 +5,7 @@ import {
 } from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
 import {
+  CollectionVariationAxis,
   DesignAssetOperation,
   GenerationTaskStatus,
   prisma,
@@ -126,6 +127,72 @@ describe("Generation processor", () => {
     }
   });
 
+  it("系列生成成功后创建唯一 CollectionLook 并投递参考相似度任务", async () => {
+    const fixture = await createTask(GenerationTaskStatus.QUEUED, true);
+    if (!fixture.parentAssetId) throw new Error("测试 Hero 资产创建失败");
+    const parent = await prisma.designAsset.findUniqueOrThrow({
+      where: { id: fixture.parentAssetId },
+    });
+    const collection = await prisma.collection.create({
+      data: {
+        dna: {
+          create: {
+            fabrics: [],
+            moodWords: [],
+            palette: [],
+            referenceFileIds: [],
+            silhouettes: [],
+          },
+        },
+        heroAssetId: parent.id,
+        looks: {
+          create: {
+            designAssetId: parent.id,
+            isHero: true,
+            ordinal: 1,
+          },
+        },
+        name: "Worker collection",
+        projectId: parent.projectId,
+      },
+    });
+    await prisma.generationTask.update({
+      where: { id: fixture.task.id },
+      data: {
+        collectionId: collection.id,
+        variationAxis: CollectionVariationAxis.DETAIL,
+      },
+    });
+    const similarityJobs = { enqueue: vi.fn().mockResolvedValue(undefined) };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      pollIntervalMs: 1,
+      similarityJobs,
+    });
+
+    try {
+      await process(fakeJob(fixture.task));
+      const looks = await prisma.collectionLook.findMany({
+        where: { collectionId: collection.id },
+        orderBy: { ordinal: "asc" },
+      });
+      expect(looks).toHaveLength(2);
+      expect(looks[1]).toMatchObject({
+        isHero: false,
+        ordinal: 2,
+        variationAxis: CollectionVariationAxis.DETAIL,
+      });
+      expect(similarityJobs.enqueue).toHaveBeenCalledWith(
+        collection.id,
+        looks[1]?.designAssetId,
+      );
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
   it("worker 取到 canceled task 时直接 ack 且不调用 AI", async () => {
     const fixture = await createTask(GenerationTaskStatus.CANCELED);
     const ai = successfulAi();
@@ -210,9 +277,9 @@ describe("Generation processor", () => {
     });
 
     try {
-      await expect(
-        process(fakeJob(fixture.task, 1)),
-      ).rejects.toBeInstanceOf(AiProviderError);
+      await expect(process(fakeJob(fixture.task, 1))).rejects.toBeInstanceOf(
+        AiProviderError,
+      );
       const [task, user] = await Promise.all([
         prisma.generationTask.findUniqueOrThrow({
           where: { id: fixture.task.id },
@@ -273,11 +340,9 @@ describe("Generation processor", () => {
     ai.submit.mockImplementation(
       async (_input: unknown, signal?: AbortSignal) =>
         new Promise<AiProviderJob>((_resolve, reject) => {
-          signal?.addEventListener(
-            "abort",
-            () => reject(signal.reason),
-            { once: true },
-          );
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
         }),
     );
     const process = createGenerationProcessor({

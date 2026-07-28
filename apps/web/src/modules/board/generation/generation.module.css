@@ -420,8 +420,7 @@
   margin: 0;
   background:
     linear-gradient(rgb(248 245 236 / 8%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(248 245 236 / 8%) 1px, transparent 1px),
-    #343630;
+    linear-gradient(90deg, rgb(248 245 236 / 8%) 1px, transparent 1px), #343630;
   background-size: 24px 24px;
   place-items: center;
 }
@@ -640,7 +639,12 @@
   overflow-y: auto;
   padding: 26px 30px 30px;
   background:
-    linear-gradient(90deg, transparent 0 78px, rgb(36 37 31 / 14%) 78px 79px, transparent 79px),
+    linear-gradient(
+      90deg,
+      transparent 0 78px,
+      rgb(36 37 31 / 14%) 78px 79px,
+      transparent 79px
+    ),
     #eeeadf;
 }
 
@@ -802,7 +806,12 @@
   height: 112px;
   border-bottom: 1px solid rgb(36 37 31 / 22%);
   animation: version-pulse 1.2s ease-in-out infinite alternate;
-  background: linear-gradient(90deg, transparent 0 8%, rgb(36 37 31 / 8%) 8% 18%, transparent 18%);
+  background: linear-gradient(
+    90deg,
+    transparent 0 8%,
+    rgb(36 37 31 / 8%) 8% 18%,
+    transparent 18%
+  );
 }
 
 .versionEmpty {
@@ -843,7 +852,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(540px, 100vw);
+  width: min(760px, 100vw);
   overflow-y: auto;
   border-left: 1px solid #24251f;
   background: #f8f5ec;
@@ -851,6 +860,43 @@
   color: #24251f;
   animation: drawer-enter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
   overscroll-behavior: contain;
+}
+
+.collectionTabs {
+  position: sticky;
+  z-index: 2;
+  top: 64px;
+  display: grid;
+  min-height: 42px;
+  border-bottom: 1px solid #24251f;
+  background: rgb(248 245 236 / 96%);
+  backdrop-filter: blur(12px);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.collectionTabs button {
+  border: 0;
+  border-right: 1px solid rgb(36 37 31 / 28%);
+  background: transparent;
+  color: #6f6c64;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.collectionTabs button:last-child {
+  border-right: 0;
+}
+
+.collectionTabs button[aria-current="page"] {
+  background: #24251f;
+  color: #fffdf7;
+}
+
+.collectionTabs button:hover:not([aria-current="page"]) {
+  background: #efebe1;
+  color: #24251f;
 }
 
 .collectionHeader {
@@ -1176,6 +1222,427 @@
   cursor: not-allowed;
 }
 
+.lookLab,
+.consistencyOverview {
+  display: grid;
+  padding-bottom: 34px;
+}
+
+.lookLab > header,
+.consistencyOverview > header {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #24251f;
+  padding: 16px 18px;
+}
+
+.lookLab > header > div,
+.consistencyOverview > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.lookLab > header span,
+.consistencyOverview > header span,
+.axisSelector legend span,
+.lookDirection > span {
+  color: #716e65;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.lookLab h2,
+.consistencyOverview h2 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+
+.lookLab > header > strong,
+.consistencyOverview > header > strong {
+  border: 1px solid #24251f;
+  padding: 7px 9px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.axisSelector {
+  display: grid;
+  border: 0;
+  border-bottom: 1px solid #24251f;
+  margin: 0;
+  padding: 16px 18px 18px;
+  gap: 12px;
+}
+
+.axisSelector legend {
+  display: grid;
+  padding: 16px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 3px;
+}
+
+.axisSelector > div {
+  display: grid;
+  border-top: 1px solid #24251f;
+  border-left: 1px solid #24251f;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.axisSelector label {
+  display: grid;
+  min-height: 86px;
+  border-right: 1px solid #24251f;
+  border-bottom: 1px solid #24251f;
+  padding: 10px;
+  background: #fffdf7;
+  cursor: pointer;
+  align-content: space-between;
+  gap: 7px;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.axisSelector label[data-selected="true"] {
+  background: #24251f;
+  color: #fffdf7;
+}
+
+.axisSelector label[data-locked="true"] {
+  background: #ebe7dc;
+  color: #8a877e;
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.axisSelector input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.axisSelector strong {
+  font-size: 13px;
+}
+
+.axisSelector small {
+  color: inherit;
+  font-size: 8px;
+  line-height: 1.4;
+  opacity: 0.72;
+}
+
+.lookDirection {
+  display: grid;
+  border-bottom: 1px solid #24251f;
+  padding: 16px 18px;
+  gap: 7px;
+}
+
+.lookDirection textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgb(36 37 31 / 58%);
+  border-radius: 0;
+  padding: 10px;
+  outline: 0;
+  background: #fffdf7;
+  color: #24251f;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.lookDirection textarea:focus {
+  border-color: #e9522c;
+  box-shadow: inset 3px 0 0 #e9522c;
+}
+
+.generateLookButton {
+  min-height: 48px;
+  border: 0;
+  border-bottom: 1px solid #24251f;
+  background: #e9522c;
+  color: #fffdf7;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.generateLookButton:hover:not(:disabled) {
+  background: #24251f;
+}
+
+.generateLookButton:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.lookError {
+  border-bottom: 1px solid #9c3a25;
+  margin: 0;
+  padding: 10px 18px;
+  background: #f1d9cf;
+  color: #872d1d;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.lookGrid {
+  display: grid;
+  padding: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lookGrid article {
+  min-width: 0;
+  border: 1px solid #24251f;
+  background: #fffdf7;
+}
+
+.lookGrid article[data-drift="true"] {
+  border: 2px solid #a43d28;
+}
+
+.lookGrid figure {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 3 / 4;
+  margin: 0;
+  background: #d6ccba;
+}
+
+.lookGrid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lookGrid figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px;
+  background: rgb(28 29 25 / 88%);
+  color: #fffdf7;
+}
+
+.lookGrid figcaption strong {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.lookGrid figcaption span {
+  color: #dcd5c7;
+  font-size: 8px;
+}
+
+.lookGrid article > div:not(.driftNotice) {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #24251f;
+  padding: 0 10px;
+}
+
+.lookGrid article > div > span {
+  color: #716e65;
+  font-size: 8px;
+}
+
+.lookGrid article > div > strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.duplicateNotice {
+  border-top: 1px solid #24251f;
+  margin: 0;
+  padding: 8px 10px;
+  background: #ecd09e;
+  color: #563a19;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.driftNotice {
+  display: grid;
+  border-top: 1px solid #a43d28;
+  padding: 9px 10px 10px;
+  background: #f1d9cf;
+  gap: 7px;
+}
+
+.driftNotice strong,
+.driftNotice span {
+  color: #872d1d;
+  font-size: 9px;
+}
+
+.driftNotice button {
+  min-height: 32px;
+  border: 1px solid #872d1d;
+  background: transparent;
+  color: #872d1d;
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.driftNotice button:hover {
+  background: #872d1d;
+  color: #fffdf7;
+}
+
+.lookPending {
+  display: grid;
+  min-height: 320px;
+  padding: 30px;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.lookPending i {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e9522c;
+  animation: task-breathe 1.1s ease-in-out infinite;
+}
+
+.lookPending strong {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.lookPending span {
+  color: #716e65;
+  font-size: 9px;
+}
+
+.consistencyOverview > p {
+  max-width: 68ch;
+  margin: 0;
+  padding: 14px 18px;
+  color: #67645c;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.consistencyEmpty {
+  min-height: 240px;
+  border-top: 1px solid #24251f;
+  border-bottom: 1px solid #24251f;
+  padding: 28px;
+  color: #67645c;
+  font-size: 11px;
+}
+
+.heatmapScroll {
+  overflow-x: auto;
+  border-top: 1px solid #24251f;
+  border-bottom: 1px solid #24251f;
+  padding: 18px;
+}
+
+.heatmapScroll table {
+  width: 100%;
+  min-width: 470px;
+  border-spacing: 0;
+  border-top: 1px solid #24251f;
+  border-left: 1px solid #24251f;
+  table-layout: fixed;
+}
+
+.heatmapScroll th,
+.heatmapScroll td {
+  height: 62px;
+  border-right: 1px solid #24251f;
+  border-bottom: 1px solid #24251f;
+  text-align: center;
+}
+
+.heatmapScroll th {
+  background: #efebe1;
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.heatmapScroll th:first-child {
+  width: 82px;
+}
+
+.heatmapScroll td {
+  background: rgb(68 111 85 / var(--similarity-alpha));
+  color: #17231c;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.heatmapScroll td[data-empty="true"] {
+  background: #ebe7dc;
+  color: #8a877e;
+}
+
+.heatmapScroll td[data-high="true"] {
+  background: #dc9849;
+  color: #271a0d;
+}
+
+.heatmapScroll td[data-low="true"] {
+  background: #a43d28;
+  color: #fffdf7;
+}
+
+.consistencyOverview > footer {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  gap: 14px;
+}
+
+.consistencyOverview > footer span {
+  display: inline-flex;
+  align-items: center;
+  color: #67645c;
+  font-size: 8px;
+  gap: 5px;
+}
+
+.consistencyOverview > footer i {
+  width: 9px;
+  height: 9px;
+  border: 1px solid #24251f;
+}
+
+.consistencyOverview > footer i[data-tone="low"] {
+  background: #a43d28;
+}
+
+.consistencyOverview > footer i[data-tone="balanced"] {
+  background: #5d8a6d;
+}
+
+.consistencyOverview > footer i[data-tone="high"] {
+  background: #dc9849;
+}
+
 .collectionSkeleton {
   display: grid;
   padding: 18px 14px;
@@ -1420,6 +1887,10 @@
     min-height: 56px;
   }
 
+  .collectionTabs {
+    top: 56px;
+  }
+
   .saveIndicator {
     min-width: 66px;
     padding: 0 6px;
@@ -1435,6 +1906,19 @@
 
   .collectionHero strong {
     font-size: 18px;
+  }
+
+  .axisSelector > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lookGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .lookLab > header,
+  .consistencyOverview > header {
+    min-height: 76px;
   }
 
   .versionTimeline {
@@ -1488,6 +1972,7 @@
 
   .collectionDrawer,
   .collectionSkeleton i,
+  .lookPending i,
   .saveIndicator i {
     animation: none;
   }

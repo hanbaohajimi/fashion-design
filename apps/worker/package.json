@@ -16,6 +16,7 @@
     "@fashion/billing": "workspace:*",
     "@fashion/db": "workspace:*",
     "@fashion/shared": "workspace:*",
+    "@huggingface/transformers": "3.8.1",
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "heic-decode": "^2.1.0",

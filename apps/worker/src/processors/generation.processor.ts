@@ -10,12 +10,10 @@ import {
   DesignAssetOperation,
   GenerationTaskStatus,
   Prisma,
+  SimilarityAnalysisStatus,
   type PrismaClient,
 } from "@fashion/db";
-import type {
-  GenerationJobData,
-  GenerationTaskEvent,
-} from "@fashion/shared";
+import type { GenerationJobData, GenerationTaskEvent } from "@fashion/shared";
 import { UnrecoverableError, type Job } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -37,7 +35,7 @@ const providerJobSchema = z.object({
 
 type GenerationDatabase = Pick<
   PrismaClient,
-  "$transaction" | "designAsset" | "generationTask"
+  "$transaction" | "collectionLook" | "designAsset" | "generationTask"
 >;
 
 type GenerationAi = Pick<
@@ -50,6 +48,9 @@ export interface GenerationProcessorDependencies {
   readonly billing: Pick<BillingService, "incrementCount">;
   readonly database: GenerationDatabase;
   readonly pollIntervalMs?: number;
+  readonly similarityJobs?: {
+    enqueue(collectionId: string, designAssetId: string): Promise<void>;
+  };
   readonly timeoutMs?: number;
 }
 
@@ -61,6 +62,7 @@ export function createGenerationProcessor({
   billing,
   database,
   pollIntervalMs = 500,
+  similarityJobs,
   timeoutMs = 120_000,
 }: GenerationProcessorDependencies) {
   return async (
@@ -80,10 +82,7 @@ export function createGenerationProcessor({
     if (task.status === GenerationTaskStatus.CANCELED) {
       return { skipped: true, status: "canceled", taskId: task.id };
     }
-    if (
-      task.status === GenerationTaskStatus.SUCCEEDED &&
-      task.countedAt
-    ) {
+    if (task.status === GenerationTaskStatus.SUCCEEDED && task.countedAt) {
       return { skipped: true, status: "succeeded", taskId: task.id };
     }
 
@@ -128,11 +127,32 @@ export function createGenerationProcessor({
         task.userId,
         result,
         {
+          collectionId: task.collectionId,
           parentAssetId: task.parentAssetId,
           projectId: task.projectId,
           taskType: task.taskType,
+          variationAxis: task.variationAxis,
         },
       );
+      const collectionId = task.collectionId;
+      if (finalStatus === "succeeded" && collectionId && similarityJobs) {
+        const generatedAssets = await database.designAsset.findMany({
+          where: { generationTaskId: task.id },
+          select: { id: true },
+        });
+        try {
+          await Promise.all(
+            generatedAssets.map((asset) =>
+              similarityJobs.enqueue(collectionId, asset.id),
+            ),
+          );
+        } catch {
+          await database.collectionLook.updateMany({
+            where: { collectionId },
+            data: { analysisStatus: SimilarityAnalysisStatus.FAILED },
+          });
+        }
+      }
       await updateProgressSafely(job, event(task.id, finalStatus));
       return {
         ...(finalStatus === "canceled" ? { skipped: true as const } : {}),
@@ -161,10 +181,8 @@ export function createGenerationProcessor({
         throw new UnrecoverableError("生成任务超过 120 秒");
       }
 
-      const finalAttempt =
-        job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
-      const retryable =
-        !(error instanceof AiProviderError) || error.retryable;
+      const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+      const retryable = !(error instanceof AiProviderError) || error.retryable;
       if (!finalAttempt && retryable) {
         await database.generationTask.updateMany({
           where: {
@@ -250,9 +268,12 @@ async function persistSuccessOnce(
   userId: string,
   result: AiProviderResult,
   lineage: {
+    readonly collectionId: string | null;
     readonly parentAssetId: string | null;
     readonly projectId: string | null;
     readonly taskType: string;
+    readonly variationAxis:
+      "COLOR" | "DETAIL" | "FABRIC" | "SILHOUETTE" | "STYLING" | null;
   },
 ): Promise<"canceled" | "succeeded"> {
   return database.$transaction(async (transaction) => {
@@ -301,9 +322,12 @@ async function persistDesignAssets(
   taskId: string,
   result: AiProviderResult,
   lineage: {
+    readonly collectionId: string | null;
     readonly parentAssetId: string | null;
     readonly projectId: string | null;
     readonly taskType: string;
+    readonly variationAxis:
+      "COLOR" | "DETAIL" | "FABRIC" | "SILHOUETTE" | "STYLING" | null;
   },
 ): Promise<AiProviderResult> {
   if (!lineage.projectId) return result;
@@ -319,6 +343,18 @@ async function persistDesignAssets(
     : null;
   if (lineage.parentAssetId && !parent) {
     throw new UnrecoverableError("父资产不存在或不属于当前项目");
+  }
+
+  let nextOrdinal = 0;
+  if (lineage.collectionId) {
+    await transaction.$queryRaw(
+      Prisma.sql`SELECT "id" FROM "collections" WHERE "id" = ${lineage.collectionId} FOR UPDATE`,
+    );
+    const current = await transaction.collectionLook.aggregate({
+      where: { collectionId: lineage.collectionId },
+      _max: { ordinal: true },
+    });
+    nextOrdinal = current._max.ordinal ?? 0;
   }
 
   const images = [];
@@ -339,6 +375,18 @@ async function persistDesignAssets(
         width: image.width ?? null,
       },
     });
+    if (lineage.collectionId) {
+      nextOrdinal += 1;
+      await transaction.collectionLook.create({
+        data: {
+          analysisStatus: SimilarityAnalysisStatus.PENDING,
+          collectionId: lineage.collectionId,
+          designAssetId: assetId,
+          ordinal: nextOrdinal,
+          variationAxis: lineage.variationAxis,
+        },
+      });
+    }
     images.push({ ...image, assetId });
   }
   return { ...result, images };
@@ -378,10 +426,7 @@ function assertNotAborted(signal: AbortSignal): void {
   throw error;
 }
 
-async function wait(
-  milliseconds: number,
-  signal: AbortSignal,
-): Promise<void> {
+async function wait(milliseconds: number, signal: AbortSignal): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", onAbort);
@@ -427,10 +472,9 @@ async function markFinalFailure(
   await database.generationTask.updateMany({
     where: {
       id: taskId,
-      status: { notIn: [
-        GenerationTaskStatus.CANCELED,
-        GenerationTaskStatus.SUCCEEDED,
-      ] },
+      status: {
+        notIn: [GenerationTaskStatus.CANCELED, GenerationTaskStatus.SUCCEEDED],
+      },
     },
     data: {
       completedAt: new Date(),
@@ -460,9 +504,7 @@ async function updateProgressSafely(
 }
 
 function standardErrorCode(error: unknown): string {
-  return error instanceof AiProviderError
-    ? error.code
-    : "GENERATION_FAILED";
+  return error instanceof AiProviderError ? error.code : "GENERATION_FAILED";
 }
 
 function safeErrorMessage(error: unknown): string {

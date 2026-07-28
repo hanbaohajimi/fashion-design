@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
+  CollectionVariationAxis,
   DesignAssetOperation,
   DnaExtractionStatus,
   FileStatus,
@@ -9,6 +10,7 @@ import {
   PrismaClient,
   RoleInferenceState,
   RoleSource,
+  SimilarityAnalysisStatus,
   type DesignAsset,
   type Collection,
   type CollectionDna,
@@ -44,6 +46,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export {
+  CollectionVariationAxis,
   DesignAssetOperation,
   DnaExtractionStatus,
   FileStatus,
@@ -52,6 +55,7 @@ export {
   PrismaClient,
   RoleInferenceState,
   RoleSource,
+  SimilarityAnalysisStatus,
 };
 export type {
   Collection,

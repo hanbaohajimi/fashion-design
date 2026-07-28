@@ -1,4 +1,9 @@
-import { DnaExtractionStatus, type PrismaClient } from "@fashion/db";
+import {
+  CollectionVariationAxis,
+  DnaExtractionStatus,
+  SimilarityAnalysisStatus,
+  type PrismaClient,
+} from "@fashion/db";
 import {
   BadRequestException,
   ForbiddenException,
@@ -8,11 +13,13 @@ import {
 } from "@nestjs/common";
 
 import {
+  type CreateCollectionLookInput,
   dnaDraftSchema,
   type DnaDraft,
   type UpdateDnaInput,
 } from "./collections.schemas";
 import type { DnaExtractor } from "./dna-extractor";
+import { GenerationService } from "../generation/generation.service";
 
 export const COLLECTIONS_DB = Symbol("COLLECTIONS_DB");
 export const DNA_EXTRACTOR = Symbol("DNA_EXTRACTOR");
@@ -50,6 +57,29 @@ export interface CollectionView {
   readonly name: string;
   readonly projectId: string;
   readonly updatedAt: Date;
+}
+
+export interface CollectionConsistencyView {
+  readonly looks: readonly CollectionLookView[];
+  readonly referenceLabel: "参考相似度";
+  readonly similarities: readonly {
+    readonly leftAssetId: string;
+    readonly rightAssetId: string;
+    readonly score: number;
+  }[];
+}
+
+export interface CollectionLookView {
+  readonly analysisStatus: "failed" | "pending" | "ready" | "running";
+  readonly assetId: string;
+  readonly isHero: boolean;
+  readonly ordinal: number;
+  readonly similarityScore: number | null;
+  readonly thumbnailUrl: string | null;
+  readonly url: string;
+  readonly variationAxis:
+    "color" | "detail" | "fabric" | "silhouette" | "styling" | null;
+  readonly warningIgnored: boolean;
 }
 
 interface CollectionRecord {
@@ -107,6 +137,8 @@ export class CollectionsService {
     private readonly database: PrismaClient,
     @Inject(DNA_EXTRACTOR)
     private readonly extractor: DnaExtractor,
+    @Inject(GenerationService)
+    private readonly generation: GenerationService,
   ) {}
 
   async createFromHero(
@@ -146,6 +178,14 @@ export class CollectionsService {
           },
         },
         heroAssetId,
+        looks: {
+          create: {
+            analysisStatus: SimilarityAnalysisStatus.PENDING,
+            designAssetId: hero.id,
+            isHero: true,
+            ordinal: 1,
+          },
+        },
         name: `系列 · ${hero.id.slice(0, 8).toUpperCase()}`,
         projectId: hero.projectId,
       },
@@ -209,6 +249,119 @@ export class CollectionsService {
       },
     });
     return this.toDnaView(updated);
+  }
+
+  async createLook(
+    userId: string,
+    collectionId: string,
+    input: CreateCollectionLookInput,
+  ): Promise<{ taskId: string }> {
+    const collection = await this.ownedCollection(userId, collectionId);
+    const dna = this.requireDna(collection.dna);
+    this.assertVariationAxisUnlocked(dna, input.variationAxis);
+    const variationAxis = toDatabaseVariationAxis(input.variationAxis);
+    const parameters = input.parameters;
+
+    return this.generation.createForCollection(
+      userId,
+      {
+        cfg: parameters?.cfg ?? 7,
+        height: parameters?.height ?? 1_024,
+        parentAssetId: collection.heroAsset.id,
+        projectId: collection.projectId,
+        prompt: collectionPrompt(collection, dna, input),
+        referenceImageUrl: collection.heroAsset.url,
+        shapeIds: [],
+        steps: parameters?.steps ?? 28,
+        strength: variationStrength(input.variationAxis),
+        taskType: "i2i",
+        width: parameters?.width ?? 768,
+        ...(parameters?.seed === undefined ? {} : { seed: parameters.seed }),
+      },
+      { collectionId, variationAxis },
+    );
+  }
+
+  async getConsistency(
+    userId: string,
+    collectionId: string,
+  ): Promise<CollectionConsistencyView> {
+    await this.ownedCollection(userId, collectionId);
+    const [looks, similarities] = await Promise.all([
+      this.database.collectionLook.findMany({
+        where: { collectionId },
+        orderBy: { ordinal: "asc" },
+        include: {
+          designAsset: {
+            select: { thumbnailUrl: true, url: true },
+          },
+        },
+      }),
+      this.database.collectionLookSimilarity.findMany({
+        where: { collectionId },
+        orderBy: [{ leftAssetId: "asc" }, { rightAssetId: "asc" }],
+      }),
+    ]);
+    return {
+      looks: looks.map((look) => ({
+        analysisStatus:
+          look.analysisStatus.toLowerCase() as CollectionLookView["analysisStatus"],
+        assetId: look.designAssetId,
+        isHero: look.isHero,
+        ordinal: look.ordinal,
+        similarityScore: look.similarityScore,
+        thumbnailUrl: look.designAsset.thumbnailUrl,
+        url: look.designAsset.url,
+        variationAxis: look.variationAxis
+          ? (look.variationAxis.toLowerCase() as NonNullable<
+              CollectionLookView["variationAxis"]
+            >)
+          : null,
+        warningIgnored: look.warningIgnored,
+      })),
+      referenceLabel: "参考相似度",
+      similarities: similarities.map((pair) => ({
+        leftAssetId: pair.leftAssetId,
+        rightAssetId: pair.rightAssetId,
+        score: pair.score,
+      })),
+    };
+  }
+
+  async forceKeep(
+    userId: string,
+    collectionId: string,
+    designAssetId: string,
+  ): Promise<CollectionLookView> {
+    await this.ownedCollection(userId, collectionId);
+    const existing = await this.database.collectionLook.findUnique({
+      where: {
+        collectionId_designAssetId: { collectionId, designAssetId },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException({
+        code: "COLLECTION_LOOK_NOT_FOUND",
+        message: "系列 Look 不存在",
+      });
+    }
+    await this.database.collectionLook.update({
+      where: {
+        collectionId_designAssetId: { collectionId, designAssetId },
+      },
+      data: { warningIgnored: true },
+    });
+    const consistency = await this.getConsistency(userId, collectionId);
+    const updated = consistency.looks.find(
+      (look) => look.assetId === designAssetId,
+    );
+    if (!updated) {
+      throw new NotFoundException({
+        code: "COLLECTION_LOOK_NOT_FOUND",
+        message: "系列 Look 不存在",
+      });
+    }
+    return updated;
   }
 
   private async ownedHero(userId: string, heroAssetId: string) {
@@ -290,6 +443,23 @@ export class CollectionsService {
     }
   }
 
+  private assertVariationAxisUnlocked(
+    dna: DnaRecord,
+    axis: CreateCollectionLookInput["variationAxis"],
+  ): void {
+    const locked =
+      (axis === "color" && dna.paletteLocked) ||
+      (axis === "silhouette" && dna.silhouettesLocked) ||
+      (axis === "fabric" && dna.fabricsLocked) ||
+      (axis === "styling" && dna.moodWordsLocked);
+    if (locked) {
+      throw new BadRequestException({
+        code: "VARIATION_AXIS_LOCKED",
+        message: "该变化轴已在 DNA 中锁定，请选择其他维度",
+      });
+    }
+  }
+
   private async assertOwnedFileReferences(
     userId: string,
     referenceFileIds: readonly string[] | undefined,
@@ -358,4 +528,72 @@ export class CollectionsService {
 
 function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function toDatabaseVariationAxis(
+  axis: CreateCollectionLookInput["variationAxis"],
+): CollectionVariationAxis {
+  return {
+    color: CollectionVariationAxis.COLOR,
+    detail: CollectionVariationAxis.DETAIL,
+    fabric: CollectionVariationAxis.FABRIC,
+    silhouette: CollectionVariationAxis.SILHOUETTE,
+    styling: CollectionVariationAxis.STYLING,
+  }[axis];
+}
+
+function variationStrength(
+  axis: CreateCollectionLookInput["variationAxis"],
+): number {
+  return {
+    color: 0.36,
+    detail: 0.32,
+    fabric: 0.42,
+    silhouette: 0.58,
+    styling: 0.48,
+  }[axis];
+}
+
+function collectionPrompt(
+  collection: CollectionRecord,
+  dna: DnaRecord,
+  input: CreateCollectionLookInput,
+): string {
+  const palette = dnaDraftSchema.shape.palette.safeParse(dna.palette);
+  const locked = [
+    dna.paletteLocked
+      ? `色板=${formatTerms(
+          palette.success
+            ? palette.data.map((color) => `${color.name} ${color.hex}`)
+            : [],
+        )}`
+      : null,
+    dna.silhouettesLocked ? `廓形=${formatTerms(dna.silhouettes)}` : null,
+    dna.fabricsLocked ? `面料=${formatTerms(dna.fabrics)}` : null,
+    dna.moodWordsLocked ? `情绪词=${formatTerms(dna.moodWords)}` : null,
+  ].filter((value): value is string => value !== null);
+  const reference = [
+    `色板=${formatTerms(
+      palette.success
+        ? palette.data.map((color) => `${color.name} ${color.hex}`)
+        : [],
+    )}`,
+    `廓形=${formatTerms(dna.silhouettes)}`,
+    `面料=${formatTerms(dna.fabrics)}`,
+    `情绪词=${formatTerms(dna.moodWords)}`,
+  ].join("；");
+  return [
+    `为系列“${collection.name}”扩展一套新的完整服装 Look。`,
+    `本次变化轴：${input.variationAxis}。在保持系列家族感的同时，围绕该轴做清晰、可辨识但受控的变化。`,
+    `必须保持的锁定 DNA：${locked.length > 0 ? locked.join("；") : "无硬锁维度"}。锁定维度不得被重新解释或替换。`,
+    `其余系列 DNA 作为视觉参考：${reference}。`,
+    "延续 Hero Look 的设计语言、造型完成度与摄影呈现，输出单人全身时装 Look，不要生成拼贴或文字。",
+    input.prompt ? `设计师补充方向：${input.prompt}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatTerms(values: readonly string[]): string {
+  return values.length > 0 ? values.join("、") : "未定义";
 }

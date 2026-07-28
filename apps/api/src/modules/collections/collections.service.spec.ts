@@ -56,6 +56,14 @@ function setup() {
     collectionDna: {
       update: vi.fn(),
     },
+    collectionLook: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    collectionLookSimilarity: {
+      findMany: vi.fn(),
+    },
     designAsset: {
       findUnique: vi.fn().mockResolvedValue({
         id: "hero-1",
@@ -72,10 +80,18 @@ function setup() {
   const extractor: DnaExtractor = {
     extract: vi.fn().mockResolvedValue(extractedDna),
   };
+  const generation = {
+    createForCollection: vi.fn(),
+  };
   return {
     database,
     extractor,
-    service: new CollectionsService(database as never, extractor),
+    generation,
+    service: new CollectionsService(
+      database as never,
+      extractor,
+      generation as never,
+    ),
   };
 }
 
@@ -143,6 +159,64 @@ describe("CollectionsService", () => {
       }),
     );
     expect(created.dna.extractionStatus).toBe("failed");
+  });
+
+  it("扩展 Look 时把锁定 DNA 与变化轴注入生成提示", async () => {
+    const { database, generation, service } = setup();
+    database.collection.findUnique.mockResolvedValue(
+      collectionRecord({
+        dna: {
+          ...collectionRecord().dna,
+          paletteLocked: true,
+        },
+      }),
+    );
+    generation.createForCollection.mockResolvedValue({ taskId: "task-1" });
+
+    const created = await service.createLook("user-1", "collection-1", {
+      prompt: "增加不对称门襟",
+      variationAxis: "detail",
+    });
+
+    expect(created).toEqual({ taskId: "task-1" });
+    expect(generation.createForCollection).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        parentAssetId: "hero-1",
+        projectId: "project-1",
+        referenceImageUrl: "https://cdn.test/hero.png",
+        strength: 0.32,
+        taskType: "i2i",
+        prompt: expect.stringMatching(
+          /必须保持的锁定 DNA：色板=.*深石墨 #1D232A/,
+        ),
+      }),
+      {
+        collectionId: "collection-1",
+        variationAxis: "DETAIL",
+      },
+    );
+  });
+
+  it("拒绝沿已锁定的 DNA 维度生成", async () => {
+    const { database, generation, service } = setup();
+    database.collection.findUnique.mockResolvedValue(
+      collectionRecord({
+        dna: {
+          ...collectionRecord().dna,
+          silhouettesLocked: true,
+        },
+      }),
+    );
+
+    await expect(
+      service.createLook("user-1", "collection-1", {
+        variationAxis: "silhouette",
+      }),
+    ).rejects.toMatchObject({
+      response: { code: "VARIATION_AXIS_LOCKED" },
+    });
+    expect(generation.createForCollection).not.toHaveBeenCalled();
   });
 
   it("同一个 Hero 再次建系列时直接返回原系列，不重复提取", async () => {

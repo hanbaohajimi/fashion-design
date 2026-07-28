@@ -18,6 +18,35 @@ export const createCollectionSchema = z.object({
   heroAssetId: z.string().min(1).max(128),
 });
 
+export const collectionVariationAxisSchema = z.enum([
+  "silhouette",
+  "fabric",
+  "color",
+  "detail",
+  "styling",
+]);
+
+export const createCollectionLookSchema = z
+  .object({
+    parameters: z
+      .object({
+        cfg: z.number().min(0).max(30).optional(),
+        height: z.number().int().min(256).max(2_048).multipleOf(8).optional(),
+        seed: z.number().int().min(0).max(4_294_967_295).optional(),
+        steps: z.number().int().min(1).max(100).optional(),
+        width: z.number().int().min(256).max(2_048).multipleOf(8).optional(),
+      })
+      .strict()
+      .optional(),
+    prompt: z.string().trim().max(800).optional(),
+    variationAxis: collectionVariationAxisSchema,
+  })
+  .strict();
+
+export const forceKeepCollectionLookSchema = z
+  .object({ force: z.literal(true) })
+  .strict();
+
 export const updateDnaSchema = z
   .object({
     fabrics: z.array(dnaTermSchema).max(12).optional(),
@@ -41,4 +70,7 @@ export const updateDnaSchema = z
   });
 
 export type DnaDraft = z.infer<typeof dnaDraftSchema>;
+export type CreateCollectionLookInput = z.infer<
+  typeof createCollectionLookSchema
+>;
 export type UpdateDnaInput = z.infer<typeof updateDnaSchema>;

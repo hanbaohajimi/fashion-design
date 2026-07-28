@@ -41,3 +41,31 @@ export interface UpdateDnaInput {
   readonly referenceFileIds?: readonly string[];
   readonly silhouettes?: readonly string[];
 }
+
+export type CollectionVariationAxis =
+  "silhouette" | "fabric" | "color" | "detail" | "styling";
+
+export type SimilarityAnalysisStatus =
+  "pending" | "running" | "ready" | "failed";
+
+export interface CollectionLook {
+  readonly analysisStatus: SimilarityAnalysisStatus;
+  readonly assetId: string;
+  readonly isHero: boolean;
+  readonly ordinal: number;
+  readonly similarityScore: number | null;
+  readonly thumbnailUrl: string | null;
+  readonly url: string;
+  readonly variationAxis: CollectionVariationAxis | null;
+  readonly warningIgnored: boolean;
+}
+
+export interface CollectionConsistency {
+  readonly looks: readonly CollectionLook[];
+  readonly referenceLabel: "参考相似度";
+  readonly similarities: readonly {
+    readonly leftAssetId: string;
+    readonly rightAssetId: string;
+    readonly score: number;
+  }[];
+}

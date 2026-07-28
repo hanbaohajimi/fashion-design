@@ -2,12 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchCollection, updateCollectionDna } from "./collection-api";
-import type { CollectionDetail, CollectionDna } from "./collection-types";
+import {
+  fetchCollection,
+  fetchCollectionConsistency,
+  updateCollectionDna,
+} from "./collection-api";
+import type {
+  CollectionConsistency,
+  CollectionDetail,
+  CollectionDna,
+} from "./collection-types";
+import { ConsistencyOverview } from "./ConsistencyOverview";
 import { DNACard } from "./DNACard";
 import styles from "./generation.module.css";
+import { LookGrid } from "./LookGrid";
 
 type SaveState = "error" | "saved" | "saving" | "unsaved";
+type DrawerTab = "consistency" | "dna" | "looks";
 
 export function CollectionDrawer({
   collectionId,
@@ -17,9 +28,13 @@ export function CollectionDrawer({
   readonly onClose: () => void;
 }) {
   const [collection, setCollection] = useState<CollectionDetail | null>(null);
+  const [consistency, setConsistency] = useState<CollectionConsistency | null>(
+    null,
+  );
   const [draft, setDraft] = useState<CollectionDna | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [tab, setTab] = useState<DrawerTab>("dna");
   const lastSaved = useRef("");
   const draftRef = useRef<CollectionDna | null>(null);
   const saveQueue = useRef(Promise.resolve());
@@ -59,19 +74,29 @@ export function CollectionDrawer({
     [collectionId],
   );
 
-  const closeAfterSave = useCallback(async (): Promise<void> => {
+  const flushDna = useCallback(async (): Promise<void> => {
     const current = draftRef.current;
     if (current && dnaSignature(current) !== lastSaved.current) {
-      try {
-        await enqueueSave(current);
-      } catch {
-        return;
-      }
+      await enqueueSave(current);
     } else {
       await saveQueue.current;
     }
+  }, [enqueueSave]);
+
+  const closeAfterSave = useCallback(async (): Promise<void> => {
+    try {
+      await flushDna();
+    } catch {
+      return;
+    }
     onClose();
-  }, [enqueueSave, onClose]);
+  }, [flushDna, onClose]);
+
+  const refreshConsistency = useCallback(async () => {
+    const result = await fetchCollectionConsistency(collectionId);
+    setConsistency(result);
+    return result;
+  }, [collectionId]);
 
   useEffect(() => {
     let disposed = false;
@@ -88,6 +113,18 @@ export function CollectionDrawer({
         if (!disposed) {
           setError(
             reason instanceof Error ? reason.message : "系列 DNA 读取失败",
+          );
+        }
+      },
+    );
+    void fetchCollectionConsistency(collectionId).then(
+      (result) => {
+        if (!disposed) setConsistency(result);
+      },
+      (reason: unknown) => {
+        if (!disposed) {
+          setError(
+            reason instanceof Error ? reason.message : "系列参考相似度读取失败",
           );
         }
       },
@@ -129,7 +166,7 @@ export function CollectionDrawer({
     >
       <header className={styles.collectionHeader}>
         <div>
-          <span>COLLECTION / DNA</span>
+          <span>COLLECTION / LAB</span>
           <strong>{collection?.name ?? "正在读取系列"}</strong>
         </div>
         <div>
@@ -143,6 +180,32 @@ export function CollectionDrawer({
           </button>
         </div>
       </header>
+
+      {collection ? (
+        <nav aria-label="系列工作区" className={styles.collectionTabs}>
+          <button
+            aria-current={tab === "dna" ? "page" : undefined}
+            onClick={() => setTab("dna")}
+            type="button"
+          >
+            DNA 定义
+          </button>
+          <button
+            aria-current={tab === "looks" ? "page" : undefined}
+            onClick={() => setTab("looks")}
+            type="button"
+          >
+            Look 扩展
+          </button>
+          <button
+            aria-current={tab === "consistency" ? "page" : undefined}
+            onClick={() => setTab("consistency")}
+            type="button"
+          >
+            一致性
+          </button>
+        </nav>
+      ) : null}
 
       {!collection && !error ? (
         <div className={styles.collectionSkeleton} aria-label="正在加载 DNA">
@@ -161,8 +224,16 @@ export function CollectionDrawer({
               void fetchCollection(collectionId).then(
                 (result) => {
                   lastSaved.current = dnaSignature(result.dna);
+                  draftRef.current = result.dna;
                   setCollection(result);
                   setDraft(result.dna);
+                  void refreshConsistency().catch((refreshError: unknown) => {
+                    setError(
+                      refreshError instanceof Error
+                        ? refreshError.message
+                        : "系列参考相似度读取失败",
+                    );
+                  });
                 },
                 (reason: unknown) => {
                   setError(
@@ -180,36 +251,59 @@ export function CollectionDrawer({
         </div>
       ) : collection && draft ? (
         <>
-          <section className={styles.collectionHero}>
-            <figure>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt="系列 Hero Look"
-                src={collection.hero.thumbnailUrl ?? collection.hero.url}
-              />
-            </figure>
-            <div>
-              <span>FOUNDATION LOOK</span>
-              <strong>Hero 已锁定为系列原点</strong>
-              <p>
-                {draft.extractionStatus === "failed"
-                  ? "自动提取未完成，已为你保留空白 DNA，可直接手动定义。"
-                  : "DNA 草案已从 Hero 提取。锁定稳定维度，再继续扩展系列。"}
-              </p>
-            </div>
-          </section>
           {error ? (
             <p className={styles.collectionInlineError} role="status">
               {error}
             </p>
           ) : null}
-          <DNACard
-            dna={draft}
-            onChange={(next) => {
-              setError(null);
-              setDraft(next);
-            }}
-          />
+          {tab === "dna" ? (
+            <>
+              <section className={styles.collectionHero}>
+                <figure>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt="系列 Hero Look"
+                    src={collection.hero.thumbnailUrl ?? collection.hero.url}
+                  />
+                </figure>
+                <div>
+                  <span>FOUNDATION LOOK</span>
+                  <strong>Hero 已锁定为系列原点</strong>
+                  <p>
+                    {draft.extractionStatus === "failed"
+                      ? "自动提取未完成，已为你保留空白 DNA，可直接手动定义。"
+                      : "DNA 草案已从 Hero 提取。锁定稳定维度，再继续扩展系列。"}
+                  </p>
+                </div>
+              </section>
+              <DNACard
+                dna={draft}
+                onChange={(next) => {
+                  setError(null);
+                  setDraft(next);
+                }}
+              />
+            </>
+          ) : consistency && tab === "looks" ? (
+            <LookGrid
+              beforeGenerate={flushDna}
+              collectionId={collectionId}
+              consistency={consistency}
+              dna={draft}
+              onRefresh={refreshConsistency}
+            />
+          ) : consistency && tab === "consistency" ? (
+            <ConsistencyOverview consistency={consistency} />
+          ) : (
+            <div
+              className={styles.collectionSkeleton}
+              aria-label="正在加载系列 Look"
+            >
+              <i />
+              <i />
+              <i />
+            </div>
+          )}
         </>
       ) : null}
     </aside>

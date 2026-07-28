@@ -1,4 +1,5 @@
 import {
+  CollectionVariationAxis,
   GenerationTaskStatus,
   Prisma,
   type PrismaClient,
@@ -21,10 +22,7 @@ import type { GenerationCreateRequest } from "./generation.schemas";
 export const GENERATION_DB = Symbol("GENERATION_DB");
 export const GENERATION_JOBS = Symbol("GENERATION_JOBS");
 
-type GenerationDatabase = Pick<
-  PrismaClient,
-  "designAsset" | "generationTask"
->;
+type GenerationDatabase = Pick<PrismaClient, "designAsset" | "generationTask">;
 
 export interface GenerationJobs {
   enqueue(taskId: string, userId: string): Promise<void>;
@@ -37,14 +35,17 @@ export interface GenerationTaskView {
   readonly taskType: string;
   readonly compiledPrompt: unknown;
   readonly output: unknown;
-  readonly error:
-    | {
-        readonly code: string;
-        readonly message: string;
-      }
-    | null;
+  readonly error: {
+    readonly code: string;
+    readonly message: string;
+  } | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+export interface CollectionGenerationContext {
+  readonly collectionId: string;
+  readonly variationAxis: CollectionVariationAxis;
 }
 
 @Injectable()
@@ -60,6 +61,22 @@ export class GenerationService {
   async create(
     userId: string,
     request: GenerationCreateRequest,
+  ): Promise<{ taskId: string }> {
+    return this.createTask(userId, request);
+  }
+
+  async createForCollection(
+    userId: string,
+    request: GenerationCreateRequest,
+    context: CollectionGenerationContext,
+  ): Promise<{ taskId: string }> {
+    return this.createTask(userId, request, context);
+  }
+
+  private async createTask(
+    userId: string,
+    request: GenerationCreateRequest,
+    context?: CollectionGenerationContext,
   ): Promise<{ taskId: string }> {
     const quota = await this.billingService.canGenerate(userId);
     if (!quota.allowed) {
@@ -95,6 +112,12 @@ export class GenerationService {
           ? { parentAssetId: request.parentAssetId }
           : {}),
         ...(request.projectId ? { projectId: request.projectId } : {}),
+        ...(context
+          ? {
+              collectionId: context.collectionId,
+              variationAxis: context.variationAxis,
+            }
+          : {}),
         status: GenerationTaskStatus.QUEUED,
         taskType: input.taskType,
         userId,
@@ -181,10 +204,7 @@ export class GenerationService {
     return this.toView(task);
   }
 
-  async cancel(
-    userId: string,
-    taskId: string,
-  ): Promise<GenerationTaskView> {
+  async cancel(userId: string, taskId: string): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
       where: { id: taskId, userId },
     });

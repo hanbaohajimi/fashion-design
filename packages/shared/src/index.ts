@@ -1,5 +1,6 @@
 export const PLATFORM_NAME = "AI 服装设计平台";
 export const GENERATION_QUEUE_NAME = "generation";
+export const COLLECTION_SIMILARITY_QUEUE_NAME = "collection-similarity";
 export const THUMBNAIL_QUEUE_NAME = "thumbnail";
 export const VLM_INFERENCE_QUEUE_NAME = "vlm-inference";
 export const BOARD_ELEMENT_ROLES = [
@@ -34,12 +35,13 @@ export interface GenerationJobData {
   readonly userId: string;
 }
 
+export interface CollectionSimilarityJobData {
+  readonly collectionId: string;
+  readonly designAssetId: string;
+}
+
 export type GenerationTaskEventStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "canceled";
+  "queued" | "running" | "succeeded" | "failed" | "canceled";
 
 export interface GenerationTaskEvent {
   readonly taskId: string;

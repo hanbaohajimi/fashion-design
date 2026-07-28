@@ -6,7 +6,9 @@ allowBuilds:
   "@prisma/engines": true
   esbuild: true
   msgpackr-extract: true
+  onnxruntime-node: true
   prisma: true
+  protobufjs: true
   sharp: true
   supabase: true
   unrs-resolver: true
