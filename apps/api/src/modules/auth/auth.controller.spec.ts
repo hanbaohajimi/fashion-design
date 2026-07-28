@@ -16,6 +16,8 @@ import {
 import { AppModule } from "../../app.module";
 import { BillingService } from "../billing/billing.service";
 import { AuthService } from "./auth.service";
+import { AUDIT_DB } from "../../security/audit.interceptor";
+import { RATE_LIMIT_STORE } from "../../security/rate-limit.guard";
 
 const user: User = {
   id: "cm1234567890123456789012",
@@ -55,6 +57,17 @@ describe("authentication HTTP contract", () => {
       .useValue(authService)
       .overrideProvider(BillingService)
       .useValue(billingService)
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue({
+        consume: vi.fn().mockResolvedValue({
+          count: 1,
+          retryAfterSeconds: 60,
+        }),
+      })
+      .overrideProvider(AUDIT_DB)
+      .useValue({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

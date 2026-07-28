@@ -1,4 +1,4 @@
-import "./load-env";
+import "./instrument";
 
 import { createAiRuntimeFromEnv } from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
@@ -37,6 +37,11 @@ import {
 } from "./processors/vlm-inference.processor";
 import { S3ThumbnailStorage } from "./storage";
 import { OpenAiVlmClassifier } from "./vlm-classifier";
+import { OpenAiContentModerationService } from "./content-moderation.service";
+import {
+  captureWorkerException,
+  flushWorkerSentry,
+} from "./sentry.config";
 
 function redisConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
@@ -77,6 +82,7 @@ const processGeneration = createGenerationProcessor({
   ai: createAiRuntimeFromEnv(),
   billing: new BillingService(prisma),
   database: prisma,
+  moderator: new OpenAiContentModerationService(),
   similarityJobs: {
     async enqueue(collectionId, designAssetId) {
       await collectionSimilarityQueue.add(
@@ -207,35 +213,55 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     inferenceWorker.close(),
   ]);
   await prisma.$disconnect();
+  await flushWorkerSentry();
   process.exit(0);
 }
 
 thumbnailWorker.on("failed", (job, error) => {
   console.error(`缩略图任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, { phase: "failed", queue: "thumbnail" });
 });
 inferenceWorker.on("failed", (job, error) => {
   console.error(`角色推断任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, {
+    phase: "failed",
+    queue: "vlm-inference",
+  });
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
     void markRoleInferenceFailed(prisma, job.data).catch((fallbackError) => {
       console.error("角色推断最终回退状态写入失败：", fallbackError);
+      captureWorkerException(fallbackError, {
+        phase: "fallback",
+        queue: "vlm-inference",
+      });
     });
   }
 });
 generationWorker.on("failed", (job, error) => {
   console.error(`生成任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, { phase: "failed", queue: "generation" });
 });
 collectionSimilarityWorker.on("failed", (job, error) => {
   console.error(`系列参考相似度任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, {
+    phase: "failed",
+    queue: "collection-similarity",
+  });
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
     void markCollectionSimilarityFailed(prisma, job.data).catch(
       (fallbackError) => {
         console.error("系列参考相似度失败状态写入失败：", fallbackError);
+        captureWorkerException(fallbackError, {
+          phase: "fallback",
+          queue: "collection-similarity",
+        });
       },
     );
   }
 });
 exportWorker.on("failed", (job, error) => {
   console.error(`导出任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, { phase: "failed", queue: "export" });
   if (
     job?.data.action === "render" &&
     job.attemptsMade >= (job.opts.attempts ?? 1)
@@ -243,6 +269,10 @@ exportWorker.on("failed", (job, error) => {
     void markExportFailed(prisma, job.data.exportId, error.message).catch(
       (fallbackError) => {
         console.error("导出任务最终失败状态写入失败：", fallbackError);
+        captureWorkerException(fallbackError, {
+          phase: "fallback",
+          queue: "export",
+        });
       },
     );
   }
@@ -257,6 +287,7 @@ process.once("SIGTERM", () => {
 
 void start().catch(async (error: unknown) => {
   console.error("Worker 启动失败：无法连接 Redis 或对象存储配置无效。", error);
+  captureWorkerException(error, { phase: "bootstrap", queue: "worker" });
   await Promise.all([
     generationWorker.close(),
     collectionSimilarityWorker.close(),
@@ -267,5 +298,6 @@ void start().catch(async (error: unknown) => {
     inferenceWorker.close(),
   ]);
   await prisma.$disconnect();
+  await flushWorkerSentry();
   process.exitCode = 1;
 });

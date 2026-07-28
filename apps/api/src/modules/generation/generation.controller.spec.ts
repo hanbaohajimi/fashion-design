@@ -15,6 +15,8 @@ import {
 import { AppModule } from "../../app.module";
 import { AuthService } from "../auth/auth.service";
 import { GenerationService } from "./generation.service";
+import { AUDIT_DB } from "../../security/audit.interceptor";
+import { RATE_LIMIT_STORE } from "../../security/rate-limit.guard";
 
 describe("generation HTTP contract", () => {
   let app: INestApplication;
@@ -35,6 +37,17 @@ describe("generation HTTP contract", () => {
       .useValue(authService)
       .overrideProvider(GenerationService)
       .useValue(generationService)
+      .overrideProvider(RATE_LIMIT_STORE)
+      .useValue({
+        consume: vi.fn().mockResolvedValue({
+          count: 1,
+          retryAfterSeconds: 3600,
+        }),
+      })
+      .overrideProvider(AUDIT_DB)
+      .useValue({
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

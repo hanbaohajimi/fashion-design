@@ -22,6 +22,7 @@ import type {
   GenerationTaskItem,
 } from "./generation-types";
 import { useGenerationSSE } from "./useGenerationSSE";
+import { captureAnalytics } from "../../../observability/analytics";
 
 interface StartGenerationInput {
   readonly parameters: GenerationParameters;
@@ -44,7 +45,12 @@ interface GenerationWorkspaceValue {
 
 const GenerationWorkspaceContext =
   createContext<GenerationWorkspaceValue | null>(null);
-const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
+const TERMINAL = new Set([
+  "succeeded",
+  "failed",
+  "moderation_failed",
+  "canceled",
+]);
 
 function candidatesFrom(
   task: GenerationTaskDetail,
@@ -165,6 +171,11 @@ export function GenerationWorkspace({
             : {}),
         });
         const now = new Date().toISOString();
+        captureAnalytics("generation_submitted", {
+          has_reference: Boolean(input.referenceImageUrl),
+          selected_element_count: input.shapeIds.length,
+          task_type: input.taskType ?? "t2i",
+        });
         setTasks((current) => [
           {
             candidates: [],

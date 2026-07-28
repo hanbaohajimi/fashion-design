@@ -3,6 +3,7 @@ export type GenerationStatus =
   | "running"
   | "succeeded"
   | "failed"
+  | "moderation_failed"
   | "canceled";
 
 export interface GenerationCandidate {

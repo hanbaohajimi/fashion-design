@@ -14,6 +14,7 @@ import type {
 import { fetchGenerationTask } from "./generation-api";
 import styles from "./generation.module.css";
 import { VariationAxisSelector } from "./VariationAxisSelector";
+import { captureAnalytics } from "../../../observability/analytics";
 
 const TASK_POLL_MS = 1_200;
 const ANALYSIS_POLL_MS = 1_500;
@@ -79,6 +80,9 @@ export function LookGrid({
         direction,
       );
       await waitForGeneration(taskId);
+      captureAnalytics("collection_look_generated", {
+        variation_axis: effectiveAxis,
+      });
       if (!mounted.current) return;
       setDirection("");
       await waitForSimilarity(onRefresh, previousLookCount);
@@ -221,7 +225,11 @@ async function waitForGeneration(taskId: string): Promise<void> {
   for (let attempt = 0; attempt < MAX_TASK_POLLS; attempt += 1) {
     const task = await fetchGenerationTask(taskId);
     if (task.status === "succeeded") return;
-    if (task.status === "failed" || task.status === "canceled") {
+    if (
+      task.status === "failed" ||
+      task.status === "moderation_failed" ||
+      task.status === "canceled"
+    ) {
       throw new Error(task.error?.message ?? "系列 Look 生成未完成");
     }
     await delay(TASK_POLL_MS);

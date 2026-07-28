@@ -22,6 +22,7 @@ import {
   isBoardShape,
   normalizeBoardRole,
 } from "../shapes";
+import { captureAnalytics } from "../../../observability/analytics";
 
 const SAVE_DEBOUNCE_MS = 1_500;
 const RETRY_MIN_MS = 3_000;
@@ -295,6 +296,11 @@ export function useBoardPersist(
 
           for (const record of Object.values(entry.changes.added)) {
             queueRecord(record, false);
+            if (isShapeRecord(record)) {
+              captureAnalytics("board_element_added", {
+                element_type: record.type,
+              });
+            }
           }
           for (const [, record] of Object.values(entry.changes.updated)) {
             queueRecord(record, false);

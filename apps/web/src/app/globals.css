@@ -57,3 +57,64 @@ a {
   font-weight: 700;
   text-underline-offset: 0.3em;
 }
+
+.global-error-page {
+  display: grid;
+  min-height: 100vh;
+  padding: 2rem;
+  place-items: center;
+}
+
+.core-error-boundary {
+  align-content: center;
+  background: #f4f1ea;
+  border: 1px solid #171714;
+  border-top: 5px solid #a6321d;
+  color: #171714;
+  display: grid;
+  gap: 0.85rem;
+  margin: auto;
+  max-width: 34rem;
+  min-height: 18rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  width: min(100%, 34rem);
+}
+
+.core-error-boundary > span {
+  color: #6e6a60;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.core-error-boundary > strong {
+  font-size: clamp(1.45rem, 3vw, 2.25rem);
+  line-height: 1.15;
+}
+
+.core-error-boundary > p {
+  color: #555249;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.core-error-boundary > button {
+  background: #171714;
+  border: 1px solid #171714;
+  color: #f4f1ea;
+  cursor: pointer;
+  font-weight: 800;
+  justify-self: start;
+  min-height: 2.75rem;
+  padding: 0.65rem 1.35rem;
+}
+
+.core-error-boundary > button:hover {
+  background: #a6321d;
+  border-color: #a6321d;
+}
+
+.core-error-boundary > button:focus-visible {
+  outline: 3px solid #d69b43;
+  outline-offset: 3px;
+}

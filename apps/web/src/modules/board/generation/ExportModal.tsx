@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -14,6 +14,7 @@ import {
   type ExportSource,
 } from "./export-api";
 import styles from "./generation.module.css";
+import { captureAnalytics } from "../../../observability/analytics";
 
 const POLL_INTERVAL_MS = 1_000;
 
@@ -34,6 +35,7 @@ export function ExportModal({
   const [error, setError] = useState<string | null>(null);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const capturedJobs = useRef(new Set<string>());
 
   const loadCapabilities = useCallback(async (): Promise<void> => {
     setError(null);
@@ -89,6 +91,21 @@ export function ExportModal({
       window.clearTimeout(timer);
     };
   }, [job, pollAttempt]);
+
+  useEffect(() => {
+    if (
+      job?.status !== "succeeded" ||
+      capturedJobs.current.has(job.id)
+    ) {
+      return;
+    }
+    capturedJobs.current.add(job.id);
+    captureAnalytics("export_completed", {
+      format,
+      quality,
+      source_type: source.type,
+    });
+  }, [format, job, quality, source.type]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

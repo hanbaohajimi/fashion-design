@@ -17,6 +17,7 @@
     "@fashion/db": "workspace:*",
     "@fashion/shared": "workspace:*",
     "@huggingface/transformers": "3.8.1",
+    "@sentry/node": "^10.68.0",
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "heic-decode": "^2.1.0",

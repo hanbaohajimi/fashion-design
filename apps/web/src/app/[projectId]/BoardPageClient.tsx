@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { BoardSkeleton } from "../../modules/board/BoardSkeleton";
+import { ErrorBoundary } from "../../observability/ErrorBoundary";
 
 const BoardCanvas = dynamic(
   () => import("../../modules/board/BoardCanvas"),
@@ -17,5 +18,9 @@ interface BoardPageClientProps {
 }
 
 export function BoardPageClient({ projectId }: BoardPageClientProps) {
-  return <BoardCanvas key={projectId} projectId={projectId} />;
+  return (
+    <ErrorBoundary area="board">
+      <BoardCanvas key={projectId} projectId={projectId} />
+    </ErrorBoundary>
+  );
 }

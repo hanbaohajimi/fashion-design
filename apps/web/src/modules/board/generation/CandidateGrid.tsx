@@ -11,6 +11,7 @@ import { DEFAULT_GENERATION_PARAMETERS } from "./GenerationBar";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import type { GenerationCandidate } from "./generation-types";
 import styles from "./generation.module.css";
+import { captureAnalytics } from "../../../observability/analytics";
 
 export function CandidateGrid() {
   const editor = useEditor();
@@ -56,6 +57,9 @@ export function CandidateGrid() {
       },
     });
     editor.select(shapeId);
+    captureAnalytics("generation_adopted", {
+      task_type: candidate.taskType,
+    });
     generation.dismissCandidate(candidate.id);
   };
 

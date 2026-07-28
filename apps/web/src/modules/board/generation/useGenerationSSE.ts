@@ -11,6 +11,7 @@ import type {
 const TERMINAL = new Set<GenerationStatus>([
   "succeeded",
   "failed",
+  "moderation_failed",
   "canceled",
 ]);
 const POLL_INTERVAL_MS = 2_000;

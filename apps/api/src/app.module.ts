@@ -1,5 +1,9 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
+import {
+  SentryGlobalFilter,
+  SentryModule,
+} from "@sentry/nestjs/setup";
 
 import { HealthController } from "./health.controller";
 import { AiModule } from "./modules/ai/ai.module";
@@ -14,9 +18,13 @@ import { ExportsModule } from "./modules/exports/exports.module";
 import { FilesModule } from "./modules/files/files.module";
 import { GenerationModule } from "./modules/generation/generation.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
+import { SecurityModule } from "./security/security.module";
+import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
+    SecurityModule,
     AiModule,
     AuthModule,
     BillingModule,
@@ -34,6 +42,14 @@ import { ProjectsModule } from "./modules/projects/projects.module";
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SlowApiInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
     },
   ],
 })

@@ -11,6 +11,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { z } from "zod";
@@ -27,6 +28,10 @@ import type { AuthSession, AuthenticatedUser } from "./auth.types";
 import { CurrentUser } from "./current-user.decorator";
 import { Public } from "./public.decorator";
 import { BillingService } from "../billing/billing.service";
+import {
+  RateLimit,
+  RateLimitGuard,
+} from "../../security/rate-limit.guard";
 
 const loginRequestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -57,6 +62,13 @@ export class AuthController {
   @Public()
   @Post("auth/login")
   @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "login",
+    limit: 5,
+    name: "auth-login",
+    windowSeconds: 60,
+  })
   async login(
     @Body() body: unknown,
     @Headers("origin") origin: string | undefined,

@@ -1,4 +1,4 @@
-import "./load-env";
+import "./instrument";
 import "reflect-metadata";
 
 import { PLATFORM_NAME } from "@fashion/shared";

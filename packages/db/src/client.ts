@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AccountPlan,
   CollectionVariationAxis,
+  ContentModerationStatus,
   DesignAssetOperation,
   DnaExtractionStatus,
   ExportFormat,
@@ -53,6 +54,7 @@ if (process.env.NODE_ENV !== "production") {
 export {
   AccountPlan,
   CollectionVariationAxis,
+  ContentModerationStatus,
   DesignAssetOperation,
   DnaExtractionStatus,
   ExportFormat,

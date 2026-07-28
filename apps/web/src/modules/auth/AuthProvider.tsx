@@ -17,6 +17,10 @@ import {
   readErrorMessage,
   refreshSession,
 } from "./auth-api";
+import {
+  identifyAnalyticsUser,
+  resetAnalyticsUser,
+} from "../../observability/analytics";
 
 interface AuthContextValue {
   readonly error: string | null;
@@ -111,6 +115,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [isPublicPath, loadSession]);
+
+  useEffect(() => {
+    if (session?.user.id) {
+      identifyAnalyticsUser(session.user.id);
+    } else if (!loading) {
+      resetAnalyticsUser();
+    }
+  }, [loading, session?.user.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

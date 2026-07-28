@@ -12,6 +12,8 @@ import { hasToneMismatch } from "./tone-analysis";
 import { VariationControl } from "./VariationControl";
 import { VersionTimeline } from "./VersionTimeline";
 import styles from "./generation.module.css";
+import { captureAnalytics } from "../../../observability/analytics";
+import { ErrorBoundary } from "../../../observability/ErrorBoundary";
 
 export function CandidateLightbox({
   candidate,
@@ -54,6 +56,7 @@ export function CandidateLightbox({
     setCollectionError(null);
     try {
       const collection = await createCollection(activeCandidate.assetId);
+      captureAnalytics("collection_created", {});
       setCollectionId(collection.id);
       setCollectionOpen(true);
     } catch (error) {
@@ -179,10 +182,12 @@ export function CandidateLightbox({
         )}
       </section>
       {collectionOpen && collectionId ? (
-        <CollectionDrawer
-          collectionId={collectionId}
-          onClose={() => setCollectionOpen(false)}
-        />
+        <ErrorBoundary area="collection">
+          <CollectionDrawer
+            collectionId={collectionId}
+            onClose={() => setCollectionOpen(false)}
+          />
+        </ErrorBoundary>
       ) : null}
       {exportOpen ? (
         <ExportModal

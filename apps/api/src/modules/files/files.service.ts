@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 
@@ -18,6 +19,48 @@ export const THUMBNAIL_JOBS = Symbol("THUMBNAIL_JOBS");
 
 type FilesDatabase = Pick<PrismaClient, "fileAsset" | "project">;
 type FileRecord = Awaited<ReturnType<FilesDatabase["fileAsset"]["findUnique"]>>;
+
+const IMAGE_SIGNATURE_BYTES = 24;
+
+export function detectImageMime(bytes: Uint8Array): string | null {
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 8 &&
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every(
+      (value, index) => bytes[index] === value,
+    )
+  ) {
+    return "image/png";
+  }
+  if (
+    bytes.length >= 12 &&
+    ascii(bytes, 0, 4) === "RIFF" &&
+    ascii(bytes, 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (bytes.length >= 12 && ascii(bytes, 4, 8) === "ftyp") {
+    const brand = ascii(bytes, 8, 12);
+    if (["heic", "heix", "hevc", "hevx", "heim", "heis"].includes(brand)) {
+      return "image/heic";
+    }
+    if (["mif1", "msf1"].includes(brand)) {
+      return "image/heif";
+    }
+  }
+  return null;
+}
+
+function ascii(bytes: Uint8Array, start: number, end: number): string {
+  return String.fromCharCode(...bytes.slice(start, end));
+}
 
 @Injectable()
 export class FilesService {
@@ -131,6 +174,39 @@ export class FilesService {
       throw new BadRequestException({
         code: "UPLOAD_MISMATCH",
         message: "上传后的文件大小或类型与签名请求不一致",
+      });
+    }
+
+    let detectedMime: string | null;
+    try {
+      const prefix = await this.storage.readPrefix(
+        file.objectKey,
+        IMAGE_SIGNATURE_BYTES,
+      );
+      detectedMime = detectImageMime(prefix);
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        {
+          code: "UPLOAD_INSPECTION_UNAVAILABLE",
+          message: "暂时无法校验上传内容，请稍后重试",
+        },
+        { cause: error },
+      );
+    }
+    if (detectedMime !== file.mimeType) {
+      await Promise.all([
+        this.storage.delete(file.objectKey).catch(() => undefined),
+        this.database.fileAsset.update({
+          where: { id: file.id },
+          data: {
+            errorMessage: "文件内容不是有效图片或与声明类型不一致",
+            status: FileStatus.FAILED,
+          },
+        }),
+      ]);
+      throw new BadRequestException({
+        code: "INVALID_IMAGE_CONTENT",
+        message: "文件内容不是有效图片或与声明类型不一致",
       });
     }
 

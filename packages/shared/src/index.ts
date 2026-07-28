@@ -59,7 +59,12 @@ export type ExportJobData =
     };
 
 export type GenerationTaskEventStatus =
-  "queued" | "running" | "succeeded" | "failed" | "canceled";
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "moderation_failed"
+  | "canceled";
 
 export interface GenerationTaskEvent {
   readonly taskId: string;

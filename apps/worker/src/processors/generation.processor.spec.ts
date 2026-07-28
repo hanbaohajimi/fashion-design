@@ -61,6 +61,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
     });
 
@@ -103,12 +104,87 @@ describe("Generation processor", () => {
     }
   });
 
+  it("审核不通过时 task=moderation_failed、不给用户计次且不落设计资产", async () => {
+    const fixture = await createTask();
+    const moderator = {
+      moderate: vi.fn().mockResolvedValue({
+        categories: ["sexual"],
+        status: "rejected" as const,
+      }),
+    };
+    const job = fakeJob(fixture.task);
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator,
+      pollIntervalMs: 1,
+    });
+
+    try {
+      await expect(process(job)).resolves.toMatchObject({
+        status: "moderation_failed",
+      });
+      const [task, user, assets] = await Promise.all([
+        prisma.generationTask.findUniqueOrThrow({
+          where: { id: fixture.task.id },
+        }),
+        prisma.user.findUniqueOrThrow({ where: { id: fixture.userId } }),
+        prisma.designAsset.findMany({
+          where: { generationTaskId: fixture.task.id },
+        }),
+      ]);
+      expect(task).toMatchObject({
+        countedAt: null,
+        errorCode: "CONTENT_MODERATION_FAILED",
+        errorMessage: "该内容不符合平台规范",
+        manualReviewRequired: false,
+        moderationCategories: ["sexual"],
+        status: GenerationTaskStatus.MODERATION_FAILED,
+      });
+      expect(task.output).toBeNull();
+      expect(user.generationCount).toBe(0);
+      expect(assets).toHaveLength(0);
+      expect(job.updateProgress).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: "moderation_failed" }),
+      );
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("审核服务异常时成功落图并标记人工复查", async () => {
+    const fixture = await createTask();
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: {
+        moderate: vi.fn().mockRejectedValue(new Error("moderation timeout")),
+      },
+      pollIntervalMs: 1,
+    });
+
+    try {
+      await process(fakeJob(fixture.task));
+      const task = await prisma.generationTask.findUniqueOrThrow({
+        where: { id: fixture.task.id },
+      });
+      expect(task.status).toBe(GenerationTaskStatus.SUCCEEDED);
+      expect(task.manualReviewRequired).toBe(true);
+      expect(task.moderationStatus).toBe("REVIEW_REQUIRED");
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
   it("i2i 成功后新资产继承父资产与根血缘", async () => {
     const fixture = await createTask(GenerationTaskStatus.QUEUED, true);
     const process = createGenerationProcessor({
       ai: successfulAi(),
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
     });
 
@@ -168,6 +244,7 @@ describe("Generation processor", () => {
       ai: successfulAi(),
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
       similarityJobs,
     });
@@ -200,6 +277,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
     });
 
     try {
@@ -236,6 +314,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
     });
 
@@ -273,6 +352,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
     });
 
@@ -310,6 +390,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       pollIntervalMs: 1,
     });
 
@@ -349,6 +430,7 @@ describe("Generation processor", () => {
       ai,
       billing: new BillingService(prisma),
       database: prisma,
+      moderator: approvedModerator(),
       timeoutMs: 10,
     });
 
@@ -376,6 +458,15 @@ function successfulAi() {
     submit: vi.fn().mockResolvedValue(providerJob),
     getStatus: vi.fn().mockResolvedValue({ status: "completed" }),
     getResult: vi.fn().mockResolvedValue(providerResult),
+  };
+}
+
+function approvedModerator() {
+  return {
+    moderate: vi.fn().mockResolvedValue({
+      categories: [],
+      status: "approved" as const,
+    }),
   };
 }
 

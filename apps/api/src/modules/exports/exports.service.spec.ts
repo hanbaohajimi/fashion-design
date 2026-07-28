@@ -51,8 +51,10 @@ describe("ExportsService", () => {
   const storage = {
     createDownloadUrl: vi.fn(),
     createUploadUrl: vi.fn(),
+    delete: vi.fn(),
     head: vi.fn(),
     publicUrl: vi.fn(),
+    readPrefix: vi.fn(),
   };
   const service = new ExportsService(
     database as never,

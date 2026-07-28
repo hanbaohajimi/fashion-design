@@ -49,8 +49,10 @@ describe("FilesService", () => {
   const storage = {
     createDownloadUrl: vi.fn(),
     createUploadUrl: vi.fn(),
+    delete: vi.fn(),
     head: vi.fn(),
     publicUrl: vi.fn((key: string) => `https://cdn.test/${key}`),
+    readPrefix: vi.fn(),
   };
   const jobs = { enqueue: vi.fn() };
   const service = new FilesService(database as never, storage, jobs);
@@ -62,6 +64,10 @@ describe("FilesService", () => {
       workspace: { ownerId: "user-a" },
     });
     storage.createUploadUrl.mockResolvedValue("https://upload.test/signed");
+    storage.delete.mockResolvedValue(undefined);
+    storage.readPrefix.mockResolvedValue(
+      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
   });
 
   it("为新图片创建记录并返回直传 URL", async () => {
@@ -135,6 +141,33 @@ describe("FilesService", () => {
 
     await expect(service.complete("user-a", "file-1")).rejects.toBeInstanceOf(
       BadRequestException,
+    );
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("拒绝 MIME 伪装为图片但 magic bytes 不是图片的文件", async () => {
+    database.fileAsset.findUnique.mockResolvedValue(fileRecord());
+    storage.head.mockResolvedValue({
+      contentLength: 1024,
+      contentType: "image/png",
+    });
+    storage.readPrefix.mockResolvedValue(
+      new TextEncoder().encode("%PDF-1.7"),
+    );
+    database.fileAsset.update.mockResolvedValue(
+      fileRecord({ status: FileStatus.FAILED }),
+    );
+
+    const failure = await service
+      .complete("user-a", "file-1")
+      .catch((error) => error);
+
+    expect(failure).toBeInstanceOf(BadRequestException);
+    expect(failure.getResponse()).toMatchObject({
+      code: "INVALID_IMAGE_CONTENT",
+    });
+    expect(storage.delete).toHaveBeenCalledWith(
+      "originals/user-a/file-1/source",
     );
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });

@@ -13,6 +13,7 @@ import {
   Param,
   Post,
   Sse,
+  UseGuards,
   type MessageEvent,
 } from "@nestjs/common";
 import type { Observable } from "rxjs";
@@ -27,6 +28,10 @@ import {
   GenerationService,
   type GenerationTaskView,
 } from "./generation.service";
+import {
+  RateLimit,
+  RateLimitGuard,
+} from "../../security/rate-limit.guard";
 
 @Controller("generations")
 export class GenerationController {
@@ -63,6 +68,13 @@ export class GenerationController {
 
   @Post()
   @HttpCode(202)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "user",
+    limit: 20,
+    name: "generation-create",
+    windowSeconds: 60 * 60,
+  })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: unknown,

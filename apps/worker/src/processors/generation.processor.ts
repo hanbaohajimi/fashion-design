@@ -7,6 +7,7 @@ import {
 } from "@fashion/ai";
 import type { BillingService } from "@fashion/billing";
 import {
+  ContentModerationStatus,
   DesignAssetOperation,
   GenerationTaskStatus,
   Prisma,
@@ -17,6 +18,11 @@ import type { GenerationJobData, GenerationTaskEvent } from "@fashion/shared";
 import { UnrecoverableError, type Job } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+
+import type {
+  ContentModerationDecision,
+  ContentModerationService,
+} from "../content-moderation.service";
 
 const providerJobSchema = z.object({
   provider: z.string().min(1),
@@ -47,6 +53,7 @@ export interface GenerationProcessorDependencies {
   readonly ai: GenerationAi;
   readonly billing: Pick<BillingService, "incrementCount">;
   readonly database: GenerationDatabase;
+  readonly moderator: ContentModerationService;
   readonly pollIntervalMs?: number;
   readonly similarityJobs?: {
     enqueue(collectionId: string, designAssetId: string): Promise<void>;
@@ -61,6 +68,7 @@ export function createGenerationProcessor({
   ai,
   billing,
   database,
+  moderator,
   pollIntervalMs = 500,
   similarityJobs,
   timeoutMs = 120_000,
@@ -70,7 +78,7 @@ export function createGenerationProcessor({
     workerSignal?: AbortSignal,
   ): Promise<{
     skipped?: true;
-    status: "canceled" | "succeeded";
+    status: "canceled" | "moderation_failed" | "succeeded";
     taskId: string;
   }> => {
     const task = await database.generationTask.findUnique({
@@ -81,6 +89,13 @@ export function createGenerationProcessor({
     }
     if (task.status === GenerationTaskStatus.CANCELED) {
       return { skipped: true, status: "canceled", taskId: task.id };
+    }
+    if (task.status === GenerationTaskStatus.MODERATION_FAILED) {
+      return {
+        skipped: true,
+        status: "moderation_failed",
+        taskId: task.id,
+      };
     }
     if (task.status === GenerationTaskStatus.SUCCEEDED && task.countedAt) {
       return { skipped: true, status: "succeeded", taskId: task.id };
@@ -120,12 +135,30 @@ export function createGenerationProcessor({
         taskId: task.id,
         pollIntervalMs,
       });
+      const moderation = await moderateSafely(
+        moderator,
+        result.images.map((image) => image.url),
+      );
+      if (moderation.status === "rejected") {
+        const finalStatus = await markModerationFailed(
+          database,
+          task.id,
+          moderation.categories,
+        );
+        await updateProgressSafely(job, event(task.id, finalStatus));
+        return {
+          ...(finalStatus === "canceled" ? { skipped: true as const } : {}),
+          status: finalStatus,
+          taskId: task.id,
+        };
+      }
       const finalStatus = await persistSuccessOnce(
         database,
         billing,
         task.id,
         task.userId,
         result,
+        moderation,
         {
           collectionId: task.collectionId,
           parentAssetId: task.parentAssetId,
@@ -267,6 +300,10 @@ async function persistSuccessOnce(
   taskId: string,
   userId: string,
   result: AiProviderResult,
+  moderation: Extract<
+    ContentModerationDecision,
+    { status: "approved" | "review_required" }
+  >,
   lineage: {
     readonly collectionId: string | null;
     readonly parentAssetId: string | null;
@@ -290,6 +327,13 @@ async function persistSuccessOnce(
         errorCode: null,
         errorMessage: null,
         output: toJson(result),
+        manualReviewRequired: moderation.status === "review_required",
+        moderationCategories: [...moderation.categories],
+        moderationCheckedAt: completedAt,
+        moderationStatus:
+          moderation.status === "approved"
+            ? ContentModerationStatus.APPROVED
+            : ContentModerationStatus.REVIEW_REQUIRED,
         status: GenerationTaskStatus.SUCCEEDED,
       },
     });
@@ -451,7 +495,12 @@ async function markCanceled(
   await database.generationTask.updateMany({
     where: {
       id: taskId,
-      status: { not: GenerationTaskStatus.SUCCEEDED },
+      status: {
+        notIn: [
+          GenerationTaskStatus.SUCCEEDED,
+          GenerationTaskStatus.MODERATION_FAILED,
+        ],
+      },
     },
     data: {
       canceledAt: new Date(),
@@ -461,6 +510,40 @@ async function markCanceled(
       status: GenerationTaskStatus.CANCELED,
     },
   });
+}
+
+async function markModerationFailed(
+  database: GenerationDatabase,
+  taskId: string,
+  categories: readonly string[],
+): Promise<"canceled" | "moderation_failed"> {
+  const completedAt = new Date();
+  const updated = await database.generationTask.updateMany({
+    where: {
+      countedAt: null,
+      id: taskId,
+      status: GenerationTaskStatus.RUNNING,
+    },
+    data: {
+      completedAt,
+      errorCode: "CONTENT_MODERATION_FAILED",
+      errorMessage: "该内容不符合平台规范",
+      manualReviewRequired: false,
+      moderationCategories: [...categories],
+      moderationCheckedAt: completedAt,
+      moderationStatus: ContentModerationStatus.REJECTED,
+      output: Prisma.DbNull,
+      status: GenerationTaskStatus.MODERATION_FAILED,
+    },
+  });
+  if (updated.count === 1) return "moderation_failed";
+  const current = await database.generationTask.findUnique({
+    where: { id: taskId },
+    select: { status: true },
+  });
+  return current?.status === GenerationTaskStatus.CANCELED
+    ? "canceled"
+    : "moderation_failed";
 }
 
 async function markFinalFailure(
@@ -473,7 +556,11 @@ async function markFinalFailure(
     where: {
       id: taskId,
       status: {
-        notIn: [GenerationTaskStatus.CANCELED, GenerationTaskStatus.SUCCEEDED],
+        notIn: [
+          GenerationTaskStatus.CANCELED,
+          GenerationTaskStatus.MODERATION_FAILED,
+          GenerationTaskStatus.SUCCEEDED,
+        ],
       },
     },
     data: {
@@ -483,6 +570,21 @@ async function markFinalFailure(
       status: GenerationTaskStatus.FAILED,
     },
   });
+}
+
+async function moderateSafely(
+  moderator: ContentModerationService,
+  imageUrls: readonly string[],
+): Promise<ContentModerationDecision> {
+  try {
+    return await moderator.moderate(imageUrls);
+  } catch {
+    return {
+      categories: [],
+      reason: "unavailable",
+      status: "review_required",
+    };
+  }
 }
 
 function event(

@@ -18,6 +18,7 @@ const EVENT_STATUSES = new Set<GenerationTaskEventStatus>([
   "running",
   "succeeded",
   "failed",
+  "moderation_failed",
   "canceled",
 ]);
 export const GENERATION_EVENTS_QUEUE_NAME = Symbol(
@@ -57,6 +58,7 @@ export class GenerationEventsService implements OnModuleDestroy {
       if (
         initial.status === "succeeded" ||
         initial.status === "failed" ||
+        initial.status === "moderation_failed" ||
         initial.status === "canceled"
       ) {
         subscriber.complete();
@@ -133,6 +135,7 @@ export class GenerationEventsService implements OnModuleDestroy {
       if (
         event.status === "succeeded" ||
         event.status === "failed" ||
+        event.status === "moderation_failed" ||
         event.status === "canceled"
       ) {
         subscriber.complete();
@@ -141,6 +144,7 @@ export class GenerationEventsService implements OnModuleDestroy {
     if (
       event.status === "succeeded" ||
       event.status === "failed" ||
+      event.status === "moderation_failed" ||
       event.status === "canceled"
     ) {
       this.subscribers.delete(event.taskId);
@@ -200,7 +204,9 @@ export class GenerationEventsService implements OnModuleDestroy {
       typeof parsed === "object" &&
       parsed !== null &&
       "status" in parsed &&
-      (parsed.status === "succeeded" || parsed.status === "canceled")
+      (parsed.status === "succeeded" ||
+        parsed.status === "moderation_failed" ||
+        parsed.status === "canceled")
     ) {
       return parsed.status;
     }

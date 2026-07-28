@@ -6,6 +6,7 @@ import styles from "./generation.module.css";
 const STATUS_LABEL = {
   canceled: "已取消",
   failed: "失败",
+  moderation_failed: "内容审核未通过",
   queued: "排队中",
   running: "生成中",
   succeeded: "已完成",
@@ -51,4 +52,3 @@ export function TaskTray() {
     </aside>
   );
 }
-

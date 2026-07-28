@@ -1,6 +1,7 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
+import { SecurityModule } from "../../security/security.module";
 import { BillingModule } from "../billing/billing.module";
 import { FilesModule } from "../files/files.module";
 import {
@@ -23,7 +24,7 @@ import {
 } from "./generation-mask.service";
 
 @Module({
-  imports: [BillingModule, FilesModule],
+  imports: [BillingModule, FilesModule, SecurityModule],
   controllers: [GenerationController],
   providers: [
     GenerationEventsService,

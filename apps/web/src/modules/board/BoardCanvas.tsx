@@ -25,6 +25,7 @@ import {
 } from "./hooks/useBoardPersist";
 import { boardShapeUtils } from "./shapes";
 import styles from "./board.module.css";
+import { ErrorBoundary } from "../../observability/ErrorBoundary";
 
 interface BoardCanvasProps {
   readonly projectId: string;
@@ -41,9 +42,11 @@ function BoardCanvasOverlay() {
     <>
       <BoardFileDrop />
       <ElementRolePanel />
-      <GenerationBar />
-      <CandidateGrid />
-      <TaskTray />
+      <ErrorBoundary area="generation">
+        <GenerationBar />
+        <CandidateGrid />
+        <TaskTray />
+      </ErrorBoundary>
     </>
   );
 }

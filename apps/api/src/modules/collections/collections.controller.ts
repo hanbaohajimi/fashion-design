@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from "@nestjs/common";
 import type { ZodType } from "zod";
 
@@ -20,6 +21,10 @@ import {
   updateDnaSchema,
 } from "./collections.schemas";
 import { CollectionsService } from "./collections.service";
+import {
+  RateLimit,
+  RateLimitGuard,
+} from "../../security/rate-limit.guard";
 
 @Controller("collections")
 export class CollectionsController {
@@ -65,6 +70,13 @@ export class CollectionsController {
 
   @Post(":id/looks")
   @HttpCode(202)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "user",
+    limit: 20,
+    name: "generation-create",
+    windowSeconds: 60 * 60,
+  })
   async createLook(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") collectionId: string,

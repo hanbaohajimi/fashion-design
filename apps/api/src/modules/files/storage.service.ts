@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   S3Client,
@@ -18,8 +19,10 @@ export interface FileStorage {
     expiresInSeconds: number,
     fileName?: string,
   ): Promise<string>;
+  delete(objectKey: string): Promise<void>;
   head(objectKey: string): Promise<StoredObjectHead>;
   publicUrl(objectKey: string): string;
+  readPrefix(objectKey: string, maxBytes: number): Promise<Uint8Array>;
 }
 
 function requiredEnvironment(name: string): string {
@@ -78,6 +81,29 @@ export class S3FileStorage implements FileStorage {
       contentLength: response.ContentLength ?? -1,
       contentType: response.ContentType,
     };
+  }
+
+  async delete(objectKey: string): Promise<void> {
+    await this.getClient().send(
+      new DeleteObjectCommand({
+        Bucket: requiredEnvironment("S3_BUCKET"),
+        Key: objectKey,
+      }),
+    );
+  }
+
+  async readPrefix(objectKey: string, maxBytes: number): Promise<Uint8Array> {
+    const response = await this.getClient().send(
+      new GetObjectCommand({
+        Bucket: requiredEnvironment("S3_BUCKET"),
+        Key: objectKey,
+        Range: `bytes=0-${Math.max(maxBytes - 1, 0)}`,
+      }),
+    );
+    if (!response.Body) {
+      throw new Error("对象存储未返回文件内容");
+    }
+    return response.Body.transformToByteArray();
   }
 
   publicUrl(objectKey: string): string {
