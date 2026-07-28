@@ -3,6 +3,10 @@ export const GENERATION_QUEUE_NAME = "generation";
 export const COLLECTION_SIMILARITY_QUEUE_NAME = "collection-similarity";
 export const THUMBNAIL_QUEUE_NAME = "thumbnail";
 export const VLM_INFERENCE_QUEUE_NAME = "vlm-inference";
+export const EXPORT_QUEUE_NAME = "export";
+export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1_000;
+export const FREE_EXPORT_MAX_EDGE = 1_600;
+export const STANDARD_EXPORT_MAX_EDGE = 2_048;
 export const BOARD_ELEMENT_ROLES = [
   "style_ref",
   "fabric_ref",
@@ -39,6 +43,20 @@ export interface CollectionSimilarityJobData {
   readonly collectionId: string;
   readonly designAssetId: string;
 }
+
+export type ExportJobData =
+  | {
+      readonly action: "render";
+      readonly exportId: string;
+    }
+  | {
+      readonly action: "cleanup";
+      readonly exportId: string;
+      readonly objectKey: string;
+    }
+  | {
+      readonly action: "sweep";
+    };
 
 export type GenerationTaskEventStatus =
   "queued" | "running" | "succeeded" | "failed" | "canceled";

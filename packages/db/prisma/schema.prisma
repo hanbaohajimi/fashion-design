@@ -13,15 +13,41 @@ model User {
   email           String           @unique
   name            String?
   avatar          String?
+  plan            AccountPlan      @default(FREE)
   generationCount Int              @default(0) @map("generation_count")
   generationLimit Int              @default(100) @map("generation_limit")
   deletedAt       DateTime?        @map("deleted_at")
   createdAt       DateTime         @default(now()) @map("created_at")
+  exportJobs      ExportJob[]
   files           FileAsset[]
   generationTasks GenerationTask[]
   ownedWorkspaces Workspace[]
 
   @@map("users")
+}
+
+enum AccountPlan {
+  FREE
+  PRO
+}
+
+enum ExportFormat {
+  PNG
+  JPG
+  PDF
+}
+
+enum ExportQuality {
+  STANDARD
+  HIGH
+}
+
+enum ExportStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  EXPIRED
 }
 
 enum DnaExtractionStatus {
@@ -122,6 +148,7 @@ model DesignAsset {
   collectionLook      CollectionLook?
   similarityLeft      CollectionLookSimilarity[] @relation("SimilarityLeftAsset")
   similarityRight     CollectionLookSimilarity[] @relation("SimilarityRightAsset")
+  exportJobs          ExportJob[]
 
   @@index([projectId, createdAt])
   @@index([rootAssetId, createdAt])
@@ -204,6 +231,7 @@ model Project {
   designAssets    DesignAsset[]
   collections     Collection[]
   generationTasks GenerationTask[]
+  exportJobs      ExportJob[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -223,9 +251,44 @@ model Collection {
   generationTasks GenerationTask[]
   looks           CollectionLook[]
   similarities    CollectionLookSimilarity[]
+  exportJobs      ExportJob[]
 
   @@index([projectId, createdAt])
   @@map("collections")
+}
+
+model ExportJob {
+  id              String        @id @default(cuid(2))
+  userId          String        @map("user_id")
+  projectId       String        @map("project_id")
+  designAssetId   String?       @map("design_asset_id")
+  collectionId    String?       @map("collection_id")
+  format          ExportFormat
+  quality         ExportQuality
+  status          ExportStatus  @default(QUEUED)
+  watermark       Boolean
+  maxEdge         Int?          @map("max_edge")
+  objectKey       String?       @unique @map("object_key")
+  mimeType        String?       @map("mime_type")
+  fileName        String?       @map("file_name")
+  sizeBytes       Int?          @map("size_bytes")
+  errorCode       String?       @map("error_code")
+  errorMessage    String?       @map("error_message")
+  startedAt       DateTime?     @map("started_at")
+  completedAt     DateTime?     @map("completed_at")
+  expiresAt       DateTime?     @map("expires_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  designAsset     DesignAsset?  @relation(fields: [designAssetId], references: [id], onDelete: SetNull)
+  collection      Collection?   @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+  @@index([designAssetId])
+  @@index([collectionId])
+  @@map("export_jobs")
 }
 
 model CollectionLook {

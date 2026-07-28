@@ -13,7 +13,11 @@ export interface StoredObjectHead {
 
 export interface FileStorage {
   createUploadUrl(objectKey: string, mimeType: string): Promise<string>;
-  createDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
+  createDownloadUrl(
+    objectKey: string,
+    expiresInSeconds: number,
+    fileName?: string,
+  ): Promise<string>;
   head(objectKey: string): Promise<StoredObjectHead>;
   publicUrl(objectKey: string): string;
 }
@@ -46,12 +50,18 @@ export class S3FileStorage implements FileStorage {
   async createDownloadUrl(
     objectKey: string,
     expiresInSeconds: number,
+    fileName?: string,
   ): Promise<string> {
     return getSignedUrl(
       this.getClient(),
       new GetObjectCommand({
         Bucket: requiredEnvironment("S3_BUCKET"),
         Key: objectKey,
+        ...(fileName
+          ? {
+              ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+            }
+          : {}),
       }),
       { expiresIn: expiresInSeconds },
     );

@@ -1,4 +1,4 @@
-import type { User } from "@fashion/db";
+import { AccountPlan, type User } from "@fashion/db";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
@@ -27,6 +27,7 @@ const user: User = {
   generationCount: 12,
   generationLimit: 100,
   name: "Designer",
+  plan: AccountPlan.FREE,
 };
 
 describe("authentication HTTP contract", () => {

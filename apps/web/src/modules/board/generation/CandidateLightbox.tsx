@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { createCollection } from "./collection-api";
 import { CollectionDrawer } from "./CollectionDrawer";
+import { ExportModal } from "./ExportModal";
 import { InpaintPanel } from "./InpaintPanel";
 import type { GenerationCandidate } from "./generation-types";
 import { hasToneMismatch } from "./tone-analysis";
@@ -32,16 +33,17 @@ export function CandidateLightbox({
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [collectionError, setCollectionError] = useState<string | null>(null);
   const [creatingCollection, setCreatingCollection] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        if (!collectionOpen) onClose();
+        if (!collectionOpen && !exportOpen) onClose();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [collectionOpen, onClose]);
+  }, [collectionOpen, exportOpen, onClose]);
 
   const openCollection = async (): Promise<void> => {
     if (collectionId) {
@@ -89,7 +91,7 @@ export function CandidateLightbox({
     >
       <section
         className={styles.lightbox}
-        inert={collectionOpen ? true : undefined}
+        inert={collectionOpen || exportOpen ? true : undefined}
       >
         <header>
           <div>
@@ -122,6 +124,9 @@ export function CandidateLightbox({
                 : collectionId
                   ? "打开系列 DNA"
                   : "设为 Hero → 建系列"}
+            </button>
+            <button onClick={() => setExportOpen(true)} type="button">
+              导出
             </button>
             <button onClick={() => onAdopt(activeCandidate)} type="button">
               采纳
@@ -177,6 +182,16 @@ export function CandidateLightbox({
         <CollectionDrawer
           collectionId={collectionId}
           onClose={() => setCollectionOpen(false)}
+        />
+      ) : null}
+      {exportOpen ? (
+        <ExportModal
+          onClose={() => setExportOpen(false)}
+          source={{
+            assetId: activeCandidate.assetId,
+            previewUrl: activeCandidate.url,
+            type: "asset",
+          }}
         />
       ) : null}
     </div>,

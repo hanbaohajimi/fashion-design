@@ -5,11 +5,13 @@ import { BillingService } from "@fashion/billing";
 import { prisma } from "@fashion/db";
 import {
   COLLECTION_SIMILARITY_QUEUE_NAME,
+  EXPORT_QUEUE_NAME,
   GENERATION_QUEUE_NAME,
   PLATFORM_NAME,
   THUMBNAIL_QUEUE_NAME,
   VLM_INFERENCE_QUEUE_NAME,
   type CollectionSimilarityJobData,
+  type ExportJobData,
   type GenerationJobData,
   type ThumbnailJobData,
   type VlmInferenceJobData,
@@ -22,6 +24,12 @@ import {
   markCollectionSimilarityFailed,
 } from "./processors/collection-similarity.processor";
 import { createGenerationProcessor } from "./processors/generation.processor";
+import {
+  cleanupExport,
+  cleanupExpiredExports,
+  createExportProcessor,
+  markExportFailed,
+} from "./processors/export.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
 import {
   createVlmInferenceProcessor,
@@ -41,6 +49,13 @@ function redisConnection() {
 }
 
 const storage = new S3ThumbnailStorage();
+const exportQueue = new Queue<ExportJobData>(EXPORT_QUEUE_NAME, {
+  connection: redisConnection(),
+});
+const processExport = createExportProcessor({
+  database: prisma,
+  storage,
+});
 const processThumbnail = createThumbnailProcessor({
   database: prisma,
   storage,
@@ -115,16 +130,68 @@ const collectionSimilarityWorker = new Worker<CollectionSimilarityJobData>(
     maxStalledCount: 1,
   },
 );
+const exportWorker = new Worker<ExportJobData>(
+  EXPORT_QUEUE_NAME,
+  async (job) => {
+    if (job.data.action === "sweep") {
+      await cleanupExpiredExports(prisma, storage);
+      return;
+    }
+    if (job.data.action === "cleanup") {
+      await cleanupExport(
+        prisma,
+        storage,
+        job.data.exportId,
+        job.data.objectKey,
+      );
+      return;
+    }
+    const result = await processExport(job.data.exportId);
+    await exportQueue.add(
+      "cleanup",
+      {
+        action: "cleanup",
+        exportId: job.data.exportId,
+        objectKey: result.objectKey,
+      },
+      {
+        delay: Math.max(result.expiresAt.getTime() - Date.now(), 0),
+        attempts: 10,
+        backoff: { delay: 60_000, type: "exponential" },
+        jobId: `cleanup-${job.data.exportId}`,
+        removeOnComplete: true,
+        removeOnFail: { age: 30 * 24 * 60 * 60 },
+      },
+    );
+  },
+  {
+    concurrency: 1,
+    connection: redisConnection(),
+    lockDuration: 120_000,
+    maxStalledCount: 1,
+  },
+);
 
 async function start(): Promise<void> {
+  await exportQueue.add(
+    "sweep",
+    { action: "sweep" },
+    {
+      jobId: "export-expiry-sweep",
+      removeOnComplete: true,
+      removeOnFail: { age: 30 * 24 * 60 * 60 },
+      repeat: { every: 60 * 60 * 1_000 },
+    },
+  );
   await Promise.all([
     thumbnailWorker.waitUntilReady(),
     inferenceWorker.waitUntilReady(),
     generationWorker.waitUntilReady(),
     collectionSimilarityWorker.waitUntilReady(),
+    exportWorker.waitUntilReady(),
   ]);
   console.log(
-    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度并发数为 1。`,
+    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度与临时导出并发数为 1。`,
   );
 }
 
@@ -133,6 +200,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   await Promise.all([
     generationWorker.close(),
     collectionSimilarityWorker.close(),
+    exportWorker.close(),
+    exportQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),
@@ -165,6 +234,19 @@ collectionSimilarityWorker.on("failed", (job, error) => {
     );
   }
 });
+exportWorker.on("failed", (job, error) => {
+  console.error(`导出任务 ${job?.id ?? "unknown"} 失败：`, error);
+  if (
+    job?.data.action === "render" &&
+    job.attemptsMade >= (job.opts.attempts ?? 1)
+  ) {
+    void markExportFailed(prisma, job.data.exportId, error.message).catch(
+      (fallbackError) => {
+        console.error("导出任务最终失败状态写入失败：", fallbackError);
+      },
+    );
+  }
+});
 
 process.once("SIGINT", () => {
   void shutdown("SIGINT");
@@ -178,6 +260,8 @@ void start().catch(async (error: unknown) => {
   await Promise.all([
     generationWorker.close(),
     collectionSimilarityWorker.close(),
+    exportWorker.close(),
+    exportQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),

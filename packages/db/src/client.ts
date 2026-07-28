@@ -1,9 +1,13 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
+  AccountPlan,
   CollectionVariationAxis,
   DesignAssetOperation,
   DnaExtractionStatus,
+  ExportFormat,
+  ExportQuality,
+  ExportStatus,
   FileStatus,
   GenerationTaskStatus,
   Prisma,
@@ -15,6 +19,7 @@ import {
   type Collection,
   type CollectionDna,
   type FileAsset,
+  type ExportJob,
   type GenerationTask,
   type Project,
   type User,
@@ -46,9 +51,13 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export {
+  AccountPlan,
   CollectionVariationAxis,
   DesignAssetOperation,
   DnaExtractionStatus,
+  ExportFormat,
+  ExportQuality,
+  ExportStatus,
   FileStatus,
   GenerationTaskStatus,
   Prisma,
@@ -61,6 +70,7 @@ export type {
   Collection,
   CollectionDna,
   DesignAsset,
+  ExportJob,
   FileAsset,
   GenerationTask,
   Project,

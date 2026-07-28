@@ -21,12 +21,14 @@
     "dotenv": "^17.4.2",
     "heic-decode": "^2.1.0",
     "openai": "^6.16.0",
+    "pdfkit": "^0.19.1",
     "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/heic-decode": "^2.0.0",
     "@types/node": "^24.10.0",
+    "@types/pdfkit": "^0.17.6",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"

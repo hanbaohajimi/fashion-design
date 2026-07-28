@@ -1771,6 +1771,292 @@
   font-size: 8px;
 }
 
+.exportBackdrop {
+  position: fixed;
+  z-index: 2800;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  align-items: center;
+  padding: 24px;
+  background: rgb(20 20 18 / 76%);
+  backdrop-filter: blur(10px);
+}
+
+.exportModal {
+  width: min(860px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  border: 1px solid #24251f;
+  margin: auto;
+  background: #f8f5ec;
+  box-shadow: 12px 12px 0 rgb(0 0 0 / 24%);
+  color: #24251f;
+  animation: lightbox-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.exportModal > header {
+  display: flex;
+  min-height: 64px;
+  align-items: stretch;
+  justify-content: space-between;
+  border-bottom: 1px solid #24251f;
+}
+
+.exportModal > header > div {
+  display: grid;
+  padding: 12px 16px;
+  align-content: center;
+  gap: 4px;
+}
+
+.exportModal > header span,
+.exportControls section > span {
+  color: #747168;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.exportModal > header strong {
+  font-size: 18px;
+  font-weight: 540;
+  letter-spacing: -0.025em;
+}
+
+.exportModal > header button {
+  min-width: 72px;
+  border: 0;
+  border-left: 1px solid #24251f;
+  background: transparent;
+  color: #24251f;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.exportModal > header button:hover:not(:disabled) {
+  background: #24251f;
+  color: #fffdf7;
+}
+
+.exportLayout {
+  display: grid;
+  min-height: 500px;
+  grid-template-columns: minmax(270px, 0.92fr) minmax(360px, 1.08fr);
+}
+
+.exportLayout > figure {
+  position: relative;
+  overflow: hidden;
+  min-height: 500px;
+  border-right: 1px solid #24251f;
+  margin: 0;
+  background: #bdb4a3;
+}
+
+.exportLayout > figure img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.exportLayout > figure figcaption {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  overflow: hidden;
+  padding: 8px 10px;
+  background: rgb(20 20 18 / 78%);
+  color: #fffdf7;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exportControls {
+  display: grid;
+  padding: 22px;
+  align-content: start;
+  gap: 18px;
+}
+
+.exportControls section {
+  display: grid;
+  gap: 8px;
+}
+
+.exportOptions {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+
+.exportOptions button,
+.exportActions button,
+.exportActions a {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #24251f;
+  border-radius: 0;
+  background: transparent;
+  color: #24251f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.exportOptions button + button {
+  border-left: 0;
+}
+
+.exportOptions button[aria-pressed="true"] {
+  background: #24251f;
+  color: #fffdf7;
+}
+
+.exportOptions button:disabled {
+  color: #99958c;
+  cursor: not-allowed;
+}
+
+.exportUpgrade,
+.exportNote,
+.exportRetention p,
+.exportError p {
+  margin: 0;
+  color: #69665e;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.exportUpgrade {
+  border-left: 3px solid #e9522c;
+  padding: 7px 9px;
+  background: #f2e4d8;
+  color: #7d3723;
+}
+
+.exportRetention {
+  display: grid;
+  border-top: 1px solid rgb(36 37 31 / 22%);
+  border-bottom: 1px solid rgb(36 37 31 / 22%);
+  padding: 14px 0;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+}
+
+.exportRetention span {
+  color: #747168;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.exportRetention strong {
+  font-size: 14px;
+}
+
+.exportRetention p {
+  grid-column: 1 / -1;
+}
+
+.exportProgress,
+.exportLoading {
+  display: grid;
+  min-height: 66px;
+  align-items: center;
+  border: 1px solid rgb(36 37 31 / 26%);
+  padding: 10px 12px;
+  grid-template-columns: 9px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.exportProgress > i,
+.exportLoading > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e9522c;
+  animation: task-breathe 1.2s ease-in-out infinite;
+}
+
+.exportProgress[data-status="succeeded"] > i {
+  background: #47725e;
+  animation: none;
+}
+
+.exportProgress[data-status="failed"] > i,
+.exportProgress[data-status="expired"] > i {
+  background: #a63d28;
+  animation: none;
+}
+
+.exportProgress > div {
+  display: grid;
+  gap: 3px;
+}
+
+.exportProgress span,
+.exportLoading span {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.exportProgress strong,
+.exportProgress small {
+  color: #747168;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.exportError {
+  border: 1px solid #9c3a25;
+  padding: 10px 12px;
+  background: #f4ddd4;
+}
+
+.exportError strong {
+  color: #872d1d;
+  font-size: 10px;
+}
+
+.exportError button {
+  min-height: 28px;
+  border: 1px solid #872d1d;
+  margin-top: 8px;
+  padding: 0 10px;
+  background: transparent;
+  color: #872d1d;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.exportActions {
+  display: grid;
+}
+
+.exportActions button,
+.exportActions a {
+  min-height: 48px;
+  background: #e9522c;
+  color: #fffdf7;
+}
+
+.exportActions button:disabled {
+  background: #d4cec1;
+  color: #77736c;
+  cursor: wait;
+}
+
 @keyframes bar-enter {
   from {
     opacity: 0;
@@ -1883,6 +2169,30 @@
     width: 100vw;
   }
 
+  .exportBackdrop {
+    align-items: start;
+    padding: 8px;
+  }
+
+  .exportModal {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .exportLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .exportLayout > figure {
+    min-height: 240px;
+    max-height: 34dvh;
+    border-right: 0;
+    border-bottom: 1px solid #24251f;
+  }
+
+  .exportControls {
+    padding: 16px;
+  }
+
   .collectionHeader {
     min-height: 56px;
   }
@@ -1972,6 +2282,9 @@
 
   .collectionDrawer,
   .collectionSkeleton i,
+  .exportModal,
+  .exportProgress > i,
+  .exportLoading > i,
   .lookPending i,
   .saveIndicator i {
     animation: none;

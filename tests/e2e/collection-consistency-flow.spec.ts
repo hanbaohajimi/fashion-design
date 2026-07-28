@@ -202,6 +202,58 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.route("**/api/collections/collection-e2e", (route) =>
     route.fulfill({ json: collection() }),
   );
+  await page.route("**/api/exports/capabilities", (route) =>
+    route.fulfill({
+      json: {
+        downloadLinkHours: 24,
+        freeMaxEdge: 1600,
+        highResolutionAllowed: false,
+        plan: "free",
+        watermark: true,
+      },
+    }),
+  );
+  await page.route("**/api/exports/export-pdf-e2e", (route) =>
+    route.fulfill({
+      json: {
+        completedAt: createdAt,
+        createdAt,
+        downloadUrl: "https://download.example/lookbook.pdf?signature=e2e",
+        error: null,
+        expiresAt: "2026-07-29T10:00:00.000Z",
+        fileName: "series-lookbook.pdf",
+        format: "pdf",
+        id: "export-pdf-e2e",
+        maxEdge: 1600,
+        mimeType: "application/pdf",
+        quality: "standard",
+        retryAllowed: false,
+        sizeBytes: 524288,
+        status: "succeeded",
+        watermark: true,
+      },
+    }),
+  );
+  await page.route("**/api/exports", (route) =>
+    route.fulfill({
+      status: 202,
+      json: {
+        completedAt: null,
+        createdAt,
+        error: null,
+        expiresAt: null,
+        fileName: null,
+        format: "pdf",
+        id: "export-pdf-e2e",
+        maxEdge: 1600,
+        mimeType: "application/pdf",
+        quality: "standard",
+        sizeBytes: null,
+        status: "queued",
+        watermark: true,
+      },
+    }),
+  );
   await page.route("https://assets.example/collection-look-*.png", (route) => {
     const lookNumber =
       route
@@ -272,4 +324,15 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       .filter({ has: page.getByRole("heading", { name: "色板" }) })
       .getByRole("button", { name: "解锁" }),
   ).toBeVisible();
+
+  await page.getByRole("button", { name: "导出 PDF" }).click();
+  await expect(page.getByRole("dialog", { name: "导出成果" })).toBeVisible();
+  await expect(page.getByText("Free 版本带水印。")).toBeVisible();
+  await page.getByRole("button", { name: "开始导出" }).click();
+  await expect(
+    page.getByRole("link", { name: "下载 PDF" }),
+  ).toHaveAttribute(
+    "href",
+    "https://download.example/lookbook.pdf?signature=e2e",
+  );
 });

@@ -10,6 +10,7 @@ import { BoardElementsModule } from "./modules/board-elements/board-elements.mod
 import { BoardsModule } from "./modules/boards/boards.module";
 import { CollectionsModule } from "./modules/collections/collections.module";
 import { DesignAssetsModule } from "./modules/design-assets/design-assets.module";
+import { ExportsModule } from "./modules/exports/exports.module";
 import { FilesModule } from "./modules/files/files.module";
 import { GenerationModule } from "./modules/generation/generation.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
@@ -23,6 +24,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
     BoardsModule,
     CollectionsModule,
     DesignAssetsModule,
+    ExportsModule,
     FilesModule,
     GenerationModule,
     ProjectsModule,

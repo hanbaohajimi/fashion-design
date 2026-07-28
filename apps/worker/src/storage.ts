@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -7,6 +8,15 @@ import {
 export interface ThumbnailStorage {
   get(objectKey: string): Promise<Buffer>;
   put(objectKey: string, body: Buffer, contentType: string): Promise<void>;
+}
+
+export interface ExportStorage {
+  delete(objectKey: string): Promise<void>;
+  putTemporary(
+    objectKey: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void>;
 }
 
 function requiredEnvironment(name: string): string {
@@ -55,6 +65,31 @@ export class S3ThumbnailStorage implements ThumbnailStorage {
         Bucket: this.bucket,
         CacheControl: "public, max-age=31536000, immutable",
         ContentType: contentType,
+        Key: objectKey,
+      }),
+    );
+  }
+
+  async putTemporary(
+    objectKey: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Body: body,
+        Bucket: this.bucket,
+        CacheControl: "private, no-store, max-age=0",
+        ContentType: contentType,
+        Key: objectKey,
+      }),
+    );
+  }
+
+  async delete(objectKey: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
         Key: objectKey,
       }),
     );

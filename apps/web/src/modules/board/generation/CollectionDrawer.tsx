@@ -14,6 +14,7 @@ import type {
 } from "./collection-types";
 import { ConsistencyOverview } from "./ConsistencyOverview";
 import { DNACard } from "./DNACard";
+import { ExportModal } from "./ExportModal";
 import styles from "./generation.module.css";
 import { LookGrid } from "./LookGrid";
 
@@ -35,6 +36,7 @@ export function CollectionDrawer({
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [tab, setTab] = useState<DrawerTab>("dna");
+  const [exportOpen, setExportOpen] = useState(false);
   const lastSaved = useRef("");
   const draftRef = useRef<CollectionDna | null>(null);
   const saveQueue = useRef(Promise.resolve());
@@ -136,14 +138,14 @@ export function CollectionDrawer({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !exportOpen) {
         event.preventDefault();
         void closeAfterSave();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeAfterSave]);
+  }, [closeAfterSave, exportOpen]);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -162,6 +164,7 @@ export function CollectionDrawer({
     <aside
       aria-label="系列 DNA"
       className={styles.collectionDrawer}
+      inert={exportOpen ? true : undefined}
       role="complementary"
     >
       <header className={styles.collectionHeader}>
@@ -171,6 +174,13 @@ export function CollectionDrawer({
         </div>
         <div>
           <SaveIndicator state={saveState} />
+          <button
+            disabled={!collection}
+            onClick={() => setExportOpen(true)}
+            type="button"
+          >
+            导出 PDF
+          </button>
           <button
             aria-label="关闭系列抽屉"
             onClick={() => void closeAfterSave()}
@@ -305,6 +315,17 @@ export function CollectionDrawer({
             </div>
           )}
         </>
+      ) : null}
+      {exportOpen && collection ? (
+        <ExportModal
+          onClose={() => setExportOpen(false)}
+          source={{
+            collectionId,
+            name: collection.name,
+            previewUrl: collection.hero.thumbnailUrl ?? collection.hero.url,
+            type: "collection",
+          }}
+        />
       ) : null}
     </aside>
   );
