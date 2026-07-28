@@ -24,6 +24,11 @@ model User {
   @@map("users")
 }
 
+enum DnaExtractionStatus {
+  READY
+  FAILED
+}
+
 enum GenerationTaskStatus {
   QUEUED
   RUNNING
@@ -94,6 +99,7 @@ model DesignAsset {
   restoredFrom        DesignAsset?         @relation("AssetRestores", fields: [restoredFromAssetId], references: [id], onDelete: SetNull)
   restoreCopies       DesignAsset[]        @relation("AssetRestores")
   sourceForTasks      GenerationTask[]     @relation("TaskParentAsset")
+  heroOfCollection    Collection?          @relation("CollectionHero")
 
   @@index([projectId, createdAt])
   @@index([rootAssetId, createdAt])
@@ -174,11 +180,45 @@ model Project {
   boardSnapshot   BoardSnapshot?
   boardElements   BoardElement[]
   designAssets    DesignAsset[]
+  collections     Collection[]
   generationTasks GenerationTask[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
   @@map("projects")
+}
+
+model Collection {
+  id          String         @id @default(cuid(2))
+  projectId   String         @map("project_id")
+  heroAssetId String         @unique @map("hero_asset_id")
+  name        String
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  heroAsset   DesignAsset    @relation("CollectionHero", fields: [heroAssetId], references: [id], onDelete: Restrict)
+  dna         CollectionDna?
+
+  @@index([projectId, createdAt])
+  @@map("collections")
+}
+
+model CollectionDna {
+  collectionId      String              @id @map("collection_id")
+  extractionStatus  DnaExtractionStatus @default(READY) @map("extraction_status")
+  palette           Json
+  silhouettes       String[]
+  fabrics           String[]
+  moodWords         String[]            @map("mood_words")
+  referenceFileIds  String[]            @map("reference_file_ids")
+  paletteLocked     Boolean             @default(false) @map("palette_locked")
+  silhouettesLocked Boolean             @default(false) @map("silhouettes_locked")
+  fabricsLocked     Boolean             @default(false) @map("fabrics_locked")
+  moodWordsLocked   Boolean             @default(false) @map("mood_words_locked")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  collection        Collection          @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@map("collection_dna")
 }
 
 model BoardSnapshot {

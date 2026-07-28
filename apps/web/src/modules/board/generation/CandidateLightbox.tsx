@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { createCollection } from "./collection-api";
+import { CollectionDrawer } from "./CollectionDrawer";
 import { InpaintPanel } from "./InpaintPanel";
 import type { GenerationCandidate } from "./generation-types";
 import { hasToneMismatch } from "./tone-analysis";
@@ -24,29 +26,47 @@ export function CandidateLightbox({
   readonly onDiscard: () => void;
 }) {
   const [activeCandidate, setActiveCandidate] = useState(candidate);
-  const [mode, setMode] = useState<"history" | "inpaint" | "view">(
-    initialMode,
-  );
+  const [mode, setMode] = useState<"history" | "inpaint" | "view">(initialMode);
   const [toneWarning, setToneWarning] = useState(false);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [collectionOpen, setCollectionOpen] = useState(false);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+  const [creatingCollection, setCreatingCollection] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        if (!collectionOpen) onClose();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [collectionOpen, onClose]);
+
+  const openCollection = async (): Promise<void> => {
+    if (collectionId) {
+      setCollectionOpen(true);
+      return;
+    }
+    setCreatingCollection(true);
+    setCollectionError(null);
+    try {
+      const collection = await createCollection(activeCandidate.assetId);
+      setCollectionId(collection.id);
+      setCollectionOpen(true);
+    } catch (error) {
+      setCollectionError(
+        error instanceof Error ? error.message : "系列创建失败，请稍后重试",
+      );
+    } finally {
+      setCreatingCollection(false);
+    }
+  };
 
   useEffect(() => {
     let disposed = false;
-    if (
-      activeCandidate.taskType === "inpaint" &&
-      activeCandidate.sourceUrl
-    ) {
-      void hasToneMismatch(
-        activeCandidate.sourceUrl,
-        activeCandidate.url,
-      ).then(
+    if (activeCandidate.taskType === "inpaint" && activeCandidate.sourceUrl) {
+      void hasToneMismatch(activeCandidate.sourceUrl, activeCandidate.url).then(
         (mismatch) => {
           if (!disposed) setToneWarning(mismatch === true);
         },
@@ -63,11 +83,14 @@ export function CandidateLightbox({
       aria-modal="true"
       className={styles.lightboxBackdrop}
       onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && !collectionOpen) onClose();
       }}
       role="dialog"
     >
-      <section className={styles.lightbox}>
+      <section
+        className={styles.lightbox}
+        inert={collectionOpen ? true : undefined}
+      >
         <header>
           <div>
             <span>LIGHTBOX / EDIT</span>
@@ -89,6 +112,17 @@ export function CandidateLightbox({
             <button onClick={() => setMode("history")} type="button">
               版本
             </button>
+            <button
+              disabled={creatingCollection}
+              onClick={() => void openCollection()}
+              type="button"
+            >
+              {creatingCollection
+                ? "提取 DNA…"
+                : collectionId
+                  ? "打开系列 DNA"
+                  : "设为 Hero → 建系列"}
+            </button>
             <button onClick={() => onAdopt(activeCandidate)} type="button">
               采纳
             </button>
@@ -105,12 +139,20 @@ export function CandidateLightbox({
             局部结果与原图平均色调差异较大，建议降低强度或重新生成。
           </p>
         ) : null}
+        {collectionError ? (
+          <p className={styles.toneWarning} role="alert">
+            {collectionError}
+          </p>
+        ) : null}
         {mode === "inpaint" ? (
           <InpaintPanel candidate={activeCandidate} onSubmitted={onClose} />
         ) : mode === "history" ? (
           <VersionTimeline
             assetId={activeCandidate.assetId}
-            onRestore={(asset) =>
+            onRestore={(asset) => {
+              setCollectionId(null);
+              setCollectionOpen(false);
+              setCollectionError(null);
               setActiveCandidate((current) => ({
                 ...current,
                 assetId: asset.id,
@@ -118,8 +160,8 @@ export function CandidateLightbox({
                 ...(asset.height === null ? {} : { height: asset.height }),
                 ...(asset.seed === null ? {} : { seed: asset.seed }),
                 ...(asset.width === null ? {} : { width: asset.width }),
-              }))
-            }
+              }));
+            }}
           />
         ) : (
           <div className={styles.lightboxPreview}>
@@ -131,6 +173,12 @@ export function CandidateLightbox({
           </div>
         )}
       </section>
+      {collectionOpen && collectionId ? (
+        <CollectionDrawer
+          collectionId={collectionId}
+          onClose={() => setCollectionOpen(false)}
+        />
+      ) : null}
     </div>,
     document.body,
   );
