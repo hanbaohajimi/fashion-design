@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useRef, useState } from "react";
+import { useCallback, useContext, useId, useRef, useState } from "react";
 import { useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
@@ -40,6 +40,7 @@ export function InpaintPanel({
   const [error, setError] = useState<string | null>(null);
   const [confirmSmall, setConfirmSmall] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const maskHelpId = useId();
   const width = normalizedDimension(candidate.width);
   const height = normalizedDimension(candidate.height);
   const onMaskChange = useCallback((state: MaskCanvasState) => {
@@ -73,7 +74,7 @@ export function InpaintPanel({
         width,
         height,
       );
-      await generation.start({
+      const result = await generation.start({
         parameters: {
           ...DEFAULT_GENERATION_PARAMETERS,
           height,
@@ -89,7 +90,11 @@ export function InpaintPanel({
         strength: 0.82,
         taskType: "inpaint",
       });
-      onSubmitted();
+      if (result.ok) {
+        onSubmitted();
+      } else {
+        setError(result.error);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "局部重绘提交失败");
     } finally {
@@ -105,13 +110,16 @@ export function InpaintPanel({
           <img alt="局部重绘原图" src={candidate.url} />
           <MaskCanvas
             brushRatio={brushRatio}
+            descriptionId={maskHelpId}
             height={height}
             onChange={onMaskChange}
             ref={mask}
             width={width}
           />
         </div>
-        <figcaption>白色区域将被重绘，未涂抹区域保持不变</figcaption>
+        <figcaption id={maskHelpId}>
+          白色区域将被重绘；键盘用户可用右侧“标记中央区域”
+        </figcaption>
       </figure>
       <aside className={styles.inpaintControls}>
         <div>
@@ -145,6 +153,12 @@ export function InpaintPanel({
           <strong>{(maskState.coverage * 100).toFixed(1)}%</strong>
         </div>
         <div className={styles.maskActions}>
+          <button
+            onClick={() => mask.current?.addCenterRegion()}
+            type="button"
+          >
+            标记中央区域
+          </button>
           <button
             disabled={maskState.strokeCount === 0}
             onClick={() => mask.current?.undo()}

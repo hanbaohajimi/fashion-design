@@ -40,9 +40,56 @@ export type BoardElementPatch =
     };
 
 export interface BoardPatchPayload {
+  readonly baseRevision: number;
   readonly batchId: string;
   readonly patches: readonly BoardElementPatch[];
   readonly snapshot: TLEditorSnapshot;
+}
+
+export interface BoardPatchResponse {
+  readonly batchId: string;
+  readonly revision: number;
+  readonly savedAt: string;
+}
+
+interface BoardErrorBody {
+  readonly code?: string;
+  readonly currentRevision?: number;
+  readonly message?: string;
+}
+
+export class BoardApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+    readonly currentRevision: number | undefined,
+  ) {
+    super(message);
+    this.name = "BoardApiError";
+  }
+}
+
+async function boardApiError(
+  response: Response,
+  fallback: string,
+): Promise<BoardApiError> {
+  try {
+    const body = (await response.json()) as BoardErrorBody;
+    return new BoardApiError(
+      body.message ?? fallback,
+      body.code ?? "BOARD_REQUEST_FAILED",
+      response.status,
+      body.currentRevision,
+    );
+  } catch {
+    return new BoardApiError(
+      fallback,
+      "BOARD_REQUEST_FAILED",
+      response.status,
+      undefined,
+    );
+  }
 }
 
 export interface RoleInferenceResult {
@@ -54,7 +101,9 @@ export interface RoleInferenceResult {
   readonly state: "none" | "pending" | "ready" | "failed";
 }
 
-export async function fetchBoard(projectId: string): Promise<BoardLoadResponse> {
+export async function fetchBoard(
+  projectId: string,
+): Promise<BoardLoadResponse> {
   const response = await fetch(
     `/api/projects/${encodeURIComponent(projectId)}/board`,
     {
@@ -73,7 +122,7 @@ export async function fetchBoard(projectId: string): Promise<BoardLoadResponse> 
 export async function patchBoard(
   projectId: string,
   payload: BoardPatchPayload,
-): Promise<void> {
+): Promise<BoardPatchResponse> {
   const response = await fetch(
     `/api/projects/${encodeURIComponent(projectId)}/board`,
     {
@@ -83,13 +132,14 @@ export async function patchBoard(
       headers: {
         "Content-Type": "application/json",
       },
-      keepalive: true,
     },
   );
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "画布保存失败"));
+    throw await boardApiError(response, "画布保存失败");
   }
+
+  return (await response.json()) as BoardPatchResponse;
 }
 
 export async function registerRoleInference(
@@ -138,7 +188,6 @@ export async function setElementRoles(
       body: JSON.stringify({ role, shapeIds }),
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      keepalive: true,
     },
   );
   if (!response.ok) {

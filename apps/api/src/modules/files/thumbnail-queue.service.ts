@@ -21,7 +21,55 @@ export class BullThumbnailJobs implements ThumbnailJobs, OnModuleDestroy {
   private queue: Queue<ThumbnailJobData> | undefined;
 
   async enqueue(fileId: string): Promise<void> {
-    await this.getQueue().add(
+    const queue = this.getQueue();
+    const existing = await queue.getJob(fileId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "failed") {
+        try {
+          await existing.retry("failed", {
+            resetAttemptsMade: true,
+            resetAttemptsStarted: true,
+          });
+          return;
+        } catch (error) {
+          const current = await queue.getJob(fileId);
+          if (current) {
+            const currentState = await current.getState();
+            if (currentState === "failed") {
+              throw error;
+            }
+            if (currentState !== "completed" && currentState !== "unknown") {
+              return;
+            }
+            if (currentState === "completed") {
+              await current.remove();
+            }
+          }
+        }
+      } else if (state === "completed") {
+        await existing.remove();
+      } else if (state !== "unknown") {
+        return;
+      }
+    }
+
+    try {
+      await this.addJob(queue, fileId);
+    } catch (error) {
+      const reconciled = await queue.getJob(fileId).catch(() => undefined);
+      if (reconciled) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private async addJob(
+    queue: Queue<ThumbnailJobData>,
+    fileId: string,
+  ): Promise<void> {
+    await queue.add(
       "generate",
       { fileId },
       {

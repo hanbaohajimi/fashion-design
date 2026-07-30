@@ -44,8 +44,10 @@ export async function markRoleInferenceFailed(
 ): Promise<void> {
   await database.boardElement.updateMany({
     where: {
+      deletedAt: null,
       fileAssetId: data.fileId,
       projectId: data.projectId,
+      roleInferenceState: RoleInferenceState.PENDING,
       roleSource: { not: RoleSource.MANUAL },
       shapeId: data.shapeId,
     },
@@ -82,20 +84,16 @@ export function createVlmInferenceProcessor({
     if (element.roleSource === RoleSource.MANUAL) {
       return;
     }
-    if (
-      !file ||
-      file.status !== FileStatus.READY ||
-      !file.thumbnail1024Key
-    ) {
+    if (element.roleInferenceState !== RoleInferenceState.PENDING) {
+      return;
+    }
+    if (!file || file.status !== FileStatus.READY || !file.thumbnail1024Key) {
       throw new SourceNotReadyError("图片缩略图尚未就绪");
     }
 
     try {
       const thumbnail = await storage.get(file.thumbnail1024Key);
-      const classification = await classifier.classify(
-        thumbnail,
-        "image/webp",
-      );
+      const classification = await classifier.classify(thumbnail, "image/webp");
       const role = roleForVlmLabel(classification.label);
       const confidence =
         classification.label === "non_fashion" || !classification.isFashion
@@ -103,8 +101,10 @@ export function createVlmInferenceProcessor({
           : classification.confidence;
       await database.boardElement.updateMany({
         where: {
+          deletedAt: null,
           fileAssetId: data.fileId,
           projectId: data.projectId,
+          roleInferenceState: RoleInferenceState.PENDING,
           roleSource: { not: RoleSource.MANUAL },
           shapeId: data.shapeId,
         },

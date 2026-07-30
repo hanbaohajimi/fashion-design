@@ -20,6 +20,7 @@ import {
 } from "./collections.schemas";
 import type { DnaExtractor } from "./dna-extractor";
 import { GenerationService } from "../generation/generation.service";
+import { S3FileStorage } from "../files/storage.service";
 
 export const COLLECTIONS_DB = Symbol("COLLECTIONS_DB");
 export const DNA_EXTRACTOR = Symbol("DNA_EXTRACTOR");
@@ -139,6 +140,8 @@ export class CollectionsService {
     private readonly extractor: DnaExtractor,
     @Inject(GenerationService)
     private readonly generation: GenerationService,
+    @Inject(S3FileStorage)
+    private readonly storage: S3FileStorage,
   ) {}
 
   async createFromHero(
@@ -157,7 +160,7 @@ export class CollectionsService {
     let extractionStatus: DnaExtractionStatus = DnaExtractionStatus.READY;
     let draft: DnaDraft;
     try {
-      draft = await this.extractor.extract(hero.url);
+      draft = await this.extractor.extract(await this.providerUrl(hero.url));
     } catch {
       extractionStatus = DnaExtractionStatus.FAILED;
       draft = emptyDraft;
@@ -196,6 +199,18 @@ export class CollectionsService {
 
   async get(userId: string, collectionId: string): Promise<CollectionView> {
     return this.toView(await this.ownedCollection(userId, collectionId));
+  }
+
+  async list(userId: string, projectId: string): Promise<CollectionView[]> {
+    const collections = await this.database.collection.findMany({
+      where: {
+        projectId,
+        project: { workspace: { ownerId: userId } },
+      },
+      include: collectionInclude,
+      orderBy: { updatedAt: "desc" },
+    });
+    return collections.map((collection) => this.toView(collection));
   }
 
   async getByHero(
@@ -255,6 +270,7 @@ export class CollectionsService {
     userId: string,
     collectionId: string,
     input: CreateCollectionLookInput,
+    idempotencyKey: string,
   ): Promise<{ taskId: string }> {
     const collection = await this.ownedCollection(userId, collectionId);
     const dna = this.requireDna(collection.dna);
@@ -270,7 +286,7 @@ export class CollectionsService {
         parentAssetId: collection.heroAsset.id,
         projectId: collection.projectId,
         prompt: collectionPrompt(collection, dna, input),
-        referenceImageUrl: collection.heroAsset.url,
+        referenceImageUrl: await this.providerUrl(collection.heroAsset.url),
         shapeIds: [],
         steps: parameters?.steps ?? 28,
         strength: variationStrength(input.variationAxis),
@@ -279,6 +295,7 @@ export class CollectionsService {
         ...(parameters?.seed === undefined ? {} : { seed: parameters.seed }),
       },
       { collectionId, variationAxis },
+      idempotencyKey,
     );
   }
 
@@ -310,8 +327,18 @@ export class CollectionsService {
         isHero: look.isHero,
         ordinal: look.ordinal,
         similarityScore: look.similarityScore,
-        thumbnailUrl: look.designAsset.thumbnailUrl,
-        url: look.designAsset.url,
+        thumbnailUrl: look.designAsset.thumbnailUrl
+          ? displayAssetUrl(
+              look.designAssetId,
+              "thumbnail",
+              look.designAsset.thumbnailUrl,
+            )
+          : null,
+        url: displayAssetUrl(
+          look.designAssetId,
+          "content",
+          look.designAsset.url,
+        ),
         variationAxis: look.variationAxis
           ? (look.variationAxis.toLowerCase() as NonNullable<
               CollectionLookView["variationAxis"]
@@ -483,14 +510,31 @@ export class CollectionsService {
       dna: this.toDnaView(this.requireDna(collection.dna)),
       hero: {
         assetId: collection.heroAsset.id,
-        thumbnailUrl: collection.heroAsset.thumbnailUrl,
-        url: collection.heroAsset.url,
+        thumbnailUrl: collection.heroAsset.thumbnailUrl
+          ? displayAssetUrl(
+              collection.heroAsset.id,
+              "thumbnail",
+              collection.heroAsset.thumbnailUrl,
+            )
+          : null,
+        url: displayAssetUrl(
+          collection.heroAsset.id,
+          "content",
+          collection.heroAsset.url,
+        ),
       },
       id: collection.id,
       name: collection.name,
       projectId: collection.projectId,
       updatedAt: collection.updatedAt,
     };
+  }
+
+  private async providerUrl(stored: string): Promise<string> {
+    const objectKey = objectKeyFrom(stored);
+    return objectKey
+      ? this.storage.createDownloadUrl(objectKey, 15 * 60)
+      : stored;
   }
 
   private toDnaView(dna: DnaRecord): DnaView {
@@ -524,6 +568,20 @@ export class CollectionsService {
     }
     return dna;
   }
+}
+
+function objectKeyFrom(value: string): string | null {
+  return value.startsWith("s3://") ? value.slice("s3://".length) : null;
+}
+
+function displayAssetUrl(
+  assetId: string,
+  variant: "content" | "thumbnail",
+  stored: string,
+): string {
+  return objectKeyFrom(stored)
+    ? `/api/design-assets/${encodeURIComponent(assetId)}/${variant}`
+    : stored;
 }
 
 function sameValue(left: unknown, right: unknown): boolean {

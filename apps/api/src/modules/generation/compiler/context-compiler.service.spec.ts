@@ -12,6 +12,7 @@ function element(
   roleLabel: string | null = null,
 ) {
   return {
+    fileAsset: null,
     id,
     record: { props },
     role,
@@ -21,6 +22,9 @@ function element(
 
 describe("ContextCompilerService", () => {
   const database = {
+    designAsset: {
+      findFirst: vi.fn(),
+    },
     project: {
       findUnique: vi.fn(),
     },
@@ -29,10 +33,18 @@ describe("ContextCompilerService", () => {
     analyzeImage: vi.fn(),
     enhancePrompt: vi.fn(),
   };
-  const service = new ContextCompilerService(database as never, model);
+  const storage = {
+    createDownloadUrl: vi.fn(),
+  };
+  const service = new ContextCompilerService(
+    database as never,
+    model,
+    storage as never,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
+    database.designAsset.findFirst.mockResolvedValue(null);
     database.project.findUnique.mockResolvedValue({
       boardElements: [],
       deletedAt: null,
@@ -41,6 +53,9 @@ describe("ContextCompilerService", () => {
     vi.mocked(model.analyzeImage).mockResolvedValue([]);
     vi.mocked(model.enhancePrompt).mockRejectedValue(
       new Error("model unavailable"),
+    );
+    storage.createDownloadUrl.mockImplementation(
+      async (objectKey: string) => `https://signed.example/${objectKey}`,
     );
   });
 
@@ -106,17 +121,13 @@ describe("ContextCompilerService", () => {
       workspace: { ownerId: "user-1" },
     });
     vi.mocked(model.analyzeImage).mockImplementation(async ({ channel }) =>
-      channel === "fabric"
-        ? ["silk", "botanical pattern"]
-        : ["bound seam"],
+      channel === "fabric" ? ["silk", "botanical pattern"] : ["bound seam"],
     );
 
     const result = await service.compile("user-1", "project-1", "dress");
 
     expect(result.fabricReferences[0]?.labels).toContain("silk");
-    expect(result.patternReferences[0]?.labels).toContain(
-      "botanical pattern",
-    );
+    expect(result.patternReferences[0]?.labels).toContain("botanical pattern");
     expect(result.detailReferences[0]?.labels).toContain("bound seam");
     expect(result.positivePrompt).toContain("fabric: silk");
     expect(result.positivePrompt).toContain("pattern: botanical pattern");
@@ -152,6 +163,56 @@ describe("ContextCompilerService", () => {
       },
     ]);
     expect(JSON.stringify(result)).not.toContain("base64");
+  });
+
+  it("把上传文件与生成资产的相对鉴权 URL 解析为短期签名引用", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("style-upload", "style_ref", {
+            fileId: "file-1",
+            url: "/api/files/file-1/thumbnail/1024",
+          }),
+          fileAsset: {
+            objectKey: "users/user-1/original.webp",
+            ownerId: "user-1",
+            status: "READY",
+            thumbnail1024Key: "users/user-1/thumb-1024.webp",
+          },
+        },
+        element("silhouette-generated", "silhouette_ref", {
+          assetId: "asset-1",
+          url: "/api/design-assets/asset-1/content",
+        }),
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+    database.designAsset.findFirst.mockResolvedValue({
+      url: "s3://users/user-1/generated/asset-1.png",
+    });
+
+    const result = await service.compile("user-1", "project-1", "dress");
+
+    expect(result.styleReferences[0]?.imageUrl).toBe(
+      "https://signed.example/users/user-1/thumb-1024.webp",
+    );
+    expect(result.silhouetteReferences[0]?.edgeImageUrl).toBe(
+      "https://signed.example/users/user-1/generated/asset-1.png",
+    );
+    expect(storage.createDownloadUrl).toHaveBeenCalledWith(
+      "users/user-1/thumb-1024.webp",
+      86_400,
+    );
+    expect(database.designAsset.findFirst).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        id: "asset-1",
+        projectId: "project-1",
+        project: { workspace: { ownerId: "user-1" } },
+      },
+      select: { url: true },
+    });
   });
 
   it("无 style_ref 不注入默认风格，空白板走纯文生图", async () => {

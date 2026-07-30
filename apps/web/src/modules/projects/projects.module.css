@@ -3,7 +3,7 @@
   --paper: #f1eee5;
   --signal: #e9522c;
   --muted: #69675f;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 0 clamp(1.25rem, 4vw, 4.5rem) 5rem;
   overflow-x: hidden;
   background:
@@ -108,7 +108,45 @@
   align-items: center;
   border-block: 1px solid var(--ink);
   gap: 1.5rem;
-  grid-template-columns: minmax(13rem, 1fr) auto auto;
+  grid-template-columns: auto minmax(13rem, 1fr) auto auto;
+}
+
+.statusFilters {
+  display: inline-grid;
+  border: 1px solid var(--ink);
+  grid-template-columns: 1fr 1fr;
+}
+
+.statusFilter,
+.statusFilterActive {
+  min-height: 2.5rem;
+  border: 0;
+  padding: 0.55rem 0.85rem;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.statusFilter + .statusFilter,
+.statusFilter + .statusFilterActive,
+.statusFilterActive + .statusFilter,
+.statusFilterActive + .statusFilterActive {
+  border-left: 1px solid var(--ink);
+}
+
+.statusFilter:hover {
+  background: rgb(24 25 21 / 8%);
+}
+
+.statusFilterActive {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .search {
@@ -138,13 +176,17 @@
 
 .primaryButton,
 .secondaryButton {
+  display: inline-flex;
   min-height: 2.9rem;
   border: 1px solid var(--ink);
   padding: 0.7rem 1.2rem;
+  align-items: center;
   cursor: pointer;
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
+  justify-content: center;
+  text-decoration: none;
   transition:
     transform 160ms ease,
     background-color 160ms ease,
@@ -176,10 +218,28 @@
   color: white;
 }
 
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  border-color: rgb(24 25 21 / 38%);
+  background: rgb(24 25 21 / 12%);
+  color: rgb(24 25 21 / 56%);
+  cursor: wait;
+  transform: none;
+}
+
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible,
+.statusFilter:focus-visible,
+.statusFilterActive:focus-visible,
+.brand:focus-visible,
+.search input:focus-visible,
+.projectOpen:focus-visible,
+.cardHeading h2 a:focus-visible,
 .cardMenu summary:focus-visible,
-.menuPanel button:focus-visible {
+.menuPanel button:focus-visible,
+.renameForm input:focus-visible,
+.renameForm button:focus-visible,
+.notice button:focus-visible {
   outline: 3px solid var(--signal);
   outline-offset: 3px;
 }
@@ -342,6 +402,12 @@
 .menuPanel button:hover {
   background: var(--ink);
   color: white;
+}
+
+.menuPanel button:disabled {
+  background: rgb(24 25 21 / 8%);
+  color: var(--muted);
+  cursor: wait;
 }
 
 .menuPanel .deleteAction {
@@ -530,6 +596,11 @@
   box-shadow: 0 2px 0 var(--signal);
 }
 
+.dialog input:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 4px;
+}
+
 .dialog .fieldError {
   margin: 0.6rem 0 0;
   color: #a6321d;
@@ -550,13 +621,59 @@
 }
 
 .statePage {
+  --ink: #181915;
+  --paper: #f1eee5;
+  --signal: #e9522c;
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 2rem;
-  background: #f1eee5;
-  color: #181915;
+  background:
+    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px) 0 0 /
+      clamp(4.5rem, 8vw, 8.5rem) 100%,
+    var(--paper);
+  color: var(--ink);
   place-content: center;
   text-align: center;
+}
+
+.stateCard {
+  display: grid;
+  width: min(100%, 36rem);
+  border: 1px solid var(--ink);
+  border-top: 5px solid var(--signal);
+  padding: clamp(1.75rem, 5vw, 3.5rem);
+  justify-items: start;
+  background: #f8f5ec;
+  box-shadow: 14px 14px 0 rgb(24 25 21 / 12%);
+  text-align: left;
+}
+
+.stateCard > span {
+  color: var(--signal);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.stateCard h1 {
+  margin: 1rem 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 1.05;
+}
+
+.stateCard p {
+  margin: 1.25rem 0 0;
+  color: #782815;
+  line-height: 1.65;
+}
+
+.stateActions {
+  display: flex;
+  margin-top: 2rem;
+  gap: 0.75rem;
 }
 
 .loadingRule {
@@ -611,6 +728,32 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .toolbar {
+    padding-block: 1rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .statusFilters {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .search {
+    max-width: none;
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .projectCount {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  .toolbar > .primaryButton {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
   .hero {
     grid-template-columns: 1fr;
   }
@@ -642,8 +785,25 @@
     grid-template-columns: 1fr auto;
   }
 
+  .statusFilters {
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
   .search {
     grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .projectCount {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .toolbar > .primaryButton {
+    grid-column: 2;
+    grid-row: 3;
   }
 
   .projectGrid,
@@ -654,6 +814,11 @@
   .dialogActions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .stateActions {
+    width: 100%;
+    flex-direction: column;
   }
 }
 
@@ -667,6 +832,8 @@
 
   .primaryButton,
   .secondaryButton,
+  .statusFilter,
+  .statusFilterActive,
   .projectCover {
     transition: none;
   }

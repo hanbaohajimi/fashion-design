@@ -36,6 +36,8 @@ export function ExportModal({
   const [pollAttempt, setPollAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const capturedJobs = useRef(new Set<string>());
+  const dialogRef = useRef<HTMLElement>(null);
+  const isProcessing = job?.status === "queued" || job?.status === "running";
 
   const loadCapabilities = useCallback(async (): Promise<void> => {
     setError(null);
@@ -108,17 +110,42 @@ export function ExportModal({
   }, [format, job, quality, source.type]);
 
   useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.requestAnimationFrame(() => {
+        if (
+          previouslyFocused?.isConnected &&
+          !previouslyFocused.closest("[inert]")
+        ) {
+          previouslyFocused.focus();
+        }
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        onClose();
+        if (!isProcessing) onClose();
+        return;
+      }
+      if (event.key === "Tab" && dialogRef.current) {
+        trapFocus(event, dialogRef.current);
       }
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [onClose]);
+  }, [isProcessing, onClose]);
 
   const submit = async (): Promise<void> => {
     setSubmitting(true);
@@ -132,20 +159,23 @@ export function ExportModal({
     }
   };
 
-  const isProcessing = job?.status === "queued" || job?.status === "running";
   const canDownload = job?.status === "succeeded" && job.downloadUrl;
 
   return createPortal(
     <div
-      aria-label="导出成果"
-      aria-modal="true"
       className={styles.exportBackdrop}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget && !isProcessing) onClose();
       }}
-      role="dialog"
     >
-      <section className={styles.exportModal}>
+      <section
+        aria-label="导出成果"
+        aria-modal="true"
+        className={styles.exportModal}
+        ref={dialogRef}
+        role="dialog"
+        tabIndex={-1}
+      >
         <header>
           <div>
             <span>EXPORT / DELIVERY</span>
@@ -344,4 +374,45 @@ function formatBytes(bytes: number): string {
   if (bytes < 1_024) return `${bytes} B`;
   if (bytes < 1_024 * 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
   return `${(bytes / (1_024 * 1_024)).toFixed(1)} MB`;
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "summary",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
+  const focusable = Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      !element.closest("[inert]") &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.tabIndex >= 0,
+  );
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+  if (document.activeElement === container) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  } else if (!container.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
 }

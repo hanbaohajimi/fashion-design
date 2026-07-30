@@ -7,6 +7,7 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   const taskDetails = new Map<string, Record<string, unknown>>();
   let sequence = 0;
   let uploadedMaskBytes = 0;
+  let rejectedInpaintOnce = false;
 
   await page.route("**/api/me", (route) =>
     route.fulfill({
@@ -24,10 +25,33 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
       },
     }),
   );
+  await page.route("**/api/projects/e2e-inpaint", (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt: "2026-07-27T08:00:00.000Z",
+        id: "e2e-inpaint",
+        name: "E2E 局部编辑项目",
+        updatedAt: "2026-07-27T08:00:00.000Z",
+      },
+    }),
+  );
+  await page.route("**/api/collections?projectId=e2e-inpaint", (route) =>
+    route.fulfill({ json: [] }),
+  );
   await page.route("**/api/projects/e2e-inpaint/board", async (route) => {
     await route.fulfill(
       route.request().method() === "PATCH"
-        ? { json: { ok: true } }
+        ? {
+            json: {
+              batchId: "e2e-board-save",
+              revision: 1,
+              savedAt: "2026-07-27T08:00:02.000Z",
+            },
+          }
         : { json: { elements: [], revision: 0, snapshot: null } },
     );
   });
@@ -45,15 +69,29 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
       },
     }),
   );
-  await page.route("https://signed.example/mask-e2e.png?write=1", async (route) => {
-    uploadedMaskBytes = route.request().postDataBuffer()?.byteLength ?? 0;
-    await route.fulfill({ status: 200 });
-  });
-  await page.route("**/api/generations", async (route) => {
+  await page.route(
+    "https://signed.example/mask-e2e.png?write=1",
+    async (route) => {
+      uploadedMaskBytes = route.request().postDataBuffer()?.byteLength ?? 0;
+      await route.fulfill({ status: 200 });
+    },
+  );
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route(/\/api\/generations$/u, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
+    const taskType = String(body.taskType);
+    if (taskType === "inpaint" && !rejectedInpaintOnce) {
+      rejectedInpaintOnce = true;
+      await route.fulfill({
+        status: 503,
+        json: { message: "模拟局部重绘创建失败" },
+      });
+      return;
+    }
     requests.push(body);
     sequence += 1;
-    const taskType = String(body.taskType);
     const id =
       taskType === "t2i" ? "task-source" : `task-${taskType}-${sequence}`;
     const imageUrl =
@@ -121,7 +159,42 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   const sourceCard = page.locator("article").filter({
     has: page.locator('img[src="https://assets.example/source.png"]'),
   });
-  await sourceCard.getByRole("button", { name: "打开候选详情" }).click();
+  await page.setViewportSize({ height: 844, width: 390 });
+  const [taskTrayBox, candidateDockBox, generationBarBox] = await Promise.all([
+    page.getByRole("complementary", { name: "生成任务托盘" }).boundingBox(),
+    page.getByRole("region", { name: "生成候选" }).boundingBox(),
+    page.getByRole("region", { name: "生成浮条" }).boundingBox(),
+  ]);
+  if (!taskTrayBox || !candidateDockBox || !generationBarBox) {
+    throw new Error("移动端生成浮层未完整渲染");
+  }
+  expect(taskTrayBox.y + taskTrayBox.height).toBeLessThanOrEqual(
+    candidateDockBox.y,
+  );
+  expect(candidateDockBox.y + candidateDockBox.height).toBeLessThanOrEqual(
+    generationBarBox.y,
+  );
+  await page.setViewportSize({ height: 720, width: 1280 });
+
+  const openDetails = sourceCard.getByRole("button", {
+    name: "打开候选详情",
+  });
+  await openDetails.click();
+  const lightboxDialog = page.getByRole("dialog", {
+    name: "候选设计详情",
+  });
+  await expect(lightboxDialog).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "生成 3 个变体" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "预览" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(lightboxDialog).toBeHidden();
+  await expect(openDetails).toBeFocused();
+
+  await openDetails.click();
   await page.getByRole("button", { name: "生成 3 个变体" }).click();
   await expect
     .poll(() => requests.filter((body) => body.taskType === "i2i").length)
@@ -144,6 +217,15 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   ).toBeVisible();
 
   const canvas = page.getByLabel("局部重绘掩码画布");
+  const addCenterRegion = page.getByRole("button", {
+    name: "标记中央区域",
+  });
+  await addCenterRegion.focus();
+  await page.keyboard.press("Enter");
+  await expect(canvas).toHaveAttribute("data-stroke-count", "1");
+  await page.getByRole("button", { name: "清空" }).click();
+  await expect(canvas).toHaveAttribute("data-stroke-count", "0");
+
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
   if (!bounds) return;
@@ -158,12 +240,27 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await expect(canvas).toHaveAttribute("data-stroke-count", "1");
 
   await page.getByLabel("掩码画笔尺寸").fill("0.16");
-  await page.mouse.move(bounds.x + bounds.width * 0.28, bounds.y + bounds.height * 0.3);
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.28,
+    bounds.y + bounds.height * 0.3,
+  );
   await page.mouse.down();
-  await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.7, {
-    steps: 18,
-  });
+  await page.mouse.move(
+    bounds.x + bounds.width * 0.7,
+    bounds.y + bounds.height * 0.7,
+    {
+      steps: 18,
+    },
+  );
   await page.mouse.up();
+  await page.getByRole("button", { name: "提交局部重绘" }).click();
+  const candidateDialog = page.getByRole("dialog", {
+    name: "候选设计详情",
+  });
+  await expect(candidateDialog.getByRole("alert")).toContainText(
+    "模拟局部重绘创建失败",
+  );
+  await expect(candidateDialog).toBeVisible();
   await page.getByRole("button", { name: "提交局部重绘" }).click();
 
   await expect.poll(() => uploadedMaskBytes).toBeGreaterThan(100);

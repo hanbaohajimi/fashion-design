@@ -1,5 +1,6 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
+import { FilesModule } from "../files/files.module";
 
 import { DesignAssetsController } from "./design-assets.controller";
 import {
@@ -8,6 +9,7 @@ import {
 } from "./design-assets.service";
 
 @Module({
+  imports: [FilesModule],
   controllers: [DesignAssetsController],
   providers: [
     DesignAssetsService,

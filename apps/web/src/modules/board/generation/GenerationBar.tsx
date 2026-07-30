@@ -4,10 +4,7 @@ import { type CSSProperties, useContext, useState } from "react";
 import { useEditor, useValue } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
-import {
-  isBoardShape,
-  normalizeBoardRole,
-} from "../shapes";
+import { isBoardShape, normalizeBoardRole } from "../shapes";
 import { ConstraintChips } from "./ConstraintChips";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import type { GenerationParameters } from "./generation-types";
@@ -27,6 +24,7 @@ export function GenerationBar() {
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [parameters, setParameters] = useState(DEFAULT_GENERATION_PARAMETERS);
+  const [submitting, setSubmitting] = useState(false);
   const selection = useValue(
     "generation-selection",
     () => {
@@ -60,18 +58,29 @@ export function GenerationBar() {
   } as CSSProperties;
 
   const submit = async (): Promise<void> => {
+    if (submitting) {
+      return;
+    }
     const normalized = prompt.trim();
     if (normalized.length < 3) {
       setError("请用至少 3 个字描述希望生成的设计");
       return;
     }
     setError(null);
-    await generation.start({
-      parameters,
-      projectId,
-      prompt: normalized,
-      shapeIds: selection.shapeIds,
-    });
+    setSubmitting(true);
+    try {
+      const result = await generation.start({
+        parameters,
+        projectId,
+        prompt: normalized,
+        shapeIds: selection.shapeIds,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -93,7 +102,11 @@ export function GenerationBar() {
             maxLength={4000}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+              if (
+                event.key === "Enter" &&
+                !event.nativeEvent.isComposing &&
+                !submitting
+              ) {
                 event.preventDefault();
                 void submit();
               }
@@ -102,8 +115,12 @@ export function GenerationBar() {
             value={prompt}
           />
         </label>
-        <button onClick={() => void submit()} type="button">
-          生成
+        <button
+          disabled={submitting}
+          onClick={() => void submit()}
+          type="button"
+        >
+          {submitting ? "提交中…" : "生成"}
         </button>
       </div>
       <details className={styles.advancedOptions}>
@@ -167,10 +184,7 @@ export function GenerationBar() {
           </label>
         </div>
       </details>
-      {error || generation.notice ? (
-        <p role="status">{error ?? generation.notice}</p>
-      ) : null}
+      {error ? <p role="status">{error}</p> : null}
     </section>
   );
 }
-

@@ -35,9 +35,8 @@ export function VariationControl({
     if (variationSeeds.length !== 3) return;
     setSubmitting(true);
     try {
-      await Promise.all(
-        variationSeeds.map((seed) =>
-          generation.start({
+      await generation.startBatch(
+        variationSeeds.map((seed) => ({
             parameters: {
               ...DEFAULT_GENERATION_PARAMETERS,
               height: normalizedDimension(candidate.height),
@@ -51,8 +50,7 @@ export function VariationControl({
             shapeIds: editor.getSelectedShapeIds(),
             strength,
             taskType: "i2i",
-          }),
-        ),
+          })),
       );
     } finally {
       setSubmitting(false);

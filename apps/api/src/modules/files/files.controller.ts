@@ -5,7 +5,9 @@ import {
   Get,
   Param,
   Post,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
 
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -54,6 +56,24 @@ export class FilesController {
     return this.filesService.get(
       user.userId,
       parseOrThrow(fileIdSchema, fileId),
+    );
+  }
+
+  @Get(":id/thumbnail/:size")
+  async thumbnail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") fileId: string,
+    @Param("size") rawSize: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const size = parseOrThrow(z.enum(["256", "1024"]), rawSize);
+    response.redirect(
+      307,
+      await this.filesService.thumbnailUrl(
+        user.userId,
+        parseOrThrow(fileIdSchema, fileId),
+        size,
+      ),
     );
   }
 }

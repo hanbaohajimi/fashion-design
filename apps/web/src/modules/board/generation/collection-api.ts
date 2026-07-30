@@ -12,6 +12,11 @@ interface ErrorBody {
   readonly message?: string;
 }
 
+export const collectionKeys = {
+  all: ["collections"] as const,
+  list: (projectId: string) => ["collections", { projectId }] as const,
+};
+
 export class CollectionApiError extends Error {
   constructor(
     message: string,
@@ -65,6 +70,20 @@ export async function fetchCollection(
   return (await response.json()) as CollectionDetail;
 }
 
+export async function listCollections(
+  projectId: string,
+): Promise<readonly CollectionDetail[]> {
+  const query = new URLSearchParams({ projectId });
+  const response = await fetch(`/api/collections?${query.toString()}`, {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw await apiError(response, "系列列表读取失败");
+  }
+  return (await response.json()) as readonly CollectionDetail[];
+}
+
 export async function updateCollectionDna(
   collectionId: string,
   input: UpdateDnaInput,
@@ -98,7 +117,10 @@ export async function createCollectionLook(
         ...(prompt?.trim() ? { prompt: prompt.trim() } : {}),
       }),
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
     },
   );
   if (!response.ok) {

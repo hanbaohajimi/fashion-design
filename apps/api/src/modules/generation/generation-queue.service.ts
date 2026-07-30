@@ -19,23 +19,34 @@ function redisConnection() {
 }
 
 @Injectable()
-export class BullGenerationJobs
-  implements GenerationJobs, OnModuleDestroy
-{
+export class BullGenerationJobs implements GenerationJobs, OnModuleDestroy {
   private queue: Queue<GenerationJobData> | undefined;
 
   async enqueue(taskId: string, userId: string): Promise<void> {
-    const job = await this.getQueue().add(
-      "generate",
-      { taskId, userId },
-      {
-        attempts: 2,
-        backoff: { delay: 1_000, type: "exponential" },
-        jobId: taskId,
-        removeOnComplete: { age: 7 * 24 * 60 * 60 },
-        removeOnFail: { age: 30 * 24 * 60 * 60 },
-      },
-    );
+    const queue = this.getQueue();
+    const existing = await queue.getJob(taskId);
+    if (existing && (await existing.getState()) === "failed") {
+      try {
+        await existing.retry();
+      } catch (error) {
+        if ((await existing.getState()) === "failed") {
+          throw error;
+        }
+      }
+    }
+    const job =
+      existing ??
+      (await queue.add(
+        "generate",
+        { taskId, userId },
+        {
+          attempts: 2,
+          backoff: { delay: 1_000, type: "exponential" },
+          jobId: taskId,
+          removeOnComplete: { age: 7 * 24 * 60 * 60 },
+          removeOnFail: { age: 30 * 24 * 60 * 60 },
+        },
+      ));
     await job
       .updateProgress(this.event(taskId, "queued"))
       .catch(() => undefined);

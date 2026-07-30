@@ -2,6 +2,7 @@ import type {
   DesignAssetVersion,
   GenerationParameters,
   GenerationTaskDetail,
+  GenerationTaskList,
 } from "./generation-types";
 
 interface CreateGenerationInput extends GenerationParameters {
@@ -91,18 +92,38 @@ async function apiError(
 
 export async function createGeneration(
   input: CreateGenerationInput,
+  idempotencyKey = crypto.randomUUID(),
 ): Promise<string> {
   const response = await fetch("/api/generations", {
     method: "POST",
     body: JSON.stringify(input),
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
   });
   if (!response.ok) {
     throw await apiError(response, "生成任务创建失败，请稍后重试");
   }
   const body = (await response.json()) as { readonly task_id: string };
   return body.task_id;
+}
+
+export async function cancelGeneration(
+  taskId: string,
+): Promise<GenerationTaskDetail> {
+  const response = await fetch(
+    `/api/generations/${encodeURIComponent(taskId)}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "生成任务取消失败");
+  }
+  return (await response.json()) as GenerationTaskDetail;
 }
 
 export async function fetchGenerationTask(
@@ -116,6 +137,22 @@ export async function fetchGenerationTask(
     throw await apiError(response, "生成任务状态读取失败");
   }
   return (await response.json()) as GenerationTaskDetail;
+}
+
+export async function fetchGenerationTasks(
+  projectId: string,
+  cursor?: string,
+): Promise<GenerationTaskList> {
+  const query = new URLSearchParams({ limit: "100", projectId });
+  if (cursor) query.set("cursor", cursor);
+  const response = await fetch(`/api/generations?${query}`, {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw await apiError(response, "生成任务历史读取失败");
+  }
+  return (await response.json()) as GenerationTaskList;
 }
 
 interface SignedMaskUpload {

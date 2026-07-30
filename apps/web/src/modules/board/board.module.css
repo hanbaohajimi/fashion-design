@@ -55,13 +55,71 @@
 }
 
 .boardIdentity span[data-status="offline"],
+.boardIdentity span[data-status="conflict"],
 .boardIdentity span[data-status="error"] {
   color: #b2381f;
+}
+
+.boardConflictNotice {
+  position: fixed;
+  z-index: 1200;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  width: min(390px, calc(100vw - 36px));
+  border: 1px solid #9d2f20;
+  padding: 14px;
+  background: #f7eee5;
+  box-shadow: 8px 8px 0 rgb(157 47 32 / 14%);
+  color: #4b211b;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.boardConflictNotice div {
+  display: grid;
+  gap: 4px;
+}
+
+.boardConflictNotice strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.boardConflictNotice span,
+.boardConflictNotice small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.boardConflictNotice small {
+  color: #76534d;
+}
+
+.boardConflictNotice button {
+  border: 0;
+  padding: 10px 12px;
+  background: #9d2f20;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .shapeActions {
   display: flex;
   height: 100%;
+}
+
+.quotaPill {
+  align-items: center;
+  border-left: 1px solid rgb(24 25 21 / 22%);
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .shapeActions button {
@@ -75,6 +133,17 @@
   font: inherit;
   font-size: 11px;
   font-weight: 700;
+}
+
+.shapeActions select {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid rgb(24 25 21 / 22%);
+  color: #181915;
+  cursor: pointer;
+  font-size: 11px;
+  max-width: 150px;
+  padding: 0 10px;
 }
 
 .shapeActions button:last-child {
@@ -230,6 +299,65 @@
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
+}
+
+.emptyBoardGuide {
+  background: rgb(248 246 239 / 96%);
+  border: 1px solid rgb(24 25 21 / 28%);
+  box-shadow: 14px 14px 0 rgb(24 25 21 / 8%);
+  left: 50%;
+  max-width: 430px;
+  padding: 24px;
+  pointer-events: auto;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 420;
+}
+
+.emptyBoardGuide > span {
+  color: #765f47;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.emptyBoardGuide h1 {
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.02;
+  margin: 12px 0;
+}
+
+.emptyBoardGuide p {
+  color: #5e6058;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.emptyBoardGuide ol {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  list-style-position: inside;
+  margin: 20px 0;
+  padding: 0;
+}
+
+.emptyBoardGuide li {
+  border-top: 1px solid rgb(24 25 21 / 22%);
+  font-size: 11px;
+  padding-top: 8px;
+}
+
+.emptyBoardGuide button {
+  background: #181915;
+  border: 0;
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 12px 16px;
+  width: 100%;
 }
 
 .uploadTray {
@@ -474,18 +602,34 @@
 
 @media (max-width: 760px) {
   .boardToolbar {
-    grid-template-columns: 1fr auto;
+    width: calc(100vw - 16px);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .shapeActions {
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
     grid-row: 2;
     grid-column: 1 / -1;
     border-top: 1px solid #181915;
   }
 
   .shapeActions button {
+    flex: 0 0 auto;
     min-height: 38px;
-    flex: 1;
+  }
+
+  .shapeActions select {
+    min-width: 132px;
+    min-height: 38px;
+    flex: 0 0 auto;
+  }
+
+  .quotaPill {
+    min-height: 38px;
+    flex: 0 0 auto;
   }
 
   .boardIdentity span {
@@ -493,11 +637,13 @@
   }
 
   .rolePanel {
-    top: auto;
+    top: 112px;
     right: 12px;
-    bottom: 76px;
+    bottom: auto;
     left: 12px;
     width: auto;
+    max-height: 148px;
+    overflow-y: auto;
   }
 
   .rolePanelEmpty {

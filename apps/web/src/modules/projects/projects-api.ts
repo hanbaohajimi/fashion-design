@@ -1,5 +1,9 @@
 import { readErrorMessage } from "../auth/auth-api";
-import type { Project, ProjectPage } from "./project-types";
+import type {
+  Project,
+  ProjectPage,
+  ProjectStatusFilter,
+} from "./project-types";
 
 async function requestJson<T>(
   input: RequestInfo | URL,
@@ -24,8 +28,10 @@ async function requestJson<T>(
 export function fetchProjects(
   page: number,
   search: string,
+  status: ProjectStatusFilter,
 ): Promise<ProjectPage> {
   const params = new URLSearchParams({
+    archived: status,
     limit: "50",
     page: String(page),
   });
@@ -35,6 +41,12 @@ export function fetchProjects(
   }
 
   return requestJson<ProjectPage>(`/api/projects?${params.toString()}`);
+}
+
+export function fetchProject(projectId: string): Promise<Project> {
+  return requestJson<Project>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    cache: "no-store",
+  });
 }
 
 export function createProject(
@@ -58,6 +70,19 @@ export function updateProject(
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export function duplicateProject(
+  projectId: string,
+  idempotencyKey: string,
+): Promise<Project> {
+  return requestJson<Project>(
+    `/api/projects/${encodeURIComponent(projectId)}/duplicate`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+    },
+  );
 }
 
 export async function deleteProject(projectId: string): Promise<void> {

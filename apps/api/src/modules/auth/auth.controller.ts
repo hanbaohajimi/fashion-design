@@ -74,7 +74,7 @@ export class AuthController {
     @Headers("origin") origin: string | undefined,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<{ ok: true; user?: User }> {
+  ): Promise<{ ok: true; projectId?: string; user?: User }> {
     try {
       this.authService.assertAllowedOrigin(origin);
       const parsed = loginRequestSchema.safeParse(body);
@@ -97,7 +97,14 @@ export class AuthController {
           : await this.refreshFromCookie(request);
 
       this.setSessionCookies(response, session);
-      return { ok: true, user: session.user };
+      const projectId = await this.authService.getInitialProjectId(
+        session.user.id,
+      );
+      return {
+        ok: true,
+        user: session.user,
+        ...(projectId ? { projectId } : {}),
+      };
     } catch (error) {
       if (error instanceof AuthFlowError) {
         const Exception =

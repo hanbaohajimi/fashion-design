@@ -26,6 +26,7 @@ export interface MaskCanvasState {
 }
 
 export interface MaskCanvasHandle {
+  addCenterRegion(): void;
   clear(): void;
   exportPng(): Promise<Blob>;
   undo(): void;
@@ -33,9 +34,31 @@ export interface MaskCanvasHandle {
 
 interface MaskCanvasProps {
   readonly brushRatio: number;
+  readonly descriptionId?: string;
   readonly height: number;
   readonly onChange: (state: MaskCanvasState) => void;
   readonly width: number;
+}
+
+function centerRegionStroke(
+  width: number,
+  height: number,
+  brushRatio: number,
+): Stroke {
+  const lineWidth = Math.max(8, Math.min(width, height) * brushRatio);
+  const spacing = Math.max(6, lineWidth * 0.65);
+  const left = width * 0.25;
+  const right = width * 0.75;
+  const points: Point[] = [];
+  let drawRight = true;
+  for (let y = height * 0.35; y <= height * 0.65; y += spacing) {
+    points.push(
+      { x: drawRight ? left : right, y },
+      { x: drawRight ? right : left, y },
+    );
+    drawRight = !drawRight;
+  }
+  return { points };
 }
 
 function maskCoverage(
@@ -58,7 +81,7 @@ function maskCoverage(
 
 export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
   function MaskCanvas(
-    { brushRatio, height, onChange, width },
+    { brushRatio, descriptionId, height, onChange, width },
     forwardedRef,
   ) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -169,6 +192,11 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
     useImperativeHandle(
       forwardedRef,
       () => ({
+        addCenterRegion: () =>
+          setStrokes((current) => [
+            ...current,
+            centerRegionStroke(width, height, brushRatio),
+          ]),
         clear: () => setStrokes([]),
         undo: () => setStrokes((current) => current.slice(0, -1)),
         exportPng: async () => {
@@ -190,16 +218,18 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
           });
         },
       }),
-      [height, width],
+      [brushRatio, height, width],
     );
 
     return (
       <canvas
         aria-label="局部重绘掩码画布"
+        aria-describedby={descriptionId}
         className={styles.maskCanvas}
         data-stroke-count={strokes.length}
         height={height}
         ref={canvasRef}
+        role="img"
         width={width}
       />
     );

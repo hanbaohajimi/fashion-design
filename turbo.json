@@ -1,12 +1,12 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": [".env", ".env.example"],
   "globalPassThroughEnv": [
     "AI_CREDITS_PER_USD",
     "AI_FALLBACK_PROVIDER",
     "AI_PRIMARY_PROVIDER",
     "AI_PROVIDER_RETRY_BASE_MS",
     "AI_PROVIDER_TIMEOUT_MS",
-    "API_INTERNAL_URL",
     "API_PORT",
     "APP_ORIGIN",
     "ASSET_CDN_ORIGIN",
@@ -19,7 +19,6 @@
     "FAL_KEY",
     "FAL_T2I_COST_PER_MEGAPIXEL",
     "FAL_T2I_MODEL",
-    "NEXT_PUBLIC_TLDRAW_LICENSE_KEY",
     "OPENAI_API_KEY",
     "OPENAI_COMPILER_MODEL",
     "OPENAI_VLM_MODEL",
@@ -28,6 +27,7 @@
     "S3_BUCKET",
     "S3_ENDPOINT",
     "S3_FORCE_PATH_STYLE",
+    "S3_HEALTHCHECK_OBJECT_KEY",
     "S3_REGION",
     "S3_SECRET_ACCESS_KEY",
     "SESSION_COOKIE_SECURE",
@@ -37,6 +37,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "API_INTERNAL_URL",
+        "NEXT_PUBLIC_POSTHOG_HOST",
+        "NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN",
+        "NEXT_PUBLIC_SENTRY_DSN",
+        "NEXT_PUBLIC_TLDRAW_LICENSE_KEY",
+        "SENTRY_DSN",
+        "SENTRY_ENVIRONMENT"
+      ],
       "outputs": [".next/**", "dist/**", "generated/**"]
     },
     "dev": {
@@ -50,6 +59,7 @@
       "dependsOn": ["^build"]
     },
     "test": {
+      "cache": false,
       "dependsOn": ["^build"]
     }
   }

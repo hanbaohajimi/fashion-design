@@ -1,8 +1,4 @@
-import {
-  FileStatus,
-  RoleInferenceState,
-  RoleSource,
-} from "@fashion/db";
+import { FileStatus, RoleInferenceState, RoleSource } from "@fashion/db";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -16,10 +12,14 @@ const data = {
   shapeId: "shape:one",
 };
 
-function element(roleSource: RoleSource = RoleSource.DEFAULT) {
+function element(
+  roleSource: RoleSource = RoleSource.DEFAULT,
+  roleInferenceState: RoleInferenceState = RoleInferenceState.PENDING,
+) {
   return {
     deletedAt: null,
     fileAssetId: "file-1",
+    roleInferenceState,
     roleSource,
   };
 }
@@ -50,6 +50,7 @@ describe("VLM role inference processor", () => {
         fileAsset: { findUnique: vi.fn().mockResolvedValue(file()) },
       } as never,
       storage: {
+        delete: vi.fn(),
         get: vi.fn().mockResolvedValue(Buffer.from("webp")),
         put: vi.fn(),
       },
@@ -64,6 +65,11 @@ describe("VLM role inference processor", () => {
           role: "fabric_ref",
           roleConfidence: 0.86,
           roleInferenceState: RoleInferenceState.READY,
+        }),
+        where: expect.objectContaining({
+          deletedAt: null,
+          roleInferenceState: RoleInferenceState.PENDING,
+          roleSource: { not: RoleSource.MANUAL },
         }),
       }),
     );
@@ -83,6 +89,7 @@ describe("VLM role inference processor", () => {
         fileAsset: { findUnique: vi.fn().mockResolvedValue(file()) },
       } as never,
       storage: {
+        delete: vi.fn(),
         get: vi.fn().mockResolvedValue(Buffer.from("webp")),
         put: vi.fn(),
       },
@@ -95,6 +102,11 @@ describe("VLM role inference processor", () => {
           role: "style_ref",
           roleInferenceState: RoleInferenceState.FAILED,
           roleSource: RoleSource.DEFAULT,
+        }),
+        where: expect.objectContaining({
+          deletedAt: null,
+          roleInferenceState: RoleInferenceState.PENDING,
+          roleSource: { not: RoleSource.MANUAL },
         }),
       }),
     );
@@ -112,11 +124,38 @@ describe("VLM role inference processor", () => {
         },
         fileAsset: { findUnique: vi.fn().mockResolvedValue(file()) },
       } as never,
-      storage: { get: vi.fn(), put: vi.fn() },
+      storage: { delete: vi.fn(), get: vi.fn(), put: vi.fn() },
     });
 
     await processor(data);
 
+    expect(classify).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not classify a duplicate job after inference is already ready", async () => {
+    const classify = vi.fn();
+    const get = vi.fn();
+    const updateMany = vi.fn();
+    const processor = createVlmInferenceProcessor({
+      classifier: { classify },
+      database: {
+        boardElement: {
+          findUnique: vi
+            .fn()
+            .mockResolvedValue(
+              element(RoleSource.INFERRED, RoleInferenceState.READY),
+            ),
+          updateMany,
+        },
+        fileAsset: { findUnique: vi.fn().mockResolvedValue(file()) },
+      } as never,
+      storage: { delete: vi.fn(), get, put: vi.fn() },
+    });
+
+    await processor(data);
+
+    expect(get).not.toHaveBeenCalled();
     expect(classify).not.toHaveBeenCalled();
     expect(updateMany).not.toHaveBeenCalled();
   });
@@ -139,6 +178,7 @@ describe("VLM role inference processor", () => {
         fileAsset: { findUnique: vi.fn().mockResolvedValue(file()) },
       } as never,
       storage: {
+        delete: vi.fn(),
         get: vi.fn().mockResolvedValue(Buffer.from("webp")),
         put: vi.fn(),
       },

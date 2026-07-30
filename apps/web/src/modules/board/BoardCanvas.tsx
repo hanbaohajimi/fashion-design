@@ -8,13 +8,15 @@ import {
   Tldraw,
   type TLAnyShapeUtilConstructor,
   type TLComponents,
+  useEditor,
+  useValue,
 } from "tldraw";
 
 import { BoardToolbar } from "./BoardToolbar";
 import { BoardFileDrop } from "./BoardFileDrop";
 import { ElementRolePanel } from "./ElementRolePanel";
 import { BoardSkeleton } from "./BoardSkeleton";
-import { BoardProjectContext } from "./board-context";
+import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import { CandidateGrid } from "./generation/CandidateGrid";
 import { GenerationBar } from "./generation/GenerationBar";
 import { GenerationWorkspace } from "./generation/GenerationWorkspace";
@@ -37,10 +39,40 @@ function ConnectedBoardToolbar() {
   return <BoardToolbar status={useContext(PersistStatusContext)} />;
 }
 
+function EmptyBoardGuide() {
+  const editor = useEditor();
+  const empty = useValue(
+    "empty-board-guide",
+    () => editor.getCurrentPageShapes().length === 0,
+    [editor],
+  );
+  if (!empty) return null;
+
+  return (
+    <section className={styles.emptyBoardGuide} aria-label="白板三步上手">
+      <span>START / 01</span>
+      <h1>把第一份灵感放进白板</h1>
+      <p>拖入或粘贴图片，也可以从这里选择文件。系统会在后台识别素材角色。</p>
+      <ol>
+        <li>上传参考</li>
+        <li>确认角色</li>
+        <li>框选并生成</li>
+      </ol>
+      <button
+        onClick={() => window.dispatchEvent(new Event(BOARD_FILE_PICKER_EVENT))}
+        type="button"
+      >
+        上传第一张参考
+      </button>
+    </section>
+  );
+}
+
 function BoardCanvasOverlay() {
   return (
     <>
       <BoardFileDrop />
+      <EmptyBoardGuide />
       <ElementRolePanel />
       <ErrorBoundary area="generation">
         <GenerationBar />
@@ -103,6 +135,24 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
           </GenerationWorkspace>
         </BoardProjectContext.Provider>
       </PersistStatusContext.Provider>
+      {persistence.status === "conflict" ? (
+        <section
+          aria-live="assertive"
+          className={styles.boardConflictNotice}
+          role="alert"
+        >
+          <div>
+            <strong>检测到版本冲突</strong>
+            <span>{persistence.error}</span>
+          </div>
+          <button onClick={persistence.resolveConflict} type="button">
+            读取最新版本并合并
+          </button>
+          <small>
+            此操作会读取最新远端画布，并重新应用当前本地待保存修改。
+          </small>
+        </section>
+      ) : null}
     </main>
   );
 }

@@ -54,6 +54,17 @@ export class ProjectsController {
     );
   }
 
+  @Get(":id")
+  get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") projectId: string,
+  ) {
+    return this.projectsService.get(
+      user.userId,
+      parseOrThrow(projectIdSchema, projectId),
+    );
+  }
+
   @Post()
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -77,6 +88,19 @@ export class ProjectsController {
       user.userId,
       parseOrThrow(projectIdSchema, projectId),
       parseOrThrow(updateProjectSchema, body),
+    );
+  }
+
+  @Post(":id/duplicate")
+  duplicate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") projectId: string,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+  ) {
+    return this.projectsService.duplicate(
+      user.userId,
+      parseOrThrow(projectIdSchema, projectId),
+      parseOrThrow(idempotencyKeySchema, idempotencyKey),
     );
   }
 

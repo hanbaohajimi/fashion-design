@@ -21,6 +21,24 @@ function projectFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ProjectsService ownership and soft deletion", () => {
+  it("returns an owned project detail for the board header", async () => {
+    const database = {
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          ...projectFixture(),
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+      workspace: {},
+    };
+    const service = new ProjectsService(database as never);
+
+    await expect(service.get("user-a", "project-a")).resolves.toMatchObject({
+      id: "project-a",
+      name: "春季系列",
+    });
+  });
+
   it("returns 403 when user A tries to update user B's project", async () => {
     const database = {
       project: {

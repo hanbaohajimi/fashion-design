@@ -102,11 +102,24 @@ async function main(): Promise<void> {
     }
 
     const originalKey = `originals/${user.id}/${signed.file.id}/source`;
-    const [persistedOriginal, publicOriginalResponse, thumbnailResponse] =
+    const thumbnailDownloadUrl = await service.thumbnailUrl(
+      user.id,
+      signed.file.id,
+      "256",
+    );
+    const [
+      persistedOriginal,
+      publicOriginalResponse,
+      publicThumbnailResponse,
+      thumbnailResponse,
+    ] =
       await Promise.all([
         workerStorage.get(originalKey),
         fetch(`${process.env.ASSET_CDN_ORIGIN}/${originalKey}`),
-        fetch(ready.thumbnail256Url),
+        fetch(
+          `${process.env.ASSET_CDN_ORIGIN}/thumbnails/${user.id}/${signed.file.id}/256.webp`,
+        ),
+        fetch(thumbnailDownloadUrl),
       ]);
     if (
       createHash("sha256").update(persistedOriginal).digest("hex") !== sha256
@@ -116,11 +129,14 @@ async function main(): Promise<void> {
     if (publicOriginalResponse.ok) {
       throw new Error("原图不应通过公开 CDN 地址访问");
     }
+    if (publicThumbnailResponse.ok) {
+      throw new Error("缩略图不应通过匿名 CDN 地址访问");
+    }
     if (
       !thumbnailResponse.ok ||
       thumbnailResponse.headers.get("content-type") !== "image/webp"
     ) {
-      throw new Error("CDN 缩略图不可读取或类型错误");
+      throw new Error("鉴权缩略图不可读取或类型错误");
     }
 
     const deduplicated = await service.signUpload(user.id, {

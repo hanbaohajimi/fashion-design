@@ -9,6 +9,10 @@ config({
   path: resolve(packageDirectory, "../../.env"),
   quiet: true,
 });
+config({
+  path: resolve(packageDirectory, "../../.env.example"),
+  quiet: true,
+});
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

@@ -58,6 +58,7 @@ describe("BoardsService persistence integration", () => {
       };
 
       await boardsService.patch(user.id, project.id, {
+        baseRevision: 0,
         batchId: crypto.randomUUID(),
         patches: [
           {
@@ -78,6 +79,7 @@ describe("BoardsService persistence integration", () => {
       });
 
       await boardsService.patch(user.id, project.id, {
+        baseRevision: 1,
         batchId: crypto.randomUUID(),
         patches: [
           {
@@ -111,18 +113,61 @@ describe("BoardsService persistence integration", () => {
         },
       });
 
-      await expect(boardsService.get(user.id, project.id)).resolves.toMatchObject(
-        {
-          elements: [
+      await expect(
+        boardsService.patch(user.id, project.id, {
+          baseRevision: 1,
+          batchId: crypto.randomUUID(),
+          patches: [
             {
               deleted: false,
-              role: "avoid",
+              record: {
+                ...record,
+                props: {
+                  ...record.props,
+                  role: "fabric_ref",
+                },
+              },
+              role: "fabric_ref",
+              roleInferenceState: "ready",
+              roleSource: "manual",
               shapeId: record.id,
+              shapeType: record.type,
             },
           ],
-          revision: 2,
+          snapshot: {
+            document: {
+              store: {
+                [record.id]: {
+                  ...record,
+                  props: {
+                    ...record.props,
+                    role: "fabric_ref",
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ).rejects.toMatchObject({
+        response: {
+          code: "BOARD_REVISION_CONFLICT",
+          currentRevision: 2,
         },
-      );
+        status: 409,
+      });
+
+      await expect(
+        boardsService.get(user.id, project.id),
+      ).resolves.toMatchObject({
+        elements: [
+          {
+            deleted: false,
+            role: "avoid",
+            shapeId: record.id,
+          },
+        ],
+        revision: 2,
+      });
     } finally {
       await prisma.user.delete({ where: { id: user.id } });
     }

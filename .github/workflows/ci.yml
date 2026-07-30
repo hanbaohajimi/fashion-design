@@ -6,10 +6,22 @@ on:
 
 jobs:
   quality:
-    name: lint + typecheck
+    name: quality + integration + browser contract
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
+      API_INTERNAL_URL: http://127.0.0.1:3001
+      APP_ORIGIN: http://localhost:3000
+      ASSET_CDN_ORIGIN: http://127.0.0.1:9000/fashion-assets
       DATABASE_URL: postgresql://fashion:fashion_dev@localhost:5432/fashion_design?schema=public
+      REDIS_URL: redis://127.0.0.1:6379
+      S3_ACCESS_KEY_ID: fashion_minio
+      S3_BUCKET: fashion-assets
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_FORCE_PATH_STYLE: "true"
+      S3_HEALTHCHECK_OBJECT_KEY: .health/ready
+      S3_REGION: us-east-1
+      S3_SECRET_ACCESS_KEY: fashion_minio_dev_secret
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,8 +40,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
       - name: Lint
         run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Validate database schema
+        run: pnpm db:validate
+
+      - name: Start integration infrastructure
+        run: |
+          docker compose up -d --wait postgres redis minio
+          docker compose run --rm minio-init
+
+      - name: Apply migrations to ephemeral database
+        run: pnpm db:deploy
+
+      - name: Test applications and workers
+        run: pnpm test
+
+      - name: Test database package
+        run: pnpm db:test
+
+      - name: Verify private file pipeline
+        run: pnpm verify:file-pipeline
+
+      - name: Build production artifacts
+        run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser contract tests
+        run: pnpm test:e2e
+
+      - name: Stop integration infrastructure
+        if: always()
+        run: docker compose down -v

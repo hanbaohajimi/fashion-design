@@ -2,6 +2,8 @@ import {
   pipeline,
   type ImageFeatureExtractionPipelineType,
 } from "@huggingface/transformers";
+import sharp from "sharp";
+import type { ThumbnailStorage } from "./storage";
 
 const DEFAULT_CLIP_MODEL = "Xenova/clip-vit-base-patch32";
 const createImageFeatureExtractor = pipeline as unknown as (
@@ -17,9 +19,11 @@ export interface ImageEmbedder {
 export class ClipImageEmbedder implements ImageEmbedder {
   private extractor: Promise<ImageFeatureExtractionPipelineType> | undefined;
 
+  constructor(private readonly storage?: Pick<ThumbnailStorage, "get">) {}
+
   async embed(imageUrl: string): Promise<readonly number[]> {
     const extractor = await this.getExtractor();
-    const tensor = await extractor(imageUrl);
+    const tensor = await extractor(await this.resolveImage(imageUrl));
     const values = Array.from(tensor.data, (value) => Number(value));
     const magnitude = Math.sqrt(
       values.reduce((sum, value) => sum + value * value, 0),
@@ -28,6 +32,20 @@ export class ClipImageEmbedder implements ImageEmbedder {
       throw new Error("CLIP 返回了无效的图像特征");
     }
     return values.map((value) => value / magnitude);
+  }
+
+  private async resolveImage(imageUrl: string): Promise<string> {
+    if (!imageUrl.startsWith("s3://")) return imageUrl;
+    if (!this.storage) {
+      throw new Error("私有系列资产缺少对象存储读取器");
+    }
+    const body = await this.storage.get(imageUrl.slice("s3://".length));
+    const metadata = await sharp(body, { failOn: "error" }).metadata();
+    if (!metadata.format) {
+      throw new Error("无法识别私有系列资产的图片格式");
+    }
+    const mimeType = `image/${metadata.format}`;
+    return `data:${mimeType};base64,${body.toString("base64")}`;
   }
 
   private getExtractor(): Promise<ImageFeatureExtractionPipelineType> {

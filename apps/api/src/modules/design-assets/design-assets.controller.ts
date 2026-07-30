@@ -7,7 +7,9 @@ import {
   Param,
   Post,
   Query,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
 
 import type { AuthenticatedUser } from "../auth/auth.types";
@@ -38,6 +40,30 @@ export class DesignAssetsController {
       });
     }
     return this.assets.versions(user.userId, assetId, cursor, parsed.data);
+  }
+
+  @Get(":id/content")
+  async content(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") assetId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    response.redirect(
+      307,
+      await this.assets.downloadUrl(user.userId, assetId, "content"),
+    );
+  }
+
+  @Get(":id/thumbnail")
+  async thumbnail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") assetId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    response.redirect(
+      307,
+      await this.assets.downloadUrl(user.userId, assetId, "thumbnail"),
+    );
   }
 
   @Post(":id/restore")

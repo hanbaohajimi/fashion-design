@@ -8,9 +8,7 @@ const upsertPatchSchema = z.object({
   record: jsonObjectSchema,
   role: z.string().trim().min(1).max(64),
   roleConfidence: z.number().min(0).max(1).nullable().optional(),
-  roleInferenceState: z
-    .enum(["none", "pending", "ready", "failed"])
-    .optional(),
+  roleInferenceState: z.enum(["none", "pending", "ready", "failed"]).optional(),
   roleLabel: z.string().trim().min(1).max(64).nullable().optional(),
   roleSource: z.enum(["default", "inferred", "manual"]).optional(),
   shapeId: shapeIdSchema,
@@ -24,12 +22,15 @@ const deletePatchSchema = z.object({
 
 export const boardPatchSchema = z
   .object({
+    baseRevision: z.number().int().nonnegative(),
     batchId: z.string().uuid(),
     patches: z
-      .array(z.discriminatedUnion("deleted", [
-        upsertPatchSchema.extend({ deleted: z.literal(false) }),
-        deletePatchSchema,
-      ]))
+      .array(
+        z.discriminatedUnion("deleted", [
+          upsertPatchSchema.extend({ deleted: z.literal(false) }),
+          deletePatchSchema,
+        ]),
+      )
       .max(500),
     snapshot: jsonObjectSchema,
   })

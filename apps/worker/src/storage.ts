@@ -6,6 +6,7 @@ import {
 } from "@aws-sdk/client-s3";
 
 export interface ThumbnailStorage {
+  delete(objectKey: string): Promise<void>;
   get(objectKey: string): Promise<Buffer>;
   put(objectKey: string, body: Buffer, contentType: string): Promise<void>;
 }

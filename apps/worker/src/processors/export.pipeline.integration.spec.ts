@@ -64,7 +64,7 @@ describe("真实对象存储导出流水线", () => {
                     id: assetId,
                     operation: DesignAssetOperation.GENERATED,
                     rootAssetId: assetId,
-                    url: `http://127.0.0.1:9000/fashion-assets/${sourceKey}`,
+                    url: `s3://${sourceKey}`,
                     width: 2_400,
                     height: 1_800,
                   },

@@ -83,6 +83,9 @@ function setup() {
   const generation = {
     createForCollection: vi.fn(),
   };
+  const storage = {
+    createDownloadUrl: vi.fn(),
+  };
   return {
     database,
     extractor,
@@ -91,6 +94,7 @@ function setup() {
       database as never,
       extractor,
       generation as never,
+      storage as never,
     ),
   };
 }
@@ -173,10 +177,15 @@ describe("CollectionsService", () => {
     );
     generation.createForCollection.mockResolvedValue({ taskId: "task-1" });
 
-    const created = await service.createLook("user-1", "collection-1", {
-      prompt: "增加不对称门襟",
-      variationAxis: "detail",
-    });
+    const created = await service.createLook(
+      "user-1",
+      "collection-1",
+      {
+        prompt: "增加不对称门襟",
+        variationAxis: "detail",
+      },
+      "collection-look-1",
+    );
 
     expect(created).toEqual({ taskId: "task-1" });
     expect(generation.createForCollection).toHaveBeenCalledWith(
@@ -195,6 +204,7 @@ describe("CollectionsService", () => {
         collectionId: "collection-1",
         variationAxis: "DETAIL",
       },
+      "collection-look-1",
     );
   });
 
@@ -210,9 +220,14 @@ describe("CollectionsService", () => {
     );
 
     await expect(
-      service.createLook("user-1", "collection-1", {
-        variationAxis: "silhouette",
-      }),
+      service.createLook(
+        "user-1",
+        "collection-1",
+        {
+          variationAxis: "silhouette",
+        },
+        "collection-look-2",
+      ),
     ).rejects.toMatchObject({
       response: { code: "VARIATION_AXIS_LOCKED" },
     });

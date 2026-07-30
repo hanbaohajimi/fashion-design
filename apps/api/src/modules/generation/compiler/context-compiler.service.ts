@@ -1,4 +1,4 @@
-import type { PrismaClient, Prisma } from "@fashion/db";
+import { FileStatus, type PrismaClient, type Prisma } from "@fashion/db";
 import {
   ForbiddenException,
   Inject,
@@ -13,12 +13,19 @@ import type {
   SemanticImageChannel,
 } from "./compiler.types";
 import { compilePaletteColor } from "./palette-channel";
+import { S3FileStorage } from "../../files/storage.service";
 
 export const COMPILER_DB = Symbol("COMPILER_DB");
 export const CONTEXT_MODEL = Symbol("CONTEXT_MODEL");
 
-type CompilerDatabase = Pick<PrismaClient, "project">;
+type CompilerDatabase = Pick<PrismaClient, "designAsset" | "project">;
 type BoardElement = {
+  fileAsset: {
+    objectKey: string;
+    ownerId: string;
+    status: FileStatus;
+    thumbnail1024Key: string | null;
+  } | null;
   id: string;
   role: string;
   roleLabel: string | null;
@@ -34,6 +41,7 @@ const COMMON_NEGATIVE_TERMS = [
   "watermark",
   "low-resolution fabric texture",
 ] as const;
+const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
 
 function propsOf(record: Prisma.JsonValue | null): Record<string, unknown> {
   if (!record || Array.isArray(record) || typeof record !== "object") return {};
@@ -62,7 +70,9 @@ function safeRemoteUrl(value: unknown): string | null {
 }
 
 function unique(values: readonly (string | null)[]): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+  return [
+    ...new Set(values.filter((value): value is string => Boolean(value))),
+  ];
 }
 
 @Injectable()
@@ -70,6 +80,8 @@ export class ContextCompilerService {
   constructor(
     @Inject(COMPILER_DB) private readonly database: CompilerDatabase,
     @Inject(CONTEXT_MODEL) private readonly model: ContextModelGateway,
+    @Inject(S3FileStorage)
+    private readonly storage: Pick<S3FileStorage, "createDownloadUrl">,
   ) {}
 
   async compile(
@@ -94,38 +106,56 @@ export class ContextCompilerService {
         .filter((element) => element.role === "note")
         .map((element) => cleanText(propsOf(element.record).text, 500)),
     );
-    const styleReferences = elements
-      .filter((element) => element.role === "style_ref")
-      .map((element) => this.referenceFrom(element))
-      .filter((value): value is ImageReference => Boolean(value));
-    const silhouetteReferences = elements
-      .filter((element) => element.role === "silhouette_ref")
-      .map((element) => {
-        const imageUrl = safeRemoteUrl(propsOf(element.record).url);
-        return imageUrl
-          ? { edgeImageUrl: imageUrl, elementId: element.id }
-          : null;
-      })
-      .filter(
-        (
-          value,
-        ): value is { edgeImageUrl: string; elementId: string } =>
-          Boolean(value),
-      );
+    const styleReferences = (
+      await Promise.all(
+        elements
+          .filter((element) => element.role === "style_ref")
+          .map((element) => this.referenceFrom(element, userId, projectId)),
+      )
+    ).filter((value): value is ImageReference => Boolean(value));
+    const silhouetteReferences = (
+      await Promise.all(
+        elements
+          .filter((element) => element.role === "silhouette_ref")
+          .map(async (element) => {
+            const reference = await this.referenceFrom(
+              element,
+              userId,
+              projectId,
+            );
+            return reference
+              ? {
+                  edgeImageUrl: reference.imageUrl,
+                  elementId: element.id,
+                }
+              : null;
+          }),
+      )
+    ).filter((value): value is { edgeImageUrl: string; elementId: string } =>
+      Boolean(value),
+    );
     const fabricReferences = await this.compileSemanticReferences(
       elements.filter((element) => element.role === "fabric_ref"),
       "fabric",
+      userId,
+      projectId,
     );
     const detailReferences = await this.compileSemanticReferences(
       elements.filter((element) => element.role === "detail_ref"),
       "detail",
+      userId,
+      projectId,
     );
     const patternReferences = fabricReferences.filter((reference) =>
-      reference.labels.some((label) => /pattern|print|motif|纹样|图案/i.test(label)),
+      reference.labels.some((label) =>
+        /pattern|print|motif|纹样|图案/i.test(label),
+      ),
     );
     const avoidReferences = await this.compileSemanticReferences(
       elements.filter((element) => element.role === "avoid"),
       "avoid",
+      userId,
+      projectId,
     );
     const avoidLabels = unique(
       avoidReferences.flatMap((reference) => [...reference.labels]),
@@ -210,7 +240,20 @@ export class ContextCompilerService {
             deletedAt: null,
             ...(shapeIds ? { shapeId: { in: [...shapeIds] } } : {}),
           },
-          select: { id: true, record: true, role: true, roleLabel: true },
+          select: {
+            fileAsset: {
+              select: {
+                objectKey: true,
+                ownerId: true,
+                status: true,
+                thumbnail1024Key: true,
+              },
+            },
+            id: true,
+            record: true,
+            role: true,
+            roleLabel: true,
+          },
         },
       },
     });
@@ -229,8 +272,16 @@ export class ContextCompilerService {
     return project.boardElements;
   }
 
-  private referenceFrom(element: BoardElement): ImageReference | null {
-    const imageUrl = safeRemoteUrl(propsOf(element.record).url);
+  private async referenceFrom(
+    element: BoardElement,
+    userId: string,
+    projectId: string | undefined,
+  ): Promise<ImageReference | null> {
+    const imageUrl = await this.resolveElementImageUrl(
+      element,
+      userId,
+      projectId,
+    );
     if (!imageUrl) return null;
     const label = cleanText(element.roleLabel);
     return {
@@ -243,10 +294,12 @@ export class ContextCompilerService {
   private async compileSemanticReferences(
     elements: readonly BoardElement[],
     channel: SemanticImageChannel,
+    userId: string,
+    projectId: string | undefined,
   ): Promise<ImageReference[]> {
     return Promise.all(
       elements.slice(0, 20).map(async (element) => {
-        const reference = this.referenceFrom(element);
+        const reference = await this.referenceFrom(element, userId, projectId);
         if (!reference) return null;
         if (reference.labels.length) return reference;
         try {
@@ -266,7 +319,50 @@ export class ContextCompilerService {
     );
   }
 
+  private async resolveElementImageUrl(
+    element: BoardElement,
+    userId: string,
+    projectId: string | undefined,
+  ): Promise<string | null> {
+    if (
+      element.fileAsset?.ownerId === userId &&
+      element.fileAsset.status === FileStatus.READY
+    ) {
+      return this.storage.createDownloadUrl(
+        element.fileAsset.thumbnail1024Key ?? element.fileAsset.objectKey,
+        REFERENCE_URL_TTL_SECONDS,
+      );
+    }
+
+    const props = propsOf(element.record);
+    const assetId =
+      typeof props.assetId === "string" ? props.assetId.trim() : "";
+    if (assetId && projectId) {
+      const asset = await this.database.designAsset.findFirst({
+        where: {
+          archivedAt: null,
+          id: assetId,
+          projectId,
+          project: { workspace: { ownerId: userId } },
+        },
+        select: { url: true },
+      });
+      if (asset) {
+        const objectKey = objectKeyFrom(asset.url);
+        return objectKey
+          ? this.storage.createDownloadUrl(objectKey, REFERENCE_URL_TTL_SECONDS)
+          : safeRemoteUrl(asset.url);
+      }
+    }
+
+    return safeRemoteUrl(props.url);
+  }
+
   private joinPrompt(parts: readonly (string | null)[]): string {
     return parts.filter((part): part is string => Boolean(part)).join(". ");
   }
+}
+
+function objectKeyFrom(value: string): string | null {
+  return value.startsWith("s3://") ? value.slice("s3://".length) : null;
 }

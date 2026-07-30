@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
-import {
-  SentryGlobalFilter,
-  SentryModule,
-} from "@sentry/nestjs/setup";
+import { SentryGlobalFilter, SentryModule } from "@sentry/nestjs/setup";
 
-import { HealthController } from "./health.controller";
+import {
+  HEALTH_DEPENDENCY_CHECKER,
+  HealthController,
+  InfrastructureHealthChecker,
+} from "./health.controller";
 import { AiModule } from "./modules/ai/ai.module";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -39,6 +40,11 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
   ],
   controllers: [HealthController],
   providers: [
+    InfrastructureHealthChecker,
+    {
+      provide: HEALTH_DEPENDENCY_CHECKER,
+      useExisting: InfrastructureHealthChecker,
+    },
     {
       provide: APP_GUARD,
       useClass: AuthGuard,

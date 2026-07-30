@@ -1,6 +1,7 @@
 import { FileStatus, Prisma, type PrismaClient } from "@fashion/db";
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -80,7 +81,7 @@ export class FilesService {
         },
       },
     });
-    const deduplicated = Boolean(file);
+    let deduplicated = Boolean(file);
 
     if (!file) {
       const id = randomUUID();
@@ -111,6 +112,7 @@ export class FilesService {
             },
           },
         });
+        deduplicated = Boolean(file);
       }
     }
 
@@ -125,14 +127,29 @@ export class FilesService {
       });
     }
 
+    if (file.status === FileStatus.FAILED) {
+      await this.database.fileAsset.updateMany({
+        where: {
+          id: file.id,
+          ownerId: userId,
+          status: FileStatus.FAILED,
+          updatedAt: file.updatedAt,
+        },
+        data: {
+          completedAt: null,
+          errorMessage: null,
+          height: null,
+          status: FileStatus.PENDING,
+          thumbnail1024Key: null,
+          thumbnail256Key: null,
+          width: null,
+        },
+      });
+      file = await this.assertFileOwnership(userId, file.id);
+    }
+
     const uploadRequired =
       file.status === FileStatus.PENDING || file.status === FileStatus.FAILED;
-    if (file.status === FileStatus.FAILED) {
-      file = await this.database.fileAsset.update({
-        where: { id: file.id },
-        data: { errorMessage: null, status: FileStatus.PENDING },
-      });
-    }
 
     return {
       deduplicated,
@@ -154,11 +171,11 @@ export class FilesService {
 
   async complete(userId: string, fileId: string) {
     const file = await this.assertFileOwnership(userId, fileId);
-    if (
-      file.status === FileStatus.READY ||
-      file.status === FileStatus.PROCESSING
-    ) {
+    if (file.status === FileStatus.READY) {
       return this.toResponse(file);
+    }
+    if (file.status === FileStatus.PROCESSING) {
+      return this.reconcileThumbnailJob(userId, file);
     }
 
     const head = await this.storage.head(file.objectKey).catch(() => {
@@ -194,47 +211,94 @@ export class FilesService {
       );
     }
     if (detectedMime !== file.mimeType) {
-      await Promise.all([
-        this.storage.delete(file.objectKey).catch(() => undefined),
-        this.database.fileAsset.update({
-          where: { id: file.id },
-          data: {
-            errorMessage: "文件内容不是有效图片或与声明类型不一致",
-            status: FileStatus.FAILED,
-          },
-        }),
-      ]);
+      const invalidated = await this.database.fileAsset.updateMany({
+        where: {
+          id: file.id,
+          ownerId: userId,
+          status: FileStatus.PENDING,
+          updatedAt: file.updatedAt,
+        },
+        data: {
+          errorMessage: "文件内容不是有效图片或与声明类型不一致",
+          status: FileStatus.FAILED,
+        },
+      });
+      if (invalidated.count === 0) {
+        const current = await this.assertFileOwnership(userId, fileId);
+        if (current.status === FileStatus.READY) {
+          return this.toResponse(current);
+        }
+        if (current.status === FileStatus.PROCESSING) {
+          return this.reconcileThumbnailJob(userId, current);
+        }
+        throw new ConflictException({
+          code: "UPLOAD_STATE_CHANGED",
+          message: "文件状态已发生变化，请重新获取文件状态后再试",
+        });
+      }
+      await this.storage.delete(file.objectKey).catch(() => undefined);
       throw new BadRequestException({
         code: "INVALID_IMAGE_CONTENT",
         message: "文件内容不是有效图片或与声明类型不一致",
       });
     }
 
-    const processing = await this.database.fileAsset.update({
-      where: { id: file.id },
+    const completedAt = new Date();
+    const claim = await this.database.fileAsset.updateMany({
+      where: {
+        id: file.id,
+        ownerId: userId,
+        status: FileStatus.PENDING,
+        updatedAt: file.updatedAt,
+      },
       data: {
-        completedAt: new Date(),
+        completedAt,
         errorMessage: null,
         status: FileStatus.PROCESSING,
       },
     });
-    try {
-      await this.thumbnailJobs.enqueue(file.id);
-    } catch (error) {
-      await this.database.fileAsset.update({
-        where: { id: file.id },
-        data: {
-          errorMessage: "缩略图任务入队失败",
-          status: FileStatus.FAILED,
-        },
+    if (claim.count === 0) {
+      const current = await this.assertFileOwnership(userId, fileId);
+      if (current.status === FileStatus.READY) {
+        return this.toResponse(current);
+      }
+      if (current.status === FileStatus.PROCESSING) {
+        return this.reconcileThumbnailJob(userId, current);
+      }
+      throw new ConflictException({
+        code: "UPLOAD_STATE_CHANGED",
+        message: "文件状态已发生变化，请重新获取文件状态后再试",
       });
-      throw error;
     }
-    return this.toResponse(processing);
+
+    const processing = {
+      ...file,
+      completedAt,
+      errorMessage: null,
+      status: FileStatus.PROCESSING,
+    };
+    return this.reconcileThumbnailJob(userId, processing);
   }
 
   async get(userId: string, fileId: string) {
     return this.toResponse(await this.assertFileOwnership(userId, fileId));
+  }
+
+  async thumbnailUrl(
+    userId: string,
+    fileId: string,
+    size: "256" | "1024",
+  ): Promise<string> {
+    const file = await this.assertFileOwnership(userId, fileId);
+    const objectKey =
+      size === "1024" ? file.thumbnail1024Key : file.thumbnail256Key;
+    if (!objectKey) {
+      throw new NotFoundException({
+        code: "THUMBNAIL_NOT_READY",
+        message: "缩略图尚未生成",
+      });
+    }
+    return this.storage.createDownloadUrl(objectKey, 60);
   }
 
   private async assertProjectOwnership(
@@ -281,6 +345,45 @@ export class FilesService {
     return file;
   }
 
+  private async reconcileThumbnailJob(
+    userId: string,
+    file: NonNullable<FileRecord>,
+  ) {
+    try {
+      await this.thumbnailJobs.enqueue(file.id);
+    } catch (error) {
+      await this.database.fileAsset.updateMany({
+        where: {
+          completedAt: file.completedAt,
+          id: file.id,
+          ownerId: userId,
+          status: FileStatus.PROCESSING,
+        },
+        data: {
+          errorMessage: "缩略图任务入队状态未知，请重试完成请求",
+        },
+      });
+      throw new ServiceUnavailableException(
+        {
+          code: "THUMBNAIL_QUEUE_UNAVAILABLE",
+          message: "缩略图任务暂时无法入队，请稍后重试完成请求",
+        },
+        { cause: error },
+      );
+    }
+
+    await this.database.fileAsset.updateMany({
+      where: {
+        completedAt: file.completedAt,
+        id: file.id,
+        ownerId: userId,
+        status: FileStatus.PROCESSING,
+      },
+      data: { errorMessage: null },
+    });
+    return this.toResponse(await this.assertFileOwnership(userId, file.id));
+  }
+
   private toResponse(file: NonNullable<FileRecord>) {
     return {
       error: file.errorMessage,
@@ -291,10 +394,10 @@ export class FilesService {
       size: file.sizeBytes,
       status: file.status,
       thumbnail1024Url: file.thumbnail1024Key
-        ? this.storage.publicUrl(file.thumbnail1024Key)
+        ? `/api/files/${encodeURIComponent(file.id)}/thumbnail/1024`
         : null,
       thumbnail256Url: file.thumbnail256Key
-        ? this.storage.publicUrl(file.thumbnail256Key)
+        ? `/api/files/${encodeURIComponent(file.id)}/thumbnail/256`
         : null,
       width: file.width,
     };

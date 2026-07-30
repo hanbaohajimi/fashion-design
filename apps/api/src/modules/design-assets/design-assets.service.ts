@@ -11,10 +11,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { S3FileStorage } from "../files/storage.service";
 
 export const DESIGN_ASSETS_DB = Symbol("DESIGN_ASSETS_DB");
 
-type DesignAssetDatabase = Pick<PrismaClient, "$transaction" | "designAsset">;
+type DesignAssetDatabase = Pick<PrismaClient, "designAsset">;
 
 interface OwnedDesignAsset extends DesignAsset {
   readonly project: {
@@ -44,7 +45,21 @@ export class DesignAssetsService {
   constructor(
     @Inject(DESIGN_ASSETS_DB)
     private readonly database: DesignAssetDatabase,
+    @Inject(S3FileStorage)
+    private readonly storage: S3FileStorage,
   ) {}
+
+  async downloadUrl(
+    userId: string,
+    assetId: string,
+    variant: "content" | "thumbnail",
+  ): Promise<string> {
+    const asset = await this.ownedAsset(userId, assetId);
+    const stored =
+      variant === "thumbnail" ? (asset.thumbnailUrl ?? asset.url) : asset.url;
+    const objectKey = objectKeyFrom(stored);
+    return objectKey ? this.storage.createDownloadUrl(objectKey, 60) : stored;
+  }
 
   async versions(
     userId: string,
@@ -75,8 +90,7 @@ export class DesignAssetsService {
     const page = records.slice(0, limit);
     return {
       items: page.map((record) => this.toView(record)),
-      nextCursor:
-        records.length > limit ? (page.at(-1)?.id ?? null) : null,
+      nextCursor: records.length > limit ? (page.at(-1)?.id ?? null) : null,
     };
   }
 
@@ -99,25 +113,23 @@ export class DesignAssetsService {
       });
     }
 
-    const restored = await this.database.$transaction((transaction) =>
-      transaction.designAsset.create({
-        data: {
-          id: randomUUID(),
-          archivedAt: null,
-          generationTaskId: null,
-          height: target.height,
-          operation: DesignAssetOperation.RESTORE,
-          parentAssetId: current.id,
-          projectId: current.projectId,
-          restoredFromAssetId: target.id,
-          rootAssetId: current.rootAssetId,
-          seed: target.seed,
-          thumbnailUrl: target.thumbnailUrl,
-          url: target.url,
-          width: target.width,
-        },
-      }),
-    );
+    const restored = await this.database.designAsset.create({
+      data: {
+        id: randomUUID(),
+        archivedAt: null,
+        generationTaskId: null,
+        height: target.height,
+        operation: DesignAssetOperation.RESTORE,
+        parentAssetId: current.id,
+        projectId: current.projectId,
+        restoredFromAssetId: target.id,
+        rootAssetId: current.rootAssetId,
+        seed: target.seed,
+        thumbnailUrl: target.thumbnailUrl,
+        url: target.url,
+        width: target.width,
+      },
+    });
     return this.toView(restored);
   }
 
@@ -156,15 +168,30 @@ export class DesignAssetsService {
       createdAt: asset.createdAt,
       height: asset.height,
       id: asset.id,
-      operation:
-        asset.operation.toLowerCase() as DesignAssetView["operation"],
+      operation: asset.operation.toLowerCase() as DesignAssetView["operation"],
       parentAssetId: asset.parentAssetId,
       projectId: asset.projectId,
       restoredFromAssetId: asset.restoredFromAssetId,
       seed: asset.seed === null ? null : Number(asset.seed),
-      thumbnailUrl: asset.thumbnailUrl,
-      url: asset.url,
+      thumbnailUrl: asset.thumbnailUrl
+        ? displayAssetUrl(asset.id, "thumbnail", asset.thumbnailUrl)
+        : null,
+      url: displayAssetUrl(asset.id, "content", asset.url),
       width: asset.width,
     };
   }
+}
+
+function objectKeyFrom(value: string): string | null {
+  return value.startsWith("s3://") ? value.slice("s3://".length) : null;
+}
+
+function displayAssetUrl(
+  assetId: string,
+  variant: "content" | "thumbnail",
+  stored: string,
+): string {
+  return objectKeyFrom(stored)
+    ? `/api/design-assets/${encodeURIComponent(assetId)}/${variant}`
+    : stored;
 }

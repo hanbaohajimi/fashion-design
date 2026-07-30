@@ -7,10 +7,13 @@ import type { Project } from "./project-types";
 import styles from "./projects.module.css";
 
 interface ProjectCardProps {
+  readonly duplicating: boolean;
   readonly index: number;
   readonly onArchive: (project: Project) => Promise<void>;
   readonly onDelete: (project: Project) => Promise<void>;
+  readonly onDuplicate: (project: Project) => Promise<void>;
   readonly onRename: (project: Project, name: string) => Promise<void>;
+  readonly onRestore: (project: Project) => Promise<void>;
   readonly project: Project;
 }
 
@@ -31,10 +34,13 @@ function formatDate(value: string): string {
 }
 
 export function ProjectCard({
+  duplicating,
   index,
   onArchive,
   onDelete,
+  onDuplicate,
   onRename,
+  onRestore,
   project,
 }: ProjectCardProps) {
   const [renaming, setRenaming] = useState(false);
@@ -136,10 +142,22 @@ export function ProjectCard({
                   重命名
                 </button>
                 <button
-                  onClick={() => void onArchive(project)}
+                  aria-busy={duplicating}
+                  disabled={duplicating}
+                  onClick={() => void onDuplicate(project)}
                   type="button"
                 >
-                  归档
+                  {duplicating ? "复制中…" : "创建副本"}
+                </button>
+                <button
+                  onClick={() =>
+                    void (project.archived
+                      ? onRestore(project)
+                      : onArchive(project))
+                  }
+                  type="button"
+                >
+                  {project.archived ? "恢复项目" : "归档"}
                 </button>
                 <button
                   className={styles.deleteAction}

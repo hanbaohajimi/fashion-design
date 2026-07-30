@@ -19,12 +19,36 @@ export interface GenerationCandidate {
 }
 
 export interface GenerationTaskDetail {
-  readonly id: string;
-  readonly status: GenerationStatus;
-  readonly output: unknown;
-  readonly error: { readonly code: string; readonly message: string } | null;
   readonly createdAt: string;
+  readonly error: { readonly code: string; readonly message: string } | null;
+  readonly id: string;
+  readonly output: unknown;
+  readonly request: PersistedGenerationRequest | null;
+  readonly status: GenerationStatus;
+  readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly updatedAt: string;
+}
+
+export interface GenerationTaskList {
+  readonly items: readonly GenerationTaskDetail[];
+  readonly nextCursor: string | null;
+}
+
+export interface PersistedGenerationRequest {
+  readonly cfg: number;
+  readonly height: number;
+  readonly maskImageUrl?: string;
+  readonly negativePrompt?: string;
+  readonly parentAssetId?: string;
+  readonly projectId?: string;
+  readonly prompt: string;
+  readonly referenceImageUrl?: string;
+  readonly seed?: number;
+  readonly shapeIds?: readonly string[];
+  readonly steps: number;
+  readonly strength?: number;
+  readonly taskType: "t2i" | "i2i" | "inpaint";
+  readonly width: number;
 }
 
 export interface GenerationTaskItem {
@@ -34,6 +58,7 @@ export interface GenerationTaskItem {
   readonly error: string | null;
   readonly id: string;
   readonly prompt: string;
+  readonly request: GenerationStartRequest;
   readonly status: GenerationStatus;
   readonly referenceImageUrl?: string;
   readonly seed?: number;
@@ -49,12 +74,20 @@ export interface GenerationParameters {
   readonly width: number;
 }
 
+export interface GenerationStartRequest {
+  readonly parameters: GenerationParameters;
+  readonly projectId: string;
+  readonly prompt: string;
+  readonly maskImageUrl?: string;
+  readonly parentAssetId?: string;
+  readonly referenceImageUrl?: string;
+  readonly shapeIds: readonly string[];
+  readonly strength?: number;
+  readonly taskType?: "t2i" | "i2i" | "inpaint";
+}
+
 export type DesignAssetOperation =
-  | "generated"
-  | "variation"
-  | "inpaint"
-  | "upscale"
-  | "restore";
+  "generated" | "variation" | "inpaint" | "upscale" | "restore";
 
 export interface DesignAssetVersion {
   readonly archivedAt: string | null;

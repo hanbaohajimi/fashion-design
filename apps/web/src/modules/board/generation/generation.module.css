@@ -18,6 +18,42 @@
   animation: bar-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.generationNotice {
+  position: fixed;
+  z-index: 1100;
+  top: 76px;
+  left: 50%;
+  display: flex;
+  width: min(520px, calc(100vw - 32px));
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #24251f;
+  padding: 8px 8px 8px 14px;
+  gap: 12px;
+  background: #fffdf7;
+  box-shadow: 5px 5px 0 rgb(24 25 21 / 14%);
+  color: #24251f;
+  font-size: 13px;
+  line-height: 1.45;
+  pointer-events: all;
+  transform: translate3d(-50%, 0, 0);
+}
+
+.generationNotice button {
+  min-width: 54px;
+  min-height: 30px;
+  border: 1px solid #24251f;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.generationNotice button:focus-visible {
+  outline: 3px solid #e9522c;
+  outline-offset: 2px;
+}
+
 .generationBarTopline {
   display: flex;
   min-height: 35px;
@@ -609,7 +645,7 @@
 
 .maskActions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .maskActions button {
@@ -1723,7 +1759,7 @@
   align-items: center;
   border-bottom: 1px solid rgb(36 37 31 / 16%);
   padding: 7px 9px;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
   gap: 8px;
 }
 
@@ -1769,6 +1805,21 @@
 .taskTray time {
   color: #747168;
   font-size: 8px;
+}
+
+.taskTray li > button {
+  background: transparent;
+  border: 1px solid rgb(24 25 21 / 24%);
+  color: #181915;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 8px;
+}
+
+.taskTray li > button:hover {
+  background: #181915;
+  color: #fff;
 }
 
 .exportBackdrop {
@@ -2057,6 +2108,25 @@
   cursor: wait;
 }
 
+.generationBar :where(button, input, select, summary):focus-visible,
+.candidateDock button:focus-visible,
+.lightbox :where(button, input, textarea, a, summary):focus-visible,
+.collectionDrawer :where(button, input, textarea, a, summary):focus-visible,
+.taskTray button:focus-visible,
+.exportModal :where(button, input, textarea, a, summary):focus-visible {
+  outline: 3px solid #e9522c;
+  outline-offset: 2px;
+}
+
+.candidateImageButton:focus-visible {
+  outline-offset: -4px;
+}
+
+.axisSelector label:has(input:focus-visible) {
+  outline: 3px solid #e9522c;
+  outline-offset: 2px;
+}
+
 @keyframes bar-enter {
   from {
     opacity: 0;
@@ -2112,21 +2182,50 @@
 }
 
 @media (max-width: 820px) {
+  .generationNotice {
+    top: 68px;
+    width: calc(100vw - 24px);
+  }
+
   .generationBar {
     top: auto;
     right: 12px;
-    bottom: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
     left: 12px;
     width: auto;
+    max-height: 36dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     transform: none;
   }
 
   .candidateDock {
+    top: calc(72px + 18dvh + 8px);
     right: 12px;
-    bottom: 76px;
+    bottom: calc(36dvh + 24px);
     left: 12px;
+    display: grid;
     width: auto;
+    max-height: none;
     min-width: 0;
+    overflow: hidden;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .candidateGrid {
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+  }
+
+  .candidateCard {
+    min-height: 200px;
+    grid-template-rows: minmax(140px, 1fr) auto;
+  }
+
+  .candidateImageButton,
+  .candidateImageButton > img {
+    min-height: 140px;
   }
 
   .taskTray {
@@ -2134,6 +2233,12 @@
     right: 12px;
     bottom: auto;
     width: min(310px, calc(100vw - 24px));
+    max-height: 18dvh;
+    overflow: hidden;
+  }
+
+  .taskTray ol {
+    max-height: calc(18dvh - 38px);
   }
 
   .lightboxBackdrop {
@@ -2266,6 +2371,26 @@
   .inpaintControls {
     border-top: 1px solid #24251f;
     border-left: 0;
+  }
+}
+
+@media (max-width: 820px) and (max-height: 640px) {
+  .generationBar {
+    max-height: 34dvh;
+  }
+
+  .candidateDock {
+    top: calc(60px + 16dvh + 8px);
+    bottom: calc(34dvh + 20px);
+  }
+
+  .taskTray {
+    top: 60px;
+    max-height: 16dvh;
+  }
+
+  .taskTray ol {
+    max-height: calc(16dvh - 38px);
   }
 }
 

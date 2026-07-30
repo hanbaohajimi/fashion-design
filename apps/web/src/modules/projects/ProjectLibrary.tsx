@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthProvider";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { EmptyState } from "./EmptyState";
 import { ProjectGrid } from "./ProjectGrid";
-import type { Project } from "./project-types";
+import type { Project, ProjectStatusFilter } from "./project-types";
 import styles from "./projects.module.css";
 import {
   useCreateProject,
   useDeleteProject,
+  useDuplicateProject,
   useProjects,
   useUpdateProject,
 } from "./use-projects";
@@ -21,15 +22,32 @@ function errorMessage(error: unknown): string {
 }
 
 export function ProjectLibrary() {
-  const { error: authError, loading: authLoading, session } = useAuth();
+  const {
+    error: authError,
+    loading: authLoading,
+    refresh: refreshAuth,
+    session,
+  } = useAuth();
   const [search, setSearch] = useState("");
+  const [projectStatus, setProjectStatus] =
+    useState<ProjectStatusFilter>("active");
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [duplicatingProjectIds, setDuplicatingProjectIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const duplicateFlightsRef = useRef(new Map<string, Promise<void>>());
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search.trim());
-  const projectsQuery = useProjects(deferredSearch, Boolean(session));
+  const projectsQuery = useProjects(
+    deferredSearch,
+    projectStatus,
+    Boolean(session),
+  );
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
+  const duplicateMutation = useDuplicateProject();
   const projects = useMemo(
     () => projectsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [projectsQuery.data],
@@ -38,15 +56,11 @@ export function ProjectLibrary() {
 
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
-
-    try {
-      await createMutation.mutateAsync({
-        idempotencyKey: crypto.randomUUID(),
-        name,
-      });
-    } catch (error) {
-      setNotice(errorMessage(error));
-    }
+    await createMutation.mutateAsync({
+      idempotencyKey: crypto.randomUUID(),
+      name,
+    });
+    setProjectStatus("active");
   };
 
   const runRename = async (
@@ -78,6 +92,19 @@ export function ProjectLibrary() {
     }
   };
 
+  const runRestore = async (project: Project): Promise<void> => {
+    setNotice(null);
+
+    try {
+      await updateMutation.mutateAsync({
+        id: project.id,
+        input: { archived: false },
+      });
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  };
+
   const runDelete = async (project: Project): Promise<void> => {
     setNotice(null);
 
@@ -86,6 +113,44 @@ export function ProjectLibrary() {
     } catch (error) {
       setNotice(errorMessage(error));
     }
+  };
+
+  const runDuplicate = async (project: Project): Promise<void> => {
+    const existingFlight = duplicateFlightsRef.current.get(project.id);
+
+    if (existingFlight) {
+      return existingFlight;
+    }
+
+    setNotice(null);
+    setDuplicatingProjectIds((current) => {
+      const next = new Set(current);
+      next.add(project.id);
+      return next;
+    });
+
+    const idempotencyKey = crypto.randomUUID();
+    const flight = duplicateMutation
+      .mutateAsync({
+        idempotencyKey,
+        projectId: project.id,
+      })
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        setNotice(errorMessage(error));
+      })
+      .finally(() => {
+        duplicateFlightsRef.current.delete(project.id);
+
+        setDuplicatingProjectIds((current) => {
+          const next = new Set(current);
+          next.delete(project.id);
+          return next;
+        });
+      });
+
+    duplicateFlightsRef.current.set(project.id, flight);
+    return flight;
   };
 
   if (authLoading) {
@@ -100,7 +165,25 @@ export function ProjectLibrary() {
   if (authError || !session) {
     return (
       <main className={styles.statePage}>
-        <p role="alert">{authError ?? "登录状态已失效，正在返回登录页。"}</p>
+        <section className={styles.stateCard}>
+          <span>SESSION / INTERRUPTED</span>
+          <h1>暂时无法打开项目库</h1>
+          <p role="alert">
+            {authError ?? "登录状态已失效，请重新登录后继续。"}
+          </p>
+          <div className={styles.stateActions}>
+            <button
+              className={styles.primaryButton}
+              onClick={() => void refreshAuth()}
+              type="button"
+            >
+              重试认证
+            </button>
+            <Link className={styles.secondaryButton} href="/login">
+              前往登录
+            </Link>
+          </div>
+        </section>
       </main>
     );
   }
@@ -136,18 +219,46 @@ export function ProjectLibrary() {
       </section>
 
       <section className={styles.toolbar} aria-label="项目工具栏">
+        <div className={styles.statusFilters} aria-label="项目状态">
+          <button
+            aria-pressed={projectStatus === "active"}
+            className={
+              projectStatus === "active"
+                ? styles.statusFilterActive
+                : styles.statusFilter
+            }
+            onClick={() => setProjectStatus("active")}
+            type="button"
+          >
+            进行中
+          </button>
+          <button
+            aria-pressed={projectStatus === "archived"}
+            className={
+              projectStatus === "archived"
+                ? styles.statusFilterActive
+                : styles.statusFilter
+            }
+            onClick={() => setProjectStatus("archived")}
+            type="button"
+          >
+            已归档
+          </button>
+        </div>
         <label className={styles.search}>
           <span className={styles.srOnly}>搜索项目</span>
           <span aria-hidden="true">⌕</span>
           <input
             onChange={(event) => setSearch(event.target.value)}
             placeholder="搜索项目名称"
+            ref={searchInputRef}
             type="search"
             value={search}
           />
         </label>
         <span className={styles.projectCount}>
-          {String(total).padStart(2, "0")} PROJECTS
+          {String(total).padStart(2, "0")}{" "}
+          {projectStatus === "archived" ? "ARCHIVED" : "PROJECTS"}
         </span>
         <button
           className={styles.primaryButton}
@@ -188,9 +299,12 @@ export function ProjectLibrary() {
       ) : projects.length > 0 ? (
         <>
           <ProjectGrid
+            duplicatingProjectIds={duplicatingProjectIds}
             onArchive={runArchive}
             onDelete={runDelete}
+            onDuplicate={runDuplicate}
             onRename={runRename}
+            onRestore={runRestore}
             projects={projects}
           />
           {projectsQuery.hasNextPage ? (
@@ -210,6 +324,11 @@ export function ProjectLibrary() {
         </>
       ) : (
         <EmptyState
+          archived={projectStatus === "archived"}
+          onClearSearch={() => {
+            setSearch("");
+            searchInputRef.current?.focus();
+          }}
           onCreate={() => setCreateOpen(true)}
           searching={Boolean(deferredSearch)}
         />

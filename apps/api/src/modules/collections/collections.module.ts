@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 
 import { SecurityModule } from "../../security/security.module";
 import { GenerationModule } from "../generation/generation.module";
+import { FilesModule } from "../files/files.module";
 import { CollectionsController } from "./collections.controller";
 import {
   COLLECTIONS_DB,
@@ -12,7 +13,7 @@ import {
 import { OpenAiDnaExtractor } from "./dna-extractor";
 
 @Module({
-  imports: [GenerationModule, SecurityModule],
+  imports: [FilesModule, GenerationModule, SecurityModule],
   controllers: [CollectionsController],
   providers: [
     CollectionsService,

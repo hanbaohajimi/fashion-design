@@ -4,7 +4,9 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { DesignAssetsService } from "./design-assets.service";
 
-const service = new DesignAssetsService(prisma);
+const service = new DesignAssetsService(prisma, {
+  createDownloadUrl: async (objectKey: string) => `https://signed.test/${objectKey}`,
+} as never);
 
 describe("DesignAssetsService lineage integration", () => {
   afterAll(async () => {

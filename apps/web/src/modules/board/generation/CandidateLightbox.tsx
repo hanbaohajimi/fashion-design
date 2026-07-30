@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { createCollection } from "./collection-api";
+import { BoardProjectContext } from "../board-context";
+import { collectionKeys, createCollection } from "./collection-api";
+import type { CollectionDetail } from "./collection-types";
 import { CollectionDrawer } from "./CollectionDrawer";
 import { ExportModal } from "./ExportModal";
 import { InpaintPanel } from "./InpaintPanel";
@@ -28,6 +31,8 @@ export function CandidateLightbox({
   readonly onClose: () => void;
   readonly onDiscard: () => void;
 }) {
+  const projectId = useContext(BoardProjectContext);
+  const queryClient = useQueryClient();
   const [activeCandidate, setActiveCandidate] = useState(candidate);
   const [mode, setMode] = useState<"history" | "inpaint" | "view">(initialMode);
   const [toneWarning, setToneWarning] = useState(false);
@@ -36,15 +41,47 @@ export function CandidateLightbox({
   const [collectionError, setCollectionError] = useState<string | null>(null);
   const [creatingCollection, setCreatingCollection] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
+  const collectionTriggerRef = useRef<HTMLButtonElement>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = window.requestAnimationFrame(() => {
+      dialogRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.requestAnimationFrame(() => {
+        if (
+          previouslyFocused?.isConnected &&
+          !previouslyFocused.closest("[inert]")
+        ) {
+          previouslyFocused.focus();
+        }
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (collectionOpen || exportOpen) return;
       if (event.key === "Escape") {
-        if (!collectionOpen && !exportOpen) onClose();
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key === "Tab" && dialogRef.current) {
+        trapFocus(event, dialogRef.current);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [collectionOpen, exportOpen, onClose]);
 
   const openCollection = async (): Promise<void> => {
@@ -57,6 +94,16 @@ export function CandidateLightbox({
     try {
       const collection = await createCollection(activeCandidate.assetId);
       captureAnalytics("collection_created", {});
+      queryClient.setQueryData<readonly CollectionDetail[]>(
+        collectionKeys.list(projectId),
+        (current) =>
+          current?.some((item) => item.id === collection.id)
+            ? current
+            : [collection, ...(current ?? [])],
+      );
+      void queryClient.invalidateQueries({
+        queryKey: collectionKeys.list(projectId),
+      });
       setCollectionId(collection.id);
       setCollectionOpen(true);
     } catch (error) {
@@ -66,6 +113,16 @@ export function CandidateLightbox({
     } finally {
       setCreatingCollection(false);
     }
+  };
+
+  const closeCollection = (): void => {
+    setCollectionOpen(false);
+    window.requestAnimationFrame(() => collectionTriggerRef.current?.focus());
+  };
+
+  const closeExport = (): void => {
+    setExportOpen(false);
+    window.requestAnimationFrame(() => exportTriggerRef.current?.focus());
   };
 
   useEffect(() => {
@@ -84,17 +141,19 @@ export function CandidateLightbox({
 
   return createPortal(
     <div
-      aria-label="候选设计详情"
-      aria-modal="true"
       className={styles.lightboxBackdrop}
       onPointerDown={(event) => {
         if (event.target === event.currentTarget && !collectionOpen) onClose();
       }}
-      role="dialog"
     >
       <section
+        aria-label="候选设计详情"
+        aria-modal="true"
         className={styles.lightbox}
         inert={collectionOpen || exportOpen ? true : undefined}
+        ref={dialogRef}
+        role="dialog"
+        tabIndex={-1}
       >
         <header>
           <div>
@@ -120,6 +179,7 @@ export function CandidateLightbox({
             <button
               disabled={creatingCollection}
               onClick={() => void openCollection()}
+              ref={collectionTriggerRef}
               type="button"
             >
               {creatingCollection
@@ -128,7 +188,11 @@ export function CandidateLightbox({
                   ? "打开系列 DNA"
                   : "设为 Hero → 建系列"}
             </button>
-            <button onClick={() => setExportOpen(true)} type="button">
+            <button
+              onClick={() => setExportOpen(true)}
+              ref={exportTriggerRef}
+              type="button"
+            >
               导出
             </button>
             <button onClick={() => onAdopt(activeCandidate)} type="button">
@@ -185,13 +249,13 @@ export function CandidateLightbox({
         <ErrorBoundary area="collection">
           <CollectionDrawer
             collectionId={collectionId}
-            onClose={() => setCollectionOpen(false)}
+            onClose={closeCollection}
           />
         </ErrorBoundary>
       ) : null}
       {exportOpen ? (
         <ExportModal
-          onClose={() => setExportOpen(false)}
+          onClose={closeExport}
           source={{
             assetId: activeCandidate.assetId,
             previewUrl: activeCandidate.url,
@@ -202,4 +266,45 @@ export function CandidateLightbox({
     </div>,
     document.body,
   );
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "summary",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
+  const focusable = Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      !element.closest("[inert]") &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.tabIndex >= 0,
+  );
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+  if (document.activeElement === container) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  } else if (!container.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
 }

@@ -68,6 +68,7 @@ describe("security hardening integration", () => {
       await request(app.getHttpServer())
         .post("/generations")
         .set("Cookie", "fashion_access_token=valid-token")
+        .set("Idempotency-Key", `security-generation-${attempt}`)
         .send({
           cfg: 3.5,
           height: 512,
@@ -82,6 +83,7 @@ describe("security hardening integration", () => {
     const limited = await request(app.getHttpServer())
       .post("/generations")
       .set("Cookie", "fashion_access_token=valid-token")
+      .set("Idempotency-Key", "security-generation-21")
       .send({
         cfg: 3.5,
         height: 512,

@@ -2,7 +2,10 @@ import { prisma, type User } from "@fashion/db";
 import { Inject, Injectable } from "@nestjs/common";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
-import { DEFAULT_WORKSPACE_NAME } from "./auth.constants";
+import {
+  DEFAULT_PROJECT_NAME,
+  DEFAULT_WORKSPACE_NAME,
+} from "./auth.constants";
 import { AuthFlowError } from "./auth.errors";
 import type {
   AuthSession,
@@ -69,6 +72,18 @@ export class AuthService {
     return user;
   }
 
+  async getInitialProjectId(userId: string): Promise<string | undefined> {
+    const project = await prisma.project.findFirst({
+      where: {
+        deletedAt: null,
+        workspace: { ownerId: userId },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    return project?.id;
+  }
+
   assertAllowedOrigin(origin: string | undefined): void {
     const allowedOrigin = this.getAppOrigin();
 
@@ -132,6 +147,9 @@ export class AuthService {
           data: {
             name: DEFAULT_WORKSPACE_NAME,
             ownerId: user.id,
+            projects: {
+              create: { name: DEFAULT_PROJECT_NAME },
+            },
           },
         });
       }
@@ -149,6 +167,9 @@ export class AuthService {
         ownedWorkspaces: {
           create: {
             name: DEFAULT_WORKSPACE_NAME,
+            projects: {
+              create: { name: DEFAULT_PROJECT_NAME },
+            },
           },
         },
       },

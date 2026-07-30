@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
 
-import type { ExportStorage } from "../storage";
+import type { ExportStorage, ThumbnailStorage } from "../storage";
 
 interface PaletteColor {
   readonly hex: string;
@@ -19,7 +19,7 @@ interface ExportProcessorDependencies {
   readonly database: PrismaClient;
   readonly download?: (url: string) => Promise<Buffer>;
   readonly now?: () => Date;
-  readonly storage: ExportStorage;
+  readonly storage: ExportStorage & Partial<ThumbnailStorage>;
 }
 
 const exportInclude = {
@@ -74,8 +74,12 @@ export function createExportProcessor({
 
       const rendered =
         exportJob.format === ExportFormat.PDF
-          ? await renderLookbook(exportJob, download)
-          : await renderImage(exportJob, download);
+          ? await renderLookbook(exportJob, (stored) =>
+              downloadStored(stored, storage, download),
+            )
+          : await renderImage(exportJob, (stored) =>
+              downloadStored(stored, storage, download),
+            );
       const extension = exportJob.format.toLowerCase();
       const objectKey = `temporary/exports/${exportJob.userId}/${exportJob.id}.${extension}`;
       await storage.putTemporary(
@@ -116,6 +120,21 @@ export function createExportProcessor({
       throw error;
     }
   };
+}
+
+async function downloadStored(
+  stored: string,
+  storage: Partial<ThumbnailStorage>,
+  download: (url: string) => Promise<Buffer>,
+): Promise<Buffer> {
+  if (!stored.startsWith("s3://")) return download(stored);
+  if (!storage.get) {
+    throw exportFailure(
+      "EXPORT_STORAGE_UNAVAILABLE",
+      "无法读取私有设计资产",
+    );
+  }
+  return storage.get(stored.slice("s3://".length));
 }
 
 export async function cleanupExport(

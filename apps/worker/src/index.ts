@@ -76,13 +76,14 @@ const collectionSimilarityQueue = new Queue<CollectionSimilarityJobData>(
 );
 const processCollectionSimilarity = createCollectionSimilarityProcessor({
   database: prisma,
-  embedder: new ClipImageEmbedder(),
+  embedder: new ClipImageEmbedder(storage),
 });
 const processGeneration = createGenerationProcessor({
   ai: createAiRuntimeFromEnv(),
   billing: new BillingService(prisma),
   database: prisma,
   moderator: new OpenAiContentModerationService(),
+  storage,
   similarityJobs: {
     async enqueue(collectionId, designAssetId) {
       await collectionSimilarityQueue.add(

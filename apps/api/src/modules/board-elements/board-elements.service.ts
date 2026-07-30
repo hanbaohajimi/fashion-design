@@ -22,9 +22,7 @@ type BoardElementsDatabase = Pick<
   "boardElement" | "fileAsset" | "project"
 >;
 type ElementRecord = NonNullable<
-  Awaited<
-    ReturnType<BoardElementsDatabase["boardElement"]["findUnique"]>
-  >
+  Awaited<ReturnType<BoardElementsDatabase["boardElement"]["findUnique"]>>
 >;
 
 @Injectable()
@@ -50,8 +48,15 @@ export class BoardElementsService {
     if (current?.roleSource === RoleSource.MANUAL) {
       return this.toRoleResponse(current);
     }
+    if (
+      current?.fileAssetId === fileId &&
+      (current.roleInferenceState === RoleInferenceState.READY ||
+        current.roleInferenceState === RoleInferenceState.FAILED)
+    ) {
+      return this.toRoleResponse(current);
+    }
 
-    const element = await this.database.boardElement.upsert({
+    const ensured = await this.database.boardElement.upsert({
       where: { projectId_shapeId: { projectId, shapeId } },
       create: {
         fileAssetId: fileId,
@@ -63,7 +68,26 @@ export class BoardElementsService {
         shapeId,
         shapeType: "fashion-image",
       },
-      update: {
+      update: {},
+    });
+    if (ensured.roleSource === RoleSource.MANUAL) {
+      return this.toRoleResponse(ensured);
+    }
+
+    const registered = await this.database.boardElement.updateMany({
+      where: {
+        ...(current?.fileAssetId === fileId &&
+        current.roleInferenceState === RoleInferenceState.PENDING
+          ? {
+              fileAssetId: fileId,
+              roleInferenceState: RoleInferenceState.PENDING,
+            }
+          : {}),
+        projectId,
+        roleSource: { not: RoleSource.MANUAL },
+        shapeId,
+      },
+      data: {
         deletedAt: null,
         fileAssetId: fileId,
         role: "style_ref",
@@ -74,13 +98,35 @@ export class BoardElementsService {
         shapeType: "fashion-image",
       },
     });
+    const element = await this.database.boardElement.findUnique({
+      where: { projectId_shapeId: { projectId, shapeId } },
+    });
+    if (!element) {
+      throw new NotFoundException({
+        code: "BOARD_ELEMENT_NOT_FOUND",
+        message: "画布元素不存在",
+      });
+    }
+    if (registered.count !== 1 || element.roleSource === RoleSource.MANUAL) {
+      return this.toRoleResponse(element);
+    }
 
     try {
       await this.inferenceJobs.enqueue({ fileId, projectId, shapeId });
-      return this.toRoleResponse(element);
-    } catch {
-      const fallback = await this.database.boardElement.update({
+      const current = await this.database.boardElement.findUnique({
         where: { projectId_shapeId: { projectId, shapeId } },
+      });
+      return this.toRoleResponse(current ?? element);
+    } catch {
+      await this.database.boardElement.updateMany({
+        where: {
+          deletedAt: null,
+          fileAssetId: fileId,
+          projectId,
+          roleInferenceState: RoleInferenceState.PENDING,
+          roleSource: { not: RoleSource.MANUAL },
+          shapeId,
+        },
         data: {
           role: "style_ref",
           roleConfidence: null,
@@ -89,7 +135,10 @@ export class BoardElementsService {
           roleSource: RoleSource.DEFAULT,
         },
       });
-      return this.toRoleResponse(fallback);
+      const fallback = await this.database.boardElement.findUnique({
+        where: { projectId_shapeId: { projectId, shapeId } },
+      });
+      return this.toRoleResponse(fallback ?? element);
     }
   }
 

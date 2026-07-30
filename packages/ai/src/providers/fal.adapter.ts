@@ -127,11 +127,7 @@ export class FalAdapter implements AiProvider {
   ) {}
 
   supports(taskType: AiGenerationRequest["taskType"]): boolean {
-    return (
-      taskType === "t2i" ||
-      taskType === "i2i" ||
-      taskType === "inpaint"
-    );
+    return taskType === "t2i" || taskType === "i2i" || taskType === "inpaint";
   }
 
   async submit(
@@ -139,9 +135,13 @@ export class FalAdapter implements AiProvider {
     signal: AbortSignal,
   ): Promise<AiProviderJob> {
     this.assertCredentials();
+    const guidedTextToImage =
+      request.taskType === "t2i" && Boolean(request.referenceImageUrl);
     const model =
       request.taskType === "t2i"
-        ? this.config.t2iModel
+        ? guidedTextToImage
+          ? this.config.i2iModel
+          : this.config.t2iModel
         : request.taskType === "i2i"
           ? this.config.i2iModel
           : this.config.inpaintModel;
@@ -158,7 +158,7 @@ export class FalAdapter implements AiProvider {
         model,
         taskType: request.taskType,
         submittedAt: new Date().toISOString(),
-        cost: this.calculateCost(request),
+        cost: this.calculateCost(request, guidedTextToImage),
       };
     } catch (error) {
       throw this.mapError(error);
@@ -216,9 +216,7 @@ export class FalAdapter implements AiProvider {
           const mapped = {
             url: image.url,
             ...(image.width !== undefined ? { width: image.width } : {}),
-            ...(image.height !== undefined
-              ? { height: image.height }
-              : {}),
+            ...(image.height !== undefined ? { height: image.height } : {}),
             ...(image.content_type !== undefined
               ? { contentType: image.content_type }
               : {}),
@@ -255,9 +253,7 @@ export class FalAdapter implements AiProvider {
     }
   }
 
-  private mapInput(
-    request: AiGenerationRequest,
-  ): Record<string, unknown> {
+  private mapInput(request: AiGenerationRequest): Record<string, unknown> {
     const input: Record<string, unknown> = {
       prompt: request.prompt,
       image_size: {
@@ -278,9 +274,13 @@ export class FalAdapter implements AiProvider {
     if (request.negativePrompt) {
       input.negative_prompt = request.negativePrompt;
     }
-    if (request.taskType === "i2i" || request.taskType === "inpaint") {
+    if (
+      (request.taskType === "t2i" && request.referenceImageUrl) ||
+      request.taskType === "i2i" ||
+      request.taskType === "inpaint"
+    ) {
       input.image_url = request.referenceImageUrl;
-      input.strength = request.strength;
+      input.strength = request.strength ?? 0.72;
     }
     if (request.taskType === "inpaint") {
       input.mask_url = request.maskImageUrl;
@@ -288,14 +288,19 @@ export class FalAdapter implements AiProvider {
     return input;
   }
 
-  private calculateCost(request: AiGenerationRequest): AiGenerationCost {
+  private calculateCost(
+    request: AiGenerationRequest,
+    guidedTextToImage = false,
+  ): AiGenerationCost {
     const billableMegapixels = Math.max(
       1,
       Math.ceil((request.width * request.height) / 1_000_000),
     );
     const rate =
       request.taskType === "t2i"
-        ? this.config.t2iCostPerMegapixel
+        ? guidedTextToImage
+          ? this.config.i2iCostPerMegapixel
+          : this.config.t2iCostPerMegapixel
         : request.taskType === "i2i"
           ? this.config.i2iCostPerMegapixel
           : this.config.inpaintCostPerMegapixel;

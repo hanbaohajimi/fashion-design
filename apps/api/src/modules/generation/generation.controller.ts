@@ -8,10 +8,12 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Inject,
   Param,
   Post,
+  Query,
   Sse,
   UseGuards,
   type MessageEvent,
@@ -21,11 +23,15 @@ import type { Observable } from "rxjs";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { GenerationEventsService } from "./generation-events.service";
-import { generationCreateRequestSchema } from "./generation.schemas";
+import {
+  generationCreateRequestSchema,
+  generationListQuerySchema,
+} from "./generation.schemas";
 import { GenerationMaskService } from "./generation-mask.service";
 import { z } from "zod";
 import {
   GenerationService,
+  type GenerationTaskListView,
   type GenerationTaskView,
 } from "./generation.service";
 import {
@@ -77,6 +83,7 @@ export class GenerationController {
   })
   async create(
     @CurrentUser() user: AuthenticatedUser,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() body: unknown,
   ): Promise<{ task_id: string }> {
     const parsed = generationCreateRequestSchema.safeParse(body);
@@ -86,11 +93,34 @@ export class GenerationController {
         message: "生成参数不合法",
       });
     }
+    const parsedKey = z.string().trim().min(8).max(200).safeParse(idempotencyKey);
+    if (!parsedKey.success) {
+      throw new BadRequestException({
+        code: "INVALID_IDEMPOTENCY_KEY",
+        message: "缺少有效的 Idempotency-Key 请求头",
+      });
+    }
     const result = await this.generationService.create(
       user.userId,
       parsed.data,
+      parsedKey.data,
     );
     return { task_id: result.taskId };
+  }
+
+  @Get()
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: unknown,
+  ): Promise<GenerationTaskListView> {
+    const parsed = generationListQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_REQUEST",
+        message: "生成任务查询参数不合法",
+      });
+    }
+    return this.generationService.list(user.userId, parsed.data);
   }
 
   @Get(":id")

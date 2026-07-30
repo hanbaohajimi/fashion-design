@@ -1,4 +1,8 @@
-import { Prisma, type PrismaClient } from "@fashion/db";
+import {
+  GenerationTaskStatus,
+  Prisma,
+  type PrismaClient,
+} from "@fashion/db";
 
 export const GENERATION_LIMIT_EXCEEDED = {
   code: "GEN_LIMIT_EXCEEDED",
@@ -11,6 +15,10 @@ export type BillingDatabase = Pick<
   "$executeRaw" | "$queryRaw" | "$transaction"
 >;
 export type BillingQueryClient = Pick<PrismaClient, "$queryRaw">;
+export type LockedGenerationQuotaTransaction = Pick<
+  Prisma.TransactionClient,
+  "$queryRaw" | "generationTask"
+>;
 
 interface LockedGenerationQuota {
   generationCount: number;
@@ -39,6 +47,19 @@ export class BillingService {
   constructor(private readonly database: BillingDatabase) {}
 
   async canGenerate(userId: string): Promise<GenerationQuota> {
+    return this.withLockedGenerationQuota(
+      userId,
+      async (_transaction, quota) => quota,
+    );
+  }
+
+  async withLockedGenerationQuota<T>(
+    userId: string,
+    operation: (
+      transaction: LockedGenerationQuotaTransaction,
+      quota: GenerationQuota,
+    ) => Promise<T>,
+  ): Promise<T> {
     return this.database.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<LockedGenerationQuota[]>(
         Prisma.sql`
@@ -51,31 +72,41 @@ export class BillingService {
           FOR UPDATE
         `,
       );
-      const quota = rows[0];
+      const stored = rows[0];
 
-      if (!quota) {
+      if (!stored) {
         throw new BillingUserNotFoundError();
       }
 
-      const remaining = Math.max(
-        quota.generationLimit - quota.generationCount,
-        0,
-      );
-      if (remaining === 0) {
-        return {
-          allowed: false,
-          used: quota.generationCount,
-          limit: quota.generationLimit,
-          ...GENERATION_LIMIT_EXCEEDED,
-        };
-      }
-
-      return {
-        allowed: true,
-        used: quota.generationCount,
-        limit: quota.generationLimit,
-        remaining,
-      };
+      const activeCount = await transaction.generationTask.count({
+        where: {
+          countedAt: null,
+          status: {
+            in: [
+              GenerationTaskStatus.QUEUED,
+              GenerationTaskStatus.RUNNING,
+            ],
+          },
+          userId,
+        },
+      });
+      const used = stored.generationCount + activeCount;
+      const remaining = Math.max(stored.generationLimit - used, 0);
+      const quota: GenerationQuota =
+        remaining === 0
+          ? {
+              allowed: false,
+              used,
+              limit: stored.generationLimit,
+              ...GENERATION_LIMIT_EXCEEDED,
+            }
+          : {
+              allowed: true,
+              used,
+              limit: stored.generationLimit,
+              remaining,
+            };
+      return operation(transaction, quota);
     });
   }
 

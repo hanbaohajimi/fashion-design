@@ -21,6 +21,9 @@ export function CandidateGrid() {
     readonly candidate: GenerationCandidate;
     readonly mode: "view" | "inpaint";
   } | null>(null);
+  const [rerunningCandidateId, setRerunningCandidateId] = useState<
+    string | null
+  >(null);
   const candidates = generation.tasks.flatMap((task) => task.candidates);
 
   if (candidates.length === 0) return null;
@@ -66,17 +69,25 @@ export function CandidateGrid() {
   const rerun = async (
     candidate: GenerationCandidate,
   ): Promise<void> => {
+    if (rerunningCandidateId) {
+      return;
+    }
     const source = generation.tasks.find((task) => task.id === candidate.taskId);
-    await generation.start({
-      parameters: DEFAULT_GENERATION_PARAMETERS,
-      parentAssetId: candidate.assetId,
-      projectId,
-      prompt: source?.prompt || "生成设计变体",
-      shapeIds: editor.getSelectedShapeIds(),
-      taskType: "i2i",
-      referenceImageUrl: candidate.url,
-      strength: 0.5,
-    });
+    setRerunningCandidateId(candidate.id);
+    try {
+      await generation.start({
+        parameters: DEFAULT_GENERATION_PARAMETERS,
+        parentAssetId: candidate.assetId,
+        projectId,
+        prompt: source?.prompt || "生成设计变体",
+        shapeIds: editor.getSelectedShapeIds(),
+        taskType: "i2i",
+        referenceImageUrl: candidate.url,
+        strength: 0.5,
+      });
+    } finally {
+      setRerunningCandidateId(null);
+    }
   };
 
   return createPortal(
@@ -115,8 +126,12 @@ export function CandidateGrid() {
               >
                 丢弃
               </button>
-              <button onClick={() => void rerun(candidate)} type="button">
-                再来一版
+              <button
+                disabled={rerunningCandidateId !== null}
+                onClick={() => void rerun(candidate)}
+                type="button"
+              >
+                {rerunningCandidateId === candidate.id ? "创建中…" : "再来一版"}
               </button>
               <button
                 onClick={() => setLightbox({ candidate, mode: "inpaint" })}

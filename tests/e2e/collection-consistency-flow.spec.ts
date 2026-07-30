@@ -6,6 +6,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   const createdAt = "2026-07-28T10:00:00.000Z";
   let lookCount = 1;
   let paletteLocked = false;
+  let collectionCreated = false;
   const ignoredAssets = new Set<string>();
   const dna = () => ({
     extractionStatus: "ready",
@@ -38,6 +39,23 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     projectId: "e2e-collection",
     updatedAt: createdAt,
   });
+  await page.route("**/api/projects/e2e-collection", (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt,
+        id: "e2e-collection",
+        name: "E2E 系列项目",
+        updatedAt: createdAt,
+      },
+    }),
+  );
+  await page.route("**/api/collections?projectId=e2e-collection", (route) =>
+    route.fulfill({ json: collectionCreated ? [collection()] : [] }),
+  );
   const consistency = () => {
     const looks = [
       {
@@ -118,11 +136,18 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     route.fulfill({
       json:
         route.request().method() === "PATCH"
-          ? { ok: true }
+          ? {
+              batchId: "e2e-board-save",
+              revision: 1,
+              savedAt: "2026-07-27T08:00:02.000Z",
+            }
           : { elements: [], revision: 0, snapshot: null },
     }),
   );
-  await page.route("**/api/generations", (route) =>
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route(/\/api\/generations$/u, (route) =>
     route.fulfill({ status: 202, json: { task_id: "task-hero" } }),
   );
   await page.route("**/api/generations/task-hero/events", (route) =>
@@ -170,9 +195,10 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       },
     }),
   );
-  await page.route("**/api/collections", (route) =>
-    route.fulfill({ status: 201, json: collection() }),
-  );
+  await page.route("**/api/collections", (route) => {
+    collectionCreated = true;
+    return route.fulfill({ status: 201, json: collection() });
+  });
   await page.route("**/api/collections/collection-e2e/consistency", (route) =>
     route.fulfill({ json: consistency() }),
   );
@@ -286,7 +312,9 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "设为 Hero → 建系列" }).click();
 
+  const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
+  await expect(collectionDrawer).toBeFocused();
   const paletteSection = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "色板" }) });
@@ -294,7 +322,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await expect(
     paletteSection.getByRole("button", { name: "解锁" }),
   ).toBeVisible();
-  await expect(page.getByText("已保存")).toBeVisible();
+  await expect(page.getByLabel("系列 DNA").getByText("已保存")).toBeVisible();
 
   await page.getByRole("button", { name: "Look 扩展" }).click();
   await page.getByText("细节", { exact: true }).click();
@@ -317,7 +345,11 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await expect(page.getByRole("cell", { name: "0.44" }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "关闭系列抽屉" }).click();
-  await page.getByRole("button", { name: "打开系列 DNA" }).click();
+  const reopenCollection = page.getByRole("button", {
+    name: "打开系列 DNA",
+  });
+  await expect(reopenCollection).toBeFocused();
+  await reopenCollection.click();
   await expect(
     page
       .locator("section")
@@ -325,14 +357,34 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       .getByRole("button", { name: "解锁" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "导出 PDF" }).click();
-  await expect(page.getByRole("dialog", { name: "导出成果" })).toBeVisible();
+  const exportTrigger = page.getByRole("button", { name: "导出 PDF" });
+  await exportTrigger.click();
+  const exportDialog = page.getByRole("dialog", { name: "导出成果" });
+  await expect(exportDialog).toBeFocused();
+  await expect(page.getByText("Free 版本带水印。")).toBeVisible();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "开始导出" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "关闭导出窗口" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(exportDialog).toBeHidden();
+  await expect(exportTrigger).toBeFocused();
+
+  await exportTrigger.click();
   await expect(page.getByText("Free 版本带水印。")).toBeVisible();
   await page.getByRole("button", { name: "开始导出" }).click();
-  await expect(
-    page.getByRole("link", { name: "下载 PDF" }),
-  ).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "下载 PDF" })).toHaveAttribute(
     "href",
     "https://download.example/lookbook.pdf?signature=e2e",
   );
+  await page.getByRole("button", { name: "关闭导出窗口" }).click();
+  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await page.getByRole("button", { name: "关闭候选详情" }).click();
+  await expect(page.getByLabel("选择系列")).toHaveValue("collection-e2e");
+  await page.getByRole("button", { name: "打开系列", exact: true }).click();
+  await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
 });

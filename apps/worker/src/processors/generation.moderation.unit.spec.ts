@@ -59,9 +59,7 @@ describe("generation moderation state transition", () => {
       attemptCount: 0,
       output: null,
     };
-    const updateMany = vi
-      .fn()
-      .mockResolvedValueOnce({ count: 1 });
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const database = {
       $transaction: vi.fn(),
       collectionLook: { updateMany: vi.fn() },
@@ -70,7 +68,10 @@ describe("generation moderation state transition", () => {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(task)
-          .mockResolvedValue({ status: GenerationTaskStatus.RUNNING }),
+          .mockResolvedValue({
+            attemptCount: task.attemptCount + 1,
+            status: GenerationTaskStatus.RUNNING,
+          }),
         update: vi.fn().mockResolvedValue({}),
         updateMany,
       },
@@ -114,6 +115,7 @@ describe("generation moderation state transition", () => {
     ]);
     expect(updateMany).toHaveBeenLastCalledWith({
       where: {
+        attemptCount: task.attemptCount + 1,
         countedAt: null,
         id: task.id,
         status: GenerationTaskStatus.RUNNING,
@@ -122,6 +124,101 @@ describe("generation moderation state transition", () => {
         errorMessage: "该内容不符合平台规范",
         moderationStatus: ContentModerationStatus.REJECTED,
         status: GenerationTaskStatus.MODERATION_FAILED,
+      }),
+    });
+    expect(database.$transaction).not.toHaveBeenCalled();
+    expect(database.designAsset.findMany).not.toHaveBeenCalled();
+    expect(billing.incrementCount).not.toHaveBeenCalled();
+  });
+
+  it("审核服务不可用时最终失败且不落资产、不计费", async () => {
+    const task = {
+      attemptCount: 0,
+      canceledAt: null,
+      collectionId: null,
+      compiledPrompt: null,
+      completedAt: null,
+      countedAt: null,
+      createdAt: new Date(),
+      errorCode: null,
+      errorMessage: null,
+      id: "task-review",
+      input: {
+        cfg: 3.5,
+        height: 512,
+        prompt: "fashion editorial",
+        steps: 20,
+        taskType: "t2i",
+        width: 512,
+      },
+      manualReviewRequired: false,
+      moderationCategories: [],
+      moderationCheckedAt: null,
+      moderationStatus: ContentModerationStatus.PENDING,
+      output: null,
+      parentAssetId: null,
+      projectId: "project-a",
+      providerJob,
+      startedAt: null,
+      status: GenerationTaskStatus.QUEUED,
+      taskType: "t2i",
+      updatedAt: new Date(),
+      userId: "user-a",
+      variationAxis: null,
+    };
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const database = {
+      $transaction: vi.fn(),
+      collectionLook: { updateMany: vi.fn() },
+      designAsset: { findMany: vi.fn() },
+      generationTask: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(task)
+          .mockResolvedValue({
+            attemptCount: task.attemptCount + 1,
+            status: GenerationTaskStatus.RUNNING,
+          }),
+        update: vi.fn().mockResolvedValue({}),
+        updateMany,
+      },
+    };
+    const billing = { incrementCount: vi.fn() };
+    const job = {
+      attemptsMade: 1,
+      data: { taskId: task.id, userId: task.userId },
+      id: task.id,
+      opts: { attempts: 2 },
+      updateProgress: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Job<GenerationJobData>;
+    const process = createGenerationProcessor({
+      ai: {
+        getResult: vi.fn().mockResolvedValue({
+          cost: providerJob.cost,
+          images: [{ url: "https://cdn.test/generated.png" }],
+          job: providerJob,
+        }),
+        getStatus: vi.fn().mockResolvedValue({ status: "completed" }),
+        submit: vi.fn(),
+      },
+      billing,
+      database: database as never,
+      moderator: {
+        moderate: vi.fn().mockRejectedValue(new Error("moderation offline")),
+      },
+      pollIntervalMs: 1,
+    });
+
+    await expect(process(job)).rejects.toThrow("内容审核服务暂时不可用");
+    expect(updateMany).toHaveBeenLastCalledWith({
+      where: {
+        attemptCount: task.attemptCount + 1,
+        id: task.id,
+        status: GenerationTaskStatus.RUNNING,
+      },
+      data: expect.objectContaining({
+        errorCode: "CONTENT_MODERATION_UNAVAILABLE",
+        status: GenerationTaskStatus.FAILED,
       }),
     });
     expect(database.$transaction).not.toHaveBeenCalled();

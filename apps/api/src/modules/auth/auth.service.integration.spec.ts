@@ -29,7 +29,7 @@ describe("AuthService local user synchronization", () => {
     try {
       const stored = await prisma.user.findUnique({
         where: { authId: authUserId },
-        include: { ownedWorkspaces: true },
+        include: { ownedWorkspaces: { include: { projects: true } } },
       });
 
       expect(stored).toMatchObject({
@@ -41,6 +41,10 @@ describe("AuthService local user synchronization", () => {
       });
       expect(stored?.ownedWorkspaces).toHaveLength(1);
       expect(stored?.ownedWorkspaces[0]?.name).toBe("我的工作区");
+      expect(stored?.ownedWorkspaces[0]?.projects).toHaveLength(1);
+      expect(stored?.ownedWorkspaces[0]?.projects[0]?.name).toBe(
+        "我的第一个设计项目",
+      );
 
       const secondSync = await authService.syncLocalUser({
         authUserId,

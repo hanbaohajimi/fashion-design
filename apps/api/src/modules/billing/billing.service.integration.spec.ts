@@ -1,4 +1,4 @@
-import { prisma } from "@fashion/db";
+import { GenerationTaskStatus, prisma } from "@fashion/db";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { BillingService } from "./billing.service";
@@ -29,6 +29,60 @@ describe("BillingService PostgreSQL concurrency", () => {
       });
 
       expect(stored.generationCount).toBe(10);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  });
+
+  it("同一用户并发准入只创建额度允许数量的 queued task", async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `billing-admission-${crypto.randomUUID()}@example.com`,
+        generationLimit: 1,
+      },
+    });
+
+    try {
+      const admitted = await Promise.all(
+        Array.from({ length: 10 }, (_, index) =>
+          service.withLockedGenerationQuota(
+            user.id,
+            async (transaction, quota) => {
+              if (!quota.allowed) return null;
+              return transaction.generationTask.create({
+                data: {
+                  id: `quota-${user.id}-${index}`,
+                  input: {
+                    cfg: 3.5,
+                    height: 512,
+                    prompt: "quota concurrency",
+                    steps: 20,
+                    taskType: "t2i",
+                    width: 512,
+                  },
+                  status: GenerationTaskStatus.QUEUED,
+                  taskType: "t2i",
+                  userId: user.id,
+                },
+              });
+            },
+          ),
+        ),
+      );
+
+      expect(admitted.filter(Boolean)).toHaveLength(1);
+      await expect(
+        prisma.generationTask.count({
+          where: {
+            countedAt: null,
+            status: GenerationTaskStatus.QUEUED,
+            userId: user.id,
+          },
+        }),
+      ).resolves.toBe(1);
+      await expect(
+        prisma.user.findUniqueOrThrow({ where: { id: user.id } }),
+      ).resolves.toMatchObject({ generationCount: 0 });
     } finally {
       await prisma.user.delete({ where: { id: user.id } });
     }

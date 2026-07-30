@@ -19,7 +19,12 @@ describe("CollectionsService persistence integration", () => {
         silhouettes: ["茧型"],
       }),
     };
-    const service = new CollectionsService(prisma, extractor, {} as never);
+    const service = new CollectionsService(
+      prisma,
+      extractor,
+      {} as never,
+      {} as never,
+    );
 
     try {
       const created = await service.createFromHero(

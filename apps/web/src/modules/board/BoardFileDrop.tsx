@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createShapeId, type TLShapeId, useEditor } from "tldraw";
 
-import { BoardProjectContext } from "./board-context";
+import {
+  BOARD_FILE_PICKER_EVENT,
+  BoardProjectContext,
+} from "./board-context";
 import {
   fetchElementRole,
   registerRoleInference,
@@ -35,6 +38,7 @@ interface UploadTask {
 export function BoardFileDrop() {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [tasks, setTasks] = useState<readonly UploadTask[]>([]);
 
@@ -82,6 +86,27 @@ export function BoardFileDrop() {
     [editor],
   );
 
+  const failInference = useCallback(
+    (shapeId: TLShapeId): void => {
+      const shape = editor.getShape<ImageShape>(shapeId);
+      if (
+        shape?.type !== IMAGE_SHAPE_TYPE ||
+        shape.props.roleSource === "manual" ||
+        shape.meta.roleSource === "manual"
+      ) {
+        return;
+      }
+      updateImage(shapeId, {
+        role: "style_ref",
+        roleConfidence: undefined,
+        roleInferenceState: "failed",
+        roleLabel: undefined,
+        roleSource: "default",
+      });
+    },
+    [editor, updateImage],
+  );
+
   const trackInference = useCallback(
     async (
       shapeId: TLShapeId,
@@ -101,24 +126,14 @@ export function BoardFileDrop() {
           result = await fetchElementRole(projectId, shapeId);
           applyInference(result);
         }
-      } catch {
-        const shape = editor.getShape<ImageShape>(shapeId);
-        if (
-          shape?.type === IMAGE_SHAPE_TYPE &&
-          shape.props.roleSource !== "manual" &&
-          shape.meta.roleSource !== "manual"
-        ) {
-          updateImage(shapeId, {
-            role: "style_ref",
-            roleConfidence: undefined,
-            roleInferenceState: "failed",
-            roleLabel: undefined,
-            roleSource: "default",
-          });
+        if (result.state === "pending") {
+          failInference(shapeId);
         }
+      } catch {
+        failInference(shapeId);
       }
     },
-    [applyInference, editor, projectId, updateImage],
+    [applyInference, failInference, projectId],
   );
 
   const runUpload = useCallback(
@@ -141,7 +156,6 @@ export function BoardFileDrop() {
           roleSource: "default",
           uploadStatus: signed.file.status === "READY" ? "ready" : "processing",
         });
-        void trackInference(task.shapeId, signed.file.id);
         const processing = signed.upload
           ? await putOriginal(signed.upload, task.file).then(() =>
               completeUpload(signed.file.id),
@@ -158,12 +172,14 @@ export function BoardFileDrop() {
           url: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
           w: width,
         });
+        void trackInference(task.shapeId, signed.file.id);
         clearUploadPreview(task.shapeId);
         setTasks((current) => current.filter((item) => item.id !== task.id));
       } catch (cause) {
         const error =
           cause instanceof Error ? cause.message : "图片上传失败，请重试";
         updateImage(task.shapeId, { uploadStatus: "failed" });
+        failInference(task.shapeId);
         setTasks((current) =>
           current.map((item) =>
             item.id === task.id ? { ...item, error, status: "failed" } : item,
@@ -171,7 +187,7 @@ export function BoardFileDrop() {
         );
       }
     },
-    [projectId, trackInference, updateImage],
+    [failInference, projectId, trackInference, updateImage],
   );
 
   useEffect(() => {
@@ -194,8 +210,12 @@ export function BoardFileDrop() {
             uploadStatus: "ready",
             url: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
           });
+          void trackInference(shape.id, fileId);
         })
-        .catch(() => updateImage(shape.id, { uploadStatus: "failed" }));
+        .catch(() => {
+          updateImage(shape.id, { uploadStatus: "failed" });
+          failInference(shape.id);
+        });
     }
     const pendingRoles = editor
       .getCurrentPageShapes()
@@ -203,12 +223,54 @@ export function BoardFileDrop() {
         (shape): shape is ImageShape =>
           shape.type === IMAGE_SHAPE_TYPE &&
           Boolean(shape.props.fileId) &&
+          shape.props.uploadStatus === "ready" &&
           shape.props.roleInferenceState === "pending",
       );
     for (const shape of pendingRoles) {
-      void trackInference(shape.id);
+      const fileId = shape.props.fileId;
+      if (fileId) {
+        void trackInference(shape.id, fileId);
+      }
     }
-  }, [editor, trackInference, updateImage]);
+  }, [editor, failInference, trackInference, updateImage]);
+
+  const addFiles = useCallback(
+    (
+      files: readonly File[],
+      point = editor.getViewportPageBounds().center,
+    ): void => {
+      files.forEach((file, index) => {
+        const validationError = validateImage(file);
+        const shapeId = createShapeId();
+        editor.createShape<ImageShape>({
+          id: shapeId,
+          type: IMAGE_SHAPE_TYPE,
+          x: point.x + index * 24 - 170,
+          y: point.y + index * 24 - 130,
+          props: {
+            fileId: "",
+            title: file.name,
+            uploadStatus: validationError ? "failed" : "uploading",
+          },
+        });
+        if (!validationError) {
+          setUploadPreview(shapeId, URL.createObjectURL(file));
+        }
+        const task: UploadTask = {
+          error: validationError,
+          file,
+          id: crypto.randomUUID(),
+          shapeId,
+          status: validationError ? "failed" : "uploading",
+        };
+        setTasks((current) => [...current, task]);
+        if (!validationError) {
+          void runUpload(task);
+        }
+      });
+    },
+    [editor, runUpload],
+  );
 
   useEffect(() => {
     let dragDepth = 0;
@@ -247,52 +309,59 @@ export function BoardFileDrop() {
         x: event.clientX,
         y: event.clientY,
       });
-
-      files.forEach((file, index) => {
-        const validationError = validateImage(file);
-        const shapeId = createShapeId();
-        editor.createShape<ImageShape>({
-          id: shapeId,
-          type: IMAGE_SHAPE_TYPE,
-          x: point.x + index * 24 - 170,
-          y: point.y + index * 24 - 130,
-          props: {
-            fileId: "",
-            title: file.name,
-            uploadStatus: validationError ? "failed" : "uploading",
-          },
-        });
-        if (!validationError) {
-          setUploadPreview(shapeId, URL.createObjectURL(file));
-        }
-        const task: UploadTask = {
-          error: validationError,
-          file,
-          id: crypto.randomUUID(),
-          shapeId,
-          status: validationError ? "failed" : "uploading",
-        };
-        setTasks((current) => [...current, task]);
-        if (!validationError) {
-          void runUpload(task);
-        }
-      });
+      addFiles(files, point);
+    };
+    const onPaste = (event: ClipboardEvent): void => {
+      const isEditableTarget = event.composedPath().some(
+        (target) =>
+          target instanceof HTMLElement &&
+          (target.matches("input, textarea, select") ||
+            target.isContentEditable),
+      );
+      if (event.defaultPrevented || isEditableTarget) {
+        return;
+      }
+      const files = [...(event.clipboardData?.files ?? [])].filter((file) =>
+        file.type.startsWith("image/"),
+      );
+      if (files.length === 0) return;
+      event.preventDefault();
+      addFiles(files);
+    };
+    const openFilePicker = (): void => {
+      fileInput.current?.click();
     };
 
     window.addEventListener("dragenter", onDragEnter);
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("dragleave", onDragLeave);
     window.addEventListener("drop", onDrop);
+    window.addEventListener("paste", onPaste);
+    window.addEventListener(BOARD_FILE_PICKER_EVENT, openFilePicker);
     return () => {
       window.removeEventListener("dragenter", onDragEnter);
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("dragleave", onDragLeave);
       window.removeEventListener("drop", onDrop);
+      window.removeEventListener("paste", onPaste);
+      window.removeEventListener(BOARD_FILE_PICKER_EVENT, openFilePicker);
     };
-  }, [editor, runUpload]);
+  }, [addFiles, editor]);
 
   return (
     <>
+      <input
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        aria-label="选择要上传的图片"
+        hidden
+        multiple
+        onChange={(event) => {
+          addFiles([...(event.currentTarget.files ?? [])]);
+          event.currentTarget.value = "";
+        }}
+        ref={fileInput}
+        type="file"
+      />
       {dragging ? (
         <div className={styles.uploadDropZone}>
           <strong>DROP / IMAGE</strong>

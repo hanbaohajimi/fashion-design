@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async ({
-  page,
-}) => {
+test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async ({ page }) => {
   const restores: Array<{
     readonly currentAssetId: string;
     readonly targetAssetId: string;
@@ -28,6 +26,23 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
     width: 768,
     ...overrides,
   });
+  await page.route("**/api/projects/e2e-history", (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt,
+        id: "e2e-history",
+        name: "E2E 版本项目",
+        updatedAt: createdAt,
+      },
+    }),
+  );
+  await page.route("**/api/collections?projectId=e2e-history", (route) =>
+    route.fulfill({ json: [] }),
+  );
   const root = asset(
     "asset-root",
     "generated",
@@ -60,11 +75,18 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
     route.fulfill({
       json:
         route.request().method() === "PATCH"
-          ? { ok: true }
+          ? {
+              batchId: "e2e-board-save",
+              revision: 1,
+              savedAt: "2026-07-27T08:00:02.000Z",
+            }
           : { elements: [], revision: 0, snapshot: null },
     }),
   );
-  await page.route("**/api/generations", (route) =>
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route(/\/api\/generations$/u, (route) =>
     route.fulfill({ status: 202, json: { task_id: "task-history" } }),
   );
   await page.route("**/api/generations/task-history/events", (route) =>
@@ -104,25 +126,17 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   await page.route(
     /\/api\/design-assets\/([^/]+)\/versions/u,
     async (route) => {
-      const activeId = new URL(route.request().url()).pathname.split("/").at(-2);
-      const restoredOne = asset(
-        "asset-restore-1",
-        "restore",
-        root.url,
-        {
-          parentAssetId: "asset-current",
-          restoredFromAssetId: "asset-root",
-        },
-      );
-      const restoredTwo = asset(
-        "asset-restore-2",
-        "restore",
-        current.url,
-        {
-          parentAssetId: "asset-restore-1",
-          restoredFromAssetId: "asset-current",
-        },
-      );
+      const activeId = new URL(route.request().url()).pathname
+        .split("/")
+        .at(-2);
+      const restoredOne = asset("asset-restore-1", "restore", root.url, {
+        parentAssetId: "asset-current",
+        restoredFromAssetId: "asset-root",
+      });
+      const restoredTwo = asset("asset-restore-2", "restore", current.url, {
+        parentAssetId: "asset-restore-1",
+        restoredFromAssetId: "asset-current",
+      });
       const items =
         activeId === "asset-restore-2"
           ? [restoredTwo, restoredOne, current, root]
@@ -179,7 +193,9 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   await page.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "版本" }).click();
 
-  await expect(page.getByRole("heading", { name: "资产版本时间线" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "资产版本时间线" }),
+  ).toBeVisible();
   await expect(page.getByText("初次生成")).toBeVisible();
   await page
     .getByRole("listitem")
@@ -207,7 +223,8 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
     });
 
   await page.getByRole("button", { name: "预览" }).click();
-  await expect(
-    page.getByRole("img", { name: "候选设计大图" }),
-  ).toHaveAttribute("src", "https://assets.example/current.png");
+  await expect(page.getByRole("img", { name: "候选设计大图" })).toHaveAttribute(
+    "src",
+    "https://assets.example/current.png",
+  );
 });

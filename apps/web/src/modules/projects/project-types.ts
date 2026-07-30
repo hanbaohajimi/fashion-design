@@ -17,3 +17,5 @@ export interface ProjectPage {
   readonly pageSize: number;
   readonly total: number;
 }
+
+export type ProjectStatusFilter = "active" | "archived";

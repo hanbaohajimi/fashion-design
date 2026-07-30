@@ -40,6 +40,8 @@ export function CollectionDrawer({
   const lastSaved = useRef("");
   const draftRef = useRef<CollectionDna | null>(null);
   const saveQueue = useRef(Promise.resolve());
+  const drawerRef = useRef<HTMLElement>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
 
   const enqueueSave = useCallback(
     (snapshot: CollectionDna): Promise<void> => {
@@ -94,6 +96,11 @@ export function CollectionDrawer({
     onClose();
   }, [flushDna, onClose]);
 
+  const closeExport = (): void => {
+    setExportOpen(false);
+    window.requestAnimationFrame(() => exportTriggerRef.current?.focus());
+  };
+
   const refreshConsistency = useCallback(async () => {
     const result = await fetchCollectionConsistency(collectionId);
     setConsistency(result);
@@ -137,14 +144,42 @@ export function CollectionDrawer({
   }, [collectionId]);
 
   useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = window.requestAnimationFrame(() => {
+      drawerRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.requestAnimationFrame(() => {
+        if (
+          previouslyFocused?.isConnected &&
+          !previouslyFocused.closest("[inert]")
+        ) {
+          previouslyFocused.focus();
+        }
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && !exportOpen) {
+      if (exportOpen) return;
+      if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         void closeAfterSave();
+        return;
+      }
+      if (event.key === "Tab" && drawerRef.current) {
+        trapFocus(event, drawerRef.current);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [closeAfterSave, exportOpen]);
 
   useEffect(() => {
@@ -163,9 +198,12 @@ export function CollectionDrawer({
   return (
     <aside
       aria-label="系列 DNA"
+      aria-modal="true"
       className={styles.collectionDrawer}
       inert={exportOpen ? true : undefined}
-      role="complementary"
+      ref={drawerRef}
+      role="dialog"
+      tabIndex={-1}
     >
       <header className={styles.collectionHeader}>
         <div>
@@ -177,6 +215,7 @@ export function CollectionDrawer({
           <button
             disabled={!collection}
             onClick={() => setExportOpen(true)}
+            ref={exportTriggerRef}
             type="button"
           >
             导出 PDF
@@ -318,7 +357,7 @@ export function CollectionDrawer({
       ) : null}
       {exportOpen && collection ? (
         <ExportModal
-          onClose={() => setExportOpen(false)}
+          onClose={closeExport}
           source={{
             collectionId,
             name: collection.name,
@@ -356,4 +395,45 @@ function dnaSignature(dna: CollectionDna | null): string {
     referenceFileIds: dna.referenceFileIds,
     silhouettes: dna.silhouettes,
   });
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "summary",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
+  const focusable = Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      !element.closest("[inert]") &&
+      element.getAttribute("aria-hidden") !== "true" &&
+      element.tabIndex >= 0,
+  );
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+  if (document.activeElement === container) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  } else if (!container.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
 }

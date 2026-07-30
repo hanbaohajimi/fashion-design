@@ -5,6 +5,7 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import {
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -65,8 +66,7 @@ export class BoardsService {
         record: element.record,
         role: element.role,
         roleConfidence: element.roleConfidence ?? null,
-        roleInferenceState:
-          element.roleInferenceState?.toLowerCase() ?? "none",
+        roleInferenceState: element.roleInferenceState?.toLowerCase() ?? "none",
         roleLabel: element.roleLabel ?? null,
         roleSource: element.roleSource?.toLowerCase() ?? "default",
         shapeId: element.shapeId,
@@ -86,18 +86,77 @@ export class BoardsService {
     await this.assertOwnership(userId, projectId);
 
     const result = await this.database.$transaction(async (transaction) => {
-      const snapshot = await transaction.boardSnapshot.upsert({
+      const currentSnapshot = await transaction.boardSnapshot.findUnique({
         where: { projectId },
-        create: {
-          projectId,
-          revision: 1,
-          snapshot: input.snapshot as Prisma.InputJsonValue,
-        },
-        update: {
-          revision: { increment: 1 },
-          snapshot: input.snapshot as Prisma.InputJsonValue,
-        },
+        select: { revision: true },
       });
+      let snapshot: { readonly revision: number; readonly updatedAt: Date };
+
+      if (!currentSnapshot) {
+        if (input.baseRevision !== 0) {
+          throw revisionConflict(input.baseRevision, 0);
+        }
+
+        try {
+          snapshot = await transaction.boardSnapshot.create({
+            data: {
+              projectId,
+              revision: 1,
+              snapshot: input.snapshot as Prisma.InputJsonValue,
+            },
+            select: {
+              revision: true,
+              updatedAt: true,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            throw revisionConflict(input.baseRevision);
+          }
+          throw error;
+        }
+      } else {
+        if (currentSnapshot.revision !== input.baseRevision) {
+          throw revisionConflict(input.baseRevision, currentSnapshot.revision);
+        }
+
+        const updated = await transaction.boardSnapshot.updateMany({
+          where: {
+            projectId,
+            revision: input.baseRevision,
+          },
+          data: {
+            revision: { increment: 1 },
+            snapshot: input.snapshot as Prisma.InputJsonValue,
+          },
+        });
+
+        if (updated.count !== 1) {
+          const latestSnapshot = await transaction.boardSnapshot.findUnique({
+            where: { projectId },
+            select: { revision: true },
+          });
+          throw revisionConflict(
+            input.baseRevision,
+            latestSnapshot?.revision ?? 0,
+          );
+        }
+
+        const savedSnapshot = await transaction.boardSnapshot.findUnique({
+          where: { projectId },
+          select: {
+            revision: true,
+            updatedAt: true,
+          },
+        });
+        if (!savedSnapshot) {
+          throw revisionConflict(input.baseRevision, 0);
+        }
+        snapshot = savedSnapshot;
+      }
 
       for (const patch of input.patches) {
         if (patch.deleted) {
@@ -202,6 +261,18 @@ export class BoardsService {
   }
 }
 
+function revisionConflict(
+  baseRevision: number,
+  currentRevision?: number,
+): ConflictException {
+  return new ConflictException({
+    code: "BOARD_REVISION_CONFLICT",
+    message: "画布已在其他窗口更新，本地修改未覆盖远端版本",
+    expectedRevision: baseRevision,
+    ...(currentRevision === undefined ? {} : { currentRevision }),
+  });
+}
+
 function toRoleSource(value: string | undefined): RoleSource {
   if (value === "manual") {
     return RoleSource.MANUAL;
@@ -212,9 +283,7 @@ function toRoleSource(value: string | undefined): RoleSource {
   return RoleSource.DEFAULT;
 }
 
-function toInferenceState(
-  value: string | undefined,
-): RoleInferenceState {
+function toInferenceState(value: string | undefined): RoleInferenceState {
   if (value === "pending") {
     return RoleInferenceState.PENDING;
   }

@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createThumbnailProcessor } from "./thumbnail.processor";
 
 let source: Buffer;
+const completedAt = new Date("2026-01-02T03:04:05.000Z");
 
 beforeAll(async () => {
   source = await sharp({
@@ -21,7 +22,7 @@ beforeAll(async () => {
 
 function record(id = "file-1") {
   return {
-    completedAt: new Date(),
+    completedAt,
     createdAt: new Date(),
     errorMessage: null,
     height: null,
@@ -44,10 +45,11 @@ describe("thumbnail processor", () => {
   const database = {
     fileAsset: {
       findUnique: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
   const storage = {
+    delete: vi.fn(),
     get: vi.fn(),
     put: vi.fn(),
   };
@@ -59,7 +61,7 @@ describe("thumbnail processor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.fileAsset.findUnique.mockResolvedValue(record());
-    database.fileAsset.update.mockResolvedValue(record());
+    database.fileAsset.updateMany.mockResolvedValue({ count: 1 });
     storage.get.mockResolvedValue(source);
     storage.put.mockResolvedValue(undefined);
   });
@@ -70,21 +72,29 @@ describe("thumbnail processor", () => {
     expect(storage.get).toHaveBeenCalledWith("originals/user-a/file-1/source");
     expect(storage.put).toHaveBeenCalledTimes(2);
     expect(storage.put.mock.calls.map((call) => call[0])).toEqual([
-      "thumbnails/user-a/file-1/256.webp",
-      "thumbnails/user-a/file-1/1024.webp",
+      `thumbnails/user-a/file-1/${completedAt.getTime()}/256.webp`,
+      `thumbnails/user-a/file-1/${completedAt.getTime()}/1024.webp`,
     ]);
     expect(
       storage.put.mock.calls.every((call) => call[2] === "image/webp"),
     ).toBe(true);
-    expect(database.fileAsset.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          height: 80,
-          status: FileStatus.READY,
-          width: 120,
-        }),
-      }),
-    );
+    expect(database.fileAsset.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        completedAt,
+        id: "file-1",
+        status: {
+          in: [FileStatus.PROCESSING, FileStatus.FAILED],
+        },
+      },
+      data: {
+        errorMessage: null,
+        height: 80,
+        status: FileStatus.READY,
+        thumbnail1024Key: `thumbnails/user-a/file-1/${completedAt.getTime()}/1024.webp`,
+        thumbnail256Key: `thumbnails/user-a/file-1/${completedAt.getTime()}/256.webp`,
+        width: 120,
+      },
+    });
   });
 
   it("READY 去重任务不会重新下载或生成缩略图", async () => {
@@ -100,6 +110,89 @@ describe("thumbnail processor", () => {
     expect(storage.put).not.toHaveBeenCalled();
   });
 
+  it("PENDING 的陈旧任务不会下载或生成缩略图", async () => {
+    database.fileAsset.findUnique.mockResolvedValueOnce({
+      ...record("file-pending"),
+      status: FileStatus.PENDING,
+    });
+
+    await processThumbnail("file-pending");
+
+    expect(storage.get).not.toHaveBeenCalled();
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(database.fileAsset.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("BullMQ 自动重试可从 FAILED 恢复到 READY", async () => {
+    database.fileAsset.findUnique.mockResolvedValueOnce({
+      ...record("file-retry"),
+      errorMessage: "temporary error",
+      status: FileStatus.FAILED,
+    });
+
+    await processThumbnail("file-retry");
+
+    expect(database.fileAsset.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: FileStatus.READY }),
+        where: expect.objectContaining({
+          completedAt,
+          status: {
+            in: [FileStatus.PROCESSING, FileStatus.FAILED],
+          },
+        }),
+      }),
+    );
+  });
+
+  it("处理失败仅用原世代 CAS 写 FAILED 并继续抛错触发重试", async () => {
+    const failure = new Error("temporary storage failure");
+    storage.get.mockRejectedValueOnce(failure);
+
+    await expect(processThumbnail("file-1")).rejects.toBe(failure);
+
+    expect(database.fileAsset.updateMany).toHaveBeenCalledWith({
+      where: {
+        completedAt,
+        id: "file-1",
+        status: {
+          in: [FileStatus.PROCESSING, FileStatus.FAILED],
+        },
+      },
+      data: {
+        errorMessage: "temporary storage failure",
+        status: FileStatus.FAILED,
+      },
+    });
+  });
+
+  it("旧世代完成时不会覆盖新上传，并抛错让 BullMQ 再次调度", async () => {
+    const oldFile = record("file-race");
+    const newCompletedAt = new Date("2026-01-03T03:04:05.000Z");
+    database.fileAsset.findUnique
+      .mockResolvedValueOnce(oldFile)
+      .mockResolvedValueOnce({
+        ...oldFile,
+        completedAt: newCompletedAt,
+        status: FileStatus.PROCESSING,
+      });
+    database.fileAsset.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(processThumbnail("file-race")).rejects.toThrow(
+      "缩略图任务处理世代已变化",
+    );
+
+    expect(
+      database.fileAsset.updateMany.mock.calls.every(
+        ([argument]) => argument.where.completedAt === completedAt,
+      ),
+    ).toBe(true);
+    expect(storage.put.mock.calls.map((call) => call[0])).toEqual([
+      `thumbnails/user-a/file-race/${completedAt.getTime()}/256.webp`,
+      `thumbnails/user-a/file-race/${completedAt.getTime()}/1024.webp`,
+    ]);
+  });
+
   it("连续处理 151 个上传且不保留输出 Buffer", async () => {
     for (let index = 0; index < 151; index += 1) {
       const current = record(`stress-${index}`);
@@ -109,6 +202,6 @@ describe("thumbnail processor", () => {
 
     expect(storage.get).toHaveBeenCalledTimes(151);
     expect(storage.put).toHaveBeenCalledTimes(302);
-    expect(database.fileAsset.update).toHaveBeenCalledTimes(151);
+    expect(database.fileAsset.updateMany).toHaveBeenCalledTimes(151);
   }, 30_000);
 });

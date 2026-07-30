@@ -11,6 +11,9 @@ describe("BillingService", () => {
           generationLimit: 100,
         },
       ]),
+      generationTask: {
+        count: vi.fn().mockResolvedValue(0),
+      },
     };
     const database = {
       $executeRaw: vi.fn(),
@@ -41,6 +44,9 @@ describe("BillingService", () => {
           generationLimit: 20,
         },
       ]),
+      generationTask: {
+        count: vi.fn().mockResolvedValue(0),
+      },
     };
     const database = {
       $executeRaw: vi.fn(),
@@ -58,6 +64,44 @@ describe("BillingService", () => {
       limit: 20,
       remaining: 13,
       used: 7,
+    });
+  });
+
+  it("把 queued/running 且未计费任务计入有效额度占用", async () => {
+    const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          generationCount: 7,
+          generationLimit: 10,
+        },
+      ]),
+      generationTask: {
+        count: vi.fn().mockResolvedValue(2),
+      },
+    };
+    const database = {
+      $executeRaw: vi.fn(),
+      $queryRaw: vi.fn(),
+      $transaction: vi.fn(
+        async (callback: (value: typeof transaction) => Promise<unknown>) =>
+          callback(transaction),
+      ),
+    };
+
+    await expect(
+      new BillingService(database as never).canGenerate("user-1"),
+    ).resolves.toEqual({
+      allowed: true,
+      limit: 10,
+      remaining: 1,
+      used: 9,
+    });
+    expect(transaction.generationTask.count).toHaveBeenCalledWith({
+      where: {
+        countedAt: null,
+        status: { in: ["QUEUED", "RUNNING"] },
+        userId: "user-1",
+      },
     });
   });
 

@@ -118,7 +118,10 @@ async function renderThumbnail(
 }
 
 function thumbnailKey(file: FileAsset, size: number): string {
-  return `thumbnails/${file.ownerId}/${file.id}/${size}.webp`;
+  if (!file.completedAt) {
+    throw new Error("缩略图任务缺少上传完成时间");
+  }
+  return `thumbnails/${file.ownerId}/${file.id}/${file.completedAt.getTime()}/${size}.webp`;
 }
 
 export function createThumbnailProcessor({
@@ -132,7 +135,11 @@ export function createThumbnailProcessor({
     if (!file) {
       throw new Error(`缩略图文件记录不存在：${fileId}`);
     }
-    if (file.status === FileStatus.READY) {
+    if (
+      !file.completedAt ||
+      (file.status !== FileStatus.PROCESSING &&
+        file.status !== FileStatus.FAILED)
+    ) {
       return;
     }
 
@@ -148,8 +155,14 @@ export function createThumbnailProcessor({
         outputs.set(size, key);
       }
 
-      await database.fileAsset.update({
-        where: { id: file.id },
+      const finalized = await database.fileAsset.updateMany({
+        where: {
+          completedAt: file.completedAt,
+          id: file.id,
+          status: {
+            in: [FileStatus.PROCESSING, FileStatus.FAILED],
+          },
+        },
         data: {
           errorMessage: null,
           height: prepared.height,
@@ -159,13 +172,31 @@ export function createThumbnailProcessor({
           width: prepared.width,
         },
       });
+      if (finalized.count === 0) {
+        const current = await database.fileAsset.findUnique({
+          where: { id: file.id },
+        });
+        if (
+          current?.completedAt?.getTime() !== file.completedAt.getTime() &&
+          (current?.status === FileStatus.PROCESSING ||
+            current?.status === FileStatus.FAILED)
+        ) {
+          throw new Error("缩略图任务处理世代已变化");
+        }
+      }
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message.slice(0, 500)
           : "未知图片处理错误";
-      await database.fileAsset.update({
-        where: { id: file.id },
+      await database.fileAsset.updateMany({
+        where: {
+          completedAt: file.completedAt,
+          id: file.id,
+          status: {
+            in: [FileStatus.PROCESSING, FileStatus.FAILED],
+          },
+        },
         data: {
           errorMessage: message,
           status: FileStatus.FAILED,

@@ -3,14 +3,17 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Inject,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import type { ZodType } from "zod";
+import { z } from "zod";
 
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
@@ -52,6 +55,21 @@ export class CollectionsController {
     return this.collections.getByHero(user.userId, heroAssetId);
   }
 
+  @Get()
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("projectId") projectId: string | undefined,
+  ) {
+    const parsed = z.string().min(1).max(128).safeParse(projectId);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_PROJECT_ID",
+        message: "缺少有效的 projectId",
+      });
+    }
+    return this.collections.list(user.userId, parsed.data);
+  }
+
   @Get(":id")
   async get(
     @CurrentUser() user: AuthenticatedUser,
@@ -80,6 +98,7 @@ export class CollectionsController {
   async createLook(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") collectionId: string,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Body() body: unknown,
   ): Promise<{ task_id: string }> {
     const input = this.parse(
@@ -88,10 +107,18 @@ export class CollectionsController {
       "INVALID_COLLECTION_LOOK_REQUEST",
       "系列 Look 生成参数不合法",
     );
+    const parsedKey = z.string().trim().min(8).max(200).safeParse(idempotencyKey);
+    if (!parsedKey.success) {
+      throw new BadRequestException({
+        code: "INVALID_IDEMPOTENCY_KEY",
+        message: "缺少有效的 Idempotency-Key 请求头",
+      });
+    }
     const result = await this.collections.createLook(
       user.userId,
       collectionId,
       input,
+      parsedKey.data,
     );
     return { task_id: result.taskId };
   }

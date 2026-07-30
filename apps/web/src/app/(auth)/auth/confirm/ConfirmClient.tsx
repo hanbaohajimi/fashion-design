@@ -46,7 +46,14 @@ export function ConfirmClient() {
           return;
         }
 
-        router.replace("/");
+        const body = (await response.json()) as {
+          readonly projectId?: string;
+        };
+        router.replace(
+          body.projectId
+            ? `/${encodeURIComponent(body.projectId)}`
+            : "/",
+        );
         router.refresh();
       } catch {
         setError("无法连接认证服务，请检查网络后重试。");

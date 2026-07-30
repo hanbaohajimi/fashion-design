@@ -15,7 +15,10 @@ import type {
 
 export const PROJECTS_DB = Symbol("PROJECTS_DB");
 
-type ProjectsDatabase = Pick<PrismaClient, "project" | "workspace">;
+type ProjectsDatabase = Pick<
+  PrismaClient,
+  "$transaction" | "project" | "workspace"
+>;
 
 interface ProjectRecord {
   readonly archived: boolean;
@@ -84,6 +87,10 @@ export class ProjectsService {
       pageSize: input.limit,
       total,
     };
+  }
+
+  async get(userId: string, projectId: string) {
+    return toProjectResponse(await this.assertOwnership(userId, projectId));
   }
 
   async create(
@@ -166,6 +173,96 @@ export class ProjectsService {
     });
 
     return toProjectResponse(project);
+  }
+
+  async duplicate(
+    userId: string,
+    projectId: string,
+    idempotencyKey: string,
+  ) {
+    await this.assertOwnership(userId, projectId);
+    const source = await this.database.project.findUnique({
+      where: { id: projectId },
+      include: {
+        boardElements: true,
+        boardSnapshot: true,
+        workspace: { select: { ownerId: true } },
+      },
+    });
+    if (!source) {
+      throw new NotFoundException({
+        code: "PROJECT_NOT_FOUND",
+        message: "项目不存在",
+      });
+    }
+    const existing = await this.database.project.findFirst({
+      where: { idempotencyKey, wsId: source.wsId },
+    });
+    if (existing && !existing.deletedAt) {
+      return toProjectResponse(existing);
+    }
+
+    try {
+      const duplicated = await this.database.$transaction(
+        async (transaction) => {
+          const project = await transaction.project.create({
+            data: {
+              idempotencyKey,
+              name: `${source.name} 副本`.slice(0, 80),
+              wsId: source.wsId,
+            },
+          });
+          if (source.boardSnapshot) {
+            await transaction.boardSnapshot.create({
+              data: {
+                projectId: project.id,
+                revision: 0,
+                snapshot:
+                  source.boardSnapshot.snapshot === null
+                    ? Prisma.JsonNull
+                    : (source.boardSnapshot
+                        .snapshot as Prisma.InputJsonValue),
+              },
+            });
+          }
+          if (source.boardElements.length > 0) {
+            await transaction.boardElement.createMany({
+              data: source.boardElements.map((element) => ({
+                deletedAt: element.deletedAt,
+                fileAssetId: element.fileAssetId,
+                projectId: project.id,
+                record:
+                  element.record === null
+                    ? Prisma.JsonNull
+                    : (element.record as Prisma.InputJsonValue),
+                role: element.role,
+                roleConfidence: element.roleConfidence,
+                roleInferenceState: element.roleInferenceState,
+                roleLabel: element.roleLabel,
+                roleSource: element.roleSource,
+                shapeId: element.shapeId,
+                shapeType: element.shapeType,
+              })),
+            });
+          }
+          return project;
+        },
+      );
+      return toProjectResponse(duplicated);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const concurrent = await this.database.project.findFirst({
+          where: { idempotencyKey, wsId: source.wsId },
+        });
+        if (concurrent && !concurrent.deletedAt) {
+          return toProjectResponse(concurrent);
+        }
+      }
+      throw error;
+    }
   }
 
   async remove(userId: string, projectId: string): Promise<void> {

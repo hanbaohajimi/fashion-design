@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getSnapshot,
   loadSnapshot,
@@ -11,17 +11,14 @@ import {
 } from "tldraw";
 
 import {
+  BoardApiError,
   type BoardElementPatch,
   type BoardElementRow,
   type BoardPatchPayload,
   fetchBoard,
   patchBoard,
 } from "../board-api";
-import {
-  IMAGE_SHAPE_TYPE,
-  isBoardShape,
-  normalizeBoardRole,
-} from "../shapes";
+import { IMAGE_SHAPE_TYPE, isBoardShape, normalizeBoardRole } from "../shapes";
 import { captureAnalytics } from "../../../observability/analytics";
 
 const SAVE_DEBOUNCE_MS = 1_500;
@@ -29,15 +26,11 @@ const RETRY_MIN_MS = 3_000;
 const RETRY_MAX_MS = 30_000;
 
 export type BoardPersistStatus =
-  | "loading"
-  | "ready"
-  | "saving"
-  | "saved"
-  | "offline"
-  | "error";
+  "loading" | "ready" | "saving" | "saved" | "offline" | "conflict" | "error";
 
-interface BoardPersistState {
+export interface BoardPersistState {
   readonly error: string | null;
+  readonly resolveConflict: () => void;
   readonly retry: () => void;
   readonly status: BoardPersistStatus;
 }
@@ -73,11 +66,7 @@ function semanticForShape(shape: TLShape) {
     };
   }
   const state = shape.props.roleInferenceState;
-  const roleInferenceState:
-    | "none"
-    | "pending"
-    | "ready"
-    | "failed" =
+  const roleInferenceState: "none" | "pending" | "ready" | "failed" =
     state === "pending" || state === "failed" || state === "ready"
       ? state
       : "none";
@@ -145,13 +134,43 @@ function applyElementRows(
   });
 }
 
-function readOutbox(key: string): BoardPatchPayload | null {
+function applyElementPatches(
+  store: TLStore,
+  patches: readonly BoardElementPatch[],
+): void {
+  store.mergeRemoteChanges(() => {
+    for (const patch of patches) {
+      const shapeId = patch.shapeId as TLShapeId;
+      if (patch.deleted) {
+        if (store.has(shapeId)) {
+          store.remove([shapeId]);
+        }
+      } else {
+        store.put([patch.record]);
+      }
+    }
+  });
+}
+
+type StoredBoardPatchPayload = Omit<BoardPatchPayload, "baseRevision"> & {
+  readonly baseRevision?: number;
+};
+
+function readOutbox(key: string): StoredBoardPatchPayload | null {
   try {
     const value = window.localStorage.getItem(key);
-    return value ? (JSON.parse(value) as BoardPatchPayload) : null;
+    return value ? (JSON.parse(value) as StoredBoardPatchPayload) : null;
   } catch {
     return null;
   }
+}
+
+function storedBaseRevision(payload: StoredBoardPatchPayload): number {
+  return typeof payload.baseRevision === "number" &&
+    Number.isInteger(payload.baseRevision) &&
+    payload.baseRevision >= 0
+    ? payload.baseRevision
+    : 0;
 }
 
 export function useBoardPersist(
@@ -161,13 +180,22 @@ export function useBoardPersist(
   const [status, setStatus] = useState<BoardPersistStatus>("loading");
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const rebaseOutboxRef = useRef(false);
   const retry = useCallback(() => setReloadToken((value) => value + 1), []);
+  const resolveConflict = useCallback(() => {
+    rebaseOutboxRef.current = true;
+    setReloadToken((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     const outboxKey = `fashion-board-outbox:${projectId}`;
     const pending = new Map<string, BoardElementPatch>();
     let snapshotDirty = false;
     let disposed = false;
+    let conflictDetected = false;
+    let flushInFlight = false;
+    let inFlightPayload: BoardPatchPayload | null = null;
+    let revision = 0;
     let saveTimer: number | undefined;
     let retryTimer: number | undefined;
     let retryDelay = RETRY_MIN_MS;
@@ -183,6 +211,7 @@ export function useBoardPersist(
     const makePayload = (
       patches: readonly BoardElementPatch[],
     ): BoardPatchPayload => ({
+      baseRevision: revision,
       batchId: crypto.randomUUID(),
       patches,
       snapshot: getSnapshot(store),
@@ -193,12 +222,13 @@ export function useBoardPersist(
         window.clearTimeout(saveTimer);
       }
       saveTimer = window.setTimeout(() => {
+        saveTimer = undefined;
         void flush();
       }, delay);
     };
 
     const flush = async (): Promise<void> => {
-      if (disposed || (!snapshotDirty && pending.size === 0)) {
+      if (disposed || flushInFlight || (!snapshotDirty && pending.size === 0)) {
         return;
       }
 
@@ -207,22 +237,24 @@ export function useBoardPersist(
         saveTimer = undefined;
       }
 
+      flushInFlight = true;
       const sending = new Map(pending);
       pending.clear();
       snapshotDirty = false;
       const payload = makePayload([...sending.values()]);
+      inFlightPayload = payload;
       saveOutbox(payload);
       setStatus(navigator.onLine ? "saving" : "offline");
 
       try {
-        await patchBoard(projectId, payload);
+        const result = await patchBoard(projectId, payload);
+        revision = result.revision;
         retryDelay = RETRY_MIN_MS;
+        setError(null);
 
         if (pending.size === 0 && !snapshotDirty) {
           window.localStorage.removeItem(outboxKey);
           setStatus("saved");
-        } else {
-          scheduleFlush();
         }
       } catch (cause) {
         for (const [shapeId, patch] of sending) {
@@ -231,15 +263,49 @@ export function useBoardPersist(
           }
         }
         snapshotDirty = true;
-        setStatus(navigator.onLine ? "offline" : "offline");
-        setError(cause instanceof Error ? cause.message : "画布保存失败");
+        saveOutbox(makePayload([...pending.values()]));
 
-        if (!retryTimer) {
+        if (saveTimer) {
+          window.clearTimeout(saveTimer);
+          saveTimer = undefined;
+        }
+
+        if (
+          cause instanceof BoardApiError &&
+          cause.status === 409 &&
+          cause.code === "BOARD_REVISION_CONFLICT"
+        ) {
+          conflictDetected = true;
+          if (retryTimer) {
+            window.clearTimeout(retryTimer);
+            retryTimer = undefined;
+          }
+          setStatus("conflict");
+          setError(
+            "检测到其他窗口已保存更新。本地待保存内容已保留；请读取最新版本后再重试。",
+          );
+        } else {
+          setStatus("offline");
+          setError(cause instanceof Error ? cause.message : "画布保存失败");
+        }
+
+        if (!conflictDetected && !retryTimer) {
           retryTimer = window.setTimeout(() => {
             retryTimer = undefined;
             void flush();
           }, retryDelay);
           retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
+        }
+      } finally {
+        flushInFlight = false;
+        inFlightPayload = null;
+        if (
+          !disposed &&
+          !conflictDetected &&
+          !retryTimer &&
+          (pending.size > 0 || snapshotDirty)
+        ) {
+          scheduleFlush();
         }
       }
     };
@@ -268,9 +334,12 @@ export function useBoardPersist(
       setStatus("loading");
       setError(null);
       const localOutbox = readOutbox(outboxKey);
+      let serverRevision: number | null = null;
 
       try {
         const board = await fetchBoard(projectId);
+        serverRevision = board.revision;
+        revision = board.revision;
 
         if (board.snapshot) {
           loadSnapshot(store, board.snapshot);
@@ -283,11 +352,33 @@ export function useBoardPersist(
       }
 
       if (localOutbox) {
-        loadSnapshot(store, localOutbox.snapshot);
+        const localBaseRevision = storedBaseRevision(localOutbox);
+        const latestRevision = rebaseOutboxRef.current ? serverRevision : null;
+        if (latestRevision !== null) {
+          revision = latestRevision;
+          rebaseOutboxRef.current = false;
+        } else {
+          revision = localBaseRevision;
+          if (serverRevision !== null && localBaseRevision !== serverRevision) {
+            conflictDetected = true;
+          }
+          if (rebaseOutboxRef.current && serverRevision === null) {
+            conflictDetected = true;
+          }
+        }
+
+        if (latestRevision !== null) {
+          applyElementPatches(store, localOutbox.patches);
+        } else {
+          loadSnapshot(store, localOutbox.snapshot);
+        }
         for (const patch of localOutbox.patches) {
           pending.set(patch.shapeId, patch);
         }
         snapshotDirty = true;
+        saveOutbox(makePayload([...pending.values()]));
+      } else if (serverRevision !== null) {
+        rebaseOutboxRef.current = false;
       }
 
       const stopListening = store.listen(
@@ -309,14 +400,27 @@ export function useBoardPersist(
             queueRecord(record, true);
           }
 
-          setStatus("ready");
-          scheduleFlush();
+          if (conflictDetected) {
+            saveOutbox(makePayload([...pending.values()]));
+          } else {
+            setStatus("ready");
+            scheduleFlush();
+          }
         },
         { scope: "document", source: "user" },
       );
 
-      setStatus(localOutbox ? "offline" : "ready");
-      if (localOutbox) {
+      if (conflictDetected) {
+        setStatus("conflict");
+        setError(
+          serverRevision === null
+            ? "本地待保存内容已保留；需要联网读取最新版本后才能重试。"
+            : "检测到其他窗口已保存更新。本地待保存内容已保留；请读取最新版本后再重试。",
+        );
+      } else {
+        setStatus(localOutbox ? "offline" : "ready");
+      }
+      if (localOutbox && !conflictDetected) {
         scheduleFlush(0);
       }
       return stopListening;
@@ -337,13 +441,30 @@ export function useBoardPersist(
       });
 
     const handleOnline = (): void => {
+      if (conflictDetected) {
+        if (rebaseOutboxRef.current) {
+          setReloadToken((value) => value + 1);
+        }
+        return;
+      }
       setStatus("ready");
       void flush();
     };
-    const handleOffline = (): void => setStatus("offline");
+    const handleOffline = (): void => {
+      if (!conflictDetected) {
+        setStatus("offline");
+      }
+    };
     const handlePageHide = (): void => {
-      if (snapshotDirty || pending.size > 0) {
-        saveOutbox(makePayload([...pending.values()]));
+      if (inFlightPayload || snapshotDirty || pending.size > 0) {
+        const recoverable = new Map<string, BoardElementPatch>();
+        for (const patch of inFlightPayload?.patches ?? []) {
+          recoverable.set(patch.shapeId, patch);
+        }
+        for (const patch of pending.values()) {
+          recoverable.set(patch.shapeId, patch);
+        }
+        saveOutbox(makePayload([...recoverable.values()]));
       }
     };
 
@@ -367,5 +488,5 @@ export function useBoardPersist(
     };
   }, [projectId, reloadToken, store]);
 
-  return { error, retry, status };
+  return { error, resolveConflict, retry, status };
 }

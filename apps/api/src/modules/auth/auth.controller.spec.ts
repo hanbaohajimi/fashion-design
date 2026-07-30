@@ -38,6 +38,7 @@ describe("authentication HTTP contract", () => {
     assertAllowedOrigin: vi.fn(),
     authenticate: vi.fn(),
     getUser: vi.fn(),
+    getInitialProjectId: vi.fn(),
     refreshSession: vi.fn(),
     sendMagicLink: vi.fn(),
     verifyMagicLink: vi.fn(),
@@ -131,6 +132,7 @@ describe("authentication HTTP contract", () => {
       refreshToken: "refresh-token-value",
       user,
     });
+    authService.getInitialProjectId.mockResolvedValue("project-first");
 
     const response = await request(app.getHttpServer())
       .post("/auth/login")
@@ -151,5 +153,6 @@ describe("authentication HTTP contract", () => {
     );
     expect(response.body).not.toHaveProperty("accessToken");
     expect(response.body).not.toHaveProperty("refreshToken");
+    expect(response.body.projectId).toBe("project-first");
   });
 });

@@ -16,6 +16,8 @@ const commonRequestSchema = z.object({
 export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
     taskType: z.literal("t2i"),
+    referenceImageUrl: z.url().optional(),
+    strength: z.number().min(0).max(1).optional(),
   }),
   commonRequestSchema.extend({
     taskType: z.literal("i2i"),
@@ -85,8 +87,5 @@ export interface AiProvider {
     signal: AbortSignal,
   ): Promise<AiProviderJobStatus>;
 
-  getResult(
-    job: AiProviderJob,
-    signal: AbortSignal,
-  ): Promise<AiProviderResult>;
+  getResult(job: AiProviderJob, signal: AbortSignal): Promise<AiProviderResult>;
 }
