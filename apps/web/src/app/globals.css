@@ -1,13 +1,54 @@
 :root {
+  /* ---- Digital Atelier design tokens ---- */
+
+  /* Surfaces: paper stock, from cutting-table canvas to bright sample sheet */
+  --atelier-canvas: #ece9e0; /* board background, the cutting table */
+  --atelier-paper: #f1eee5; /* page ground, pattern paper */
+  --atelier-sheet: #f8f5ec; /* raised panels, fresh sample sheet */
+  --atelier-bright: #fffdf7; /* text knocked out of ink */
+
+  /* Ink: charcoal, never pure black */
+  --atelier-ink: #181915;
+  --atelier-ink-soft: #24251f;
+  --atelier-muted: #69675f;
+  --atelier-faint: #8a867d;
+
+  /* Rules and tints derived from ink — keeps every hairline on one system */
+  --atelier-rule: rgb(24 25 21 / 22%);
+  --atelier-rule-faint: rgb(24 25 21 / 12%);
+  --atelier-grid: rgb(24 25 21 / 4%); /* graph-paper ruling */
+  --atelier-warm-mid: #d2cec3; /* skeleton / unexposed material */
+
+  /* Season accent — one colour only, used for signal not decoration */
+  --atelier-signal: #e9522c;
+  --atelier-signal-deep: #a6321d;
+  --atelier-signal-wash: rgb(233 82 44 / 10%);
+
+  /* Typography: editorial serif for voice, UI sans for instruments */
+  --type-editorial: Georgia, "Songti SC", serif;
+  --type-ui:
+    "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+
+  /* Micro-label: the letterpressed spec text on a pattern piece */
+  --label-size: 0.68rem;
+  --label-weight: 800;
+  --label-track: 0.14em;
+
+  /* Offset shadows only — paper lifted off paper, never a soft glow */
+  --shadow-card: 7px 7px 0 rgb(24 25 21 / 12%);
+  --shadow-float: 12px 12px 0 rgb(24 25 21 / 16%);
+  --shadow-modal: 18px 18px 0 rgb(24 25 21 / 25%);
+
+  /* Motion: quick, decisive, like a pinned dart */
+  --ease-atelier: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-instant: 120ms;
+  --dur-quick: 180ms;
+  --dur-considered: 300ms;
+
   color-scheme: light;
-  font-family:
-    "PingFang SC",
-    "Microsoft YaHei",
-    system-ui,
-    -apple-system,
-    sans-serif;
-  background: #f4f1ea;
-  color: #171714;
+  font-family: var(--type-ui);
+  background: var(--atelier-paper);
+  color: var(--atelier-ink);
 }
 
 * {

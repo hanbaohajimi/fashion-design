@@ -4,12 +4,16 @@ export const AI_TASK_TYPES = ["t2i", "i2i", "inpaint"] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
 
 const commonRequestSchema = z.object({
+  background: z.enum(["auto", "opaque"]).optional(),
   prompt: z.string().trim().min(1).max(4_000),
   negativePrompt: z.string().trim().max(3_000).optional(),
   width: z.number().int().min(256).max(2_048).multipleOf(8),
   height: z.number().int().min(256).max(2_048).multipleOf(8),
   steps: z.number().int().min(1).max(100),
   cfg: z.number().min(0).max(30),
+  outputCompression: z.number().int().min(0).max(100).optional(),
+  outputFormat: z.enum(["jpeg", "png", "webp"]).optional(),
+  quality: z.enum(["auto", "low", "medium", "high"]).optional(),
   seed: z.number().int().min(0).max(4_294_967_295).optional(),
 });
 
@@ -39,9 +43,14 @@ export type AiProviderStatus = "queued" | "running" | "completed";
 export interface AiGenerationCost {
   rawCost: number;
   credits: number;
-  currency: "USD";
+  currency: "CNY" | "USD";
   billableMegapixels: number;
   estimated: true;
+}
+
+export interface AiProviderCompletedResult {
+  images: AiGeneratedImage[];
+  seed?: number | undefined;
 }
 
 export interface AiProviderJob {
@@ -51,6 +60,12 @@ export interface AiProviderJob {
   taskType: AiTaskType;
   submittedAt: string;
   cost: AiGenerationCost;
+  /**
+   * 同步 Provider 的即时结果。HTTPS URL 可由 Worker 短暂持久化；GPT Image 2 的
+   * data:image Base64 只能停留在进程内存，Worker 必须跳过 providerJob 落库并立即
+   * 物化到私有对象存储。
+   */
+  completedResult?: AiProviderCompletedResult | undefined;
 }
 
 export interface AiProviderJobStatus {
@@ -60,9 +75,9 @@ export interface AiProviderJobStatus {
 
 export interface AiGeneratedImage {
   url: string;
-  width?: number;
-  height?: number;
-  contentType?: string;
+  width?: number | undefined;
+  height?: number | undefined;
+  contentType?: string | undefined;
 }
 
 export interface AiProviderResult {
@@ -91,3 +106,33 @@ export interface AiProvider {
 
   getResult(job: AiProviderJob, signal: AbortSignal): Promise<AiProviderResult>;
 }
+
+const aiGenerationCostSchema = z.object({
+  rawCost: z.number().nonnegative(),
+  credits: z.number().int().nonnegative(),
+  currency: z.enum(["CNY", "USD"]),
+  billableMegapixels: z.number().int().positive(),
+  estimated: z.literal(true),
+});
+
+const aiGeneratedImageSchema = z.object({
+  url: z.url(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  contentType: z.string().min(1).optional(),
+});
+
+export const aiProviderJobSchema = z.object({
+  provider: z.string().min(1),
+  providerJobId: z.string().min(1),
+  model: z.string().min(1),
+  taskType: z.enum(AI_TASK_TYPES),
+  submittedAt: z.iso.datetime(),
+  cost: aiGenerationCostSchema,
+  completedResult: z
+    .object({
+      images: z.array(aiGeneratedImageSchema).min(1),
+      seed: z.number().int().optional(),
+    })
+    .optional(),
+});

@@ -17,6 +17,8 @@ interface ProjectCardProps {
   readonly project: Project;
 }
 
+/* Undyed material tones: unbleached calico, sage wool, ash rose, raw linen,
+   slate cotton. Read as fabric on the table, never as brand colour. */
 const PLACEHOLDER_COLORS = [
   "#d5c1a8",
   "#a9b7ad",
@@ -24,6 +26,10 @@ const PLACEHOLDER_COLORS = [
   "#c8c0a2",
   "#9ea9b8",
 ] as const;
+
+/* Bias angles so a run of uncovered cards looks like swatches cut on the
+   grain rather than one repeated texture. */
+const WEAVE_ANGLES = ["24deg", "68deg", "112deg", "156deg", "45deg"] as const;
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -44,10 +50,13 @@ export function ProjectCard({
   project,
 }: ProjectCardProps) {
   const [renaming, setRenaming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [name, setName] = useState(project.name);
   const placeholder = PLACEHOLDER_COLORS[index % PLACEHOLDER_COLORS.length];
   const coverStyle = {
     "--cover-color": placeholder,
+    "--weave-angle": WEAVE_ANGLES[index % WEAVE_ANGLES.length],
     ...(project.coverUrl
       ? { backgroundImage: `url("${project.coverUrl}")` }
       : {}),
@@ -68,14 +77,18 @@ export function ProjectCard({
     setRenaming(false);
   };
 
-  const confirmDelete = async (): Promise<void> => {
-    const message =
-      project.assetCount > 0
-        ? "该项目含设计资产，确认删除？"
-        : `确认删除“${project.name}”？`;
+  const runDelete = async (): Promise<void> => {
+    if (deletePending) {
+      return;
+    }
 
-    if (window.confirm(message)) {
+    setDeletePending(true);
+
+    try {
       await onDelete(project);
+    } finally {
+      setDeletePending(false);
+      setConfirmingDelete(false);
     }
   };
 
@@ -92,14 +105,18 @@ export function ProjectCard({
       >
         <div
           aria-label={
-            project.coverUrl ? `${project.name} 封面` : "项目封面占位色"
+            project.coverUrl ? `${project.name} 封面` : "项目封面占位布样"
           }
           className={styles.projectCover}
+          data-has-cover={project.coverUrl ? "true" : undefined}
           role="img"
           style={coverStyle}
         >
           <span className={styles.coverNumber}>
             {String(index + 1).padStart(2, "0")}
+          </span>
+          <span aria-hidden="true" className={styles.coverMeasure}>
+            {project.assetCount > 0 ? `${project.assetCount} PCS` : "UNCUT"}
           </span>
           <span className={styles.coverMark}>FD</span>
         </div>
@@ -161,7 +178,7 @@ export function ProjectCard({
                 </button>
                 <button
                   className={styles.deleteAction}
-                  onClick={() => void confirmDelete()}
+                  onClick={() => setConfirmingDelete(true)}
                   type="button"
                 >
                   删除
@@ -181,6 +198,36 @@ export function ProjectCard({
                 : "空项目"}
           </span>
         </div>
+
+        {confirmingDelete ? (
+          <div className={styles.confirmPanel} role="group">
+            <span>DISCARD · 不可撤销</span>
+            <p>
+              {project.assetCount > 0
+                ? `“${project.name}”含 ${project.assetCount} 项设计资产，删除后无法找回。`
+                : `确认删除“${project.name}”？`}
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                autoFocus
+                disabled={deletePending}
+                onClick={() => setConfirmingDelete(false)}
+                type="button"
+              >
+                保留
+              </button>
+              <button
+                aria-busy={deletePending}
+                data-confirm="true"
+                disabled={deletePending}
+                onClick={() => void runDelete()}
+                type="button"
+              >
+                {deletePending ? "正在删除…" : "确认删除"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </article>
   );

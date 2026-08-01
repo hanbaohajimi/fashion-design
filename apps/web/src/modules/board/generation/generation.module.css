@@ -82,7 +82,6 @@
 .constraintChips span {
   min-height: 21px;
   border: 1px solid rgb(36 37 31 / 34%);
-  border-radius: 999px;
   padding: 4px 8px;
   background: #ebe7dc;
   font-size: 8px;
@@ -191,6 +190,13 @@
   background: #f8f5ec;
   color: #24251f;
   font: inherit;
+}
+
+.providerParameterHint {
+  grid-column: 1 / -1;
+  color: #747168;
+  font-size: 8px;
+  line-height: 1.45;
 }
 
 .generationBar > p {
@@ -360,8 +366,7 @@
   inset: 0;
   display: grid;
   padding: 22px;
-  background: rgb(24 25 21 / 74%);
-  backdrop-filter: blur(10px);
+  background: rgb(24 25 21 / 82%);
   color: #24251f;
   place-items: center;
   animation: lightbox-enter 180ms ease-out both;
@@ -905,8 +910,9 @@
   display: grid;
   min-height: 42px;
   border-bottom: 1px solid #24251f;
-  background: rgb(248 245 236 / 96%);
-  backdrop-filter: blur(12px);
+  /* Opaque paper, not frosted glass: at 96% the blur was invisible anyway
+     and cost a composited layer on every scroll frame. */
+  background: #f8f5ec;
   grid-template-columns: repeat(3, 1fr);
 }
 
@@ -944,8 +950,7 @@
   align-items: stretch;
   justify-content: space-between;
   border-bottom: 1px solid #24251f;
-  background: rgb(248 245 236 / 96%);
-  backdrop-filter: blur(12px);
+  background: #f8f5ec;
 }
 
 .collectionHeader > div:first-child {
@@ -1008,7 +1013,6 @@
 .saveIndicator i {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
   background: #47725e;
 }
 
@@ -1788,7 +1792,6 @@
 .taskTray li > i {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
   background: #77736a;
 }
 
@@ -1864,8 +1867,7 @@
   overflow-y: auto;
   align-items: center;
   padding: 24px;
-  background: rgb(20 20 18 / 76%);
-  backdrop-filter: blur(10px);
+  background: rgb(20 20 18 / 84%);
 }
 
 .exportModal {
@@ -2068,7 +2070,6 @@
 .exportLoading > i {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
   background: #e9522c;
   animation: task-breathe 1.2s ease-in-out infinite;
 }

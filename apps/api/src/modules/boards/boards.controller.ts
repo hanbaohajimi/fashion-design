@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Patch,
 } from "@nestjs/common";
@@ -30,7 +31,9 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
 
 @Controller("projects/:projectId/board")
 export class BoardsController {
-  constructor(private readonly boardsService: BoardsService) {}
+  constructor(
+    @Inject(BoardsService) private readonly boardsService: BoardsService,
+  ) {}
 
   @Get()
   get(

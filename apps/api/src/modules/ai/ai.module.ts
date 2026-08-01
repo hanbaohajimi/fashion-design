@@ -1,7 +1,7 @@
 import {
   aiServiceOptionsFromEnv,
-  FalAdapter,
-  falAdapterConfigFromEnv,
+  createAmuxClaudeClientFromEnv,
+  createAiProvidersFromEnv,
   type AiServiceOptions,
 } from "@fashion/ai";
 import { Module } from "@nestjs/common";
@@ -10,26 +10,25 @@ import { AiService } from "./ai.service";
 import {
   AI_PROVIDERS,
   AI_SERVICE_OPTIONS,
-  FAL_ADAPTER,
+  AMUX_CLAUDE_CLIENT,
 } from "./ai.tokens";
 
 @Module({
   providers: [
     {
-      provide: FAL_ADAPTER,
-      useFactory: () => new FalAdapter(falAdapterConfigFromEnv()),
-    },
-    {
       provide: AI_PROVIDERS,
-      inject: [FAL_ADAPTER],
-      useFactory: (falAdapter: FalAdapter) => [falAdapter],
+      useFactory: createAiProvidersFromEnv,
     },
     {
       provide: AI_SERVICE_OPTIONS,
       useFactory: (): AiServiceOptions => aiServiceOptionsFromEnv(),
     },
+    {
+      provide: AMUX_CLAUDE_CLIENT,
+      useFactory: createAmuxClaudeClientFromEnv,
+    },
     AiService,
   ],
-  exports: [AiService],
+  exports: [AiService, AMUX_CLAUDE_CLIENT],
 })
 export class AiModule {}

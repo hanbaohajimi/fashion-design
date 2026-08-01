@@ -47,6 +47,9 @@
   font-style: italic;
 }
 
+/* A bodice front pattern piece laid on the dark table: straight grain edges,
+   a shaped armhole and side seam. clip-path, not a border-radius blob —
+   the silhouette has to read as drafted, not as a soft shape. */
 .cutPiece {
   position: absolute;
   right: -7%;
@@ -54,7 +57,17 @@
   width: min(70%, 38rem);
   aspect-ratio: 0.78;
   border: 1px dashed rgb(242 238 228 / 55%);
-  border-radius: 52% 48% 18% 12% / 24% 32% 15% 18%;
+  clip-path: polygon(
+    30% 0,
+    62% 3%,
+    72% 14%,
+    88% 34%,
+    96% 62%,
+    92% 100%,
+    8% 100%,
+    2% 46%,
+    14% 12%
+  );
   rotate: -12deg;
 }
 
@@ -64,6 +77,7 @@
   content: "";
 }
 
+/* Bust line — the one measurement marked in season red */
 .cutPiece::before {
   top: 18%;
   left: -12%;
@@ -72,6 +86,7 @@
   rotate: 21deg;
 }
 
+/* Centre-front grainline */
 .cutPiece::after {
   top: 10%;
   left: 50%;

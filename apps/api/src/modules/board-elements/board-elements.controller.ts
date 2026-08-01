@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -32,7 +33,10 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
 
 @Controller("projects/:projectId/board-elements")
 export class BoardElementsController {
-  constructor(private readonly boardElementsService: BoardElementsService) {}
+  constructor(
+    @Inject(BoardElementsService)
+    private readonly boardElementsService: BoardElementsService,
+  ) {}
 
   @Post(":shapeId/infer")
   infer(

@@ -61,16 +61,54 @@ describe("AiService", () => {
     expect(fallback.submittedRequests).toEqual([request]);
   });
 
+  it("主 Provider 持续不可用时降级到备选 Provider", async () => {
+    const primary = new MockAdapter({
+      name: "primary",
+      submitError: unavailable("primary"),
+    });
+    const fallback = new MockAdapter({ name: "fallback" });
+    const service = createService([primary, fallback], {
+      primaryProvider: "primary",
+      fallbackProvider: "fallback",
+    });
+
+    const job = await service.submit(request);
+
+    expect(job.provider).toBe("fallback");
+    expect(fallback.submittedRequests).toEqual([request]);
+  });
+
+  it("备选 Provider 不支持任务类型时保留主渠道原始错误", async () => {
+    const primary = new MockAdapter({
+      name: "primary",
+      submitError: new AiProviderError({
+        code: "RATE_LIMITED",
+        provider: "primary",
+        message: "rate limited",
+      }),
+    });
+    const fallback = providerWithSubmit("fallback", vi.fn());
+    fallback.supports = () => false;
+    const service = createService([primary, fallback], {
+      primaryProvider: "primary",
+      fallbackProvider: "fallback",
+    });
+
+    await expect(service.submit(request)).rejects.toMatchObject({
+      code: "RATE_LIMITED",
+      provider: "primary",
+    });
+    expect(fallback.submit).not.toHaveBeenCalled();
+  });
+
   it("CONTENT_FLAGGED 不重试也不降级", async () => {
-    const submit = vi
-      .fn<AiProvider["submit"]>()
-      .mockRejectedValue(
-        new AiProviderError({
-          code: "CONTENT_FLAGGED",
-          provider: "primary",
-          message: "flagged",
-        }),
-      );
+    const submit = vi.fn<AiProvider["submit"]>().mockRejectedValue(
+      new AiProviderError({
+        code: "CONTENT_FLAGGED",
+        provider: "primary",
+        message: "flagged",
+      }),
+    );
     const fallback = new MockAdapter({ name: "fallback" });
     const service = createService(
       [providerWithSubmit("primary", submit), fallback],

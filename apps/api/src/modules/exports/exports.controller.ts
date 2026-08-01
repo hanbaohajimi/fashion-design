@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Header,
   HttpCode,
   Param,
@@ -20,7 +21,9 @@ const PRIVATE_NO_STORE = "private, no-store";
 
 @Controller("exports")
 export class ExportsController {
-  constructor(private readonly exportsService: ExportsService) {}
+  constructor(
+    @Inject(ExportsService) private readonly exportsService: ExportsService,
+  ) {}
 
   @Get("capabilities")
   capabilities(@CurrentUser() user: AuthenticatedUser) {

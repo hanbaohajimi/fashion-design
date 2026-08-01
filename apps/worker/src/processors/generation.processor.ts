@@ -1,6 +1,7 @@
 import {
   AiProviderError,
   aiGenerationRequestSchema,
+  aiProviderJobSchema,
   type AiProviderJob,
   type AiProviderResult,
   type AiRuntimeService,
@@ -20,28 +21,12 @@ import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sharp from "sharp";
-import { z } from "zod";
 
 import type {
   ContentModerationDecision,
   ContentModerationService,
 } from "../content-moderation.service";
 import type { ThumbnailStorage } from "../storage";
-
-const providerJobSchema = z.object({
-  provider: z.string().min(1),
-  providerJobId: z.string().min(1),
-  model: z.string().min(1),
-  taskType: z.enum(["t2i", "i2i", "inpaint"]),
-  submittedAt: z.iso.datetime(),
-  cost: z.object({
-    rawCost: z.number().nonnegative(),
-    credits: z.number().int().nonnegative(),
-    currency: z.literal("USD"),
-    billableMegapixels: z.number().int().positive(),
-    estimated: z.literal(true),
-  }),
-});
 
 const MAX_GENERATED_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_GENERATED_IMAGE_PIXELS = 40_000_000;
@@ -52,6 +37,7 @@ const MAX_GENERATED_IMAGE_REDIRECTS = 3;
 const PROVIDER_CANCEL_TIMEOUT_MS = 5_000;
 const MATERIALIZED_OBJECT_DELETE_ATTEMPTS = 3;
 const MATERIALIZED_OBJECT_DELETE_RETRY_BASE_MS = 25;
+const DEFAULT_GENERATION_TIMEOUT_MS = 720_000;
 const ALLOWED_GENERATED_IMAGE_TYPES = new Set([
   "image/avif",
   "image/jpeg",
@@ -96,6 +82,18 @@ class GenerationLeaseLostError extends UnrecoverableError {}
 class GenerationStateConflictError extends UnrecoverableError {}
 class ContentModerationUnavailableError extends Error {}
 
+export function generationTimeoutMsFromEnv(
+  value = process.env.GENERATION_TIMEOUT_MS,
+): number {
+  if (!value?.trim()) {
+    return DEFAULT_GENERATION_TIMEOUT_MS;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_GENERATION_TIMEOUT_MS;
+}
+
 export function createGenerationProcessor({
   ai,
   billing,
@@ -107,7 +105,7 @@ export function createGenerationProcessor({
   resolveHostname = resolveGeneratedImageHostname,
   similarityJobs,
   storage,
-  timeoutMs = 120_000,
+  timeoutMs = generationTimeoutMsFromEnv(),
 }: GenerationProcessorDependencies) {
   return async (
     job: Job<GenerationJobData>,
@@ -204,12 +202,11 @@ export function createGenerationProcessor({
     await updateProgressSafely(job, event(task.id, "running"));
 
     const timeoutController = new AbortController();
+    const timeoutMessage = `生成任务超过 ${formatTimeoutDuration(timeoutMs)}`;
     const leaseController = new AbortController();
     const timeout = setTimeout(
       () =>
-        timeoutController.abort(
-          new GenerationTimedOutError("生成任务超过 120 秒"),
-        ),
+        timeoutController.abort(new GenerationTimedOutError(timeoutMessage)),
       timeoutMs,
     );
     const signal = AbortSignal.any([
@@ -238,6 +235,14 @@ export function createGenerationProcessor({
         taskId: task.id,
         pollIntervalMs,
       });
+      if (
+        result.images.some((image) => isInlineImageUrl(image.url)) &&
+        (!storage || !task.projectId)
+      ) {
+        throw new UnrecoverableError(
+          "GPT Image 2 内联结果必须关联项目并配置对象存储",
+        );
+      }
       const moderation = await moderateSafely(
         moderator,
         result.images.map((image) => image.url),
@@ -363,7 +368,7 @@ export function createGenerationProcessor({
           task.id,
           leaseAttempt,
           "GENERATION_TIMEOUT",
-          "生成任务超过 120 秒",
+          timeoutMessage,
         );
         await updateProgressSafely(job, event(task.id, finalStatus));
         if (finalStatus === "canceled") {
@@ -373,7 +378,7 @@ export function createGenerationProcessor({
             taskId: task.id,
           };
         }
-        throw new UnrecoverableError("生成任务超过 120 秒");
+        throw new UnrecoverableError(timeoutMessage);
       }
 
       const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
@@ -444,6 +449,16 @@ export function createGenerationProcessor({
   };
 }
 
+function formatTimeoutDuration(timeoutMs: number): string {
+  if (timeoutMs >= 60_000 && timeoutMs % 60_000 === 0) {
+    return `${timeoutMs / 60_000} 分钟`;
+  }
+  if (timeoutMs >= 1_000 && timeoutMs % 1_000 === 0) {
+    return `${timeoutMs / 1_000} 秒`;
+  }
+  return `${timeoutMs} 毫秒`;
+}
+
 async function executeGeneration({
   ai,
   attemptCount,
@@ -467,10 +482,14 @@ async function executeGeneration({
   let remoteJob: AiProviderJob;
 
   if (providerJob) {
-    remoteJob = providerJobSchema.parse(providerJob);
+    remoteJob = aiProviderJobSchema.parse(providerJob);
   } else {
     await assertActive(database, taskId, attemptCount);
     remoteJob = await ai.submit(request, signal);
+    if (hasInlineCompletedResult(remoteJob)) {
+      await assertActive(database, taskId, attemptCount);
+      return resultWithoutCompletedJob(await ai.getResult(remoteJob, signal));
+    }
     const saved = await database.generationTask.updateMany({
       where: {
         attemptCount,
@@ -495,7 +514,21 @@ async function executeGeneration({
   }
 
   await assertActive(database, taskId, attemptCount);
-  return ai.getResult(remoteJob, signal);
+  return resultWithoutCompletedJob(await ai.getResult(remoteJob, signal));
+}
+
+function resultWithoutCompletedJob(result: AiProviderResult): AiProviderResult {
+  return {
+    ...result,
+    job: {
+      cost: result.job.cost,
+      model: result.job.model,
+      provider: result.job.provider,
+      providerJobId: result.job.providerJobId,
+      submittedAt: result.job.submittedAt,
+      taskType: result.job.taskType,
+    },
+  };
 }
 
 async function persistSuccessOnce(
@@ -533,6 +566,7 @@ async function persistSuccessOnce(
         errorCode: null,
         errorMessage: null,
         output: toJson(result),
+        providerJob: Prisma.DbNull,
         manualReviewRequired: moderation.status === "review_required",
         moderationCategories: [...moderation.categories],
         moderationCheckedAt: completedAt,
@@ -747,6 +781,9 @@ async function fetchImageResponse(
   resolveHostname: GenerationHostnameResolver,
   signal: AbortSignal,
 ): Promise<Response> {
+  if (isInlineImageUrl(value)) {
+    return inlineImageResponse(value);
+  }
   let current = safeImageUrl(value);
   for (let redirectCount = 0; ; redirectCount += 1) {
     await assertHostnameResolvesPublicly(current, resolveHostname);
@@ -772,6 +809,41 @@ async function fetchImageResponse(
       await response.body?.cancel().catch(() => undefined);
     }
   }
+}
+
+function hasInlineCompletedResult(job: AiProviderJob): boolean {
+  return Boolean(
+    job.completedResult?.images.some((image) => isInlineImageUrl(image.url)),
+  );
+}
+
+function isInlineImageUrl(value: string): boolean {
+  return value.startsWith("data:image/");
+}
+
+function inlineImageResponse(value: string): Response {
+  const match =
+    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/u.exec(
+      value,
+    );
+  if (!match?.[1] || !match[2]) {
+    throw new Error("生成结果内联图片格式无效");
+  }
+  const padding = match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0;
+  const estimatedBytes = Math.floor((match[2].length * 3) / 4) - padding;
+  if (estimatedBytes <= 0 || estimatedBytes > MAX_GENERATED_IMAGE_BYTES) {
+    throw new Error("生成结果大小超过限制");
+  }
+  const body = Buffer.from(match[2], "base64");
+  if (body.byteLength !== estimatedBytes) {
+    throw new Error("生成结果内联图片编码无效");
+  }
+  return new Response(Uint8Array.from(body), {
+    headers: {
+      "Content-Length": String(body.byteLength),
+      "Content-Type": match[1],
+    },
+  });
 }
 
 async function resolveGeneratedImageHostname(
@@ -1060,7 +1132,7 @@ async function cancelProviderJobSafely(
       where: { id: taskId },
       select: { providerJob: true },
     });
-    const remoteJob = providerJobSchema.safeParse(current?.providerJob);
+    const remoteJob = aiProviderJobSchema.safeParse(current?.providerJob);
     if (remoteJob.success) {
       await settleBeforeTimeout(ai.cancel(remoteJob.data), timeoutMs);
     }
@@ -1148,6 +1220,7 @@ async function markCanceled(
       completedAt: new Date(),
       errorCode: null,
       errorMessage: null,
+      providerJob: Prisma.DbNull,
       status: GenerationTaskStatus.CANCELED,
     },
   });
@@ -1176,6 +1249,7 @@ async function markModerationFailed(
       moderationCheckedAt: completedAt,
       moderationStatus: ContentModerationStatus.REJECTED,
       output: Prisma.DbNull,
+      providerJob: Prisma.DbNull,
       status: GenerationTaskStatus.MODERATION_FAILED,
     },
   });
@@ -1210,6 +1284,7 @@ async function markFinalFailure(
       completedAt: new Date(),
       errorCode,
       errorMessage,
+      providerJob: Prisma.DbNull,
       status: GenerationTaskStatus.FAILED,
     },
   });

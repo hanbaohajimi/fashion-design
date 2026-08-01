@@ -7,6 +7,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Patch,
   Post,
@@ -41,7 +42,9 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
 
 @Controller("projects")
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    @Inject(ProjectsService) private readonly projectsService: ProjectsService,
+  ) {}
 
   @Get()
   list(

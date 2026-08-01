@@ -1,6 +1,9 @@
 import "./instrument";
 
-import { createAiRuntimeFromEnv } from "@fashion/ai";
+import {
+  createAiRuntimeFromEnv,
+  createAmuxClaudeClientFromEnv,
+} from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
 import { prisma } from "@fashion/db";
 import {
@@ -36,12 +39,9 @@ import {
   markRoleInferenceFailed,
 } from "./processors/vlm-inference.processor";
 import { S3ThumbnailStorage } from "./storage";
-import { OpenAiVlmClassifier } from "./vlm-classifier";
-import { OpenAiContentModerationService } from "./content-moderation.service";
-import {
-  captureWorkerException,
-  flushWorkerSentry,
-} from "./sentry.config";
+import { AmuxClaudeVlmClassifier } from "./vlm-classifier";
+import { AmuxClaudeContentModerationService } from "./content-moderation.service";
+import { captureWorkerException, flushWorkerSentry } from "./sentry.config";
 
 function redisConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
@@ -54,6 +54,7 @@ function redisConnection() {
 }
 
 const storage = new S3ThumbnailStorage();
+const amuxClaude = createAmuxClaudeClientFromEnv();
 const exportQueue = new Queue<ExportJobData>(EXPORT_QUEUE_NAME, {
   connection: redisConnection(),
 });
@@ -66,7 +67,7 @@ const processThumbnail = createThumbnailProcessor({
   storage,
 });
 const processRoleInference = createVlmInferenceProcessor({
-  classifier: new OpenAiVlmClassifier(),
+  classifier: new AmuxClaudeVlmClassifier(amuxClaude),
   database: prisma,
   storage,
 });
@@ -82,7 +83,7 @@ const processGeneration = createGenerationProcessor({
   ai: createAiRuntimeFromEnv(),
   billing: new BillingService(prisma),
   database: prisma,
-  moderator: new OpenAiContentModerationService(),
+  moderator: new AmuxClaudeContentModerationService(amuxClaude),
   storage,
   similarityJobs: {
     async enqueue(collectionId, designAssetId) {

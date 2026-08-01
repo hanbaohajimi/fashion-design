@@ -62,15 +62,14 @@ export class AiRuntimeService {
       );
     } catch (error) {
       const normalized = normalizeProviderError(primary.name, error);
-      if (
-        normalized.code !== "RATE_LIMITED" ||
-        !this.options.fallbackProvider
-      ) {
+      if (!shouldFallback(normalized) || !this.options.fallbackProvider) {
         throw normalized;
       }
 
       const fallback = this.getProvider(this.options.fallbackProvider);
-      this.assertSupport(fallback, parsed.data.taskType);
+      if (!fallback.supports(parsed.data.taskType)) {
+        throw normalized;
+      }
       return this.invoke(
         fallback,
         (signal) => fallback.submit(parsed.data, signal),
@@ -206,4 +205,12 @@ export class AiRuntimeService {
       externalSignal?.removeEventListener("abort", abortFromExternal);
     }
   }
+}
+
+function shouldFallback(error: AiProviderError): boolean {
+  return (
+    error.code === "RATE_LIMITED" ||
+    error.code === "PROVIDER_UNAVAILABLE" ||
+    error.code === "TIMEOUT"
+  );
 }

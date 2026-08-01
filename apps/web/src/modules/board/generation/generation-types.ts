@@ -35,13 +35,17 @@ export interface GenerationTaskList {
 }
 
 export interface PersistedGenerationRequest {
+  readonly background?: "auto" | "opaque";
   readonly cfg: number;
   readonly height: number;
   readonly maskImageUrl?: string;
   readonly negativePrompt?: string;
+  readonly outputCompression?: number;
+  readonly outputFormat?: "jpeg" | "png" | "webp";
   readonly parentAssetId?: string;
   readonly projectId?: string;
   readonly prompt: string;
+  readonly quality?: "auto" | "high" | "low" | "medium";
   readonly referenceImageUrl?: string;
   readonly seed?: number;
   readonly shapeIds?: readonly string[];
@@ -67,8 +71,12 @@ export interface GenerationTaskItem {
 }
 
 export interface GenerationParameters {
+  readonly background?: "auto" | "opaque";
   readonly cfg: number;
   readonly height: number;
+  readonly outputCompression?: number;
+  readonly outputFormat?: "jpeg" | "png" | "webp";
+  readonly quality?: "auto" | "high" | "low" | "medium";
   readonly seed?: number;
   readonly steps: number;
   readonly width: number;

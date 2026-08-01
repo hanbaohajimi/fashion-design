@@ -2,6 +2,7 @@ import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
 import { SecurityModule } from "../../security/security.module";
+import { AiModule } from "../ai/ai.module";
 import { BillingModule } from "../billing/billing.module";
 import { FilesModule } from "../files/files.module";
 import {
@@ -9,7 +10,7 @@ import {
   CONTEXT_MODEL,
   ContextCompilerService,
 } from "./compiler/context-compiler.service";
-import { OpenAiContextModelGateway } from "./compiler/openai-context-model.gateway";
+import { AmuxClaudeContextModelGateway } from "./compiler/amux-claude-context-model.gateway";
 import { GenerationEventsService } from "./generation-events.service";
 import { BullGenerationJobs } from "./generation-queue.service";
 import { GenerationController } from "./generation.controller";
@@ -24,21 +25,21 @@ import {
 } from "./generation-mask.service";
 
 @Module({
-  imports: [BillingModule, FilesModule, SecurityModule],
+  imports: [AiModule, BillingModule, FilesModule, SecurityModule],
   controllers: [GenerationController],
   providers: [
     GenerationEventsService,
     GenerationService,
     GenerationMaskService,
     ContextCompilerService,
-    OpenAiContextModelGateway,
+    AmuxClaudeContextModelGateway,
     BullGenerationJobs,
     { provide: GENERATION_DB, useValue: prisma },
     { provide: GENERATION_MASK_DB, useValue: prisma },
     { provide: COMPILER_DB, useValue: prisma },
     {
       provide: CONTEXT_MODEL,
-      useExisting: OpenAiContextModelGateway,
+      useExisting: AmuxClaudeContextModelGateway,
     },
     { provide: GENERATION_JOBS, useExisting: BullGenerationJobs },
   ],

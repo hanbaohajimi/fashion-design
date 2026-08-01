@@ -11,8 +11,12 @@ import type { GenerationParameters } from "./generation-types";
 import styles from "./generation.module.css";
 
 export const DEFAULT_GENERATION_PARAMETERS: GenerationParameters = {
+  background: "opaque",
   cfg: 3.5,
   height: 1024,
+  outputCompression: 90,
+  outputFormat: "png",
+  quality: "high",
   steps: 28,
   width: 1024,
 };
@@ -150,38 +154,51 @@ export function GenerationBar() {
             </select>
           </label>
           <label>
-            步数
-            <input
-              aria-label="生成步数"
-              max={50}
-              min={12}
+            质量
+            <select
+              aria-label="生成质量"
               onChange={(event) =>
                 setParameters((current) => ({
                   ...current,
-                  steps: Number(event.target.value),
+                  quality: event.target.value as
+                    | "auto"
+                    | "high"
+                    | "low"
+                    | "medium",
                 }))
               }
-              type="number"
-              value={parameters.steps}
-            />
+              value={parameters.quality ?? "high"}
+            >
+              <option value="low">草稿 · 快速</option>
+              <option value="medium">标准</option>
+              <option value="high">精细</option>
+              <option value="auto">模型自动</option>
+            </select>
           </label>
           <label>
-            引导
-            <input
-              aria-label="生成引导强度"
-              max={12}
-              min={1}
+            格式
+            <select
+              aria-label="输出格式"
               onChange={(event) =>
                 setParameters((current) => ({
                   ...current,
-                  cfg: Number(event.target.value),
+                  outputFormat: event.target.value as
+                    | "jpeg"
+                    | "png"
+                    | "webp",
                 }))
               }
-              step={0.5}
-              type="number"
-              value={parameters.cfg}
-            />
+              value={parameters.outputFormat ?? "png"}
+            >
+              <option value="png">PNG · 无损</option>
+              <option value="jpeg">JPEG · 更快</option>
+              <option value="webp">WebP · 更小</option>
+            </select>
           </label>
+          <span className={styles.providerParameterHint}>
+            GPT Image 2 使用尺寸、质量和格式；CFG、步数已保留给后续 SD
+            Provider，不会发送到 Amux。
+          </span>
         </div>
       </details>
       {error ? <p role="status">{error}</p> : null}

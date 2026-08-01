@@ -47,6 +47,64 @@ pnpm dev
 `packages/shared`、`packages/ai` 或 `packages/billing` 后，依赖应用会自动
 重新编译或重启。仓库根 `.env` 会由 API、Worker、Prisma 与 Web 配置统一加载。
 
+## Amux 模型渠道配置
+
+系统不再依赖 fal.ai，也不再需要单独的 OpenAI Key。图片理解与生图使用同一个
+Amux 令牌，但按模型明确分工：
+
+- `special/anthropic` 下的 `claude-sonnet-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
+- `special/openai` 下的 `gpt-image-2`：只负责实际生成与编辑图片。
+
+首次配置只需要在 `.env` 中填写：
+
+```env
+AI_PRIMARY_PROVIDER=amux
+AMUX_API_KEY=在这里填写你的令牌
+AMUX_BASE_URL=https://api.amux.ai/v1
+AMUX_CLAUDE_MODEL=claude-sonnet-5
+AMUX_CLAUDE_TIMEOUT_MS=20000
+AMUX_IMAGE_MODEL=gpt-image-2
+AI_PROVIDER_TIMEOUT_MS=600000
+GENERATION_TIMEOUT_MS=720000
+```
+
+Amux 令牌需要同时包含 `special/anthropic` 和 `special/openai` 分组，并且模型列表中
+确实存在上述两个模型。Claude 通过原生 Anthropic `/messages` 接口，并使用强制
+`tool_choice` 与 `strict input_schema` 返回结构化结果；系统使用 `/images/generations` 生成图片，使用
+`/images/edits` 处理参考图和透明蒙版。`gpt-image-2` 按原生格式返回
+`b64_json`；Worker 只在内存中短暂接收并立即写入私有 MinIO，不会把 Base64 图片写入
+任务数据库。送审时，系统会把该 Data URL 转换为 Anthropic 原生 `base64` 图片源，
+避免 Amux 静默忽略图片并返回普通文字。
+
+Amux 分组由令牌在平台侧路由，请求体不额外发送渠道字段。Provider 最长等待 10 分钟，
+Worker 总任务最长等待 12 分钟，额外两分钟用于内容审核、对象存储和缩略图处理。
+带参考图的文生图会优先使用 `/images/edits`；若 `special/openai` 对该请求返回 5xx，
+系统会保留已编译的文字设计要求并降级到 `/images/generations`。真正的图片编辑与局部重绘
+不会降级，以免错误修改整张图片。Provider 内不再叠加重试，队列层仍会重试一次。
+
+当前画布只向用户展示 GPT Image 2 支持的尺寸、质量和输出格式。`CFG`、采样步数与
+原生 `strength` 不会作为 Amux 参数发送；它们继续保留在通用生成契约中，供后续接入
+Stable Diffusion Provider。参考图“变化程度”会转换成文字约束并写入编辑提示词。
+
+参考图片只允许从受信任的对象存储来源下载。系统会自动允许 `S3_ENDPOINT` 和
+`ASSET_CDN_ORIGIN`；生产环境如使用其他签名图片域名，可追加：
+
+```env
+AI_REFERENCE_IMAGE_ALLOWED_ORIGINS=https://assets.example.com
+```
+
+百炼 Provider 已注册但默认不启用。取得北京地域 API Key 和业务空间 ID 后，可填写：
+
+```env
+AI_FALLBACK_PROVIDER=dashscope
+DASHSCOPE_API_KEY=在这里填写百炼密钥
+DASHSCOPE_BASE_URL=https://你的WorkspaceId.cn-beijing.maas.aliyuncs.com
+DASHSCOPE_IMAGE_MODEL=wan2.7-image-pro
+```
+
+备用渠道只在主渠道限流、超时或持续不可用时触发，不会绕过内容审核。当前百炼适配器
+支持文生图和参考图编辑；精确蒙版重绘仍固定由 Amux 处理。
+
 ## 本地邮箱登录
 
 首次启动 Supabase 后，运行 `pnpm auth:status`，把输出中的 API URL 与

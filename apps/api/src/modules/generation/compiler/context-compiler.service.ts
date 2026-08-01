@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 
@@ -77,6 +78,8 @@ function unique(values: readonly (string | null)[]): string[] {
 
 @Injectable()
 export class ContextCompilerService {
+  private readonly logger = new Logger(ContextCompilerService.name);
+
   constructor(
     @Inject(COMPILER_DB) private readonly database: CompilerDatabase,
     @Inject(CONTEXT_MODEL) private readonly model: ContextModelGateway,
@@ -204,8 +207,10 @@ export class ContextCompilerService {
       positivePrompt = enhanced.positivePrompt;
       negativePrompt = enhanced.negativePrompt;
       enhancement = "llm";
-    } catch {
-      // 编译增强是可选能力；模型故障时保留确定性的关键词产物。
+    } catch (error) {
+      this.logger.warn(
+        `提示词增强失败，已回退为关键词编译；reason=${safeModelFailureReason(error)}`,
+      );
     }
 
     return {
@@ -361,6 +366,19 @@ export class ContextCompilerService {
   private joinPrompt(parts: readonly (string | null)[]): string {
     return parts.filter((part): part is string => Boolean(part)).join(". ");
   }
+}
+
+function safeModelFailureReason(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown";
+  if (error.name === "AbortError" || error.name === "TimeoutError") {
+    return "timeout";
+  }
+  const httpStatus = /HTTP\s+(\d{3})/u.exec(error.message)?.[1];
+  if (httpStatus) return `upstream_http_${httpStatus}`;
+  if (error.name === "ZodError") return "invalid_schema";
+  if (error.message.includes("有效 JSON")) return "invalid_json";
+  if (error.message.includes("缺少文本内容")) return "missing_content";
+  return "unexpected_response";
 }
 
 function objectKeyFrom(value: string): string | null {

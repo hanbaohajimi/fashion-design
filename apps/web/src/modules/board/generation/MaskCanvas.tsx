@@ -97,10 +97,7 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
         context.clearRect(0, 0, width, height);
         context.lineCap = "round";
         context.lineJoin = "round";
-        context.lineWidth = Math.max(
-          8,
-          Math.min(width, height) * brushRatio,
-        );
+        context.lineWidth = Math.max(8, Math.min(width, height) * brushRatio);
         context.strokeStyle = "#ffffff";
         context.fillStyle = "#ffffff";
 
@@ -209,6 +206,8 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
           if (!context) throw new Error("无法导出掩码");
           context.fillStyle = "#000000";
           context.fillRect(0, 0, width, height);
+          // OpenAI Images Edits 约定透明区域为需要重绘的范围。
+          context.globalCompositeOperation = "destination-out";
           context.drawImage(source, 0, 0);
           return new Promise<Blob>((resolve, reject) => {
             output.toBlob((blob) => {

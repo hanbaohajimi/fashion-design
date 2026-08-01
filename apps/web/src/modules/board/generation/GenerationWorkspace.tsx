@@ -113,8 +113,14 @@ function startRequestFrom(
   if (request.projectId !== projectId) return null;
   return {
     parameters: {
+      ...(request.background ? { background: request.background } : {}),
       cfg: request.cfg,
       height: request.height,
+      ...(request.outputCompression !== undefined
+        ? { outputCompression: request.outputCompression }
+        : {}),
+      ...(request.outputFormat ? { outputFormat: request.outputFormat } : {}),
+      ...(request.quality ? { quality: request.quality } : {}),
       steps: request.steps,
       width: request.width,
       ...(request.seed !== undefined ? { seed: request.seed } : {}),

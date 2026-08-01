@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Header,
+  Inject,
   Param,
   Post,
   Res,
@@ -32,7 +33,9 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
 
 @Controller("files")
 export class FilesController {
-  constructor(private readonly filesService: FilesService) {}
+  constructor(
+    @Inject(FilesService) private readonly filesService: FilesService,
+  ) {}
 
   @Post("sign-upload")
   @Header("Cache-Control", PRIVATE_NO_STORE)

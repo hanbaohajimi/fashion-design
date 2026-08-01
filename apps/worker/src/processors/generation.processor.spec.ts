@@ -16,7 +16,10 @@ import { UnrecoverableError, type Job } from "bullmq";
 import sharp from "sharp";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { createGenerationProcessor } from "./generation.processor";
+import {
+  createGenerationProcessor,
+  generationTimeoutMsFromEnv,
+} from "./generation.processor";
 
 const request = {
   taskType: "t2i" as const,
@@ -54,6 +57,12 @@ function resolvePublicHostname(): Promise<string[]> {
 }
 
 describe("Generation processor", () => {
+  it("默认给 Amux 生图和后处理预留十二分钟，并允许环境变量覆盖", () => {
+    expect(generationTimeoutMsFromEnv(undefined)).toBe(720_000);
+    expect(generationTimeoutMsFromEnv("900000")).toBe(900_000);
+    expect(generationTimeoutMsFromEnv("invalid")).toBe(720_000);
+  });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -132,6 +141,61 @@ describe("Generation processor", () => {
         expect.objectContaining({ status: "running" }),
         expect.objectContaining({ status: "succeeded" }),
       ]);
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("GPT Image 2 内联结果不写入 providerJob，并直接物化到对象存储", async () => {
+    const fixture = await createTask();
+    const source = await generatedSource();
+    const inlineUrl = `data:image/png;base64,${source.toString("base64")}`;
+    const inlineJob: AiProviderJob = {
+      ...providerJob,
+      provider: "amux",
+      completedResult: { images: [{ url: inlineUrl }] },
+    };
+    const ai = successfulAi();
+    ai.submit.mockResolvedValue(inlineJob);
+    ai.getResult.mockResolvedValue({
+      ...providerResult,
+      job: inlineJob,
+      images: [{ url: inlineUrl }],
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("内联图片不应触发网络请求"));
+    const storage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const moderator = approvedModerator();
+    const process = createGenerationProcessor({
+      ai,
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator,
+      pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task))).resolves.toMatchObject({
+        status: "succeeded",
+      });
+
+      const task = await prisma.generationTask.findUniqueOrThrow({
+        where: { id: fixture.task.id },
+      });
+      expect(task.providerJob).toBeNull();
+      expect(JSON.stringify(task.output)).not.toContain("data:image/");
+      expect(ai.getStatus).not.toHaveBeenCalled();
+      expect(moderator.moderate).toHaveBeenCalledWith([inlineUrl]);
+      expect(storage.put).toHaveBeenCalledTimes(2);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       fetchMock.mockRestore();
       await cleanup(fixture.userId);
@@ -754,6 +818,7 @@ describe("Generation processor", () => {
         status: GenerationTaskStatus.MODERATION_FAILED,
       });
       expect(task.output).toBeNull();
+      expect(task.providerJob).toBeNull();
       expect(user.generationCount).toBe(0);
       expect(assets).toHaveLength(0);
       expect(job.updateProgress).toHaveBeenLastCalledWith(
@@ -798,6 +863,7 @@ describe("Generation processor", () => {
       });
       expect(user.generationCount).toBe(0);
       expect(assets).toHaveLength(0);
+      expect(task.providerJob).toBeNull();
     } finally {
       await cleanup(fixture.userId);
     }
@@ -980,6 +1046,7 @@ describe("Generation processor", () => {
       });
       expect(task.attemptCount).toBe(1);
       expect(task.status).toBe(GenerationTaskStatus.SUCCEEDED);
+      expect(task.providerJob).toBeNull();
     } finally {
       await cleanup(fixture.userId);
     }
@@ -1433,7 +1500,7 @@ describe("Generation processor", () => {
     }
   });
 
-  it("120 秒策略超时后自动标记 failed 且不计次", async () => {
+  it("策略超时后自动标记 failed 且不计次", async () => {
     const fixture = await createTask();
     const ai = successfulAi();
     ai.submit.mockImplementation(
@@ -1454,7 +1521,7 @@ describe("Generation processor", () => {
 
     try {
       await expect(process(fakeJob(fixture.task))).rejects.toThrow(
-        "生成任务超过 120 秒",
+        "生成任务超过 10 毫秒",
       );
       const [task, user] = await Promise.all([
         prisma.generationTask.findUniqueOrThrow({

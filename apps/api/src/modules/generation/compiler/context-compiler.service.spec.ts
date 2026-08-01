@@ -1,4 +1,4 @@
-import { HttpStatus } from "@nestjs/common";
+import { HttpStatus, Logger } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ContextModelGateway } from "./compiler.types";
@@ -243,6 +243,34 @@ describe("ContextCompilerService", () => {
     expect(model.enhancePrompt).toHaveBeenCalledWith(
       expect.objectContaining({ userRequest: "silk dress" }),
     );
+  });
+
+  it("LLM 回退只记录脱敏原因，不记录用户提示词或上游响应", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => {
+      // 测试中抑制预期的回退日志。
+    });
+    vi.mocked(model.enhancePrompt).mockRejectedValue(
+      new Error("Amux Claude 请求失败（HTTP 503）：敏感上游内容"),
+    );
+
+    try {
+      const result = await service.compile(
+        "user-1",
+        undefined,
+        "private user prompt",
+      );
+
+      expect(result.enhancement).toBe("keywords");
+      expect(warn).toHaveBeenCalledWith(
+        "提示词增强失败，已回退为关键词编译；reason=upstream_http_503",
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(
+        "private user prompt",
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("敏感上游内容");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("项目归属不匹配返回 403", async () => {
