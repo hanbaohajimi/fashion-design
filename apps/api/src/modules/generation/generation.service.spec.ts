@@ -703,7 +703,38 @@ describe("BullGenerationJobs", () => {
 
     await jobs.enqueue("task-1", "user-1");
 
-    expect(existing.retry).toHaveBeenCalledOnce();
+    expect(existing.retry).toHaveBeenCalledWith("failed", {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
+    expect(queue.add).not.toHaveBeenCalled();
+    expect(existing.updateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "queued",
+        taskId: "task-1",
+      }),
+    );
+  });
+
+  it("同 fixed jobId 已完成但数据库仍需补投时原子重试历史任务", async () => {
+    const existing = {
+      getState: vi.fn().mockResolvedValue("completed"),
+      retry: vi.fn().mockResolvedValue(undefined),
+      updateProgress: vi.fn().mockResolvedValue(undefined),
+    };
+    const queue = {
+      add: vi.fn(),
+      getJob: vi.fn().mockResolvedValue(existing),
+    };
+    const jobs = new BullGenerationJobs();
+    Object.assign(jobs, { queue });
+
+    await jobs.enqueue("task-1", "user-1");
+
+    expect(existing.retry).toHaveBeenCalledWith("completed", {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
     expect(queue.add).not.toHaveBeenCalled();
     expect(existing.updateProgress).toHaveBeenCalledWith(
       expect.objectContaining({

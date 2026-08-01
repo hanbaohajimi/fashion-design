@@ -166,15 +166,36 @@ interface SignedMaskUpload {
   };
 }
 
+async function checksumSha256Base64(blob: Blob): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    throw new GenerationApiError(
+      "当前浏览器不支持安全掩码上传，请升级浏览器后重试",
+      "MASK_CHECKSUM_UNSUPPORTED",
+    );
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    await blob.arrayBuffer(),
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(digest)));
+}
+
 export async function uploadTemporaryMask(
   projectId: string,
   blob: Blob,
   width: number,
   height: number,
 ): Promise<string> {
+  const sha256 = await checksumSha256Base64(blob);
   const response = await fetch("/api/generations/masks/sign", {
     method: "POST",
-    body: JSON.stringify({ height, projectId, size: blob.size, width }),
+    body: JSON.stringify({
+      height,
+      projectId,
+      sha256,
+      size: blob.size,
+      width,
+    }),
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
@@ -182,6 +203,12 @@ export async function uploadTemporaryMask(
     throw await apiError(response, "临时掩码签名失败");
   }
   const signed = (await response.json()) as SignedMaskUpload;
+  if (signed.upload.headers["x-amz-checksum-sha256"] !== sha256) {
+    throw new GenerationApiError(
+      "掩码签名摘要不匹配，请重试",
+      "MASK_CHECKSUM_MISMATCH",
+    );
+  }
   const uploaded = await fetch(signed.upload.url, {
     method: signed.upload.method,
     body: blob,

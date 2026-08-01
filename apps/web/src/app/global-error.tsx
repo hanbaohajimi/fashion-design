@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import Link from "next/link";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -25,6 +26,7 @@ export default function GlobalError({
             <button onClick={reset} type="button">
               重试
             </button>
+            <Link href="/">返回项目库</Link>
           </section>
         </main>
       </body>

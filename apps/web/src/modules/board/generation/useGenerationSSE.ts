@@ -15,7 +15,8 @@ const TERMINAL = new Set<GenerationStatus>([
   "canceled",
 ]);
 const POLL_INTERVAL_MS = 2_000;
-const MAX_SSE_ERRORS = 2;
+const MAX_SSE_ERRORS = 1;
+const SSE_RECONNECT_MS = 10_000;
 
 interface GenerationEvent {
   readonly status?: GenerationStatus;
@@ -32,21 +33,33 @@ export function useGenerationSSE(
     let disposed = false;
     let source: EventSource | null = null;
     let pollTimer: number | undefined;
+    let reconnectTimer: number | undefined;
     let errorCount = 0;
+    let polling = false;
+    let appliedSyncSequence = 0;
+    let syncSequence = 0;
 
     const stop = (): void => {
+      polling = false;
       source?.close();
       source = null;
       if (pollTimer) {
         window.clearTimeout(pollTimer);
         pollTimer = undefined;
       }
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
     };
 
     const sync = async (): Promise<boolean> => {
+      const sequence = ++syncSequence;
       try {
         const task = await fetchGenerationTask(taskId);
         if (disposed) return true;
+        if (sequence < appliedSyncSequence) return false;
+        appliedSyncSequence = sequence;
         onTask(task);
         if (TERMINAL.has(task.status)) {
           stop();
@@ -59,39 +72,73 @@ export function useGenerationSSE(
     };
 
     const poll = async (): Promise<void> => {
-      if (disposed || (await sync())) return;
+      if (disposed || !polling || (await sync())) return;
       pollTimer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
     };
 
-    const fallbackToPolling = (): void => {
-      source?.close();
-      source = null;
-      setMode("polling");
-      void poll();
+    const scheduleReconnect = (): void => {
+      if (disposed || !polling || reconnectTimer) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = undefined;
+        if (!disposed && polling) openSse();
+      }, SSE_RECONNECT_MS);
     };
 
-    source = new EventSource(
-      `/api/generations/${encodeURIComponent(taskId)}/events`,
-      { withCredentials: true },
-    );
-    source.addEventListener("generation", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent<string>).data) as
-          GenerationEvent;
-        if (payload.taskId !== taskId) return;
-        errorCount = 0;
-        void sync();
-      } catch {
-        // Malformed events never replace the server detail response.
+    const fallbackToPolling = (): void => {
+      if (disposed) return;
+      source?.close();
+      source = null;
+      if (!polling) {
+        polling = true;
+        setMode("polling");
+        void poll();
       }
-    });
-    source.onopen = () => {
-      errorCount = 0;
+      scheduleReconnect();
     };
-    source.onerror = () => {
-      errorCount += 1;
-      if (errorCount >= MAX_SSE_ERRORS) fallbackToPolling();
-    };
+
+    function openSse(): void {
+      if (disposed) return;
+      source?.close();
+      const candidate = new EventSource(
+        `/api/generations/${encodeURIComponent(taskId)}/events`,
+        { withCredentials: true },
+      );
+      source = candidate;
+      candidate.addEventListener("generation", (event) => {
+        try {
+          const payload = JSON.parse(
+            (event as MessageEvent<string>).data,
+          ) as GenerationEvent;
+          if (payload.taskId !== taskId) return;
+          errorCount = 0;
+          void sync();
+        } catch {
+          // Malformed events never replace the server detail response.
+        }
+      });
+      candidate.onopen = () => {
+        if (disposed || source !== candidate) return;
+        errorCount = 0;
+        polling = false;
+        if (pollTimer) {
+          window.clearTimeout(pollTimer);
+          pollTimer = undefined;
+        }
+        if (reconnectTimer) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        }
+        setMode("sse");
+        void sync();
+      };
+      candidate.onerror = () => {
+        if (disposed || source !== candidate) return;
+        errorCount += 1;
+        if (polling || errorCount >= MAX_SSE_ERRORS) fallbackToPolling();
+      };
+    }
+
+    openSse();
     void sync();
 
     return () => {

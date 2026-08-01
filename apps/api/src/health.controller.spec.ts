@@ -113,4 +113,58 @@ describe("health endpoints", () => {
       await checker.onModuleDestroy();
     }
   });
+
+  it("模块销毁会中止仍在执行的底层 readiness 探针", async () => {
+    const checker = new InfrastructureHealthChecker();
+    let observedSignal: AbortSignal | undefined;
+    const internal = checker as unknown as {
+      probe(
+        name: string,
+        operation: (signal: AbortSignal) => Promise<void>,
+      ): Promise<"up" | "down">;
+    };
+    const pending = internal.probe("cancellable-test", async (signal) => {
+      observedSignal = signal;
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      });
+    });
+
+    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    await checker.onModuleDestroy();
+
+    await expect(pending).resolves.toBe("down");
+    expect(observedSignal?.aborted).toBe(true);
+  });
+
+  it("readiness 超时会主动 abort 底层探针而不是仅停止等待", async () => {
+    const checker = new InfrastructureHealthChecker();
+    let observedSignal: AbortSignal | undefined;
+    const internal = checker as unknown as {
+      probe(
+        name: string,
+        operation: (signal: AbortSignal) => Promise<void>,
+      ): Promise<"up" | "down">;
+    };
+    try {
+      const result = await internal.probe("timeout-test", async (signal) => {
+        observedSignal = signal;
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      });
+
+      expect(result).toBe("down");
+      expect(observedSignal?.aborted).toBe(true);
+      expect((observedSignal?.reason as Error | undefined)?.message).toBe(
+        "健康检查超时",
+      );
+    } finally {
+      await checker.onModuleDestroy();
+    }
+  }, 5_000);
 });

@@ -7,6 +7,8 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   let lookCount = 1;
   let paletteLocked = false;
   let collectionCreated = false;
+  let collectionListAvailable = false;
+  let consistencyAvailable = false;
   const ignoredAssets = new Set<string>();
   const dna = () => ({
     extractionStatus: "ready",
@@ -53,8 +55,18 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       },
     }),
   );
-  await page.route("**/api/collections?projectId=e2e-collection", (route) =>
-    route.fulfill({ json: collectionCreated ? [collection()] : [] }),
+  await page.route(
+    "**/api/collections?projectId=e2e-collection",
+    async (route) => {
+      if (!collectionListAvailable) {
+        await route.fulfill({
+          status: 503,
+          json: { message: "模拟系列列表暂时不可用" },
+        });
+        return;
+      }
+      await route.fulfill({ json: collectionCreated ? [collection()] : [] });
+    },
   );
   const consistency = () => {
     const looks = [
@@ -195,12 +207,26 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       },
     }),
   );
-  await page.route("**/api/collections", (route) => {
+  await page.route("**/api/collections", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
     collectionCreated = true;
-    return route.fulfill({ status: 201, json: collection() });
+    await route.fulfill({ status: 201, json: collection() });
   });
-  await page.route("**/api/collections/collection-e2e/consistency", (route) =>
-    route.fulfill({ json: consistency() }),
+  await page.route(
+    "**/api/collections/collection-e2e/consistency",
+    async (route) => {
+      if (!consistencyAvailable) {
+        await route.fulfill({
+          status: 503,
+          json: { message: "模拟一致性暂时不可用" },
+        });
+        return;
+      }
+      await route.fulfill({ json: consistency() });
+    },
   );
   await page.route("**/api/collections/collection-e2e/dna", async (route) => {
     const body = route.request().postDataJSON() as {
@@ -304,6 +330,14 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   });
 
   await page.goto("/e2e-collection");
+  const retryCollections = page.getByRole("button", {
+    name: /^(?:重试系列|重新加载系列)$/u,
+  });
+  await expect(retryCollections).toBeVisible({ timeout: 10_000 });
+  collectionListAvailable = true;
+  await retryCollections.click();
+  await expect(page.getByLabel("选择系列")).toContainText("暂无系列");
+
   await page.getByRole("button", { name: "便签" }).click();
   await page
     .getByRole("textbox", { name: "生成描述" })
@@ -315,6 +349,13 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
   await expect(collectionDrawer).toBeFocused();
+  const retryConsistency = collectionDrawer.getByRole("button", {
+    name: "重新读取一致性",
+  });
+  await expect(retryConsistency).toBeVisible();
+  consistencyAvailable = true;
+  await retryConsistency.click();
+  await expect(retryConsistency).toBeHidden();
   const paletteSection = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "色板" }) });
@@ -363,9 +404,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await expect(exportDialog).toBeFocused();
   await expect(page.getByText("Free 版本带水印。")).toBeVisible();
   await page.keyboard.press("Shift+Tab");
-  await expect(
-    page.getByRole("button", { name: "开始导出" }),
-  ).toBeFocused();
+  await expect(page.getByRole("button", { name: "开始导出" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
     page.getByRole("button", { name: "关闭导出窗口" }),

@@ -45,6 +45,11 @@ export interface FalAdapterConfig {
 }
 
 export interface FalQueueTransport {
+  cancel?(
+    endpoint: string,
+    requestId: string,
+    signal: AbortSignal,
+  ): Promise<void>;
   submit(
     endpoint: string,
     input: Record<string, unknown>,
@@ -83,6 +88,17 @@ export class FalSdkQueueTransport implements FalQueueTransport {
       abortSignal: signal,
     });
     return { requestId: response.request_id };
+  }
+
+  async cancel(
+    endpoint: string,
+    requestId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await this.client.queue.cancel(endpoint, {
+      requestId,
+      abortSignal: signal,
+    });
   }
 
   async status(
@@ -128,6 +144,18 @@ export class FalAdapter implements AiProvider {
 
   supports(taskType: AiGenerationRequest["taskType"]): boolean {
     return taskType === "t2i" || taskType === "i2i" || taskType === "inpaint";
+  }
+
+  async cancel(job: AiProviderJob, signal: AbortSignal): Promise<void> {
+    this.assertCredentials();
+    if (!this.transport.cancel) {
+      return;
+    }
+    try {
+      await this.transport.cancel(job.model, job.providerJobId, signal);
+    } catch (error) {
+      throw this.mapError(error);
+    }
   }
 
   async submit(

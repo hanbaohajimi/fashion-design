@@ -34,12 +34,53 @@ interface ReadinessResponse {
   readonly checks: ReadinessChecks;
 }
 
+interface ActiveProbe {
+  readonly controller: AbortController;
+  readonly promise: Promise<void>;
+}
+
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(`缺少健康检查配置 ${name}`);
   }
   return value;
+}
+
+async function runAbortableProbe(
+  operation: (signal: AbortSignal) => Promise<void>,
+  controller: AbortController,
+): Promise<void> {
+  const { signal } = controller;
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error("健康检查已中止"),
+      );
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  const timeout = setTimeout(() => {
+    controller.abort(new Error("健康检查超时"));
+  }, HEALTH_CHECK_TIMEOUT_MS);
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => operation(signal)),
+      aborted,
+    ]);
+  } finally {
+    clearTimeout(timeout);
+    if (onAbort) {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
 }
 
 @Injectable()
@@ -56,7 +97,7 @@ export class InfrastructureHealthChecker
       maxRetriesPerRequest: 1,
     },
   );
-  private readonly activeProbes = new Map<string, Promise<void>>();
+  private readonly activeProbes = new Map<string, ActiveProbe>();
   private cached:
     | {
         readonly checks: ReadinessChecks;
@@ -65,12 +106,16 @@ export class InfrastructureHealthChecker
     | undefined;
   private inFlight: Promise<ReadinessChecks> | undefined;
   private s3: S3Client | undefined;
+  private destroyed = false;
 
   constructor() {
     this.redis.on("error", () => undefined);
   }
 
   async check(): Promise<ReadinessChecks> {
+    if (this.destroyed) {
+      return { database: "down", redis: "down", objectStorage: "down" };
+    }
     if (this.cached && this.cached.expiresAt > Date.now()) {
       return this.cached.checks;
     }
@@ -80,10 +125,12 @@ export class InfrastructureHealthChecker
 
     const inFlight = this.runChecks()
       .then((checks) => {
-        this.cached = {
-          checks,
-          expiresAt: Date.now() + HEALTH_CHECK_CACHE_MS,
-        };
+        if (!this.destroyed) {
+          this.cached = {
+            checks,
+            expiresAt: Date.now() + HEALTH_CHECK_CACHE_MS,
+          };
+        }
         return checks;
       })
       .finally(() => {
@@ -97,22 +144,43 @@ export class InfrastructureHealthChecker
 
   private async runChecks(): Promise<ReadinessChecks> {
     const [database, redis, objectStorage] = await Promise.all([
-      this.probe("database", async () => {
-        await prisma.$queryRaw`SELECT 1`;
+      this.probe("database", async (signal) => {
+        signal.throwIfAborted();
+        await prisma.$transaction(
+          async (transaction) => {
+            signal.throwIfAborted();
+            await transaction.$queryRaw`SELECT 1`;
+            signal.throwIfAborted();
+          },
+          {
+            maxWait: HEALTH_CHECK_TIMEOUT_MS,
+            timeout: HEALTH_CHECK_TIMEOUT_MS,
+          },
+        );
       }),
-      this.probe("redis", async () => {
-        if (this.redis.status === "wait") {
-          await this.redis.connect();
+      this.probe("redis", async (signal) => {
+        const disconnectOnAbort = () => {
+          this.redis.disconnect();
+        };
+        signal.addEventListener("abort", disconnectOnAbort, { once: true });
+        try {
+          signal.throwIfAborted();
+          if (this.redis.status === "wait" || this.redis.status === "end") {
+            await this.redis.connect();
+          }
+          await this.redis.ping();
+          signal.throwIfAborted();
+        } finally {
+          signal.removeEventListener("abort", disconnectOnAbort);
         }
-        await this.redis.ping();
       }),
-      this.probe("object-storage", async () => {
+      this.probe("object-storage", async (signal) => {
         await this.getS3().send(
           new HeadObjectCommand({
             Bucket: requiredEnvironment("S3_BUCKET"),
             Key: requiredEnvironment("S3_HEALTHCHECK_OBJECT_KEY"),
           }),
-          { abortSignal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS) },
+          { abortSignal: signal },
         );
       }),
     ]);
@@ -121,6 +189,12 @@ export class InfrastructureHealthChecker
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.destroyed = true;
+    const active = [...this.activeProbes.values()];
+    for (const probe of active) {
+      probe.controller.abort(new Error("健康检查服务正在停止"));
+    }
+    await Promise.allSettled(active.map((probe) => probe.promise));
     if (this.redis.status !== "end") {
       this.redis.disconnect();
     }
@@ -129,35 +203,25 @@ export class InfrastructureHealthChecker
 
   private async probe(
     name: string,
-    operation: () => Promise<void>,
+    operation: (signal: AbortSignal) => Promise<void>,
   ): Promise<"up" | "down"> {
-    let active = this.activeProbes.get(name);
-    if (!active) {
-      const pending = operation();
-      active = pending.finally(() => {
-        if (this.activeProbes.get(name) === active) {
+    let activeProbe = this.activeProbes.get(name);
+    if (!activeProbe) {
+      const controller = new AbortController();
+      const promise = runAbortableProbe(operation, controller).finally(() => {
+        if (this.activeProbes.get(name)?.promise === promise) {
           this.activeProbes.delete(name);
         }
       });
-      this.activeProbes.set(name, active);
+      activeProbe = { controller, promise };
+      this.activeProbes.set(name, activeProbe);
     }
 
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([
-        active,
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error("健康检查超时")),
-            HEALTH_CHECK_TIMEOUT_MS,
-          );
-        }),
-      ]);
+      await activeProbe.promise;
       return "up";
     } catch {
       return "down";
-    } finally {
-      if (timeout) clearTimeout(timeout);
     }
   }
 

@@ -30,11 +30,12 @@ export class MockAdapter implements AiProvider {
   }
 
   supports(taskType: AiGenerationRequest["taskType"]): boolean {
-    return (
-      taskType === "t2i" ||
-      taskType === "i2i" ||
-      taskType === "inpaint"
-    );
+    return taskType === "t2i" || taskType === "i2i" || taskType === "inpaint";
+  }
+
+  async cancel(job: AiProviderJob, signal: AbortSignal): Promise<void> {
+    await this.wait(signal);
+    this.jobs.delete(job.providerJobId);
   }
 
   async submit(

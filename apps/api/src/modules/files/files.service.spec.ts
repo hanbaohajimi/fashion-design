@@ -85,9 +85,19 @@ describe("FilesService", () => {
     database.fileAsset.create.mockResolvedValue(fileRecord());
 
     const result = await service.signUpload("user-a", input);
+    const checksumSha256 = Buffer.from(input.sha256, "hex").toString("base64");
 
     expect(result.deduplicated).toBe(false);
     expect(result.upload?.method).toBe("PUT");
+    expect(result.upload?.headers).toEqual({
+      "Content-Type": "image/png",
+      "x-amz-checksum-sha256": checksumSha256,
+    });
+    expect(storage.createUploadUrl).toHaveBeenCalledWith(
+      "originals/user-a/file-1/source",
+      "image/png",
+      checksumSha256,
+    );
     expect(database.fileAsset.create).toHaveBeenCalledOnce();
   });
 
@@ -165,6 +175,51 @@ describe("FilesService", () => {
     });
     expect(result.file.status).toBe(FileStatus.PENDING);
     expect(result.upload).not.toBeNull();
+    expect(storage.delete).toHaveBeenCalledWith("old/1024.webp");
+    expect(storage.delete).toHaveBeenCalledWith("old/256.webp");
+  });
+
+  it("FAILED 重置 CAS 失配时不删除仍可能被其他请求引用的缩略图", async () => {
+    const failed = fileRecord({
+      completedAt: new Date("2026-01-02"),
+      status: FileStatus.FAILED,
+      thumbnail1024Key: "old/1024.webp",
+      thumbnail256Key: "old/256.webp",
+    });
+    database.fileAsset.findUnique
+      .mockResolvedValueOnce(failed)
+      .mockResolvedValueOnce(fileRecord({ status: FileStatus.READY }));
+    database.fileAsset.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await service.signUpload("user-a", input);
+
+    expect(result.file.status).toBe(FileStatus.READY);
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+  it("FAILED 重置 CAS 后仍为 FAILED 时不签发无法完成的上传 URL", async () => {
+    const failed = fileRecord({
+      completedAt: new Date("2026-01-02"),
+      status: FileStatus.FAILED,
+      thumbnail256Key: "old/256.webp",
+    });
+    database.fileAsset.findUnique
+      .mockResolvedValueOnce(failed)
+      .mockResolvedValueOnce(
+        fileRecord({
+          ...failed,
+          errorMessage: "并发任务更新了失败详情",
+          updatedAt: new Date("2026-01-04"),
+        }),
+      );
+    database.fileAsset.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(service.signUpload("user-a", input)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+
+    expect(storage.createUploadUrl).not.toHaveBeenCalled();
+    expect(storage.delete).not.toHaveBeenCalled();
   });
 
   it("用户 A 不能向用户 B 的项目签名上传", async () => {
@@ -241,6 +296,50 @@ describe("FilesService", () => {
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
+  it("拒绝对象存储返回的 SHA256 与签名请求不一致", async () => {
+    database.fileAsset.findUnique.mockResolvedValue(fileRecord());
+    storage.head.mockResolvedValue({
+      checksumSha256: Buffer.from("b".repeat(64), "hex").toString("base64"),
+      contentLength: 1024,
+      contentType: "image/png",
+    });
+
+    await expect(service.complete("user-a", "file-1")).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(storage.readPrefix).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("对象存储暂时不可用时返回 503 而不是误报未上传", async () => {
+    database.fileAsset.findUnique.mockResolvedValue(fileRecord());
+    storage.head.mockRejectedValue(new Error("socket timeout"));
+
+    const failure = await service
+      .complete("user-a", "file-1")
+      .catch((error) => error);
+
+    expect(failure).toBeInstanceOf(ServiceUnavailableException);
+    expect(failure.getResponse()).toMatchObject({
+      code: "UPLOAD_STORAGE_UNAVAILABLE",
+    });
+  });
+
+  it("对象存储明确返回 404 时仍提示原图未上传", async () => {
+    database.fileAsset.findUnique.mockResolvedValue(fileRecord());
+    storage.head.mockRejectedValue({
+      name: "NotFound",
+      $metadata: { httpStatusCode: 404 },
+    });
+
+    const failure = await service
+      .complete("user-a", "file-1")
+      .catch((error) => error);
+
+    expect(failure).toBeInstanceOf(BadRequestException);
+    expect(failure.getResponse()).toMatchObject({ code: "UPLOAD_NOT_FOUND" });
+  });
+
   it("拒绝 MIME 伪装为图片但 magic bytes 不是图片的文件", async () => {
     database.fileAsset.findUnique.mockResolvedValue(fileRecord());
     storage.head.mockResolvedValue({
@@ -278,9 +377,7 @@ describe("FilesService", () => {
   it("INVALID 检查失去版本 CAS 时不删除新上传对象", async () => {
     database.fileAsset.findUnique
       .mockResolvedValueOnce(fileRecord())
-      .mockResolvedValueOnce(
-        fileRecord({ updatedAt: new Date("2026-01-02") }),
-      );
+      .mockResolvedValueOnce(fileRecord({ updatedAt: new Date("2026-01-02") }));
     database.fileAsset.updateMany.mockResolvedValue({ count: 0 });
     storage.head.mockResolvedValue({
       contentLength: 1024,

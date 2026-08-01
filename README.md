@@ -53,6 +53,8 @@ pnpm dev
 publishable/anon key 写入 `.env` 的 `SUPABASE_URL` 和
 `SUPABASE_PUBLISHABLE_KEY`。认证接口只把访问令牌和刷新令牌写入
 HttpOnly Cookie，浏览器脚本不会读取或持久化 JWT。
+登录、会话与退出响应均使用 `Cache-Control: private, no-store`；项目库的
+“退出登录”会调用 `POST /auth/logout` 并同时清除两枚会话 Cookie。
 
 魔法链接邮件模板需要把一次性 TokenHash 发回平台确认页。在 Supabase
 Dashboard 的 Authentication → Email Templates → Magic Link 中使用：

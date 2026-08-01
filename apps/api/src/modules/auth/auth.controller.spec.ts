@@ -154,5 +154,41 @@ describe("authentication HTTP contract", () => {
     expect(response.body).not.toHaveProperty("accessToken");
     expect(response.body).not.toHaveProperty("refreshToken");
     expect(response.body.projectId).toBe("project-first");
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+  });
+
+  it("clears both session cookies when logging out", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/auth/logout")
+      .set("Origin", "http://localhost:3000")
+      .set(
+        "Cookie",
+        "fashion_access_token=access-token; fashion_refresh_token=refresh-token",
+      )
+      .expect(204);
+
+    const cookies = response.headers["set-cookie"] as unknown as string[];
+    expect(cookies).toHaveLength(2);
+    const accessCookie = cookies.find((cookie) =>
+      cookie.startsWith("fashion_access_token="),
+    );
+    const refreshCookie = cookies.find((cookie) =>
+      cookie.startsWith("fashion_refresh_token="),
+    );
+    expect(accessCookie).toContain("fashion_access_token=;");
+    expect(refreshCookie).toContain("fashion_refresh_token=;");
+    expect(accessCookie).toContain("Max-Age=0");
+    expect(refreshCookie).toContain("Max-Age=0");
+    expect(accessCookie).toContain("Path=/");
+    expect(refreshCookie).toContain("Path=/");
+    expect(accessCookie).toContain("HttpOnly");
+    expect(refreshCookie).toContain("HttpOnly");
+    expect(cookies.every((cookie) => cookie.includes("SameSite=Lax"))).toBe(
+      true,
+    );
+    expect(authService.assertAllowedOrigin).toHaveBeenCalledWith(
+      "http://localhost:3000",
+    );
+    expect(response.headers["cache-control"]).toBe("private, no-store");
   });
 });

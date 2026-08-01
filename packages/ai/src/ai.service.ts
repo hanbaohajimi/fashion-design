@@ -79,6 +79,21 @@ export class AiRuntimeService {
     }
   }
 
+  async cancel(
+    job: AiProviderJob,
+    externalSignal?: AbortSignal,
+  ): Promise<void> {
+    const provider = this.getProvider(job.provider);
+    if (!provider.cancel) {
+      return;
+    }
+    await this.invoke(
+      provider,
+      (signal) => provider.cancel?.(job, signal) ?? Promise.resolve(),
+      externalSignal,
+    );
+  }
+
   async getStatus(
     job: AiProviderJob,
     externalSignal?: AbortSignal,
@@ -135,11 +150,7 @@ export class AiRuntimeService {
   ): Promise<T> {
     for (let retry = 0; retry <= this.options.maxRetries; retry += 1) {
       try {
-        return await this.withTimeout(
-          provider.name,
-          operation,
-          externalSignal,
-        );
+        return await this.withTimeout(provider.name, operation, externalSignal);
       } catch (error) {
         const normalized = normalizeProviderError(provider.name, error);
         const canRetry =

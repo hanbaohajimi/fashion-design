@@ -8,6 +8,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   Inject,
@@ -34,10 +35,12 @@ import {
   type GenerationTaskListView,
   type GenerationTaskView,
 } from "./generation.service";
-import {
-  RateLimit,
-  RateLimitGuard,
-} from "../../security/rate-limit.guard";
+import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
+
+const maskChecksumSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9+/]{43}=$/u)
+  .refine((value) => Buffer.from(value, "base64").toString("base64") === value);
 
 @Controller("generations")
 export class GenerationController {
@@ -51,22 +54,28 @@ export class GenerationController {
   ) {}
 
   @Post("masks/sign")
+  @Header("Cache-Control", "private, no-store")
   async signMask(
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: unknown,
   ) {
     const parsed = z
       .object({
+        checksumSha256: maskChecksumSchema,
         height: z.number().int().min(64).max(2048),
         projectId: z.string().min(1).max(128),
-        size: z.number().int().positive().max(12 * 1024 * 1024),
+        size: z
+          .number()
+          .int()
+          .positive()
+          .max(12 * 1024 * 1024),
         width: z.number().int().min(64).max(2048),
       })
       .safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
         code: "INVALID_MASK",
-        message: "掩码尺寸或文件大小不合法",
+        message: "掩码尺寸、文件大小或摘要不合法",
       });
     }
     return this.masks.sign(user.userId, parsed.data);
@@ -93,7 +102,12 @@ export class GenerationController {
         message: "生成参数不合法",
       });
     }
-    const parsedKey = z.string().trim().min(8).max(200).safeParse(idempotencyKey);
+    const parsedKey = z
+      .string()
+      .trim()
+      .min(8)
+      .max(200)
+      .safeParse(idempotencyKey);
     if (!parsedKey.success) {
       throw new BadRequestException({
         code: "INVALID_IDEMPOTENCY_KEY",

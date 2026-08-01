@@ -25,6 +25,7 @@ export function ProjectLibrary() {
   const {
     error: authError,
     loading: authLoading,
+    logout,
     refresh: refreshAuth,
     session,
   } = useAuth();
@@ -33,6 +34,7 @@ export function ProjectLibrary() {
     useState<ProjectStatusFilter>("active");
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [logoutPending, setLogoutPending] = useState(false);
   const [duplicatingProjectIds, setDuplicatingProjectIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -63,10 +65,7 @@ export function ProjectLibrary() {
     setProjectStatus("active");
   };
 
-  const runRename = async (
-    project: Project,
-    name: string,
-  ): Promise<void> => {
+  const runRename = async (project: Project, name: string): Promise<void> => {
     setNotice(null);
 
     try {
@@ -153,6 +152,22 @@ export function ProjectLibrary() {
     return flight;
   };
 
+  const runLogout = async (): Promise<void> => {
+    if (logoutPending) {
+      return;
+    }
+
+    setNotice(null);
+    setLogoutPending(true);
+
+    try {
+      await logout();
+    } catch (error) {
+      setNotice(errorMessage(error));
+      setLogoutPending(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <main className={styles.statePage}>
@@ -191,15 +206,29 @@ export function ProjectLibrary() {
   return (
     <main className={styles.library}>
       <header className={styles.topbar}>
-        <Link className={styles.brand} href="/" aria-label="AI Fashion Design 首页">
+        <Link
+          className={styles.brand}
+          href="/"
+          aria-label="AI Fashion Design 首页"
+        >
           <span>AI</span>
           <strong>FASHION / DESIGN</strong>
         </Link>
         <div className={styles.account}>
           <span>{session.user.email}</span>
           <span className={styles.avatar} aria-hidden="true">
-            {(session.user.name ?? session.user.email).slice(0, 1).toUpperCase()}
+            {(session.user.name ?? session.user.email)
+              .slice(0, 1)
+              .toUpperCase()}
           </span>
+          <button
+            className={styles.logoutButton}
+            disabled={logoutPending}
+            onClick={() => void runLogout()}
+            type="button"
+          >
+            {logoutPending ? "正在退出…" : "退出登录"}
+          </button>
         </div>
       </header>
 

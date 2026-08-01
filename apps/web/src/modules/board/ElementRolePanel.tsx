@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import type { BoardElementRole } from "@fashion/shared";
 import { useEditor, useValue } from "tldraw";
 
@@ -39,13 +46,16 @@ export function ElementRolePanel() {
   const projectId = useContext(BoardProjectContext);
   const [saveError, setSaveError] = useState<string | null>(null);
   const queue = useRef<QueuedRoleChange | null>(null);
+  const roleButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const timer = useRef<number | undefined>(undefined);
   const selected = useValue(
     "selected-role-elements",
     () => editor.getSelectedShapes().filter(isRoleAssignableShape),
     [editor],
   );
-  const roles = new Set(selected.map((shape) => normalizeBoardRole(shape.props.role)));
+  const roles = new Set(
+    selected.map((shape) => normalizeBoardRole(shape.props.role)),
+  );
   const activeRole = roles.size === 1 ? [...roles][0] : null;
   const selectedImage =
     selected.length === 1 && selected[0]?.type === IMAGE_SHAPE_TYPE
@@ -130,6 +140,37 @@ export function ElementRolePanel() {
     }, 500);
   };
 
+  const handleRoleKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentIndex: number,
+  ): void => {
+    let nextIndex: number | null = null;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (currentIndex + 1) % BOARD_ROLES.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + BOARD_ROLES.length) % BOARD_ROLES.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = BOARD_ROLES.length - 1;
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const nextRole = BOARD_ROLES[nextIndex];
+    if (!nextRole) {
+      return;
+    }
+
+    setRole(nextRole);
+    roleButtons.current[nextIndex]?.focus();
+  };
+
   const lowConfidence =
     selectedImage?.props.roleSource === "inferred" &&
     ((selectedImage.props.roleConfidence ?? 0) < 0.7 ||
@@ -157,13 +198,22 @@ export function ElementRolePanel() {
       ) : (
         <>
           <div className={styles.roleOptions} role="radiogroup">
-            {BOARD_ROLES.map((role) => (
+            {BOARD_ROLES.map((role, index) => (
               <button
                 aria-checked={activeRole === role}
                 data-role={role}
                 key={role}
                 onClick={() => setRole(role)}
+                onKeyDown={(event) => handleRoleKeyDown(event, index)}
+                ref={(node) => {
+                  roleButtons.current[index] = node;
+                }}
                 role="radio"
+                tabIndex={
+                  activeRole === role || (activeRole === null && index === 0)
+                    ? 0
+                    : -1
+                }
                 type="button"
               >
                 <span>{ROLE_CONTENT[role].index}</span>
@@ -185,7 +235,9 @@ export function ElementRolePanel() {
                 {Math.round((selectedImage.props.roleConfidence ?? 0) * 100)}%
               </span>
             ) : (
-              <span>{selected.length > 1 ? "批量标注" : "人工标注"} · 500ms 入库</span>
+              <span>
+                {selected.length > 1 ? "批量标注" : "人工标注"} · 500ms 入库
+              </span>
             )}
             {saveError ? <small>{saveError}</small> : null}
           </footer>

@@ -63,7 +63,9 @@ async function prepareImage(
     }
   }
 
-  const images = (await decodeHeic.all({ buffer: input })) as HeicImageHandle[] & {
+  const images = (await decodeHeic.all({
+    buffer: input,
+  })) as HeicImageHandle[] & {
     dispose?: () => void;
   };
   const primary = images[0];
@@ -124,6 +126,37 @@ function thumbnailKey(file: FileAsset, size: number): string {
   return `thumbnails/${file.ownerId}/${file.id}/${file.completedAt.getTime()}/${size}.webp`;
 }
 
+function isReadyWithExpectedThumbnails(
+  current: FileAsset | null | undefined,
+  completedAt: Date,
+  thumbnail256Key: string,
+  thumbnail1024Key: string,
+): boolean {
+  return (
+    current?.status === FileStatus.READY &&
+    current.completedAt?.getTime() === completedAt.getTime() &&
+    current.thumbnail256Key === thumbnail256Key &&
+    current.thumbnail1024Key === thumbnail1024Key
+  );
+}
+
+async function cleanupUnreferencedThumbnails(
+  storage: ThumbnailStorage,
+  attemptedKeys: readonly string[],
+  current: FileAsset | null,
+): Promise<void> {
+  const referenced = new Set(
+    [current?.thumbnail256Key, current?.thumbnail1024Key].filter(
+      (key): key is string => Boolean(key),
+    ),
+  );
+  await Promise.allSettled(
+    [...new Set(attemptedKeys)]
+      .filter((key) => !referenced.has(key))
+      .map((key) => storage.delete(key)),
+  );
+}
+
 export function createThumbnailProcessor({
   database,
   storage,
@@ -143,6 +176,11 @@ export function createThumbnailProcessor({
       return;
     }
 
+    const thumbnail256Key = thumbnailKey(file, 256);
+    const thumbnail1024Key = thumbnailKey(file, 1024);
+    const attemptedKeys: string[] = [];
+    let reconciledCurrent: FileAsset | null | undefined;
+
     try {
       const original = await storage.get(file.objectKey);
       const prepared = await prepareImage(original, file.mimeType);
@@ -151,6 +189,7 @@ export function createThumbnailProcessor({
       for (const size of THUMBNAIL_SIZES) {
         const key = thumbnailKey(file, size);
         const thumbnail = await renderThumbnail(prepared, size);
+        attemptedKeys.push(key);
         await storage.put(key, thumbnail, "image/webp");
         outputs.set(size, key);
       }
@@ -167,41 +206,79 @@ export function createThumbnailProcessor({
           errorMessage: null,
           height: prepared.height,
           status: FileStatus.READY,
-          thumbnail1024Key: outputs.get(1024) ?? thumbnailKey(file, 1024),
-          thumbnail256Key: outputs.get(256) ?? thumbnailKey(file, 256),
+          thumbnail1024Key: outputs.get(1024) ?? thumbnail1024Key,
+          thumbnail256Key: outputs.get(256) ?? thumbnail256Key,
           width: prepared.width,
         },
       });
       if (finalized.count === 0) {
-        const current = await database.fileAsset.findUnique({
+        reconciledCurrent = await database.fileAsset.findUnique({
           where: { id: file.id },
         });
         if (
-          current?.completedAt?.getTime() !== file.completedAt.getTime() &&
-          (current?.status === FileStatus.PROCESSING ||
-            current?.status === FileStatus.FAILED)
+          isReadyWithExpectedThumbnails(
+            reconciledCurrent,
+            file.completedAt,
+            thumbnail256Key,
+            thumbnail1024Key,
+          )
+        ) {
+          return;
+        }
+        if (
+          reconciledCurrent?.completedAt?.getTime() !==
+          file.completedAt.getTime()
         ) {
           throw new Error("缩略图任务处理世代已变化");
         }
+        throw new Error("缩略图任务状态已发生变化");
       }
     } catch (error) {
+      if (reconciledCurrent === undefined) {
+        try {
+          reconciledCurrent = await database.fileAsset.findUnique({
+            where: { id: file.id },
+          });
+        } catch {
+          // 数据库完成写可能已经提交；无法对账时保留对象比误删已引用对象更安全。
+        }
+      }
+      if (
+        isReadyWithExpectedThumbnails(
+          reconciledCurrent,
+          file.completedAt,
+          thumbnail256Key,
+          thumbnail1024Key,
+        )
+      ) {
+        return;
+      }
+      if (reconciledCurrent !== undefined) {
+        await cleanupUnreferencedThumbnails(
+          storage,
+          attemptedKeys,
+          reconciledCurrent,
+        );
+      }
       const message =
         error instanceof Error
           ? error.message.slice(0, 500)
           : "未知图片处理错误";
-      await database.fileAsset.updateMany({
-        where: {
-          completedAt: file.completedAt,
-          id: file.id,
-          status: {
-            in: [FileStatus.PROCESSING, FileStatus.FAILED],
+      await database.fileAsset
+        .updateMany({
+          where: {
+            completedAt: file.completedAt,
+            id: file.id,
+            status: {
+              in: [FileStatus.PROCESSING, FileStatus.FAILED],
+            },
           },
-        },
-        data: {
-          errorMessage: message,
-          status: FileStatus.FAILED,
-        },
-      });
+          data: {
+            errorMessage: message,
+            status: FileStatus.FAILED,
+          },
+        })
+        .catch(() => undefined);
       throw error;
     }
   };

@@ -23,6 +23,25 @@ type FileRecord = Awaited<ReturnType<FilesDatabase["fileAsset"]["findUnique"]>>;
 
 const IMAGE_SIGNATURE_BYTES = 24;
 
+function checksumSha256Base64(sha256: string): string {
+  return Buffer.from(sha256, "hex").toString("base64");
+}
+
+function isObjectNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const candidate = error as {
+    readonly $metadata?: { readonly httpStatusCode?: number };
+    readonly name?: string;
+  };
+  return (
+    candidate.$metadata?.httpStatusCode === 404 ||
+    candidate.name === "NoSuchKey" ||
+    candidate.name === "NotFound"
+  );
+}
+
 export function detectImageMime(bytes: Uint8Array): string | null {
   if (
     bytes.length >= 3 &&
@@ -128,7 +147,7 @@ export class FilesService {
     }
 
     if (file.status === FileStatus.FAILED) {
-      await this.database.fileAsset.updateMany({
+      const reset = await this.database.fileAsset.updateMany({
         where: {
           id: file.id,
           ownerId: userId,
@@ -145,11 +164,29 @@ export class FilesService {
           width: null,
         },
       });
+      if (reset.count > 0) {
+        const staleThumbnailKeys = [
+          file.thumbnail1024Key,
+          file.thumbnail256Key,
+        ].filter((key): key is string => Boolean(key));
+        await Promise.allSettled(
+          [...new Set(staleThumbnailKeys)].map((key) =>
+            this.storage.delete(key),
+          ),
+        );
+      }
       file = await this.assertFileOwnership(userId, file.id);
+      if (reset.count === 0 && file.status === FileStatus.FAILED) {
+        throw new ConflictException({
+          code: "FILE_RETRY_STATE_CHANGED",
+          message: "文件重试状态已发生变化，请重新发起上传",
+        });
+      }
     }
 
     const uploadRequired =
       file.status === FileStatus.PENDING || file.status === FileStatus.FAILED;
+    const checksumSha256 = checksumSha256Base64(file.sha256);
 
     return {
       deduplicated,
@@ -158,11 +195,13 @@ export class FilesService {
         ? {
             headers: {
               "Content-Type": file.mimeType,
+              "x-amz-checksum-sha256": checksumSha256,
             },
             method: "PUT" as const,
             url: await this.storage.createUploadUrl(
               file.objectKey,
               file.mimeType,
+              checksumSha256,
             ),
           }
         : null,
@@ -178,15 +217,31 @@ export class FilesService {
       return this.reconcileThumbnailJob(userId, file);
     }
 
-    const head = await this.storage.head(file.objectKey).catch(() => {
-      throw new BadRequestException({
-        code: "UPLOAD_NOT_FOUND",
-        message: "未找到已直传的原图，请重试上传",
-      });
-    });
+    let head: Awaited<ReturnType<FileStorage["head"]>>;
+    try {
+      head = await this.storage.head(file.objectKey);
+    } catch (error) {
+      if (isObjectNotFoundError(error)) {
+        throw new BadRequestException({
+          code: "UPLOAD_NOT_FOUND",
+          message: "未找到已直传的原图，请重试上传",
+        });
+      }
+      throw new ServiceUnavailableException(
+        {
+          code: "UPLOAD_STORAGE_UNAVAILABLE",
+          message: "对象存储暂时不可用，请稍后重试确认上传",
+        },
+        { cause: error },
+      );
+    }
+    const expectedChecksum = checksumSha256Base64(file.sha256);
     if (
       head.contentLength !== file.sizeBytes ||
-      head.contentType?.toLowerCase() !== file.mimeType
+      head.contentType?.split(";", 1)[0]?.trim().toLowerCase() !==
+        file.mimeType ||
+      (head.checksumSha256 !== undefined &&
+        head.checksumSha256 !== expectedChecksum)
     ) {
       throw new BadRequestException({
         code: "UPLOAD_MISMATCH",

@@ -26,6 +26,7 @@ describe("GenerationMaskService", () => {
 
   it("只签临时前缀且不创建 FileAsset 用户资产", async () => {
     const result = await service.sign("user-1", {
+      checksumSha256: "ERERERERERERERERERERERERERERERERERERERERERE=",
       height: 1024,
       projectId: "project-1",
       size: 2048,
@@ -33,10 +34,9 @@ describe("GenerationMaskService", () => {
     });
 
     expect(storage.createUploadUrl).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^temporary\/masks\/user-1\/[\da-f-]+\.png$/u,
-      ),
+      expect.stringMatching(/^temporary\/masks\/user-1\/[\da-f-]+\.png$/u),
       "image/png",
+      "ERERERERERERERERERERERERERERERERERERERERERE=",
     );
     expect(storage.createDownloadUrl).toHaveBeenCalledWith(
       expect.stringMatching(/^temporary\/masks\/user-1\//u),
@@ -44,7 +44,14 @@ describe("GenerationMaskService", () => {
     );
     expect(result).toMatchObject({
       maskUrl: "https://signed.test/mask",
-      upload: { method: "PUT" },
+      upload: {
+        headers: {
+          "Content-Type": "image/png",
+          "x-amz-checksum-sha256":
+            "ERERERERERERERERERERERERERERERERERERERERERE=",
+        },
+        method: "PUT",
+      },
     });
     expect(database).not.toHaveProperty("fileAsset");
   });
@@ -57,6 +64,7 @@ describe("GenerationMaskService", () => {
 
     await expect(
       service.sign("user-1", {
+        checksumSha256: "ERERERERERERERERERERERERERERERERERERERERERE=",
         height: 512,
         projectId: "project-1",
         size: 1024,

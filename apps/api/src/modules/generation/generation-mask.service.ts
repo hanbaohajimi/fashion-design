@@ -23,6 +23,7 @@ export class GenerationMaskService {
   async sign(
     userId: string,
     input: {
+      readonly checksumSha256: string;
       readonly projectId: string;
       readonly width: number;
       readonly height: number;
@@ -42,9 +43,16 @@ export class GenerationMaskService {
         MASK_DOWNLOAD_TTL_SECONDS,
       ),
       upload: {
-        headers: { "Content-Type": "image/png" },
+        headers: {
+          "Content-Type": "image/png",
+          "x-amz-checksum-sha256": input.checksumSha256,
+        },
         method: "PUT" as const,
-        url: await this.storage.createUploadUrl(objectKey, "image/png"),
+        url: await this.storage.createUploadUrl(
+          objectKey,
+          "image/png",
+          input.checksumSha256,
+        ),
       },
     };
   }

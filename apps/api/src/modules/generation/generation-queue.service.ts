@@ -4,7 +4,7 @@ import {
   type GenerationTaskEvent,
 } from "@fashion/shared";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
-import { Queue } from "bullmq";
+import { Queue, type Job } from "bullmq";
 
 import type { GenerationJobs } from "./generation.service";
 
@@ -24,29 +24,27 @@ export class BullGenerationJobs implements GenerationJobs, OnModuleDestroy {
 
   async enqueue(taskId: string, userId: string): Promise<void> {
     const queue = this.getQueue();
-    const existing = await queue.getJob(taskId);
-    if (existing && (await existing.getState()) === "failed") {
-      try {
-        await existing.retry();
-      } catch (error) {
-        if ((await existing.getState()) === "failed") {
-          throw error;
-        }
+    let job = await queue.getJob(taskId);
+    if (job) {
+      const state = await job.getState();
+      if (state === "failed") {
+        await this.retryFinishedJob(job, "failed");
+      } else if (state === "completed") {
+        await this.retryFinishedJob(job, "completed");
       }
     }
-    const job =
-      existing ??
-      (await queue.add(
-        "generate",
-        { taskId, userId },
-        {
-          attempts: 2,
-          backoff: { delay: 1_000, type: "exponential" },
-          jobId: taskId,
-          removeOnComplete: { age: 7 * 24 * 60 * 60 },
-          removeOnFail: { age: 30 * 24 * 60 * 60 },
-        },
-      ));
+
+    job ??= await queue.add(
+      "generate",
+      { taskId, userId },
+      {
+        attempts: 2,
+        backoff: { delay: 1_000, type: "exponential" },
+        jobId: taskId,
+        removeOnComplete: { age: 7 * 24 * 60 * 60 },
+        removeOnFail: { age: 30 * 24 * 60 * 60 },
+      },
+    );
     await job
       .updateProgress(this.event(taskId, "queued"))
       .catch(() => undefined);
@@ -76,6 +74,22 @@ export class BullGenerationJobs implements GenerationJobs, OnModuleDestroy {
       connection: redisConnection(),
     });
     return this.queue;
+  }
+
+  private async retryFinishedJob(
+    job: Job<GenerationJobData>,
+    state: "completed" | "failed",
+  ): Promise<void> {
+    try {
+      await job.retry(state, {
+        resetAttemptsMade: true,
+        resetAttemptsStarted: true,
+      });
+    } catch (error) {
+      if ((await job.getState()) === state) {
+        throw error;
+      }
+    }
   }
 
   private event(

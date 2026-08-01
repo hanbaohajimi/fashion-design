@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Post,
   Res,
@@ -16,6 +17,7 @@ import { signUploadSchema } from "./files.schemas";
 import { FilesService } from "./files.service";
 
 const fileIdSchema = z.string().min(1).max(100);
+const PRIVATE_NO_STORE = "private, no-store";
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -33,6 +35,7 @@ export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post("sign-upload")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   signUpload(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
     return this.filesService.signUpload(
       user.userId,
@@ -41,6 +44,7 @@ export class FilesController {
   }
 
   @Post(":id/complete")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   complete(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") fileId: string,
@@ -52,6 +56,7 @@ export class FilesController {
   }
 
   @Get(":id")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   get(@CurrentUser() user: AuthenticatedUser, @Param("id") fileId: string) {
     return this.filesService.get(
       user.userId,
@@ -60,6 +65,7 @@ export class FilesController {
   }
 
   @Get(":id/thumbnail/:size")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   async thumbnail(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") fileId: string,
@@ -67,6 +73,7 @@ export class FilesController {
     @Res() response: Response,
   ): Promise<void> {
     const size = parseOrThrow(z.enum(["256", "1024"]), rawSize);
+    response.setHeader("Cache-Control", PRIVATE_NO_STORE);
     response.redirect(
       307,
       await this.filesService.thumbnailUrl(

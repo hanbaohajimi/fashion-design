@@ -15,12 +15,45 @@
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
 }
 
+.app-root {
+  min-height: 100dvh;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: #171714;
+  color: #f4f1ea;
+  font-size: 0.85rem;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.skip-link:focus-visible {
+  outline: 3px solid #d69b43;
+  outline-offset: 3px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -41,7 +74,7 @@ a {
 
 .confirm-page {
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   place-content: center;
   padding: 2rem;
   text-align: center;
@@ -60,7 +93,7 @@ a {
 
 .global-error-page {
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 2rem;
   place-items: center;
 }
@@ -114,7 +147,34 @@ a {
   border-color: #a6321d;
 }
 
+.core-error-boundary > button:active {
+  transform: translateY(1px);
+}
+
 .core-error-boundary > button:focus-visible {
   outline: 3px solid #d69b43;
   outline-offset: 3px;
+}
+
+.core-error-boundary > a {
+  justify-self: start;
+  color: #555249;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-underline-offset: 0.3em;
+}
+
+.core-error-boundary > a:hover {
+  color: #a6321d;
+}
+
+.core-error-boundary > a:focus-visible {
+  outline: 3px solid #d69b43;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
 }

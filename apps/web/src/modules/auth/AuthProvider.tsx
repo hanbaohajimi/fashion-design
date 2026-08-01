@@ -13,6 +13,7 @@ import {
 
 import {
   fetchMe,
+  logoutSession,
   type MeResponse,
   readErrorMessage,
   refreshSession,
@@ -25,6 +26,7 @@ import {
 interface AuthContextValue {
   readonly error: string | null;
   readonly loading: boolean;
+  readonly logout: () => Promise<void>;
   readonly refresh: () => Promise<void>;
   readonly session: MeResponse | null;
 }
@@ -86,6 +88,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [isPublicPath, router]);
 
+  const logout = useCallback(async (): Promise<void> => {
+    const response = await logoutSession();
+
+    if (!response.ok) {
+      throw new Error(
+        await readErrorMessage(response, "退出登录失败，请稍后重试。"),
+      );
+    }
+
+    setSession(null);
+    setError(null);
+    router.replace("/login");
+  }, [router]);
+
   useEffect(() => {
     const timerId = window.setTimeout(() => {
       void loadSession();
@@ -128,10 +144,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     () => ({
       error,
       loading,
+      logout,
       refresh: loadSession,
       session,
     }),
-    [error, loadSession, loading, session],
+    [error, loadSession, loading, logout, session],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

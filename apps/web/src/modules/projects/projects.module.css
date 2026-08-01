@@ -67,6 +67,41 @@
   place-items: center;
 }
 
+.logoutButton {
+  min-height: 2.25rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0.35rem 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.logoutButton:hover:not(:disabled) {
+  border-bottom-color: currentColor;
+  color: var(--signal);
+}
+
+.logoutButton:active:not(:disabled) {
+  translate: 0 1px;
+}
+
+.logoutButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.logoutButton:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+
 .hero {
   display: grid;
   min-height: clamp(18rem, 40vw, 30rem);
@@ -832,6 +867,7 @@
 
   .primaryButton,
   .secondaryButton,
+  .logoutButton,
   .statusFilter,
   .statusFilterActive,
   .projectCover {

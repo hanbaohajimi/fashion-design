@@ -3,7 +3,7 @@
   --paper: #f2eee4;
   --signal: #e24a2a;
   display: grid;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--paper);
   color: var(--ink);
   grid-template-columns: minmax(0, 1.08fr) minmax(22rem, 0.92fr);
@@ -11,7 +11,7 @@
 
 .patternPanel {
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
   padding: clamp(2rem, 5vw, 5rem);
   background-color: #20211d;
@@ -139,6 +139,11 @@
   box-shadow: 0 2px 0 var(--signal);
 }
 
+.form input:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .form button {
   min-height: 3.4rem;
   margin-top: 1rem;
@@ -178,6 +183,43 @@
   color: #a6321d;
 }
 
+.messageActions {
+  display: flex;
+  margin-top: 0.8rem;
+  gap: 1rem;
+}
+
+.messageActions button {
+  min-height: 2.35rem;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  padding: 0.35rem 0;
+  background: transparent;
+  color: #4d6048;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.messageActions button:hover:not(:disabled) {
+  color: var(--signal);
+}
+
+.messageActions button:active:not(:disabled) {
+  translate: 0 1px;
+}
+
+.messageActions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.messageActions button:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+
 @media (max-width: 760px) {
   .page {
     grid-template-columns: 1fr;
@@ -193,7 +235,7 @@
   }
 
   .formPanel {
-    min-height: calc(100vh - 17rem);
+    min-height: calc(100dvh - 17rem);
     padding-block: 3.5rem;
   }
 }

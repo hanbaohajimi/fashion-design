@@ -50,3 +50,11 @@ export async function refreshSession(): Promise<Response> {
     },
   });
 }
+
+export async function logoutSession(): Promise<Response> {
+  return fetch("/api/auth/logout", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "include",
+  });
+}

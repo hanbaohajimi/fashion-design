@@ -39,6 +39,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
   const collectionsQuery = useQuery({
     queryFn: () => listCollections(projectId),
     queryKey: collectionKeys.list(projectId),
+    retry: false,
   });
   const collections = collectionsQuery.data ?? [];
   const selectedCollectionId = collections.some(
@@ -93,7 +94,9 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
           ←
         </Link>
         <strong title={projectName}>{projectName}</strong>
-        <span data-status={status}>{STATUS_LABELS[status]}</span>
+        <span aria-live="polite" data-status={status} role="status">
+          {STATUS_LABELS[status]}
+        </span>
       </div>
 
       <div className={styles.shapeActions} aria-label="添加画布元素">
@@ -133,6 +136,16 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
         >
           画框
         </button>
+        {collectionsQuery.isError ? (
+          <button
+            aria-label="重新加载系列"
+            disabled={collectionsQuery.isFetching}
+            onClick={() => void collectionsQuery.refetch()}
+            type="button"
+          >
+            {collectionsQuery.isFetching ? "重试中…" : "重试系列"}
+          </button>
+        ) : null}
         <select
           aria-label="选择系列"
           disabled={collections.length === 0}

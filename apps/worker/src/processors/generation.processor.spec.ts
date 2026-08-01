@@ -49,6 +49,10 @@ const providerResult: AiProviderResult = {
   cost: providerJob.cost,
 };
 
+function resolvePublicHostname(): Promise<string[]> {
+  return Promise.resolve(["93.184.216.34"]);
+}
+
 describe("Generation processor", () => {
   afterAll(async () => {
     await prisma.$disconnect();
@@ -87,6 +91,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -149,6 +154,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -195,6 +201,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -229,6 +236,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -241,6 +249,129 @@ describe("Generation processor", () => {
         "https://cdn.test/generated.png",
         expect.objectContaining({ redirect: "manual" }),
       );
+      expect(storage.put).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it.each([
+    { addresses: ["10.0.0.8"], recordType: "A 私网" },
+    { addresses: ["fd00::8"], recordType: "AAAA 私网" },
+    { addresses: ["fe80::8"], recordType: "AAAA 链路本地" },
+    {
+      addresses: ["93.184.216.34", "fd00::8"],
+      recordType: "A/AAAA 混合结果中的私网",
+    },
+  ])("素材持久化拒绝解析到 $recordType 地址的域名", async ({ addresses }) => {
+    const fixture = await createTask();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("private address must not be fetched"));
+    const resolveHostname = vi.fn().mockResolvedValue(addresses);
+    const storage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      resolveHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow(
+        "生成结果域名解析到不允许的地址",
+      );
+      expect(resolveHostname).toHaveBeenCalledWith("cdn.test");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(storage.put).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("素材持久化会在每次重定向前重新解析并拒绝私网地址", async () => {
+    const fixture = await createTask();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, {
+        headers: { Location: "https://redirect.test/generated.png" },
+        status: 302,
+      }),
+    );
+    const resolveHostname = vi
+      .fn()
+      .mockImplementation((hostname: string) =>
+        Promise.resolve(
+          hostname === "cdn.test" ? ["93.184.216.34"] : ["127.0.0.1"],
+        ),
+      );
+    const storage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      resolveHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow(
+        "生成结果域名解析到不允许的地址",
+      );
+      expect(resolveHostname.mock.calls.map(([hostname]) => hostname)).toEqual([
+        "cdn.test",
+        "redirect.test",
+      ]);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(storage.put).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("素材持久化在域名解析失败时拒绝发起请求", async () => {
+    const fixture = await createTask();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("unresolved host must not be fetched"));
+    const resolveHostname = vi
+      .fn()
+      .mockRejectedValue(new Error("getaddrinfo ENOTFOUND"));
+    const storage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      resolveHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow(
+        "生成结果域名解析失败",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
       expect(storage.put).not.toHaveBeenCalled();
     } finally {
       fetchMock.mockRestore();
@@ -270,6 +401,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -303,6 +435,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -347,6 +480,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -383,6 +517,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -396,6 +531,91 @@ describe("Generation processor", () => {
           expect.stringMatching(/\/thumbnail-1024\.webp$/),
         ]),
       );
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("对象补偿删除遇到瞬时失败时会重试", async () => {
+    const fixture = await createTask();
+    const source = await generatedSource();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(Uint8Array.from(source), {
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+    const deleteAttempts = new Map<string, number>();
+    const storage = {
+      delete: vi.fn().mockImplementation(async (key: string) => {
+        const attempt = (deleteAttempts.get(key) ?? 0) + 1;
+        deleteAttempts.set(key, attempt);
+        if (attempt === 1) {
+          throw new Error("temporary delete failure");
+        }
+      }),
+      get: vi.fn(),
+      put: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("thumbnail write failed")),
+    };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow(
+        "thumbnail write failed",
+      );
+      expect([...deleteAttempts.values()]).toEqual([2, 2]);
+    } finally {
+      fetchMock.mockRestore();
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("对象 key 绑定租约 attempt，避免旧租约补偿误删新租约对象", async () => {
+    const fixture = await createTask();
+    await prisma.generationTask.update({
+      where: { id: fixture.task.id },
+      data: { attemptCount: 4 },
+    });
+    const source = await generatedSource();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(Uint8Array.from(source), {
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+    const storage = {
+      delete: vi.fn().mockResolvedValue(undefined),
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue(undefined),
+    };
+    const process = createGenerationProcessor({
+      ai: successfulAi(),
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
+      storage,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task))).resolves.toMatchObject({
+        status: "succeeded",
+      });
+      expect(storage.put.mock.calls.map(([key]) => key)).toEqual([
+        expect.stringContaining("/attempt-5/source"),
+        expect.stringContaining("/attempt-5/thumbnail-1024.webp"),
+      ]);
     } finally {
       fetchMock.mockRestore();
       await cleanup(fixture.userId);
@@ -432,6 +652,7 @@ describe("Generation processor", () => {
       database: prisma,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -479,6 +700,7 @@ describe("Generation processor", () => {
       } as never,
       moderator: approvedModerator(),
       pollIntervalMs: 1,
+      resolveHostname: resolvePublicHostname,
       storage,
     });
 
@@ -699,9 +921,10 @@ describe("Generation processor", () => {
     }
   });
 
-  it("新鲜 RUNNING 租约的重复 Worker 直接跳过", async () => {
+  it("新鲜 RUNNING 租约会延迟 Bull job，避免把仍在执行的任务错误完成", async () => {
     const fixture = await createTask(GenerationTaskStatus.RUNNING);
     const ai = successfulAi();
+    const job = fakeJob(fixture.task);
     const process = createGenerationProcessor({
       ai,
       billing: new BillingService(prisma),
@@ -710,11 +933,14 @@ describe("Generation processor", () => {
     });
 
     try {
-      await expect(process(fakeJob(fixture.task))).resolves.toEqual({
-        skipped: true,
-        status: "running",
-        taskId: fixture.task.id,
+      await expect(process(job)).rejects.toMatchObject({
+        name: "DelayedError",
       });
+      expect(job.moveToDelayed).toHaveBeenCalledOnce();
+      expect(job.moveToDelayed).toHaveBeenCalledWith(
+        expect.any(Number),
+        "worker-token",
+      );
       expect(ai.submit).not.toHaveBeenCalled();
       const task = await prisma.generationTask.findUniqueOrThrow({
         where: { id: fixture.task.id },
@@ -780,10 +1006,7 @@ describe("Generation processor", () => {
 
     try {
       const running = process(fakeJob(fixture.task));
-      await waitForTaskStatus(
-        fixture.task.id,
-        GenerationTaskStatus.RUNNING,
-      );
+      await waitForTaskStatus(fixture.task.id, GenerationTaskStatus.RUNNING);
       await prisma.generationTask.update({
         where: { id: fixture.task.id },
         data: {
@@ -896,6 +1119,199 @@ describe("Generation processor", () => {
       await cleanup(fixture.userId);
     }
   });
+
+  it("轮询中的任务被取消时 best-effort 取消远端 Provider job", async () => {
+    const fixture = await createTask();
+    const ai = successfulAi();
+    ai.getStatus.mockImplementationOnce(async () => {
+      await prisma.generationTask.update({
+        where: { id: fixture.task.id },
+        data: {
+          canceledAt: new Date(),
+          completedAt: new Date(),
+          status: GenerationTaskStatus.CANCELED,
+        },
+      });
+      return { status: "running" };
+    });
+    const process = createGenerationProcessor({
+      ai,
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+    });
+
+    try {
+      await expect(process(fakeJob(fixture.task))).resolves.toMatchObject({
+        skipped: true,
+        status: "canceled",
+      });
+      expect(ai.cancel).toHaveBeenCalledWith(
+        expect.objectContaining({ providerJobId: providerJob.providerJobId }),
+      );
+      expect(ai.getResult).not.toHaveBeenCalled();
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("远端 Provider cancel 永不返回时不阻塞本地取消收尾", async () => {
+    const fixture = await createTask();
+    const ai = successfulAi();
+    let releaseCancel: (() => void) | undefined;
+    ai.cancel.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCancel = resolve;
+        }),
+    );
+    ai.getStatus.mockImplementationOnce(async () => {
+      await prisma.generationTask.update({
+        where: { id: fixture.task.id },
+        data: {
+          canceledAt: new Date(),
+          completedAt: new Date(),
+          status: GenerationTaskStatus.CANCELED,
+        },
+      });
+      return { status: "running" };
+    });
+    const process = createGenerationProcessor({
+      ai,
+      billing: new BillingService(prisma),
+      database: prisma,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+      providerCancelTimeoutMs: 5,
+    });
+    const running = process(fakeJob(fixture.task));
+    let guardTimer: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const guarded = Promise.race([
+        running,
+        new Promise<never>((_, reject) => {
+          guardTimer = setTimeout(
+            () => reject(new Error("Provider cancel blocked local cleanup")),
+            1_000,
+          );
+        }),
+      ]);
+      await expect(guarded).resolves.toMatchObject({
+        skipped: true,
+        status: "canceled",
+      });
+      expect(ai.cancel).toHaveBeenCalledOnce();
+      const task = await prisma.generationTask.findUniqueOrThrow({
+        where: { id: fixture.task.id },
+      });
+      expect(task.status).toBe(GenerationTaskStatus.CANCELED);
+    } finally {
+      if (guardTimer) {
+        clearTimeout(guardTimer);
+      }
+      releaseCancel?.();
+      await running.catch(() => undefined);
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it("Provider 调用阻塞时 heartbeat 能识别取消而不是误报租约丢失", async () => {
+    const fixture = await createTask();
+    await prisma.generationTask.update({
+      where: { id: fixture.task.id },
+      data: { providerJob: providerJob as never },
+    });
+    const ai = successfulAi();
+    ai.getStatus.mockImplementation(
+      async (_job: AiProviderJob, signal?: AbortSignal) =>
+        new Promise((_, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    );
+    const process = createGenerationProcessor({
+      ai,
+      billing: new BillingService(prisma),
+      database: prisma,
+      heartbeatIntervalMs: 5,
+      moderator: approvedModerator(),
+      pollIntervalMs: 1,
+    });
+
+    try {
+      const running = process(fakeJob(fixture.task));
+      await waitForTaskStatus(fixture.task.id, GenerationTaskStatus.RUNNING);
+      await prisma.generationTask.update({
+        where: { id: fixture.task.id },
+        data: {
+          canceledAt: new Date(),
+          completedAt: new Date(),
+          status: GenerationTaskStatus.CANCELED,
+        },
+      });
+
+      await expect(running).resolves.toMatchObject({
+        skipped: true,
+        status: "canceled",
+      });
+      expect(ai.cancel).toHaveBeenCalledWith(
+        expect.objectContaining({ providerJobId: providerJob.providerJobId }),
+      );
+    } finally {
+      await cleanup(fixture.userId);
+    }
+  });
+
+  it.each([{ attemptsMade: 0 }, { attemptsMade: 1 }])(
+    "Provider 失败与取消竞态时保留 canceled 终态（attemptsMade=$attemptsMade）",
+    async ({ attemptsMade }) => {
+      const fixture = await createTask();
+      const ai = successfulAi();
+      ai.getResult.mockImplementationOnce(async () => {
+        await prisma.generationTask.update({
+          where: { id: fixture.task.id },
+          data: {
+            canceledAt: new Date(),
+            completedAt: new Date(),
+            status: GenerationTaskStatus.CANCELED,
+          },
+        });
+        throw new AiProviderError({
+          code: "PROVIDER_UNAVAILABLE",
+          provider: "mock",
+          message: "temporary failure",
+          retryable: true,
+        });
+      });
+      const job = fakeJob(fixture.task, attemptsMade);
+      const process = createGenerationProcessor({
+        ai,
+        billing: new BillingService(prisma),
+        database: prisma,
+        moderator: approvedModerator(),
+        pollIntervalMs: 1,
+      });
+
+      try {
+        await expect(process(job)).resolves.toMatchObject({
+          skipped: true,
+          status: "canceled",
+        });
+        expect(job.updateProgress).toHaveBeenLastCalledWith(
+          expect.objectContaining({ status: "canceled" }),
+        );
+        const task = await prisma.generationTask.findUniqueOrThrow({
+          where: { id: fixture.task.id },
+        });
+        expect(task.status).toBe(GenerationTaskStatus.CANCELED);
+      } finally {
+        await cleanup(fixture.userId);
+      }
+    },
+  );
 
   it("成功 CAS 失败且当前不是 succeeded/canceled 时抛不可恢复冲突", async () => {
     const fixture = await createTask();
@@ -1057,6 +1473,7 @@ describe("Generation processor", () => {
 
 function successfulAi() {
   return {
+    cancel: vi.fn().mockResolvedValue(undefined),
     submit: vi.fn().mockResolvedValue(providerJob),
     getStatus: vi.fn().mockResolvedValue({ status: "completed" }),
     getResult: vi.fn().mockResolvedValue(providerResult),
@@ -1107,13 +1524,16 @@ function fakeJob(
   task: GenerationTask,
   attemptsMade = 0,
 ): Job<GenerationJobData> & {
+  moveToDelayed: ReturnType<typeof vi.fn>;
   updateProgress: ReturnType<typeof vi.fn>;
 } {
   return {
     attemptsMade,
     data: { taskId: task.id, userId: task.userId },
     id: task.id,
+    moveToDelayed: vi.fn().mockResolvedValue(undefined),
     opts: { attempts: 2 },
+    token: "worker-token",
     updateProgress: vi.fn().mockResolvedValue(undefined),
   } as never;
 }

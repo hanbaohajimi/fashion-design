@@ -15,8 +15,9 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import type { GenerationJobData, GenerationTaskEvent } from "@fashion/shared";
-import { UnrecoverableError, type Job } from "bullmq";
+import { DelayedError, UnrecoverableError, type Job } from "bullmq";
 import { randomUUID } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sharp from "sharp";
 import { z } from "zod";
@@ -46,7 +47,11 @@ const MAX_GENERATED_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_GENERATED_IMAGE_PIXELS = 40_000_000;
 const GENERATION_LEASE_MS = 30_000;
 const GENERATION_HEARTBEAT_MS = 10_000;
+const GENERATION_LEASE_RETRY_PADDING_MS = 250;
 const MAX_GENERATED_IMAGE_REDIRECTS = 3;
+const PROVIDER_CANCEL_TIMEOUT_MS = 5_000;
+const MATERIALIZED_OBJECT_DELETE_ATTEMPTS = 3;
+const MATERIALIZED_OBJECT_DELETE_RETRY_BASE_MS = 25;
 const ALLOWED_GENERATED_IMAGE_TYPES = new Set([
   "image/avif",
   "image/jpeg",
@@ -62,14 +67,22 @@ type GenerationDatabase = Pick<
 type GenerationAi = Pick<
   AiRuntimeService,
   "getResult" | "getStatus" | "submit"
->;
+> &
+  Partial<Pick<AiRuntimeService, "cancel">>;
+
+type GenerationHostnameResolver = (
+  hostname: string,
+) => Promise<readonly string[]>;
 
 export interface GenerationProcessorDependencies {
   readonly ai: GenerationAi;
   readonly billing: Pick<BillingService, "incrementCount">;
   readonly database: GenerationDatabase;
+  readonly heartbeatIntervalMs?: number;
   readonly moderator: ContentModerationService;
   readonly pollIntervalMs?: number;
+  readonly providerCancelTimeoutMs?: number;
+  readonly resolveHostname?: GenerationHostnameResolver;
   readonly similarityJobs?: {
     enqueue(collectionId: string, designAssetId: string): Promise<void>;
   };
@@ -87,8 +100,11 @@ export function createGenerationProcessor({
   ai,
   billing,
   database,
+  heartbeatIntervalMs = GENERATION_HEARTBEAT_MS,
   moderator,
   pollIntervalMs = 500,
+  providerCancelTimeoutMs = PROVIDER_CANCEL_TIMEOUT_MS,
+  resolveHostname = resolveGeneratedImageHostname,
   similarityJobs,
   storage,
   timeoutMs = 120_000,
@@ -98,7 +114,7 @@ export function createGenerationProcessor({
     workerSignal?: AbortSignal,
   ): Promise<{
     skipped?: true;
-    status: "canceled" | "moderation_failed" | "running" | "succeeded";
+    status: "canceled" | "moderation_failed" | "succeeded";
     taskId: string;
   }> => {
     const task = await database.generationTask.findUnique({
@@ -130,10 +146,9 @@ export function createGenerationProcessor({
     const claimedAt = new Date();
     if (
       task.status === GenerationTaskStatus.RUNNING &&
-      task.updatedAt.getTime() >
-        claimedAt.getTime() - GENERATION_LEASE_MS
+      task.updatedAt.getTime() > claimedAt.getTime() - GENERATION_LEASE_MS
     ) {
-      return { skipped: true, status: "running", taskId: task.id };
+      return delayForActiveLease(job, task.updatedAt);
     }
     const claimed = await database.generationTask.updateMany({
       where: {
@@ -157,7 +172,7 @@ export function createGenerationProcessor({
     if (claimed.count !== 1) {
       const current = await database.generationTask.findUnique({
         where: { id: task.id },
-        select: { status: true },
+        select: { status: true, updatedAt: true },
       });
       if (current?.status === GenerationTaskStatus.CANCELED) {
         return {
@@ -181,11 +196,7 @@ export function createGenerationProcessor({
         };
       }
       if (current?.status === GenerationTaskStatus.RUNNING) {
-        return {
-          skipped: true,
-          status: "running",
-          taskId: task.id,
-        };
+        return delayForActiveLease(job, current.updatedAt);
       }
       throw new UnrecoverableError("生成任务当前不可领取");
     }
@@ -211,6 +222,7 @@ export function createGenerationProcessor({
       task.id,
       leaseAttempt,
       leaseController,
+      heartbeatIntervalMs,
     );
     let materializedObjectKeys: string[] = [];
     let materializationCommitted = false;
@@ -257,7 +269,9 @@ export function createGenerationProcessor({
           storage,
           task.userId,
           task.id,
+          leaseAttempt,
           result,
+          resolveHostname,
           signal,
         );
         durableResult = materialized.result;
@@ -281,10 +295,7 @@ export function createGenerationProcessor({
       );
       materializationCommitted = finalStatus === "succeeded";
       if (finalStatus === "canceled" && storage) {
-        await deleteMaterializedObjects(
-          storage,
-          materializedObjectKeys,
-        );
+        await deleteMaterializedObjects(storage, materializedObjectKeys);
         materializedObjectKeys = [];
       }
       const collectionId = task.collectionId;
@@ -314,10 +325,7 @@ export function createGenerationProcessor({
       };
     } catch (error) {
       if (!materializationCommitted && storage) {
-        await deleteMaterializedObjects(
-          storage,
-          materializedObjectKeys,
-        );
+        await deleteMaterializedObjects(storage, materializedObjectKeys);
         materializedObjectKeys = [];
       }
       if (
@@ -328,6 +336,12 @@ export function createGenerationProcessor({
         throw error;
       }
       if (error instanceof GenerationCanceledError) {
+        await cancelProviderJobSafely(
+          ai,
+          database,
+          task.id,
+          providerCancelTimeoutMs,
+        );
         await markCanceled(database, task.id, leaseAttempt);
         await updateProgressSafely(job, event(task.id, "canceled"));
         return {
@@ -338,14 +352,27 @@ export function createGenerationProcessor({
       }
 
       if (timeoutController.signal.aborted) {
-        await markFinalFailure(
+        await cancelProviderJobSafely(
+          ai,
+          database,
+          task.id,
+          providerCancelTimeoutMs,
+        );
+        const finalStatus = await markFinalFailure(
           database,
           task.id,
           leaseAttempt,
           "GENERATION_TIMEOUT",
           "生成任务超过 120 秒",
         );
-        await updateProgressSafely(job, event(task.id, "failed"));
+        await updateProgressSafely(job, event(task.id, finalStatus));
+        if (finalStatus === "canceled") {
+          return {
+            skipped: true,
+            status: "canceled",
+            taskId: task.id,
+          };
+        }
         throw new UnrecoverableError("生成任务超过 120 秒");
       }
 
@@ -365,22 +392,47 @@ export function createGenerationProcessor({
           },
         });
         if (released.count !== 1) {
-          throw new GenerationLeaseLostError(
-            "生成任务执行租约已失效",
-          );
+          if (await isCanceled(database, task.id)) {
+            await cancelProviderJobSafely(
+              ai,
+              database,
+              task.id,
+              providerCancelTimeoutMs,
+            );
+            await updateProgressSafely(job, event(task.id, "canceled"));
+            return {
+              skipped: true,
+              status: "canceled",
+              taskId: task.id,
+            };
+          }
+          throw new GenerationLeaseLostError("生成任务执行租约已失效");
         }
         await updateProgressSafely(job, event(task.id, "queued"));
         throw error;
       }
 
-      await markFinalFailure(
+      const finalStatus = await markFinalFailure(
         database,
         task.id,
         leaseAttempt,
         standardErrorCode(error),
         safeErrorMessage(error),
       );
-      await updateProgressSafely(job, event(task.id, "failed"));
+      await updateProgressSafely(job, event(task.id, finalStatus));
+      if (finalStatus === "canceled") {
+        await cancelProviderJobSafely(
+          ai,
+          database,
+          task.id,
+          providerCancelTimeoutMs,
+        );
+        return {
+          skipped: true,
+          status: "canceled",
+          taskId: task.id,
+        };
+      }
       if (!retryable) {
         throw new UnrecoverableError(safeErrorMessage(error));
       }
@@ -609,7 +661,9 @@ async function materializeResult(
   storage: ThumbnailStorage,
   userId: string,
   taskId: string,
+  attemptCount: number,
   result: AiProviderResult,
+  resolveHostname: GenerationHostnameResolver,
   signal: AbortSignal,
 ): Promise<{
   readonly objectKeys: string[];
@@ -619,7 +673,11 @@ async function materializeResult(
   const objectKeys: string[] = [];
   try {
     for (const [index, image] of result.images.entries()) {
-      const response = await fetchImageResponse(image.url, signal);
+      const response = await fetchImageResponse(
+        image.url,
+        resolveHostname,
+        signal,
+      );
       if (!response.ok) {
         throw new Error(`生成结果下载失败（HTTP ${response.status}）`);
       }
@@ -632,10 +690,7 @@ async function materializeResult(
         throw new Error("生成结果 Content-Type 不受支持");
       }
       assertDeclaredImageSize(response.headers.get("content-length"));
-      const body = await readBodyWithLimit(
-        response,
-        MAX_GENERATED_IMAGE_BYTES,
-      );
+      const body = await readBodyWithLimit(response, MAX_GENERATED_IMAGE_BYTES);
       if (body.byteLength === 0) {
         throw new Error("生成结果为空");
       }
@@ -647,9 +702,9 @@ async function materializeResult(
         throw new Error("生成结果不是有效图片");
       }
       const assetId = `${taskId}-${index + 1}`;
-      const contentKey = `generated/${userId}/${assetId}/source`;
-      const thumbnailKey =
-        `generated/${userId}/${assetId}/thumbnail-1024.webp`;
+      const attemptPrefix = `generated/${userId}/${assetId}/attempt-${attemptCount}`;
+      const contentKey = `${attemptPrefix}/source`;
+      const thumbnailKey = `${attemptPrefix}/thumbnail-1024.webp`;
       const thumbnail = await sharp(body, {
         failOn: "error",
         limitInputPixels: MAX_GENERATED_IMAGE_PIXELS,
@@ -689,10 +744,12 @@ async function materializeResult(
 
 async function fetchImageResponse(
   value: string,
+  resolveHostname: GenerationHostnameResolver,
   signal: AbortSignal,
 ): Promise<Response> {
   let current = safeImageUrl(value);
   for (let redirectCount = 0; ; redirectCount += 1) {
+    await assertHostnameResolvesPublicly(current, resolveHostname);
     const response = await fetch(current.toString(), {
       redirect: "manual",
       signal,
@@ -709,10 +766,50 @@ async function fetchImageResponse(
       await response.body?.cancel().catch(() => undefined);
       throw new Error("生成结果重定向缺少 Location");
     }
-    const next = safeImageUrl(new URL(location, current).toString());
-    await response.body?.cancel().catch(() => undefined);
-    current = next;
+    try {
+      current = safeImageUrl(new URL(location, current).toString());
+    } finally {
+      await response.body?.cancel().catch(() => undefined);
+    }
   }
+}
+
+async function resolveGeneratedImageHostname(
+  hostname: string,
+): Promise<string[]> {
+  const addresses = await lookup(hostname, {
+    all: true,
+    verbatim: true,
+  });
+  return addresses.map(({ address }) => address);
+}
+
+async function assertHostnameResolvesPublicly(
+  url: URL,
+  resolveHostname: GenerationHostnameResolver,
+): Promise<void> {
+  const hostname = normalizedHostname(url);
+  if (isIP(hostname) !== 0) {
+    return;
+  }
+
+  let addresses: readonly string[];
+  try {
+    addresses = await resolveHostname(hostname);
+  } catch {
+    throw new Error("生成结果域名解析失败");
+  }
+  if (
+    addresses.length === 0 ||
+    addresses.some((address) => isIP(address) === 0)
+  ) {
+    throw new Error("生成结果域名解析失败");
+  }
+  if (addresses.some((address) => isPrivateIpLiteral(address))) {
+    throw new Error("生成结果域名解析到不允许的地址");
+  }
+
+  // 标准 fetch 不暴露已解析地址绑定能力；网络出口仍需防御校验与连接间的 DNS rebinding。
 }
 
 function safeImageUrl(value: string): URL {
@@ -725,10 +822,7 @@ function safeImageUrl(value: string): URL {
   if (parsed.protocol !== "https:") {
     throw new Error("生成结果仅允许 HTTPS URL");
   }
-  const hostname = parsed.hostname
-    .replace(/^\[|\]$/gu, "")
-    .replace(/\.$/u, "")
-    .toLowerCase();
+  const hostname = normalizedHostname(parsed);
   if (
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||
@@ -737,6 +831,13 @@ function safeImageUrl(value: string): URL {
     throw new Error("生成结果 URL 不允许指向本机或私网地址");
   }
   return parsed;
+}
+
+function normalizedHostname(url: URL): string {
+  return url.hostname
+    .replace(/^\[|\]$/gu, "")
+    .replace(/\.$/u, "")
+    .toLowerCase();
 }
 
 function isPrivateIpLiteral(hostname: string): boolean {
@@ -766,7 +867,8 @@ function isPrivateIpLiteral(hostname: string): boolean {
       normalized.startsWith("::ffff:") ||
       normalized.startsWith("fc") ||
       normalized.startsWith("fd") ||
-      (firstGroup & 0xffc0) === 0xfe80
+      (firstGroup & 0xffc0) === 0xfe80 ||
+      (firstGroup & 0xff00) === 0xff00
     );
   }
   return false;
@@ -776,11 +878,37 @@ async function deleteMaterializedObjects(
   storage: ThumbnailStorage,
   objectKeys: readonly string[],
 ): Promise<void> {
-  await Promise.allSettled(
+  await Promise.all(
     [...new Set(objectKeys)].map((objectKey) =>
-      storage.delete(objectKey),
+      deleteMaterializedObject(storage, objectKey),
     ),
   );
+}
+
+async function deleteMaterializedObject(
+  storage: ThumbnailStorage,
+  objectKey: string,
+): Promise<void> {
+  for (
+    let attempt = 1;
+    attempt <= MATERIALIZED_OBJECT_DELETE_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      await storage.delete(objectKey);
+      return;
+    } catch {
+      if (attempt === MATERIALIZED_OBJECT_DELETE_ATTEMPTS) {
+        return;
+      }
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          MATERIALIZED_OBJECT_DELETE_RETRY_BASE_MS * 2 ** (attempt - 1),
+        ),
+      );
+    }
+  }
 }
 
 function assertDeclaredImageSize(value: string | null): void {
@@ -831,11 +959,26 @@ function operationFrom(taskType: string): DesignAssetOperation {
   return DesignAssetOperation.GENERATED;
 }
 
+async function delayForActiveLease(
+  job: Job<GenerationJobData>,
+  leaseUpdatedAt: Date,
+): Promise<never> {
+  const retryAt = Math.max(
+    Date.now() + GENERATION_LEASE_RETRY_PADDING_MS,
+    leaseUpdatedAt.getTime() +
+      GENERATION_LEASE_MS +
+      GENERATION_LEASE_RETRY_PADDING_MS,
+  );
+  await job.moveToDelayed(retryAt, job.token);
+  throw new DelayedError();
+}
+
 function startLeaseHeartbeat(
   database: GenerationDatabase,
   taskId: string,
   attemptCount: number,
   controller: AbortController,
+  heartbeatIntervalMs: number,
 ): () => void {
   let refreshing = false;
   const heartbeat = setInterval(() => {
@@ -843,33 +986,39 @@ function startLeaseHeartbeat(
       return;
     }
     refreshing = true;
-    void database.generationTask
-      .updateMany({
-        where: {
-          attemptCount,
-          id: taskId,
-          status: GenerationTaskStatus.RUNNING,
-        },
-        data: { updatedAt: new Date() },
-      })
-      .then((updated) => {
-        if (updated.count !== 1 && !controller.signal.aborted) {
-          controller.abort(
-            new GenerationLeaseLostError("生成任务执行租约已失效"),
-          );
+    void (async () => {
+      try {
+        const updated = await database.generationTask.updateMany({
+          where: {
+            attemptCount,
+            id: taskId,
+            status: GenerationTaskStatus.RUNNING,
+          },
+          data: { updatedAt: new Date() },
+        });
+        if (updated.count === 1 || controller.signal.aborted) {
+          return;
         }
-      })
-      .catch(() => {
+        const current = await database.generationTask.findUnique({
+          where: { id: taskId },
+          select: { status: true },
+        });
+        controller.abort(
+          current?.status === GenerationTaskStatus.CANCELED
+            ? new GenerationCanceledError("生成任务已取消")
+            : new GenerationLeaseLostError("生成任务执行租约已失效"),
+        );
+      } catch {
         if (!controller.signal.aborted) {
           controller.abort(
             new GenerationLeaseLostError("生成任务租约刷新失败"),
           );
         }
-      })
-      .finally(() => {
+      } finally {
         refreshing = false;
-      });
-  }, GENERATION_HEARTBEAT_MS);
+      }
+    })();
+  }, heartbeatIntervalMs);
   heartbeat.unref();
   return () => clearInterval(heartbeat);
 }
@@ -895,6 +1044,62 @@ async function assertActive(
   ) {
     throw new GenerationLeaseLostError("生成任务执行租约已失效");
   }
+}
+
+async function cancelProviderJobSafely(
+  ai: GenerationAi,
+  database: GenerationDatabase,
+  taskId: string,
+  timeoutMs: number,
+): Promise<void> {
+  if (!ai.cancel) {
+    return;
+  }
+  try {
+    const current = await database.generationTask.findUnique({
+      where: { id: taskId },
+      select: { providerJob: true },
+    });
+    const remoteJob = providerJobSchema.safeParse(current?.providerJob);
+    if (remoteJob.success) {
+      await settleBeforeTimeout(ai.cancel(remoteJob.data), timeoutMs);
+    }
+  } catch {
+    // 数据库中的取消状态优先；远端取消仅作为资源补偿。
+  }
+}
+
+async function settleBeforeTimeout(
+  operation: Promise<void>,
+  timeoutMs: number,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Provider cancel timeout")),
+      Math.max(0, timeoutMs),
+    );
+    void operation.then(
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
+}
+
+async function isCanceled(
+  database: GenerationDatabase,
+  taskId: string,
+): Promise<boolean> {
+  const current = await database.generationTask.findUnique({
+    where: { id: taskId },
+    select: { status: true },
+  });
+  return current?.status === GenerationTaskStatus.CANCELED;
 }
 
 function assertNotAborted(signal: AbortSignal): void {
@@ -994,7 +1199,7 @@ async function markFinalFailure(
   attemptCount: number,
   errorCode: string,
   errorMessage: string,
-): Promise<void> {
+): Promise<"canceled" | "failed"> {
   const updated = await database.generationTask.updateMany({
     where: {
       attemptCount,
@@ -1008,9 +1213,13 @@ async function markFinalFailure(
       status: GenerationTaskStatus.FAILED,
     },
   });
-  if (updated.count !== 1) {
-    throw new GenerationLeaseLostError("生成任务执行租约已失效");
+  if (updated.count === 1) {
+    return "failed";
   }
+  if (await isCanceled(database, taskId)) {
+    return "canceled";
+  }
+  throw new GenerationLeaseLostError("生成任务执行租约已失效");
 }
 
 async function moderateSafely(

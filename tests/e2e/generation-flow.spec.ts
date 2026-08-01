@@ -1,5 +1,77 @@
 import { expect, test } from "@playwright/test";
 
+test("项目库可以安全退出并返回登录页", async ({ page }) => {
+  let logoutRequestCount = 0;
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 88, used: 12 },
+        user: {
+          authId: "auth-logout",
+          avatar: null,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          deletedAt: null,
+          email: "logout@example.com",
+          id: "user-logout",
+          name: "Logout Atelier",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/projects?*", (route) =>
+    route.fulfill({
+      json: { items: [], nextCursor: null, total: 0 },
+    }),
+  );
+  await page.route("**/api/auth/logout", async (route) => {
+    logoutRequestCount += 1;
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/");
+  await expect(page.getByText("logout@example.com")).toBeVisible();
+  await page.getByRole("button", { name: "退出登录" }).click();
+
+  await expect.poll(() => logoutRequestCount).toBe(1);
+  await expect(page).toHaveURL(/\/login$/u);
+});
+
+test("登录邮件发送后可更换邮箱并重发到已确认地址", async ({ page }) => {
+  const recipients: string[] = [];
+
+  await page.route("**/api/auth/login", async (route) => {
+    const body = route.request().postDataJSON() as {
+      readonly action: string;
+      readonly email?: string;
+    };
+    if (body.action === "send" && body.email) {
+      recipients.push(body.email);
+    }
+    await route.fulfill({ json: { ok: true } });
+  });
+
+  await page.goto("/login");
+  const skipLink = page.getByRole("link", { name: "跳到主要内容" });
+  await expect(skipLink).toHaveAttribute("href", "#main-content");
+  const emailInput = page.getByRole("textbox", { name: "邮箱地址" });
+  await emailInput.fill("first@example.com");
+  await page.getByRole("button", { name: "发送登录链接" }).click();
+
+  await expect(page.getByRole("status")).toContainText("first@example.com");
+  await expect(emailInput).toBeDisabled();
+  await page.getByRole("button", { name: "换个邮箱" }).click();
+  await expect(emailInput).toBeFocused();
+  await emailInput.fill("second@example.com");
+  await page.getByRole("button", { name: "发送登录链接" }).click();
+  await expect(page.getByRole("status")).toContainText("second@example.com");
+
+  await page.getByRole("button", { name: "重新发送" }).click();
+  await expect
+    .poll(() => recipients)
+    .toEqual(["first@example.com", "second@example.com", "second@example.com"]);
+});
+
 test("框选约束后生成候选并采纳为带 assetId 的白板图片", async ({ page }) => {
   let persistedAssetId: string | undefined;
   let generationIdempotencyKey: string | undefined;
@@ -89,6 +161,10 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
       json: { elements: [], revision: 0, snapshot: null },
     });
   });
+  await page.route(
+    "**/api/projects/e2e-project/board-elements/roles",
+    (route) => route.fulfill({ json: { ok: true } }),
+  );
   await page.route("**/api/generations?*", async (route) => {
     await route.fulfill({
       json: {
@@ -144,6 +220,16 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect(page.getByRole("button", { name: "便签" })).toBeVisible();
 
   await page.getByRole("button", { name: "便签" }).click();
+  const styleRole = page.getByRole("radio", { name: /风格参考/u });
+  const fabricRole = page.getByRole("radio", { name: /面料参考/u });
+  await styleRole.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(fabricRole).toBeFocused();
+  await expect(fabricRole).toHaveAttribute("aria-checked", "true");
+  const noteRole = page.getByRole("radio", { name: /备注/u });
+  await page.keyboard.press("End");
+  await expect(noteRole).toBeFocused();
+  await expect(noteRole).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("region", { name: "生成浮条" })).toBeHidden();
   await page.mouse.move(470, 220);

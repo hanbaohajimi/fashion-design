@@ -162,12 +162,20 @@ function taskItemFrom(
 
 function TaskObserver({
   onTask,
+  onTransport,
   taskId,
 }: {
   readonly onTask: (task: GenerationTaskDetail) => void;
+  readonly onTransport: (
+    taskId: string,
+    mode: GenerationTaskItem["connection"],
+  ) => void;
   readonly taskId: string;
 }) {
   const mode = useGenerationSSE(taskId, onTask);
+  useEffect(() => {
+    onTransport(taskId, mode);
+  }, [mode, onTransport, taskId]);
   return <span data-generation-transport={mode} hidden />;
 }
 
@@ -418,6 +426,19 @@ export function GenerationWorkspace({
     [projectTasks, start],
   );
 
+  const updateTransport = useCallback(
+    (taskId: string, connection: GenerationTaskItem["connection"]): void => {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === taskId && task.connection !== connection
+            ? { ...task, connection }
+            : task,
+        ),
+      );
+    },
+    [],
+  );
+
   const dismissCandidate = useCallback((candidateId: string): void => {
     setTasks((current) =>
       current.map((task) => ({
@@ -463,7 +484,12 @@ export function GenerationWorkspace({
         </aside>
       ) : null}
       {active.map((task) => (
-        <TaskObserver key={task.id} onTask={updateTask} taskId={task.id} />
+        <TaskObserver
+          key={task.id}
+          onTask={updateTask}
+          onTransport={updateTransport}
+          taskId={task.id}
+        />
       ))}
     </GenerationWorkspaceContext.Provider>
   );

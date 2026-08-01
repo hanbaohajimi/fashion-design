@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Inject,
   Param,
   Post,
@@ -16,6 +17,8 @@ import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { DesignAssetsService } from "./design-assets.service";
 
+const PRIVATE_NO_STORE = "private, no-store";
+
 @Controller("design-assets")
 export class DesignAssetsController {
   constructor(
@@ -24,15 +27,19 @@ export class DesignAssetsController {
   ) {}
 
   @Get(":id/versions")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   async versions(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") assetId: string,
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
   ) {
-    const parsed = z.coerce.number().int().min(1).max(24).safeParse(
-      rawLimit ?? 10,
-    );
+    const parsed = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(24)
+      .safeParse(rawLimit ?? 10);
     if (!parsed.success) {
       throw new BadRequestException({
         code: "INVALID_VERSION_PAGE",
@@ -43,11 +50,13 @@ export class DesignAssetsController {
   }
 
   @Get(":id/content")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   async content(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") assetId: string,
     @Res() response: Response,
   ): Promise<void> {
+    response.setHeader("Cache-Control", PRIVATE_NO_STORE);
     response.redirect(
       307,
       await this.assets.downloadUrl(user.userId, assetId, "content"),
@@ -55,11 +64,13 @@ export class DesignAssetsController {
   }
 
   @Get(":id/thumbnail")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
   async thumbnail(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") assetId: string,
     @Res() response: Response,
   ): Promise<void> {
+    response.setHeader("Cache-Control", PRIVATE_NO_STORE);
     response.redirect(
       307,
       await this.assets.downloadUrl(user.userId, assetId, "thumbnail"),

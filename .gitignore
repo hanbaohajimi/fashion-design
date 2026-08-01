@@ -4,6 +4,7 @@ node_modules/
 dist/
 coverage/
 output/playwright/
+.playwright-cli/
 playwright-report/
 test-results/
 generated/

@@ -5,6 +5,8 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 
+const STORAGE_OPERATION_TIMEOUT_MS = 15_000;
+
 export interface ThumbnailStorage {
   delete(objectKey: string): Promise<void>;
   get(objectKey: string): Promise<Buffer>;
@@ -48,6 +50,7 @@ export class S3ThumbnailStorage implements ThumbnailStorage {
         Bucket: this.bucket,
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(STORAGE_OPERATION_TIMEOUT_MS) },
     );
     if (!response.Body) {
       throw new Error(`对象 ${objectKey} 没有可读取的内容`);
@@ -64,10 +67,11 @@ export class S3ThumbnailStorage implements ThumbnailStorage {
       new PutObjectCommand({
         Body: body,
         Bucket: this.bucket,
-        CacheControl: "public, max-age=31536000, immutable",
+        CacheControl: "private, max-age=31536000, immutable",
         ContentType: contentType,
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(STORAGE_OPERATION_TIMEOUT_MS) },
     );
   }
 
@@ -84,6 +88,7 @@ export class S3ThumbnailStorage implements ThumbnailStorage {
         ContentType: contentType,
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(STORAGE_OPERATION_TIMEOUT_MS) },
     );
   }
 
@@ -93,6 +98,7 @@ export class S3ThumbnailStorage implements ThumbnailStorage {
         Bucket: this.bucket,
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(STORAGE_OPERATION_TIMEOUT_MS) },
     );
   }
 }

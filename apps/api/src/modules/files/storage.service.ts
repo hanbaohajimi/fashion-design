@@ -2,18 +2,24 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Injectable } from "@nestjs/common";
 
 export interface StoredObjectHead {
+  readonly checksumSha256: string | undefined;
   readonly contentLength: number;
   readonly contentType: string | undefined;
 }
 
 export interface FileStorage {
-  createUploadUrl(objectKey: string, mimeType: string): Promise<string>;
+  createUploadUrl(
+    objectKey: string,
+    mimeType: string,
+    checksumSha256?: string,
+  ): Promise<string>;
   createDownloadUrl(
     objectKey: string,
     expiresInSeconds: number,
@@ -24,6 +30,8 @@ export interface FileStorage {
   publicUrl(objectKey: string): string;
   readPrefix(objectKey: string, maxBytes: number): Promise<Uint8Array>;
 }
+
+const FILE_STORAGE_OPERATION_TIMEOUT_MS = 10_000;
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name]?.trim();
@@ -37,12 +45,16 @@ function requiredEnvironment(name: string): string {
 export class S3FileStorage implements FileStorage {
   private client: S3Client | undefined;
 
-  async createUploadUrl(objectKey: string, mimeType: string): Promise<string> {
-    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  async createUploadUrl(
+    objectKey: string,
+    mimeType: string,
+    checksumSha256?: string,
+  ): Promise<string> {
     return getSignedUrl(
       this.getClient(),
       new PutObjectCommand({
         Bucket: requiredEnvironment("S3_BUCKET"),
+        ...(checksumSha256 ? { ChecksumSHA256: checksumSha256 } : {}),
         ContentType: mimeType,
         Key: objectKey,
       }),
@@ -74,10 +86,13 @@ export class S3FileStorage implements FileStorage {
     const response = await this.getClient().send(
       new HeadObjectCommand({
         Bucket: requiredEnvironment("S3_BUCKET"),
+        ChecksumMode: "ENABLED",
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(FILE_STORAGE_OPERATION_TIMEOUT_MS) },
     );
     return {
+      checksumSha256: response.ChecksumSHA256,
       contentLength: response.ContentLength ?? -1,
       contentType: response.ContentType,
     };
@@ -89,6 +104,7 @@ export class S3FileStorage implements FileStorage {
         Bucket: requiredEnvironment("S3_BUCKET"),
         Key: objectKey,
       }),
+      { abortSignal: AbortSignal.timeout(FILE_STORAGE_OPERATION_TIMEOUT_MS) },
     );
   }
 
@@ -99,6 +115,7 @@ export class S3FileStorage implements FileStorage {
         Key: objectKey,
         Range: `bytes=0-${Math.max(maxBytes - 1, 0)}`,
       }),
+      { abortSignal: AbortSignal.timeout(FILE_STORAGE_OPERATION_TIMEOUT_MS) },
     );
     if (!response.Body) {
       throw new Error("对象存储未返回文件内容");

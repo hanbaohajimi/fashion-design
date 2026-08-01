@@ -3,10 +3,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createShapeId, type TLShapeId, useEditor } from "tldraw";
 
-import {
-  BOARD_FILE_PICKER_EVENT,
-  BoardProjectContext,
-} from "./board-context";
+import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import {
   fetchElementRole,
   registerRoleInference,
@@ -39,6 +36,7 @@ export function BoardFileDrop() {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadingTaskIds = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
   const [tasks, setTasks] = useState<readonly UploadTask[]>([]);
 
@@ -108,10 +106,7 @@ export function BoardFileDrop() {
   );
 
   const trackInference = useCallback(
-    async (
-      shapeId: TLShapeId,
-      fileId?: string,
-    ): Promise<void> => {
+    async (shapeId: TLShapeId, fileId?: string): Promise<void> => {
       try {
         let result = fileId
           ? await registerRoleInference(projectId, shapeId, fileId)
@@ -138,6 +133,8 @@ export function BoardFileDrop() {
 
   const runUpload = useCallback(
     async (task: UploadTask): Promise<void> => {
+      if (uploadingTaskIds.current.has(task.id)) return;
+      uploadingTaskIds.current.add(task.id);
       setTasks((current) =>
         current.map((item) =>
           item.id === task.id
@@ -185,9 +182,21 @@ export function BoardFileDrop() {
             item.id === task.id ? { ...item, error, status: "failed" } : item,
           ),
         );
+      } finally {
+        uploadingTaskIds.current.delete(task.id);
       }
     },
     [failInference, projectId, trackInference, updateImage],
+  );
+
+  const removeTask = useCallback(
+    (task: UploadTask): void => {
+      if (uploadingTaskIds.current.has(task.id)) return;
+      clearUploadPreview(task.shapeId);
+      editor.deleteShapes([task.shapeId]);
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+    },
+    [editor],
   );
 
   useEffect(() => {
@@ -312,12 +321,14 @@ export function BoardFileDrop() {
       addFiles(files, point);
     };
     const onPaste = (event: ClipboardEvent): void => {
-      const isEditableTarget = event.composedPath().some(
-        (target) =>
-          target instanceof HTMLElement &&
-          (target.matches("input, textarea, select") ||
-            target.isContentEditable),
-      );
+      const isEditableTarget = event
+        .composedPath()
+        .some(
+          (target) =>
+            target instanceof HTMLElement &&
+            (target.matches("input, textarea, select") ||
+              target.isContentEditable),
+        );
       if (event.defaultPrevented || isEditableTarget) {
         return;
       }
@@ -369,17 +380,35 @@ export function BoardFileDrop() {
         </div>
       ) : null}
       {tasks.length > 0 ? (
-        <aside className={styles.uploadTray} aria-label="图片上传状态">
+        <aside
+          aria-label="图片上传状态"
+          aria-live="polite"
+          className={styles.uploadTray}
+        >
           {tasks.map((task) => (
             <div key={task.id} data-status={task.status}>
               <span>{task.file.name}</span>
               <small>
                 {task.status === "uploading" ? "上传并生成缩略图…" : task.error}
               </small>
-              {task.status === "failed" && !validateImage(task.file) ? (
-                <button onClick={() => void runUpload(task)} type="button">
-                  重试
-                </button>
+              {task.status === "failed" ? (
+                validateImage(task.file) ? (
+                  <button
+                    aria-label={`移除“${task.file.name}”`}
+                    onClick={() => removeTask(task)}
+                    type="button"
+                  >
+                    移除
+                  </button>
+                ) : (
+                  <button
+                    aria-label={`重试“${task.file.name}”`}
+                    onClick={() => void runUpload(task)}
+                    type="button"
+                  >
+                    重试
+                  </button>
+                )
               ) : null}
             </div>
           ))}

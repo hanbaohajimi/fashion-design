@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Param,
   Post,
@@ -15,6 +16,7 @@ import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 
 const exportIdSchema = z.string().min(1).max(100);
+const PRIVATE_NO_STORE = "private, no-store";
 
 @Controller("exports")
 export class ExportsController {
@@ -39,10 +41,8 @@ export class ExportsController {
   }
 
   @Get(":id")
-  get(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("id") exportId: string,
-  ) {
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  get(@CurrentUser() user: AuthenticatedUser, @Param("id") exportId: string) {
     const result = exportIdSchema.safeParse(exportId);
     if (!result.success) {
       throw new BadRequestException({

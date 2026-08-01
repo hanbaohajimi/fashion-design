@@ -77,6 +77,8 @@ export interface AiProvider {
 
   supports(taskType: AiTaskType): boolean;
 
+  cancel?(job: AiProviderJob, signal: AbortSignal): Promise<void>;
+
   submit(
     request: AiGenerationRequest,
     signal: AbortSignal,

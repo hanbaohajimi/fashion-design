@@ -1073,11 +1073,33 @@
 }
 
 .collectionInlineError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   border-bottom: 1px solid #9c3a25;
   padding: 9px 14px;
   background: #f1d9cf;
   color: #872d1d;
   font-weight: 700;
+  gap: 12px;
+}
+
+.collectionInlineError button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid currentcolor;
+  padding: 0 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.collectionInlineError button:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .dnaCard {
@@ -1807,6 +1829,18 @@
   font-size: 8px;
 }
 
+.taskTray li small {
+  color: #9b4b28;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.taskTray li[data-connection="polling"] > i {
+  background: #c26b35;
+  animation: none;
+}
+
 .taskTray li > button {
   background: transparent;
   border: 1px solid rgb(24 25 21 / 24%);
@@ -2216,11 +2250,15 @@
     min-height: 0;
     max-height: none;
     overflow: auto;
+    overscroll-behavior: contain;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x pan-y;
   }
 
   .candidateCard {
     min-height: 200px;
     grid-template-rows: minmax(140px, 1fr) auto;
+    scroll-snap-align: start;
   }
 
   .candidateImageButton,
@@ -2239,6 +2277,8 @@
 
   .taskTray ol {
     max-height: calc(18dvh - 38px);
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
   }
 
   .lightboxBackdrop {

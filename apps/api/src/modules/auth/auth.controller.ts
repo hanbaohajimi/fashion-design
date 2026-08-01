@@ -4,6 +4,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Headers,
   HttpCode,
   Inject,
@@ -28,10 +29,7 @@ import type { AuthSession, AuthenticatedUser } from "./auth.types";
 import { CurrentUser } from "./current-user.decorator";
 import { Public } from "./public.decorator";
 import { BillingService } from "../billing/billing.service";
-import {
-  RateLimit,
-  RateLimitGuard,
-} from "../../security/rate-limit.guard";
+import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 
 const loginRequestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -51,6 +49,7 @@ const loginRequestSchema = z.discriminatedUnion("action", [
     action: z.literal("refresh"),
   }),
 ]);
+const AUTH_CACHE_CONTROL = "private, no-store";
 
 @Controller()
 export class AuthController {
@@ -62,6 +61,7 @@ export class AuthController {
   @Public()
   @Post("auth/login")
   @HttpCode(200)
+  @Header("Cache-Control", AUTH_CACHE_CONTROL)
   @UseGuards(RateLimitGuard)
   @RateLimit({
     keyBy: "login",
@@ -121,7 +121,29 @@ export class AuthController {
     }
   }
 
+  @Public()
+  @Post("auth/logout")
+  @HttpCode(204)
+  @Header("Cache-Control", AUTH_CACHE_CONTROL)
+  logout(
+    @Headers("origin") origin: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): void {
+    this.authService.assertAllowedOrigin(origin);
+    const commonOptions = this.getSessionCookieOptions();
+
+    response.cookie(ACCESS_TOKEN_COOKIE, "", {
+      ...commonOptions,
+      maxAge: 0,
+    });
+    response.cookie(REFRESH_TOKEN_COOKIE, "", {
+      ...commonOptions,
+      maxAge: 0,
+    });
+  }
+
   @Get("me")
+  @Header("Cache-Control", AUTH_CACHE_CONTROL)
   async getMe(@CurrentUser() authenticatedUser: AuthenticatedUser): Promise<{
     credits: { limit: number; remaining: number; used: number };
     user: User;
@@ -151,15 +173,7 @@ export class AuthController {
   }
 
   private setSessionCookies(response: Response, session: AuthSession): void {
-    const secure =
-      process.env.SESSION_COOKIE_SECURE === "true" ||
-      process.env.NODE_ENV === "production";
-    const commonOptions = {
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax" as const,
-      secure,
-    };
+    const commonOptions = this.getSessionCookieOptions();
     const accessMaxAge = session.expiresAt
       ? Math.max(session.expiresAt * 1000 - Date.now(), 1000)
       : ACCESS_TOKEN_FALLBACK_MAX_AGE_MS;
@@ -172,5 +186,21 @@ export class AuthController {
       ...commonOptions,
       maxAge: REFRESH_TOKEN_MAX_AGE_MS,
     });
+  }
+
+  private getSessionCookieOptions(): {
+    readonly httpOnly: true;
+    readonly path: "/";
+    readonly sameSite: "lax";
+    readonly secure: boolean;
+  } {
+    return {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      secure:
+        process.env.SESSION_COOKIE_SECURE === "true" ||
+        process.env.NODE_ENV === "production",
+    };
   }
 }

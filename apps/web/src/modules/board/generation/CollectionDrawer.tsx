@@ -33,7 +33,11 @@ export function CollectionDrawer({
     null,
   );
   const [draft, setDraft] = useState<CollectionDna | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+  const [consistencyError, setConsistencyError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadingCollection, setLoadingCollection] = useState(false);
+  const [loadingConsistency, setLoadingConsistency] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [tab, setTab] = useState<DrawerTab>("dna");
   const [exportOpen, setExportOpen] = useState(false);
@@ -42,6 +46,9 @@ export function CollectionDrawer({
   const saveQueue = useRef(Promise.resolve());
   const drawerRef = useRef<HTMLElement>(null);
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
+  const mountedRef = useRef(true);
+  const collectionRequestId = useRef(0);
+  const consistencyRequestId = useRef(0);
 
   const enqueueSave = useCallback(
     (snapshot: CollectionDna): Promise<void> => {
@@ -54,6 +61,7 @@ export function CollectionDrawer({
         silhouettes: snapshot.silhouettes,
       };
       setSaveState("saving");
+      setSaveError(null);
       const operation = saveQueue.current
         .catch(() => undefined)
         .then(async () => {
@@ -63,11 +71,12 @@ export function CollectionDrawer({
             draftRef.current = saved;
             setDraft(saved);
             setSaveState("saved");
+            setSaveError(null);
           }
         })
         .catch((reason: unknown) => {
           setSaveState("error");
-          setError(
+          setSaveError(
             reason instanceof Error ? reason.message : "DNA 自动保存失败",
           );
           throw reason;
@@ -101,47 +110,76 @@ export function CollectionDrawer({
     window.requestAnimationFrame(() => exportTriggerRef.current?.focus());
   };
 
+  const loadCollection = useCallback(async (): Promise<CollectionDetail> => {
+    const requestId = ++collectionRequestId.current;
+    setLoadingCollection(true);
+    setCollectionError(null);
+    try {
+      const result = await fetchCollection(collectionId);
+      if (!mountedRef.current || requestId !== collectionRequestId.current) {
+        return result;
+      }
+      const signature = dnaSignature(result.dna);
+      lastSaved.current = signature;
+      draftRef.current = result.dna;
+      setCollection(result);
+      setDraft(result.dna);
+      return result;
+    } catch (reason) {
+      if (mountedRef.current && requestId === collectionRequestId.current) {
+        setCollectionError(
+          reason instanceof Error ? reason.message : "系列 DNA 读取失败",
+        );
+      }
+      throw reason;
+    } finally {
+      if (mountedRef.current && requestId === collectionRequestId.current) {
+        setLoadingCollection(false);
+      }
+    }
+  }, [collectionId]);
+
   const refreshConsistency = useCallback(async () => {
-    const result = await fetchCollectionConsistency(collectionId);
-    setConsistency(result);
-    return result;
+    const requestId = ++consistencyRequestId.current;
+    setLoadingConsistency(true);
+    setConsistencyError(null);
+    try {
+      const result = await fetchCollectionConsistency(collectionId);
+      if (!mountedRef.current || requestId !== consistencyRequestId.current) {
+        return result;
+      }
+      setConsistency(result);
+      return result;
+    } catch (reason) {
+      if (mountedRef.current && requestId === consistencyRequestId.current) {
+        setConsistencyError(
+          reason instanceof Error ? reason.message : "系列参考相似度读取失败",
+        );
+      }
+      throw reason;
+    } finally {
+      if (mountedRef.current && requestId === consistencyRequestId.current) {
+        setLoadingConsistency(false);
+      }
+    }
   }, [collectionId]);
 
   useEffect(() => {
-    let disposed = false;
-    void fetchCollection(collectionId).then(
-      (result) => {
-        if (disposed) return;
-        const signature = dnaSignature(result.dna);
-        lastSaved.current = signature;
-        draftRef.current = result.dna;
-        setCollection(result);
-        setDraft(result.dna);
-      },
-      (reason: unknown) => {
-        if (!disposed) {
-          setError(
-            reason instanceof Error ? reason.message : "系列 DNA 读取失败",
-          );
-        }
-      },
-    );
-    void fetchCollectionConsistency(collectionId).then(
-      (result) => {
-        if (!disposed) setConsistency(result);
-      },
-      (reason: unknown) => {
-        if (!disposed) {
-          setError(
-            reason instanceof Error ? reason.message : "系列参考相似度读取失败",
-          );
-        }
-      },
-    );
+    mountedRef.current = true;
     return () => {
-      disposed = true;
+      mountedRef.current = false;
+      collectionRequestId.current += 1;
+      consistencyRequestId.current += 1;
     };
-  }, [collectionId]);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      void loadCollection().catch(() => undefined);
+      void refreshConsistency().catch(() => undefined);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadCollection, refreshConsistency]);
 
   useEffect(() => {
     const previouslyFocused =
@@ -256,54 +294,55 @@ export function CollectionDrawer({
         </nav>
       ) : null}
 
-      {!collection && !error ? (
+      {!collection && !collectionError ? (
         <div className={styles.collectionSkeleton} aria-label="正在加载 DNA">
           <i />
           <i />
           <i />
           <i />
         </div>
-      ) : error && !draft ? (
+      ) : collectionError && !draft ? (
         <div className={styles.collectionError} role="alert">
           <strong>DNA 暂时无法打开</strong>
-          <p>{error}</p>
+          <p>{collectionError}</p>
           <button
-            onClick={() => {
-              setError(null);
-              void fetchCollection(collectionId).then(
-                (result) => {
-                  lastSaved.current = dnaSignature(result.dna);
-                  draftRef.current = result.dna;
-                  setCollection(result);
-                  setDraft(result.dna);
-                  void refreshConsistency().catch((refreshError: unknown) => {
-                    setError(
-                      refreshError instanceof Error
-                        ? refreshError.message
-                        : "系列参考相似度读取失败",
-                    );
-                  });
-                },
-                (reason: unknown) => {
-                  setError(
-                    reason instanceof Error
-                      ? reason.message
-                      : "系列 DNA 读取失败",
-                  );
-                },
-              );
-            }}
+            disabled={loadingCollection || loadingConsistency}
+            onClick={() =>
+              void Promise.allSettled([loadCollection(), refreshConsistency()])
+            }
             type="button"
           >
-            重新读取
+            {loadingCollection || loadingConsistency
+              ? "重新读取中…"
+              : "重新读取"}
           </button>
         </div>
       ) : collection && draft ? (
         <>
-          {error ? (
-            <p className={styles.collectionInlineError} role="status">
-              {error}
-            </p>
+          {saveError ? (
+            <div className={styles.collectionInlineError} role="alert">
+              <span>{saveError}</span>
+              <button
+                disabled={saveState === "saving"}
+                onClick={() => void flushDna().catch(() => undefined)}
+                type="button"
+              >
+                {saveState === "saving" ? "重试中…" : "重试保存"}
+              </button>
+            </div>
+          ) : null}
+          {consistencyError ? (
+            <div className={styles.collectionInlineError} role="alert">
+              <span>{consistencyError}</span>
+              <button
+                aria-label="重新读取一致性"
+                disabled={loadingConsistency}
+                onClick={() => void refreshConsistency().catch(() => undefined)}
+                type="button"
+              >
+                {loadingConsistency ? "读取中…" : "重新读取一致性"}
+              </button>
+            </div>
           ) : null}
           {tab === "dna" ? (
             <>
@@ -328,7 +367,7 @@ export function CollectionDrawer({
               <DNACard
                 dna={draft}
                 onChange={(next) => {
-                  setError(null);
+                  setSaveError(null);
                   setDraft(next);
                 }}
               />

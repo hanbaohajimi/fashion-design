@@ -20,9 +20,14 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="zh-CN">
       <body>
-        <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </QueryProvider>
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
+        <div className="app-root" id="main-content" tabIndex={-1}>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
+        </div>
       </body>
     </html>
   );

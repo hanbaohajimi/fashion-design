@@ -59,9 +59,14 @@ describe("thumbnail processor", () => {
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    database.fileAsset.findUnique.mockReset();
+    database.fileAsset.updateMany.mockReset();
+    storage.delete.mockReset();
+    storage.get.mockReset();
+    storage.put.mockReset();
     database.fileAsset.findUnique.mockResolvedValue(record());
     database.fileAsset.updateMany.mockResolvedValue({ count: 1 });
+    storage.delete.mockResolvedValue(undefined);
     storage.get.mockResolvedValue(source);
     storage.put.mockResolvedValue(undefined);
   });
@@ -166,6 +171,40 @@ describe("thumbnail processor", () => {
     });
   });
 
+  it("部分缩略图写入失败时删除本世代所有可能已写入的对象", async () => {
+    const failure = new Error("second thumbnail response lost");
+    storage.put.mockResolvedValueOnce(undefined).mockRejectedValueOnce(failure);
+
+    await expect(processThumbnail("file-1")).rejects.toBe(failure);
+
+    expect(storage.delete.mock.calls.map((call) => call[0])).toEqual([
+      `thumbnails/user-a/file-1/${completedAt.getTime()}/256.webp`,
+      `thumbnails/user-a/file-1/${completedAt.getTime()}/1024.webp`,
+    ]);
+  });
+
+  it("数据库完成写响应丢失时对账 READY 记录且不误删已引用缩略图", async () => {
+    const current = record("file-committed");
+    const thumbnail256Key = `thumbnails/user-a/file-committed/${completedAt.getTime()}/256.webp`;
+    const thumbnail1024Key = `thumbnails/user-a/file-committed/${completedAt.getTime()}/1024.webp`;
+    database.fileAsset.findUnique
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce({
+        ...current,
+        status: FileStatus.READY,
+        thumbnail1024Key,
+        thumbnail256Key,
+      });
+    database.fileAsset.updateMany.mockRejectedValueOnce(
+      new Error("database response lost"),
+    );
+
+    await expect(processThumbnail("file-committed")).resolves.toBeUndefined();
+
+    expect(storage.delete).not.toHaveBeenCalled();
+    expect(database.fileAsset.updateMany).toHaveBeenCalledTimes(1);
+  });
+
   it("旧世代完成时不会覆盖新上传，并抛错让 BullMQ 再次调度", async () => {
     const oldFile = record("file-race");
     const newCompletedAt = new Date("2026-01-03T03:04:05.000Z");
@@ -188,6 +227,10 @@ describe("thumbnail processor", () => {
       ),
     ).toBe(true);
     expect(storage.put.mock.calls.map((call) => call[0])).toEqual([
+      `thumbnails/user-a/file-race/${completedAt.getTime()}/256.webp`,
+      `thumbnails/user-a/file-race/${completedAt.getTime()}/1024.webp`,
+    ]);
+    expect(storage.delete.mock.calls.map((call) => call[0])).toEqual([
       `thumbnails/user-a/file-race/${completedAt.getTime()}/256.webp`,
       `thumbnails/user-a/file-race/${completedAt.getTime()}/1024.webp`,
     ]);

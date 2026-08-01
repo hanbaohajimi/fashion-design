@@ -16,6 +16,7 @@ const STATUS_LABEL = {
 
 export function TaskTray() {
   const { cancel, retry, tasks } = useGenerationWorkspace();
+  const [cancelingTaskId, setCancelingTaskId] = useState<string | null>(null);
   const [retryingTaskId, setRetryingTaskId] = useState<string | null>(null);
   const active = tasks.filter(
     (task) => task.status === "queued" || task.status === "running",
@@ -35,11 +36,19 @@ export function TaskTray() {
       </header>
       <ol>
         {visible.map((task) => (
-          <li data-status={task.status} key={task.id}>
+          <li
+            data-connection={task.connection}
+            data-status={task.status}
+            key={task.id}
+          >
             <i aria-hidden="true" />
-            <div>
+            <div aria-atomic="true" aria-live="polite">
               <strong>{task.prompt}</strong>
               <span>{task.error ?? STATUS_LABEL[task.status]}</span>
+              {(task.status === "queued" || task.status === "running") &&
+              task.connection === "polling" ? (
+                <small>实时连接中断 · 轮询同步</small>
+              ) : null}
             </div>
             <time dateTime={task.updatedAt}>
               {new Date(task.updatedAt).toLocaleTimeString("zh-CN", {
@@ -50,10 +59,15 @@ export function TaskTray() {
             {task.status === "queued" || task.status === "running" ? (
               <button
                 aria-label={`取消“${task.prompt}”`}
-                onClick={() => void cancel(task.id)}
+                disabled={cancelingTaskId !== null}
+                onClick={() => {
+                  if (cancelingTaskId) return;
+                  setCancelingTaskId(task.id);
+                  void cancel(task.id).finally(() => setCancelingTaskId(null));
+                }}
                 type="button"
               >
-                取消
+                {cancelingTaskId === task.id ? "取消中…" : "取消"}
               </button>
             ) : task.status === "failed" || task.status === "canceled" ? (
               <button
