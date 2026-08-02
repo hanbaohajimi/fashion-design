@@ -3,15 +3,19 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Inject,
   Param,
   Patch,
+  Post,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { z } from "zod";
 
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/auth.types";
-import { boardPatchSchema } from "./boards.schemas";
+import { boardPatchSchema, importTrendSchema } from "./boards.schemas";
 import { BoardsService } from "./boards.service";
 
 const projectIdSchema = z.string().min(1).max(100);
@@ -56,6 +60,44 @@ export class BoardsController {
       user.userId,
       parseOrThrow(projectIdSchema, projectId),
       parseOrThrow(boardPatchSchema, body),
+    );
+  }
+}
+
+const PRIVATE_NO_STORE = "private, no-store";
+
+@Controller("boards")
+export class BoardImportsController {
+  constructor(
+    @Inject(BoardsService) private readonly boardsService: BoardsService,
+  ) {}
+
+  @Post(":boardId/import-trend")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  importTrend(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("boardId") boardId: string,
+    @Body() body: unknown,
+  ) {
+    return this.boardsService.importTrendToBoard(
+      user.userId,
+      parseOrThrow(projectIdSchema, boardId),
+      parseOrThrow(importTrendSchema, body),
+    );
+  }
+
+  @Get("trend-assets/:trendItemId")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  async trendAsset(
+    @Param("trendItemId") trendItemId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    response.setHeader("Cache-Control", PRIVATE_NO_STORE);
+    response.redirect(
+      307,
+      await this.boardsService.trendCoverUrl(
+        parseOrThrow(projectIdSchema, trendItemId),
+      ),
     );
   }
 }

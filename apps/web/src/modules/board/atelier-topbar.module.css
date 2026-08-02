@@ -1,0 +1,209 @@
+.topBar {
+  position: fixed;
+  z-index: var(--z-panel);
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  height: var(--topbar-height);
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: var(--border-width-thin) solid var(--border-color-strong);
+  padding: 0 var(--spacing-lg);
+  background: var(--color-warm-white);
+  color: var(--color-ink-black);
+  pointer-events: all;
+}
+
+.topBarLeft,
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+}
+
+.brandMark {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--letter-spacing-tight);
+  text-decoration: none;
+  color: var(--color-ink-black);
+  transition: opacity var(--transition-fast);
+}
+
+.brandMark:hover {
+  opacity: 0.64;
+}
+
+.brandMark:focus-visible {
+  outline: 2px solid var(--color-accent-terracotta);
+  outline-offset: 4px;
+}
+
+.projectInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.projectLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-black);
+  letter-spacing: var(--letter-spacing-widest);
+  color: var(--color-ink-gray);
+  text-transform: uppercase;
+}
+
+.projectName {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+.statusGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.saveStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-ink-gray);
+}
+
+.saveStatus > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-ink-gray);
+  transition: background var(--transition-fast);
+}
+
+.saveStatus[data-status="saving"] > i {
+  background: var(--color-accent-brass);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.saveStatus[data-status="saved"] > i {
+  background: var(--color-success);
+}
+
+.saveStatus[data-status="error"],
+.saveStatus[data-status="conflict"],
+.saveStatus[data-status="offline"] {
+  color: var(--color-error);
+}
+
+.saveStatus[data-status="error"] > i,
+.saveStatus[data-status="conflict"] > i,
+.saveStatus[data-status="offline"] > i {
+  background: var(--color-error);
+}
+
+.quotaBadge {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--letter-spacing-normal);
+  color: var(--color-ink-black);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: var(--border-width-thin) solid var(--border-color-default);
+  border-radius: var(--radius-full);
+}
+
+.actionGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.actionButton {
+  min-height: 36px;
+  padding: 0 var(--spacing-lg);
+  border: var(--border-width-thin) solid var(--border-color-strong);
+  background: transparent;
+  color: var(--color-ink-black);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.actionButton:hover {
+  background: var(--color-ink-black);
+  color: var(--color-warm-white);
+}
+
+.actionButton:focus-visible {
+  outline: 2px solid var(--color-accent-terracotta);
+  outline-offset: 2px;
+}
+
+.userButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: var(--border-width-thin) solid var(--border-color-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-ink-black);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.userButton:hover {
+  background: var(--color-ink-black);
+  color: var(--color-warm-white);
+}
+
+.userButton:focus-visible {
+  outline: 2px solid var(--color-accent-terracotta);
+  outline-offset: 2px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (max-width: 760px) {
+  .topBar {
+    padding: 0 var(--spacing-md);
+  }
+
+  .topBarLeft,
+  .topBarRight {
+    gap: var(--spacing-md);
+  }
+
+  .projectName {
+    max-width: 120px;
+  }
+
+  .quotaBadge {
+    display: none;
+  }
+}

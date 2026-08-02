@@ -45,6 +45,24 @@ function requiredEnvironment(name: string): string {
 export class S3FileStorage implements FileStorage {
   private client: S3Client | undefined;
 
+  async uploadBuffer(
+    objectKey: string,
+    body: Uint8Array,
+    mimeType: string,
+    checksumSha256: string,
+  ): Promise<void> {
+    await this.getClient().send(
+      new PutObjectCommand({
+        Body: body,
+        Bucket: requiredEnvironment("S3_BUCKET"),
+        ChecksumSHA256: checksumSha256,
+        ContentType: mimeType,
+        Key: objectKey,
+      }),
+      { abortSignal: AbortSignal.timeout(FILE_STORAGE_OPERATION_TIMEOUT_MS) },
+    );
+  }
+
   async createUploadUrl(
     objectKey: string,
     mimeType: string,

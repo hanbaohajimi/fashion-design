@@ -3,11 +3,13 @@ import {
   type BoardElementRole,
 } from "@fashion/shared";
 import type { TLShape } from "tldraw";
+import type { MaterialAppearance } from "./material-appearance";
 
 export const IMAGE_SHAPE_TYPE = "fashion-image";
 export const NOTE_SHAPE_TYPE = "fashion-note";
 export const SWATCH_SHAPE_TYPE = "fashion-swatch";
 export const FRAME_SHAPE_TYPE = "fashion-frame";
+export const FABRIC_SHAPE_TYPE = "fashion-fabric";
 
 export const BOARD_ROLES = BOARD_ELEMENT_ROLES;
 export type BoardRole = BoardElementRole;
@@ -17,6 +19,7 @@ export type RoleSource = "default" | "inferred" | "manual";
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
     [IMAGE_SHAPE_TYPE]: {
+      appearance?: MaterialAppearance;
       assetId?: string;
       fileId?: string;
       h: number;
@@ -31,6 +34,7 @@ declare module "tldraw" {
       w: number;
     };
     [NOTE_SHAPE_TYPE]: {
+      appearance?: MaterialAppearance;
       h: number;
       role: string;
       text: string;
@@ -38,6 +42,7 @@ declare module "tldraw" {
       w: number;
     };
     [SWATCH_SHAPE_TYPE]: {
+      appearance?: MaterialAppearance;
       color: string;
       h: number;
       label: string;
@@ -50,6 +55,16 @@ declare module "tldraw" {
       title: string;
       w: number;
     };
+    [FABRIC_SHAPE_TYPE]: {
+      appearance?: MaterialAppearance;
+      fabricCategory: string;
+      fabricId: string;
+      fabricName: string;
+      h: number;
+      role: string;
+      thumbnailUrl: string;
+      w: number;
+    };
   }
 }
 
@@ -57,14 +72,16 @@ export type ImageShape = TLShape<typeof IMAGE_SHAPE_TYPE>;
 export type NoteShape = TLShape<typeof NOTE_SHAPE_TYPE>;
 export type SwatchShape = TLShape<typeof SWATCH_SHAPE_TYPE>;
 export type FrameShape = TLShape<typeof FRAME_SHAPE_TYPE>;
-export type BoardShape = ImageShape | NoteShape | SwatchShape | FrameShape;
+export type FabricShape = TLShape<typeof FABRIC_SHAPE_TYPE>;
+export type BoardShape = ImageShape | NoteShape | SwatchShape | FrameShape | FabricShape;
 
 export function isBoardShape(shape: TLShape): shape is BoardShape {
   return (
     shape.type === IMAGE_SHAPE_TYPE ||
     shape.type === NOTE_SHAPE_TYPE ||
     shape.type === SWATCH_SHAPE_TYPE ||
-    shape.type === FRAME_SHAPE_TYPE
+    shape.type === FRAME_SHAPE_TYPE ||
+    shape.type === FABRIC_SHAPE_TYPE
   );
 }
 

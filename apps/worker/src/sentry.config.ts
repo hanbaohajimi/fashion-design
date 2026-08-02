@@ -63,6 +63,7 @@ export function captureWorkerException(
       | "export"
       | "generation"
       | "thumbnail"
+      | "trend-digest"
       | "vlm-inference"
       | "worker";
   },

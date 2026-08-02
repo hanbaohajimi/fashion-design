@@ -1,0 +1,100 @@
+.toolRail {
+  position: fixed;
+  z-index: var(--z-panel);
+  top: var(--topbar-height);
+  left: 0;
+  bottom: 0;
+  width: var(--toolrail-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-sm);
+  border-right: var(--border-width-thin) solid var(--border-color-strong);
+  background: var(--color-warm-white);
+  pointer-events: all;
+}
+
+.toolGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.toolButton {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: var(--border-width-thin) solid var(--border-color-default);
+  background: transparent;
+  color: var(--color-ink-black);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.toolButton:hover:not(:disabled) {
+  background: var(--color-paper-beige);
+  border-color: var(--color-ink-black);
+}
+
+.toolButton:active:not(:disabled) {
+  background: var(--color-ink-black);
+  color: var(--color-warm-white);
+}
+
+.toolButton:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.toolButton:focus-visible {
+  outline: 2px solid var(--color-accent-terracotta);
+  outline-offset: 2px;
+}
+
+.toolButton svg {
+  pointer-events: none;
+}
+
+.toolDivider {
+  height: 1px;
+  margin: var(--spacing-xs) 0;
+  background: var(--border-color-default);
+}
+
+@media (max-width: 760px) {
+  .toolRail {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 56px;
+    flex-direction: row;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-right: none;
+    border-top: var(--border-width-thin) solid var(--border-color-strong);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .toolGroup {
+    flex-direction: row;
+  }
+
+  .toolDivider {
+    width: 1px;
+    height: auto;
+    margin: 0 var(--spacing-xs);
+  }
+
+  .toolButton {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+}

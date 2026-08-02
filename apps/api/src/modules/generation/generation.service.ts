@@ -30,6 +30,7 @@ export const GENERATION_DB = Symbol("GENERATION_DB");
 export const GENERATION_JOBS = Symbol("GENERATION_JOBS");
 const STYLE_REFERENCE_STRENGTH = 0.72;
 const SILHOUETTE_REFERENCE_STRENGTH = 0.55;
+const FABRIC_REFERENCE_STRENGTH = 0.7;
 
 type GenerationDatabase = Pick<PrismaClient, "designAsset" | "generationTask">;
 
@@ -158,15 +159,25 @@ export class GenerationService {
       providerRequest.taskType === "t2i" &&
       !providerRequest.referenceImageUrl
     ) {
-      const styleReference = compiledPrompt.styleReferences?.[0]?.imageUrl;
+      const styleReference = compiledPrompt.styleReferences?.[0];
       const silhouetteReference =
         compiledPrompt.silhouetteReferences?.[0]?.edgeImageUrl;
-      const boardReference = styleReference ?? silhouetteReference;
+      const fabricReference = compiledPrompt.fabricReferences?.[0];
+      const boardReference =
+        styleReference?.imageUrl ??
+        silhouetteReference ??
+        fabricReference?.imageUrl;
       if (boardReference) {
         providerRequest.referenceImageUrl = boardReference;
         providerRequest.strength = styleReference
-          ? STYLE_REFERENCE_STRENGTH
-          : SILHOUETTE_REFERENCE_STRENGTH;
+          ? "weight" in styleReference
+            ? styleReference.weight
+            : STYLE_REFERENCE_STRENGTH
+          : silhouetteReference
+            ? SILHOUETTE_REFERENCE_STRENGTH
+            : (fabricReference && "weight" in fabricReference
+                ? fabricReference.weight
+                : FABRIC_REFERENCE_STRENGTH);
       }
     }
     const input: AiGenerationRequest = {
@@ -179,6 +190,7 @@ export class GenerationService {
       request,
       requestFingerprint,
     };
+    const generationInputs = compiledPrompt.fabricInputs ?? [];
 
     const admission = await this.billingService.withLockedGenerationQuota(
       userId,
@@ -213,6 +225,21 @@ export class GenerationService {
               ? {
                   collectionId: context.collectionId,
                   variationAxis: context.variationAxis,
+                }
+              : {}),
+            ...(generationInputs.length
+              ? {
+                  generationInputs: {
+                    create: generationInputs.map((generationInput) => ({
+                      attributesSnapshot:
+                        generationInput.attributes as Prisma.InputJsonValue,
+                      boardElementId: generationInput.boardElementId,
+                      fabricId: generationInput.fabricId,
+                      inputType: "fabric",
+                      role: generationInput.role,
+                      weight: generationInput.weight,
+                    })),
+                  },
                 }
               : {}),
             status: GenerationTaskStatus.QUEUED,

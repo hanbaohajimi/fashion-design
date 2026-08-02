@@ -46,3 +46,15 @@ export const boardPatchSchema = z
   });
 
 export type BoardPatchInput = z.infer<typeof boardPatchSchema>;
+
+export const importTrendSchema = z.object({
+  position: z
+    .object({
+      x: z.number().finite().min(-1_000_000).max(1_000_000),
+      y: z.number().finite().min(-1_000_000).max(1_000_000),
+    })
+    .optional(),
+  trendItemId: z.string().trim().min(1).max(100),
+});
+
+export type ImportTrendInput = z.infer<typeof importTrendSchema>;

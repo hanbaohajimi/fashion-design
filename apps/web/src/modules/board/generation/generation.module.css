@@ -21,7 +21,7 @@
 .generationNotice {
   position: fixed;
   z-index: 1100;
-  top: 76px;
+  top: calc(var(--topbar-height, 62px) + 14px);
   left: 50%;
   display: flex;
   width: min(520px, calc(100vw - 32px));
@@ -214,8 +214,9 @@
   position: fixed;
   z-index: 1200;
   bottom: 18px;
-  left: 18px;
-  width: min(820px, calc(100vw - 378px));
+  left: calc(var(--toolrail-width, 64px) + 18px);
+  right: calc(var(--inspector-width, 320px) + 18px);
+  width: auto;
   min-width: 360px;
   border: 1px solid #24251f;
   background: rgb(248 245 236 / 97%);
@@ -1745,7 +1746,7 @@
 .taskTray {
   position: fixed;
   z-index: 890;
-  right: 18px;
+  right: calc(var(--inspector-width, 320px) + 18px);
   bottom: 18px;
   width: 324px;
   border: 1px solid #24251f;

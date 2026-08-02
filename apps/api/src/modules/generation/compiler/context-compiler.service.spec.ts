@@ -1,3 +1,4 @@
+import { FabricScope, FileStatus } from "@fashion/db";
 import { HttpStatus, Logger } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,6 +26,12 @@ describe("ContextCompilerService", () => {
     designAsset: {
       findFirst: vi.fn(),
     },
+    fabric: {
+      findMany: vi.fn(),
+    },
+    trendItem: {
+      findMany: vi.fn(),
+    },
     project: {
       findUnique: vi.fn(),
     },
@@ -45,6 +52,8 @@ describe("ContextCompilerService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.designAsset.findFirst.mockResolvedValue(null);
+    database.fabric.findMany.mockResolvedValue([]);
+    database.trendItem.findMany.mockResolvedValue([]);
     database.project.findUnique.mockResolvedValue({
       boardElements: [],
       deletedAt: null,
@@ -131,6 +140,118 @@ describe("ContextCompilerService", () => {
     expect(result.detailReferences[0]?.labels).toContain("bound seam");
     expect(result.positivePrompt).toContain("fabric: silk");
     expect(result.positivePrompt).toContain("pattern: botanical pattern");
+  });
+
+  it("结构化面料元素使用 FabricChannel 注入属性且不重复调用 VLM", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("fabric-element-1", "fabric_ref", {
+            fabricId: "fabric-1",
+          }),
+          shapeType: "fashion-fabric",
+        },
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+    database.fabric.findMany.mockResolvedValue([
+      {
+        attributes: {
+          composition: { cotton: 60, polyester: 40 },
+          drape: "moderate",
+          sheen: "matte",
+          texture: "smooth",
+          weave: "plain",
+        },
+        id: "fabric-1",
+        mainFile: {
+          objectKey: "users/user-1/fabric.webp",
+          status: FileStatus.READY,
+          thumbnail1024Key: "users/user-1/fabric-1024.webp",
+        },
+        name: "Cotton Blend",
+        ownerId: "user-1",
+        scope: FabricScope.USER,
+      },
+    ]);
+
+    const result = await service.compile("user-1", "project-1", "dress");
+
+    expect(result.positivePrompt).toContain(
+      "fabric material: cotton 60%, polyester 40%, weave type: plain, fabric texture: smooth, drape: moderate, sheen: matte",
+    );
+    expect(result.fabricReferences[0]).toMatchObject({
+      fabricId: "fabric-1",
+      role: "fabric_texture",
+      weight: 0.7,
+    });
+    expect(result.fabricInputs).toEqual([
+      expect.objectContaining({
+        boardElementId: "fabric-element-1",
+        fabricId: "fabric-1",
+      }),
+    ]);
+    expect(model.analyzeImage).not.toHaveBeenCalled();
+  });
+
+  it("趋势通道把精确色值、趋势语义和 0.5 风格参考注入主编译结果", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("trend-swatch", "palette", { color: "#FF6B9D" }),
+          record: {
+            meta: { trendItemId: "trend-1" },
+            props: { color: "#FF6B9D" },
+          },
+          shapeType: "fashion-swatch",
+        },
+        {
+          ...element("trend-image", "style_ref", {
+            url: "/api/boards/trend-assets/trend-1",
+          }),
+          record: {
+            meta: { trendItemId: "trend-1" },
+            props: { url: "/api/boards/trend-assets/trend-1" },
+          },
+          shapeType: "fashion-image",
+        },
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+    database.trendItem.findMany.mockResolvedValue([
+      {
+        coverFile: {
+          objectKey: "trends/trend-1.webp",
+          status: FileStatus.READY,
+          thumbnail1024Key: null,
+        },
+        extracted: {
+          keywords: ["dopamine dressing"],
+          silhouettes: ["cocoon"],
+        },
+        id: "trend-1",
+      },
+    ]);
+
+    const result = await service.compile("user-1", "project-1", "dress");
+
+    expect(result.positivePrompt).toContain("color palette: #FF6B9D");
+    expect(result.positivePrompt).toContain(
+      "trend keywords: dopamine dressing",
+    );
+    expect(result.positivePrompt).toContain("silhouette: cocoon");
+    expect(result.styleReferences).toEqual([
+      expect.objectContaining({
+        elementId: "trend-image",
+        imageUrl: "https://signed.example/trends/trend-1.webp",
+        role: "style_ref",
+        trendItemId: "trend-1",
+        weight: 0.5,
+      }),
+    ]);
+    expect(model.analyzeImage).not.toHaveBeenCalled();
   });
 
   it("style 只保留 URL 引用，silhouette 映射为边缘参考且拒绝 base64", async () => {

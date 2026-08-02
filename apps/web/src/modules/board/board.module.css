@@ -2,7 +2,16 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: #ece9e0;
+  background: var(--color-paper-beige, #ece9e0);
+}
+
+/* Canvas viewport — offset by top bar, left tool rail, and right inspector */
+.canvasWrapper {
+  position: fixed;
+  top: var(--topbar-height, 62px);
+  left: var(--toolrail-width, 64px);
+  right: var(--inspector-width, 320px);
+  bottom: 0;
 }
 
 .boardShell :global(.tl-background) {
@@ -19,9 +28,11 @@
   min-height: 48px;
   align-items: center;
   border: 1px solid #181915;
+  border-radius: var(--radius-xl, 16px);
   margin: 12px auto 0;
   background: rgb(247 244 235 / 96%);
-  box-shadow: 6px 6px 0 rgb(24 25 21 / 12%);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgb(24 25 21 / 12%), 0 8px 32px rgb(24 25 21 / 8%);
   color: #181915;
   grid-template-columns: 1fr auto;
   pointer-events: all;
@@ -133,6 +144,9 @@
   font: inherit;
   font-size: 11px;
   font-weight: 700;
+  transition:
+    background-color var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms);
 }
 
 .shapeActions select {
@@ -144,13 +158,15 @@
   font-size: 11px;
   max-width: 150px;
   padding: 0 10px;
+  transition: background-color var(--transition-fast, 120ms);
 }
 
 .shapeActions button:last-child {
   border-right: 1px solid rgb(24 25 21 / 22%);
 }
 
-.shapeActions button:hover {
+.shapeActions button:hover,
+.shapeActions select:hover {
   background: #181915;
   color: white;
 }
@@ -424,6 +440,24 @@
   cursor: pointer;
 }
 
+.rolePanelEmbedded {
+  /* Embedded variant: sits in-flow inside ContextInspector rather than floating over the canvas */
+  position: relative;
+  z-index: auto;
+  width: 100%;
+  border: none;
+  border-top: var(--border-width-thin) solid var(--border-color-default);
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-ink-black, #181915);
+  pointer-events: all;
+}
+
+.rolePanelEmbedded > header {
+  border-bottom: var(--border-width-thin) solid var(--border-color-default);
+}
+
+
 .rolePanel {
   position: fixed;
   z-index: 1000;
@@ -431,9 +465,12 @@
   right: 68px;
   width: 276px;
   border: 1px solid #181915;
+  border-radius: var(--radius-lg, 12px);
   background: rgb(247 244 235 / 97%);
-  box-shadow: 7px 7px 0 rgb(24 25 21 / 13%);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgb(24 25 21 / 12%), 0 12px 48px rgb(24 25 21 / 10%);
   color: #181915;
+  overflow: hidden;
   pointer-events: all;
 }
 
@@ -508,6 +545,9 @@
   cursor: pointer;
   grid-template-columns: 37px 1fr 8px;
   text-align: left;
+  transition:
+    background-color var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms);
 }
 
 .roleOptions button > span {
@@ -696,5 +736,214 @@
 @media (prefers-reduced-motion: reduce) {
   .boardSkeleton > div {
     animation: none;
+  }
+}
+.fabricDrawer {
+  position: fixed;
+  z-index: 1100;
+  top: 70px;
+  right: 14px;
+  bottom: 14px;
+  width: 300px;
+  overflow: hidden;
+  border: 1px solid rgb(241 238 230 / 12%);
+  border-radius: var(--radius-xl, 16px);
+  padding: 16px 18px 0;
+  background: var(--surface-deep, #0f131c);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 40%), 0 24px 80px rgb(0 0 0 / 30%);
+  color: #f1eee6;
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
+  pointer-events: auto;
+}
+
+.fabricDrawer > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.fabricDrawer > header span {
+  color: #b98a56;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.fabricDrawer > header h2 {
+  margin: 4px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(1.3rem, 2vw, 1.7rem);
+  font-weight: 400;
+}
+
+.fabricDrawer > header button {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  border: 1px solid rgb(241 238 230 / 14%);
+  border-radius: var(--radius-circle, 50%);
+  background: transparent;
+  color: #d7d9de;
+  cursor: pointer;
+  font-size: 20px;
+  place-items: center;
+  transition:
+    background-color var(--transition-base, 200ms),
+    border-color var(--transition-base, 200ms),
+    transform var(--transition-base, 200ms);
+}
+
+.fabricDrawer > header button:hover {
+  background: rgb(241 238 230 / 8%);
+  border-color: rgb(241 238 230 / 24%);
+  transform: scale(1.05);
+}
+
+.fabricScopeTabs {
+  display: grid;
+  margin-top: 16px;
+  border-radius: var(--radius-pill, 999px);
+  padding: 3px;
+  background: var(--surface-raised, #1e2636);
+  grid-template-columns: 1fr 1fr;
+}
+
+.fabricScopeTabs button {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: #818c9e;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background-color var(--transition-base, 200ms),
+    color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.fabricScopeTabs button:hover {
+  background: rgb(185 138 86 / 20%);
+  color: #d6ad7e;
+}
+
+.fabricScopeTabs button[aria-pressed="true"] {
+  background: var(--accent-primary, #b98a56);
+  color: #10151e;
+  font-weight: 800;
+}
+
+.fabricDrawerSearch {
+  display: block;
+  margin-top: 12px;
+}
+
+.fabricDrawerSearch > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.fabricDrawerSearch input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid rgb(241 238 230 / 12%);
+  border-radius: var(--radius-pill, 999px);
+  outline: none;
+  padding: 0 14px;
+  background: var(--surface-raised, #171d29);
+  color: #f1eee6;
+  transition:
+    border-color var(--transition-base, 200ms),
+    background-color var(--transition-base, 200ms);
+}
+
+.fabricDrawerSearch input:focus {
+  border-color: var(--accent-primary, #b98a56);
+  background: var(--surface-elevated, #1a2132);
+}
+
+.fabricDrawerSearch input:hover:not(:focus) {
+  border-color: rgb(241 238 230 / 18%);
+}
+
+.fabricDrawerMeta {
+  display: flex;
+  padding: 11px 2px 7px;
+  justify-content: space-between;
+  color: #768195;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.fabricDrawerState {
+  display: grid;
+  min-height: 240px;
+  border: 1px dashed rgb(241 238 230 / 12%);
+  border-radius: 16px;
+  color: #8993a4;
+  font-size: 12px;
+  place-content: center;
+  text-align: center;
+}
+
+.fabricDrawerState button {
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  padding: 8px 16px;
+  background: rgb(185 138 86 / 12%);
+  color: #d8b58e;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color var(--transition-base, 200ms),
+    color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.fabricDrawerState button:hover {
+  background: var(--accent-primary, #b98a56);
+  color: #0f131c;
+  transform: translateY(-2px);
+}
+
+.fabricDropZone {
+  position: fixed;
+  z-index: 1090;
+  inset: 70px 16px 16px;
+  display: grid;
+  border: 2px dashed #b98a56;
+  border-radius: 22px;
+  background: rgb(15 19 28 / 76%);
+  color: #f1eee6;
+  pointer-events: none;
+  place-content: center;
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+.fabricDropZone strong {
+  color: #d6ad7e;
+  font-size: 20px;
+  letter-spacing: 0.16em;
+}
+
+.fabricDropZone span {
+  margin-top: 8px;
+  color: #b0b7c3;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .fabricDrawer {
+    top: 64px;
+    right: 8px;
+    bottom: 8px;
+    width: min(300px, calc(100vw - 16px));
   }
 }

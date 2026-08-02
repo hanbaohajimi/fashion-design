@@ -1,11 +1,13 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
-import { BoardsController } from "./boards.controller";
+import { FilesModule } from "../files/files.module";
+import { BoardImportsController, BoardsController } from "./boards.controller";
 import { BOARDS_DB, BoardsService } from "./boards.service";
 
 @Module({
-  controllers: [BoardsController],
+  imports: [FilesModule],
+  controllers: [BoardsController, BoardImportsController],
   providers: [
     BoardsService,
     {

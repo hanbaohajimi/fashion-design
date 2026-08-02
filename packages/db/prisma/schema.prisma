@@ -20,6 +20,7 @@ model User {
   createdAt       DateTime         @default(now()) @map("created_at")
   exportJobs      ExportJob[]
   files           FileAsset[]
+  fabrics         Fabric[]
   generationTasks GenerationTask[]
   auditLogs       AuditLog[]
   ownedWorkspaces Workspace[]
@@ -126,6 +127,7 @@ model GenerationTask {
   parentAsset          DesignAsset?             @relation("TaskParentAsset", fields: [parentAssetId], references: [id], onDelete: SetNull)
   collection           Collection?              @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   generatedAssets      DesignAsset[]            @relation("TaskGeneratedAssets")
+  generationInputs     GenerationInput[]
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -133,6 +135,24 @@ model GenerationTask {
   @@index([collectionId, createdAt])
   @@index([status, createdAt])
   @@map("generation_tasks")
+}
+
+model GenerationInput {
+  id                 String         @id @default(cuid(2))
+  generationTaskId   String         @map("generation_task_id")
+  inputType          String         @default("fabric") @map("input_type")
+  fabricId           String         @map("fabric_id")
+  boardElementId     String         @map("board_element_id")
+  role               String
+  weight             Float          @default(0.7)
+  attributesSnapshot Json           @map("attributes_snapshot")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  generationTask     GenerationTask @relation(fields: [generationTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([generationTaskId, boardElementId, fabricId])
+  @@index([generationTaskId])
+  @@index([fabricId])
+  @@map("generation_inputs")
 }
 
 model AuditLog {
@@ -196,6 +216,11 @@ enum FileStatus {
   FAILED
 }
 
+enum FabricScope {
+  PRESET @map("preset")
+  USER   @map("user")
+}
+
 model FileAsset {
   id               String         @id @default(cuid(2))
   ownerId          String         @map("owner_id")
@@ -215,10 +240,70 @@ model FileAsset {
   updatedAt        DateTime       @updatedAt @map("updated_at")
   owner            User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   boardElements    BoardElement[]
+  fabricMainImages Fabric[]       @relation("FabricMainFile")
+  trendCovers      TrendItem[]    @relation("TrendCoverFile")
 
   @@unique([ownerId, sha256])
   @@index([ownerId, status])
   @@map("file_assets")
+}
+
+model Fabric {
+  id          String      @id @default(cuid(2))
+  scope       FabricScope
+  ownerId     String?     @map("owner_id")
+  name        String
+  category    String
+  subCategory String?     @map("sub_category")
+  mainFileId  String      @map("main_file_id")
+  attributes  Json
+  aiTags      Json?       @map("ai_tags")
+  source      String?
+  license     String?
+  status      String      @default("active")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  owner       User?       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  mainFile    FileAsset   @relation("FabricMainFile", fields: [mainFileId], references: [id], onDelete: Restrict)
+
+  @@index([scope, category])
+  @@index([ownerId])
+  @@map("fabrics")
+}
+
+model TrendItem {
+  id          String     @id @default(cuid(2))
+  title       String
+  summary     String
+  platform    String
+  sourceUrl   String     @unique @map("source_url")
+  publishedAt DateTime   @map("published_at")
+  coverFileId String?    @map("cover_file_id")
+  category    String
+  tags        String[]   @default([])
+  extracted   Json?
+  curatedAt   DateTime   @default(now()) @map("curated_at")
+  status      String     @default("published")
+  coverFile   FileAsset? @relation("TrendCoverFile", fields: [coverFileId], references: [id], onDelete: SetNull)
+
+  @@index([publishedAt])
+  @@index([category])
+  @@index([platform])
+  @@index([status])
+  @@map("trend_items")
+}
+
+model TrendDigest {
+  id        String   @id @default(cuid(2))
+  period    String   @unique
+  theme     String
+  itemIds   String[] @default([]) @map("item_ids")
+  overview  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([period])
+  @@map("trend_digests")
 }
 
 enum RoleSource {

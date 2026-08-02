@@ -18,6 +18,10 @@ import {
   fetchBoard,
   patchBoard,
 } from "../board-api";
+import {
+  BOARD_REMOTE_REFRESH_EVENT,
+  type BoardRemoteRefreshDetail,
+} from "../board-context";
 import { IMAGE_SHAPE_TYPE, isBoardShape, normalizeBoardRole } from "../shapes";
 import { captureAnalytics } from "../../../observability/analytics";
 
@@ -467,10 +471,31 @@ export function useBoardPersist(
         saveOutbox(makePayload([...recoverable.values()]));
       }
     };
+    const handleRemoteRefresh = (event: Event): void => {
+      const detail = (event as CustomEvent<BoardRemoteRefreshDetail>).detail;
+      if (detail?.boardId !== projectId) {
+        return;
+      }
+
+      void fetchBoard(projectId)
+        .then((board) => {
+          if (disposed) {
+            return;
+          }
+          revision = board.revision;
+          applyElementRows(store, board.elements);
+        })
+        .catch((cause: unknown) => {
+          if (!disposed) {
+            setError(cause instanceof Error ? cause.message : "白板刷新失败");
+          }
+        });
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener(BOARD_REMOTE_REFRESH_EVENT, handleRemoteRefresh);
 
     return () => {
       handlePageHide();
@@ -485,6 +510,7 @@ export function useBoardPersist(
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener(BOARD_REMOTE_REFRESH_EVENT, handleRemoteRefresh);
     };
   }, [projectId, reloadToken, store]);
 

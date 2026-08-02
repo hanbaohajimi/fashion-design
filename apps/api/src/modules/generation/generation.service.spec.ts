@@ -166,6 +166,52 @@ describe("GenerationService", () => {
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledOnce();
   });
 
+  it("在生成任务同一事务中记录 fabric_id 与属性快照血缘", async () => {
+    compiler.compile.mockResolvedValue({
+      enhancement: "keywords",
+      fabricInputs: [
+        {
+          attributes: {
+            composition: { cotton: 60, polyester: 40 },
+            weave: "plain",
+          },
+          boardElementId: "board-element-1",
+          fabricId: "fabric-1",
+          role: "fabric_texture",
+          weight: 0.7,
+        },
+      ],
+      mode: "board_guided",
+      negativePrompt: "watermark",
+      positivePrompt: "fabric material: cotton 60%, polyester 40%",
+      version: 1,
+    });
+
+    await service.create("user-1", request, "fabric-lineage-key");
+
+    expect(database.generationTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          generationInputs: {
+            create: [
+              {
+                attributesSnapshot: {
+                  composition: { cotton: 60, polyester: 40 },
+                  weave: "plain",
+                },
+                boardElementId: "board-element-1",
+                fabricId: "fabric-1",
+                inputType: "fabric",
+                role: "fabric_texture",
+                weight: 0.7,
+              },
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
   it("权威事务发现活跃占用已满时不创建、不入队", async () => {
     billing.withLockedGenerationQuota.mockImplementation(
       async (
@@ -317,6 +363,78 @@ describe("GenerationService", () => {
           imageUrl: "https://signed.test/style.png",
         },
       ],
+    });
+  });
+
+  it("趋势 style_ref 使用通道提供的 0.5 权重", async () => {
+    compiler.compile.mockResolvedValueOnce({
+      enhancement: "keywords",
+      mode: "board_guided",
+      negativePrompt: "watermark",
+      positivePrompt: "dopamine dressing",
+      silhouetteReferences: [],
+      styleReferences: [
+        {
+          elementId: "trend-image-1",
+          imageUrl: "https://signed.test/trend.png",
+          labels: ["dopamine dressing"],
+          role: "style_ref",
+          trendItemId: "trend-1",
+          weight: 0.5,
+        },
+      ],
+      version: 1,
+    });
+
+    await service.create("user-1", {
+      ...request,
+      projectId: "project-1",
+      shapeIds: ["trend-image-shape"],
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input).toMatchObject({
+      referenceImageUrl: "https://signed.test/trend.png",
+      strength: 0.5,
+      taskType: "t2i",
+    });
+  });
+
+  it("没有风格或廓形参考时把面料纹理图和通道权重注入 Provider", async () => {
+    compiler.compile.mockResolvedValueOnce({
+      enhancement: "keywords",
+      fabricInputs: [],
+      fabricReferences: [
+        {
+          elementId: "fabric-element-1",
+          fabricId: "fabric-1",
+          imageUrl: "https://signed.test/fabric.png",
+          labels: ["cotton 100%", "plain"],
+          role: "fabric_texture",
+          weight: 0.7,
+        },
+      ],
+      mode: "board_guided",
+      negativePrompt: "watermark",
+      positivePrompt: "fabric material: cotton 100%, weave type: plain",
+      silhouetteReferences: [],
+      styleReferences: [],
+      version: 1,
+    });
+
+    await service.create("user-1", {
+      ...request,
+      projectId: "project-1",
+      shapeIds: ["fabric-shape"],
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input).toMatchObject({
+      referenceImageUrl: "https://signed.test/fabric.png",
+      strength: 0.7,
+      taskType: "t2i",
     });
   });
 

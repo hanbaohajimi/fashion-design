@@ -21,6 +21,6 @@ import { BullThumbnailJobs } from "./thumbnail-queue.service";
     { provide: FILE_STORAGE, useExisting: S3FileStorage },
     { provide: THUMBNAIL_JOBS, useExisting: BullThumbnailJobs },
   ],
-  exports: [S3FileStorage],
+  exports: [BullThumbnailJobs, S3FileStorage],
 })
 export class FilesModule {}

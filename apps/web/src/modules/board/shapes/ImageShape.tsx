@@ -10,7 +10,9 @@ import {
 
 import { RoleBadge } from "./RoleBadge";
 import { useUploadPreview } from "../upload-preview-store";
-import { IMAGE_SHAPE_TYPE, type ImageShape } from "./shape-types";
+import { IMAGE_SHAPE_TYPE, type ImageShape, normalizeBoardRole } from "./shape-types";
+import { MaterialShell } from "./MaterialShell";
+import { generateMaterialAppearance, resolveMaterialAppearance } from "./material-appearance";
 import styles from "./shapes.module.css";
 
 function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
@@ -27,7 +29,20 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
     [editor, shape.id],
   );
 
-  return (
+  // Generate material appearance based on role
+  const role = normalizeBoardRole(shape.props.role);
+  const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
+  const appearance = shape.props.appearance ?? generateMaterialAppearance(
+    resolveMaterialAppearance(role),
+    seed,
+    role,
+  );
+
+  // LOD based on zoom level
+  const zoom = useValue("zoom", () => editor.getZoomLevel(), [editor]);
+  const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
+
+  const content = (
     <HTMLContainer className={styles.imageShape}>
       <div className={styles.imagePlaceholder}>
         <span>IMAGE / CDN</span>
@@ -54,11 +69,23 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
       <strong>{shape.props.title || "未命名图片"}</strong>
     </HTMLContainer>
   );
+
+  return (
+    <MaterialShell
+      appearance={appearance}
+      width={shape.props.w}
+      height={shape.props.h}
+      lod={lod}
+    >
+      {content}
+    </MaterialShell>
+  );
 }
 
 export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
   static override type = IMAGE_SHAPE_TYPE;
   static override props: RecordProps<ImageShape> = {
+    appearance: T.any.optional(),
     assetId: T.string.optional(),
     fileId: T.string.optional(),
     h: T.number,

@@ -41,7 +41,12 @@ interface QueuedRoleChange {
   readonly shapeIds: readonly string[];
 }
 
-export function ElementRolePanel() {
+interface ElementRolePanelProps {
+  /** When true, strips fixed-positioning so the panel sits in-flow inside ContextInspector */
+  readonly embedded?: boolean;
+}
+
+export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -178,7 +183,7 @@ export function ElementRolePanel() {
 
   return (
     <aside
-      className={styles.rolePanel}
+      className={embedded ? styles.rolePanelEmbedded : styles.rolePanel}
       data-role={activeRole ?? "mixed"}
       aria-label="元素角色标注"
     >

@@ -64,6 +64,7 @@
   width: 2.25rem;
   height: 2.25rem;
   border: 1px solid var(--ink);
+  border-radius: var(--radius-circle);
   background: var(--ink);
   color: var(--paper);
   place-items: center;
@@ -155,6 +156,8 @@
 .statusFilters {
   display: inline-grid;
   border: 1px solid var(--ink);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
   grid-template-columns: 1fr 1fr;
 }
 
@@ -170,8 +173,8 @@
   font-size: 0.72rem;
   font-weight: 800;
   transition:
-    background-color 160ms ease,
-    color 160ms ease;
+    background-color var(--transition-base),
+    color var(--transition-base);
 }
 
 .statusFilter + .statusFilter,
@@ -220,7 +223,8 @@
   display: inline-flex;
   min-height: 2.9rem;
   border: 1px solid var(--ink);
-  padding: 0.7rem 1.2rem;
+  border-radius: var(--radius-pill);
+  padding: 0.7rem 1.4rem;
   align-items: center;
   cursor: pointer;
   font: inherit;
@@ -229,14 +233,16 @@
   justify-content: center;
   text-decoration: none;
   transition:
-    transform 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease;
+    transform var(--transition-base),
+    background-color var(--transition-base),
+    color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .primaryButton {
   background: var(--ink);
   color: white;
+  box-shadow: 0 2px 8px rgb(24 25 21 / 12%);
 }
 
 .secondaryButton {
@@ -246,7 +252,8 @@
 
 .primaryButton:hover,
 .secondaryButton:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 16px rgb(24 25 21 / 18%);
 }
 
 .primaryButton:hover {
@@ -259,6 +266,12 @@
   color: white;
 }
 
+.primaryButton:active,
+.secondaryButton:active {
+  transform: translateY(-1px);
+  transition-duration: 80ms;
+}
+
 .primaryButton:disabled,
 .secondaryButton:disabled {
   border-color: rgb(24 25 21 / 38%);
@@ -266,6 +279,7 @@
   color: rgb(24 25 21 / 56%);
   cursor: wait;
   transform: none;
+  box-shadow: none;
 }
 
 .primaryButton:focus-visible,
@@ -322,11 +336,15 @@
   overflow: hidden;
   aspect-ratio: 1.25;
   border: 1px solid var(--ink);
+  border-radius: var(--radius-lg);
   background-color: var(--cover-color);
   background-position: center;
   background-size: cover;
   isolation: isolate;
-  transition: transform var(--dur-considered) var(--ease-atelier);
+  transition:
+    transform var(--dur-considered) var(--ease-atelier),
+    box-shadow var(--dur-considered) var(--ease-atelier);
+  box-shadow: 0 2px 8px rgb(24 25 21 / 8%);
 }
 
 /* The lead piece lies flat and wide, like a full pattern sheet on the table */
@@ -383,7 +401,8 @@
 
 .projectCard:hover .projectCover,
 .projectOpen:focus-visible .projectCover {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgb(24 25 21 / 16%);
 }
 
 .projectCard:hover .projectCover::after,

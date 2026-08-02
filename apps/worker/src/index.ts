@@ -35,6 +35,12 @@ import {
 } from "./processors/export.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
 import {
+  AnthropicTrendLlmService,
+  BraveTrendSearchService,
+  S3TrendCoverService,
+  TrendDigestProcessor,
+} from "./processors/trend.digest.processor";
+import {
   createVlmInferenceProcessor,
   markRoleInferenceFailed,
 } from "./processors/vlm-inference.processor";
@@ -42,6 +48,11 @@ import { S3ThumbnailStorage } from "./storage";
 import { AmuxClaudeVlmClassifier } from "./vlm-classifier";
 import { AmuxClaudeContentModerationService } from "./content-moderation.service";
 import { captureWorkerException, flushWorkerSentry } from "./sentry.config";
+import {
+  TREND_DIGEST_QUEUE_NAME,
+  registerTrendSchedule,
+  type TrendDigestJobData,
+} from "./queues/trend.queue";
 
 function redisConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
@@ -75,6 +86,17 @@ const collectionSimilarityQueue = new Queue<CollectionSimilarityJobData>(
   COLLECTION_SIMILARITY_QUEUE_NAME,
   { connection: redisConnection() },
 );
+const trendDigestQueue = new Queue<TrendDigestJobData>(
+  TREND_DIGEST_QUEUE_NAME,
+  { connection: redisConnection() },
+);
+const trendDigestProcessor = new TrendDigestProcessor({
+  covers: new S3TrendCoverService({ database: prisma, storage }),
+  database: prisma,
+  llm: new AnthropicTrendLlmService(),
+  search: new BraveTrendSearchService(),
+  timeZone: process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
+});
 const processCollectionSimilarity = createCollectionSimilarityProcessor({
   database: prisma,
   embedder: new ClipImageEmbedder(storage),
@@ -179,8 +201,22 @@ const exportWorker = new Worker<ExportJobData>(
     maxStalledCount: 1,
   },
 );
+const trendDigestWorker = new Worker<TrendDigestJobData>(
+  TREND_DIGEST_QUEUE_NAME,
+  async (job) => trendDigestProcessor.process(job),
+  {
+    concurrency: 1,
+    connection: redisConnection(),
+    lockDuration: 10 * 60 * 1_000,
+    maxStalledCount: 1,
+  },
+);
 
 async function start(): Promise<void> {
+  await registerTrendSchedule(
+    trendDigestQueue,
+    process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
+  );
   await exportQueue.add(
     "sweep",
     { action: "sweep" },
@@ -197,9 +233,10 @@ async function start(): Promise<void> {
     generationWorker.waitUntilReady(),
     collectionSimilarityWorker.waitUntilReady(),
     exportWorker.waitUntilReady(),
+    trendDigestWorker.waitUntilReady(),
   ]);
   console.log(
-    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度与临时导出并发数为 1。`,
+    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度、临时导出与趋势周报并发数为 1。`,
   );
 }
 
@@ -210,6 +247,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     collectionSimilarityWorker.close(),
     exportWorker.close(),
     exportQueue.close(),
+    trendDigestWorker.close(),
+    trendDigestQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),
@@ -279,6 +318,10 @@ exportWorker.on("failed", (job, error) => {
     );
   }
 });
+trendDigestWorker.on("failed", (job, error) => {
+  console.error(`趋势周报任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, { phase: "failed", queue: "trend-digest" });
+});
 
 process.once("SIGINT", () => {
   void shutdown("SIGINT");
@@ -295,6 +338,8 @@ void start().catch(async (error: unknown) => {
     collectionSimilarityWorker.close(),
     exportWorker.close(),
     exportQueue.close(),
+    trendDigestWorker.close(),
+    trendDigestQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
     inferenceWorker.close(),

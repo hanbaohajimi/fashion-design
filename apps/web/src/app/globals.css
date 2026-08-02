@@ -1,5 +1,7 @@
+@import "../styles/design-tokens.css";
+
 :root {
-  /* ---- Digital Atelier design tokens ---- */
+  /* ---- Digital Atelier design tokens (legacy, kept for compatibility) ---- */
 
   /* Surfaces: paper stock, from cutting-table canvas to bright sample sheet */
   --atelier-canvas: #ece9e0; /* board background, the cutting table */

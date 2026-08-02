@@ -9,17 +9,24 @@ import {
 
 import type {
   CompiledGenInput,
+  CompilerChannel,
   ContextModelGateway,
+  FabricReference,
   ImageReference,
   SemanticImageChannel,
 } from "./compiler.types";
+import { FabricChannel } from "./fabric.channel";
 import { compilePaletteColor } from "./palette-channel";
+import { TrendChannel } from "./trend.channel";
 import { S3FileStorage } from "../../files/storage.service";
 
 export const COMPILER_DB = Symbol("COMPILER_DB");
 export const CONTEXT_MODEL = Symbol("CONTEXT_MODEL");
 
-type CompilerDatabase = Pick<PrismaClient, "designAsset" | "project">;
+type CompilerDatabase = Pick<
+  PrismaClient,
+  "designAsset" | "fabric" | "project" | "trendItem"
+>;
 type BoardElement = {
   fileAsset: {
     objectKey: string;
@@ -31,6 +38,7 @@ type BoardElement = {
   role: string;
   roleLabel: string | null;
   record: Prisma.JsonValue | null;
+  shapeType: string;
 };
 
 const COMMON_NEGATIVE_TERMS = [
@@ -109,13 +117,34 @@ export class ContextCompilerService {
         .filter((element) => element.role === "note")
         .map((element) => cleanText(propsOf(element.record).text, 500)),
     );
-    const styleReferences = (
+    const channels = [
+      new FabricChannel(this.database, userId, this.storage),
+      new TrendChannel(this.database, this.storage),
+    ] as const satisfies readonly CompilerChannel[];
+    const [structuredFabric, structuredTrend] = await Promise.all(
+      [channels[0].compile(elements), channels[1].compile(elements)],
+    );
+    const structuredFabricElementIds = new Set(
+      structuredFabric.fabricInputs?.map((input) => input.boardElementId) ?? [],
+    );
+    const structuredTrendElementIds = new Set(
+      structuredTrend.refImages.map((reference) => reference.elementId),
+    );
+    const legacyStyleReferences = (
       await Promise.all(
         elements
-          .filter((element) => element.role === "style_ref")
+          .filter(
+            (element) =>
+              element.role === "style_ref" &&
+              !structuredTrendElementIds.has(element.id),
+          )
           .map((element) => this.referenceFrom(element, userId, projectId)),
       )
     ).filter((value): value is ImageReference => Boolean(value));
+    const styleReferences = [
+      ...structuredTrend.refImages,
+      ...legacyStyleReferences,
+    ];
     const silhouetteReferences = (
       await Promise.all(
         elements
@@ -137,12 +166,20 @@ export class ContextCompilerService {
     ).filter((value): value is { edgeImageUrl: string; elementId: string } =>
       Boolean(value),
     );
-    const fabricReferences = await this.compileSemanticReferences(
-      elements.filter((element) => element.role === "fabric_ref"),
+    const legacyFabricReferences = await this.compileSemanticReferences(
+      elements.filter(
+        (element) =>
+          element.role === "fabric_ref" &&
+          !structuredFabricElementIds.has(element.id),
+      ),
       "fabric",
       userId,
       projectId,
     );
+    const fabricReferences: readonly (FabricReference | ImageReference)[] = [
+      ...structuredFabric.refImages,
+      ...legacyFabricReferences,
+    ];
     const detailReferences = await this.compileSemanticReferences(
       elements.filter((element) => element.role === "detail_ref"),
       "detail",
@@ -166,6 +203,9 @@ export class ContextCompilerService {
     const fabricTerms = unique(
       fabricReferences.flatMap((reference) => [...reference.labels]),
     );
+    const legacyFabricTerms = unique(
+      legacyFabricReferences.flatMap((reference) => [...reference.labels]),
+    );
     const patternTerms = unique(
       patternReferences.flatMap((reference) =>
         reference.labels.filter((label) =>
@@ -179,7 +219,11 @@ export class ContextCompilerService {
     const keywordPositive = this.joinPrompt([
       cleanText(userRequest, 4000),
       palette.length ? `palette: ${palette.join(", ")}` : null,
-      fabricTerms.length ? `fabric: ${fabricTerms.join(", ")}` : null,
+      structuredFabric.prompt || null,
+      structuredTrend.prompt || null,
+      legacyFabricTerms.length
+        ? `fabric: ${legacyFabricTerms.join(", ")}`
+        : null,
       patternTerms.length ? `pattern: ${patternTerms.join(", ")}` : null,
       detailTerms.length ? `details: ${detailTerms.join(", ")}` : null,
       notes.length ? `design notes: ${notes.join("; ")}` : null,
@@ -217,6 +261,7 @@ export class ContextCompilerService {
       avoidLabels,
       detailReferences,
       enhancement,
+      fabricInputs: structuredFabric.fabricInputs ?? [],
       fabricReferences,
       mode: elements.length ? "board_guided" : "text_only",
       negativePrompt,
@@ -258,6 +303,7 @@ export class ContextCompilerService {
             record: true,
             role: true,
             roleLabel: true,
+            shapeType: true,
           },
         },
       },

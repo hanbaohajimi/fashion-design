@@ -1,10 +1,26 @@
 import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
-import { boardPatchSchema } from "./boards.schemas";
+import { boardPatchSchema, importTrendSchema } from "./boards.schemas";
 import { BoardsService } from "./boards.service";
 
 describe("BoardsService ownership and semantic rows", () => {
+  it("validates optional finite trend import coordinates", () => {
+    expect(importTrendSchema.safeParse({ trendItemId: "trend-a" }).success).toBe(true);
+    expect(
+      importTrendSchema.safeParse({
+        position: { x: 120, y: 240 },
+        trendItemId: "trend-a",
+      }).success,
+    ).toBe(true);
+    expect(
+      importTrendSchema.safeParse({
+        position: { x: Number.POSITIVE_INFINITY, y: 0 },
+        trendItemId: "trend-a",
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires a non-negative base revision for every patch", () => {
     const patch = {
       batchId: crypto.randomUUID(),
@@ -246,5 +262,213 @@ describe("BoardsService ownership and semantic rows", () => {
         updatedAt: true,
       },
     });
+  });
+
+  it("imports note, horizontal swatches and image with traceable metadata", async () => {
+    const transaction = {
+      boardElement: {
+        createMany: vi.fn().mockResolvedValue({ count: 4 }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      trendItem: {
+        findUnique: vi.fn().mockResolvedValue({
+          coverFileId: "cover-a",
+          extracted: {
+            keyColors: ["#FDB462", "#8DD3C7"],
+          },
+          id: "trend-a",
+          sourceUrl: "https://www.vogue.com/article/a",
+          status: "published",
+          summary: "本周重点是轻盈半透明材质。",
+          title: "Fluid layers",
+        }),
+      },
+    };
+    const database = {
+      $transaction: vi.fn(
+        async (operation: (client: typeof transaction) => unknown) =>
+          operation(transaction),
+      ),
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    const result = await service.importTrendToBoard("user-a", "project-a", {
+      position: { x: 100, y: 200 },
+      trendItemId: "trend-a",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.elements).toHaveLength(4);
+    const inserted = transaction.boardElement.createMany.mock.calls[0]?.[0]
+      .data as Array<{
+        record: {
+          meta: Record<string, unknown>;
+          props: Record<string, unknown>;
+          type: string;
+          x: number;
+          y: number;
+        };
+        role: string;
+      }>;
+    expect(inserted.map((element) => element.record.type)).toEqual([
+      "fashion-note",
+      "fashion-swatch",
+      "fashion-swatch",
+      "fashion-image",
+    ]);
+    expect(inserted.map((element) => element.role)).toEqual([
+      "note",
+      "palette",
+      "palette",
+      "style_ref",
+    ]);
+    expect(inserted[0]?.record).toMatchObject({
+      meta: {
+        source: "https://www.vogue.com/article/a",
+        trendItemId: "trend-a",
+      },
+      props: { text: "本周重点是轻盈半透明材质。" },
+      x: 100,
+      y: 200,
+    });
+    expect(inserted[1]?.record).toMatchObject({
+      meta: { roles: ["color_ref"], trendItemId: "trend-a" },
+      props: { color: "#FDB462" },
+      x: 100,
+      y: 350,
+    });
+    expect(inserted[2]?.record.x).toBeGreaterThan(inserted[1]?.record.x ?? 0);
+    expect(inserted[3]?.record).toMatchObject({
+      meta: { roles: ["style_ref"], trendItemId: "trend-a" },
+      props: {
+        fileId: "cover-a",
+        url: "/api/boards/trend-assets/trend-a",
+      },
+      x: 100,
+      y: 450,
+    });
+  });
+
+  it("moves an imported trend group away from existing board bounds", async () => {
+    const transaction = {
+      boardElement: {
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            record: {
+              props: { h: 700, w: 500 },
+              x: 80,
+              y: 80,
+            },
+          },
+        ]),
+      },
+      trendItem: {
+        findUnique: vi.fn().mockResolvedValue({
+          coverFileId: null,
+          extracted: { keyColors: [] },
+          id: "trend-a",
+          sourceUrl: "https://www.vogue.com/article/a",
+          status: "published",
+          summary: "摘要",
+          title: "Title",
+        }),
+      },
+    };
+    const database = {
+      $transaction: vi.fn(
+        async (operation: (client: typeof transaction) => unknown) =>
+          operation(transaction),
+      ),
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    await service.importTrendToBoard("user-a", "project-a", {
+      position: { x: 100, y: 100 },
+      trendItemId: "trend-a",
+    });
+
+    const note = transaction.boardElement.createMany.mock.calls[0]?.[0]
+      .data[0].record as { x: number; y: number };
+    expect(note).not.toMatchObject({ x: 100, y: 100 });
+  });
+
+  it("rolls back concurrent duplicate imports and returns an already-exists conflict", async () => {
+    const transaction = {
+      boardElement: {
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      trendItem: {
+        findUnique: vi.fn().mockResolvedValue({
+          coverFileId: null,
+          extracted: { keyColors: [] },
+          id: "trend-a",
+          sourceUrl: "https://www.vogue.com/article/a",
+          status: "published",
+          summary: "摘要",
+          title: "Title",
+        }),
+      },
+    };
+    const database = {
+      $transaction: vi.fn(
+        async (operation: (client: typeof transaction) => unknown) =>
+          operation(transaction),
+      ),
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    const result = service.importTrendToBoard("user-a", "project-a", {
+      trendItemId: "trend-a",
+    });
+
+    await expect(result).rejects.toBeInstanceOf(ConflictException);
+    await expect(result).rejects.toMatchObject({
+      response: {
+        code: "TREND_ALREADY_IMPORTED",
+        message: "该趋势已存在于白板",
+      },
+      status: 409,
+    });
+  });
+
+  it("checks board ownership before reading a trend", async () => {
+    const trendItemFindUnique = vi.fn();
+    const database = {
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-b" },
+        }),
+      },
+      trendItem: { findUnique: trendItemFindUnique },
+    };
+    const service = new BoardsService(database as never);
+
+    await expect(
+      service.importTrendToBoard("user-a", "project-b", {
+        trendItemId: "trend-a",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(trendItemFindUnique).not.toHaveBeenCalled();
   });
 });

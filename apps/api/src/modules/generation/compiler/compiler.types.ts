@@ -10,6 +10,43 @@ export interface ImageReference {
   readonly labels: readonly string[];
 }
 
+export interface FabricReference extends ImageReference {
+  readonly fabricId: string;
+  readonly role: "fabric_texture";
+  readonly weight: number;
+}
+
+export interface TrendReference extends ImageReference {
+  readonly role: "style_ref";
+  readonly trendItemId: string;
+  readonly weight: number;
+}
+
+export interface FabricGenerationInput {
+  readonly attributes: unknown;
+  readonly boardElementId: string;
+  readonly fabricId: string;
+  readonly role: "fabric_texture";
+  readonly weight: number;
+}
+
+export interface CompilerBoardElement {
+  readonly id: string;
+  readonly record: unknown;
+  readonly role: string;
+  readonly shapeType: string;
+}
+
+export interface CompileResult {
+  readonly prompt: string;
+  readonly refImages: readonly (FabricReference | TrendReference)[];
+  readonly fabricInputs?: readonly FabricGenerationInput[];
+}
+
+export interface CompilerChannel {
+  compile(elements: readonly CompilerBoardElement[]): Promise<CompileResult>;
+}
+
 export interface SilhouetteReference {
   readonly elementId: string;
   readonly edgeImageUrl: string;
@@ -21,9 +58,10 @@ export interface CompiledGenInput {
   readonly positivePrompt: string;
   readonly negativePrompt: string;
   readonly palette: readonly string[];
-  readonly styleReferences: readonly ImageReference[];
+  readonly styleReferences: readonly (ImageReference | TrendReference)[];
   readonly silhouetteReferences: readonly SilhouetteReference[];
-  readonly fabricReferences: readonly ImageReference[];
+  readonly fabricReferences: readonly (FabricReference | ImageReference)[];
+  readonly fabricInputs: readonly FabricGenerationInput[];
   readonly patternReferences: readonly ImageReference[];
   readonly detailReferences: readonly ImageReference[];
   readonly avoidLabels: readonly string[];
@@ -57,4 +95,3 @@ export interface ContextModelGateway {
   analyzeImage(input: SemanticImageInput): Promise<readonly string[]>;
   enhancePrompt(input: PromptEnhancementInput): Promise<PromptEnhancement>;
 }
-

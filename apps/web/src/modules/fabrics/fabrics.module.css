@@ -1,0 +1,560 @@
+.libraryPage {
+  min-height: 100vh;
+  padding: 0 clamp(1rem, 4vw, 4rem) 64px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 12%, rgb(110 83 54 / 18%), transparent 28%),
+    radial-gradient(circle at 22% 88%, rgb(232 165 104 / 12%), transparent 32%),
+    var(--surface-deep, #0f131c);
+  color: #f1eee6;
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
+}
+
+.libraryHeader {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(241 238 230 / 14%);
+  gap: 24px;
+}
+
+.libraryHeader > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.libraryHeader a,
+.libraryHeader span {
+  color: #aab2c1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+}
+
+.searchWrap {
+  position: relative;
+  width: min(420px, 42vw);
+}
+
+.searchWrap label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.searchWrap input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid rgb(241 238 230 / 16%);
+  border-radius: var(--radius-pill, 999px);
+  outline: none;
+  padding: 0 72px 0 20px;
+  background: var(--surface-raised, #171d29);
+  color: #f1eee6;
+  font: inherit;
+  transition:
+    border-color var(--transition-base, 200ms),
+    background-color var(--transition-base, 200ms),
+    box-shadow var(--transition-base, 200ms);
+}
+
+.searchWrap input:focus {
+  border-color: var(--accent-primary, #b98a56);
+  background: var(--surface-elevated, #1a2132);
+  box-shadow: 0 0 0 3px rgb(185 138 86 / 15%);
+}
+
+.searchWrap input:hover:not(:focus) {
+  border-color: rgb(241 238 230 / 24%);
+}
+
+.searchWrap kbd {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 1px solid rgb(241 238 230 / 14%);
+  border-radius: var(--radius-pill, 999px);
+  padding: 4px 9px;
+  background: var(--surface-mid, #161d2b);
+  color: #7e8798;
+  font-size: 10px;
+}
+
+.libraryIntro {
+  display: grid;
+  padding: 52px 0 58px;
+  align-items: end;
+  grid-template-columns: 1.7fr 0.8fr;
+  gap: 6vw;
+}
+
+.libraryIntro span,
+.filterRailTitle span,
+.libraryState span {
+  color: #b98a56;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.libraryIntro h1 {
+  max-width: 820px;
+  margin: 15px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(2.5rem, 5vw, 5.4rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.libraryIntro p {
+  max-width: 390px;
+  margin: 0;
+  color: #9ca5b5;
+  font-size: clamp(0.86rem, 1vw, 1rem);
+  line-height: 1.8;
+}
+
+.libraryBody {
+  display: grid;
+  align-items: start;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 4rem;
+}
+
+.filterRail {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-top: 1px solid rgb(241 238 230 / 18%);
+}
+
+.filterRailTitle {
+  display: flex;
+  padding: 18px 0 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filterRailTitle button,
+.filterGroup button {
+  border: 0;
+  background: transparent;
+  color: #747e90;
+  cursor: pointer;
+  font: inherit;
+}
+
+.filterRailTitle button {
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.filterGroup {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid rgb(241 238 230 / 12%);
+  padding: 20px 0;
+}
+
+.filterGroup legend {
+  margin-bottom: 13px;
+  color: #d9dce2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filterGroup > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.filterGroup button {
+  min-height: 30px;
+  border: 1px solid rgb(241 238 230 / 10%);
+  border-radius: var(--radius-pill, 999px);
+  padding: 5px 10px;
+  font-size: 11px;
+  transition:
+    border-color var(--transition-base, 200ms),
+    background-color var(--transition-base, 200ms),
+    color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.filterGroup button:hover,
+.filterGroup button[aria-pressed="true"] {
+  border-color: var(--accent-primary, #b98a56);
+  background: var(--accent-primary, #b98a56);
+  color: #10151e;
+  transform: translateY(-1px);
+}
+
+.archivePanel {
+  min-width: 0;
+}
+
+.resultMeta {
+  display: flex;
+  min-height: 58px;
+  align-items: flex-end;
+  justify-content: space-between;
+  border-top: 1px solid rgb(241 238 230 / 18%);
+  padding: 12px 6px 12px 0;
+}
+
+.resultMeta p,
+.resultMeta span {
+  margin: 0;
+  color: #818b9d;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.resultMeta strong {
+  margin-right: 8px;
+  color: #f1eee6;
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.virtualGridHost {
+  width: 100%;
+  min-width: 0;
+}
+
+.virtualGridHost > div {
+  scrollbar-color: #394154 transparent;
+  scrollbar-width: thin;
+}
+
+.virtualCell {
+  padding: 8px;
+}
+
+.fabricCard {
+  overflow: hidden;
+  border: 1px solid rgb(241 238 230 / 9%);
+  border-radius: var(--radius-xl, 16px);
+  background: var(--surface-raised, #1e2636);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%), 0 12px 36px rgb(0 0 0 / 16%);
+  color: #f1eee6;
+  cursor: grab;
+  transition:
+    transform var(--transition-base, 200ms),
+    border-color var(--transition-base, 200ms),
+    box-shadow var(--transition-base, 200ms);
+}
+
+.fabricCard:hover {
+  border-color: rgb(185 138 86 / 58%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%), 0 16px 48px rgb(0 0 0 / 24%);
+  transform: translateY(-4px);
+}
+
+.fabricCard:active {
+  cursor: grabbing;
+  transform: translateY(-2px);
+}
+
+.cardVisual {
+  position: relative;
+  height: 236px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, transparent 49.5%, rgb(255 255 255 / 9%) 50%, transparent 50.5%),
+    #2b3547;
+}
+
+.fabricCard[data-variant="short"] .cardVisual {
+  height: 210px;
+}
+
+.cardVisual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.fabricCard:hover .cardVisual img {
+  transform: scale(1.035);
+}
+
+.cardIndex,
+.dragHint {
+  position: absolute;
+  z-index: 1;
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(15 19 28 / 85%);
+  backdrop-filter: blur(8px);
+  color: #ebe5da;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.cardIndex {
+  top: 12px;
+  left: 12px;
+  padding: 6px 9px;
+}
+
+.dragHint {
+  right: 12px;
+  bottom: 12px;
+  padding: 7px 10px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: 160ms ease;
+}
+
+.fabricCard:hover .dragHint {
+  opacity: 1;
+  transform: none;
+}
+
+.cardBody {
+  padding: 16px 17px 18px;
+}
+
+.categoryPill {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  border-radius: var(--radius-pill, 999px);
+  padding: 3px 9px;
+  background: var(--surface-elevated, #323d50);
+  color: #c6ad90;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cardBody h3 {
+  overflow: hidden;
+  margin: 11px 0 5px;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(1rem, 1.2vw, 1.25rem);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardBody p {
+  overflow: hidden;
+  margin: 0;
+  color: #8e99ab;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Handfeel: the two ordinal properties a designer reads before committing a
+   fabric to a silhouette. Three steps, filled left to right, so cards can be
+   compared down a column without reading the labels. */
+.handfeel {
+  display: grid;
+  margin: 10px 0 0;
+  gap: 5px;
+}
+
+.metricRow {
+  display: grid;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.metricRow dt {
+  color: #8e99ab;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.metricRow dd {
+  margin: 0;
+  color: #d8cbb8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.metricGauge {
+  display: flex;
+  gap: 3px;
+}
+
+.metricGauge b {
+  height: 3px;
+  flex: 1;
+  border-radius: var(--radius-pill, 999px);
+  background: rgb(241 238 230 / 12%);
+}
+
+.metricGauge b[data-on="true"] {
+  background: var(--accent-primary, #b98a56);
+}
+
+.cardFacts {
+  display: flex;
+  margin-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgb(241 238 230 / 9%);
+  padding-top: 11px;
+  color: #adb4c0;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardBody button {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 13px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--accent-primary, #b98a56);
+  color: #10151e;
+  cursor: pointer;
+  font-weight: 800;
+  transition:
+    background-color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.cardBody button:hover {
+  background: var(--accent-secondary, #c89060);
+  transform: translateY(-2px);
+}
+
+.fabricCard[data-compact="true"] .cardVisual {
+  height: 154px;
+}
+
+.fabricCard[data-compact="true"] .cardBody {
+  padding: 12px;
+}
+
+.fabricCard[data-compact="true"] .cardBody h3 {
+  font-size: 15px;
+}
+
+/* The drawer rail is too narrow for the spec block; the library page is
+   where fabrics get compared side by side. */
+.fabricCard[data-compact="true"] .cardFacts,
+.fabricCard[data-compact="true"] .handfeel,
+.fabricCard[data-compact="true"] .dragHint {
+  display: none;
+}
+
+.libraryState {
+  display: grid;
+  min-height: 420px;
+  border: 1px dashed rgb(241 238 230 / 16%);
+  border-radius: var(--radius-xl, 16px);
+  place-content: center;
+  text-align: center;
+}
+
+.libraryState p {
+  color: #8993a4;
+}
+
+.libraryState button {
+  justify-self: center;
+  border: 1px solid var(--accent-primary, #b98a56);
+  border-radius: var(--radius-pill, 999px);
+  padding: 9px 14px;
+  background: transparent;
+  color: #e6d5c0;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-base, 200ms),
+    border-color var(--transition-base, 200ms),
+    color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.libraryState button:hover {
+  background: var(--accent-primary, #b98a56);
+  color: #0f131c;
+  transform: translateY(-2px);
+}
+
+.loadingMore {
+  margin: 8px 0 0;
+  color: #7f8999;
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 920px) {
+  .libraryIntro {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryBody {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .filterRail {
+    position: static;
+    display: grid;
+    max-height: none;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 20px;
+  }
+
+  .filterRailTitle {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .libraryPage {
+    padding-inline: 18px;
+  }
+
+  .libraryHeader {
+    align-items: flex-start;
+    padding: 16px 0;
+    flex-direction: column;
+  }
+
+  .searchWrap {
+    width: 100%;
+  }
+
+  .libraryIntro {
+    padding: 38px 0;
+  }
+
+  .filterRail {
+    grid-template-columns: 1fr;
+  }
+
+  .resultMeta span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fabricCard,
+  .cardVisual img,
+  .dragHint {
+    transition: none;
+  }
+}

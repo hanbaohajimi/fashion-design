@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useMemo, useState } from "react";
 import {
   createTLStore,
   defaultBindingUtils,
@@ -12,9 +12,12 @@ import {
   useValue,
 } from "tldraw";
 
-import { BoardToolbar } from "./BoardToolbar";
+import { AtelierTopBar } from "./AtelierTopBar";
+import { ToolRail } from "./ToolRail";
+import { ContextInspector } from "./ContextInspector";
+import { FabricDrawer } from "./FabricDrawer";
 import { BoardFileDrop } from "./BoardFileDrop";
-import { ElementRolePanel } from "./ElementRolePanel";
+import { BoardFabricDrop } from "./BoardFabricDrop";
 import { BoardSkeleton } from "./BoardSkeleton";
 import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import { CandidateGrid } from "./generation/CandidateGrid";
@@ -34,10 +37,6 @@ interface BoardCanvasProps {
 }
 
 const PersistStatusContext = createContext<BoardPersistStatus>("loading");
-
-function ConnectedBoardToolbar() {
-  return <BoardToolbar status={useContext(PersistStatusContext)} />;
-}
 
 function EmptyBoardGuide() {
   const editor = useEditor();
@@ -69,11 +68,15 @@ function EmptyBoardGuide() {
 }
 
 function BoardCanvasOverlay() {
+  const [fabricsOpen, setFabricsOpen] = useState(false);
   return (
     <>
+      <ToolRail onOpenFabrics={() => setFabricsOpen((v) => !v)} />
+      <ContextInspector />
+      {fabricsOpen && <FabricDrawer onClose={() => setFabricsOpen(false)} />}
       <BoardFileDrop />
+      <BoardFabricDrop />
       <EmptyBoardGuide />
-      <ElementRolePanel />
       <ErrorBoundary area="generation">
         <GenerationBar />
         <CandidateGrid />
@@ -85,7 +88,6 @@ function BoardCanvasOverlay() {
 
 const boardComponents: TLComponents = {
   InFrontOfTheCanvas: BoardCanvasOverlay,
-  TopPanel: ConnectedBoardToolbar,
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
@@ -124,14 +126,21 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
     <main className={styles.boardShell}>
       <PersistStatusContext.Provider value={persistence.status}>
         <BoardProjectContext.Provider value={projectId}>
+          <AtelierTopBar
+            onOpenCollection={() => {/* TODO Step 4: open collection modal */}}
+            onOpenExport={() => {/* TODO Step 4: open export modal */}}
+            status={persistence.status}
+          />
           <GenerationWorkspace>
-            <Tldraw
-              autoFocus
-              components={boardComponents}
-              {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
-              shapeUtils={boardShapeUtils}
-              store={store}
-            />
+            <div className={styles.canvasWrapper}>
+              <Tldraw
+                autoFocus
+                components={boardComponents}
+                {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
+                shapeUtils={boardShapeUtils}
+                store={store}
+              />
+            </div>
           </GenerationWorkspace>
         </BoardProjectContext.Provider>
       </PersistStatusContext.Provider>

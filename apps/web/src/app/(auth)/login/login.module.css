@@ -40,6 +40,7 @@
   font-weight: 400;
   letter-spacing: -0.055em;
   line-height: 0.88;
+  text-shadow: 0 4px 24px rgb(0 0 0 / 40%);
 }
 
 .patternPanel h1 em {
@@ -163,19 +164,26 @@
   min-height: 3.4rem;
   margin-top: 1rem;
   border: 1px solid var(--ink);
+  border-radius: var(--radius-sm, 6px);
   background: var(--ink);
+  box-shadow: 0 4px 16px rgb(23 23 19 / 12%);
   color: white;
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+  letter-spacing: 0.04em;
   transition:
-    background-color 180ms ease,
-    color 180ms ease;
+    background-color var(--transition-base, 200ms),
+    color var(--transition-base, 200ms),
+    transform var(--transition-fast, 120ms),
+    box-shadow var(--transition-base, 200ms);
 }
 
 .form button:hover:not(:disabled) {
   background: transparent;
+  box-shadow: 0 6px 20px rgb(23 23 19 / 16%);
   color: var(--ink);
+  transform: translateY(-2px);
 }
 
 .form button:focus-visible {
