@@ -9,6 +9,7 @@ import {
   type FabricWeightFilter,
 } from "../../modules/fabrics/fabric-filters";
 import { FabricVirtualGrid } from "../../modules/fabrics/FabricVirtualGrid";
+import { FabricUploadPanel } from "../../modules/fabrics/FabricCard";
 import styles from "../../modules/fabrics/fabrics.module.css";
 
 const CATEGORIES = ["all", "cotton", "silk", "wool", "synthetic", "blend"] as const;
@@ -110,6 +111,8 @@ export default function FabricsPage() {
           浏览预置档案与个人上传，将真实的克重、成分和织法直接带入设计白板。
         </p>
       </section>
+
+      <FabricUploadPanel onUploaded={() => fabrics.refresh()} />
 
       <div className={styles.libraryBody}>
         <aside className={styles.filterRail} aria-label="面料筛选">

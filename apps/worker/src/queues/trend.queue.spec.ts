@@ -4,6 +4,7 @@ import {
   TREND_DIGEST_CRON,
   TREND_DIGEST_QUEUE_NAME,
   registerTrendSchedule,
+  syncTrendSchedule,
 } from "./trend.queue";
 
 describe("trend digest queue", () => {
@@ -33,5 +34,24 @@ describe("trend digest queue", () => {
     );
     expect(TREND_DIGEST_QUEUE_NAME).toBe("trend-digest");
     expect(TREND_DIGEST_CRON).toBe("0 2 * * MON");
+  });
+
+  it("缺少运行凭据时撤销已有调度器，避免继续生成必然失败的任务", async () => {
+    const queue = {
+      removeJobScheduler: vi.fn().mockResolvedValue(true),
+      upsertJobScheduler: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const scheduled = await syncTrendSchedule(
+      queue,
+      false,
+      "Asia/Shanghai",
+    );
+
+    expect(scheduled).toBe(false);
+    expect(queue.removeJobScheduler).toHaveBeenCalledWith(
+      "weekly-trend-digest",
+    );
+    expect(queue.upsertJobScheduler).not.toHaveBeenCalled();
   });
 });

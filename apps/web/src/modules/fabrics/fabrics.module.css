@@ -3,10 +3,9 @@
   padding: 0 clamp(1rem, 4vw, 4rem) 64px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 78% 12%, rgb(110 83 54 / 18%), transparent 28%),
-    radial-gradient(circle at 22% 88%, rgb(232 165 104 / 12%), transparent 32%),
-    var(--surface-deep, #0f131c);
-  color: #f1eee6;
+    repeating-linear-gradient(90deg, transparent, transparent 79px, #d4cfc0 79px, #d4cfc0 80px),
+    var(--surface-paper, #ece9e0);
+  color: var(--text-primary, #181915);
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
 }
 
@@ -15,7 +14,7 @@
   min-height: 82px;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgb(241 238 230 / 14%);
+  border-bottom: 1px solid var(--border-primary, #2d2d28);
   gap: 24px;
 }
 
@@ -27,7 +26,7 @@
 
 .libraryHeader a,
 .libraryHeader span {
-  color: #aab2c1;
+  color: var(--text-muted, #65655d);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -50,12 +49,12 @@
 .searchWrap input {
   width: 100%;
   height: 44px;
-  border: 1px solid rgb(241 238 230 / 16%);
+  border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-pill, 999px);
   outline: none;
   padding: 0 72px 0 20px;
-  background: var(--surface-raised, #171d29);
-  color: #f1eee6;
+  background: var(--surface-card, #f8f5ec);
+  color: var(--text-primary, #181915);
   font: inherit;
   transition:
     border-color var(--transition-base, 200ms),
@@ -64,24 +63,24 @@
 }
 
 .searchWrap input:focus {
-  border-color: var(--accent-primary, #b98a56);
-  background: var(--surface-elevated, #1a2132);
-  box-shadow: 0 0 0 3px rgb(185 138 86 / 15%);
+  border-color: var(--accent-primary, #e9522c);
+  background: var(--surface-paper, #ece9e0);
+  box-shadow: 0 0 0 3px rgb(233 82 44 / 15%);
 }
 
 .searchWrap input:hover:not(:focus) {
-  border-color: rgb(241 238 230 / 24%);
+  border-color: var(--border-hover, #3d3d35);
 }
 
 .searchWrap kbd {
   position: absolute;
   top: 10px;
   right: 12px;
-  border: 1px solid rgb(241 238 230 / 14%);
+  border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-pill, 999px);
   padding: 4px 9px;
-  background: var(--surface-mid, #161d2b);
-  color: #7e8798;
+  background: var(--surface-paper, #ece9e0);
+  color: var(--text-muted, #65655d);
   font-size: 10px;
 }
 
@@ -96,7 +95,7 @@
 .libraryIntro span,
 .filterRailTitle span,
 .libraryState span {
-  color: #b98a56;
+  color: var(--accent-primary, #e9522c);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.2em;
@@ -115,7 +114,7 @@
 .libraryIntro p {
   max-width: 390px;
   margin: 0;
-  color: #9ca5b5;
+  color: var(--text-secondary, #4a4a42);
   font-size: clamp(0.86rem, 1vw, 1rem);
   line-height: 1.8;
 }
@@ -132,7 +131,7 @@
   top: 24px;
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border-top: 1px solid rgb(241 238 230 / 18%);
+  border-top: 1px solid var(--border-primary, #2d2d28);
 }
 
 .filterRailTitle {
@@ -146,7 +145,7 @@
 .filterGroup button {
   border: 0;
   background: transparent;
-  color: #747e90;
+  color: var(--text-secondary, #4a4a42);
   cursor: pointer;
   font: inherit;
 }
@@ -160,13 +159,13 @@
 .filterGroup {
   margin: 0;
   border: 0;
-  border-bottom: 1px solid rgb(241 238 230 / 12%);
+  border-bottom: 1px solid var(--border-light, #e0ddd0);
   padding: 20px 0;
 }
 
 .filterGroup legend {
   margin-bottom: 13px;
-  color: #d9dce2;
+  color: var(--text-primary, #181915);
   font-size: 12px;
   font-weight: 700;
 }
@@ -179,7 +178,7 @@
 
 .filterGroup button {
   min-height: 30px;
-  border: 1px solid rgb(241 238 230 / 10%);
+  border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-pill, 999px);
   padding: 5px 10px;
   font-size: 11px;
@@ -192,9 +191,9 @@
 
 .filterGroup button:hover,
 .filterGroup button[aria-pressed="true"] {
-  border-color: var(--accent-primary, #b98a56);
-  background: var(--accent-primary, #b98a56);
-  color: #10151e;
+  border-color: var(--accent-primary, #e9522c);
+  background: var(--accent-primary, #e9522c);
+  color: #fffef9;
   transform: translateY(-1px);
 }
 
@@ -207,21 +206,21 @@
   min-height: 58px;
   align-items: flex-end;
   justify-content: space-between;
-  border-top: 1px solid rgb(241 238 230 / 18%);
+  border-top: 1px solid var(--border-primary, #2d2d28);
   padding: 12px 6px 12px 0;
 }
 
 .resultMeta p,
 .resultMeta span {
   margin: 0;
-  color: #818b9d;
+  color: var(--text-muted, #65655d);
   font-size: 11px;
   letter-spacing: 0.08em;
 }
 
 .resultMeta strong {
   margin-right: 8px;
-  color: #f1eee6;
+  color: var(--text-primary, #181915);
   font-family: Georgia, serif;
   font-size: 24px;
   font-weight: 400;
@@ -233,7 +232,7 @@
 }
 
 .virtualGridHost > div {
-  scrollbar-color: #394154 transparent;
+  scrollbar-color: #2d2d28 transparent;
   scrollbar-width: thin;
 }
 
@@ -243,11 +242,11 @@
 
 .fabricCard {
   overflow: hidden;
-  border: 1px solid rgb(241 238 230 / 9%);
+  border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-xl, 16px);
-  background: var(--surface-raised, #1e2636);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 20%), 0 12px 36px rgb(0 0 0 / 16%);
-  color: #f1eee6;
+  background: var(--surface-card, #f8f5ec);
+  box-shadow: 8px 8px 0 var(--border-primary, #2d2d28);
+  color: var(--text-primary, #181915);
   cursor: grab;
   transition:
     transform var(--transition-base, 200ms),
@@ -256,23 +255,21 @@
 }
 
 .fabricCard:hover {
-  border-color: rgb(185 138 86 / 58%);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 28%), 0 16px 48px rgb(0 0 0 / 24%);
-  transform: translateY(-4px);
+  border-color: var(--accent-primary, #e9522c);
+  box-shadow: 12px 12px 0 var(--accent-primary, #e9522c);
+  transform: translate(-2px, -2px);
 }
 
 .fabricCard:active {
   cursor: grabbing;
-  transform: translateY(-2px);
+  transform: translate(0, 0);
 }
 
 .cardVisual {
   position: relative;
   height: 236px;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, transparent 49.5%, rgb(255 255 255 / 9%) 50%, transparent 50.5%),
-    #2b3547;
+  background: #e0ddd0;
 }
 
 .fabricCard[data-variant="short"] .cardVisual {
@@ -295,9 +292,8 @@
   position: absolute;
   z-index: 1;
   border-radius: var(--radius-pill, 999px);
-  background: rgb(15 19 28 / 85%);
-  backdrop-filter: blur(8px);
-  color: #ebe5da;
+  background: var(--text-primary, #181915);
+  color: var(--surface-paper, #ece9e0);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -333,8 +329,8 @@
   align-items: center;
   border-radius: var(--radius-pill, 999px);
   padding: 3px 9px;
-  background: var(--surface-elevated, #323d50);
-  color: #c6ad90;
+  background: var(--surface-paper, #ece9e0);
+  color: var(--text-muted, #65655d);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -354,7 +350,7 @@
 .cardBody p {
   overflow: hidden;
   margin: 0;
-  color: #8e99ab;
+  color: var(--text-muted, #65655d);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -377,14 +373,14 @@
 }
 
 .metricRow dt {
-  color: #8e99ab;
+  color: var(--text-muted, #65655d);
   font-size: 9px;
   letter-spacing: 0.1em;
 }
 
 .metricRow dd {
   margin: 0;
-  color: #d8cbb8;
+  color: var(--text-primary, #181915);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -399,11 +395,11 @@
   height: 3px;
   flex: 1;
   border-radius: var(--radius-pill, 999px);
-  background: rgb(241 238 230 / 12%);
+  background: var(--border-light, #e0ddd0);
 }
 
 .metricGauge b[data-on="true"] {
-  background: var(--accent-primary, #b98a56);
+  background: var(--accent-primary, #e9522c);
 }
 
 .cardFacts {
@@ -411,9 +407,9 @@
   margin-top: 14px;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid rgb(241 238 230 / 9%);
+  border-top: 1px solid var(--border-light, #e0ddd0);
   padding-top: 11px;
-  color: #adb4c0;
+  color: var(--text-muted, #65655d);
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -425,8 +421,8 @@
   margin-top: 13px;
   border: 0;
   border-radius: var(--radius-pill, 999px);
-  background: var(--accent-primary, #b98a56);
-  color: #10151e;
+  background: var(--accent-primary, #e9522c);
+  color: #fffef9;
   cursor: pointer;
   font-weight: 800;
   transition:
@@ -435,7 +431,7 @@
 }
 
 .cardBody button:hover {
-  background: var(--accent-secondary, #c89060);
+  background: var(--accent-secondary, #d1421f);
   transform: translateY(-2px);
 }
 
@@ -462,23 +458,23 @@
 .libraryState {
   display: grid;
   min-height: 420px;
-  border: 1px dashed rgb(241 238 230 / 16%);
+  border: 1px dashed var(--border-primary, #2d2d28);
   border-radius: var(--radius-xl, 16px);
   place-content: center;
   text-align: center;
 }
 
 .libraryState p {
-  color: #8993a4;
+  color: var(--text-secondary, #4a4a42);
 }
 
 .libraryState button {
   justify-self: center;
-  border: 1px solid var(--accent-primary, #b98a56);
+  border: 1px solid var(--accent-primary, #e9522c);
   border-radius: var(--radius-pill, 999px);
   padding: 9px 14px;
   background: transparent;
-  color: #e6d5c0;
+  color: var(--text-primary, #181915);
   cursor: pointer;
   transition:
     background-color var(--transition-base, 200ms),
@@ -488,16 +484,219 @@
 }
 
 .libraryState button:hover {
-  background: var(--accent-primary, #b98a56);
-  color: #0f131c;
+  background: var(--accent-primary, #e9522c);
+  color: #fffef9;
   transform: translateY(-2px);
 }
 
 .loadingMore {
   margin: 8px 0 0;
-  color: #7f8999;
+  color: var(--text-muted, #65655d);
   font-size: 10px;
   text-align: center;
+}
+
+.fabricUploadPanel {
+  margin: 0 0 34px;
+  border: 1px solid var(--border-primary, #2d2d28);
+  background: var(--surface-card, #f8f5ec);
+  box-shadow: 8px 8px 0 var(--border-primary, #2d2d28);
+}
+
+.fabricUploadPanel[data-dragging="true"] {
+  border-color: var(--accent-primary, #e9522c);
+  box-shadow: 8px 8px 0 var(--accent-primary, #e9522c);
+}
+
+.fabricUploadTrigger {
+  display: grid;
+  width: 100%;
+  min-height: 112px;
+  border: 0;
+  padding: 22px;
+  background: transparent;
+  color: var(--text-primary, #181915);
+  cursor: pointer;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.fabricUploadTrigger strong {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 26px;
+  font-weight: 400;
+}
+
+.fabricUploadTrigger span {
+  color: var(--text-muted, #65655d);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.fabricUploadPanel[data-dragging="true"] .fabricUploadTrigger {
+  background: rgb(233 82 44 / 8%);
+  color: var(--accent-primary, #e9522c);
+}
+
+.fabricUploadForm {
+  display: grid;
+  padding: 18px;
+  align-items: start;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.fabricUploadPreview {
+  position: relative;
+  height: 176px;
+  overflow: hidden;
+  border: 1px solid var(--border-primary, #2d2d28);
+  background: #e0ddd0;
+}
+
+.fabricUploadPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fabricUploadPreview button {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  border: 1px solid #181915;
+  padding: 6px 9px;
+  background: #f8f5ec;
+  color: #181915;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.fabricUploadFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fabricUploadFields label {
+  display: grid;
+  gap: 6px;
+}
+
+.fabricUploadFields label:first-child {
+  grid-column: 1 / -1;
+}
+
+.fabricUploadFields span {
+  color: var(--text-muted, #65655d);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.fabricUploadFields input,
+.fabricUploadFields select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border-primary, #2d2d28);
+  border-radius: 0;
+  outline: none;
+  padding: 0 10px;
+  background: #fffef9;
+  color: var(--text-primary, #181915);
+  font: inherit;
+  font-size: 12px;
+}
+
+.fabricUploadFields input:focus,
+.fabricUploadFields select:focus {
+  border-color: var(--accent-primary, #e9522c);
+  box-shadow: 0 0 0 2px rgb(233 82 44 / 12%);
+}
+
+.fabricUploadActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.fabricUploadActions button {
+  min-height: 36px;
+  border: 1px solid var(--border-primary, #2d2d28);
+  padding: 0 14px;
+  background: transparent;
+  color: var(--text-primary, #181915);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.fabricUploadActions button[type="submit"] {
+  border-color: var(--accent-primary, #e9522c);
+  background: var(--accent-primary, #e9522c);
+  color: #fffef9;
+}
+
+.fabricUploadActions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.fabricUploadError,
+.fabricUploadSuccess {
+  margin: 0;
+  border-top: 1px solid var(--border-light, #e0ddd0);
+  padding: 10px 14px;
+  font-size: 11px;
+}
+
+.fabricUploadError {
+  color: #a52c1f;
+}
+
+.fabricUploadSuccess {
+  color: #276443;
+}
+
+.fabricUploadPanel[data-compact="true"] {
+  margin: 12px 0 0;
+  box-shadow: none;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadTrigger {
+  min-height: 66px;
+  padding: 10px;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadTrigger strong {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadForm {
+  max-height: min(440px, calc(100vh - 190px));
+  overflow-y: auto;
+  padding: 10px;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadPreview {
+  height: 112px;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadFields {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadFields label:first-child,
+.fabricUploadPanel[data-compact="true"] .fabricUploadActions {
+  grid-column: auto;
 }
 
 @media (max-width: 920px) {

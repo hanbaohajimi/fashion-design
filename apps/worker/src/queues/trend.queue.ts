@@ -20,6 +20,10 @@ interface TrendSchedulerQueue {
   ): Promise<unknown>;
 }
 
+interface TrendSchedulerControlQueue extends TrendSchedulerQueue {
+  removeJobScheduler(schedulerId: string): Promise<boolean>;
+}
+
 export async function registerTrendSchedule(
   queue: TrendSchedulerQueue,
   timeZone = process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
@@ -41,4 +45,17 @@ export async function registerTrendSchedule(
       },
     },
   );
+}
+
+export async function syncTrendSchedule(
+  queue: TrendSchedulerControlQueue,
+  enabled: boolean,
+  timeZone = process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
+): Promise<boolean> {
+  if (!enabled) {
+    await queue.removeJobScheduler(TREND_DIGEST_SCHEDULER_ID);
+    return false;
+  }
+  await registerTrendSchedule(queue, timeZone);
+  return true;
 }

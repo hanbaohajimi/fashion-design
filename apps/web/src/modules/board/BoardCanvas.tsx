@@ -5,9 +5,12 @@ import {
   createTLStore,
   defaultBindingUtils,
   defaultShapeUtils,
+  DefaultStylePanel,
   Tldraw,
   type TLAnyShapeUtilConstructor,
   type TLComponents,
+  type TLStateNodeConstructor,
+  type TLUiStylePanelProps,
   useEditor,
   useValue,
 } from "tldraw";
@@ -20,15 +23,16 @@ import { BoardFileDrop } from "./BoardFileDrop";
 import { BoardFabricDrop } from "./BoardFabricDrop";
 import { BoardSkeleton } from "./BoardSkeleton";
 import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
-import { CandidateGrid } from "./generation/CandidateGrid";
 import { GenerationBar } from "./generation/GenerationBar";
 import { GenerationWorkspace } from "./generation/GenerationWorkspace";
-import { TaskTray } from "./generation/TaskTray";
 import {
   type BoardPersistStatus,
   useBoardPersist,
 } from "./hooks/useBoardPersist";
 import { boardShapeUtils } from "./shapes";
+import { MountTool } from "./tools/MountTool";
+import { ConnectorTool } from "./tools/ConnectorTool";
+import { AnchorOverlay } from "./connectors/AnchorOverlay";
 import styles from "./board.module.css";
 import { ErrorBoundary } from "../../observability/ErrorBoundary";
 
@@ -37,6 +41,24 @@ interface BoardCanvasProps {
 }
 
 const PersistStatusContext = createContext<BoardPersistStatus>("loading");
+const DRAWING_SHAPE_TYPES = new Set(["arrow", "draw", "geo", "text"]);
+
+function DrawingStylePanel(props: TLUiStylePanelProps) {
+  const editor = useEditor();
+  const visible = useValue(
+    "drawing-style-panel-visible",
+    () => {
+      const selectedShapes = editor.getSelectedShapes();
+      return (
+        selectedShapes.length > 0 &&
+        selectedShapes.every((shape) => DRAWING_SHAPE_TYPES.has(shape.type))
+      );
+    },
+    [editor],
+  );
+
+  return visible ? <DefaultStylePanel {...props} /> : null;
+}
 
 function EmptyBoardGuide() {
   const editor = useEditor();
@@ -77,10 +99,9 @@ function BoardCanvasOverlay() {
       <BoardFileDrop />
       <BoardFabricDrop />
       <EmptyBoardGuide />
+      <AnchorOverlay />
       <ErrorBoundary area="generation">
         <GenerationBar />
-        <CandidateGrid />
-        <TaskTray />
       </ErrorBoundary>
     </>
   );
@@ -88,6 +109,8 @@ function BoardCanvasOverlay() {
 
 const boardComponents: TLComponents = {
   InFrontOfTheCanvas: BoardCanvasOverlay,
+  StylePanel: DrawingStylePanel,
+  Toolbar: null,
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
@@ -138,6 +161,7 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
                 components={boardComponents}
                 {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
                 shapeUtils={boardShapeUtils}
+                tools={[MountTool, ConnectorTool] as unknown as TLStateNodeConstructor[]}
                 store={store}
               />
             </div>

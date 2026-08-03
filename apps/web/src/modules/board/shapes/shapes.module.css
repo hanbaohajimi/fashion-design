@@ -1,20 +1,31 @@
 .roleBadge {
+  --role-badge-scale: var(--annotation-scale, 1);
+
+  appearance: none;
   display: inline-flex;
   width: max-content;
-  min-height: 24px;
+  min-height: calc(24px * var(--role-badge-scale));
   align-items: center;
   border: 1px solid currentColor;
-  border-radius: var(--radius-sm, 6px);
-  padding: 4px 10px;
+  border-radius: calc(6px * var(--role-badge-scale));
+  padding:
+    calc(4px * var(--role-badge-scale))
+    calc(10px * var(--role-badge-scale));
   background: rgb(248 245 236 / 95%);
-  backdrop-filter: blur(8px);
   box-shadow: 0 2px 8px rgb(24 25 21 / 8%);
   color: #181915;
-  font-size: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: calc(10px * var(--role-badge-scale));
   font-weight: 800;
   letter-spacing: 0.14em;
   line-height: 1;
   text-transform: uppercase;
+}
+
+.roleBadge:focus-visible {
+  outline: 2px solid #181915;
+  outline-offset: 2px;
 }
 
 .roleBadge[data-role="style_ref"] {
@@ -71,94 +82,94 @@
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-.fabricShape {
+/* ─── Fabric swatch: full-bleed offcut on the board ─────────────────────── */
+
+/**
+ * Wrapper sits outside MaterialShell so the caption can live below the
+ * irregular cloth silhouette without being clipped by it.
+ * pointer-events: none lets tldraw capture drag/select events directly.
+ */
+.fabricSwatchWrapper {
+  position: relative;
+  pointer-events: none;
+}
+
+/**
+ * The HTMLContainer that MaterialShell clips to the irregular outline.
+ * Full-bleed: no padding, no border — the photo IS the swatch.
+ */
+.fabricSwatch {
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border: 1px solid rgb(15 19 28 / 40%);
-  border-radius: var(--radius-lg, 12px);
-  background: linear-gradient(135deg, #1e2636 0%, #1a2130 100%);
-  box-shadow: 0 4px 16px rgb(15 19 28 / 24%), 0 8px 32px rgb(0 0 0 / 18%);
-  color: #f1eee6;
-  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
-  transition:
-    box-shadow var(--transition-base, 200ms),
-    transform var(--transition-base, 200ms);
 }
 
-.fabricShape:hover {
-  box-shadow: 0 6px 20px rgb(15 19 28 / 28%), 0 12px 40px rgb(0 0 0 / 22%);
-  transform: translateY(-2px);
-}
-
-.fabricShapeVisual {
-  display: grid;
-  height: 67%;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, transparent 49.5%, rgb(255 255 255 / 10%) 50%, transparent 50.5%),
-    #343f51;
-  place-items: center;
-}
-
-.fabricShapeVisual img {
+.fabricSwatchImage {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Slight contrast boost so fabric texture reads against the board. */
+  filter: contrast(1.04) saturate(0.96);
+  display: block;
 }
 
-.fabricShapeVisual span {
-  color: #b9c0cb;
+.fabricSwatchEmpty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #b8a890;
+}
+
+.fabricSwatchEmpty span {
+  color: rgb(255 255 255 / 0.55);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.2em;
 }
 
-.fabricShape .roleBadge {
+/**
+ * Caption — like a pencil annotation scrawled on the board below the swatch.
+ * Absolute so it participates in the wrapper's stacking without expanding it.
+ */
+.fabricCaption {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  border: 0;
-  border-radius: var(--radius-pill, 999px);
-  background: rgb(15 19 28 / 88%);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 24%);
-  color: #e8d9c5;
-  font-size: 9px;
-  letter-spacing: 0.16em;
-}
-
-.fabricShapeMeta {
+  top: calc(100% + 10px);
+  left: 4px;
   display: flex;
-  height: 33%;
-  padding: 13px 15px;
   flex-direction: column;
-  justify-content: center;
-}
-
-.fabricShapeMeta span {
-  color: #b98a56;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.fabricShapeMeta strong {
-  overflow: hidden;
-  margin-top: 5px;
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 17px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  text-overflow: ellipsis;
+  gap: 2px;
+  pointer-events: none;
   white-space: nowrap;
 }
 
+.fabricCaption span {
+  color: rgb(100 92 78 / 0.7);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.fabricCaption strong {
+  color: rgb(40 36 28 / 0.85);
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Legacy fabric card classes — kept so other shapes module CSS compiles ─ */
+.fabricShape,
+.fabricShapeVisual,
+.fabricShapeMeta {
+  /* No longer used by FabricShape; safe to remove in a later cleanup. */
+}
+
 .imageShape {
-  border: 1px solid #181915;
   background: #d8d3c8;
 }
 
@@ -194,34 +205,6 @@
   letter-spacing: 0.16em;
 }
 
-.imageShape .roleBadge {
-  position: absolute;
-  z-index: 2;
-  top: 14px;
-  left: 14px;
-}
-
-.imageShape > strong {
-  position: absolute;
-  z-index: 2;
-  right: 14px;
-  bottom: 14px;
-  left: 14px;
-  overflow: hidden;
-  border-radius: var(--radius-sm, 6px);
-  padding: 10px 12px;
-  background: rgb(248 245 236 / 92%);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgb(24 25 21 / 12%);
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .uploadStatus {
   position: absolute;
   z-index: 3;
@@ -241,89 +224,248 @@
 }
 
 .noteShape {
+  --note-content-scale: var(--note-scale, 1);
+
   display: flex;
-  padding: 18px;
+  padding: calc(18px * var(--note-content-scale));
   flex-direction: column;
   border: 1px solid rgb(24 25 21 / 65%);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: calc(6px * var(--note-content-scale));
   background: linear-gradient(135deg, #f8f5ec 0%, #f2ede0 100%);
   box-shadow: 0 4px 16px rgb(24 25 21 / 10%), 0 8px 32px rgb(24 25 21 / 8%);
 }
 
 .noteShape::after {
   position: absolute;
-  right: 16px;
-  bottom: 15px;
-  left: 16px;
+  right: calc(16px * var(--note-content-scale));
+  bottom: calc(15px * var(--note-content-scale));
+  left: calc(16px * var(--note-content-scale));
   border-bottom: 1px solid rgb(24 25 21 / 24%);
   content: "";
 }
 
-.noteShape p {
-  margin: 22px 0 0;
+.noteTextEditor {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  margin: calc(22px * var(--note-content-scale)) 0 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: #2a2621;
+  cursor: text;
   font-family: Georgia, "Songti SC", serif;
-  font-size: 20px;
+  font-size: calc(20px * var(--note-content-scale));
   font-weight: 400;
   letter-spacing: -0.01em;
   line-height: 1.55;
+  outline: none;
+  overflow: auto;
+  pointer-events: auto;
+  resize: none;
 }
 
-.shapeIndex {
-  position: absolute;
-  right: 18px;
-  bottom: 20px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+.noteTextEditor:focus {
+  outline: 1px solid rgb(24 25 21 / 28%);
+  outline-offset: calc(4px * var(--note-content-scale));
 }
 
 .swatchShape {
+  --swatch-content-scale: var(--swatch-scale, 1);
+
   border: 1px solid rgb(24 25 21 / 75%);
-  border-radius: var(--radius-sm, 6px);
-  background: linear-gradient(135deg, #f8f5ec 0%, #f2ede0 100%);
+  border-radius: calc(6px * var(--swatch-content-scale));
+  background: linear-gradient(135deg, #e8dcc8 0%, #ddd1ba 100%);
   box-shadow: 0 4px 16px rgb(24 25 21 / 10%), 0 8px 32px rgb(24 25 21 / 8%);
   overflow: hidden;
 }
 
-.swatchColor {
-  width: 100%;
-  height: 66%;
-  border-bottom: 1px solid rgb(24 25 21 / 75%);
-  box-shadow: inset 0 -1px 2px rgb(0 0 0 / 8%);
-}
-
-.swatchShape .roleBadge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-}
-
-.swatchMeta {
+/* ─── Swatch card: multi-color row (方案 A) ─────────────────────────────── */
+.swatchBody {
   display: flex;
-  height: 34%;
-  padding: 9px 11px;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 6px;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding:
+    calc(18px * var(--swatch-content-scale))
+    calc(20px * var(--swatch-content-scale))
+    calc(14px * var(--swatch-content-scale));
+  gap: calc(12px * var(--swatch-content-scale));
+  pointer-events: auto;
 }
 
-.swatchMeta strong {
-  overflow: hidden;
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
+.swatchHeader {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(8px * var(--swatch-content-scale));
+}
+
+.swatchHeaderHex {
+  color: #5a5650;
+  font-size: calc(8px * var(--swatch-content-scale));
+  font-weight: 800;
+  letter-spacing: 0.12em;
   white-space: nowrap;
 }
 
-.swatchMeta span {
+.swatchColorRow {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: calc(10px * var(--swatch-content-scale));
+  min-height: 0;
+}
+
+/* One column = color chip + label beneath it */
+.swatchColorCell {
+  position: relative;
+  display: flex;
+  width: calc(104px * var(--swatch-content-scale));
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: calc(8px * var(--swatch-content-scale));
+}
+
+.swatchChip {
+  position: relative;
+  flex: 1;
+  border: 1px solid rgb(24 25 21 / 22%);
+  border-radius: calc(2px * var(--swatch-content-scale));
+  box-shadow:
+    inset 0 1px 3px rgb(255 255 255 / 22%),
+    inset 0 -1px 3px rgb(0 0 0 / 10%),
+    0 1px 2px rgb(24 25 21 / 8%);
+  cursor: pointer;
+  transition:
+    box-shadow var(--transition-fast, 140ms),
+    transform var(--transition-fast, 140ms);
+}
+
+.swatchChip:hover {
+  box-shadow:
+    inset 0 1px 3px rgb(255 255 255 / 28%),
+    inset 0 -1px 3px rgb(0 0 0 / 12%),
+    0 2px 8px rgb(24 25 21 / 18%);
+  transform: translateY(calc(-1px * var(--swatch-content-scale)));
+}
+
+.swatchChip:focus-visible {
+  outline: 2px solid #181915;
+  outline-offset: 2px;
+}
+
+/* Hidden native color input overlaying the chip */
+.swatchColorInput {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.swatchLabel {
+  overflow: hidden;
   color: #5a5650;
-  font-size: 8px;
+  font-size: calc(9px * var(--swatch-content-scale));
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.swatchLabelInput {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #181915;
+  padding: 0;
+  background: transparent;
+  color: #181915;
+  font-family: inherit;
+  font-size: calc(9px * var(--swatch-content-scale));
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+  outline: none;
+}
+
+/* ✕ remove button — appears on chip hover */
+.swatchRemove {
+  position: absolute;
+  top: calc(-6px * var(--swatch-content-scale));
+  right: calc(-6px * var(--swatch-content-scale));
+  z-index: 2;
+  display: grid;
+  width: calc(16px * var(--swatch-content-scale));
+  height: calc(16px * var(--swatch-content-scale));
+  border: 1px solid #f1eee5;
+  border-radius: 50%;
+  padding: 0;
+  background: #d94f2b;
+  color: #fff;
+  font-size: calc(9px * var(--swatch-content-scale));
+  line-height: 1;
+  cursor: pointer;
+  place-items: center;
+  box-shadow: 0 1px 4px rgb(24 25 21 / 30%);
+}
+
+.swatchRemove:hover {
+  background: #b83d1d;
+}
+
+/* ⊕ add-color button — dashed placeholder cell */
+.swatchAddCell {
+  display: flex;
+  width: calc(40px * var(--swatch-content-scale));
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: calc(8px * var(--swatch-content-scale));
+}
+
+.swatchAdd {
+  display: grid;
+  flex: 1;
+  border: 1px dashed rgb(24 25 21 / 38%);
+  border-radius: calc(2px * var(--swatch-content-scale));
+  padding: 0;
+  background: rgb(24 25 21 / 3%);
+  color: #5a5650;
+  cursor: pointer;
+  place-items: center;
+  transition:
+    background var(--transition-fast, 140ms),
+    border-color var(--transition-fast, 140ms),
+    color var(--transition-fast, 140ms);
+}
+
+.swatchAdd:hover {
+  border-color: #181915;
+  background: rgb(24 25 21 / 8%);
+  color: #181915;
+}
+
+.swatchAdd:focus-visible {
+  outline: 2px solid #181915;
+  outline-offset: 2px;
+}
+
+.swatchAdd svg {
+  width: calc(16px * var(--swatch-content-scale));
+  height: calc(16px * var(--swatch-content-scale));
+}
+
+.swatchAddSpacer {
+  height: calc(10.8px * var(--swatch-content-scale));
 }
 
 .frameShape {

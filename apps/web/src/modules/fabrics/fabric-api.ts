@@ -1,21 +1,112 @@
 import useSWRInfinite from "swr/infinite";
 
-import type { FabricListPage, FabricListQuery } from "./fabric-types";
+import type {
+  Fabric,
+  FabricListPage,
+  FabricListQuery,
+} from "./fabric-types";
 
 const PAGE_SIZE = 48;
+const MAX_FABRIC_IMAGE_BYTES = 50 * 1024 * 1024;
+const FABRIC_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+export type FabricUploadCategory =
+  | "cotton"
+  | "silk"
+  | "wool"
+  | "synthetic"
+  | "blend";
+export type FabricUploadWeave =
+  | "plain"
+  | "twill"
+  | "satin"
+  | "knit"
+  | "jacquard";
+
+export interface FabricUploadInput {
+  readonly category: FabricUploadCategory;
+  readonly compositionName: string;
+  readonly file: File | null;
+  readonly name: string;
+  readonly weight: number;
+  readonly weave: FabricUploadWeave;
+}
+
+export function validateFabricUpload(input: FabricUploadInput): string | null {
+  if (!input.file) return "请选择一张面料图片";
+  if (!FABRIC_IMAGE_TYPES.has(input.file.type.toLowerCase())) {
+    return "仅支持 JPG、PNG、WebP 或 HEIC 图片";
+  }
+  if (input.file.size <= 0 || input.file.size > MAX_FABRIC_IMAGE_BYTES) {
+    return "图片不能为空或超过 50MB";
+  }
+  if (!input.name.trim()) return "请填写面料名称";
+  if (!input.compositionName.trim()) return "请填写主要成分";
+  if (!Number.isFinite(input.weight) || input.weight <= 0 || input.weight > 2_000) {
+    return "克重必须在 0–2000 GSM 之间";
+  }
+  return null;
+}
+
+export function buildFabricUploadFormData(
+  input: FabricUploadInput,
+): FormData {
+  const error = validateFabricUpload(input);
+  if (error) throw new Error(error);
+  const file = input.file;
+  if (!file) throw new Error("请选择一张面料图片");
+
+  const formData = new FormData();
+  formData.set("mainImage", file);
+  formData.set("name", input.name.trim());
+  formData.set("category", input.category);
+  formData.set(
+    "attributes",
+    JSON.stringify({
+      composition: { [input.compositionName.trim()]: 100 },
+      weight: input.weight,
+      weave: input.weave,
+    }),
+  );
+  return formData;
+}
+
+async function readFabricError(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const payload = (await response.json()) as { message?: string | string[] };
+    if (Array.isArray(payload.message)) return payload.message.join("；");
+    if (payload.message) return payload.message;
+  } catch {
+    // Keep the stable fallback for non-JSON proxy or storage errors.
+  }
+  return fallback;
+}
+
+export async function createFabric(input: FabricUploadInput): Promise<Fabric> {
+  const response = await fetch("/api/fabrics", {
+    body: buildFabricUploadFormData(input),
+    credentials: "include",
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(await readFabricError(response, "面料上传失败，请稍后重试"));
+  }
+  return (await response.json()) as Fabric;
+}
 
 async function fetchFabricPage(url: string): Promise<FabricListPage> {
   const response = await fetch(url, { credentials: "include" });
   if (!response.ok) {
-    let message = "面料列表加载失败";
-    try {
-      const payload = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(payload.message)) message = payload.message.join("；");
-      else if (payload.message) message = payload.message;
-    } catch {
-      // Keep the user-facing fallback when the response is not JSON.
-    }
-    throw new Error(message);
+    throw new Error(await readFabricError(response, "面料列表加载失败"));
   }
   return (await response.json()) as FabricListPage;
 }

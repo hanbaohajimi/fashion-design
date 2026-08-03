@@ -72,6 +72,236 @@ test("登录邮件发送后可更换邮箱并重发到已确认地址", async ({
     .toEqual(["first@example.com", "second@example.com", "second@example.com"]);
 });
 
+test("本地图片拖入白板后关闭投放遮罩并进入自定义上传流程", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 9, used: 91 },
+        user: {
+          authId: "auth-drop",
+          avatar: null,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          deletedAt: null,
+          email: "drop@example.com",
+          id: "user-drop",
+          name: "Drop E2E",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/projects/e2e-drop", (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt: "2026-07-27T08:00:00.000Z",
+        id: "e2e-drop",
+        name: "E2E 拖放项目",
+        updatedAt: "2026-07-27T08:00:00.000Z",
+      },
+    }),
+  );
+  await page.route("**/api/collections?projectId=e2e-drop", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/projects/e2e-drop/board", (route) =>
+    route.fulfill({
+      json:
+        route.request().method() === "PATCH"
+          ? {
+              batchId: "e2e-drop-save",
+              revision: 1,
+              savedAt: "2026-08-03T00:00:00.000Z",
+            }
+          : { elements: [], revision: 0, snapshot: null },
+    }),
+  );
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/files/sign-upload", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { message: "E2E 主动终止实际上传" },
+    }),
+  );
+
+  await page.goto("/e2e-drop");
+  await expect(page.getByText("E2E 拖放项目")).toBeVisible();
+
+  const dispatchFileDrag = (eventType: "dragenter" | "drop") =>
+    page.evaluate((type) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(
+        new File([new Uint8Array([137, 80, 78, 71])], "reference.png", {
+          type: "image/png",
+        }),
+      );
+      const x = Math.round(window.innerWidth / 2);
+      const y = Math.round(window.innerHeight / 2);
+      const target = document.elementFromPoint(x, y) ?? document.body;
+      target.dispatchEvent(
+        new DragEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          dataTransfer,
+        }),
+      );
+    }, eventType);
+
+  await dispatchFileDrag("dragenter");
+  await expect(page.getByText("DROP / IMAGE", { exact: true })).toBeVisible();
+
+  await dispatchFileDrag("drop");
+  await expect(page.getByText("DROP / IMAGE", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("complementary", { name: "图片上传状态" }),
+  ).toContainText("reference.png");
+  await expect(page.getByText("reference.png", { exact: true })).toHaveCount(1);
+});
+
+test("面料库支持点击和拖放上传，并可添加到白板", async ({ page }) => {
+  const userFabrics: Array<Record<string, unknown>> = [];
+  let uploadCount = 0;
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 9, used: 91 },
+        user: {
+          authId: "auth-fabric",
+          avatar: null,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          deletedAt: null,
+          email: "fabric@example.com",
+          id: "user-fabric",
+          name: "Fabric E2E",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/projects/e2e-fabric", (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt: "2026-07-27T08:00:00.000Z",
+        id: "e2e-fabric",
+        name: "E2E 面料项目",
+        updatedAt: "2026-07-27T08:00:00.000Z",
+      },
+    }),
+  );
+  await page.route("**/api/collections?projectId=e2e-fabric", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/projects/e2e-fabric/board", (route) =>
+    route.fulfill({
+      json:
+        route.request().method() === "PATCH"
+          ? {
+              batchId: "e2e-fabric-save",
+              revision: 1,
+              savedAt: "2026-08-03T00:00:00.000Z",
+            }
+          : { elements: [], revision: 0, snapshot: null },
+    }),
+  );
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/fabrics?*", (route) => {
+    const scope = new URL(route.request().url()).searchParams.get("scope");
+    const items = scope === "user" ? userFabrics : [];
+    return route.fulfill({
+      json: { items, limit: 48, page: 1, total: items.length, totalPages: 1 },
+    });
+  });
+  await page.route(/\/api\/fabrics$/u, async (route) => {
+    uploadCount += 1;
+    const created = {
+      attributes: {
+        composition: { 混合纤维: 100 },
+        weight: 180,
+        weave: "plain",
+      },
+      category: "blend",
+      createdAt: "2026-08-03T00:00:00.000Z",
+      id: `fabric-upload-${uploadCount}`,
+      mainFileId: `file-upload-${uploadCount}`,
+      mainImageUrl: `/api/fabrics/fabric-upload-${uploadCount}/image`,
+      name: uploadCount === 1 ? "click-fabric" : "drop-fabric",
+      scope: "user",
+      subCategory: null,
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    };
+    userFabrics.unshift(created);
+    await route.fulfill({ json: created, status: 201 });
+  });
+
+  await page.goto("/e2e-fabric");
+  await page.getByRole("button", { name: "打开面料库" }).click();
+  const drawer = page.getByRole("complementary", { name: "面料抽屉" });
+  await expect(drawer).toBeVisible();
+
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await drawer.getByRole("button", { name: /添加面料/u }).click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    buffer: Buffer.from([137, 80, 78, 71]),
+    mimeType: "image/png",
+    name: "click-fabric.png",
+  });
+  await drawer.getByRole("button", { name: "保存到面料库" }).click();
+  await expect.poll(() => uploadCount).toBe(1);
+  await expect(drawer.getByRole("button", { name: "我的" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(drawer.getByText("click-fabric", { exact: true })).toBeVisible();
+
+  const uploadPanel = drawer.getByRole("region", { name: "上传面料" });
+  await uploadPanel.evaluate((target) => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(
+      new File([new Uint8Array([137, 80, 78, 71])], "drop-fabric.png", {
+        type: "image/png",
+      }),
+    );
+    target.dispatchEvent(
+      new DragEvent("dragenter", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+      }),
+    );
+    target.dispatchEvent(
+      new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer,
+      }),
+    );
+  });
+  await drawer.getByRole("button", { name: "保存到面料库" }).click();
+  await expect.poll(() => uploadCount).toBe(2);
+  await expect(drawer.getByText("drop-fabric", { exact: true })).toBeVisible();
+
+  await drawer
+    .getByText("click-fabric", { exact: true })
+    .locator("xpath=ancestor::article")
+    .getByRole("button", { name: "添加到白板" })
+    .click();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.locator('img[alt="click-fabric"]')).toHaveCount(1);
+});
+
 test("框选约束后生成候选并采纳为带 assetId 的白板图片", async ({ page }) => {
   let persistedAssetId: string | undefined;
   let generationIdempotencyKey: string | undefined;
@@ -213,13 +443,44 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
 
   await page.goto("/e2e-project");
   await expect(page.getByText("E2E 生成项目")).toBeVisible();
-  await expect(page.getByText("剩余 9")).toBeVisible();
+  await expect(page.getByText("9 / 600", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "白板三步上手" }),
   ).toContainText("上传参考");
-  await expect(page.getByRole("button", { name: "便签" })).toBeVisible();
+  const toolRail = page.getByRole("complementary", { name: "工具条" });
+  await expect(
+    toolRail.getByRole("button", { name: "自由绘制工具" }),
+  ).toBeVisible();
+  await expect(
+    toolRail.getByRole("button", { name: "橡皮擦工具" }),
+  ).toBeVisible();
+  await expect(
+    toolRail.getByRole("button", { name: "箭头工具" }),
+  ).toBeVisible();
+  await expect(
+    toolRail.getByRole("button", { name: "矩形工具" }),
+  ).toBeVisible();
+  await expect(page.locator(".tlui-main-toolbar")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "便签" }).click();
+  const drawTool = toolRail.getByRole("button", { name: "自由绘制工具" });
+  await drawTool.click();
+  await expect(drawTool).toHaveAttribute("aria-pressed", "true");
+  const rectangleTool = toolRail.getByRole("button", { name: "矩形工具" });
+  await rectangleTool.click();
+  await expect(rectangleTool).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(100, 130);
+  await page.mouse.down();
+  await page.mouse.move(180, 180, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.getByTestId("style.panel")).toBeVisible();
+  await toolRail.getByRole("button", { name: "选择工具" }).click();
+  const inspirationNoteButton = toolRail.getByRole("button", {
+    name: "添加灵感便签",
+  });
+  await expect(inspirationNoteButton).toBeVisible();
+
+  await inspirationNoteButton.click();
+  await expect(page.getByTestId("style.panel")).toHaveCount(0);
   const styleRole = page.getByRole("radio", { name: /风格参考/u });
   const fabricRole = page.getByRole("radio", { name: /面料参考/u });
   await styleRole.focus();
@@ -251,8 +512,13 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
 
   await expect(
     page.getByRole("complementary", { name: "生成任务托盘" }),
-  ).toContainText("已完成");
-  await expect(page.getByRole("region", { name: "生成候选" })).toBeVisible();
+  ).toHaveCount(0);
+  const projectOverview = page.getByRole("complementary", {
+    name: "项目概览",
+  });
+  await expect(
+    projectOverview.getByRole("region", { name: "生成候选" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "采纳" }).click();
 
   await expect(
@@ -265,7 +531,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await page.reload();
   await expect(
     page.getByRole("complementary", { name: "生成任务托盘" }),
-  ).toContainText("已完成");
+  ).toHaveCount(0);
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
   ).toBeVisible();

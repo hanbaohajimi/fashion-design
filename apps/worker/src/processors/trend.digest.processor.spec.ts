@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 
 import {
+  AmuxTrendLlmService,
   AnthropicTrendLlmService,
   BraveTrendSearchService,
   S3TrendCoverService,
@@ -289,6 +290,23 @@ describe("trend providers", () => {
         },
       },
     });
+  });
+
+  it("趋势摘要复用已配置的 Amux Claude 结构化客户端", async () => {
+    const client = {
+      generateJson: vi.fn().mockImplementation(({ parse }) => parse(summary())),
+    };
+    const service = new AmuxTrendLlmService(client);
+
+    const output = await service.summarizeArticle(result());
+
+    expect(output).toEqual(summary());
+    expect(client.generateJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jsonSchema: expect.objectContaining({ type: "object" }),
+        schemaName: "trend_article_summary",
+      }),
+    );
   });
 
   it("趋势封面转为 WebP 后写入 trends 目录并创建 READY 文件资产", async () => {

@@ -1,7 +1,12 @@
+import { useEditor, type TLShapeId } from "tldraw";
+
+import { requestBoardLabelDesign } from "../board-context";
 import styles from "./shapes.module.css";
 
 interface RoleBadgeProps {
+  readonly label?: string | undefined;
   readonly role: string;
+  readonly shapeId: TLShapeId;
 }
 
 const ROLE_LABELS: Readonly<Record<string, string>> = {
@@ -14,10 +19,26 @@ const ROLE_LABELS: Readonly<Record<string, string>> = {
   style_ref: "风格",
 };
 
-export function RoleBadge({ role }: RoleBadgeProps) {
+export function RoleBadge({ label, role, shapeId }: RoleBadgeProps) {
+  const editor = useEditor();
+  const displayLabel = label?.trim() || ROLE_LABELS[role] || role;
+
   return (
-    <span className={styles.roleBadge} data-role={role}>
-      {ROLE_LABELS[role] ?? role}
-    </span>
+    <button
+      aria-label={`编辑标签：${displayLabel}`}
+      className={styles.roleBadge}
+      data-label-design-trigger="true"
+      data-role={role}
+      onClick={(event) => {
+        event.stopPropagation();
+        editor.select(shapeId);
+        requestBoardLabelDesign(shapeId);
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      type="button"
+    >
+      {displayLabel}
+    </button>
   );
 }

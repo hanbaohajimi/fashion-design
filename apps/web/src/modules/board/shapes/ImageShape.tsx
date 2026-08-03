@@ -11,7 +11,7 @@ import {
 import { RoleBadge } from "./RoleBadge";
 import { useUploadPreview } from "../upload-preview-store";
 import { IMAGE_SHAPE_TYPE, type ImageShape, normalizeBoardRole } from "./shape-types";
-import { MaterialShell } from "./MaterialShell";
+import { computeAnnotationScale, MaterialShell } from "./MaterialShell";
 import { generateMaterialAppearance, resolveMaterialAppearance } from "./material-appearance";
 import styles from "./shapes.module.css";
 
@@ -29,18 +29,26 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
     [editor, shape.id],
   );
 
-  // Generate material appearance based on role
   const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
   const appearance = shape.props.appearance ?? generateMaterialAppearance(
     resolveMaterialAppearance(role),
     seed,
-    role,
   );
 
-  // LOD based on zoom level
   const zoom = useValue("zoom", () => editor.getZoomLevel(), [editor]);
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
+
+  const handleRemoveMount = (mountId: string): void => {
+    const nextMounts = (shape.props.mounts ?? []).filter((m) => m.id !== mountId);
+    editor.updateShape({
+      id: shape.id,
+      type: shape.type,
+      props: {
+        mounts: nextMounts,
+      },
+    });
+  };
 
   const content = (
     <HTMLContainer className={styles.imageShape}>
@@ -48,7 +56,6 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
         <span>IMAGE / CDN</span>
       </div>
       {isNearViewport && (shape.props.url || uploadPreview) ? (
-        // CDN URLs are supplied by persisted asset data.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt=""
@@ -57,7 +64,6 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
           src={shape.props.url || uploadPreview}
         />
       ) : null}
-      <RoleBadge role={shape.props.role} />
       {(shape.props.uploadStatus ?? "ready") !== "ready" ? (
         <span
           className={styles.uploadStatus}
@@ -66,16 +72,30 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
           {shape.props.uploadStatus === "failed" ? "上传失败" : "正在处理"}
         </span>
       ) : null}
-      <strong>{shape.props.title || "未命名图片"}</strong>
     </HTMLContainer>
   );
 
   return (
     <MaterialShell
+      annotation={
+        <RoleBadge
+          label={role === "note" ? shape.props.roleLabel : undefined}
+          role={shape.props.role}
+          shapeId={shape.id}
+        />
+      }
+      annotationScale={computeAnnotationScale(
+        shape.props.w,
+        shape.props.h,
+        340,
+        260,
+      )}
       appearance={appearance}
       width={shape.props.w}
       height={shape.props.h}
       lod={lod}
+      userMounts={shape.props.mounts}
+      onRemoveMount={handleRemoveMount}
     >
       {content}
     </MaterialShell>
@@ -89,6 +109,7 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
     assetId: T.string.optional(),
     fileId: T.string.optional(),
     h: T.number,
+    mounts: T.any.optional(),
     role: T.string,
     roleConfidence: T.number.optional(),
     roleInferenceState: T.string.optional(),
@@ -99,6 +120,10 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
     url: T.string,
     w: T.number,
   };
+
+  override isAspectRatioLocked(): boolean {
+    return true;
+  }
 
   override getDefaultProps(): ImageShape["props"] {
     return {
@@ -119,6 +144,23 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
   override canCull(): boolean {
     return false;
   }
+
+  override canResize(): boolean {
+    return true;
+  }
+
+  override onTranslate = (shape: ImageShape) => {
+    const hasMounts = shape.props.mounts && shape.props.mounts.length > 0;
+    if (hasMounts) {
+      return {
+        id: shape.id,
+        type: IMAGE_SHAPE_TYPE,
+        x: shape.x,
+        y: shape.y,
+      } as const;
+    }
+    return;
+  };
 
   override component(shape: ImageShape) {
     return <ImageShapeContent shape={shape} />;

@@ -35,6 +35,7 @@ import {
 } from "./processors/export.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
 import {
+  AmuxTrendLlmService,
   AnthropicTrendLlmService,
   BraveTrendSearchService,
   S3TrendCoverService,
@@ -50,7 +51,7 @@ import { AmuxClaudeContentModerationService } from "./content-moderation.service
 import { captureWorkerException, flushWorkerSentry } from "./sentry.config";
 import {
   TREND_DIGEST_QUEUE_NAME,
-  registerTrendSchedule,
+  syncTrendSchedule,
   type TrendDigestJobData,
 } from "./queues/trend.queue";
 
@@ -66,6 +67,16 @@ function redisConnection() {
 
 const storage = new S3ThumbnailStorage();
 const amuxClaude = createAmuxClaudeClientFromEnv();
+const missingTrendDigestConfiguration = [
+  !process.env.BRAVE_SEARCH_API_KEY?.trim() ? "BRAVE_SEARCH_API_KEY" : null,
+  !process.env.AMUX_API_KEY?.trim() && !process.env.ANTHROPIC_API_KEY?.trim()
+    ? "AMUX_API_KEY 或 ANTHROPIC_API_KEY"
+    : null,
+].filter((value): value is string => value !== null);
+const trendDigestEnabled = missingTrendDigestConfiguration.length === 0;
+const trendDigestLlm = process.env.AMUX_API_KEY?.trim()
+  ? new AmuxTrendLlmService(amuxClaude)
+  : new AnthropicTrendLlmService();
 const exportQueue = new Queue<ExportJobData>(EXPORT_QUEUE_NAME, {
   connection: redisConnection(),
 });
@@ -93,7 +104,7 @@ const trendDigestQueue = new Queue<TrendDigestJobData>(
 const trendDigestProcessor = new TrendDigestProcessor({
   covers: new S3TrendCoverService({ database: prisma, storage }),
   database: prisma,
-  llm: new AnthropicTrendLlmService(),
+  llm: trendDigestLlm,
   search: new BraveTrendSearchService(),
   timeZone: process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
 });
@@ -203,7 +214,20 @@ const exportWorker = new Worker<ExportJobData>(
 );
 const trendDigestWorker = new Worker<TrendDigestJobData>(
   TREND_DIGEST_QUEUE_NAME,
-  async (job) => trendDigestProcessor.process(job),
+  async (job) => {
+    if (!trendDigestEnabled) {
+      await job.log(
+        `趋势周报已跳过：缺少 ${missingTrendDigestConfiguration.join("、")}。`,
+      );
+      return {
+        digestPeriod: null,
+        failed: 0,
+        found: 0,
+        processed: 0,
+      };
+    }
+    return trendDigestProcessor.process(job);
+  },
   {
     concurrency: 1,
     connection: redisConnection(),
@@ -213,8 +237,9 @@ const trendDigestWorker = new Worker<TrendDigestJobData>(
 );
 
 async function start(): Promise<void> {
-  await registerTrendSchedule(
+  await syncTrendSchedule(
     trendDigestQueue,
+    trendDigestEnabled,
     process.env.TREND_DIGEST_TIMEZONE?.trim() || "Asia/Shanghai",
   );
   await exportQueue.add(
@@ -238,6 +263,11 @@ async function start(): Promise<void> {
   console.log(
     `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度、临时导出与趋势周报并发数为 1。`,
   );
+  if (!trendDigestEnabled) {
+    console.warn(
+      `趋势周报调度已禁用并清理：缺少 ${missingTrendDigestConfiguration.join("、")}。补齐配置并重启 Worker 后自动恢复。`,
+    );
+  }
 }
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {

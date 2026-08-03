@@ -12,7 +12,9 @@ export type EdgeStyle =
   | "torn"
   | "deckled"
   | "pinked"
-  | "rough-cut";
+  | "rough-cut"
+  /** Unfinished cloth offcut: slanted sides, uneven waves, frayed threads. */
+  | "raw-cut";
 
 export type MountType = "pin" | "tape" | "clip" | "staple" | "stitch";
 
@@ -26,6 +28,10 @@ export type MountVariant =
   | "staple-corner"
   | "running-stitch";
 
+/**
+ * A user-placed mount fastener.
+ * x and y are normalized 0..1 relative to the shape's content area (width × height).
+ */
 export interface Mount {
   readonly id: string;
   readonly type: MountType;
@@ -74,15 +80,82 @@ export interface MaterialAppearance {
   readonly preset: MaterialPreset;
   readonly substrate: SubstrateConfig;
   readonly edge: EdgeConfig;
+  /** Legacy: always empty for new boards. User mounts live in shape.props.mounts. */
   readonly mounts: readonly Mount[];
   readonly shadow: ShadowConfig;
   readonly imperfections: ImperfectionConfig;
   readonly seed: number;
 }
 
+// ---------------------------------------------------------------------------
+// Mount catalog — exposed in the tool-rail picker
+// ---------------------------------------------------------------------------
+
+export interface MountCatalogEntry {
+  readonly variant: MountVariant;
+  readonly type: MountType;
+  readonly label: string;
+  readonly description: string;
+}
+
+export const MOUNT_CATALOG: readonly MountCatalogEntry[] = [
+  {
+    variant: "brass-pin",
+    type: "pin",
+    label: "黄铜图钉",
+    description: "固定参考图片",
+  },
+  {
+    variant: "red-pin",
+    type: "pin",
+    label: "红色图钉",
+    description: "标记需规避的设计方向",
+  },
+  {
+    variant: "masking-tape",
+    type: "tape",
+    label: "美纹纸胶带",
+    description: "临时粘贴草稿",
+  },
+  {
+    variant: "washi-tape",
+    type: "tape",
+    label: "和纸胶带",
+    description: "装饰性固定",
+  },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a user-placed mount with normalized 0..1 coordinates.
+ */
+export function createUserMount(
+  variant: MountVariant,
+  normalizedX: number,
+  normalizedY: number,
+  rotation?: number,
+): Mount {
+  const r = rotation ?? Math.random() * 360;
+  const type: MountType = variant.includes("pin")
+    ? "pin"
+    : variant.includes("tape")
+      ? "tape"
+      : "clip";
+  return {
+    id: `um-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    type,
+    variant,
+    x: Math.max(0, Math.min(1, normalizedX)),
+    y: Math.max(0, Math.min(1, normalizedY)),
+    rotation: r,
+  };
+}
+
 /**
  * Resolve material appearance from board element role.
- * Maps semantic role to physical material preset following studio conventions.
  */
 export function resolveMaterialAppearance(
   role: BoardElementRole,
@@ -109,11 +182,11 @@ export function resolveMaterialAppearance(
 
 /**
  * Generate deterministic material appearance from preset and seed.
+ * User mounts are no longer auto-generated here — they live in shape.props.mounts.
  */
 export function generateMaterialAppearance(
   preset: MaterialPreset,
   seed: number,
-  role: BoardElementRole,
 ): MaterialAppearance {
   const seededRandom = (offset: number): number => {
     const x = Math.sin(seed + offset) * 10000;
@@ -121,76 +194,15 @@ export function generateMaterialAppearance(
   };
 
   const base = PRESET_CONFIGS[preset];
-  const mounts: Mount[] = [];
-
-  // Generate mount positions deterministically
-  if (preset === "editorial-photo" || preset === "fabric-swatch") {
-    // Top-left brass pin
-    mounts.push({
-      id: `mount-${seed}-0`,
-      type: "pin",
-      variant: role === "avoid" ? "red-pin" : "brass-pin",
-      x: 18 + seededRandom(1) * 8,
-      y: 18 + seededRandom(2) * 8,
-      rotation: seededRandom(3) * 360,
-      ...(role === "avoid" ? { action: "avoid" as const } : {}),
-    });
-
-    // Top-right clip for larger pieces
-    if (seededRandom(4) > 0.5) {
-      mounts.push({
-        id: `mount-${seed}-1`,
-        type: "clip",
-        variant: "silver-clip",
-        x: 0.92,
-        y: 12 + seededRandom(5) * 8,
-        rotation: seededRandom(6) * 20 - 10,
-      });
-    }
-  } else if (preset === "sketch-paper") {
-    // Masking tape at top
-    mounts.push({
-      id: `mount-${seed}-0`,
-      type: "tape",
-      variant: "masking-tape",
-      x: 0.5,
-      y: -8,
-      rotation: seededRandom(7) * 4 - 2,
-      action: "draft",
-    });
-  } else if (preset === "archive-note") {
-    // Top-left pin
-    mounts.push({
-      id: `mount-${seed}-0`,
-      type: "pin",
-      variant: "brass-pin",
-      x: 14 + seededRandom(8) * 6,
-      y: 14 + seededRandom(9) * 6,
-      rotation: seededRandom(10) * 360,
-    });
-  } else if (preset === "color-card") {
-    // Small brass pin for swatches
-    mounts.push({
-      id: `mount-${seed}-0`,
-      type: "pin",
-      variant: "brass-pin",
-      x: 0.5,
-      y: 12,
-      rotation: seededRandom(11) * 360,
-    });
-  }
 
   return {
     preset,
-    substrate: {
-      ...base.substrate,
-      tone: base.substrate.tone,
-    },
+    substrate: { ...base.substrate },
     edge: {
       ...base.edge,
       intensity: base.edge.intensity * (0.8 + seededRandom(12) * 0.4),
     },
-    mounts,
+    mounts: [], // always empty — user mounts live in shape.props.mounts
     shadow: {
       ...base.shadow,
       offsetX: base.shadow.offsetX * (0.9 + seededRandom(13) * 0.2),
@@ -214,141 +226,43 @@ interface PresetConfig {
 
 const PRESET_CONFIGS: Record<MaterialPreset, PresetConfig> = {
   "editorial-photo": {
-    substrate: {
-      material: "photo",
-      tone: "#f8f6f2",
-      opacity: 1,
-      padding: 12,
-    },
-    edge: {
-      style: "straight",
-      intensity: 0.15,
-    },
-    shadow: {
-      elevation: 3,
-      softness: 12,
-      offsetX: 4,
-      offsetY: 6,
-    },
-    imperfections: {
-      crease: 0.05,
-      grain: 0.25,
-      cornerWear: 0.12,
-    },
+    substrate: { material: "photo", tone: "#f8f6f2", opacity: 1, padding: 12 },
+    edge: { style: "straight", intensity: 0.8 },
+    shadow: { elevation: 3, softness: 12, offsetX: 8, offsetY: 12 },
+    imperfections: { crease: 0.05, grain: 0.25, cornerWear: 0.12 },
   },
   "sketch-paper": {
-    substrate: {
-      material: "paper",
-      tone: "#f4f1ea",
-      opacity: 0.98,
-      padding: 16,
-    },
-    edge: {
-      style: "torn",
-      intensity: 0.6,
-    },
-    shadow: {
-      elevation: 2,
-      softness: 8,
-      offsetX: 3,
-      offsetY: 5,
-    },
-    imperfections: {
-      crease: 0.18,
-      grain: 0.45,
-      cornerWear: 0.28,
-    },
+    substrate: { material: "paper", tone: "#f4f1ea", opacity: 0.98, padding: 16 },
+    edge: { style: "torn", intensity: 2.0 },
+    shadow: { elevation: 2, softness: 8, offsetX: 6, offsetY: 10 },
+    imperfections: { crease: 0.18, grain: 0.45, cornerWear: 0.28 },
   },
   "fabric-swatch": {
-    substrate: {
-      material: "fabric",
-      tone: "#f9f7f3",
-      opacity: 1,
-      padding: 10,
-    },
-    edge: {
-      style: "pinked",
-      intensity: 0.8,
-    },
-    shadow: {
-      elevation: 2,
-      softness: 10,
-      offsetX: 3,
-      offsetY: 4,
-    },
-    imperfections: {
-      crease: 0.1,
-      grain: 0.55,
-      cornerWear: 0.08,
-    },
+    // padding 0 keeps the silhouette in the same coordinate space as the photo,
+    // so one clip path serves both. The shadow stays tight to the pinked edge —
+    // it reads as cloth thickness resting on the board, not a floating card.
+    // Substrate opacity 0: only the fabric photo is visible, no backing layer.
+    substrate: { material: "fabric", tone: "#cdbca2", opacity: 0, padding: 0 },
+    edge: { style: "pinked", intensity: 1 },
+    shadow: { elevation: 1, softness: 2.4, offsetX: 1.2, offsetY: 2 },
+    imperfections: { crease: 0.1, grain: 0.55, cornerWear: 0 },
   },
   "color-card": {
-    substrate: {
-      material: "card",
-      tone: "#fdfcfa",
-      opacity: 1,
-      padding: 8,
-    },
-    edge: {
-      style: "straight",
-      intensity: 0.08,
-    },
-    shadow: {
-      elevation: 1,
-      softness: 6,
-      offsetX: 2,
-      offsetY: 3,
-    },
-    imperfections: {
-      crease: 0.02,
-      grain: 0.15,
-      cornerWear: 0.05,
-    },
+    substrate: { material: "card", tone: "#fdfcfa", opacity: 1, padding: 8 },
+    edge: { style: "straight", intensity: 0.5 },
+    shadow: { elevation: 1, softness: 6, offsetX: 4, offsetY: 6 },
+    imperfections: { crease: 0.02, grain: 0.15, cornerWear: 0.05 },
   },
   "archive-note": {
-    substrate: {
-      material: "paper",
-      tone: "#f2ede3",
-      opacity: 0.96,
-      padding: 14,
-    },
-    edge: {
-      style: "deckled",
-      intensity: 0.4,
-    },
-    shadow: {
-      elevation: 2,
-      softness: 9,
-      offsetX: 3,
-      offsetY: 5,
-    },
-    imperfections: {
-      crease: 0.15,
-      grain: 0.4,
-      cornerWear: 0.22,
-    },
+    substrate: { material: "paper", tone: "#f2ede3", opacity: 0.96, padding: 14 },
+    edge: { style: "deckled", intensity: 1.8 },
+    shadow: { elevation: 2, softness: 9, offsetX: 6, offsetY: 10 },
+    imperfections: { crease: 0.15, grain: 0.4, cornerWear: 0.22 },
   },
   "clean-sheet": {
-    substrate: {
-      material: "paper",
-      tone: "#ffffff",
-      opacity: 1,
-      padding: 0,
-    },
-    edge: {
-      style: "straight",
-      intensity: 0,
-    },
-    shadow: {
-      elevation: 1,
-      softness: 4,
-      offsetX: 2,
-      offsetY: 2,
-    },
-    imperfections: {
-      crease: 0,
-      grain: 0,
-      cornerWear: 0,
-    },
+    substrate: { material: "paper", tone: "#ffffff", opacity: 1, padding: 0 },
+    edge: { style: "straight", intensity: 0 },
+    shadow: { elevation: 1, softness: 4, offsetX: 2, offsetY: 2 },
+    imperfections: { crease: 0, grain: 0, cornerWear: 0 },
   },
 };

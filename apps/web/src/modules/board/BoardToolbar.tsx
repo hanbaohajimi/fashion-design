@@ -12,7 +12,13 @@ import { CollectionDrawer } from "./generation/CollectionDrawer";
 import { collectionKeys, listCollections } from "./generation/collection-api";
 import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import type { BoardPersistStatus } from "./hooks/useBoardPersist";
-import { FRAME_SHAPE_TYPE, NOTE_SHAPE_TYPE, SWATCH_SHAPE_TYPE } from "./shapes";
+import {
+  FRAME_SHAPE_TYPE,
+  NOTE_SHAPE_TYPE,
+  SWATCH_HEIGHT,
+  SWATCH_SHAPE_TYPE,
+  computeSwatchWidth,
+} from "./shapes";
 import styles from "./board.module.css";
 
 interface BoardToolbarProps {
@@ -72,7 +78,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
     const sizes: Readonly<Record<typeof type, readonly [number, number]>> = {
       [FRAME_SHAPE_TYPE]: [760, 520],
       [NOTE_SHAPE_TYPE]: [260, 210],
-      [SWATCH_SHAPE_TYPE]: [180, 180],
+      [SWATCH_SHAPE_TYPE]: [computeSwatchWidth(1), SWATCH_HEIGHT],
     };
     const [width, height] = sizes[type];
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useContext, useState } from "react";
-import { createPortal } from "react-dom";
 import { createShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
@@ -90,7 +89,7 @@ export function CandidateGrid() {
     }
   };
 
-  return createPortal(
+  return (
     <section className={styles.candidateDock} aria-label="生成候选">
       <header>
         <div>
@@ -158,7 +157,6 @@ export function CandidateGrid() {
           }}
         />
       ) : null}
-    </section>,
-    document.body,
+    </section>
   );
 }

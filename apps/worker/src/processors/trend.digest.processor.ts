@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@fashion/db";
+import type { AmuxClaudeJsonClient } from "@fashion/ai";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -317,6 +318,36 @@ export class BraveTrendSearchService implements TrendSearchService {
   }
 }
 
+export class AmuxTrendLlmService implements TrendLlmService {
+  constructor(private readonly client: AmuxClaudeJsonClient) {}
+
+  summarizeArticle(article: TrendSearchResult): Promise<TrendArticleSummary> {
+    return this.client.generateJson({
+      instructions:
+        "你是服装设计平台的趋势研究员。仅根据提供的标题和搜索摘要提取信息，不补充未经来源支持的事实。",
+      jsonSchema: articleJsonSchema,
+      maxTokens: 1_500,
+      parse: (value) => ArticleSummarySchema.parse(value),
+      prompt: articleSummaryPrompt(article),
+      schemaName: "trend_article_summary",
+    });
+  }
+
+  summarizeDigest(
+    items: readonly { summary: string; title: string }[],
+  ): Promise<TrendDigestSummary> {
+    return this.client.generateJson({
+      instructions:
+        "你是服装设计平台的趋势主编。只归纳提供的趋势条目，不虚构来源或趋势结论。",
+      jsonSchema: digestJsonSchema,
+      maxTokens: 1_500,
+      parse: (value) => DigestSummarySchema.parse(value),
+      prompt: digestSummaryPrompt(items),
+      schemaName: "weekly_trend_digest",
+    });
+  }
+}
+
 export class AnthropicTrendLlmService implements TrendLlmService {
   constructor(
     private readonly config: {
@@ -329,7 +360,7 @@ export class AnthropicTrendLlmService implements TrendLlmService {
 
   summarizeArticle(article: TrendSearchResult): Promise<TrendArticleSummary> {
     return this.requestStructured(
-      `总结以下时尚趋势文章的核心要点（2-3句话，中文）：\n\n标题：${article.title}\n摘要：${article.snippet}\n\n提取 keyColors、silhouettes、keywords、fabricMentions。颜色必须为六位 HEX；未提到的项目返回空数组；关键词使用中文。`,
+      articleSummaryPrompt(article),
       articleJsonSchema,
       ArticleSummarySchema,
     );
@@ -338,14 +369,8 @@ export class AnthropicTrendLlmService implements TrendLlmService {
   summarizeDigest(
     items: readonly { summary: string; title: string }[],
   ): Promise<TrendDigestSummary> {
-    const articles = items
-      .map(
-        (item, index) =>
-          `${index + 1}. ${item.title}\n${item.summary.slice(0, 800)}`,
-      )
-      .join("\n\n");
     return this.requestStructured(
-      `根据以下本周时尚趋势条目，生成一个简短中文主题和 3-5 句中文周综述。只归纳已有信息，不虚构来源。\n\n${articles}`,
+      digestSummaryPrompt(items),
       digestJsonSchema,
       DigestSummarySchema,
     );
@@ -503,6 +528,22 @@ const digestJsonSchema = {
   required: ["theme", "overview"],
   type: "object",
 } as const;
+
+function articleSummaryPrompt(article: TrendSearchResult): string {
+  return `总结以下时尚趋势文章的核心要点（2-3句话，中文）：\n\n标题：${article.title}\n摘要：${article.snippet}\n\n提取 keyColors、silhouettes、keywords、fabricMentions。颜色必须为六位 HEX；未提到的项目返回空数组；关键词使用中文。`;
+}
+
+function digestSummaryPrompt(
+  items: readonly { summary: string; title: string }[],
+): string {
+  const articles = items
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.title}\n${item.summary.slice(0, 800)}`,
+    )
+    .join("\n\n");
+  return `根据以下本周时尚趋势条目，生成一个简短中文主题和 3-5 句中文周综述。只归纳已有信息，不虚构来源。\n\n${articles}`;
+}
 
 function deduplicateResults(
   results: readonly TrendSearchResult[],

@@ -20,6 +20,7 @@ import { FabricsModule } from "./modules/fabrics/fabrics.module";
 import { FilesModule } from "./modules/files/files.module";
 import { GenerationModule } from "./modules/generation/generation.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
+import { TrendsModule } from "./modules/trends/trends.module";
 import { SecurityModule } from "./security/security.module";
 import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
 
@@ -39,6 +40,7 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     FilesModule,
     GenerationModule,
     ProjectsModule,
+    TrendsModule,
   ],
   controllers: [HealthController],
   providers: [

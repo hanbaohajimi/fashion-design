@@ -10,6 +10,10 @@ import { useGenerationWorkspace } from "./GenerationWorkspace";
 import type { GenerationParameters } from "./generation-types";
 import styles from "./generation.module.css";
 
+const GENERATION_BAR_GAP_PX = 14;
+const GENERATION_BAR_MAX_WIDTH_PX = 520;
+const GENERATION_BAR_COLLAPSED_HEIGHT_PX = 120;
+
 export const DEFAULT_GENERATION_PARAMETERS: GenerationParameters = {
   background: "opaque",
   cfg: 3.5,
@@ -39,10 +43,14 @@ export function GenerationBar() {
         x: bounds.x + bounds.width / 2,
         y: bounds.y + bounds.height,
       });
+      const containerBounds = editor.getContainer().getBoundingClientRect();
       return {
         roles: shapes.map((shape) => normalizeBoardRole(shape.props.role)),
         shapeIds: shapes.map((shape) => shape.id),
-        viewport,
+        viewport: {
+          x: containerBounds.left + viewport.x,
+          y: containerBounds.top + viewport.y,
+        },
       };
     },
     [editor],
@@ -50,14 +58,31 @@ export function GenerationBar() {
 
   if (!selection) return null;
 
+  const barWidth = Math.min(
+    GENERATION_BAR_MAX_WIDTH_PX,
+    window.innerWidth - GENERATION_BAR_GAP_PX * 2,
+  );
+  const halfBarWidth = barWidth / 2;
+  const desiredY = selection.viewport.y + GENERATION_BAR_GAP_PX;
+  const maxY = Math.max(
+    GENERATION_BAR_GAP_PX,
+    window.innerHeight -
+      GENERATION_BAR_COLLAPSED_HEIGHT_PX -
+      GENERATION_BAR_GAP_PX,
+  );
+  const generationY = Math.min(Math.max(desiredY, GENERATION_BAR_GAP_PX), maxY);
   const style = {
     "--generation-x": `${Math.min(
-      Math.max(selection.viewport.x, 260),
-      Math.max(260, window.innerWidth - 260),
+      Math.max(selection.viewport.x, halfBarWidth + GENERATION_BAR_GAP_PX),
+      Math.max(
+        halfBarWidth + GENERATION_BAR_GAP_PX,
+        window.innerWidth - halfBarWidth - GENERATION_BAR_GAP_PX,
+      ),
     )}px`,
-    "--generation-y": `${Math.min(
-      selection.viewport.y + 14,
-      window.innerHeight - 190,
+    "--generation-y": `${generationY}px`,
+    "--generation-max-height": `${Math.max(
+      80,
+      window.innerHeight - generationY - GENERATION_BAR_GAP_PX,
     )}px`,
   } as CSSProperties;
 

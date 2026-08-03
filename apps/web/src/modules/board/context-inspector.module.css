@@ -11,10 +11,32 @@
   pointer-events: all;
 }
 
-.inspectorEmpty {
+.inspectorSelection {
+  top: var(
+    --inspector-selection-y,
+    calc(var(--topbar-height) + var(--spacing-md))
+  );
+  right: auto;
+  bottom: auto;
+  left: var(--inspector-selection-x, var(--spacing-md));
+  width: min(var(--inspector-width), calc(100vw - 32px));
+  max-height: var(
+    --inspector-selection-max-height,
+    calc(100vh - var(--topbar-height) - 32px)
+  );
+  border: var(--border-width-thin) solid var(--border-color-strong);
+  border-radius: var(--radius-lg, 12px);
+  background: rgb(247 244 235 / 97%);
+  box-shadow:
+    0 4px 16px rgb(24 25 21 / 12%),
+    0 12px 48px rgb(24 25 21 / 10%);
+  overflow-y: auto;
+}
+
+.inspectorOverview {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  flex: 0 0 auto;
 }
 
 .inspectorHeader {
@@ -87,7 +109,7 @@
 }
 
 @media (max-width: 1024px) {
-  .inspector {
+  .inspector:not(.inspectorSelection) {
     display: none;
   }
 }

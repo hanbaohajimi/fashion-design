@@ -214,6 +214,11 @@ export function ProjectLibrary() {
           <span>AI</span>
           <strong>FASHION / DESIGN</strong>
         </Link>
+        <nav className={styles.navigation}>
+          <Link className={styles.navLink} href="/trends">
+            趋势档案
+          </Link>
+        </nav>
         <div className={styles.account}>
           <span>{session.user.email}</span>
           <span className={styles.avatar} aria-hidden="true">

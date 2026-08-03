@@ -1,7 +1,6 @@
 .materialShell {
   position: relative;
   pointer-events: none;
-  transform-style: preserve-3d;
 }
 
 .materialShell > * {
@@ -13,7 +12,7 @@
   top: 0;
   left: 0;
   pointer-events: none;
-  opacity: 0.18;
+  opacity: 0.5;
   will-change: transform;
 }
 
@@ -29,6 +28,16 @@
   position: absolute;
   overflow: hidden;
   will-change: transform;
+  z-index: 1;
+}
+
+.clothOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  z-index: 2;
 }
 
 .mountingLayer {
@@ -39,6 +48,26 @@
   height: 100%;
   pointer-events: none;
   will-change: transform;
+  z-index: 3;
+}
+
+.mountingLayerInteractive {
+  pointer-events: auto;
+}
+
+.annotationLayer {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  width: max-content;
+  pointer-events: none;
+  /* Anchor the label above the content edge; it stays in canvas coordinates. */
+}
+
+.annotationScale {
+  display: flex;
+  width: max-content;
+  pointer-events: auto;
 }
 
 /* Material-specific substrate appearances with enhanced depth */
@@ -55,10 +84,13 @@
     inset -1px -1px 3px rgb(24 25 21 / 0.04);
 }
 
+/* Fabric swatches use an irregular silhouette, not a rect — disable rect artifacts */
 .materialShell[data-material="fabric"] .substrateLayer {
-  box-shadow:
-    inset 0 0 0 1px rgb(24 25 21 / 0.15),
-    inset 0 0 8px rgb(24 25 21 / 0.06);
+  box-shadow: none;
+}
+
+.materialShell[data-material="fabric"] .substrateLayer::before {
+  display: none;
 }
 
 .materialShell[data-material="card"] .substrateLayer {
@@ -89,7 +121,7 @@
 
 /* High LOD: all details */
 .materialShell[data-lod="high"] .shadowLayer {
-  opacity: 0.22;
+  opacity: 0.65;
 }
 
 /* Entry animation with stagger */
@@ -109,7 +141,6 @@
 
 .materialShell {
   animation: material-drop 280ms cubic-bezier(0.16, 1, 0.3, 1);
-  backface-visibility: hidden;
 }
 
 /* Hover state: subtle lift */
@@ -118,7 +149,7 @@
 }
 
 .materialShell:hover .shadowLayer {
-  opacity: 0.28;
+  opacity: 0.75;
   transition: opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -150,11 +181,53 @@
     radial-gradient(circle at 100% 100%, rgb(24 25 21 / 0.08) 0%, transparent 12%);
 }
 
+/* ─── Mount tool drop animation ──────────────────────────────────────────── */
+@keyframes mount-drop {
+  0%   { transform: scale(0.15) rotate(-25deg); opacity: 0; }
+  55%  { transform: scale(1.22) rotate(6deg);   opacity: 1; }
+  75%  { transform: scale(0.91) rotate(-2deg); }
+  100% { transform: scale(1)    rotate(0deg);   opacity: 1; }
+}
+
+/* Each user-placed mount animated from center of the translate group */
+.mountGroupAnimated {
+  transform-origin: 0 0; /* anchor = pin center (we already translate there) */
+  animation: mount-drop 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Interactive mounting layer: enable pointer events on the SVG */
+.mountingLayerInteractive {
+  pointer-events: auto !important;
+}
+.mountingLayerInteractive svg {
+  pointer-events: auto;
+}
+
+/* ─── Pinned state: suppress hover-lift ──────────────────────────────────── */
+.materialShell[data-pinned="true"]:hover .substrateLayer,
+.materialShell[data-pinned="true"]:hover .contentLayer,
+.materialShell[data-pinned="true"]:hover .mountingLayer {
+  transform: none;
+  transition: none;
+}
+.materialShell[data-pinned="true"]:hover .shadowLayer {
+  opacity: 0.45;
+  transition: none;
+}
+
+/* ─── Hover highlight when mount tool is active (added via data-attr) ─────── */
+.materialShell[data-mount-hover="true"] {
+  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .materialShell {
     animation: none;
   }
-
+  .mountGroupAnimated {
+    animation: none;
+  }
   .materialShell:hover .shadowLayer,
   .materialShell:hover .substrateLayer,
   .materialShell:hover .contentLayer,

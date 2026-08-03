@@ -16,6 +16,10 @@ import {
   validateImage,
   waitForThumbnail,
 } from "./file-upload-api";
+import {
+  createNativeFileContentHandler,
+  createNativeFileDropController,
+} from "./fabric-drag";
 import { IMAGE_SHAPE_TYPE, type ImageShape } from "./shapes";
 import {
   clearAllUploadPreviews,
@@ -246,7 +250,8 @@ export function BoardFileDrop() {
   const addFiles = useCallback(
     (
       files: readonly File[],
-      point = editor.getViewportPageBounds().center,
+      point: { readonly x: number; readonly y: number } =
+        editor.getViewportPageBounds().center,
     ): void => {
       files.forEach((file, index) => {
         const validationError = validateImage(file);
@@ -282,44 +287,30 @@ export function BoardFileDrop() {
   );
 
   useEffect(() => {
-    let dragDepth = 0;
-    const onDragEnter = (event: DragEvent): void => {
-      if (!event.dataTransfer?.types.includes("Files")) {
-        return;
-      }
-      event.preventDefault();
-      dragDepth += 1;
-      setDragging(true);
+    editor.registerExternalContentHandler(
+      "files",
+      createNativeFileContentHandler({
+        getFallbackPoint: () => editor.getViewportPageBounds().center,
+        onFiles: addFiles,
+      }),
+    );
+    return () => {
+      editor.registerExternalContentHandler("files", null);
     };
-    const onDragOver = (event: DragEvent): void => {
-      if (event.dataTransfer?.types.includes("Files")) {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-      }
-    };
-    const onDragLeave = (event: DragEvent): void => {
-      if (!event.dataTransfer?.types.includes("Files")) {
-        return;
-      }
-      dragDepth = Math.max(0, dragDepth - 1);
-      if (dragDepth === 0) {
-        setDragging(false);
-      }
-    };
-    const onDrop = (event: DragEvent): void => {
-      const files = [...(event.dataTransfer?.files ?? [])];
-      if (files.length === 0) {
-        return;
-      }
-      event.preventDefault();
-      dragDepth = 0;
-      setDragging(false);
-      const point = editor.screenToPage({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      addFiles(files, point);
-    };
+  }, [addFiles, editor]);
+
+  useEffect(() => {
+    const fileDrop = createNativeFileDropController({
+      onDraggingChange: setDragging,
+      shouldIgnore: (event) =>
+        event
+          .composedPath()
+          .some(
+            (target) =>
+              target instanceof HTMLElement &&
+              target.dataset.nativeFileDropOwner === "fabric-library",
+          ),
+    });
     const onPaste = (event: ClipboardEvent): void => {
       const isEditableTarget = event
         .composedPath()
@@ -343,17 +334,23 @@ export function BoardFileDrop() {
       fileInput.current?.click();
     };
 
-    window.addEventListener("dragenter", onDragEnter);
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("dragleave", onDragLeave);
-    window.addEventListener("drop", onDrop);
+    // Native events only drive the visual overlay. tldraw's registered
+    // external-content handler above owns file insertion and upload.
+    window.addEventListener("dragenter", fileDrop.onDragEnter, true);
+    window.addEventListener("dragover", fileDrop.onDragOver, true);
+    window.addEventListener("dragleave", fileDrop.onDragLeave, true);
+    window.addEventListener("drop", fileDrop.onDrop, true);
+    window.addEventListener("dragend", fileDrop.reset, true);
+    window.addEventListener("blur", fileDrop.reset);
     window.addEventListener("paste", onPaste);
     window.addEventListener(BOARD_FILE_PICKER_EVENT, openFilePicker);
     return () => {
-      window.removeEventListener("dragenter", onDragEnter);
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("dragleave", onDragLeave);
-      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragenter", fileDrop.onDragEnter, true);
+      window.removeEventListener("dragover", fileDrop.onDragOver, true);
+      window.removeEventListener("dragleave", fileDrop.onDragLeave, true);
+      window.removeEventListener("drop", fileDrop.onDrop, true);
+      window.removeEventListener("dragend", fileDrop.reset, true);
+      window.removeEventListener("blur", fileDrop.reset);
       window.removeEventListener("paste", onPaste);
       window.removeEventListener(BOARD_FILE_PICKER_EVENT, openFilePicker);
     };

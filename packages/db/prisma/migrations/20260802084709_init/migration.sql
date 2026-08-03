@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "generation_inputs_generation_task_id_board_element_id_fabric_id" RENAME TO "generation_inputs_generation_task_id_board_element_id_fabri_key";

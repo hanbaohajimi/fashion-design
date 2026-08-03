@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--color-paper-beige, #ece9e0);
+  background: #ebe8e0;
 }
 
 /* Canvas viewport — offset by top bar, left tool rail, and right inspector */
@@ -15,11 +15,36 @@
 }
 
 .boardShell :global(.tl-background) {
-  background-color: #ece9e0;
+  position: relative;
+  background-color: #ebe8e0;
   background-image:
-    linear-gradient(rgb(24 25 21 / 4%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px);
-  background-size: 32px 32px;
+    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.12), transparent 45%),
+    repeating-linear-gradient(90deg, rgba(82, 64, 42, 0.06) 0 0.8px, rgba(255, 255, 255, 0.05) 1px 1.8px, transparent 2px 6px),
+    repeating-linear-gradient(0deg, rgba(75, 58, 39, 0.05) 0 0.8px, rgba(255, 255, 255, 0.06) 1px 1.8px, transparent 2px 6px);
+  background-blend-mode: normal, multiply, multiply;
+  box-shadow: inset 0 0 0 1px rgba(74, 54, 31, 0.08);
+}
+
+.boardShell :global(.tl-background)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.15;
+  filter: contrast(105%) brightness(102%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65 .18' numOctaves='3' seed='9' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.boardShell :global(.tl-background)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 40%);
+  mix-blend-mode: overlay;
 }
 
 .boardToolbar {
@@ -210,10 +235,13 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background:
-    linear-gradient(rgb(24 25 21 / 4%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(24 25 21 / 4%) 1px, transparent 1px), #ece9e0;
-  background-size: 32px 32px;
+  background-color: #ebe8e0;
+  background-image:
+    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.12), transparent 45%),
+    repeating-linear-gradient(90deg, rgba(82, 64, 42, 0.06) 0 0.8px, rgba(255, 255, 255, 0.05) 1px 1.8px, transparent 2px 6px),
+    repeating-linear-gradient(0deg, rgba(75, 58, 39, 0.05) 0 0.8px, rgba(255, 255, 255, 0.06) 1px 1.8px, transparent 2px 6px);
+  background-blend-mode: normal, multiply, multiply;
+  box-shadow: inset 0 0 0 1px rgba(74, 54, 31, 0.08);
 }
 
 .boardSkeleton > div {
@@ -440,21 +468,23 @@
   cursor: pointer;
 }
 
-.rolePanelEmbedded {
+.rolePanel.rolePanelEmbedded {
   /* Embedded variant: sits in-flow inside ContextInspector rather than floating over the canvas */
   position: relative;
+  inset: auto;
   z-index: auto;
   width: 100%;
   border: none;
-  border-top: var(--border-width-thin) solid var(--border-color-default);
+  border-top: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--color-ink-black, #181915);
+  color: #181915;
   pointer-events: all;
 }
 
-.rolePanelEmbedded > header {
-  border-bottom: var(--border-width-thin) solid var(--border-color-default);
+.rolePanel.rolePanelEmbedded > header {
+  border-bottom: 1px solid rgb(24 25 21 / 10%);
 }
 
 
@@ -464,11 +494,12 @@
   top: 78px;
   right: 68px;
   width: 276px;
-  border: 1px solid #181915;
-  border-radius: var(--radius-lg, 12px);
-  background: rgb(247 244 235 / 97%);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgb(24 25 21 / 12%), 0 12px 48px rgb(24 25 21 / 10%);
+  border: 1px solid rgb(24 25 21 / 14%);
+  border-radius: 18px;
+  background: #f9f6ef;
+  box-shadow:
+    0 2px 8px rgb(24 25 21 / 8%),
+    0 8px 32px rgb(24 25 21 / 10%);
   color: #181915;
   overflow: hidden;
   pointer-events: all;
@@ -476,38 +507,17 @@
 
 .rolePanel > header {
   display: flex;
-  min-height: 62px;
-  align-items: stretch;
-  justify-content: space-between;
-  border-bottom: 1px solid #181915;
-}
-
-.rolePanel > header > div {
-  display: grid;
-  padding: 11px 13px;
-  gap: 3px;
-}
-
-.rolePanel > header span {
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  min-height: 54px;
+  align-items: center;
+  border-bottom: 1px solid rgb(24 25 21 / 12%);
+  padding: 12px 14px;
 }
 
 .rolePanel > header strong {
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 18px;
-  font-weight: 400;
-}
-
-.rolePanel > header b {
-  display: grid;
-  width: 61px;
-  border-left: 1px solid #181915;
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 23px;
-  font-weight: 400;
-  place-items: center;
+  font-family: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
 }
 
 .rolePanelEmpty {
@@ -530,93 +540,105 @@
 }
 
 .roleOptions {
-  display: grid;
+  display: flex;
+  padding: 12px;
+  flex-wrap: wrap;
+  gap: 7px;
 }
 
 .roleOptions button {
-  display: grid;
-  min-height: 39px;
+  display: inline-flex;
+  min-height: 30px;
   align-items: center;
-  border: 0;
-  border-bottom: 1px solid rgb(24 25 21 / 16%);
-  padding: 0;
-  background: transparent;
+  justify-content: center;
+  border: 1px solid rgb(24 25 21 / 18%);
+  border-radius: 999px;
+  padding: 0 11px;
+  background: rgb(255 255 255 / 56%);
   color: inherit;
   cursor: pointer;
-  grid-template-columns: 37px 1fr 8px;
-  text-align: left;
+  text-align: center;
   transition:
-    background-color var(--transition-fast, 120ms),
-    color var(--transition-fast, 120ms);
+    background-color 120ms,
+    border-color 120ms,
+    transform 120ms;
 }
 
-.roleOptions button > span {
-  display: grid;
-  height: 100%;
-  border-right: 1px solid rgb(24 25 21 / 16%);
-  color: #77736a;
-  font-family: Georgia, serif;
-  font-size: 10px;
-  place-items: center;
+.roleLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.roleOptions button > strong {
-  padding: 0 11px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+.roleOptions button:hover {
+  border-color: rgb(24 25 21 / 48%);
+  background: #fff;
+  transform: translateY(-1px);
 }
 
-.roleOptions button > i {
-  width: 3px;
-  height: 100%;
-  background: #dbe5df;
-}
-
-.roleOptions button[data-role="fabric_ref"] > i {
-  background: #bda98b;
-}
-
-.roleOptions button[data-role="palette"] > i {
-  background: #e0bd3e;
-}
-
-.roleOptions button[data-role="silhouette_ref"] > i {
-  background: #98a4b1;
-}
-
-.roleOptions button[data-role="detail_ref"] > i {
-  background: #aa92b1;
-}
-
-.roleOptions button[data-role="note"] > i {
-  background: #bcb7a9;
+.roleOptions button[aria-checked="true"] {
+  border-color: #181915;
+  background: #181915;
+  color: #fff;
 }
 
 .roleOptions button[data-role="avoid"] {
   color: #9d2f20;
 }
 
-.roleOptions button[data-role="avoid"] > i {
-  background: #a52c1f;
-}
-
-.roleOptions button:hover,
-.roleOptions button[aria-checked="true"] {
-  background: #181915;
-  color: white;
-}
-
-.roleOptions button[aria-checked="true"] > span {
-  color: #d8d3c8;
-}
-
 .roleOptions button[data-role="avoid"][aria-checked="true"] {
+  border-color: #a52c1f;
   background: #a52c1f;
-  color: white;
+  color: #fff;
+}
+
+.roleOptions button:focus-visible {
+  outline: 2px solid #181915;
+  outline-offset: 2px;
+}
+
+.roleNoteEditor {
+  display: grid;
+  border-top: 1px solid rgb(24 25 21 / 10%);
+  padding: 11px 12px 13px;
+  background: rgb(24 25 21 / 3%);
+  gap: 6px;
+}
+
+.roleNoteEditor > span {
+  color: #5f5c54;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.roleNoteEditor input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid rgb(24 25 21 / 28%);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: #181915;
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+
+.roleNoteEditor input:focus {
+  border-color: #181915;
+  box-shadow: 0 0 0 2px rgb(24 25 21 / 8%);
+}
+
+.roleNoteEditor > small {
+  color: #77736a;
+  font-size: 8px;
 }
 
 .rolePanel[data-role="avoid"] {
-  border-color: #a52c1f;
+  border-color: rgb(165 44 31 / 25%);
 }
 
 .rolePanel > footer {
@@ -624,7 +646,8 @@
   min-height: 47px;
   padding: 9px 12px;
   align-content: center;
-  background: #ece8dd;
+  background: rgb(24 25 21 / 4%);
+  border-top: 1px solid rgb(24 25 21 / 8%);
   gap: 3px;
 }
 
@@ -704,7 +727,7 @@
     bottom: auto;
     left: 12px;
     width: auto;
-    max-height: 148px;
+    max-height: min(360px, calc(100vh - 128px));
     overflow-y: auto;
   }
 
@@ -713,23 +736,11 @@
   }
 
   .roleOptions {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .roleOptions button {
-    min-height: 48px;
-    border-right: 1px solid rgb(24 25 21 / 16%);
-    grid-template-columns: 1fr 4px;
-  }
-
-  .roleOptions button > span {
-    display: none;
-  }
-
-  .roleOptions button > strong {
-    padding: 4px;
-    font-size: 8px;
-    text-align: center;
+    min-height: 30px;
   }
 }
 
@@ -738,6 +749,7 @@
     animation: none;
   }
 }
+/* ── FabricDrawer — atelier style ───────────────────────────────────────── */
 .fabricDrawer {
   position: fixed;
   z-index: 1100;
@@ -746,12 +758,12 @@
   bottom: 14px;
   width: 300px;
   overflow: hidden;
-  border: 1px solid rgb(241 238 230 / 12%);
-  border-radius: var(--radius-xl, 16px);
+  border: 1.5px solid #181915;
+  border-radius: 0;
   padding: 16px 18px 0;
-  background: var(--surface-deep, #0f131c);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 40%), 0 24px 80px rgb(0 0 0 / 30%);
-  color: #f1eee6;
+  background: #f7f3e9;
+  box-shadow: 10px 10px 0 #181915;
+  color: #181915;
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
   pointer-events: auto;
 }
@@ -763,7 +775,7 @@
 }
 
 .fabricDrawer > header span {
-  color: #b98a56;
+  color: #e9522c;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -774,66 +786,72 @@
   font-family: Georgia, "Songti SC", serif;
   font-size: clamp(1.3rem, 2vw, 1.7rem);
   font-weight: 400;
+  color: #181915;
 }
 
 .fabricDrawer > header button {
   display: grid;
   width: 31px;
   height: 31px;
-  border: 1px solid rgb(241 238 230 / 14%);
-  border-radius: var(--radius-circle, 50%);
+  border: 1.5px solid #181915;
+  border-radius: 0;
   background: transparent;
-  color: #d7d9de;
+  color: #181915;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 18px;
   place-items: center;
   transition:
-    background-color var(--transition-base, 200ms),
-    border-color var(--transition-base, 200ms),
-    transform var(--transition-base, 200ms);
+    background var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms);
 }
 
 .fabricDrawer > header button:hover {
-  background: rgb(241 238 230 / 8%);
-  border-color: rgb(241 238 230 / 24%);
-  transform: scale(1.05);
+  background: #181915;
+  color: #f7f3e9;
 }
 
+/* 分类 tabs — 实线矩形切换，无圆角 */
 .fabricScopeTabs {
   display: grid;
   margin-top: 16px;
-  border-radius: var(--radius-pill, 999px);
-  padding: 3px;
-  background: var(--surface-raised, #1e2636);
+  border: 1.5px solid #181915;
+  padding: 0;
+  background: transparent;
   grid-template-columns: 1fr 1fr;
+  gap: 0;
 }
 
 .fabricScopeTabs button {
   min-height: 32px;
   border: 0;
-  border-radius: var(--radius-pill, 999px);
+  border-radius: 0;
   background: transparent;
-  color: #818c9e;
+  color: #66645d;
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.06em;
   transition:
-    background-color var(--transition-base, 200ms),
-    color var(--transition-base, 200ms),
-    transform var(--transition-fast, 120ms);
+    background var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms);
 }
 
-.fabricScopeTabs button:hover {
-  background: rgb(185 138 86 / 20%);
-  color: #d6ad7e;
+.fabricScopeTabs button:first-child {
+  border-right: 1.5px solid #181915;
+}
+
+.fabricScopeTabs button:hover:not([aria-pressed="true"]) {
+  background: #ece9e0;
+  color: #181915;
 }
 
 .fabricScopeTabs button[aria-pressed="true"] {
-  background: var(--accent-primary, #b98a56);
-  color: #10151e;
+  background: #181915;
+  color: #f7f3e9;
   font-weight: 800;
 }
 
+/* 搜索框 */
 .fabricDrawerSearch {
   display: block;
   margin-top: 12px;
@@ -850,92 +868,98 @@
 .fabricDrawerSearch input {
   width: 100%;
   height: 38px;
-  border: 1px solid rgb(241 238 230 / 12%);
-  border-radius: var(--radius-pill, 999px);
+  border: 1.5px solid #2d2d28;
+  border-radius: 0;
   outline: none;
   padding: 0 14px;
-  background: var(--surface-raised, #171d29);
-  color: #f1eee6;
-  transition:
-    border-color var(--transition-base, 200ms),
-    background-color var(--transition-base, 200ms);
+  background: #f0ece1;
+  color: #181915;
+  font-size: 13px;
+  transition: border-color var(--transition-fast, 120ms);
+}
+
+.fabricDrawerSearch input::placeholder {
+  color: #9e9b93;
 }
 
 .fabricDrawerSearch input:focus {
-  border-color: var(--accent-primary, #b98a56);
-  background: var(--surface-elevated, #1a2132);
+  border-color: #e9522c;
+  background: #f7f3e9;
 }
 
 .fabricDrawerSearch input:hover:not(:focus) {
-  border-color: rgb(241 238 230 / 18%);
+  border-color: #181915;
 }
 
+/* 元信息行 */
 .fabricDrawerMeta {
   display: flex;
-  padding: 11px 2px 7px;
+  padding: 10px 2px 6px;
   justify-content: space-between;
-  color: #768195;
+  color: #66645d;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.1em;
+  border-bottom: 1px solid #d4cfc0;
 }
 
+/* 空/加载/错误状态 */
 .fabricDrawerState {
   display: grid;
   min-height: 240px;
-  border: 1px dashed rgb(241 238 230 / 12%);
-  border-radius: 16px;
-  color: #8993a4;
+  border: 1.5px dashed #c0bbb0;
+  border-radius: 0;
+  color: #9e9b93;
   font-size: 12px;
   place-content: center;
   text-align: center;
+  margin-top: 12px;
 }
 
 .fabricDrawerState button {
-  border: 0;
-  border-radius: var(--radius-pill, 999px);
-  padding: 8px 16px;
-  background: rgb(185 138 86 / 12%);
-  color: #d8b58e;
+  margin-top: 10px;
+  border: 1.5px solid #181915;
+  border-radius: 0;
+  padding: 7px 18px;
+  background: transparent;
+  color: #181915;
   cursor: pointer;
+  font-size: 11px;
   font-weight: 700;
-  text-decoration: none;
   transition:
-    background-color var(--transition-base, 200ms),
-    color var(--transition-base, 200ms),
-    transform var(--transition-fast, 120ms);
+    background var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms);
 }
 
 .fabricDrawerState button:hover {
-  background: var(--accent-primary, #b98a56);
-  color: #0f131c;
-  transform: translateY(-2px);
+  background: #181915;
+  color: #f7f3e9;
 }
 
+/* 拖拽放置区叠层 */
 .fabricDropZone {
   position: fixed;
   z-index: 1090;
   inset: 70px 16px 16px;
   display: grid;
-  border: 2px dashed #b98a56;
-  border-radius: 22px;
-  background: rgb(15 19 28 / 76%);
-  color: #f1eee6;
+  border: 2.5px dashed #e9522c;
+  border-radius: 0;
+  background: rgb(247 243 233 / 88%);
+  color: #181915;
   pointer-events: none;
   place-content: center;
   text-align: center;
-  backdrop-filter: blur(6px);
 }
 
 .fabricDropZone strong {
-  color: #d6ad7e;
+  color: #e9522c;
   font-size: 20px;
   letter-spacing: 0.16em;
 }
 
 .fabricDropZone span {
   margin-top: 8px;
-  color: #b0b7c3;
+  color: #66645d;
   font-size: 12px;
 }
 
@@ -945,5 +969,6 @@
     right: 8px;
     bottom: 8px;
     width: min(300px, calc(100vw - 16px));
+    box-shadow: 6px 6px 0 #181915;
   }
 }

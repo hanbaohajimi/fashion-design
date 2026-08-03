@@ -5,6 +5,7 @@ import { useEditor } from "tldraw";
 
 import { useFabrics } from "../fabrics/fabric-api";
 import type { Fabric, FabricScope } from "../fabrics/fabric-types";
+import { FabricUploadPanel } from "../fabrics/FabricCard";
 import { FabricVirtualGrid } from "../fabrics/FabricVirtualGrid";
 import { addFabricToBoard } from "./fabric-board";
 import { fabricToDragPayload } from "./fabric-drag";
@@ -31,6 +32,7 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
 
   const addToBoard = (fabric: Fabric): void => {
     addFabricToBoard(editor, fabricToDragPayload(fabric));
+    onClose();
   };
 
   return (
@@ -47,6 +49,14 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
         <button aria-pressed={scope === "preset"} onClick={() => setScope("preset")} type="button">预置</button>
         <button aria-pressed={scope === "user"} onClick={() => setScope("user")} type="button">我的</button>
       </div>
+
+      <FabricUploadPanel
+        compact
+        onUploaded={() => {
+          setScope("user");
+          fabrics.refresh();
+        }}
+      />
 
       <label className={styles.fabricDrawerSearch}>
         <span>搜索面料</span>

@@ -9,12 +9,13 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { BoardElementRole } from "@fashion/shared";
-import { useEditor, useValue } from "tldraw";
+import { useEditor, useValue, type TLShapeId } from "tldraw";
 
 import { setElementRoles } from "./board-api";
 import { BoardProjectContext } from "./board-context";
 import {
   BOARD_ROLES,
+  FABRIC_SHAPE_TYPE,
   IMAGE_SHAPE_TYPE,
   isRoleAssignableShape,
   NOTE_SHAPE_TYPE,
@@ -24,16 +25,14 @@ import {
 } from "./shapes";
 import styles from "./board.module.css";
 
-const ROLE_CONTENT: Readonly<
-  Record<BoardElementRole, { readonly index: string; readonly label: string }>
-> = {
-  avoid: { index: "06", label: "避用" },
-  detail_ref: { index: "05", label: "细节参考" },
-  fabric_ref: { index: "02", label: "面料参考" },
-  note: { index: "07", label: "备注" },
-  palette: { index: "03", label: "色彩方案" },
-  silhouette_ref: { index: "04", label: "廓形参考" },
-  style_ref: { index: "01", label: "风格参考" },
+const ROLE_LABELS: Readonly<Record<BoardElementRole, string>> = {
+  avoid: "避用",
+  detail_ref: "细节参考",
+  fabric_ref: "面料参考",
+  note: "备注",
+  palette: "色彩方案",
+  silhouette_ref: "廓形参考",
+  style_ref: "风格参考",
 };
 
 interface QueuedRoleChange {
@@ -44,9 +43,13 @@ interface QueuedRoleChange {
 interface ElementRolePanelProps {
   /** When true, strips fixed-positioning so the panel sits in-flow inside ContextInspector */
   readonly embedded?: boolean;
+  readonly shapeId: TLShapeId;
 }
 
-export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
+export function ElementRolePanel({
+  embedded = false,
+  shapeId,
+}: ElementRolePanelProps) {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -54,9 +57,12 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
   const roleButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const timer = useRef<number | undefined>(undefined);
   const selected = useValue(
-    "selected-role-elements",
-    () => editor.getSelectedShapes().filter(isRoleAssignableShape),
-    [editor],
+    `label-design-element-${shapeId}`,
+    () => {
+      const shape = editor.getShape(shapeId);
+      return shape && isRoleAssignableShape(shape) ? [shape] : [];
+    },
+    [editor, shapeId],
   );
   const roles = new Set(
     selected.map((shape) => normalizeBoardRole(shape.props.role)),
@@ -111,7 +117,10 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
               role,
               roleConfidence: undefined,
               roleInferenceState: "ready",
-              roleLabel: undefined,
+              roleLabel:
+                role === "note" && shape.props.role === "note"
+                  ? shape.props.roleLabel
+                  : undefined,
               roleSource: "manual",
             },
           });
@@ -129,6 +138,13 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
             meta,
             props: { ...shape.props, role },
           });
+        } else if (shape.type === FABRIC_SHAPE_TYPE) {
+          editor.updateShape({
+            id: shape.id,
+            type: FABRIC_SHAPE_TYPE,
+            meta,
+            props: { ...shape.props, role },
+          });
         }
       }
     });
@@ -143,6 +159,26 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
       timer.current = undefined;
       void flush();
     }, 500);
+  };
+
+  const setImageNote = (value: string): void => {
+    const shape = editor.getShape(shapeId);
+    if (!shape || shape.type !== IMAGE_SHAPE_TYPE || shape.props.role !== "note") {
+      return;
+    }
+
+    editor.updateShape({
+      id: shape.id,
+      type: IMAGE_SHAPE_TYPE,
+      meta: { ...shape.meta, roleSource: "manual" },
+      props: {
+        ...shape.props,
+        roleConfidence: undefined,
+        roleInferenceState: "ready",
+        roleLabel: value || undefined,
+        roleSource: "manual",
+      },
+    });
   };
 
   const handleRoleKeyDown = (
@@ -180,25 +216,27 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
     selectedImage?.props.roleSource === "inferred" &&
     ((selectedImage.props.roleConfidence ?? 0) < 0.7 ||
       selectedImage.props.roleLabel === "non_fashion");
+  const showStatusFooter =
+    selectedImage?.props.roleInferenceState === "pending" ||
+    selectedImage?.props.roleInferenceState === "failed" ||
+    lowConfidence ||
+    selectedImage?.props.roleSource === "inferred" ||
+    Boolean(saveError);
 
   return (
     <aside
-      className={embedded ? styles.rolePanelEmbedded : styles.rolePanel}
+      className={`${styles.rolePanel} ${embedded ? styles.rolePanelEmbedded : ""}`}
       data-role={activeRole ?? "mixed"}
-      aria-label="元素角色标注"
+      aria-label="标签设计"
     >
       <header>
-        <div>
-          <span>SEMANTIC / ROLE</span>
-          <strong>样本标注台</strong>
-        </div>
-        <b>{selected.length.toString().padStart(2, "0")}</b>
+        <strong>标签设计</strong>
       </header>
 
       {selected.length === 0 ? (
         <div className={styles.rolePanelEmpty}>
           <span>未选择可标注元素</span>
-          <p>选择图片、便签或色卡后设置生成语义。可框选多项批量标注。</p>
+          <p>请点击元素左上角标签后设置当前元素。</p>
         </div>
       ) : (
         <>
@@ -221,31 +259,44 @@ export function ElementRolePanel({ embedded = false }: ElementRolePanelProps) {
                 }
                 type="button"
               >
-                <span>{ROLE_CONTENT[role].index}</span>
-                <strong>{ROLE_CONTENT[role].label}</strong>
-                <i aria-hidden="true" />
+                <span className={styles.roleLabel}>
+                  {ROLE_LABELS[role]}
+                </span>
               </button>
             ))}
           </div>
-          <footer>
-            {selectedImage?.props.roleInferenceState === "pending" ? (
-              <span>VLM 正在后台判读，不影响画布操作</span>
-            ) : selectedImage?.props.roleInferenceState === "failed" ? (
-              <span>自动识别失败，已使用风格参考</span>
-            ) : lowConfidence ? (
-              <span data-warning="true">非服装或低置信度，请人工确认</span>
-            ) : selectedImage?.props.roleSource === "inferred" ? (
-              <span>
-                自动推断 ·{" "}
-                {Math.round((selectedImage.props.roleConfidence ?? 0) * 100)}%
-              </span>
-            ) : (
-              <span>
-                {selected.length > 1 ? "批量标注" : "人工标注"} · 500ms 入库
-              </span>
-            )}
-            {saveError ? <small>{saveError}</small> : null}
-          </footer>
+          {selectedImage && activeRole === "note" ? (
+            <label className={styles.roleNoteEditor}>
+              <span>备注标签</span>
+              <input
+                aria-label="当前图片备注标签"
+                autoFocus
+                maxLength={32}
+                onChange={(event) => setImageNote(event.currentTarget.value)}
+                onKeyDown={(event) => event.stopPropagation()}
+                placeholder="输入当前图片的备注"
+                value={selectedImage.props.roleLabel ?? ""}
+              />
+              <small>仅修改当前图片，不影响其他元素</small>
+            </label>
+          ) : null}
+          {showStatusFooter ? (
+            <footer>
+              {selectedImage?.props.roleInferenceState === "pending" ? (
+                <span>VLM 正在后台判读，不影响画布操作</span>
+              ) : selectedImage?.props.roleInferenceState === "failed" ? (
+                <span>自动识别失败，已使用风格参考</span>
+              ) : lowConfidence ? (
+                <span data-warning="true">非服装或低置信度，请人工确认</span>
+              ) : selectedImage?.props.roleSource === "inferred" ? (
+                <span>
+                  自动推断 ·{" "}
+                  {Math.round((selectedImage.props.roleConfidence ?? 0) * 100)}%
+                </span>
+              ) : null}
+              {saveError ? <small>{saveError}</small> : null}
+            </footer>
+          ) : null}
         </>
       )}
     </aside>

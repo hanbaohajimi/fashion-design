@@ -1,3 +1,4 @@
+import { buildFabricSilhouette } from "./fabric-silhouette";
 import type { EdgeStyle } from "./material-appearance";
 
 /**
@@ -26,9 +27,13 @@ export function generateEdgePath(
     case "deckled":
       return generateDeckledEdge(width, height, intensity, seededRandom);
     case "pinked":
-      return generatePinkedEdge(width, height, intensity, seededRandom);
+      return generatePinkedEdge(width, height, intensity);
     case "rough-cut":
       return generateRoughCutEdge(width, height, intensity, seededRandom);
+    case "raw-cut":
+      // Cloth offcuts carry extra geometry (frays, folds); MaterialShell builds
+      // the full silhouette. Here we only need its outline.
+      return buildFabricSilhouette(seed, width, height, intensity).path;
     default:
       return `M 0 0 L ${width} 0 L ${width} ${height} L 0 ${height} Z`;
   }
@@ -40,52 +45,52 @@ function generateTornEdge(
   intensity: number,
   rand: (offset: number) => number,
 ): string {
-  const segments = 12;
-  const maxDeviation = intensity * 8;
+  const segments = 16;
+  const maxDeviation = intensity * 12;
   const points: string[] = [];
 
   // Top edge
-  points.push(`M ${rand(0) * maxDeviation * 0.5} ${rand(1) * maxDeviation * 0.3}`);
+  points.push(`M ${rand(0) * maxDeviation * 0.5} ${rand(1) * maxDeviation * 0.4}`);
   for (let i = 1; i <= segments; i++) {
     const x = (w / segments) * i;
-    const y = rand(i * 2) * maxDeviation - maxDeviation * 0.3;
-    const cpx1 = x - w / segments / 3;
-    const cpy1 = rand(i * 2 + 100) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpx2 = x - w / segments / 6;
-    const cpy2 = rand(i * 2 + 200) * maxDeviation * 0.7 - maxDeviation * 0.3;
+    const y = rand(i * 2) * maxDeviation - maxDeviation * 0.5;
+    const cpx1 = x - w / segments / 2.5;
+    const cpy1 = rand(i * 2 + 100) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpx2 = x - w / segments / 8;
+    const cpy2 = rand(i * 2 + 200) * maxDeviation * 1.2 - maxDeviation * 0.5;
     points.push(`C ${cpx1} ${cpy1} ${cpx2} ${cpy2} ${x} ${y}`);
   }
 
   // Right edge
   for (let i = 1; i <= segments; i++) {
-    const x = w + rand(i * 2 + 300) * maxDeviation - maxDeviation * 0.3;
+    const x = w + rand(i * 2 + 300) * maxDeviation - maxDeviation * 0.5;
     const y = (h / segments) * i;
-    const cpx1 = w + rand(i * 2 + 400) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpy1 = y - h / segments / 3;
-    const cpx2 = w + rand(i * 2 + 500) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpy2 = y - h / segments / 6;
+    const cpx1 = w + rand(i * 2 + 400) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpy1 = y - h / segments / 2.5;
+    const cpx2 = w + rand(i * 2 + 500) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpy2 = y - h / segments / 8;
     points.push(`C ${cpx1} ${cpy1} ${cpx2} ${cpy2} ${x} ${y}`);
   }
 
   // Bottom edge
   for (let i = segments; i >= 0; i--) {
     const x = (w / segments) * i;
-    const y = h + rand(i * 2 + 600) * maxDeviation - maxDeviation * 0.3;
-    const cpx1 = x + w / segments / 3;
-    const cpy1 = h + rand(i * 2 + 700) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpx2 = x + w / segments / 6;
-    const cpy2 = h + rand(i * 2 + 800) * maxDeviation * 0.7 - maxDeviation * 0.3;
+    const y = h + rand(i * 2 + 600) * maxDeviation - maxDeviation * 0.5;
+    const cpx1 = x + w / segments / 2.5;
+    const cpy1 = h + rand(i * 2 + 700) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpx2 = x + w / segments / 8;
+    const cpy2 = h + rand(i * 2 + 800) * maxDeviation * 1.2 - maxDeviation * 0.5;
     points.push(`C ${cpx1} ${cpy1} ${cpx2} ${cpy2} ${x} ${y}`);
   }
 
   // Left edge
   for (let i = segments; i >= 0; i--) {
-    const x = rand(i * 2 + 900) * maxDeviation * 0.5 - maxDeviation * 0.3;
+    const x = rand(i * 2 + 900) * maxDeviation * 0.5 - maxDeviation * 0.5;
     const y = (h / segments) * i;
-    const cpx1 = rand(i * 2 + 1000) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpy1 = y + h / segments / 3;
-    const cpx2 = rand(i * 2 + 1100) * maxDeviation * 0.7 - maxDeviation * 0.3;
-    const cpy2 = y + h / segments / 6;
+    const cpx1 = rand(i * 2 + 1000) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpy1 = y + h / segments / 2.5;
+    const cpx2 = rand(i * 2 + 1100) * maxDeviation * 1.2 - maxDeviation * 0.5;
+    const cpy2 = y + h / segments / 8;
     points.push(`C ${cpx1} ${cpy1} ${cpx2} ${cpy2} ${x} ${y}`);
   }
 
@@ -99,11 +104,11 @@ function generateDeckledEdge(
   intensity: number,
   rand: (offset: number) => number,
 ): string {
-  const segments = 16;
-  const maxDeviation = intensity * 5;
+  const segments = 20;
+  const maxDeviation = intensity * 8;
   const points: string[] = [];
 
-  points.push(`M 0 ${rand(0) * maxDeviation * 0.4}`);
+  points.push(`M 0 ${rand(0) * maxDeviation * 0.6}`);
 
   // Top edge - gentle irregular waviness
   for (let i = 1; i <= segments; i++) {
@@ -141,65 +146,68 @@ function generatePinkedEdge(
   w: number,
   h: number,
   intensity: number,
-  rand: (offset: number) => number,
 ): string {
-  const zigzagSize = 6 + intensity * 4;
-  const steps = Math.floor((w + h) * 2 / zigzagSize);
-  const points: string[] = [];
+  /**
+   * Replicates the .fabric CSS clip-path from natural_fabric_pinboard_demo.html:
+   * uniform small zigzag on all four sides — ~4% step, ~2% tooth depth × intensity.
+   *
+   * Structure (mirroring the reference polygon):
+   *  Top    L→R : y alternates between 0 and depthTB
+   *  Right  T→B : x alternates between w and w−depthLR
+   *  Bottom R→L : y alternates between h and h−depthTB
+   *  Left   B→T : x alternates between 0 and depthLR
+   * Corners are single diagonal hops between the sides.
+   */
+  const px = (v: number): string => v.toFixed(2);
+  const depthTB = h * 0.02 * intensity; // tooth depth on top & bottom
+  const depthLR = w * 0.02 * intensity; // tooth depth on left & right
+  // ~25 teeth per side (4% step across 96% usable length)
+  const nH = Math.max(4, Math.round(0.96 / 0.04));
+  const nV = Math.max(4, Math.round(0.90 / 0.04));
 
-  points.push(`M 0 0`);
+  const seg = (x: number, y: number): string => `L ${px(x)} ${px(y)}`;
+  const out: string[] = [];
 
-  let x = 0;
-  let y = 0;
-  let direction = 0; // 0: right, 1: down, 2: left, 3: up
-
-  for (let i = 0; i < steps; i++) {
-    const isOut = i % 2 === 0;
-    const depth = isOut ? zigzagSize * (0.8 + rand(i) * 0.4) : 0;
-
-    switch (direction) {
-      case 0: // Moving right along top
-        x += zigzagSize;
-        y = isOut ? -depth : 0;
-        if (x >= w) {
-          x = w;
-          y = 0;
-          direction = 1;
-        }
-        break;
-      case 1: // Moving down along right
-        y += zigzagSize;
-        x = w + (isOut ? depth : 0);
-        if (y >= h) {
-          y = h;
-          x = w;
-          direction = 2;
-        }
-        break;
-      case 2: // Moving left along bottom
-        x -= zigzagSize;
-        y = h + (isOut ? depth : 0);
-        if (x <= 0) {
-          x = 0;
-          y = h;
-          direction = 3;
-        }
-        break;
-      case 3: // Moving up along left
-        y -= zigzagSize;
-        x = isOut ? -depth : 0;
-        if (y <= 0) {
-          y = 0;
-          x = 0;
-        }
-        break;
-    }
-
-    points.push(`L ${x} ${y}`);
+  // ── Top (left → right): x from 2% to 98%, y between 0 and depthTB ─────────
+  out.push(`M ${px(w * 0.02)} 0`);
+  for (let i = 1; i <= nH; i++) {
+    const x = w * 0.02 + (w * 0.96) * (i / nH);
+    const y = i % 2 === 1 ? depthTB : 0;
+    out.push(seg(x, y));
   }
 
-  points.push("Z");
-  return points.join(" ");
+  // ── Corner TR ─────────────────────────────────────────────────────────────
+  out.push(seg(w, h * 0.05));
+
+  // ── Right (top → bottom): y from 5% to 95%, x between w and w−depthLR ────
+  for (let i = 1; i <= nV; i++) {
+    const y = h * 0.05 + (h * 0.90) * (i / nV);
+    const x = i % 2 === 1 ? w - depthLR : w;
+    out.push(seg(x, y));
+  }
+
+  // ── Corner BR ─────────────────────────────────────────────────────────────
+  out.push(seg(w * 0.94, h));
+
+  // ── Bottom (right → left): x from 94% to 2%, y between h and h−depthTB ───
+  for (let i = 1; i <= nH; i++) {
+    const x = w * 0.94 - (w * 0.92) * (i / nH);
+    const y = i % 2 === 1 ? h - depthTB : h;
+    out.push(seg(x, y));
+  }
+
+  // ── Corner BL ─────────────────────────────────────────────────────────────
+  out.push(seg(0, h * 0.94));
+
+  // ── Left (bottom → top): y from 94% to 6%, x between 0 and depthLR ───────
+  for (let i = 1; i <= nV; i++) {
+    const y = h * 0.94 - (h * 0.88) * (i / nV);
+    const x = i % 2 === 1 ? depthLR : 0;
+    out.push(seg(x, y));
+  }
+
+  out.push("Z");
+  return out.join(" ");
 }
 
 function generateRoughCutEdge(
