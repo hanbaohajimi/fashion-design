@@ -15,7 +15,7 @@ import {
   useValue,
 } from "tldraw";
 
-import { AtelierTopBar } from "./AtelierTopBar";
+import { BoardActionPanels } from "./BoardActionPanels";
 import { BoardAgentPanel } from "./agent/BoardAgentPanel";
 import { ToolRail } from "./ToolRail";
 import { ContextInspector } from "./ContextInspector";
@@ -109,11 +109,7 @@ function BoardCanvasOverlay() {
   const layout = useContext(BoardLayoutContext);
   return (
     <>
-      <AtelierTopBar
-        onOpenCollection={() => undefined}
-        onOpenExport={() => undefined}
-        status={status}
-      />
+      <BoardActionPanels status={status} />
       <ToolRail onOpenFabrics={() => setFabricsOpen((v) => !v)} />
       <ContextInspector />
       {fabricsOpen && <FabricDrawer onClose={() => setFabricsOpen(false)} />}
@@ -144,11 +140,12 @@ const boardComponents: TLComponents = {
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
 export default function BoardCanvas({ projectId }: BoardCanvasProps) {
-  const [chatCollapsed, setChatCollapsed] = useState(() =>
-    typeof window === "undefined"
-      ? false
-      : window.localStorage.getItem("fashion-board-agent-collapsed") === "1",
-  );
+  const [chatCollapsed, setChatCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const saved = window.localStorage.getItem("fashion-board-agent-collapsed");
+    if (saved !== null) return saved === "1";
+    return window.matchMedia("(max-width: 1024px)").matches;
+  });
   const store = useMemo(
     () =>
       createTLStore({

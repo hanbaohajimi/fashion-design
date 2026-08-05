@@ -35,6 +35,7 @@ export const AGENT_CONVERSATIONS_DB = Symbol("AGENT_CONVERSATIONS_DB");
 const DEFAULT_TITLE = "新的设计对话";
 const HISTORY_LIMIT = 20;
 const AGENT_IMAGE_LIMIT = 5;
+const IDEMPOTENCY_REPLAY_ATTEMPTS = 3;
 
 type AgentDatabase = Pick<
   PrismaClient,
@@ -208,6 +209,12 @@ export class AgentConversationsService {
       userId,
       conversationId,
     );
+    if (conversation.archivedAt) {
+      throw new BadRequestException({
+        code: "AGENT_CONVERSATION_ARCHIVED",
+        message: "已归档会话不能继续发送消息",
+      });
+    }
     const replay = await this.findTurn(conversationId, input.clientRequestId);
     if (replay) return replay;
 
@@ -224,7 +231,7 @@ export class AgentConversationsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
-        const concurrent = await this.findTurn(
+        const concurrent = await this.waitForTurn(
           conversationId,
           input.clientRequestId,
         );
@@ -361,6 +368,18 @@ export class AgentConversationsService {
       taskId: assistantMessage.generationTaskId,
       userMessage: toMessage(userMessage),
     };
+  }
+
+  private async waitForTurn(conversationId: string, clientRequestId: string) {
+    for (let attempt = 0; attempt < IDEMPOTENCY_REPLAY_ATTEMPTS; attempt += 1) {
+      const turn = await this.findTurn(conversationId, clientRequestId);
+      if (turn) return turn;
+      if (attempt === IDEMPOTENCY_REPLAY_ATTEMPTS - 1) break;
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, (attempt + 1) * 10);
+      });
+    }
+    return null;
   }
 
   private async loadHistory(conversationId: string, currentMessageId: string) {

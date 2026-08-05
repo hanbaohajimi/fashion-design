@@ -103,6 +103,16 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await expect(agent).toContainText("已整理为三个可执行的廓形与面料方向。");
   expect(sentShapeIds).toHaveLength(1);
 
+  await page.getByRole("button", { name: "管理当前会话" }).click();
+  await page.getByRole("button", { name: "重命名会话" }).click();
+  await page.getByRole("textbox", { name: "会话标题" }).fill("面料方向讨论");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(agent.locator("header strong").first()).toHaveText("面料方向讨论");
+
+  await page.getByRole("button", { name: "管理当前会话" }).click();
+  await page.getByRole("button", { name: "归档会话" }).click();
+  await expect(agent.locator("header strong").first()).toHaveText("新的设计对话");
+
   await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
   const collapsed = page.getByRole("complementary", {
     name: "AI 设计助手（已折叠）",
@@ -140,6 +150,11 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
       viewport.height - 10,
     );
   }
+  await expect(
+    page.getByRole("button", { name: "关闭 AI 设计助手" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
+  await expect(collapsed).toBeVisible();
 });
 
 async function mockWorkspace(
@@ -216,6 +231,30 @@ async function mockWorkspace(
       });
     },
   );
+  await page.route("**/api/agent-conversations/*", (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    const conversationId = new URL(route.request().url()).pathname
+      .split("/")
+      .at(-1);
+    const body = route.request().postDataJSON() as {
+      readonly archived?: boolean;
+      readonly title?: string;
+    };
+    const index = options.conversations.findIndex(
+      (conversation) => conversation.id === conversationId,
+    );
+    const current = options.conversations[index];
+    if (!current) return route.fulfill({ status: 404 });
+    const updated = {
+      ...current,
+      archivedAt: body.archived ? NOW : current.archivedAt,
+      title: body.title ?? current.title,
+      updatedAt: NOW,
+    };
+    if (body.archived) options.conversations.splice(index, 1);
+    else options.conversations[index] = updated;
+    return route.fulfill({ json: updated });
+  });
   await page.route("**/api/agent-conversations/*/messages*", async (route) => {
     const match = new URL(route.request().url()).pathname.match(
       /agent-conversations\/([^/]+)\/messages$/u,

@@ -22,6 +22,7 @@ import {
   listAgentConversations,
   listAgentMessages,
   sendAgentMessage,
+  updateAgentConversation,
 } from "./agent-api";
 import styles from "./board-agent-panel.module.css";
 
@@ -39,11 +40,11 @@ const TERMINAL_TASKS = new Set([
 
 const STATUS_LABELS: Readonly<Record<string, string>> = {
   canceled: "已取消",
-  failed: "生成失败",
+  failed: "创作失败",
   moderation_failed: "未通过内容审核",
-  queued: "等待生成",
-  running: "正在生成",
-  succeeded: "生成完成",
+  queued: "等待处理",
+  running: "正在创作",
+  succeeded: "创作完成",
 };
 
 export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
@@ -55,15 +56,25 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   >([]);
   const [activeConversationId, setActiveConversationId] = useState("");
   const [messages, setMessages] = useState<readonly AgentMessageView[]>([]);
+  const [messageCursor, setMessageCursor] = useState<string | null>(null);
   const [contextOverride, setContextOverride] = useState<{
     readonly excludedIds: readonly string[];
     readonly selectionKey: string;
   }>({ excludedIds: [], selectionKey: "" });
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  const [conversationMutating, setConversationMutating] = useState(false);
+  const [conversationActionsOpen, setConversationActionsOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [hydrateRevision, setHydrateRevision] = useState(0);
+  const [messageRevision, setMessageRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const skipNextAutoScroll = useRef(false);
 
   const selection = useValue(
     "agent-selection-context",
@@ -99,27 +110,32 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
           items = [created];
           setConversations(items);
         }
-        if (!disposed) setActiveConversationId(items[0]?.id ?? "");
+        if (!disposed) {
+          setActiveConversationId(items[0]?.id ?? "");
+          if (!items[0]?.id) setLoading(false);
+        }
       } catch (cause) {
         if (!disposed) {
           setError(cause instanceof Error ? cause.message : "Agent 初始化失败");
+          setLoading(false);
         }
-      } finally {
-        if (!disposed) setLoading(false);
       }
     };
     void hydrate();
     return () => {
       disposed = true;
     };
-  }, [projectId, refreshConversations]);
+  }, [hydrateRevision, projectId, refreshConversations]);
 
   useEffect(() => {
     if (!activeConversationId) return;
     let disposed = false;
     void listAgentMessages(activeConversationId)
       .then((response) => {
-        if (!disposed) setMessages(response.items);
+        if (!disposed) {
+          setMessages(response.items);
+          setMessageCursor(response.nextCursor);
+        }
       })
       .catch((cause: unknown) => {
         if (!disposed) {
@@ -132,11 +148,29 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
     return () => {
       disposed = true;
     };
-  }, [activeConversationId]);
+  }, [activeConversationId, messageRevision]);
 
   useEffect(() => {
+    if (skipNextAutoScroll.current) {
+      skipNextAutoScroll.current = false;
+      return;
+    }
     if (!collapsed) endRef.current?.scrollIntoView({ block: "end" });
   }, [collapsed, messages]);
+
+  useEffect(() => {
+    if (collapsed) return;
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (
+        event.key === "Escape" &&
+        window.matchMedia("(max-width: 1024px)").matches
+      ) {
+        onToggle();
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [collapsed, onToggle]);
 
   const taskById = useMemo(
     () => new Map(generation.tasks.map((task) => [task.id, task] as const)),
@@ -145,6 +179,92 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   const activeConversation = conversations.find(
     (item) => item.id === activeConversationId,
   );
+  const linkedTaskIds = new Set(
+    messages.flatMap((message) =>
+      message.generationTaskId ? [message.generationTaskId] : [],
+    ),
+  );
+  const projectTasks = generation.tasks
+    .filter((task) => !linkedTaskIds.has(task.id))
+    .slice(0, 6);
+
+  const loadOlderMessages = useCallback(async (): Promise<void> => {
+    if (!activeConversationId || !messageCursor || loadingOlder) return;
+    const timeline = timelineRef.current;
+    const previousHeight = timeline?.scrollHeight ?? 0;
+    setLoadingOlder(true);
+    setError(null);
+    try {
+      const response = await listAgentMessages(
+        activeConversationId,
+        messageCursor,
+      );
+      skipNextAutoScroll.current = true;
+      setMessages((current) => {
+        const existing = new Set(current.map((message) => message.id));
+        return [
+          ...response.items.filter((message) => !existing.has(message.id)),
+          ...current,
+        ];
+      });
+      setMessageCursor(response.nextCursor);
+      window.requestAnimationFrame(() => {
+        if (timeline)
+          timeline.scrollTop += timeline.scrollHeight - previousHeight;
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "更早消息读取失败");
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [activeConversationId, loadingOlder, messageCursor]);
+
+  const renameConversation = async (): Promise<void> => {
+    const title = titleDraft.trim();
+    if (!activeConversationId || !title || conversationMutating) return;
+    setConversationMutating(true);
+    setError(null);
+    try {
+      const updated = await updateAgentConversation(activeConversationId, {
+        title,
+      });
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === updated.id ? updated : conversation,
+        ),
+      );
+      setEditingTitle(false);
+      setConversationActionsOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "会话重命名失败");
+    } finally {
+      setConversationMutating(false);
+    }
+  };
+
+  const archiveConversation = async (): Promise<void> => {
+    if (!activeConversationId || conversationMutating) return;
+    setConversationMutating(true);
+    setError(null);
+    try {
+      await updateAgentConversation(activeConversationId, { archived: true });
+      const remaining = conversations.filter(
+        (conversation) => conversation.id !== activeConversationId,
+      );
+      const next = remaining[0] ?? (await createAgentConversation(projectId));
+      setConversations(remaining.length > 0 ? remaining : [next]);
+      setMessages([]);
+      setMessageCursor(null);
+      setLoading(true);
+      setActiveConversationId(next.id);
+      setConversationActionsOpen(false);
+      setEditingTitle(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "会话归档失败");
+    } finally {
+      setConversationMutating(false);
+    }
+  };
 
   const submit = useCallback(
     async (content: string, shapeIds: readonly string[]): Promise<void> => {
@@ -233,8 +353,12 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
     try {
       const created = await createAgentConversation(projectId);
       setConversations((current) => [created, ...current]);
+      setLoading(true);
       setActiveConversationId(created.id);
       setMessages([]);
+      setMessageCursor(null);
+      setConversationActionsOpen(false);
+      setEditingTitle(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "新会话创建失败");
     }
@@ -264,128 +388,282 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   }
 
   return (
-    <aside aria-label="AI 设计助手" className={styles.panel} data-agent-panel>
-      <header className={styles.header}>
-        <div className={styles.identity}>
-          <AgentMark />
-          <div>
-            <span>DESIGN AGENT</span>
-            <strong>{activeConversation?.title ?? "新的设计对话"}</strong>
-          </div>
-        </div>
-        <div className={styles.headerActions}>
-          <button
-            aria-label="新建会话"
-            onClick={() => void newConversation()}
-            title="新建会话"
-            type="button"
-          >
-            <PlusIcon />
-          </button>
-          <button
-            aria-label="折叠 AI 设计助手"
-            onClick={onToggle}
-            title="折叠"
-            type="button"
-          >
-            <CollapseIcon />
-          </button>
-        </div>
-      </header>
-
-      {conversations.length > 1 ? (
-        <label className={styles.historySelect}>
-          <span>会话历史</span>
-          <select
-            aria-label="切换 Agent 会话"
-            onChange={(event) => {
-              setLoading(true);
-              setMessages([]);
-              setActiveConversationId(event.target.value);
-            }}
-            value={activeConversationId}
-          >
-            {conversations.map((conversation) => (
-              <option key={conversation.id} value={conversation.id}>
-                {conversation.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-
-      <div className={styles.timeline}>
-        {loading && messages.length === 0 ? (
-          <div className={styles.loadingState}>
-            <i />
-            <span>正在恢复项目会话</span>
-          </div>
-        ) : messages.length === 0 ? (
-          <section className={styles.welcome}>
-            <span>START WITH A DIRECTION</span>
-            <h2>从一条设计想法开始</h2>
-            <p>
-              描述服装方向，或先在白板上选中参考素材。Agent
-              会判断是继续讨论，还是创建生成任务。
-            </p>
+    <>
+      <button
+        aria-label="关闭 AI 设计助手"
+        className={styles.mobileScrim}
+        onClick={onToggle}
+        type="button"
+      />
+      <aside
+        aria-busy={loading || sending}
+        aria-label="AI 设计助手"
+        className={styles.panel}
+        data-agent-panel
+      >
+        <header className={styles.header}>
+          <div className={styles.identity}>
+            <AgentMark />
             <div>
-              <button
-                onClick={() =>
-                  setPrompt("基于选中的参考，提出三个可执行的设计方向")
-                }
-                type="button"
-              >
-                提炼设计方向
-              </button>
-              <button
-                onClick={() =>
-                  setPrompt("生成一版强调面料质感的完整成衣效果图")
-                }
-                type="button"
-              >
-                生成成衣方案
-              </button>
+              <span>DESIGN AGENT</span>
+              <strong>{activeConversation?.title ?? "新的设计对话"}</strong>
             </div>
+          </div>
+          <div className={styles.headerActions}>
+            <button
+              aria-label="新建会话"
+              onClick={() => void newConversation()}
+              title="新建会话"
+              type="button"
+            >
+              <PlusIcon />
+            </button>
+            <button
+              aria-expanded={conversationActionsOpen}
+              aria-label="管理当前会话"
+              onClick={() => {
+                setConversationActionsOpen((current) => !current);
+                setEditingTitle(false);
+                setTitleDraft(activeConversation?.title ?? "");
+              }}
+              title="管理会话"
+              type="button"
+            >
+              <MoreIcon />
+            </button>
+            <button
+              aria-label="折叠 AI 设计助手"
+              onClick={onToggle}
+              title="折叠"
+              type="button"
+            >
+              <CollapseIcon />
+            </button>
+          </div>
+        </header>
+
+        {conversationActionsOpen && activeConversation ? (
+          <section className={styles.conversationActions} aria-label="会话管理">
+            {editingTitle ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void renameConversation();
+                }}
+              >
+                <label>
+                  <span>会话标题</span>
+                  <input
+                    autoFocus
+                    disabled={conversationMutating}
+                    maxLength={80}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    value={titleDraft}
+                  />
+                </label>
+                <div>
+                  <button
+                    disabled={conversationMutating || !titleDraft.trim()}
+                    type="submit"
+                  >
+                    保存
+                  </button>
+                  <button onClick={() => setEditingTitle(false)} type="button">
+                    取消
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <button onClick={() => setEditingTitle(true)} type="button">
+                  重命名会话
+                </button>
+                <button
+                  disabled={conversationMutating}
+                  onClick={() => void archiveConversation()}
+                  type="button"
+                >
+                  {conversationMutating ? "归档中…" : "归档会话"}
+                </button>
+              </>
+            )}
           </section>
         ) : null}
 
-        {messages.map((message) => {
-          const task = message.generationTaskId
-            ? taskById.get(message.generationTaskId)
-            : undefined;
-          const repliedUser = message.replyToId
-            ? messages.find((item) => item.id === message.replyToId)
-            : undefined;
-          return (
-            <article
-              className={styles.message}
-              data-role={message.role}
-              key={message.id}
+        {conversations.length > 1 ? (
+          <label className={styles.historySelect}>
+            <span>会话历史</span>
+            <select
+              aria-label="切换 Agent 会话"
+              onChange={(event) => {
+                setLoading(true);
+                setMessages([]);
+                setMessageCursor(null);
+                setConversationActionsOpen(false);
+                setActiveConversationId(event.target.value);
+              }}
+              value={activeConversationId}
             >
-              <div className={styles.messageMeta}>
-                <span>{message.role === "user" ? "你" : "设计助手"}</span>
-                <time dateTime={message.createdAt}>
-                  {formatTime(message.createdAt)}
-                </time>
+              {conversations.map((conversation) => (
+                <option key={conversation.id} value={conversation.id}>
+                  {conversation.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        <div className={styles.timeline} ref={timelineRef}>
+          {messageCursor ? (
+            <button
+              className={styles.loadOlder}
+              disabled={loadingOlder}
+              onClick={() => void loadOlderMessages()}
+              type="button"
+            >
+              {loadingOlder ? "正在读取…" : "载入更早消息"}
+            </button>
+          ) : null}
+          {loading && messages.length === 0 ? (
+            <div className={styles.loadingState}>
+              <i />
+              <span>正在恢复项目会话</span>
+            </div>
+          ) : error && messages.length === 0 ? (
+            <section className={styles.loadError} role="alert">
+              <strong>项目会话暂时无法恢复</strong>
+              <p>{error}</p>
+              <button
+                onClick={() => {
+                  if (activeConversationId) {
+                    setLoading(true);
+                    setError(null);
+                    setMessageRevision((current) => current + 1);
+                    return;
+                  }
+                  setHydrateRevision((current) => current + 1);
+                }}
+                type="button"
+              >
+                重新连接
+              </button>
+            </section>
+          ) : messages.length === 0 ? (
+            <section className={styles.welcome}>
+              <span>START WITH A DIRECTION</span>
+              <h2>从一条设计想法开始</h2>
+              <p>
+                描述服装方向，或先在白板上选中参考素材。Agent
+                会判断是继续讨论，还是创建生成任务。
+              </p>
+              <div>
+                <button
+                  onClick={() =>
+                    setPrompt("基于选中的参考，提出三个可执行的设计方向")
+                  }
+                  type="button"
+                >
+                  提炼设计方向
+                </button>
+                <button
+                  onClick={() =>
+                    setPrompt("生成一版强调面料质感的完整成衣效果图")
+                  }
+                  type="button"
+                >
+                  生成成衣方案
+                </button>
               </div>
-              <p>{message.content}</p>
-              {message.context?.shapeIds.length ? (
-                <small>
-                  {message.context.shapeIds.length} 个白板元素作为上下文
-                </small>
-              ) : null}
-              {message.status === "pending" ? (
-                <div className={styles.agentProgress} role="status">
-                  <i />
-                  理解需求
+            </section>
+          ) : null}
+
+          {messages.map((message) => {
+            const task = message.generationTaskId
+              ? taskById.get(message.generationTaskId)
+              : undefined;
+            const repliedUser = message.replyToId
+              ? messages.find((item) => item.id === message.replyToId)
+              : undefined;
+            return (
+              <article
+                className={styles.message}
+                data-role={message.role}
+                key={message.id}
+              >
+                <div className={styles.messageMeta}>
+                  <span>{message.role === "user" ? "你" : "设计助手"}</span>
+                  <time dateTime={message.createdAt}>
+                    {formatTime(message.createdAt)}
+                  </time>
                 </div>
-              ) : null}
-              {task ? (
-                <div className={styles.taskCard} data-status={task.status}>
+                <p>{message.content}</p>
+                {message.context?.shapeIds.length ? (
+                  <small>
+                    {message.context.shapeIds.length} 个白板元素作为上下文
+                  </small>
+                ) : null}
+                {message.status === "pending" ? (
+                  <div className={styles.agentProgress} role="status">
+                    <i />
+                    理解需求
+                  </div>
+                ) : null}
+                {task ? (
+                  <div className={styles.taskCard} data-status={task.status}>
+                    <div>
+                      <span>{STATUS_LABELS[task.status] ?? task.status}</span>
+                      <small>
+                        {task.connection === "sse"
+                          ? "实时更新"
+                          : "实时连接中断 · 轮询同步"}
+                      </small>
+                    </div>
+                    {!TERMINAL_TASKS.has(task.status) ? (
+                      <button
+                        onClick={() => void generation.cancel(task.id)}
+                        type="button"
+                      >
+                        停止
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {message.status === "failed" && repliedUser ? (
+                  <button
+                    className={styles.retryButton}
+                    disabled={sending}
+                    onClick={() =>
+                      void submit(
+                        repliedUser.content,
+                        repliedUser.context?.shapeIds ?? [],
+                      )
+                    }
+                    type="button"
+                  >
+                    重试本次请求
+                  </button>
+                ) : null}
+              </article>
+            );
+          })}
+          {projectTasks.length > 0 ? (
+            <section className={styles.projectTasks} aria-label="项目生成记录">
+              <header>
+                <span>PROJECT GENERATIONS</span>
+                <strong>生成记录</strong>
+              </header>
+              {projectTasks.map((task) => (
+                <div
+                  className={styles.taskCard}
+                  data-status={task.status}
+                  key={task.id}
+                >
                   <div>
                     <span>{STATUS_LABELS[task.status] ?? task.status}</span>
                     <small>
-                      {task.connection === "sse" ? "实时更新" : "轮询更新"}
+                      {task.connection === "sse"
+                        ? "实时更新"
+                        : "实时连接中断 · 轮询同步"}
                     </small>
                   </div>
                   {!TERMINAL_TASKS.has(task.status) ? (
@@ -395,112 +673,106 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
                     >
                       停止
                     </button>
+                  ) : task.status === "failed" ||
+                    task.status === "moderation_failed" ? (
+                    <button
+                      onClick={() => void generation.retry(task.id)}
+                      type="button"
+                    >
+                      重试
+                    </button>
                   ) : null}
                 </div>
-              ) : null}
-              {message.status === "failed" && repliedUser ? (
-                <button
-                  className={styles.retryButton}
-                  disabled={sending}
-                  onClick={() =>
-                    void submit(
-                      repliedUser.content,
-                      repliedUser.context?.shapeIds ?? [],
-                    )
-                  }
-                  type="button"
-                >
-                  重试本次请求
-                </button>
-              ) : null}
-            </article>
-          );
-        })}
-        <div className={styles.results}>
-          <CandidateGrid />
-        </div>
-        <div ref={endRef} />
-      </div>
-
-      <div className={styles.composerDock}>
-        {contextItems.length > 0 ? (
-          <div className={styles.contextStrip} aria-label="发送上下文">
-            <span>画布上下文</span>
-            <div>
-              {contextItems.map((item) => (
-                <button
-                  aria-label={`移除 ${item.label}`}
-                  key={item.id}
-                  onClick={() =>
-                    setContextOverride((current) => ({
-                      excludedIds:
-                        current.selectionKey === selectionKey
-                          ? [...current.excludedIds, item.id]
-                          : [item.id],
-                      selectionKey,
-                    }))
-                  }
-                  title="点击移除"
-                  type="button"
-                >
-                  {item.label}
-                  <b aria-hidden="true">×</b>
-                </button>
               ))}
-            </div>
+            </section>
+          ) : null}
+          <div className={styles.results}>
+            <CandidateGrid />
           </div>
-        ) : null}
-        <label className={styles.composer}>
-          <span>告诉 Agent 你想完成什么</span>
-          <textarea
-            disabled={sending || !activeConversationId}
-            maxLength={4_000}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault();
+          <div ref={endRef} />
+        </div>
+
+        <div className={styles.composerDock}>
+          {contextItems.length > 0 ? (
+            <div className={styles.contextStrip} aria-label="发送上下文">
+              <span>画布上下文</span>
+              <div>
+                {contextItems.map((item) => (
+                  <button
+                    aria-label={`移除 ${item.label}`}
+                    key={item.id}
+                    onClick={() =>
+                      setContextOverride((current) => ({
+                        excludedIds:
+                          current.selectionKey === selectionKey
+                            ? [...current.excludedIds, item.id]
+                            : [item.id],
+                        selectionKey,
+                      }))
+                    }
+                    title="点击移除"
+                    type="button"
+                  >
+                    {item.label}
+                    <b aria-hidden="true">×</b>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <label className={styles.composer}>
+            <span>告诉 Agent 你想完成什么</span>
+            <textarea
+              disabled={sending || !activeConversationId}
+              maxLength={4_000}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault();
+                  void submit(
+                    prompt,
+                    contextItems.map((item) => item.id),
+                  );
+                }
+              }}
+              placeholder="例如：保留廓形，把面料改成轻薄防水材质…"
+              rows={3}
+              value={prompt}
+            />
+          </label>
+          {error ? (
+            <p className={styles.error} role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className={styles.composerFooter}>
+            <span>
+              {contextItems.length > 0
+                ? `${contextItems.length} 项参考`
+                : "未附加画布内容"}
+              {prompt.length > 0 ? ` · ${prompt.length}/4000` : ""}
+            </span>
+            <button
+              disabled={sending || prompt.trim().length === 0}
+              onClick={() =>
                 void submit(
                   prompt,
                   contextItems.map((item) => item.id),
-                );
+                )
               }
-            }}
-            placeholder="例如：保留廓形，把面料改成轻薄防水材质…"
-            rows={3}
-            value={prompt}
-          />
-        </label>
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-        <div className={styles.composerFooter}>
-          <span>
-            {contextItems.length > 0
-              ? `${contextItems.length} 项参考`
-              : "未附加画布内容"}
-          </span>
-          <button
-            disabled={sending || prompt.trim().length === 0}
-            onClick={() =>
-              void submit(
-                prompt,
-                contextItems.map((item) => item.id),
-              )
-            }
-            type="button"
-          >
-            {sending ? "处理中…" : "发送"}
-            <SendIcon />
-          </button>
+              type="button"
+            >
+              {sending ? "处理中…" : "发送"}
+              <SendIcon />
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -573,6 +845,16 @@ function CollapseIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20">
       <path d="m12.5 5-5 5 5 5" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <circle cx="5" cy="10" r="1" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none" />
     </svg>
   );
 }

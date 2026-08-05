@@ -1,199 +1,174 @@
-import { test, expect } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
-/**
- * 连接器功能端到端测试
- *
- * 测试场景：
- * 1. 创建两个图片元素
- * 2. 激活连接器工具
- * 3. 从第一个图片的锚点拖动到第二个图片的锚点
- * 4. 验证连接器创建成功
- * 5. 验证锚点在缩放和平移时不跳动
- */
+const PROJECT_ID = "e2e-connector";
+const NOW = "2026-08-05T06:00:00.000Z";
 
 test.describe("连接器功能", () => {
   test.beforeEach(async ({ page }) => {
-    // 导航到测试项目
-    await page.goto("http://localhost:3000/projects");
-
-    // 等待项目列表加载
-    await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
-
-    // 点击第一个项目进入画布
-    await page.click('[data-testid="project-card"]');
-
-    // 等待画布加载完成
-    await page.waitForSelector('.tl-canvas', { timeout: 10000 });
+    await mockWorkspace(page);
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await page.goto(`/${PROJECT_ID}`);
+    await expect(page.locator(".tl-canvas")).toBeVisible();
   });
 
-  test("应该能够在连接器模式下创建图片之间的连接", async ({ page }) => {
-    // 1. 创建第一个图片 (模拟上传)
-    const image1X = 300;
-    const image1Y = 300;
-
-    // 通过点击上传按钮触发文件选择
-    const uploadButton = page.locator('button[aria-label="上传图片"]');
-    await uploadButton.click();
-
-    // 等待文件上传完成并出现在画布上
-    await page.waitForTimeout(2000);
-
-    // 2. 创建第二个图片
-    await uploadButton.click();
-    await page.waitForTimeout(2000);
-
-    // 3. 点击连接器工具按钮
-    const connectorButton = page.locator('button[aria-label="连接器工具"]');
+  test("使用两次锚点点击创建连接，并可删除", async ({ page }) => {
+    await createSeparatedNotes(page);
+    const connectorButton = page.getByRole("button", { name: "连接器工具" });
     await connectorButton.click();
+    await expect(connectorButton).toHaveAttribute("aria-pressed", "true");
 
-    // 验证连接器工具已激活
-    await expect(connectorButton).toHaveAttribute('aria-pressed', 'true');
+    const anchors = page.locator("[data-anchor-side][data-shape-id]");
+    await expect(anchors).toHaveCount(8);
+    const shapeIds = await uniqueShapeIds(anchors);
+    expect(shapeIds).toHaveLength(2);
 
-    // 4. 等待锚点覆盖层渲染
-    await page.waitForSelector('.anchorOverlay', { timeout: 5000 });
+    await clickAnchor(page, shapeIds[0] ?? "", "left");
+    await clickAnchor(page, shapeIds[1] ?? "", "left");
 
-    // 5. 验证锚点可见
-    const anchorPoints = page.locator('.anchorPoint');
-    const anchorCount = await anchorPoints.count();
-    expect(anchorCount).toBeGreaterThan(0);
-
-    // 6. 获取第一个图片的右侧锚点
-    const firstImageAnchors = anchorPoints.filter({ hasText: '', has: page.locator('[data-anchor-side="right"]') });
-    const firstAnchor = firstImageAnchors.first();
-
-    // 7. 获取第二个图片的左侧锚点
-    const secondImageAnchors = anchorPoints.filter({ hasText: '', has: page.locator('[data-anchor-side="left"]') });
-    const secondAnchor = secondImageAnchors.first();
-
-    // 8. 从第一个锚点拖动到第二个锚点
-    await firstAnchor.hover();
-    await page.mouse.down();
-
-    await secondAnchor.hover();
-    await page.mouse.up();
-
-    // 9. 验证连接器已创建
-    await page.waitForTimeout(500);
-    const connectorPath = page.locator('.connectorPath');
-    await expect(connectorPath).toBeVisible();
-
-    // 10. 验证工具仍然是连接器模式（不会自动切换）
-    await expect(connectorButton).toHaveAttribute('aria-pressed', 'true');
+    const connector = page.locator('[class*="connectorPath"][opacity="1"]');
+    await expect(connector).toHaveCount(1);
+    await expect(connector).toHaveAttribute("d", /M \d/u);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Delete");
+    await expect(page.locator('[class*="connectorPath"]')).toHaveCount(0);
+    await connectorButton.click();
+    await expect(anchors).toHaveCount(8);
   });
 
-  test("锚点在画布缩放和平移时应该保持稳定", async ({ page }) => {
-    // 1. 激活连接器工具
-    const connectorButton = page.locator('button[aria-label="连接器工具"]');
-    await connectorButton.click();
+  test("锚点在画布缩放和平移时保持在对应元素附近", async ({ page }) => {
+    await createSeparatedNotes(page);
+    await page.getByRole("button", { name: "连接器工具" }).click();
+    const anchor = page.locator("[data-anchor-side][data-shape-id]").first();
+    const initial = await anchor.boundingBox();
+    expect(initial).not.toBeNull();
 
-    // 2. 等待锚点渲染
-    await page.waitForSelector('.anchorPoint', { timeout: 5000 });
+    await page.mouse.move(initial?.x ?? 400, initial?.y ?? 350);
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, -220);
+    await page.keyboard.up("Control");
+    const zoomed = await anchor.boundingBox();
+    expect(zoomed).not.toBeNull();
+    expect(Math.abs((zoomed?.x ?? 0) - (initial?.x ?? 0))).toBeLessThan(500);
+    expect(Math.abs((zoomed?.y ?? 0) - (initial?.y ?? 0))).toBeLessThan(500);
 
-    // 3. 获取第一个锚点的初始位置
-    const firstAnchor = page.locator('.anchorPoint').first();
-    const initialBox = await firstAnchor.boundingBox();
-
-    expect(initialBox).not.toBeNull();
-    const initialX = initialBox!.x;
-    const initialY = initialBox!.y;
-
-    // 4. 使用鼠标滚轮缩放画布 (Ctrl + Scroll)
-    await page.keyboard.down('Control');
-    await page.mouse.wheel(0, 100); // 放大
-    await page.keyboard.up('Control');
-
-    await page.waitForTimeout(300);
-
-    // 5. 验证锚点位置随缩放正确变化（不跳动）
-    const zoomedBox = await firstAnchor.boundingBox();
-    expect(zoomedBox).not.toBeNull();
-
-    // 锚点应该相对于其父元素保持在相同位置
-    // 实际像素位置会随缩放改变，但不应该跳到完全不相关的位置
-    const deltaX = Math.abs(zoomedBox!.x - initialX);
-    const deltaY = Math.abs(zoomedBox!.y - initialY);
-
-    // 允许的位置变化范围（由于缩放导致）
-    expect(deltaX).toBeLessThan(500); // 不应该跳得太远
-    expect(deltaY).toBeLessThan(500);
-
-    // 6. 平移画布 (按住空格 + 拖动)
-    await page.keyboard.down(' ');
-    await page.mouse.move(400, 400);
-    await page.mouse.down();
-    await page.mouse.move(500, 500);
-    await page.mouse.up();
-    await page.keyboard.up(' ');
-
-    await page.waitForTimeout(300);
-
-    // 7. 验证锚点随画布平移
-    const pannedBox = await firstAnchor.boundingBox();
-    expect(pannedBox).not.toBeNull();
-
-    // 锚点应该跟随画布移动
-    expect(pannedBox!.x).not.toBe(zoomedBox!.x);
-    expect(pannedBox!.y).not.toBe(zoomedBox!.y);
+    await page.mouse.move(440, 420);
+    await page.mouse.wheel(140, 90);
+    const panned = await anchor.boundingBox();
+    expect(panned).not.toBeNull();
+    expect(Math.abs((panned?.x ?? 0) - (zoomed?.x ?? 0))).toBeGreaterThan(20);
   });
 
-  test("应该能够选中并删除连接器", async ({ page }) => {
-    // 前提：先创建一个连接器（简化版本）
-    const connectorButton = page.locator('button[aria-label="连接器工具"]');
+  test("Esc 退出连接器模式并回到选择工具", async ({ page }) => {
+    const connectorButton = page.getByRole("button", { name: "连接器工具" });
     await connectorButton.click();
+    await expect(connectorButton).toHaveAttribute("aria-pressed", "true");
 
-    await page.waitForSelector('.anchorPoint', { timeout: 5000 });
+    await page.mouse.click(900, 160);
+    await page.keyboard.press("Escape");
 
-    // 创建连接（简化交互）
-    const anchors = page.locator('.anchorPoint');
-    if (await anchors.count() >= 2) {
-      const first = anchors.nth(0);
-      const second = anchors.nth(4); // 选择不同shape的锚点
-
-      await first.hover();
-      await page.mouse.down();
-      await second.hover();
-      await page.mouse.up();
-
-      await page.waitForTimeout(500);
-    }
-
-    // 切换到选择工具
-    const selectButton = page.locator('button[aria-label="选择工具"]');
-    await selectButton.click();
-
-    // 点击连接器选中它
-    const connector = page.locator('.connectorPath').first();
-    await connector.click();
-
-    // 验证连接器被选中（线条会加粗）
-    await expect(connector).toBeVisible();
-
-    // 按Delete键删除
-    await page.keyboard.press('Delete');
-
-    // 验证连接器已被删除
-    await page.waitForTimeout(500);
-    const connectorCount = await page.locator('.connectorPath').count();
-    expect(connectorCount).toBe(0);
-  });
-
-  test("按Esc键应该退出连接器模式", async ({ page }) => {
-    // 激活连接器工具
-    const connectorButton = page.locator('button[aria-label="连接器工具"]');
-    await connectorButton.click();
-
-    // 验证已激活
-    await expect(connectorButton).toHaveAttribute('aria-pressed', 'true');
-
-    // 按Esc键
-    await page.keyboard.press('Escape');
-
-    // 验证已退出连接器模式
-    await page.waitForTimeout(300);
-    await expect(connectorButton).toHaveAttribute('aria-pressed', 'false');
-
-    // 应该自动切换到选择工具
-    const selectButton = page.locator('button[aria-label="选择工具"]');
-    await expect(selectButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(connectorButton).toHaveAttribute("aria-pressed", "false");
+    await expect(
+      page.getByRole("button", { name: "选择工具" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });
+
+async function createSeparatedNotes(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "添加Frame" }).click();
+  await page.getByRole("button", { name: "添加灵感便签" }).click();
+}
+
+async function uniqueShapeIds(anchors: Locator): Promise<string[]> {
+  const ids = await anchors.evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("data-shape-id") ?? ""),
+  );
+  return [...new Set(ids.filter(Boolean))];
+}
+
+async function clickAnchor(
+  page: Page,
+  shapeId: string,
+  side: "left" | "right",
+): Promise<void> {
+  const anchor = page.locator(
+    `[data-shape-id="${shapeId}"][data-anchor-side="${side}"]`,
+  );
+  const box = await anchor.boundingBox();
+  if (!box) throw new Error(`未找到 ${side} 锚点`);
+  const inwardOffset = side === "left" ? 4 : -4;
+  await page.mouse.click(
+    box.x + box.width / 2 + inwardOffset,
+    box.y + box.height / 2,
+  );
+}
+
+async function mockWorkspace(page: Page): Promise<void> {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 600, remaining: 540, used: 60 },
+        user: {
+          authId: "auth-connector",
+          avatar: null,
+          createdAt: NOW,
+          deletedAt: null,
+          email: "connector@example.com",
+          id: "user-connector",
+          name: "Connector E2E",
+        },
+      },
+    }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/board`, (route) =>
+    route.fulfill({
+      json:
+        route.request().method() === "PATCH"
+          ? { batchId: "connector-save", revision: 1, savedAt: NOW }
+          : { elements: [], revision: 0, snapshot: null },
+    }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({
+      json: {
+        archived: false,
+        assetCount: 0,
+        coverAssetId: null,
+        coverUrl: null,
+        createdAt: NOW,
+        id: PROJECT_ID,
+        name: "连接器验收项目",
+        updatedAt: NOW,
+      },
+    }),
+  );
+  await page.route(`**/api/collections?projectId=${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route(
+    `**/api/projects/${PROJECT_ID}/agent-conversations*`,
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [conversationFixture()],
+          nextCursor: null,
+        },
+      }),
+  );
+  await page.route("**/api/agent-conversations/*/messages*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+}
+
+function conversationFixture() {
+  return {
+    archivedAt: null,
+    createdAt: NOW,
+    id: "conversation-connector",
+    projectId: PROJECT_ID,
+    title: "连接器测试",
+    updatedAt: NOW,
+  };
+}

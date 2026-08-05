@@ -1,4 +1,4 @@
-import { AgentMessageRole, AgentMessageStatus } from "@fashion/db";
+import { AgentMessageRole, AgentMessageStatus, Prisma } from "@fashion/db";
 import { BadRequestException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
@@ -67,7 +67,10 @@ function createHarness() {
       }),
     ),
     agentConversation: {
+      create: vi.fn().mockResolvedValue(conversationFixture()),
+      findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(conversationFixture()),
+      update: vi.fn().mockResolvedValue(conversationFixture()),
     },
     agentMessage: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -81,7 +84,13 @@ function createHarness() {
       count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
     },
-    project: {},
+    project: {
+      findUnique: vi.fn().mockResolvedValue({
+        deletedAt: null,
+        id: "project-a",
+        workspace: { ownerId: "user-a" },
+      }),
+    },
   };
   const model = { generateJson: vi.fn() };
   const generation = { create: vi.fn() };
@@ -233,5 +242,84 @@ describe("AgentConversationsService", () => {
     expect(result.taskId).toBe("task-a");
     expect(harness.database.$transaction).not.toHaveBeenCalled();
     expect(harness.model.generateJson).not.toHaveBeenCalled();
+  });
+
+  it("rejects new messages for an archived conversation", async () => {
+    const harness = createHarness();
+    harness.database.agentConversation.findUnique.mockResolvedValue({
+      ...conversationFixture(),
+      archivedAt: now,
+    });
+
+    await expect(
+      harness.service.send("user-a", "conversation-a", {
+        clientRequestId: "request-123",
+        content: "继续生成",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: "AGENT_CONVERSATION_ARCHIVED",
+      }),
+    });
+    expect(harness.database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("returns the concurrent turn when the idempotency constraint races", async () => {
+    const harness = createHarness();
+    const completedAssistant = messageFixture(AgentMessageRole.ASSISTANT, {
+      content: "并发请求已完成。",
+      status: AgentMessageStatus.COMPLETED,
+    });
+    harness.database.agentMessage.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(messageFixture(AgentMessageRole.USER))
+      .mockResolvedValueOnce(completedAssistant);
+    harness.database.$transaction.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("unique", {
+        clientVersion: "test",
+        code: "P2002",
+      }),
+    );
+
+    const result = await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-123",
+      content: "并发重复发送",
+      fileAssetIds: [],
+      shapeIds: [],
+    });
+
+    expect(result.assistantMessage.content).toBe("并发请求已完成。");
+    expect(harness.model.generateJson).not.toHaveBeenCalled();
+  });
+
+  it("paginates project conversations and updates their title", async () => {
+    const harness = createHarness();
+    const older = {
+      ...conversationFixture(),
+      id: "conversation-b",
+      title: "旧会话",
+    };
+    harness.database.agentConversation.findMany.mockResolvedValue([
+      conversationFixture(),
+      older,
+    ]);
+    harness.database.agentConversation.update.mockResolvedValue({
+      ...conversationFixture(),
+      title: "机能风系列",
+    });
+
+    const page = await harness.service.list("user-a", "project-a", {
+      limit: 1,
+    });
+    const updated = await harness.service.update("user-a", "conversation-a", {
+      title: "机能风系列",
+    });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.nextCursor).toBe("conversation-a");
+    expect(updated.title).toBe("机能风系列");
   });
 });

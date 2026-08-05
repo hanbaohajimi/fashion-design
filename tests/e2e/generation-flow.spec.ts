@@ -516,16 +516,16 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect(noteRole).toBeFocused();
   await expect(noteRole).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("region", { name: "生成浮条" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "设计面板" })).toBeHidden();
   await page.mouse.move(470, 220);
   await page.mouse.down();
   await page.mouse.move(810, 500, { steps: 12 });
   await page.mouse.up();
-  await expect(page.getByRole("region", { name: "生成浮条" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "设计面板" })).toBeVisible();
   await expect(page.getByLabel("当前生成约束")).toContainText("备注 1");
 
-  const generationBar = page.getByRole("region", { name: "生成浮条" });
-  const promptInput = generationBar.getByRole("textbox", { name: "生成描述" });
+  const generationBar = page.getByRole("region", { name: "设计面板" });
+  const promptInput = generationBar.getByRole("textbox", { name: "设计描述" });
   const generateButton = generationBar.locator("button").first();
   await promptInput.fill("保留便签约束的利落廓形外套");
   await generateButton.click();

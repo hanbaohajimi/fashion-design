@@ -187,11 +187,11 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   await page.goto("/e2e-history");
   await page.getByRole("button", { name: "便签" }).click();
   await page
-    .getByRole("textbox", { name: "生成描述" })
+    .getByRole("textbox", { name: "设计描述" })
     .fill("带明确肩线的短款夹克");
-  await page.getByRole("button", { name: "生成", exact: true }).click();
+  await page.getByRole("button", { name: "创建", exact: true }).click();
   await page.getByRole("button", { name: "打开候选详情" }).click();
-  await page.getByRole("button", { name: "版本" }).click();
+  await page.getByRole("button", { name: "版本", exact: true }).click();
 
   await expect(
     page.getByRole("heading", { name: "资产版本时间线" }),

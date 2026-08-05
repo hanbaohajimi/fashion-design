@@ -58,15 +58,37 @@ export async function createAgentConversation(
 
 export async function listAgentMessages(
   conversationId: string,
+  cursor?: string,
 ): Promise<CursorPage<AgentMessageView>> {
+  const query = new URLSearchParams({ limit: "50" });
+  if (cursor) query.set("cursor", cursor);
   const response = await fetch(
-    `/api/agent-conversations/${encodeURIComponent(conversationId)}/messages?limit=100`,
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/messages?${query.toString()}`,
     { cache: "no-store", credentials: "include" },
   );
   if (!response.ok) {
     throw await apiError(response, "会话消息读取失败");
   }
   return (await response.json()) as CursorPage<AgentMessageView>;
+}
+
+export async function updateAgentConversation(
+  conversationId: string,
+  input: { readonly archived?: boolean; readonly title?: string },
+): Promise<AgentConversationSummary> {
+  const response = await fetch(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}`,
+    {
+      body: JSON.stringify(input),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "会话更新失败");
+  }
+  return (await response.json()) as AgentConversationSummary;
 }
 
 export async function sendAgentMessage(

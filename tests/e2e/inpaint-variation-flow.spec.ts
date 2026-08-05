@@ -184,9 +184,9 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
 
   await page.getByRole("button", { name: "便签" }).click();
   await page
-    .getByRole("textbox", { name: "生成描述" })
+    .getByRole("textbox", { name: "设计描述" })
     .fill("结构清晰的短款外套");
-  await page.getByRole("button", { name: "生成", exact: true }).click();
+  await page.getByRole("button", { name: "创建", exact: true }).click();
   await expect(page.getByText("实时连接中断 · 轮询同步")).toBeVisible({
     timeout: 12_000,
   });
@@ -199,21 +199,19 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
     has: page.locator('img[src="https://assets.example/source.png"]'),
   });
   await page.setViewportSize({ height: 844, width: 390 });
-  const [taskTrayBox, candidateDockBox, generationBarBox] = await Promise.all([
-    page.getByRole("complementary", { name: "生成任务托盘" }).boundingBox(),
+  const [agentBox, candidateDockBox] = await Promise.all([
+    page.getByRole("complementary", { name: "AI 设计助手" }).boundingBox(),
     page.getByRole("region", { name: "生成候选" }).boundingBox(),
-    page.getByRole("region", { name: "生成浮条" }).boundingBox(),
   ]);
-  if (!taskTrayBox || !candidateDockBox || !generationBarBox) {
-    throw new Error("移动端生成浮层未完整渲染");
+  if (!agentBox || !candidateDockBox) {
+    throw new Error("移动端 Agent 生成记录未完整渲染");
   }
-  expect(taskTrayBox.y + taskTrayBox.height).toBeLessThanOrEqual(
-    candidateDockBox.y,
-  );
-  expect(candidateDockBox.y + candidateDockBox.height).toBeLessThanOrEqual(
-    generationBarBox.y,
-  );
+  expect(Math.round(agentBox.x + agentBox.width)).toBe(390);
+  expect(candidateDockBox.x).toBeGreaterThanOrEqual(agentBox.x);
+  await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
+  await expect(page.getByRole("region", { name: "设计面板" })).toBeVisible();
   await page.setViewportSize({ height: 720, width: 1280 });
+  await page.getByRole("button", { name: "展开 AI 设计助手" }).click();
 
   const openDetails = sourceCard.getByRole("button", {
     name: "打开候选详情",

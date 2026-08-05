@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { listAgentConversations, sendAgentMessage } from "./agent-api";
+import {
+  listAgentConversations,
+  listAgentMessages,
+  sendAgentMessage,
+  updateAgentConversation,
+} from "./agent-api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -51,5 +56,37 @@ describe("agent-api", () => {
       fileAssetIds: ["file-a"],
       shapeIds: ["shape-a"],
     });
+  });
+
+  it("loads older messages with a cursor", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], nextCursor: null }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listAgentMessages("conversation a", "message/older");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agent-conversations/conversation%20a/messages?limit=50&cursor=message%2Folder",
+      { cache: "no-store", credentials: "include" },
+    );
+  });
+
+  it("updates a conversation through the patch endpoint", async () => {
+    const body = { id: "conversation-a", title: "机能风系列" };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      updateAgentConversation("conversation-a", { title: "机能风系列" }),
+    ).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agent-conversations/conversation-a",
+      expect.objectContaining({ method: "PATCH" }),
+    );
   });
 });

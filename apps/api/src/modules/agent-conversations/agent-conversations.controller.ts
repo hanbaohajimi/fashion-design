@@ -57,6 +57,13 @@ export class ProjectAgentConversationsController {
   }
 
   @Post()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "user",
+    limit: 30,
+    name: "agent-conversation-create",
+    windowSeconds: 60 * 60,
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Param("projectId") projectId: string,
@@ -78,6 +85,13 @@ export class AgentConversationsController {
   ) {}
 
   @Patch(":id")
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "user",
+    limit: 120,
+    name: "agent-conversation-update",
+    windowSeconds: 60 * 60,
+  })
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") conversationId: string,

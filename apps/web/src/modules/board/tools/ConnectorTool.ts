@@ -245,6 +245,11 @@ export class ConnectorTool extends StateNode {
     }
   };
 
+  override onCancel = (): void => {
+    this.clearPreview();
+    this.editor.setCurrentTool("select");
+  };
+
   private clearPreview(): void {
     if (this.clickState) {
       this.editor.deleteShape(this.clickState.previewId);

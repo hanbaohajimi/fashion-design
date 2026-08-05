@@ -330,6 +330,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   });
 
   await page.goto("/e2e-collection");
+  await page.getByRole("button", { name: "系列", exact: true }).click();
   const retryCollections = page.getByRole("button", {
     name: /^(?:重试系列|重新加载系列)$/u,
   });
@@ -337,12 +338,13 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   collectionListAvailable = true;
   await retryCollections.click();
   await expect(page.getByLabel("选择系列")).toContainText("暂无系列");
+  await page.getByRole("button", { name: "系列", exact: true }).click();
 
   await page.getByRole("button", { name: "便签" }).click();
   await page
-    .getByRole("textbox", { name: "生成描述" })
+    .getByRole("textbox", { name: "设计描述" })
     .fill("作为系列 Hero 的克制廓形");
-  await page.getByRole("button", { name: "生成", exact: true }).click();
+  await page.getByRole("button", { name: "创建", exact: true }).click();
   await page.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "设为 Hero → 建系列" }).click();
 
@@ -423,7 +425,8 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.getByRole("button", { name: "关闭导出窗口" }).click();
   await page.getByRole("button", { name: "关闭系列抽屉" }).click();
   await page.getByRole("button", { name: "关闭候选详情" }).click();
+  await page.getByRole("button", { name: "系列", exact: true }).click();
   await expect(page.getByLabel("选择系列")).toHaveValue("collection-e2e");
-  await page.getByRole("button", { name: "打开系列", exact: true }).click();
+  await page.getByRole("button", { name: "打开系列工作台" }).click();
   await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
 });

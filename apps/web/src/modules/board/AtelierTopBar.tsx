@@ -11,6 +11,8 @@ import type { BoardPersistStatus } from "./hooks/useBoardPersist";
 import styles from "./atelier-topbar.module.css";
 
 interface AtelierTopBarProps {
+  readonly collectionOpen?: boolean;
+  readonly exportOpen?: boolean;
   readonly onOpenCollection: () => void;
   readonly onOpenExport: () => void;
   readonly status: BoardPersistStatus;
@@ -27,6 +29,8 @@ const STATUS_LABELS: Readonly<Record<BoardPersistStatus, string>> = {
 };
 
 export function AtelierTopBar({
+  collectionOpen = false,
+  exportOpen = false,
   onOpenCollection,
   onOpenExport,
   status,
@@ -36,6 +40,8 @@ export function AtelierTopBar({
   const editor = useEditor();
   const [projectName, setProjectName] = useState("设计项目");
   const [overviewOpen, setOverviewOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const boardStats = useValue(
     "project-capsule-stats",
     () => ({
@@ -117,13 +123,14 @@ export function AtelierTopBar({
             <i aria-hidden="true" />
             {STATUS_LABELS[status]}
           </span>
-          <span className={styles.quotaBadge} title="本月剩余生成次数">
+          <span className={styles.quotaBadge} title="本月剩余配额">
             {auth.session?.credits.remaining ?? "—"} / 600
           </span>
         </div>
 
         <div className={styles.actionGroup}>
           <button
+            aria-expanded={exportOpen}
             className={styles.actionButton}
             onClick={onOpenExport}
             type="button"
@@ -131,6 +138,7 @@ export function AtelierTopBar({
             导出
           </button>
           <button
+            aria-expanded={collectionOpen}
             className={styles.actionButton}
             onClick={onOpenCollection}
             type="button"
@@ -139,7 +147,9 @@ export function AtelierTopBar({
           </button>
           <button
             className={styles.userButton}
+            aria-expanded={userOpen}
             aria-label="用户菜单"
+            onClick={() => setUserOpen((current) => !current)}
             type="button"
           >
             <svg
@@ -165,6 +175,34 @@ export function AtelierTopBar({
             </svg>
           </button>
         </div>
+        {userOpen ? (
+          <section className={styles.userPopover} aria-label="账户菜单">
+            <div>
+              <span>ACCOUNT</span>
+              <strong>
+                {auth.session?.user.name ||
+                  auth.session?.user.email ||
+                  "当前用户"}
+              </strong>
+              {auth.session?.user.name ? (
+                <small>{auth.session.user.email}</small>
+              ) : null}
+            </div>
+            <p>
+              本月剩余 <b>{auth.session?.credits.remaining ?? "—"}</b> 次创作配额
+            </p>
+            <button
+              disabled={loggingOut}
+              onClick={() => {
+                setLoggingOut(true);
+                void auth.logout().catch(() => setLoggingOut(false));
+              }}
+              type="button"
+            >
+              {loggingOut ? "正在退出…" : "退出登录"}
+            </button>
+          </section>
+        ) : null}
       </div>
     </header>
   );
