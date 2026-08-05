@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   createTLStore,
   defaultBindingUtils,
@@ -16,13 +16,18 @@ import {
 } from "tldraw";
 
 import { AtelierTopBar } from "./AtelierTopBar";
+import { BoardAgentPanel } from "./agent/BoardAgentPanel";
 import { ToolRail } from "./ToolRail";
 import { ContextInspector } from "./ContextInspector";
 import { FabricDrawer } from "./FabricDrawer";
 import { BoardFileDrop } from "./BoardFileDrop";
 import { BoardFabricDrop } from "./BoardFabricDrop";
 import { BoardSkeleton } from "./BoardSkeleton";
-import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
+import {
+  BOARD_FILE_PICKER_EVENT,
+  BOARD_LAYOUT_CHANGE_EVENT,
+  BoardProjectContext,
+} from "./board-context";
 import { GenerationBar } from "./generation/GenerationBar";
 import { GenerationWorkspace } from "./generation/GenerationWorkspace";
 import {
@@ -41,6 +46,15 @@ interface BoardCanvasProps {
 }
 
 const PersistStatusContext = createContext<BoardPersistStatus>("loading");
+interface BoardLayoutValue {
+  readonly chatCollapsed: boolean;
+  readonly toggleChat: () => void;
+}
+
+const BoardLayoutContext = createContext<BoardLayoutValue>({
+  chatCollapsed: false,
+  toggleChat: () => undefined,
+});
 const DRAWING_SHAPE_TYPES = new Set(["arrow", "draw", "geo", "text"]);
 
 function DrawingStylePanel(props: TLUiStylePanelProps) {
@@ -91,8 +105,15 @@ function EmptyBoardGuide() {
 
 function BoardCanvasOverlay() {
   const [fabricsOpen, setFabricsOpen] = useState(false);
+  const status = useContext(PersistStatusContext);
+  const layout = useContext(BoardLayoutContext);
   return (
     <>
+      <AtelierTopBar
+        onOpenCollection={() => undefined}
+        onOpenExport={() => undefined}
+        status={status}
+      />
       <ToolRail onOpenFabrics={() => setFabricsOpen((v) => !v)} />
       <ContextInspector />
       {fabricsOpen && <FabricDrawer onClose={() => setFabricsOpen(false)} />}
@@ -103,18 +124,31 @@ function BoardCanvasOverlay() {
       <ErrorBoundary area="generation">
         <GenerationBar />
       </ErrorBoundary>
+      <ErrorBoundary area="generation">
+        <BoardAgentPanel
+          collapsed={layout.chatCollapsed}
+          onToggle={layout.toggleChat}
+        />
+      </ErrorBoundary>
     </>
   );
 }
 
 const boardComponents: TLComponents = {
   InFrontOfTheCanvas: BoardCanvasOverlay,
+  MenuPanel: null,
+  QuickActions: null,
   StylePanel: DrawingStylePanel,
   Toolbar: null,
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
 export default function BoardCanvas({ projectId }: BoardCanvasProps) {
+  const [chatCollapsed, setChatCollapsed] = useState(() =>
+    typeof window === "undefined"
+      ? false
+      : window.localStorage.getItem("fashion-board-agent-collapsed") === "1",
+  );
   const store = useMemo(
     () =>
       createTLStore({
@@ -127,6 +161,25 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
     [],
   );
   const persistence = useBoardPersist(projectId, store);
+  const layout = useMemo(
+    () => ({
+      chatCollapsed,
+      toggleChat: () => setChatCollapsed((current) => !current),
+    }),
+    [chatCollapsed],
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "fashion-board-agent-collapsed",
+      chatCollapsed ? "1" : "0",
+    );
+    document.documentElement.style.setProperty(
+      "--board-agent-current-width",
+      chatCollapsed ? "48px" : "400px",
+    );
+    window.dispatchEvent(new Event(BOARD_LAYOUT_CHANGE_EVENT));
+  }, [chatCollapsed]);
 
   if (persistence.status === "loading") {
     return <BoardSkeleton />;
@@ -146,26 +199,33 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
   }
 
   return (
-    <main className={styles.boardShell}>
+    <main
+      className={styles.boardShell}
+      data-chat-collapsed={chatCollapsed ? "true" : "false"}
+    >
       <PersistStatusContext.Provider value={persistence.status}>
         <BoardProjectContext.Provider value={projectId}>
-          <AtelierTopBar
-            onOpenCollection={() => {/* TODO Step 4: open collection modal */}}
-            onOpenExport={() => {/* TODO Step 4: open export modal */}}
-            status={persistence.status}
-          />
-          <GenerationWorkspace>
-            <div className={styles.canvasWrapper}>
-              <Tldraw
-                autoFocus
-                components={boardComponents}
-                {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
-                shapeUtils={boardShapeUtils}
-                tools={[MountTool, ConnectorTool] as unknown as TLStateNodeConstructor[]}
-                store={store}
-              />
-            </div>
-          </GenerationWorkspace>
+          <BoardLayoutContext.Provider value={layout}>
+            <GenerationWorkspace>
+              <div className={styles.canvasWrapper}>
+                <Tldraw
+                  autoFocus
+                  components={boardComponents}
+                  {...(tldrawLicenseKey
+                    ? { licenseKey: tldrawLicenseKey }
+                    : {})}
+                  shapeUtils={boardShapeUtils}
+                  tools={
+                    [
+                      MountTool,
+                      ConnectorTool,
+                    ] as unknown as TLStateNodeConstructor[]
+                  }
+                  store={store}
+                />
+              </div>
+            </GenerationWorkspace>
+          </BoardLayoutContext.Provider>
         </BoardProjectContext.Provider>
       </PersistStatusContext.Provider>
       {persistence.status === "conflict" ? (

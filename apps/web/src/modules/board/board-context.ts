@@ -3,6 +3,7 @@ import { createContext } from "react";
 export const BOARD_FILE_PICKER_EVENT = "fashion-board:open-file-picker";
 export const BOARD_LABEL_DESIGN_EVENT = "fashion-board:open-label-design";
 export const BOARD_REMOTE_REFRESH_EVENT = "fashion-board:remote-refresh";
+export const BOARD_LAYOUT_CHANGE_EVENT = "fashion-board:layout-change";
 
 export interface BoardLabelDesignDetail {
   shapeId: string;

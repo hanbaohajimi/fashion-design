@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useContext, useEffect, useState } from "react";
+import { useEditor, useValue } from "tldraw";
 
 import { useAuth } from "../auth/AuthProvider";
 import { fetchProject } from "../projects/projects-api";
@@ -32,7 +33,17 @@ export function AtelierTopBar({
 }: AtelierTopBarProps) {
   const projectId = useContext(BoardProjectContext);
   const auth = useAuth();
+  const editor = useEditor();
   const [projectName, setProjectName] = useState("设计项目");
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const boardStats = useValue(
+    "project-capsule-stats",
+    () => ({
+      selected: editor.getSelectedShapeIds().length,
+      total: editor.getCurrentPageShapes().length,
+    }),
+    [editor],
+  );
 
   useEffect(() => {
     let active = true;
@@ -52,14 +63,47 @@ export function AtelierTopBar({
     <header className={styles.topBar}>
       <div className={styles.topBarLeft}>
         <Link href="/" className={styles.brandMark} aria-label="返回项目库">
-          atelier.
+          a.
         </Link>
-        <div className={styles.projectInfo}>
-          <span className={styles.projectLabel}>PROJECT</span>
-          <strong className={styles.projectName} title={projectName}>
-            {projectName}
-          </strong>
-        </div>
+        <button
+          aria-expanded={overviewOpen}
+          className={styles.projectButton}
+          onClick={() => setOverviewOpen((current) => !current)}
+          type="button"
+        >
+          <span className={styles.projectInfo}>
+            <span className={styles.projectLabel}>PROJECT</span>
+            <strong className={styles.projectName} title={projectName}>
+              {projectName}
+            </strong>
+          </span>
+          <svg aria-hidden="true" viewBox="0 0 16 16">
+            <path d="m4 6 4 4 4-4" />
+          </svg>
+        </button>
+        {overviewOpen ? (
+          <section className={styles.projectPopover} aria-label="项目概览">
+            <header>
+              <span>PROJECT / OVERVIEW</span>
+              <strong>{projectName}</strong>
+            </header>
+            <dl>
+              <div>
+                <dt>画布元素</dt>
+                <dd>{boardStats.total}</dd>
+              </div>
+              <div>
+                <dt>当前选中</dt>
+                <dd>{boardStats.selected}</dd>
+              </div>
+              <div>
+                <dt>同步状态</dt>
+                <dd>{STATUS_LABELS[status]}</dd>
+              </div>
+            </dl>
+            <Link href="/">返回项目库</Link>
+          </section>
+        ) : null}
       </div>
 
       <div className={styles.topBarRight}>

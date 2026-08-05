@@ -1,11 +1,5 @@
-import {
-  Controller,
-  Get,
-  Header,
-  Inject,
-  Query,
-} from "@nestjs/common";
-import { TrendsService } from "./trends.service";
+import { Controller, Get, Header, Inject, Query } from "@nestjs/common";
+import { TrendsService, type TrendListResponse } from "./trends.service";
 
 const CACHE_CONTROL_PUBLIC = "public, max-age=300, stale-while-revalidate=600";
 
@@ -20,7 +14,7 @@ export class TrendsController {
   async listTrends(
     @Query("limit") limit?: string,
     @Query("page") page?: string,
-  ) {
+  ): Promise<TrendListResponse> {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : 60;
     const parsedPage = page ? Number.parseInt(page, 10) : 1;
 

@@ -2,13 +2,12 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { useEditor, useValue, type TLShapeId } from "tldraw";
-import { ErrorBoundary } from "../../observability/ErrorBoundary";
 import { ElementRolePanel } from "./ElementRolePanel";
 import {
+  BOARD_LAYOUT_CHANGE_EVENT,
   BOARD_LABEL_DESIGN_EVENT,
   type BoardLabelDesignDetail,
 } from "./board-context";
-import { CandidateGrid } from "./generation/CandidateGrid";
 import { isRoleAssignableShape } from "./shapes";
 import styles from "./context-inspector.module.css";
 
@@ -27,6 +26,7 @@ export function ContextInspector() {
   const editor = useEditor();
   const [labelDesignShapeId, setLabelDesignShapeId] =
     useState<TLShapeId | null>(null);
+  const [layoutRevision, setLayoutRevision] = useState(0);
 
   useEffect(() => {
     const handleOpen = (event: Event): void => {
@@ -63,13 +63,27 @@ export function ContextInspector() {
     };
   }, []);
 
+  useEffect(() => {
+    const refreshLayout = (): void => {
+      setLayoutRevision((current) => current + 1);
+    };
+    window.addEventListener(BOARD_LAYOUT_CHANGE_EVENT, refreshLayout);
+    window.addEventListener("resize", refreshLayout);
+    return () => {
+      window.removeEventListener(BOARD_LAYOUT_CHANGE_EVENT, refreshLayout);
+      window.removeEventListener("resize", refreshLayout);
+    };
+  }, []);
+
   const selection = useValue(
     "inspector-selection",
     () => {
-      const shapes = editor.getSelectedShapes();
+      const selectedShapes = editor.getSelectedShapes();
       const candidate = labelDesignShapeId
         ? editor.getShape(labelDesignShapeId)
-        : null;
+        : selectedShapes.length === 1
+          ? selectedShapes[0]
+          : null;
       const labelDesignShape =
         candidate && isRoleAssignableShape(candidate) ? candidate : null;
       const bounds = labelDesignShape
@@ -97,16 +111,23 @@ export function ContextInspector() {
         );
         const estimatedHeight = 300;
         const minX = PANEL_GAP_PX;
+        const agentWidth =
+          window.innerWidth > 1024
+            ? readCssPixelValue("--board-agent-current-width", 400)
+            : 0;
         const maxX = Math.max(
           minX,
-          window.innerWidth - panelWidth - PANEL_GAP_PX,
+          window.innerWidth - agentWidth - panelWidth - PANEL_GAP_PX,
         );
         const minY = topbarHeight + PANEL_GAP_PX;
         const maxY = Math.max(
           minY,
           window.innerHeight -
-            Math.min(estimatedHeight, window.innerHeight - minY - PANEL_GAP_PX) -
-            PANEL_GAP_PX,
+            Math.min(
+              estimatedHeight,
+              window.innerHeight - minY - PANEL_GAP_PX,
+            ) -
+            76,
         );
 
         const x = Math.min(
@@ -129,12 +150,11 @@ export function ContextInspector() {
       }
 
       return {
-        count: shapes.length,
         labelDesignShape,
         position,
       };
     },
-    [editor, labelDesignShapeId],
+    [editor, labelDesignShapeId, layoutRevision],
   );
 
   const positionStyle = selection.position
@@ -154,38 +174,9 @@ export function ContextInspector() {
           data-label-design-panel="true"
           style={positionStyle}
         >
-          <ElementRolePanel
-            embedded
-            shapeId={selection.labelDesignShape.id}
-          />
+          <ElementRolePanel embedded shapeId={selection.labelDesignShape.id} />
         </aside>
       ) : null}
-      <aside className={styles.inspector} aria-label="项目概览">
-        <div className={styles.inspectorOverview}>
-          <header className={styles.inspectorHeader}>
-            <span>CONTEXT / OVERVIEW</span>
-            <strong>项目概览</strong>
-          </header>
-          <div className={styles.inspectorContent}>
-            <p className={styles.emptyHint}>
-              点击元素左上角标签，可打开当前元素的标签设计。
-            </p>
-            <dl className={styles.statsList}>
-              <div>
-                <dt>当前选中</dt>
-                <dd>{selection.count} 项</dd>
-              </div>
-              <div>
-                <dt>画布元素</dt>
-                <dd>{editor.getCurrentPageShapes().length} 个</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-        <ErrorBoundary area="generation">
-          <CandidateGrid />
-        </ErrorBoundary>
-      </aside>
     </>
   );
 }

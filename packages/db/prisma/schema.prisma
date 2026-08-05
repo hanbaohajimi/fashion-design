@@ -8,22 +8,23 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(cuid(2))
-  authId          String?          @unique @map("auth_id")
-  email           String           @unique
-  name            String?
-  avatar          String?
-  plan            AccountPlan      @default(FREE)
-  generationCount Int              @default(0) @map("generation_count")
-  generationLimit Int              @default(100) @map("generation_limit")
-  deletedAt       DateTime?        @map("deleted_at")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  exportJobs      ExportJob[]
-  files           FileAsset[]
-  fabrics         Fabric[]
-  generationTasks GenerationTask[]
-  auditLogs       AuditLog[]
-  ownedWorkspaces Workspace[]
+  id                 String              @id @default(cuid(2))
+  authId             String?             @unique @map("auth_id")
+  email              String              @unique
+  name               String?
+  avatar             String?
+  plan               AccountPlan         @default(FREE)
+  generationCount    Int                 @default(0) @map("generation_count")
+  generationLimit    Int                 @default(100) @map("generation_limit")
+  deletedAt          DateTime?           @map("deleted_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  exportJobs         ExportJob[]
+  files              FileAsset[]
+  fabrics            Fabric[]
+  generationTasks    GenerationTask[]
+  agentConversations AgentConversation[]
+  auditLogs          AuditLog[]
+  ownedWorkspaces    Workspace[]
 
   @@map("users")
 }
@@ -96,6 +97,17 @@ enum SimilarityAnalysisStatus {
   FAILED
 }
 
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+}
+
+enum AgentMessageStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model GenerationTask {
   id                   String                   @id @default(cuid(2))
   userId               String                   @map("user_id")
@@ -128,6 +140,7 @@ model GenerationTask {
   collection           Collection?              @relation(fields: [collectionId], references: [id], onDelete: SetNull)
   generatedAssets      DesignAsset[]            @relation("TaskGeneratedAssets")
   generationInputs     GenerationInput[]
+  agentMessage         AgentMessage?
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -332,22 +345,23 @@ model Workspace {
 }
 
 model Project {
-  id              String           @id @default(cuid(2))
-  wsId            String           @map("ws_id")
-  name            String
-  coverAssetId    String?          @map("cover_asset_id")
-  idempotencyKey  String?          @map("idempotency_key")
-  archived        Boolean          @default(false)
-  deletedAt       DateTime?        @map("deleted_at")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  workspace       Workspace        @relation(fields: [wsId], references: [id], onDelete: Cascade)
-  boardSnapshot   BoardSnapshot?
-  boardElements   BoardElement[]
-  designAssets    DesignAsset[]
-  collections     Collection[]
-  generationTasks GenerationTask[]
-  exportJobs      ExportJob[]
+  id                 String              @id @default(cuid(2))
+  wsId               String              @map("ws_id")
+  name               String
+  coverAssetId       String?             @map("cover_asset_id")
+  idempotencyKey     String?             @map("idempotency_key")
+  archived           Boolean             @default(false)
+  deletedAt          DateTime?           @map("deleted_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  workspace          Workspace           @relation(fields: [wsId], references: [id], onDelete: Cascade)
+  boardSnapshot      BoardSnapshot?
+  boardElements      BoardElement[]
+  designAssets       DesignAsset[]
+  collections        Collection[]
+  generationTasks    GenerationTask[]
+  agentConversations AgentConversation[]
+  exportJobs         ExportJob[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -493,4 +507,46 @@ model BoardElement {
   @@index([projectId, deletedAt])
   @@index([fileAssetId])
   @@map("board_elements")
+}
+
+model AgentConversation {
+  id          String         @id @default(cuid(2))
+  projectId   String         @map("project_id")
+  createdById String         @map("created_by_id")
+  title       String
+  archivedAt  DateTime?      @map("archived_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  messages    AgentMessage[]
+
+  @@index([projectId, updatedAt])
+  @@index([createdById, updatedAt])
+  @@map("agent_conversations")
+}
+
+model AgentMessage {
+  id               String             @id @default(cuid(2))
+  conversationId   String             @map("conversation_id")
+  role             AgentMessageRole
+  status           AgentMessageStatus @default(COMPLETED)
+  content          String             @db.Text
+  context          Json?
+  clientRequestId  String?            @map("client_request_id")
+  replyToId        String?            @unique @map("reply_to_id")
+  generationTaskId String?            @unique @map("generation_task_id")
+  errorCode        String?            @map("error_code")
+  errorMessage     String?            @map("error_message")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  conversation     AgentConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo          AgentMessage?      @relation("AgentMessageReply", fields: [replyToId], references: [id], onDelete: Cascade)
+  reply            AgentMessage?      @relation("AgentMessageReply")
+  generationTask   GenerationTask?    @relation(fields: [generationTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, clientRequestId])
+  @@index([conversationId, createdAt])
+  @@index([status, updatedAt])
+  @@map("agent_messages")
 }

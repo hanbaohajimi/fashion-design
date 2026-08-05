@@ -368,6 +368,30 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await page.route("**/api/collections?projectId=e2e-project", (route) =>
     route.fulfill({ json: [] }),
   );
+  await page.route(
+    "**/api/projects/e2e-project/agent-conversations?limit=50",
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              archivedAt: null,
+              createdAt: "2026-07-27T08:00:00.000Z",
+              id: "conversation-e2e-project",
+              messageCount: 0,
+              projectId: "e2e-project",
+              title: "新的设计对话",
+              updatedAt: "2026-07-27T08:00:00.000Z",
+            },
+          ],
+          nextCursor: null,
+        },
+      }),
+  );
+  await page.route(
+    "**/api/agent-conversations/conversation-e2e-project/messages?limit=100",
+    (route) => route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
   await page.route("**/api/projects/e2e-project/board", async (route) => {
     if (route.request().method() === "PATCH") {
       const payload = route.request().postDataJSON() as {
@@ -513,11 +537,11 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect(
     page.getByRole("complementary", { name: "生成任务托盘" }),
   ).toHaveCount(0);
-  const projectOverview = page.getByRole("complementary", {
-    name: "项目概览",
+  const agentPanel = page.getByRole("complementary", {
+    name: "AI 设计助手",
   });
   await expect(
-    projectOverview.getByRole("region", { name: "生成候选" }),
+    agentPanel.getByRole("region", { name: "生成候选" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "采纳" }).click();
 

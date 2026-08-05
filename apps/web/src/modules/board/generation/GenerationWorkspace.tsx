@@ -16,6 +16,7 @@ import { BoardProjectContext } from "../board-context";
 import {
   cancelGeneration,
   createGeneration,
+  fetchGenerationTask,
   fetchGenerationTasks,
   GenerationApiError,
 } from "./generation-api";
@@ -53,6 +54,7 @@ interface GenerationWorkspaceValue {
   readonly startBatch: (
     inputs: readonly GenerationStartRequest[],
   ) => Promise<GenerationBatchStartResult>;
+  readonly track: (taskId: string) => Promise<void>;
   readonly tasks: readonly GenerationTaskItem[];
 }
 
@@ -432,6 +434,19 @@ export function GenerationWorkspace({
     [projectTasks, start],
   );
 
+  const track = useCallback(
+    async (taskId: string): Promise<void> => {
+      const detail = await fetchGenerationTask(taskId);
+      const task = taskItemFrom(detail, projectId);
+      if (!task) return;
+      setTasks((current) => {
+        const remaining = current.filter((item) => item.id !== task.id);
+        return [task, ...remaining];
+      });
+    },
+    [projectId],
+  );
+
   const updateTransport = useCallback(
     (taskId: string, connection: GenerationTaskItem["connection"]): void => {
       setTasks((current) =>
@@ -465,8 +480,18 @@ export function GenerationWorkspace({
       start,
       startBatch,
       tasks: projectTasks,
+      track,
     }),
-    [cancel, dismissCandidate, notice, projectTasks, retry, start, startBatch],
+    [
+      cancel,
+      dismissCandidate,
+      notice,
+      projectTasks,
+      retry,
+      start,
+      startBatch,
+      track,
+    ],
   );
   const active = projectTasks.filter((task) => !TERMINAL.has(task.status));
 

@@ -1,28 +1,35 @@
 .boardShell {
+  --agent-panel-width: 400px;
+  --agent-rail-width: 48px;
+  --board-agent-current-width: var(--agent-panel-width);
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: #ebe8e0;
+  background: #f7f7f4;
 }
 
-/* Canvas viewport — offset by top bar, left tool rail, and right inspector */
+.boardShell[data-chat-collapsed="true"] {
+  --board-agent-current-width: var(--agent-rail-width);
+}
+
+/* Canvas viewport — full-height workspace, reduced only by the desktop agent. */
 .canvasWrapper {
   position: fixed;
-  top: var(--topbar-height, 62px);
-  left: var(--toolrail-width, 64px);
-  right: var(--inspector-width, 320px);
-  bottom: 0;
+  inset: 0 var(--board-agent-current-width) 0 0;
+  transition: right 200ms ease;
 }
 
 .boardShell :global(.tl-background) {
   position: relative;
-  background-color: #ebe8e0;
-  background-image:
-    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.12), transparent 45%),
-    repeating-linear-gradient(90deg, rgba(82, 64, 42, 0.06) 0 0.8px, rgba(255, 255, 255, 0.05) 1px 1.8px, transparent 2px 6px),
-    repeating-linear-gradient(0deg, rgba(75, 58, 39, 0.05) 0 0.8px, rgba(255, 255, 255, 0.06) 1px 1.8px, transparent 2px 6px);
-  background-blend-mode: normal, multiply, multiply;
-  box-shadow: inset 0 0 0 1px rgba(74, 54, 31, 0.08);
+  background-color: #f8f8f5;
+  background-image: radial-gradient(
+    circle at center,
+    rgb(66 62 55 / 18%) 0 0.8px,
+    transparent 0.9px
+  );
+  background-position: 0 0;
+  background-size: 16px 16px;
+  box-shadow: inset 0 0 0 1px rgb(67 61 52 / 5%);
 }
 
 .boardShell :global(.tl-background)::before {
@@ -30,8 +37,8 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  opacity: 0.15;
-  filter: contrast(105%) brightness(102%);
+  opacity: 0.035;
+  filter: contrast(104%);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65 .18' numOctaves='3' seed='9' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
   mix-blend-mode: multiply;
   pointer-events: none;
@@ -43,7 +50,9 @@
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 40%);
+  background:
+    radial-gradient(circle at 30% 12%, rgb(255 255 255 / 42%), transparent 36%),
+    linear-gradient(135deg, rgb(255 255 255 / 10%), transparent 42%);
   mix-blend-mode: overlay;
 }
 
@@ -57,7 +66,9 @@
   margin: 12px auto 0;
   background: rgb(247 244 235 / 96%);
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgb(24 25 21 / 12%), 0 8px 32px rgb(24 25 21 / 8%);
+  box-shadow:
+    0 4px 16px rgb(24 25 21 / 12%),
+    0 8px 32px rgb(24 25 21 / 8%);
   color: #181915;
   grid-template-columns: 1fr auto;
   pointer-events: all;
@@ -99,7 +110,7 @@
 .boardConflictNotice {
   position: fixed;
   z-index: 1200;
-  right: 18px;
+  right: calc(var(--board-agent-current-width) + 18px);
   bottom: 18px;
   display: grid;
   width: min(390px, calc(100vw - 36px));
@@ -235,11 +246,25 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background-color: #ebe8e0;
+  background-color: #f8f8f5;
   background-image:
-    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.12), transparent 45%),
-    repeating-linear-gradient(90deg, rgba(82, 64, 42, 0.06) 0 0.8px, rgba(255, 255, 255, 0.05) 1px 1.8px, transparent 2px 6px),
-    repeating-linear-gradient(0deg, rgba(75, 58, 39, 0.05) 0 0.8px, rgba(255, 255, 255, 0.06) 1px 1.8px, transparent 2px 6px);
+    radial-gradient(
+      ellipse at 50% 20%,
+      rgba(255, 255, 255, 0.12),
+      transparent 45%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(82, 64, 42, 0.06) 0 0.8px,
+      rgba(255, 255, 255, 0.05) 1px 1.8px,
+      transparent 2px 6px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(75, 58, 39, 0.05) 0 0.8px,
+      rgba(255, 255, 255, 0.06) 1px 1.8px,
+      transparent 2px 6px
+    );
   background-blend-mode: normal, multiply, multiply;
   box-shadow: inset 0 0 0 1px rgba(74, 54, 31, 0.08);
 }
@@ -329,7 +354,7 @@
 .uploadDropZone {
   position: fixed;
   z-index: 1000;
-  inset: 72px 18px 18px;
+  inset: 12px calc(var(--board-agent-current-width) + 12px) 12px 12px;
   display: grid;
   border: 2px dashed #e9522c;
   background: rgb(247 244 235 / 88%);
@@ -356,7 +381,7 @@
   background: rgb(248 246 239 / 96%);
   border: 1px solid rgb(24 25 21 / 28%);
   box-shadow: 14px 14px 0 rgb(24 25 21 / 8%);
-  left: 50%;
+  left: calc((100vw - var(--board-agent-current-width)) / 2);
   max-width: 430px;
   padding: 24px;
   pointer-events: auto;
@@ -486,7 +511,6 @@
 .rolePanel.rolePanelEmbedded > header {
   border-bottom: 1px solid rgb(24 25 21 / 10%);
 }
-
 
 .rolePanel {
   position: fixed;
@@ -754,8 +778,9 @@
   position: fixed;
   z-index: 1100;
   top: 70px;
-  right: 14px;
-  bottom: 14px;
+  right: auto;
+  bottom: 78px;
+  left: 14px;
   width: 300px;
   overflow: hidden;
   border: 1.5px solid #181915;
@@ -966,9 +991,28 @@
 @media (max-width: 640px) {
   .fabricDrawer {
     top: 64px;
-    right: 8px;
-    bottom: 8px;
+    right: auto;
+    bottom: 66px;
+    left: 8px;
     width: min(300px, calc(100vw - 16px));
     box-shadow: 6px 6px 0 #181915;
+  }
+}
+
+@media (max-width: 1024px) {
+  .canvasWrapper {
+    right: 0;
+  }
+
+  .boardConflictNotice {
+    right: 18px;
+  }
+
+  .emptyBoardGuide {
+    left: 50%;
+  }
+
+  .uploadDropZone {
+    right: 12px;
   }
 }

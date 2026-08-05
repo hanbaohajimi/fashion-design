@@ -82,3 +82,54 @@ export interface HealthResponse {
   readonly ok: true;
   readonly ts: string;
 }
+
+export type AgentMessageRole = "user" | "assistant";
+export type AgentMessageStatus = "pending" | "completed" | "failed";
+
+export interface AgentMessageContext {
+  readonly fileAssetIds: readonly string[];
+  readonly shapeIds: readonly string[];
+}
+
+export interface AgentConversationSummary {
+  readonly archivedAt: string | null;
+  readonly createdAt: string;
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly updatedAt: string;
+}
+
+export interface AgentMessageView {
+  readonly clientRequestId: string | null;
+  readonly content: string;
+  readonly context: AgentMessageContext | null;
+  readonly createdAt: string;
+  readonly error: {
+    readonly code: string;
+    readonly message: string;
+  } | null;
+  readonly generationTaskId: string | null;
+  readonly id: string;
+  readonly replyToId: string | null;
+  readonly role: AgentMessageRole;
+  readonly status: AgentMessageStatus;
+  readonly updatedAt: string;
+}
+
+export type AgentAction =
+  | { readonly type: "reply" }
+  | {
+      readonly type: "generate";
+      readonly request: {
+        readonly background?: "auto" | "opaque";
+        readonly height: number;
+        readonly outputCompression?: number;
+        readonly outputFormat?: "jpeg" | "png" | "webp";
+        readonly prompt: string;
+        readonly quality?: "auto" | "high" | "low" | "medium";
+        readonly shapeIds: readonly string[];
+        readonly taskType: "t2i" | "i2i" | "inpaint";
+        readonly width: number;
+      };
+    };

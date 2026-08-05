@@ -1,6 +1,11 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { Prisma, prisma } from "./client.js";
+import {
+  AgentMessageRole,
+  AgentMessageStatus,
+  Prisma,
+  prisma,
+} from "./client.js";
 
 describe("User → Workspace → Project database relations", () => {
   afterAll(async () => {
@@ -62,6 +67,84 @@ describe("User → Workspace → Project database relations", () => {
       await prisma.user.delete({
         where: { id: user.id },
       });
+    }
+  });
+
+  it("persists agent turns, links a generation task, and cascades with the project", async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `agent-${crypto.randomUUID()}@example.com`,
+        ownedWorkspaces: {
+          create: {
+            name: "Agent workspace",
+            projects: { create: { name: "Agent project" } },
+          },
+        },
+      },
+      include: { ownedWorkspaces: { include: { projects: true } } },
+    });
+    const project = user.ownedWorkspaces[0]?.projects[0];
+    expect(project).toBeDefined();
+    if (!project) return;
+
+    try {
+      const conversation = await prisma.agentConversation.create({
+        data: {
+          createdById: user.id,
+          projectId: project.id,
+          title: "风衣方向",
+        },
+      });
+      const userMessage = await prisma.agentMessage.create({
+        data: {
+          clientRequestId: "request-agent-001",
+          content: "生成一件轻量风衣",
+          context: { fileAssetIds: [], shapeIds: [] },
+          conversationId: conversation.id,
+          role: AgentMessageRole.USER,
+        },
+      });
+      const task = await prisma.generationTask.create({
+        data: {
+          input: { prompt: "lightweight trench" },
+          projectId: project.id,
+          taskType: "t2i",
+          userId: user.id,
+        },
+      });
+      await prisma.agentMessage.create({
+        data: {
+          content: "已创建风衣生成任务。",
+          conversationId: conversation.id,
+          generationTaskId: task.id,
+          replyToId: userMessage.id,
+          role: AgentMessageRole.ASSISTANT,
+          status: AgentMessageStatus.COMPLETED,
+        },
+      });
+
+      await expect(
+        prisma.agentMessage.create({
+          data: {
+            clientRequestId: "request-agent-001",
+            content: "重复请求",
+            conversationId: conversation.id,
+            role: AgentMessageRole.USER,
+          },
+        }),
+      ).rejects.toMatchObject({ code: "P2002" });
+
+      await prisma.project.delete({ where: { id: project.id } });
+      await expect(
+        prisma.agentConversation.count({ where: { id: conversation.id } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.agentMessage.count({
+          where: { conversationId: conversation.id },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
     }
   });
 });

@@ -18,7 +18,7 @@
     "generate": "prisma generate",
     "lint": "eslint prisma.config.ts src --max-warnings=0",
     "migrate": "prisma migrate dev --name init",
-    "test:integration": "vitest run src/client.integration.spec.ts",
+    "test:integration": "node --env-file=../../.env.example --env-file-if-exists=../../.env ./node_modules/vitest/vitest.mjs run src/client.integration.spec.ts",
     "typecheck": "prisma generate && tsc --noEmit"
   },
   "devDependencies": {

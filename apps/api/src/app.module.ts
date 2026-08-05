@@ -8,6 +8,7 @@ import {
   InfrastructureHealthChecker,
 } from "./health.controller";
 import { AiModule } from "./modules/ai/ai.module";
+import { AgentConversationsModule } from "./modules/agent-conversations/agent-conversations.module";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BillingModule } from "./modules/billing/billing.module";
@@ -29,6 +30,7 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     SentryModule.forRoot(),
     SecurityModule,
     AiModule,
+    AgentConversationsModule,
     AuthModule,
     BillingModule,
     BoardElementsModule,

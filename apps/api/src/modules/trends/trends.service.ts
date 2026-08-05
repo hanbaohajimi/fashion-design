@@ -5,14 +5,35 @@ export const TRENDS_DB = Symbol("TRENDS_DB");
 
 type TrendsDatabase = Pick<PrismaClient, "trendItem" | "trendDigest">;
 
+export interface TrendListResponse {
+  readonly hasMore: boolean;
+  readonly items: readonly {
+    readonly category: string;
+    readonly coverFileId: string | null;
+    readonly curatedAt: Date | null;
+    readonly extracted: unknown;
+    readonly id: string;
+    readonly platform: string;
+    readonly publishedAt: Date;
+    readonly sourceUrl: string;
+    readonly summary: string;
+    readonly tags: readonly string[];
+    readonly title: string;
+  }[];
+  readonly limit: number;
+  readonly page: number;
+  readonly total: number;
+}
+
 @Injectable()
 export class TrendsService {
-  constructor(
-    @Inject(TRENDS_DB) private readonly database: TrendsDatabase,
-  ) {}
+  constructor(@Inject(TRENDS_DB) private readonly database: TrendsDatabase) {}
 
-  async listTrends(limit: number, page: number) {
-    const safeLimit = Math.min(Math.max(Number.isFinite(limit) ? limit : 60, 1), 200);
+  async listTrends(limit: number, page: number): Promise<TrendListResponse> {
+    const safeLimit = Math.min(
+      Math.max(Number.isFinite(limit) ? limit : 60, 1),
+      200,
+    );
     const safePage = Math.max(Number.isFinite(page) ? page : 1, 1);
     const skip = (safePage - 1) * safeLimit;
 

@@ -2,6 +2,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
   AccountPlan,
+  AgentMessageRole,
+  AgentMessageStatus,
   CollectionVariationAxis,
   ContentModerationStatus,
   DesignAssetOperation,
@@ -18,6 +20,8 @@ import {
   RoleSource,
   SimilarityAnalysisStatus,
   type DesignAsset,
+  type AgentConversation,
+  type AgentMessage,
   type Collection,
   type CollectionDna,
   type FileAsset,
@@ -58,6 +62,8 @@ if (process.env.NODE_ENV !== "production") {
 
 export {
   AccountPlan,
+  AgentMessageRole,
+  AgentMessageStatus,
   CollectionVariationAxis,
   ContentModerationStatus,
   DesignAssetOperation,
@@ -75,6 +81,8 @@ export {
   SimilarityAnalysisStatus,
 };
 export type {
+  AgentConversation,
+  AgentMessage,
   Collection,
   CollectionDna,
   DesignAsset,
