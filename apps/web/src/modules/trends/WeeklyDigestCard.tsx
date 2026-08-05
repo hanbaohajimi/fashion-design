@@ -27,7 +27,7 @@ export function WeeklyDigestCard({
         <div>
           <span>WEEKLY SOURCE BRIEF</span>
           <h2>本周综述尚未生成</h2>
-          <p>{error?.message ?? "定期采集完成后，这里会显示基于来源条目的 AI 整理。"}</p>
+          <p>{error?.message ?? "定期采集完成后，这里会显示基于来源条目的分析整理。"}</p>
         </div>
       </section>
     );
@@ -46,7 +46,7 @@ export function WeeklyDigestCard({
         <p>{digest.overview}</p>
       </div>
       <div className={styles.digestBoundary}>
-        <strong>⚠ AI整理</strong>
+        <strong>⚠ 机器整理</strong>
         <span>这是对已采集文章的归纳，不替代原文判断。</span>
       </div>
     </section>

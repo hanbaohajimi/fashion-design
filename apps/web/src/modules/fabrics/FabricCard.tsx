@@ -12,7 +12,7 @@ import {
   FABRIC_METRIC_STEPS,
   FABRIC_SEASON_LABELS,
   FABRIC_WEAVE_LABELS,
-  getCompositionEntries,
+  formatFabricComposition,
   getFabricMetrics,
   getFabricSeasons,
   type Fabric,
@@ -334,10 +334,7 @@ export function FabricCard({
   onAdd,
   variant = "short",
 }: FabricCardProps) {
-  const composition = getCompositionEntries(fabric.attributes)
-    .slice(0, 2)
-    .map(([name, percentage]) => `${name} ${percentage}%`)
-    .join(" · ");
+  const composition = formatFabricComposition(fabric.attributes);
   const metrics = getFabricMetrics(fabric.attributes);
   const weave = fabric.attributes.weave;
   const seasons = getFabricSeasons(fabric.attributes)

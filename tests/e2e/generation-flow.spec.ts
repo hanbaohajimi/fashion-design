@@ -72,6 +72,153 @@ test("登录邮件发送后可更换邮箱并重发到已确认地址", async ({
     .toEqual(["first@example.com", "second@example.com", "second@example.com"]);
 });
 
+test("新建项目成功后立即进入对应白板", async ({ page }) => {
+  const now = "2026-08-05T00:00:00.000Z";
+  const project = {
+    archived: false,
+    assetCount: 0,
+    coverAssetId: null,
+    coverUrl: null,
+    createdAt: now,
+    id: "created-project",
+    name: "真实流程胶囊系列",
+    updatedAt: now,
+  };
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 100, used: 0 },
+        user: {
+          authId: "auth-project-create",
+          avatar: null,
+          createdAt: now,
+          deletedAt: null,
+          email: "project-create@example.com",
+          id: "user-project-create",
+          name: "Project Creator",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/projects?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null, total: 0 } }),
+  );
+  await page.route(/\/api\/projects$/u, (route) =>
+    route.fulfill({ json: project, status: 201 }),
+  );
+  await page.route("**/api/projects/created-project", (route) =>
+    route.fulfill({ json: project }),
+  );
+  await page.route("**/api/projects/created-project/board", (route) =>
+    route.fulfill({ json: { elements: [], revision: 0, snapshot: null } }),
+  );
+  await page.route("**/api/collections?projectId=created-project", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/generations?*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/projects/created-project/agent-conversations*", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            archivedAt: null,
+            createdAt: now,
+            id: "created-project-conversation",
+            messageCount: 0,
+            projectId: project.id,
+            title: "新的设计对话",
+            updatedAt: now,
+          },
+        ],
+        nextCursor: null,
+      },
+    }),
+  );
+  await page.route("**/api/agent-conversations/*/messages*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "新建项目" }).click();
+  await page.getByRole("textbox", { name: "项目名称" }).fill(project.name);
+  await page.getByRole("button", { name: "创建项目", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/created-project$/u);
+  await expect(page.getByText(project.name)).toBeVisible();
+  await expect(page.getByRole("region", { name: "白板三步上手" })).toBeVisible();
+});
+
+test("趋势主题筛选使用接口返回的真实分类", async ({ page }) => {
+  const now = "2026-08-05T00:00:00.000Z";
+  const trend = (id: string, category: string, title: string) => ({
+    category,
+    coverImageUrl: null,
+    curatedAt: now,
+    extracted: null,
+    id,
+    platform: "vogue",
+    publishedAt: now,
+    sourceUrl: `https://example.com/${id}`,
+    status: "published",
+    summary: `${title}摘要`,
+    tags: [category],
+    title,
+  });
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 100, used: 0 },
+        user: {
+          authId: "auth-trends",
+          avatar: null,
+          createdAt: now,
+          deletedAt: null,
+          email: "trends@example.com",
+          id: "user-trends",
+          name: "Trend Reader",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/trends?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          trend("color-1", "color", "低饱和红"),
+          trend("styling-1", "styling", "层叠造型"),
+          trend("material-1", "material", "轻量科技面料"),
+        ],
+        page: 1,
+        pageSize: 60,
+        total: 3,
+      },
+    }),
+  );
+  await page.route("**/api/trends/digest/current", (route) =>
+    route.fulfill({
+      json: {
+        createdAt: now,
+        id: "digest-1",
+        itemIds: [],
+        overview: "本周趋势摘要",
+        period: "2026-W32",
+        theme: "轻量层叠",
+      },
+    }),
+  );
+
+  await page.goto("/trends");
+  const filters = page.getByRole("region", { name: "趋势筛选" });
+  await expect(filters.getByRole("button", { name: "色彩" })).toBeVisible();
+  await expect(filters.getByRole("button", { name: "造型" })).toBeVisible();
+  await expect(filters.getByRole("button", { name: "材质" })).toBeVisible();
+  await filters.getByRole("button", { name: "色彩" }).click();
+  await expect(page.getByText("低饱和红", { exact: true })).toBeVisible();
+  await expect(page.getByText("层叠造型", { exact: true })).toHaveCount(0);
+});
+
 test("本地图片拖入白板后关闭投放遮罩并进入自定义上传流程", async ({ page }) => {
   await page.route("**/api/me", (route) =>
     route.fulfill({
@@ -323,6 +470,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     output: {
       images: [
         {
+          assetId: "asset-e2e-1",
           url: "https://assets.example/generated-look.png",
           width: 768,
           height: 1024,
@@ -538,7 +686,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     page.getByRole("complementary", { name: "生成任务托盘" }),
   ).toHaveCount(0);
   const agentPanel = page.getByRole("complementary", {
-    name: "AI 设计助手",
+    name: "设计助手",
   });
   await expect(
     agentPanel.getByRole("region", { name: "生成候选" }),
@@ -550,7 +698,14 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   ).toHaveCount(1);
   await expect
     .poll(() => persistedAssetId, { timeout: 5_000 })
-    .toBe("task-e2e-1:0");
+    .toBe("asset-e2e-1");
+
+  await page.getByRole("button", { name: "导出", exact: true }).click();
+  const exportOptions = page.getByRole("region", { name: "导出选项" });
+  await expect(exportOptions).toContainText("已定位到最近生成的设计资产");
+  await expect(
+    exportOptions.getByRole("button", { name: "打开导出设置" }),
+  ).toBeEnabled();
 
   await page.reload();
   await expect(

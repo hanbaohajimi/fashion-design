@@ -72,6 +72,21 @@ export function getCompositionEntries(
   return [];
 }
 
+export function formatFabricComposition(
+  attributes: FabricAttributes,
+  limit = 2,
+): string {
+  return getCompositionEntries(attributes)
+    .slice(0, limit)
+    .map(([name, percentage]) => {
+      const normalizedName = name.trim();
+      return /\d+(?:\.\d+)?\s*%/u.test(normalizedName)
+        ? normalizedName
+        : `${normalizedName} ${percentage}%`;
+    })
+    .join(" · ");
+}
+
 export const FABRIC_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   blend: "混纺",
   cotton: "棉",

@@ -65,25 +65,20 @@ async function createFixture(): Promise<{
   const user = await prisma.user.create({
     data: {
       email: `collection-${crypto.randomUUID()}@example.com`,
-      ownedWorkspaces: {
-        create: {
-          name: "Collection workspace",
-          projects: { create: { name: "Collection project" } },
-        },
-      },
-    },
-    include: {
-      ownedWorkspaces: { include: { projects: true } },
     },
   });
-  const projectId = user.ownedWorkspaces[0]?.projects[0]?.id;
-  if (!projectId) throw new Error("测试项目创建失败");
+  const workspace = await prisma.workspace.create({
+    data: { name: "Collection workspace", ownerId: user.id },
+  });
+  const project = await prisma.project.create({
+    data: { name: "Collection project", wsId: workspace.id },
+  });
   const heroAssetId = crypto.randomUUID();
   await prisma.designAsset.create({
     data: {
       id: heroAssetId,
       operation: DesignAssetOperation.GENERATED,
-      projectId,
+      projectId: project.id,
       rootAssetId: heroAssetId,
       url: "https://cdn.test/collection-hero.png",
     },

@@ -1,5 +1,7 @@
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { describe, expect, it, vi } from "vitest";
+/** @vitest-environment jsdom */
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TrendCard } from "./TrendCard";
 import type { TrendItem } from "./trend-types";
@@ -24,57 +26,29 @@ const trend: TrendItem = {
   title: "Fluid layers",
 };
 
+afterEach(cleanup);
+
 describe("TrendCard", () => {
-  it("显眼展示 AI 整理边界、明确平台、日期与原文入口", async () => {
-    let renderer: ReactTestRenderer | null = null;
-    await act(() => {
-      renderer = create(
-        <TrendCard importing={false} onImport={vi.fn()} trend={trend} />,
-      );
-    });
+  it("显眼展示分析整理边界、明确平台、日期与原文入口", () => {
+    render(<TrendCard importing={false} onImport={vi.fn()} trend={trend} />);
 
-    const mounted = renderer as ReactTestRenderer | null;
-    if (!mounted) throw new Error("TrendCard test renderer 未挂载");
-    const output = JSON.stringify(mounted.toJSON());
-    const sourceLink = mounted.root
-      .findAllByType("a")
-      .find((link) => link.props.href === trend.sourceUrl);
-
-    expect(output).toContain("AI整理，建议结合原文判断");
-    expect(
-      sourceLink?.children.filter((child) => typeof child === "string").join(""),
-    ).toContain("查看原文 - Vogue");
-    expect(output).toContain("2026年8月1日");
-    expect(output).not.toContain("AI推荐");
-    expect(sourceLink?.props).toMatchObject({
-      rel: "noreferrer",
-      target: "_blank",
+    const sourceLink = screen.getByRole("link", {
+      name: "查看原文 - Vogue",
     });
+    expect(screen.getByText("AI整理，建议结合原文判断")).toBeTruthy();
+    expect(screen.getByText("2026年8月1日")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("AI推荐");
+    expect(sourceLink.getAttribute("href")).toBe(trend.sourceUrl);
+    expect(sourceLink.getAttribute("rel")).toBe("noreferrer");
+    expect(sourceLink.getAttribute("target")).toBe("_blank");
   });
 
-  it("提供可访问色卡并触发存入白板", async () => {
+  it("提供可访问色卡并触发存入白板", () => {
     const onImport = vi.fn();
-    let renderer: ReactTestRenderer | null = null;
-    await act(() => {
-      renderer = create(
-        <TrendCard importing={false} onImport={onImport} trend={trend} />,
-      );
-    });
+    render(<TrendCard importing={false} onImport={onImport} trend={trend} />);
 
-    const mounted = renderer as ReactTestRenderer | null;
-    if (!mounted) throw new Error("TrendCard test renderer 未挂载");
-    expect(
-      mounted.root.findAll(
-        (node) => node.props["aria-label"] === "色彩 #FDB462",
-      ),
-    ).toHaveLength(1);
-
-    await act(() => {
-      mounted.root
-        .findAllByType("button")
-        .find((button) => button.children.includes("存入白板"))
-        ?.props.onClick();
-    });
+    expect(screen.getByLabelText("色彩 #FDB462")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "存入白板" }));
     expect(onImport).toHaveBeenCalledWith(trend);
   });
 });

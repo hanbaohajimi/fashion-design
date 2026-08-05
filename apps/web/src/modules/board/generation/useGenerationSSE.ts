@@ -15,8 +15,8 @@ const TERMINAL = new Set<GenerationStatus>([
   "canceled",
 ]);
 const POLL_INTERVAL_MS = 2_000;
-const MAX_SSE_ERRORS = 1;
-const SSE_RECONNECT_MS = 10_000;
+const MAX_SSE_ERRORS = 3;
+const SSE_RECONNECT_MS = 2_500;
 
 interface GenerationEvent {
   readonly status?: GenerationStatus;
@@ -134,6 +134,9 @@ export function useGenerationSSE(
       candidate.onerror = () => {
         if (disposed || source !== candidate) return;
         errorCount += 1;
+        // EventSource already retries transient disconnects. Only switch the
+        // visible transport after repeated failures, while polling keeps the
+        // task state current and a short timer attempts to restore SSE.
         if (polling || errorCount >= MAX_SSE_ERRORS) fallbackToPolling();
       };
     }

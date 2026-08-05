@@ -15,6 +15,7 @@ import {
 import { useEditor, useValue } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
+import type { BoardPersistStatus } from "../hooks/useBoardPersist";
 import { CandidateGrid } from "../generation/CandidateGrid";
 import { useGenerationWorkspace } from "../generation/GenerationWorkspace";
 import {
@@ -27,6 +28,7 @@ import {
 import styles from "./board-agent-panel.module.css";
 
 interface BoardAgentPanelProps {
+  readonly boardStatus: BoardPersistStatus;
   readonly collapsed: boolean;
   readonly onToggle: () => void;
 }
@@ -47,7 +49,11 @@ const STATUS_LABELS: Readonly<Record<string, string>> = {
   succeeded: "创作完成",
 };
 
-export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
+export function BoardAgentPanel({
+  boardStatus,
+  collapsed,
+  onToggle,
+}: BoardAgentPanelProps) {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
   const generation = useGenerationWorkspace();
@@ -75,6 +81,9 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const skipNextAutoScroll = useRef(false);
+  const initialConversationRef = useRef<
+    Promise<AgentConversationSummary> | null
+  >(null);
 
   const selection = useValue(
     "agent-selection-context",
@@ -91,6 +100,8 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
       ? new Set(contextOverride.excludedIds)
       : new Set<string>();
   const contextItems = selection.filter((item) => !excludedIds.has(item.id));
+  const contextReady =
+    contextItems.length === 0 || boardStatus === "ready" || boardStatus === "saved";
 
   const refreshConversations = useCallback(async () => {
     const response = await listAgentConversations(projectId);
@@ -106,9 +117,15 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
       try {
         let items = await refreshConversations();
         if (items.length === 0) {
-          const created = await createAgentConversation(projectId);
+          initialConversationRef.current ??= createAgentConversation(
+            projectId,
+          ).catch((cause: unknown) => {
+            initialConversationRef.current = null;
+            throw cause;
+          });
+          const created = await initialConversationRef.current;
           items = [created];
-          setConversations(items);
+          if (!disposed) setConversations(items);
         }
         if (!disposed) {
           setActiveConversationId(items[0]?.id ?? "");
@@ -267,10 +284,30 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   };
 
   const submit = useCallback(
-    async (content: string, shapeIds: readonly string[]): Promise<void> => {
+    async (
+      content: string,
+      shapeIds: readonly string[],
+      retry?: {
+        readonly assistantMessageId: string;
+        readonly clientRequestId: string;
+        readonly userMessageId: string;
+      },
+    ): Promise<void> => {
       const normalized = content.trim();
       if (!normalized || !activeConversationId || sending) return;
-      const clientRequestId = crypto.randomUUID();
+      if (
+        shapeIds.length > 0 &&
+        boardStatus !== "ready" &&
+        boardStatus !== "saved"
+      ) {
+        setError(
+          boardStatus === "offline"
+            ? "选中的画布元素尚未同步；恢复联网并保存后才能作为上下文发送。"
+            : "选中的画布元素正在保存，保存完成后即可发送。",
+        );
+        return;
+      }
+      const clientRequestId = retry?.clientRequestId ?? crypto.randomUUID();
       const timestamp = new Date().toISOString();
       const optimisticUser = optimisticMessage({
         clientRequestId,
@@ -291,12 +328,28 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
         status: "pending",
         timestamp,
       });
-      setMessages((current) => [
-        ...current,
-        optimisticUser,
-        optimisticAssistant,
-      ]);
-      setPrompt("");
+      if (retry) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === retry.assistantMessageId
+              ? {
+                  ...message,
+                  content: "正在理解你的设计需求…",
+                  error: null,
+                  status: "pending",
+                  updatedAt: timestamp,
+                }
+              : message,
+          ),
+        );
+      } else {
+        setMessages((current) => [
+          ...current,
+          optimisticUser,
+          optimisticAssistant,
+        ]);
+        setPrompt("");
+      }
       setSending(true);
       setError(null);
       try {
@@ -306,15 +359,25 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
           fileAssetIds: [],
           shapeIds,
         });
-        setMessages((current) => [
-          ...current.filter(
-            (message) =>
-              message.id !== optimisticUser.id &&
-              message.id !== optimisticAssistant.id,
-          ),
-          result.userMessage,
-          result.assistantMessage,
-        ]);
+        setMessages((current) =>
+          retry
+            ? current.map((message) => {
+                if (message.id === retry.userMessageId)
+                  return result.userMessage;
+                if (message.id === retry.assistantMessageId)
+                  return result.assistantMessage;
+                return message;
+              })
+            : [
+                ...current.filter(
+                  (message) =>
+                    message.id !== optimisticUser.id &&
+                    message.id !== optimisticAssistant.id,
+                ),
+                result.userMessage,
+                result.assistantMessage,
+              ],
+        );
         if (result.taskId) {
           void generation.track(result.taskId).catch(() => {
             setError("生成任务已创建，状态同步稍有延迟");
@@ -331,20 +394,30 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
           })
           .catch(() => undefined);
       } catch (cause) {
-        setMessages((current) =>
-          current.filter(
-            (message) =>
-              message.id !== optimisticUser.id &&
-              message.id !== optimisticAssistant.id,
-          ),
-        );
-        setPrompt(normalized);
+        if (retry) {
+          setMessageRevision((current) => current + 1);
+        } else {
+          setMessages((current) =>
+            current.filter(
+              (message) =>
+                message.id !== optimisticUser.id &&
+                message.id !== optimisticAssistant.id,
+            ),
+          );
+          setPrompt(normalized);
+        }
         setError(cause instanceof Error ? cause.message : "消息发送失败");
       } finally {
         setSending(false);
       }
     },
-    [activeConversationId, generation, refreshConversations, sending],
+    [
+      activeConversationId,
+      boardStatus,
+      generation,
+      refreshConversations,
+      sending,
+    ],
   );
 
   const newConversation = async (): Promise<void> => {
@@ -367,12 +440,12 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   if (collapsed) {
     return (
       <aside
-        aria-label="AI 设计助手（已折叠）"
+        aria-label="设计助手（已折叠）"
         className={styles.collapsedRail}
         data-agent-panel
       >
         <button
-          aria-label="展开 AI 设计助手"
+          aria-label="展开设计助手"
           className={styles.railButton}
           onClick={onToggle}
           type="button"
@@ -390,14 +463,14 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
   return (
     <>
       <button
-        aria-label="关闭 AI 设计助手"
+        aria-label="关闭设计助手"
         className={styles.mobileScrim}
         onClick={onToggle}
         type="button"
       />
       <aside
         aria-busy={loading || sending}
-        aria-label="AI 设计助手"
+        aria-label="设计助手"
         className={styles.panel}
         data-agent-panel
       >
@@ -432,7 +505,7 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
               <MoreIcon />
             </button>
             <button
-              aria-label="折叠 AI 设计助手"
+              aria-label="折叠设计助手"
               onClick={onToggle}
               title="折叠"
               type="button"
@@ -631,12 +704,19 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
                 {message.status === "failed" && repliedUser ? (
                   <button
                     className={styles.retryButton}
-                    disabled={sending}
+                    disabled={sending || !repliedUser.clientRequestId}
                     onClick={() =>
-                      void submit(
-                        repliedUser.content,
-                        repliedUser.context?.shapeIds ?? [],
-                      )
+                      repliedUser.clientRequestId
+                        ? void submit(
+                            repliedUser.content,
+                            repliedUser.context?.shapeIds ?? [],
+                            {
+                              assistantMessageId: message.id,
+                              clientRequestId: repliedUser.clientRequestId,
+                              userMessageId: repliedUser.id,
+                            },
+                          )
+                        : undefined
                     }
                     type="button"
                   >
@@ -752,12 +832,16 @@ export function BoardAgentPanel({ collapsed, onToggle }: BoardAgentPanelProps) {
           <div className={styles.composerFooter}>
             <span>
               {contextItems.length > 0
-                ? `${contextItems.length} 项参考`
+                ? contextReady
+                  ? `${contextItems.length} 项参考`
+                  : `${contextItems.length} 项参考 · 保存中`
                 : "未附加画布内容"}
               {prompt.length > 0 ? ` · ${prompt.length}/4000` : ""}
             </span>
             <button
-              disabled={sending || prompt.trim().length === 0}
+              disabled={
+                sending || prompt.trim().length === 0 || !contextReady
+              }
               onClick={() =>
                 void submit(
                   prompt,
@@ -807,11 +891,22 @@ function shapeLabel(type: string, props: unknown): string {
     if (typeof title === "string" && title.trim()) return title.trim();
   }
   const labels: Readonly<Record<string, string>> = {
+    arrow: "连接箭头",
+    bookmark: "网页参考",
+    draw: "手绘线稿",
+    embed: "嵌入内容",
     "fashion-fabric": "面料",
     "fashion-frame": "组织框",
     "fashion-image": "图片参考",
     "fashion-note": "灵感便签",
     "fashion-swatch": "色卡",
+    frame: "画板框",
+    geo: "几何图形",
+    image: "图片参考",
+    line: "线条",
+    note: "便签",
+    text: "文字说明",
+    video: "视频参考",
   };
   return labels[type] ?? "白板元素";
 }

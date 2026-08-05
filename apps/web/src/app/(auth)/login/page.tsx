@@ -3,7 +3,7 @@
 import { type FormEvent, useRef, useState } from "react";
 
 import { readErrorMessage } from "../../../modules/auth/auth-api";
-import styles from "./login.module.css";
+import styles from "./login-redesign.module.css";
 
 type FormState = "idle" | "sending" | "sent";
 
@@ -64,21 +64,28 @@ export default function LoginPage() {
 
   return (
     <main className={styles.page}>
-      <section className={styles.patternPanel} aria-label="平台介绍">
-        <p className={styles.brand}>AI Fashion Design / Atelier 01</p>
-        <h1>
+      <section className={styles.brandPanel} aria-label="平台介绍">
+        <div>
+          <div className={styles.brandMark}>A</div>
+          <p className={styles.brandText}>Atelier Design Studio</p>
+        </div>
+        <h1 className={styles.headline}>
           从一根线，
-          <em>生成系列。</em>
+          <em>绘制系列。</em>
         </h1>
-        <div className={styles.cutPiece} aria-hidden="true" />
+        <p className={styles.caption}>
+          专业服装设计师的创作工作台。整合趋势分析、面料管理、设计工具于一体。
+        </p>
       </section>
 
       <section className={styles.formPanel}>
-        <p className={styles.step}>Secure entry · 01</p>
-        <h2>回到设计台</h2>
-        <p className={styles.intro}>
-          输入工作邮箱。我们会发送一条一次性安全链接，无需记住密码。
-        </p>
+        <div className={styles.formHeader}>
+          <p className={styles.step}>Secure entry · 01</p>
+          <h2 className={styles.formTitle}>回到设计台</h2>
+          <p className={styles.intro}>
+            输入工作邮箱。我们会发送一条一次性安全链接，无需记住密码。
+          </p>
+        </div>
 
         <form
           aria-busy={state === "sending"}

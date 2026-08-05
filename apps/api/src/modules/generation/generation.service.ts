@@ -159,25 +159,60 @@ export class GenerationService {
       providerRequest.taskType === "t2i" &&
       !providerRequest.referenceImageUrl
     ) {
-      const styleReference = compiledPrompt.styleReferences?.[0];
-      const silhouetteReference =
-        compiledPrompt.silhouetteReferences?.[0]?.edgeImageUrl;
-      const fabricReference = compiledPrompt.fabricReferences?.[0];
-      const boardReference =
-        styleReference?.imageUrl ??
-        silhouetteReference ??
-        fabricReference?.imageUrl;
-      if (boardReference) {
-        providerRequest.referenceImageUrl = boardReference;
-        providerRequest.strength = styleReference
-          ? "weight" in styleReference
-            ? styleReference.weight
-            : STYLE_REFERENCE_STRENGTH
-          : silhouetteReference
-            ? SILHOUETTE_REFERENCE_STRENGTH
-            : (fabricReference && "weight" in fabricReference
-                ? fabricReference.weight
-                : FABRIC_REFERENCE_STRENGTH);
+      // 收集所有参考图片及其权重
+      interface WeightedReference {
+        url: string;
+        weight: number;
+        priority: number; // 类型优先级：style=3, fabric=2, silhouette=1
+      }
+
+      const allReferences: WeightedReference[] = [];
+
+      // Style references (最高优先级)
+      for (const ref of compiledPrompt.styleReferences ?? []) {
+        allReferences.push({
+          url: ref.imageUrl,
+          weight: "weight" in ref ? ref.weight : STYLE_REFERENCE_STRENGTH,
+          priority: 3,
+        });
+      }
+
+      // Fabric references (中优先级)
+      for (const ref of compiledPrompt.fabricReferences ?? []) {
+        allReferences.push({
+          url: ref.imageUrl,
+          weight: "weight" in ref ? ref.weight : FABRIC_REFERENCE_STRENGTH,
+          priority: 2,
+        });
+      }
+
+      // Silhouette references (低优先级)
+      for (const ref of compiledPrompt.silhouetteReferences ?? []) {
+        allReferences.push({
+          url: ref.edgeImageUrl,
+          weight: SILHOUETTE_REFERENCE_STRENGTH,
+          priority: 1,
+        });
+      }
+
+      // 设置所有参考图片到请求中
+      if (allReferences.length > 0) {
+        // 按权重和优先级排序，权重高的在前
+        const sorted = allReferences.sort((a, b) => {
+          if (b.weight !== a.weight) return b.weight - a.weight;
+          return b.priority - a.priority;
+        });
+
+        // 使用 referenceImageUrls 传递所有图片（最多16张）
+        providerRequest.referenceImageUrls = sorted
+          .slice(0, 16)
+          .map((reference) => reference.url);
+        // 保持向后兼容：referenceImageUrl 设为权重最高的
+        const primaryReference = sorted[0];
+        if (primaryReference) {
+          providerRequest.referenceImageUrl = primaryReference.url;
+          providerRequest.strength = primaryReference.weight;
+        }
       }
     }
     const input: AiGenerationRequest = {

@@ -1,5 +1,6 @@
 import {
   pipeline,
+  RawImage,
   type ImageFeatureExtractionPipelineType,
 } from "@huggingface/transformers";
 import sharp from "sharp";
@@ -34,7 +35,7 @@ export class ClipImageEmbedder implements ImageEmbedder {
     return values.map((value) => value / magnitude);
   }
 
-  private async resolveImage(imageUrl: string): Promise<string> {
+  private async resolveImage(imageUrl: string): Promise<string | RawImage> {
     if (!imageUrl.startsWith("s3://")) return imageUrl;
     if (!this.storage) {
       throw new Error("私有系列资产缺少对象存储读取器");
@@ -44,8 +45,20 @@ export class ClipImageEmbedder implements ImageEmbedder {
     if (!metadata.format) {
       throw new Error("无法识别私有系列资产的图片格式");
     }
-    const mimeType = `image/${metadata.format}`;
-    return `data:${mimeType};base64,${body.toString("base64")}`;
+    const normalized = await sharp(body, { failOn: "error" })
+      .rotate()
+      .resize({
+        fit: "inside",
+        height: 512,
+        width: 512,
+        withoutEnlargement: true,
+      })
+      .removeAlpha()
+      .png()
+      .toBuffer();
+    return RawImage.fromBlob(
+      new Blob([Uint8Array.from(normalized).buffer], { type: "image/png" }),
+    );
   }
 
   private getExtractor(): Promise<ImageFeatureExtractionPipelineType> {

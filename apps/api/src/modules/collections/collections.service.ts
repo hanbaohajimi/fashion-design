@@ -130,6 +130,13 @@ const emptyDraft: DnaDraft = {
   palette: [],
   silhouettes: [],
 };
+const MAX_CLAUDE_IMAGE_BYTES = 10 * 1024 * 1024;
+const CLAUDE_IMAGE_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 @Injectable()
 export class CollectionsService {
@@ -154,44 +161,88 @@ export class CollectionsService {
       include: collectionInclude,
     });
     if (existing) {
+      if (
+        existing.dna &&
+        (existing.dna.extractionStatus === DnaExtractionStatus.FAILED ||
+          !hasUsefulDnaRecord(existing.dna))
+      ) {
+        try {
+          const recovered = await this.extractor.extract(
+            await this.claudeImageUrl(hero.thumbnailUrl ?? hero.url),
+          );
+          if (!hasUsefulDna(recovered)) {
+            throw new Error("Hero Look 未提取到可用的系列 DNA");
+          }
+          const dna = await this.database.collectionDna.update({
+            where: { collectionId: existing.id },
+            data: {
+              extractionStatus: DnaExtractionStatus.READY,
+              fabrics: recovered.fabrics,
+              moodWords: recovered.moodWords,
+              palette: [...recovered.palette],
+              silhouettes: recovered.silhouettes,
+            },
+          });
+          return this.toView({ ...existing, dna });
+        } catch {
+          return this.toView(existing);
+        }
+      }
       return this.toView(existing);
     }
 
     let extractionStatus: DnaExtractionStatus = DnaExtractionStatus.READY;
     let draft: DnaDraft;
     try {
-      draft = await this.extractor.extract(await this.providerUrl(hero.url));
+      draft = await this.extractor.extract(
+        await this.claudeImageUrl(hero.thumbnailUrl ?? hero.url),
+      );
+      if (!hasUsefulDna(draft)) {
+        throw new Error("Hero Look 未提取到可用的系列 DNA");
+      }
     } catch {
       extractionStatus = DnaExtractionStatus.FAILED;
       draft = emptyDraft;
     }
 
-    const collection = await this.database.collection.upsert({
-      where: { heroAssetId },
-      update: {},
-      create: {
-        dna: {
-          create: {
-            extractionStatus,
-            fabrics: draft.fabrics,
-            moodWords: draft.moodWords,
-            palette: [...draft.palette],
-            referenceFileIds: [],
-            silhouettes: draft.silhouettes,
-          },
+    const collectionId = await this.database.$transaction(async (transaction) => {
+      const base = await transaction.collection.upsert({
+        where: { heroAssetId },
+        update: {},
+        create: {
+          heroAssetId,
+          name: `系列 · ${hero.id.slice(0, 8).toUpperCase()}`,
+          projectId: hero.projectId,
         },
-        heroAssetId,
-        looks: {
-          create: {
-            analysisStatus: SimilarityAnalysisStatus.PENDING,
-            designAssetId: hero.id,
-            isHero: true,
-            ordinal: 1,
-          },
+      });
+      await transaction.collectionDna.upsert({
+        where: { collectionId: base.id },
+        update: {},
+        create: {
+          collectionId: base.id,
+          extractionStatus,
+          fabrics: draft.fabrics,
+          moodWords: draft.moodWords,
+          palette: [...draft.palette],
+          referenceFileIds: [],
+          silhouettes: draft.silhouettes,
         },
-        name: `系列 · ${hero.id.slice(0, 8).toUpperCase()}`,
-        projectId: hero.projectId,
-      },
+      });
+      await transaction.collectionLook.upsert({
+        where: { designAssetId: hero.id },
+        update: {},
+        create: {
+          analysisStatus: SimilarityAnalysisStatus.PENDING,
+          collectionId: base.id,
+          designAssetId: hero.id,
+          isHero: true,
+          ordinal: 1,
+        },
+      });
+      return base.id;
+    });
+    const collection = await this.database.collection.findUniqueOrThrow({
+      where: { id: collectionId },
       include: collectionInclude,
     });
     return this.toView(collection);
@@ -233,6 +284,7 @@ export class CollectionsService {
     const collection = await this.ownedCollection(userId, collectionId);
     const dna = this.requireDna(collection.dna);
     this.assertUnlocked(dna, input);
+    this.assertLockableDimensions(dna, input);
     await this.assertOwnedFileReferences(userId, input.referenceFileIds);
 
     const updated = await this.database.collectionDna.update({
@@ -487,6 +539,29 @@ export class CollectionsService {
     }
   }
 
+  private assertLockableDimensions(
+    dna: DnaRecord,
+    input: UpdateDnaInput,
+  ): void {
+    const currentPalette = dnaDraftSchema.shape.palette.safeParse(dna.palette);
+    const emptyLock =
+      (input.locks?.palette === true &&
+        (input.palette ?? (currentPalette.success ? currentPalette.data : []))
+          .length === 0) ||
+      (input.locks?.silhouettes === true &&
+        (input.silhouettes ?? dna.silhouettes).length === 0) ||
+      (input.locks?.fabrics === true &&
+        (input.fabrics ?? dna.fabrics).length === 0) ||
+      (input.locks?.moodWords === true &&
+        (input.moodWords ?? dna.moodWords).length === 0);
+    if (emptyLock) {
+      throw new BadRequestException({
+        code: "DNA_DIMENSION_EMPTY",
+        message: "请先定义该 DNA 维度，再将其锁定",
+      });
+    }
+  }
+
   private async assertOwnedFileReferences(
     userId: string,
     referenceFileIds: readonly string[] | undefined,
@@ -535,6 +610,30 @@ export class CollectionsService {
     return objectKey
       ? this.storage.createDownloadUrl(objectKey, 15 * 60)
       : stored;
+  }
+
+  private async claudeImageUrl(stored: string): Promise<string> {
+    const objectKey = objectKeyFrom(stored);
+    if (!objectKey) return stored;
+    const head = await this.storage.head(objectKey);
+    const contentType = head.contentType?.toLowerCase();
+    if (!contentType || !CLAUDE_IMAGE_TYPES.has(contentType)) {
+      throw new Error("Hero Look 图片格式不受 Claude 支持");
+    }
+    if (
+      head.contentLength <= 0 ||
+      head.contentLength > MAX_CLAUDE_IMAGE_BYTES
+    ) {
+      throw new Error("Hero Look 缩略图大小不适合视觉分析");
+    }
+    const bytes = await this.storage.readPrefix(
+      objectKey,
+      head.contentLength + 1,
+    );
+    if (bytes.byteLength !== head.contentLength) {
+      throw new Error("Hero Look 图片读取不完整");
+    }
+    return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
   }
 
   private toDnaView(dna: DnaRecord): DnaView {
@@ -605,7 +704,7 @@ function variationStrength(
 ): number {
   return {
     color: 0.36,
-    detail: 0.32,
+    detail: 0.2,
     fabric: 0.42,
     silhouette: 0.58,
     styling: 0.48,
@@ -644,6 +743,7 @@ function collectionPrompt(
     `为系列“${collection.name}”扩展一套新的完整服装 Look。`,
     `本次变化轴：${input.variationAxis}。在保持系列家族感的同时，围绕该轴做清晰、可辨识但受控的变化。`,
     `必须保持的锁定 DNA：${locked.length > 0 ? locked.join("；") : "无硬锁维度"}。锁定维度不得被重新解释或替换。`,
+    `除“${input.variationAxis}”外，其余廓形、比例、色彩、面料和造型均需与 Hero Look 保持一致；若与锁定 DNA 冲突，以锁定 DNA 为最高优先级。`,
     `其余系列 DNA 作为视觉参考：${reference}。`,
     "延续 Hero Look 的设计语言、造型完成度与摄影呈现，输出单人全身时装 Look，不要生成拼贴或文字。",
     input.prompt ? `设计师补充方向：${input.prompt}` : "",
@@ -654,4 +754,23 @@ function collectionPrompt(
 
 function formatTerms(values: readonly string[]): string {
   return values.length > 0 ? values.join("、") : "未定义";
+}
+
+function hasUsefulDna(draft: DnaDraft): boolean {
+  return (
+    draft.palette.length > 0 ||
+    draft.silhouettes.length > 0 ||
+    draft.fabrics.length > 0 ||
+    draft.moodWords.length > 0
+  );
+}
+
+function hasUsefulDnaRecord(dna: DnaRecord): boolean {
+  const palette = dnaDraftSchema.shape.palette.safeParse(dna.palette);
+  return (
+    (palette.success && palette.data.length > 0) ||
+    dna.silhouettes.length > 0 ||
+    dna.fabrics.length > 0 ||
+    dna.moodWords.length > 0
+  );
 }

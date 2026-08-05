@@ -13,6 +13,7 @@ import styles from "./generation.module.css";
 const GENERATION_BAR_GAP_PX = 14;
 const GENERATION_BAR_MAX_WIDTH_PX = 520;
 const GENERATION_BAR_COLLAPSED_HEIGHT_PX = 120;
+const TOOL_DOCK_SAFE_BOTTOM_PX = 82;
 
 export const DEFAULT_GENERATION_PARAMETERS: GenerationParameters = {
   background: "opaque",
@@ -68,6 +69,7 @@ export function GenerationBar() {
     GENERATION_BAR_GAP_PX,
     window.innerHeight -
       GENERATION_BAR_COLLAPSED_HEIGHT_PX -
+      TOOL_DOCK_SAFE_BOTTOM_PX -
       GENERATION_BAR_GAP_PX,
   );
   const generationY = Math.min(Math.max(desiredY, GENERATION_BAR_GAP_PX), maxY);
@@ -82,7 +84,10 @@ export function GenerationBar() {
     "--generation-y": `${generationY}px`,
     "--generation-max-height": `${Math.max(
       80,
-      window.innerHeight - generationY - GENERATION_BAR_GAP_PX,
+      window.innerHeight -
+        generationY -
+        TOOL_DOCK_SAFE_BOTTOM_PX -
+        GENERATION_BAR_GAP_PX,
     )}px`,
   } as CSSProperties;
 
@@ -92,7 +97,7 @@ export function GenerationBar() {
     }
     const normalized = prompt.trim();
     if (normalized.length < 3) {
-      setError("请用至少 3 个字描述希望生成的设计");
+      setError("请用至少 3 个字描述设计方向");
       return;
     }
     setError(null);
@@ -114,20 +119,20 @@ export function GenerationBar() {
 
   return (
     <section
-      aria-label="生成浮条"
+      aria-label="设计面板"
       className={styles.generationBar}
       onPointerDown={(event) => event.stopPropagation()}
       style={style}
     >
       <div className={styles.generationBarTopline}>
         <ConstraintChips roles={selection.roles} />
-        <span>{selection.shapeIds.length} 项参与编译</span>
+        <span>{selection.shapeIds.length} 项参与设计</span>
       </div>
       <div className={styles.promptRow}>
         <label>
-          <span>生成描述</span>
+          <span>设计描述</span>
           <input
-            aria-label="生成描述"
+            aria-label="设计描述"
             maxLength={4000}
             onChange={(event) => setPrompt(event.target.value)}
             onKeyDown={(event) => {
@@ -149,7 +154,7 @@ export function GenerationBar() {
           onClick={() => void submit()}
           type="button"
         >
-          {submitting ? "提交中…" : "生成"}
+          {submitting ? "提交中…" : "创建"}
         </button>
       </div>
       <details className={styles.advancedOptions}>
@@ -158,7 +163,7 @@ export function GenerationBar() {
           <label>
             尺寸
             <select
-              aria-label="生成尺寸"
+              aria-label="设计尺寸"
               onChange={(event) => {
                 const [width, height] = event.target.value
                   .split("x")
@@ -181,7 +186,7 @@ export function GenerationBar() {
           <label>
             质量
             <select
-              aria-label="生成质量"
+              aria-label="输出质量"
               onChange={(event) =>
                 setParameters((current) => ({
                   ...current,

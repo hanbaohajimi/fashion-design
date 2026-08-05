@@ -58,7 +58,7 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await page.setViewportSize({ height: 1080, width: 1920 });
   await page.goto(`/${PROJECT_ID}`);
 
-  const agent = page.getByRole("complementary", { name: "AI 设计助手" });
+  const agent = page.getByRole("complementary", { name: "设计助手" });
   const toolDock = page.getByRole("complementary", { name: "工具条" });
   await expect(agent).toBeVisible();
   await expect(toolDock).toBeVisible();
@@ -94,6 +94,9 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
     name: "告诉 Agent 你想完成什么",
   });
   await composer.fill("请分析这个廓形并给出三个面料方向");
+  const sendButton = page.getByRole("button", { name: "发送", exact: true });
+  await expect(sendButton).toBeDisabled();
+  await expect(sendButton).toBeEnabled();
   await composer.press("Enter");
   await composer.press("Enter");
   await expect(
@@ -113,9 +116,9 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await page.getByRole("button", { name: "归档会话" }).click();
   await expect(agent.locator("header strong").first()).toHaveText("新的设计对话");
 
-  await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
+  await page.getByRole("button", { name: "折叠设计助手" }).click();
   const collapsed = page.getByRole("complementary", {
-    name: "AI 设计助手（已折叠）",
+    name: "设计助手（已折叠）",
   });
   await expect(collapsed).toBeVisible();
   expect((await collapsed.boundingBox())?.width).toBeLessThanOrEqual(50);
@@ -129,8 +132,11 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
 
   await page.reload();
   await expect(collapsed).toBeVisible();
-  await page.getByRole("button", { name: "展开 AI 设计助手" }).click();
+  await page.getByRole("button", { name: "展开设计助手" }).click();
   await expect(agent).toBeVisible();
+  await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
+  const inspector = page.locator('[data-label-design-panel="true"]');
+  await expect(inspector).toBeVisible();
 
   for (const viewport of [
     { height: 900, width: 1440 },
@@ -149,11 +155,20 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
     expect((dockBox?.y ?? 0) + (dockBox?.height ?? 0)).toBeLessThanOrEqual(
       viewport.height - 10,
     );
+    const inspectorBox = await inspector.boundingBox();
+    expect(inspectorBox).not.toBeNull();
+    expect((inspectorBox?.x ?? 0) >= 0).toBe(true);
+    expect(
+      (inspectorBox?.x ?? 0) + (inspectorBox?.width ?? 0),
+    ).toBeLessThanOrEqual(viewport.width);
+    expect(
+      (inspectorBox?.y ?? 0) + (inspectorBox?.height ?? 0),
+    ).toBeLessThanOrEqual(viewport.height - 76);
   }
   await expect(
-    page.getByRole("button", { name: "关闭 AI 设计助手" }),
+    page.getByRole("button", { name: "关闭设计助手" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
+  await page.getByRole("button", { name: "折叠设计助手" }).click();
   await expect(collapsed).toBeVisible();
 });
 

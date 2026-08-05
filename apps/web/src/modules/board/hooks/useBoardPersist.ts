@@ -407,7 +407,7 @@ export function useBoardPersist(
           if (conflictDetected) {
             saveOutbox(makePayload([...pending.values()]));
           } else {
-            setStatus("ready");
+            setStatus("saving");
             scheduleFlush();
           }
         },

@@ -23,8 +23,7 @@ export function ConsistencyOverview({
         <strong>{consistency.referenceLabel}</strong>
       </header>
       <p>
-        数值来自 CLIP
-        视觉特征的两两余弦相似度，仅用于发现重复与偏离，不能替代设计师判断。
+        数值来自视觉特征的两两余弦相似度，仅用于发现重复与偏离，不能替代设计师判断。
       </p>
 
       {consistency.looks.length < 2 ? (

@@ -10,7 +10,7 @@ const STATUS_LABEL = {
   failed: "失败",
   moderation_failed: "内容审核未通过",
   queued: "排队中",
-  running: "生成中",
+  running: "创作中",
   succeeded: "已完成",
 } as const;
 
@@ -29,7 +29,7 @@ export function TaskTray() {
   if (visible.length === 0) return null;
 
   return (
-    <aside className={styles.taskTray} aria-label="生成任务托盘">
+    <aside className={styles.taskTray} aria-label="任务托盘">
       <header>
         <span>TASK / TRAY</span>
         <b>{active.length} 进行中</b>

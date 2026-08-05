@@ -47,7 +47,7 @@ export function EmptyState({
       <p className={styles.emptyKicker}>YOUR FIRST COLLECTION</p>
       <h2>从一个名字开始。</h2>
       <p>
-        创建第一份设计项目，把灵感、款式与后续生成资产收拢在同一处。
+        创建第一份设计项目，把灵感、款式与后续创作资产收拢在同一处。
       </p>
       <button className={styles.primaryButton} onClick={onCreate} type="button">
         创建首个项目

@@ -1,6 +1,6 @@
 .toolRail {
   position: fixed;
-  z-index: var(--z-panel);
+  z-index: 1050;
   top: auto;
   bottom: 14px;
   left: calc((100vw - var(--board-agent-current-width, 400px)) / 2);

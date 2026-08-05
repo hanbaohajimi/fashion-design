@@ -14,6 +14,7 @@ import styles from "./context-inspector.module.css";
 const PANEL_GAP_PX = 16;
 const PANEL_FALLBACK_WIDTH_PX = 320;
 const TOPBAR_FALLBACK_HEIGHT_PX = 62;
+const TOOL_DOCK_SAFE_BOTTOM_PX = 82;
 
 function readCssPixelValue(name: string, fallback: number): number {
   const value = Number.parseFloat(
@@ -120,14 +121,19 @@ export function ContextInspector() {
           window.innerWidth - agentWidth - panelWidth - PANEL_GAP_PX,
         );
         const minY = topbarHeight + PANEL_GAP_PX;
+        const availableHeight = Math.max(
+          80,
+          window.innerHeight -
+            minY -
+            PANEL_GAP_PX -
+            TOOL_DOCK_SAFE_BOTTOM_PX,
+        );
         const maxY = Math.max(
           minY,
           window.innerHeight -
-            Math.min(
-              estimatedHeight,
-              window.innerHeight - minY - PANEL_GAP_PX,
-            ) -
-            76,
+            Math.min(estimatedHeight, availableHeight) -
+            PANEL_GAP_PX -
+            TOOL_DOCK_SAFE_BOTTOM_PX,
         );
 
         const x = Math.min(
@@ -143,7 +149,13 @@ export function ContextInspector() {
         );
 
         position = {
-          maxHeight: Math.max(80, window.innerHeight - y - PANEL_GAP_PX),
+          maxHeight: Math.max(
+            80,
+            window.innerHeight -
+              y -
+              PANEL_GAP_PX -
+              TOOL_DOCK_SAFE_BOTTOM_PX,
+          ),
           x,
           y,
         };

@@ -103,6 +103,8 @@ export function AnchorOverlay() {
   return (
     <div className={styles.anchorOverlay}>
       <svg
+        aria-hidden="true"
+        focusable="false"
         style={{
           height: "100%",
           left: 0,

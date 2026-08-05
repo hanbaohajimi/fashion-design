@@ -363,7 +363,7 @@ async function createLookbookPdf(input: {
     margin: 42,
     size: "A4",
   });
-  useCjkFont(document);
+  const bodyFont = useCjkFont(document);
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const finished = new Promise<Buffer>((resolve, reject) => {
@@ -378,7 +378,9 @@ async function createLookbookPdf(input: {
     .text("COLLECTION / LOOKBOOK", 42, 42, { characterSpacing: 1.8 });
   document
     .fontSize(31)
-    .text(pdfDisplayText(input.collectionName), 42, 88, { width: 650 });
+    .text(pdfDisplayText(input.collectionName, bodyFont), 42, 88, {
+      width: 650,
+    });
   document
     .fillColor("#66645f")
     .fontSize(10)
@@ -388,15 +390,17 @@ async function createLookbookPdf(input: {
     .fillColor("#66645f")
     .fontSize(9)
     .text("DNA / COLOR PALETTE", 42, 276, { characterSpacing: 1.4 });
+  if (input.watermark) drawPdfWatermark(document, bodyFont);
 
   const looksPerPage = 4;
   for (let start = 0; start < input.looks.length; start += looksPerPage) {
     document.addPage();
     document
+      .font(bodyFont)
       .fillColor("#161616")
       .fontSize(10)
       .text(
-        `${pdfDisplayText(input.collectionName)} / LOOKS ${start + 1}–${Math.min(start + looksPerPage, input.looks.length)}`,
+        `${pdfDisplayText(input.collectionName, bodyFont)} / LOOKS ${start + 1}-${Math.min(start + looksPerPage, input.looks.length)}`,
         42,
         28,
       );
@@ -429,6 +433,7 @@ async function createLookbookPdf(input: {
           width,
         });
     });
+    if (input.watermark) drawPdfWatermark(document, bodyFont);
   }
 
   const range = document.bufferedPageRange();
@@ -440,28 +445,33 @@ async function createLookbookPdf(input: {
       .text(
         `${PLATFORM_NAME}  ·  ${String(page + 1).padStart(2, "0")} / ${String(range.count).padStart(2, "0")}`,
         42,
-        566,
-        { align: "right", width: 758 },
+        540,
+        { align: "right", height: 12, lineBreak: false, width: 758 },
       );
-    if (input.watermark) {
-      document.save();
-      document
-        .fillOpacity(0.11)
-        .fillColor("#111111")
-        .font("Helvetica-Bold")
-        .fontSize(40)
-        .rotate(-24, { origin: [421, 298] })
-        .text("FREE EXPORT", 205, 276, {
-          align: "center",
-          characterSpacing: 5,
-          width: 432,
-        });
-      document.restore();
-      useCjkFont(document);
-    }
+    document.font(bodyFont);
   }
   document.end();
   return finished;
+}
+
+function drawPdfWatermark(
+  document: PDFKit.PDFDocument,
+  bodyFont: string,
+): void {
+  document.save();
+  document
+    .fillOpacity(0.11)
+    .fillColor("#111111")
+    .font("Helvetica-Bold")
+    .fontSize(40)
+    .text("FREE EXPORT", 205, 284, {
+      align: "center",
+      characterSpacing: 5,
+      lineBreak: false,
+      width: 432,
+    });
+  document.restore();
+  document.font(bodyFont);
 }
 
 function drawPalette(
@@ -507,43 +517,38 @@ function parsePalette(value: unknown): readonly PaletteColor[] {
   });
 }
 
-function useCjkFont(document: PDFKit.PDFDocument): void {
+function useCjkFont(document: PDFKit.PDFDocument): string {
   const configured = process.env.EXPORT_PDF_FONT_PATH?.trim();
   const candidates = [
     configured,
-    "C:/Windows/Fonts/msyh.ttc",
     "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/Deng.ttf",
+    "C:/Windows/Fonts/msyh.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
   ].filter((candidate): candidate is string => Boolean(candidate));
-  const fontPath = candidates.find((candidate) => existsSync(candidate));
-  if (!fontPath) {
-    document.font("Helvetica");
-    return;
+  for (const [index, fontPath] of candidates.entries()) {
+    if (!existsSync(fontPath)) continue;
+    const fontName = `LookbookCJK${index}`;
+    try {
+      const family = process.env.EXPORT_PDF_FONT_FAMILY?.trim();
+      if (family && /\.ttc$/iu.test(fontPath)) {
+        document.registerFont(fontName, fontPath, family);
+      } else {
+        document.registerFont(fontName, fontPath);
+      }
+      document.font(fontName);
+      return fontName;
+    } catch {
+      continue;
+    }
   }
-  try {
-    document.registerFont(
-      "LookbookCJK",
-      fontPath,
-      process.env.EXPORT_PDF_FONT_FAMILY?.trim() || "Microsoft YaHei",
-    );
-    document.font("LookbookCJK");
-  } catch {
-    document.font("Helvetica");
-  }
+  document.font("Helvetica");
+  return "Helvetica";
 }
 
-function pdfDisplayText(value: string): string {
-  const hasCjkFont = [
-    process.env.EXPORT_PDF_FONT_PATH?.trim(),
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-  ]
-    .filter((candidate): candidate is string => Boolean(candidate))
-    .some((candidate) => existsSync(candidate));
-  return hasCjkFont
+function pdfDisplayText(value: string, fontName: string): string {
+  return fontName !== "Helvetica"
     ? value
     : value.replace(/[^\u0020-\u007e]/gu, "").trim() || "COLLECTION";
 }

@@ -2221,7 +2221,7 @@
   .generationBar {
     top: auto;
     right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: max(70px, calc(env(safe-area-inset-bottom) + 62px));
     left: 12px;
     width: auto;
     max-height: 36dvh;

@@ -87,7 +87,11 @@ export class AuthService {
   assertAllowedOrigin(origin: string | undefined): void {
     const allowedOrigin = this.getAppOrigin();
 
-    if (!origin || origin !== allowedOrigin) {
+    if (
+      !origin ||
+      (origin !== allowedOrigin &&
+        !this.isDevelopmentLoopbackAlias(origin, allowedOrigin))
+    ) {
       throw new AuthFlowError(
         "INVALID_ORIGIN",
         "请求来源无效，请刷新页面后重试。",
@@ -191,6 +195,34 @@ export class AuthService {
 
   private getConfirmUrl(): string {
     return `${this.getAppOrigin()}/auth/confirm`;
+  }
+
+  private isDevelopmentLoopbackAlias(
+    candidateOrigin: string,
+    allowedOrigin: string,
+  ): boolean {
+    if (process.env.NODE_ENV === "production") {
+      return false;
+    }
+
+    try {
+      const candidate = new URL(candidateOrigin);
+      const allowed = new URL(allowedOrigin);
+      const normalizeHost = (hostname: string): string =>
+        hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+      const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+      const candidateHost = normalizeHost(candidate.hostname);
+      const allowedHost = normalizeHost(allowed.hostname);
+
+      return (
+        loopbackHosts.has(candidateHost) &&
+        loopbackHosts.has(allowedHost) &&
+        candidate.protocol === allowed.protocol &&
+        candidate.port === allowed.port
+      );
+    } catch {
+      return false;
+    }
   }
 
   private toIdentity(user: SupabaseUser): VerifiedIdentity {

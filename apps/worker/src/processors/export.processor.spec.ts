@@ -167,6 +167,9 @@ describe("export processor", () => {
     const output = storage.putTemporary.mock.calls[0]?.[1] as Buffer;
     expect(output.subarray(0, 5).toString()).toBe("%PDF-");
     expect(output.byteLength).toBeGreaterThan(5_000);
+    expect(output.toString("latin1").match(/\/Type\s*\/Page\b/gu)).toHaveLength(
+      2,
+    );
     expect(storage.putTemporary).toHaveBeenCalledWith(
       "temporary/exports/user-a/export-a.pdf",
       expect.any(Buffer),

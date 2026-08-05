@@ -4,12 +4,13 @@ import type { ReactNode } from "react";
 import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
 
+import "../styles/design-system.css";
 import "./globals.css";
 import "tldraw/tldraw.css";
 
 export const metadata: Metadata = {
-  title: "AI 服装设计平台",
-  description: "面向专业服装设计工作流的 AI 创意平台",
+  title: "Atelier 设计工作室",
+  description: "专业服装设计师的创作工作台",
 };
 
 interface RootLayoutProps {

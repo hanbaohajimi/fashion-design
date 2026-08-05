@@ -200,7 +200,7 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   });
   await page.setViewportSize({ height: 844, width: 390 });
   const [agentBox, candidateDockBox] = await Promise.all([
-    page.getByRole("complementary", { name: "AI 设计助手" }).boundingBox(),
+    page.getByRole("complementary", { name: "设计助手" }).boundingBox(),
     page.getByRole("region", { name: "生成候选" }).boundingBox(),
   ]);
   if (!agentBox || !candidateDockBox) {
@@ -208,10 +208,10 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   }
   expect(Math.round(agentBox.x + agentBox.width)).toBe(390);
   expect(candidateDockBox.x).toBeGreaterThanOrEqual(agentBox.x);
-  await page.getByRole("button", { name: "折叠 AI 设计助手" }).click();
+  await page.getByRole("button", { name: "折叠设计助手" }).click();
   await expect(page.getByRole("region", { name: "设计面板" })).toBeVisible();
   await page.setViewportSize({ height: 720, width: 1280 });
-  await page.getByRole("button", { name: "展开 AI 设计助手" }).click();
+  await page.getByRole("button", { name: "展开设计助手" }).click();
 
   const openDetails = sourceCard.getByRole("button", {
     name: "打开候选详情",

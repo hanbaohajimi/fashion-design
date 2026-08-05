@@ -22,12 +22,15 @@ import { TrendCard, platformLabel } from "../../modules/trends/TrendCard";
 import styles from "../../modules/trends/trends.module.css";
 import { WeeklyDigestCard } from "../../modules/trends/WeeklyDigestCard";
 
-const CATEGORIES = ["all", "women", "men", "accessories"] as const;
 const PLATFORMS = ["all", "vogue", "wwd", "pinterest", "fashionunited"] as const;
 const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   accessories: "配饰",
   all: "全部",
+  color: "色彩",
+  culture: "文化",
+  material: "材质",
   men: "男装",
+  styling: "造型",
   women: "女装",
 };
 
@@ -64,6 +67,18 @@ export default function TrendsPage() {
       .slice(0, 8)
       .map(([value]) => value);
   }, [trends.items]);
+
+  const availableCategories = useMemo(
+    () => [
+      "all",
+      ...new Set(
+        trends.items
+          .map((trend) => trend.category.trim())
+          .filter((value) => value.length > 0),
+      ),
+    ],
+    [trends.items],
+  );
 
   const filtered = useMemo(
     () =>
@@ -118,13 +133,13 @@ export default function TrendsPage() {
 
       <section className={styles.hero}>
         <div><span>TRACEABLE FASHION SIGNALS</span><h1>趋势可以被整理，<br />判断必须留给你。</h1></div>
-        <p>这里展示的是对公开来源的 AI 整理。每一条摘要都与平台、发布日期和原文入口并列呈现。</p>
+        <p>这里展示的是对公开来源的分析整理。每一条摘要都与平台、发布日期和原文入口并列呈现。</p>
       </section>
 
       <WeeklyDigestCard digest={digest.data} error={digest.error} loading={digest.isLoading} />
 
       <section aria-label="趋势筛选" className={styles.filterBar}>
-        <FilterGroup label="品类" onChange={setCategory} options={CATEGORIES} value={category} labels={CATEGORY_LABELS} />
+        <FilterGroup label="主题" onChange={setCategory} options={availableCategories} value={category} labels={CATEGORY_LABELS} />
         <FilterGroup
           label="平台"
           onChange={setPlatform}

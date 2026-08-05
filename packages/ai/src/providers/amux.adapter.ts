@@ -155,7 +155,10 @@ export class AmuxAdapter implements AiProvider {
         taskType: request.taskType,
         submittedAt: new Date().toISOString(),
         cost: this.calculateCost(request, usesEdit),
-        completedResult: { images },
+        completedResult: {
+          images,
+          ...(request.seed === undefined ? {} : { seed: request.seed }),
+        },
       };
     } catch (error) {
       throw this.mapError(error);
@@ -209,14 +212,10 @@ export class AmuxAdapter implements AiProvider {
         message: "Amux 图片编辑缺少参考图加载配置",
       });
     }
-    const source = await this.loadReferenceImage(
-      request.referenceImageUrl,
-      signal,
-    );
+
     const form = new FormData();
     form.set("model", this.config.imageModel);
     form.set("prompt", promptFor(request));
-    form.set("image", blobFrom(source), source.filename);
     form.set("n", "1");
     form.set("size", gptImage2Size(request.width, request.height));
     form.set("quality", request.quality ?? this.config.quality);
@@ -228,6 +227,18 @@ export class AmuxAdapter implements AiProvider {
     if (outputFormat !== "png" && request.outputCompression !== undefined) {
       form.set("output_compression", String(request.outputCompression));
     }
+
+    // 加载并添加所有参考图片
+    const referenceUrls =
+      "referenceImageUrls" in request && request.referenceImageUrls
+        ? request.referenceImageUrls
+        : [request.referenceImageUrl];
+
+    for (const url of referenceUrls) {
+      const source = await this.loadReferenceImage(url, signal);
+      form.append("image", blobFrom(source), source.filename);
+    }
+
     if (request.taskType === "inpaint") {
       const mask = await this.loadReferenceImage(request.maskImageUrl, signal);
       form.set("mask", blobFrom(mask), mask.filename);

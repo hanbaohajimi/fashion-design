@@ -96,6 +96,7 @@ export class ConnectorTool extends StateNode {
 
     const point = this.editor.inputs.currentPagePoint;
     const hitShape = this.editor.getShapeAtPoint(point, {
+      filter: isConnectable,
       hitInside: true,
       margin: 0,
     });
@@ -201,6 +202,7 @@ export class ConnectorTool extends StateNode {
 
     const point = this.editor.inputs.currentPagePoint;
     const hitShape = this.editor.getShapeAtPoint(point, {
+      filter: isConnectable,
       hitInside: true,
       margin: 0,
     });

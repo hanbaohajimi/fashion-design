@@ -1,0 +1,1020 @@
+/**
+ * Project Library - Redesigned
+ * 修复所有A/B/C级问题
+ * Part 1: Layout & Variables
+ */
+
+.library {
+  min-height: 100dvh;
+  padding: 0 var(--space-8) var(--space-16);
+  background: var(--surface-paper);
+  color: var(--text-primary);
+}
+
+/* ========================================
+   TOPBAR - 简化的导航栏
+   ======================================== */
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  min-height: var(--topbar-height);
+  align-items: center;
+  border-bottom: 1px solid var(--border-color-default);
+  gap: var(--space-8);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  gap: var(--space-3);
+  text-decoration: none;
+}
+
+.brand > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--text-primary);
+  place-items: center;
+  font-family: var(--font-serif);
+  font-size: var(--font-sm);
+  font-style: italic;
+}
+
+.brand strong {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+.navigation {
+  display: flex;
+  justify-self: center;
+  gap: var(--space-8);
+}
+
+.navLink {
+  min-height: 36px;
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition: border-color var(--duration-base) var(--ease-out);
+}
+
+.navLink:hover {
+  border-bottom-color: var(--accent-primary);
+}
+
+/* ========================================
+   ACCOUNT SECTION
+   ======================================== */
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-sm);
+  letter-spacing: var(--tracking-normal);
+}
+
+.avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--text-primary);
+  border-radius: var(--radius-circle);
+  background: var(--text-primary);
+  color: var(--surface-card);
+  place-items: center;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}
+
+.logoutButton {
+  min-height: 36px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: var(--space-2) 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  transition: color var(--duration-base) var(--ease-out);
+}
+
+.logoutButton:hover:not(:disabled) {
+  color: var(--accent-primary);
+}
+
+.logoutButton:disabled {
+  cursor: wait;
+  opacity: var(--opacity-disabled);
+}
+
+.logoutButton:focus-visible {
+  outline: 3px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+/* ========================================
+   HERO SECTION - 改为工作台仪表盘 (B级修复)
+   ======================================== */
+
+.dashboard {
+  display: grid;
+  min-height: 200px;
+  align-items: center;
+  padding: var(--space-12) 0 var(--space-8);
+  grid-template-columns: 1fr auto;
+  gap: var(--space-12);
+}
+
+.dashboardTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.dashboardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+}
+
+.statCard {
+  min-width: 120px;
+  border: 1px solid var(--border-color-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--surface-card);
+}
+
+.statLabel {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+
+.statValue {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* ========================================
+   TOOLBAR - 筛选和搜索
+   ======================================== */
+
+.toolbar {
+  display: grid;
+  min-height: 72px;
+  align-items: center;
+  border-block: 1px solid var(--border-color-default);
+  gap: var(--space-6);
+  grid-template-columns: auto minmax(200px, 1fr) auto auto;
+}
+
+.statusFilters {
+  display: inline-grid;
+  border: 2px solid var(--border-color-default);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  grid-template-columns: 1fr 1fr;
+}
+
+.statusFilter,
+.statusFilterActive {
+  min-height: 40px;
+  border: 0;
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-bold);
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+.statusFilter + .statusFilter,
+.statusFilter + .statusFilterActive,
+.statusFilterActive + .statusFilter,
+.statusFilterActive + .statusFilterActive {
+  border-left: 2px solid var(--border-color-default);
+}
+
+.statusFilter:hover {
+  background: var(--surface-canvas);
+}
+
+.statusFilterActive {
+  background: var(--text-primary);
+  color: var(--surface-card);
+}
+
+/* Search Input */
+.search {
+  display: flex;
+  max-width: 400px;
+  align-items: center;
+  border-bottom: 2px solid var(--border-color-default);
+  padding-bottom: var(--space-2);
+  gap: var(--space-2);
+}
+
+.search > span {
+  color: var(--text-tertiary);
+  font-size: 1.25rem;
+}
+
+.search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: var(--space-2) 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-base);
+}
+
+.search input::placeholder {
+  color: var(--text-tertiary);  /* 修复: WCAG AA合规 */
+}
+
+.projectCount {
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+/* ========================================
+   BUTTONS
+   ======================================== */
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  min-height: 44px;
+  border: 2px solid var(--text-primary);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-6);
+  align-items: center;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-bold);
+  justify-content: center;
+  text-decoration: none;
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    background-color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.primaryButton {
+  background: var(--text-primary);
+  color: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.secondaryButton {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.primaryButton:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.secondaryButton:hover {
+  background: var(--text-primary);
+  color: var(--surface-card);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  border-color: var(--border-color-subtle);
+  background: var(--border-color-subtle);
+  color: var(--text-disabled);
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ========================================
+   PROJECT GRID - 统一卡片尺寸 (B级修复)
+   移除5n+1的不规则布局
+   ======================================== */
+
+.projectGrid,
+.skeletonGrid {
+  display: grid;
+  padding-top: var(--space-8);
+  gap: var(--card-gap);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.projectCard,
+.skeletonGrid > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  animation: card-in 400ms var(--ease-smooth) both;
+}
+
+.optimisticCard {
+  opacity: 0.6;
+}
+
+.optimisticCard .projectCover {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ========================================
+   PROJECT CARD
+   ======================================== */
+
+.projectOpen {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.projectCover {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1.4;
+  border: 1px solid var(--border-color-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--cover-color);
+  background-position: center;
+  background-size: cover;
+  transition:
+    transform var(--duration-base) var(--ease-smooth),
+    box-shadow var(--duration-base) var(--ease-smooth);
+  box-shadow: var(--shadow-sm);
+}
+
+.projectCard:hover .projectCover,
+.projectOpen:focus-visible .projectCover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Cover elements - 简化动画 (A级修复) */
+.coverNumber {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+.coverMeasure {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wide);
+  opacity: 0;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.projectCard:hover .coverMeasure,
+.projectOpen:focus-visible .coverMeasure {
+  opacity: 1;
+}
+
+.coverMark {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: var(--font-xs);
+  font-style: italic;
+  font-weight: var(--font-weight-normal);
+}
+
+/* ========================================
+   CARD BODY & METADATA - 增加时尚元数据 (C级修复)
+   ======================================== */
+
+.cardBody {
+  padding: var(--space-4) 0;
+}
+
+.cardHeading {
+  display: flex;
+  min-height: 40px;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.cardHeading h2 {
+  overflow: hidden;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardHeading h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cardHeading h2 a:hover {
+  color: var(--accent-primary);
+}
+
+/* Fashion Metadata Tags */
+.cardTags {
+  display: flex;
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* Season tag */
+.tagSeason {
+  background: var(--accent-secondary);
+  color: var(--text-primary);
+}
+
+/* Style tags - 使用语义化颜色 */
+.tagStyle {
+  background: var(--style-minimalist);
+  color: var(--text-primary);
+}
+
+/* Material tags */
+.tagMaterial {
+  background: var(--fabric-woven);
+  color: var(--text-primary);
+}
+
+/* Card metadata */
+.cardMeta {
+  display: flex;
+  margin-top: var(--space-3);
+  justify-content: space-between;
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  letter-spacing: var(--tracking-wide);
+}
+
+/* ========================================
+   CARD MENU & ACTIONS
+   ======================================== */
+
+.cardMenu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cardMenu summary {
+  min-width: 32px;
+  cursor: pointer;
+  font-weight: var(--font-weight-bold);
+  list-style: none;
+  text-align: right;
+}
+
+.cardMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menuPanel {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  top: 32px;
+  right: 0;
+  display: grid;
+  min-width: 160px;
+  border: 1px solid var(--border-color-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-lg);
+}
+
+.menuPanel button {
+  border: 0;
+  border-bottom: 1px solid var(--border-color-subtle);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.menuPanel button:last-child {
+  border-bottom: 0;
+}
+
+.menuPanel button:hover:not(:disabled) {
+  background: var(--surface-canvas);
+}
+
+.menuPanel button:disabled {
+  color: var(--text-disabled);
+  cursor: wait;
+  opacity: var(--opacity-disabled);
+}
+
+.menuPanel .deleteAction {
+  color: var(--color-error);
+}
+
+/* ========================================
+   RENAME FORM
+   ======================================== */
+
+.renameForm {
+  display: flex;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.renameForm input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  border-bottom: 2px solid var(--accent-primary);
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-base);
+}
+
+.renameForm button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ========================================
+   DELETE CONFIRMATION PANEL
+   ======================================== */
+
+.confirmPanel {
+  display: grid;
+  border: 2px solid var(--color-error);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-error-bg);
+  gap: var(--space-2);
+}
+
+.confirmPanel > span {
+  color: var(--color-error);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+.confirmPanel > p {
+  margin: 0;
+  color: var(--color-error);
+  font-size: var(--font-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.confirmActions {
+  display: grid;
+  margin-top: var(--space-2);
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.confirmActions button {
+  min-height: 40px;
+  border: 2px solid var(--color-error);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-error);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-bold);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.confirmActions button[data-confirm="true"] {
+  background: var(--color-error);
+  color: var(--surface-card);
+}
+
+.confirmActions button:hover:not(:disabled) {
+  background: var(--color-error);
+  color: var(--surface-card);
+}
+
+.confirmActions button:disabled {
+  cursor: wait;
+  opacity: var(--opacity-disabled);
+}
+
+/* ========================================
+   EMPTY & ERROR STATES
+   ======================================== */
+
+.emptyState,
+.errorState {
+  position: relative;
+  display: grid;
+  min-height: 320px;
+  max-width: 600px;
+  align-content: center;
+  justify-items: start;
+  padding: var(--space-12) 0;
+}
+
+.emptyKicker {
+  color: var(--accent-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+
+.emptyState h2 {
+  margin: var(--space-4) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--tracking-tight);
+}
+
+.emptyState p {
+  max-width: 480px;
+  margin: var(--space-4) 0 var(--space-6);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+
+.statePage {
+  display: grid;
+  min-height: 100dvh;
+  padding: var(--space-8);
+  background: var(--surface-paper);
+  color: var(--text-primary);
+  place-content: center;
+  text-align: center;
+}
+
+.loadingRule {
+  display: block;
+  width: 120px;
+  height: 3px;
+  margin: 0 auto var(--space-6);
+  animation: loading-rule 1.2s ease-in-out infinite;
+  background: var(--accent-primary);
+  transform-origin: left;
+}
+
+.skeletonGrid > span {
+  aspect-ratio: 1.4;
+  border: 1px solid var(--border-color-subtle);
+  border-radius: var(--radius-lg);
+  animation: pulse 1.5s ease-in-out infinite;
+  background: var(--surface-canvas);
+}
+
+/* ========================================
+   DIALOGS & MODALS
+   ======================================== */
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: var(--z-modal);
+  inset: 0;
+  display: grid;
+  padding: var(--space-6);
+  background: rgb(26 25 22 / 0.7);
+  place-items: center;
+}
+
+.dialog {
+  width: min(100%, 500px);
+  border: 1px solid var(--border-color-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-2xl);
+}
+
+.dialogIndex {
+  color: var(--accent-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-wider);
+}
+
+.dialog h2 {
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-normal);
+  letter-spacing: var(--tracking-tight);
+}
+
+.dialog > p {
+  margin: var(--space-4) 0;
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.dialog label {
+  display: block;
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-wide);
+}
+
+.dialog input {
+  width: 100%;
+  border: 0;
+  border-bottom: 2px solid var(--border-color-default);
+  border-radius: 0;
+  outline: 0;
+  padding: var(--space-4) 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-md);
+}
+
+.dialog input:focus {
+  border-color: var(--accent-primary);
+}
+
+.dialogActions {
+  display: flex;
+  margin-top: var(--space-8);
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* ========================================
+   NOTICE BANNER
+   ======================================== */
+
+.notice {
+  display: flex;
+  margin-top: var(--space-4);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  font-size: var(--font-sm);
+}
+
+.notice button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes loading-rule {
+  0%, 100% {
+    transform: scaleX(0.2);
+  }
+  50% {
+    transform: scaleX(1);
+  }
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 1024px) {
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardStats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .library {
+    padding-inline: var(--space-4);
+  }
+
+  .topbar {
+    grid-template-columns: auto 1fr;
+    gap: var(--space-4);
+  }
+
+  .navigation {
+    display: none;
+  }
+
+  .account > span:first-child {
+    display: none;
+  }
+
+  .toolbar {
+    padding-block: var(--space-4);
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .statusFilters {
+    width: 100%;
+  }
+
+  .search {
+    max-width: none;
+  }
+
+  .projectCount {
+    order: -1;
+  }
+
+  .dashboardStats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+
+/* ========================================
+   ACCESSIBILITY - Focus States
+   ======================================== */
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.statusFilter:focus-visible,
+.statusFilterActive:focus-visible,
+.brand:focus-visible,
+.navLink:focus-visible,
+.logoutButton:focus-visible,
+.search input:focus-visible,
+.projectOpen:focus-visible,
+.cardHeading h2 a:focus-visible,
+.cardMenu summary:focus-visible,
+.menuPanel button:focus-visible,
+.renameForm input:focus-visible,
+.renameForm button:focus-visible,
+.confirmActions button:focus-visible,
+.notice button:focus-visible,
+.dialog input:focus-visible {
+  outline: 3px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+/* ========================================
+   REDUCED MOTION - A级可访问性修复
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .projectCard,
+  .projectCover,
+  .coverMeasure,
+  .primaryButton,
+  .secondaryButton,
+  .statusFilter,
+  .statusFilterActive,
+  .logoutButton,
+  .navLink,
+  .messageActions button,
+  .menuPanel button,
+  .confirmActions button {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* 保留聚焦指示器，但移除动画 */
+  .projectCard:hover .projectCover,
+  .projectOpen:focus-visible .projectCover {
+    transform: none;
+  }
+
+  .coverMeasure {
+    opacity: 1;  /* 始终显示，不做动画 */
+  }
+}

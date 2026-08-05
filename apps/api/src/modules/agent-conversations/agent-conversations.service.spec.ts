@@ -136,6 +136,43 @@ describe("AgentConversationsService", () => {
     expect(harness.generation.create).not.toHaveBeenCalled();
   });
 
+  it("normalizes a provider reply that serializes generation as a string", async () => {
+    const harness = createHarness();
+    harness.model.generateJson.mockImplementation(
+      async (options: { parse: (value: unknown) => unknown }) =>
+        options.parse({
+          action: "reply",
+          generation: "null",
+          message: "先确认目标场景，再收敛廓形和面料。",
+        }),
+    );
+    harness.database.agentMessage.update.mockResolvedValue(
+      messageFixture(AgentMessageRole.ASSISTANT, {
+        content: "先确认目标场景，再收敛廓形和面料。",
+        status: AgentMessageStatus.COMPLETED,
+      }),
+    );
+
+    const result = await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-123",
+      content: "我应该从哪里开始？",
+      fileAssetIds: [],
+      shapeIds: [],
+    });
+
+    expect(result.assistantMessage.status).toBe("completed");
+    expect(result.taskId).toBeNull();
+    expect(harness.generation.create).not.toHaveBeenCalled();
+    expect(harness.database.agentMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          content: "先确认目标场景，再收敛廓形和面料。",
+          status: AgentMessageStatus.COMPLETED,
+        }),
+      }),
+    );
+  });
+
   it("uses selected project shapes and the existing generation service", async () => {
     const harness = createHarness();
     harness.database.boardElement.findMany.mockResolvedValue([
@@ -218,6 +255,51 @@ describe("AgentConversationsService", () => {
     expect(result.assistantMessage.status).toBe("failed");
     expect(result.assistantMessage.error?.code).toBe("AGENT_REQUEST_FAILED");
     expect(harness.generation.create).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed turn with the same request id without creating duplicate messages", async () => {
+    const harness = createHarness();
+    const originalUser = messageFixture(AgentMessageRole.USER, {
+      content: "生成一件风衣",
+    });
+    const failedAssistant = messageFixture(AgentMessageRole.ASSISTANT, {
+      content: "我暂时无法完成这次请求。你可以检查上下文后重试。",
+      errorCode: "AGENT_REQUEST_FAILED",
+      errorMessage: "provider offline",
+      status: AgentMessageStatus.FAILED,
+    });
+    harness.database.agentMessage.findUnique
+      .mockResolvedValueOnce(originalUser)
+      .mockResolvedValueOnce(failedAssistant);
+    harness.model.generateJson.mockResolvedValue({
+      action: "reply",
+      generation: null,
+      message: "已恢复，可以继续完善风衣方案。",
+    });
+    harness.database.agentMessage.update
+      .mockResolvedValueOnce(
+        messageFixture(AgentMessageRole.ASSISTANT, {
+          content: "正在理解你的设计需求…",
+          status: AgentMessageStatus.PENDING,
+        }),
+      )
+      .mockResolvedValueOnce(
+        messageFixture(AgentMessageRole.ASSISTANT, {
+          content: "已恢复，可以继续完善风衣方案。",
+          status: AgentMessageStatus.COMPLETED,
+        }),
+      );
+
+    const result = await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-123",
+      content: "生成一件风衣",
+      fileAssetIds: [],
+      shapeIds: [],
+    });
+
+    expect(result.assistantMessage.status).toBe("completed");
+    expect(harness.database.$transaction).not.toHaveBeenCalled();
+    expect(harness.model.generateJson).toHaveBeenCalledOnce();
   });
 
   it("replays a completed turn for a duplicate client request id", async () => {

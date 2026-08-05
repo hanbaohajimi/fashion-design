@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { getFabricMetrics } from "./fabric-types";
+import {
+  formatFabricComposition,
+  getFabricMetrics,
+} from "./fabric-types";
+
+describe("formatFabricComposition", () => {
+  it("不会给已经带百分比的成分名称重复追加占比", () => {
+    expect(
+      formatFabricComposition({
+        composition: [{ name: "100% 再生尼龙", percentage: 100 }],
+      }),
+    ).toBe("100% 再生尼龙");
+  });
+
+  it("为普通成分名称补充占比并限制卡片展示数量", () => {
+    expect(
+      formatFabricComposition({
+        composition: { 棉: 70, 聚酯纤维: 25, 氨纶: 5 },
+      }),
+    ).toBe("棉 70% · 聚酯纤维 25%");
+  });
+});
 
 describe("getFabricMetrics", () => {
   it("把垂坠与弹力翻译成中文标签和刻度位置", () => {

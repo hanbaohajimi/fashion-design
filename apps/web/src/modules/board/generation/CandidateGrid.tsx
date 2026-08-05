@@ -52,7 +52,7 @@ export function CandidateGrid() {
         role: "style_ref",
         roleInferenceState: "ready",
         roleSource: "default",
-        title: "AI 候选设计",
+        title: "候选设计",
         uploadStatus: "ready",
         url: candidate.url,
         w: width,
@@ -113,7 +113,7 @@ export function CandidateGrid() {
             >
               {/* Provider result URLs are persisted by the generation task. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="AI 生成候选设计" src={candidate.url} />
+              <img alt="候选设计" src={candidate.url} />
             </button>
             <div className={styles.candidateActions}>
               <button onClick={() => adopt(candidate)} type="button">

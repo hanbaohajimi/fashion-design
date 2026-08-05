@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useState } from "react";
+import { useEditor, useValue } from "tldraw";
 
 import { AtelierTopBar } from "./AtelierTopBar";
 import { BoardProjectContext } from "./board-context";
@@ -11,6 +12,7 @@ import { useGenerationWorkspace } from "./generation/GenerationWorkspace";
 import { collectionKeys, listCollections } from "./generation/collection-api";
 import type { ExportSource } from "./generation/export-api";
 import type { BoardPersistStatus } from "./hooks/useBoardPersist";
+import { IMAGE_SHAPE_TYPE } from "./shapes";
 import styles from "./atelier-topbar.module.css";
 
 export function BoardActionPanels({
@@ -19,6 +21,7 @@ export function BoardActionPanels({
   readonly status: BoardPersistStatus;
 }) {
   const projectId = useContext(BoardProjectContext);
+  const editor = useEditor();
   const generation = useGenerationWorkspace();
   const [collectionMenuOpen, setCollectionMenuOpen] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -38,9 +41,29 @@ export function BoardActionPanels({
   )
     ? collectionId
     : (collections[0]?.id ?? "");
+  const latestCanvasAsset = useValue(
+    "latest-adopted-generation-asset",
+    () => {
+      const shapes = editor.getCurrentPageShapes();
+      for (let index = shapes.length - 1; index >= 0; index -= 1) {
+        const shape = shapes[index];
+        if (
+          shape?.type === IMAGE_SHAPE_TYPE &&
+          typeof shape.props.assetId === "string" &&
+          shape.props.assetId.length > 0 &&
+          !shape.props.assetId.includes(":") &&
+          shape.props.url
+        ) {
+          return { assetId: shape.props.assetId, url: shape.props.url };
+        }
+      }
+      return null;
+    },
+    [editor],
+  );
   const latestCandidate = generation.tasks
     .flatMap((task) => task.candidates)
-    .find((candidate) => !candidate.assetId.includes(":"));
+    .find((candidate) => !candidate.assetId.includes(":")) ?? latestCanvasAsset;
 
   return (
     <>

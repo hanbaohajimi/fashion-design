@@ -10,6 +10,7 @@ import {
   type TLAnyShapeUtilConstructor,
   type TLComponents,
   type TLStateNodeConstructor,
+  type TLUiOverrides,
   type TLUiStylePanelProps,
   useEditor,
   useValue,
@@ -122,6 +123,7 @@ function BoardCanvasOverlay() {
       </ErrorBoundary>
       <ErrorBoundary area="generation">
         <BoardAgentPanel
+          boardStatus={status}
           collapsed={layout.chatCollapsed}
           onToggle={layout.toggleChat}
         />
@@ -136,6 +138,21 @@ const boardComponents: TLComponents = {
   QuickActions: null,
   StylePanel: DrawingStylePanel,
   Toolbar: null,
+};
+const boardUiOverrides: TLUiOverrides = {
+  translations: {
+    "zh-cn": {
+      "action.copy-hovered-styles": "复制悬停样式",
+      "action.frame-selection": "为所选内容添加画板框",
+      "page-menu.max-pages-reached": "已达到页面数量上限",
+      "page-menu.resize": "调整页面菜单大小",
+    },
+  },
+};
+const boardAssetUrls = {
+  translations: {
+    "zh-cn": "/tldraw-translations/zh-cn",
+  },
 };
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
@@ -206,8 +223,11 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
             <GenerationWorkspace>
               <div className={styles.canvasWrapper}>
                 <Tldraw
+                  assetUrls={boardAssetUrls}
                   autoFocus
                   components={boardComponents}
+                  locale="zh-cn"
+                  overrides={boardUiOverrides}
                   {...(tldrawLicenseKey
                     ? { licenseKey: tldrawLicenseKey }
                     : {})}

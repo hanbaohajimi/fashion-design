@@ -111,6 +111,41 @@ const agentDecisionJsonSchema = {
   type: "object",
 } satisfies Record<string, unknown>;
 
+function normalizeAgentDecision(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const decision = { ...(value as Record<string, unknown>) };
+  if (decision.action === "reply") {
+    decision.generation = null;
+    return decision;
+  }
+  if (typeof decision.generation !== "string") return decision;
+
+  const serialized = decision.generation.trim();
+  if (!serialized || serialized === "null") {
+    decision.generation = null;
+    return decision;
+  }
+  try {
+    const parsed = JSON.parse(serialized) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      decision.generation = parsed;
+      return decision;
+    }
+  } catch {
+    // Some compatible providers return the image prompt directly in this field.
+  }
+  decision.generation = {
+    background: "auto",
+    height: 1024,
+    negativePrompt: "",
+    outputFormat: "png",
+    prompt: serialized,
+    quality: "high",
+    width: 1024,
+  };
+  return decision;
+}
+
 @Injectable()
 export class AgentConversationsService {
   constructor(
@@ -216,7 +251,9 @@ export class AgentConversationsService {
       });
     }
     const replay = await this.findTurn(conversationId, input.clientRequestId);
-    if (replay) return replay;
+    if (replay && replay.assistantMessage.status !== AgentMessageStatus.FAILED) {
+      return toTurnResponse(replay);
+    }
 
     const context = await this.validateContext(
       userId,
@@ -224,20 +261,35 @@ export class AgentConversationsService {
       input,
     );
     let turn: Awaited<ReturnType<typeof this.createPendingTurn>>;
-    try {
-      turn = await this.createPendingTurn(conversation, input, context);
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        const concurrent = await this.waitForTurn(
-          conversationId,
-          input.clientRequestId,
-        );
-        if (concurrent) return concurrent;
+    if (replay) {
+      this.assertRetryMatchesOriginal(replay.userMessage, input, context);
+      const assistantMessage = await this.database.agentMessage.update({
+        where: { id: replay.assistantMessage.id },
+        data: {
+          content: "正在理解你的设计需求…",
+          errorCode: null,
+          errorMessage: null,
+          generationTaskId: null,
+          status: AgentMessageStatus.PENDING,
+        },
+      });
+      turn = { assistantMessage, userMessage: replay.userMessage };
+    } else {
+      try {
+        turn = await this.createPendingTurn(conversation, input, context);
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          const concurrent = await this.waitForTurn(
+            conversationId,
+            input.clientRequestId,
+          );
+          if (concurrent) return toTurnResponse(concurrent);
+        }
+        throw error;
       }
-      throw error;
     }
 
     try {
@@ -250,7 +302,7 @@ export class AgentConversationsService {
         instructions: agentInstructions,
         jsonSchema: agentDecisionJsonSchema,
         maxTokens: 1_200,
-        parse: (value) => agentDecisionSchema.parse(value),
+        parse: (value) => agentDecisionSchema.parse(normalizeAgentDecision(value)),
         prompt: buildAgentPrompt(input.content, history, context),
         schemaName: "fashion_agent_decision",
       });
@@ -283,6 +335,8 @@ export class AgentConversationsService {
         where: { id: turn.assistantMessage.id },
         data: {
           content: decision.message,
+          errorCode: null,
+          errorMessage: null,
           generationTaskId: taskId,
           status: AgentMessageStatus.COMPLETED,
         },
@@ -363,11 +417,7 @@ export class AgentConversationsService {
       where: { replyToId: userMessage.id },
     });
     if (!assistantMessage) return null;
-    return {
-      assistantMessage: toMessage(assistantMessage),
-      taskId: assistantMessage.generationTaskId,
-      userMessage: toMessage(userMessage),
-    };
+    return { assistantMessage, userMessage };
   }
 
   private async waitForTurn(conversationId: string, clientRequestId: string) {
@@ -380,6 +430,24 @@ export class AgentConversationsService {
       });
     }
     return null;
+  }
+
+  private assertRetryMatchesOriginal(
+    userMessage: Parameters<typeof toMessage>[0],
+    input: SendAgentMessageInput,
+    context: AgentMessageContext,
+  ): void {
+    const originalContext = toMessage(userMessage).context;
+    if (
+      userMessage.content !== input.content ||
+      !sameIds(originalContext?.shapeIds ?? [], context.shapeIds) ||
+      !sameIds(originalContext?.fileAssetIds ?? [], context.fileAssetIds)
+    ) {
+      throw new BadRequestException({
+        code: "AGENT_IDEMPOTENCY_CONFLICT",
+        message: "重试请求与原始消息不一致",
+      });
+    }
   }
 
   private async loadHistory(conversationId: string, currentMessageId: string) {
@@ -547,6 +615,7 @@ const agentInstructions = [
   "你是服装设计白板中的项目 Agent。",
   "先理解用户是否只需要建议，还是明确希望生成、绘制、制作或修改视觉方案。",
   "仅在明确需要产出图片时选择 generate；解释、讨论和澄清使用 reply。",
+  "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 必须是完整 JSON 对象，禁止输出字符串。",
   "回复使用简体中文，简洁说明理解和下一步，不承诺未执行的操作。",
   "生成提示词应具体描述服装品类、廓形、材质、色彩、细节、视角和光线。",
 ].join("\n");
@@ -622,4 +691,21 @@ function toMessage(message: {
     status: message.status.toLowerCase() as AgentMessageView["status"],
     updatedAt: message.updatedAt.toISOString(),
   };
+}
+
+function toTurnResponse(turn: {
+  readonly assistantMessage: Parameters<typeof toMessage>[0];
+  readonly userMessage: Parameters<typeof toMessage>[0];
+}) {
+  return {
+    assistantMessage: toMessage(turn.assistantMessage),
+    taskId: turn.assistantMessage.generationTaskId,
+    userMessage: toMessage(turn.userMessage),
+  };
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightIds = new Set(right);
+  return left.every((id) => rightIds.has(id));
 }

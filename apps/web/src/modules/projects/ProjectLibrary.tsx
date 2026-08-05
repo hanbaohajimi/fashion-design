@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -16,12 +17,14 @@ import {
   useProjects,
   useUpdateProject,
 } from "./use-projects";
+import { writeActiveBoardId } from "../trends/active-board";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败，请稍后重试";
 }
 
 export function ProjectLibrary() {
+  const router = useRouter();
   const {
     error: authError,
     loading: authLoading,
@@ -58,11 +61,13 @@ export function ProjectLibrary() {
 
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
-    await createMutation.mutateAsync({
+    const created = await createMutation.mutateAsync({
       idempotencyKey: crypto.randomUUID(),
       name,
     });
     setProjectStatus("active");
+    writeActiveBoardId(created.id);
+    router.push(`/${created.id}`);
   };
 
   const runRename = async (project: Project, name: string): Promise<void> => {
@@ -209,10 +214,10 @@ export function ProjectLibrary() {
         <Link
           className={styles.brand}
           href="/"
-          aria-label="AI Fashion Design 首页"
+          aria-label="Atelier 设计工作室首页"
         >
-          <span>AI</span>
-          <strong>FASHION / DESIGN</strong>
+          <span>A</span>
+          <strong>ATELIER / STUDIO</strong>
         </Link>
         <nav className={styles.navigation}>
           <Link className={styles.navLink} href="/trends">

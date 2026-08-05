@@ -21,11 +21,13 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
     taskType: z.literal("t2i"),
     referenceImageUrl: z.url().optional(),
+    referenceImageUrls: z.array(z.url()).max(16).optional(),
     strength: z.number().min(0).max(1).optional(),
   }),
   commonRequestSchema.extend({
     taskType: z.literal("i2i"),
     referenceImageUrl: z.url(),
+    referenceImageUrls: z.array(z.url()).max(16).optional(),
     strength: z.number().min(0).max(1),
   }),
   commonRequestSchema.extend({
