@@ -1,11 +1,12 @@
-import { DesignAssetOperation, prisma } from "@fashion/db";
+import { DesignAssetOperation, FileStatus, prisma } from "@fashion/db";
 import { HttpStatus } from "@nestjs/common";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { DesignAssetsService } from "./design-assets.service";
 
 const service = new DesignAssetsService(prisma, {
-  createDownloadUrl: async (objectKey: string) => `https://signed.test/${objectKey}`,
+  createDownloadUrl: async (objectKey: string) =>
+    `https://signed.test/${objectKey}`,
 } as never);
 
 describe("DesignAssetsService lineage integration", () => {
@@ -34,9 +35,7 @@ describe("DesignAssetsService lineage integration", () => {
         firstPage.nextCursor ?? undefined,
         2,
       );
-      expect(secondPage.items.map((item) => item.id)).toEqual([
-        fixture.rootId,
-      ]);
+      expect(secondPage.items.map((item) => item.id)).toEqual([fixture.rootId]);
       expect(secondPage.nextCursor).toBeNull();
 
       const restoredRoot = await service.restore(
@@ -86,7 +85,89 @@ describe("DesignAssetsService lineage integration", () => {
       await prisma.user.delete({ where: { id: fixture.userId } });
     }
   });
+
+  it("将已就绪的上传文件幂等导入为系列可用的根资产", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const first = await service.importFile(
+        fixture.userId,
+        fixture.projectId,
+        fixture.fileId,
+      );
+      const second = await service.importFile(
+        fixture.userId,
+        fixture.projectId,
+        fixture.fileId,
+      );
+
+      expect(second.id).toBe(first.id);
+      expect(first).toMatchObject({
+        height: 1536,
+        operation: "imported",
+        parentAssetId: null,
+        projectId: fixture.projectId,
+        thumbnailUrl: `/api/design-assets/${first.id}/thumbnail`,
+        url: `/api/design-assets/${first.id}/content`,
+        width: 1024,
+      });
+      await expect(
+        prisma.designAsset.findUniqueOrThrow({ where: { id: first.id } }),
+      ).resolves.toMatchObject({
+        rootAssetId: first.id,
+        sourceFileId: fixture.fileId,
+      });
+      await expect(
+        prisma.designAsset.count({
+          where: {
+            projectId: fixture.projectId,
+            sourceFileId: fixture.fileId,
+          },
+        }),
+      ).resolves.toBe(1);
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
 });
+
+async function createImportFixture(): Promise<{
+  readonly fileId: string;
+  readonly projectId: string;
+  readonly userId: string;
+}> {
+  const user = await prisma.user.create({
+    data: {
+      email: `asset-import-${crypto.randomUUID()}@example.com`,
+      ownedWorkspaces: {
+        create: {
+          name: "Asset import workspace",
+          projects: { create: { name: "Asset import project" } },
+        },
+      },
+    },
+    include: {
+      ownedWorkspaces: { include: { projects: true } },
+    },
+  });
+  const projectId = user.ownedWorkspaces[0]?.projects[0]?.id;
+  if (!projectId) throw new Error("测试项目创建失败");
+  const file = await prisma.fileAsset.create({
+    data: {
+      height: 1536,
+      mimeType: "image/png",
+      objectKey: `originals/${user.id}/${crypto.randomUUID()}/source`,
+      originalName: "系列核心.png",
+      ownerId: user.id,
+      sha256: crypto.randomUUID().replaceAll("-", "").padEnd(64, "0"),
+      sizeBytes: 1024,
+      status: FileStatus.READY,
+      thumbnail1024Key: `thumbnails/${user.id}/hero-1024.webp`,
+      thumbnail256Key: `thumbnails/${user.id}/hero-256.webp`,
+      width: 1024,
+    },
+  });
+  return { fileId: file.id, projectId, userId: user.id };
+}
 
 async function createFixture(): Promise<{
   readonly currentId: string;

@@ -1,11 +1,13 @@
 import {
   CollectionVariationAxis,
   DnaExtractionStatus,
+  GenerationTaskStatus,
   SimilarityAnalysisStatus,
   type PrismaClient,
 } from "@fashion/db";
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -15,7 +17,10 @@ import {
 import {
   type CreateCollectionLookInput,
   dnaDraftSchema,
+  garmentTypeSchema,
   type DnaDraft,
+  type GarmentType,
+  type UpdateCollectionInput,
   type UpdateDnaInput,
 } from "./collections.schemas";
 import type { DnaExtractor } from "./dna-extractor";
@@ -42,6 +47,7 @@ export interface DnaView {
   readonly moodWords: readonly string[];
   readonly palette: readonly PaletteColor[];
   readonly referenceFileIds: readonly string[];
+  readonly signatureDetails: readonly string[];
   readonly silhouettes: readonly string[];
   readonly updatedAt: Date;
 }
@@ -57,6 +63,7 @@ export interface CollectionView {
   readonly id: string;
   readonly name: string;
   readonly projectId: string;
+  readonly sourceGarmentType: GarmentType | null;
   readonly updatedAt: Date;
 }
 
@@ -74,12 +81,20 @@ export interface CollectionLookView {
   readonly analysisStatus: "failed" | "pending" | "ready" | "running";
   readonly assetId: string;
   readonly isHero: boolean;
+  readonly garmentType: GarmentType | null;
   readonly ordinal: number;
   readonly similarityScore: number | null;
+  readonly slotKey: string | null;
   readonly thumbnailUrl: string | null;
   readonly url: string;
   readonly variationAxis:
-    "color" | "detail" | "fabric" | "silhouette" | "styling" | null;
+    | "color"
+    | "detail"
+    | "fabric"
+    | "garmentType"
+    | "silhouette"
+    | "styling"
+    | null;
   readonly warningIgnored: boolean;
 }
 
@@ -97,6 +112,8 @@ interface CollectionRecord {
     readonly workspace: { readonly ownerId: string };
   };
   readonly projectId: string;
+  readonly sourceGarmentTypeCode: string | null;
+  readonly sourceGarmentTypeLabel: string | null;
   readonly updatedAt: Date;
 }
 
@@ -109,6 +126,7 @@ interface DnaRecord {
   readonly palette: unknown;
   readonly paletteLocked: boolean;
   readonly referenceFileIds: readonly string[];
+  readonly signatureDetails: readonly string[];
   readonly silhouettes: readonly string[];
   readonly silhouettesLocked: boolean;
   readonly updatedAt: Date;
@@ -154,6 +172,7 @@ export class CollectionsService {
   async createFromHero(
     userId: string,
     heroAssetId: string,
+    sourceGarmentType?: GarmentType,
   ): Promise<CollectionView> {
     const hero = await this.ownedHero(userId, heroAssetId);
     const existing = await this.database.collection.findUnique({
@@ -161,10 +180,26 @@ export class CollectionsService {
       include: collectionInclude,
     });
     if (existing) {
+      const current = sourceGarmentType
+        ? {
+            ...existing,
+            ...(await this.database.collection.update({
+              where: { id: existing.id },
+              data: {
+                sourceGarmentTypeCode: sourceGarmentType.code,
+                sourceGarmentTypeLabel: sourceGarmentType.label,
+              },
+              select: {
+                sourceGarmentTypeCode: true,
+                sourceGarmentTypeLabel: true,
+              },
+            })),
+          }
+        : existing;
       if (
-        existing.dna &&
-        (existing.dna.extractionStatus === DnaExtractionStatus.FAILED ||
-          !hasUsefulDnaRecord(existing.dna))
+        current.dna &&
+        (current.dna.extractionStatus === DnaExtractionStatus.FAILED ||
+          !hasUsefulDnaRecord(current.dna))
       ) {
         try {
           const recovered = await this.extractor.extract(
@@ -174,7 +209,7 @@ export class CollectionsService {
             throw new Error("Hero Look 未提取到可用的系列 DNA");
           }
           const dna = await this.database.collectionDna.update({
-            where: { collectionId: existing.id },
+            where: { collectionId: current.id },
             data: {
               extractionStatus: DnaExtractionStatus.READY,
               fabrics: recovered.fabrics,
@@ -183,12 +218,12 @@ export class CollectionsService {
               silhouettes: recovered.silhouettes,
             },
           });
-          return this.toView({ ...existing, dna });
+          return this.toView({ ...current, dna });
         } catch {
-          return this.toView(existing);
+          return this.toView(current);
         }
       }
-      return this.toView(existing);
+      return this.toView(current);
     }
 
     let extractionStatus: DnaExtractionStatus = DnaExtractionStatus.READY;
@@ -205,42 +240,50 @@ export class CollectionsService {
       draft = emptyDraft;
     }
 
-    const collectionId = await this.database.$transaction(async (transaction) => {
-      const base = await transaction.collection.upsert({
-        where: { heroAssetId },
-        update: {},
-        create: {
-          heroAssetId,
-          name: `系列 · ${hero.id.slice(0, 8).toUpperCase()}`,
-          projectId: hero.projectId,
-        },
-      });
-      await transaction.collectionDna.upsert({
-        where: { collectionId: base.id },
-        update: {},
-        create: {
-          collectionId: base.id,
-          extractionStatus,
-          fabrics: draft.fabrics,
-          moodWords: draft.moodWords,
-          palette: [...draft.palette],
-          referenceFileIds: [],
-          silhouettes: draft.silhouettes,
-        },
-      });
-      await transaction.collectionLook.upsert({
-        where: { designAssetId: hero.id },
-        update: {},
-        create: {
-          analysisStatus: SimilarityAnalysisStatus.PENDING,
-          collectionId: base.id,
-          designAssetId: hero.id,
-          isHero: true,
-          ordinal: 1,
-        },
-      });
-      return base.id;
-    });
+    const collectionId = await this.database.$transaction(
+      async (transaction) => {
+        const base = await transaction.collection.upsert({
+          where: { heroAssetId },
+          update: {},
+          create: {
+            heroAssetId,
+            name: `系列 · ${hero.id.slice(0, 8).toUpperCase()}`,
+            projectId: hero.projectId,
+            ...(sourceGarmentType
+              ? {
+                  sourceGarmentTypeCode: sourceGarmentType.code,
+                  sourceGarmentTypeLabel: sourceGarmentType.label,
+                }
+              : {}),
+          },
+        });
+        await transaction.collectionDna.upsert({
+          where: { collectionId: base.id },
+          update: {},
+          create: {
+            collectionId: base.id,
+            extractionStatus,
+            fabrics: draft.fabrics,
+            moodWords: draft.moodWords,
+            palette: [...draft.palette],
+            referenceFileIds: [],
+            silhouettes: draft.silhouettes,
+          },
+        });
+        await transaction.collectionLook.upsert({
+          where: { designAssetId: hero.id },
+          update: {},
+          create: {
+            analysisStatus: SimilarityAnalysisStatus.PENDING,
+            collectionId: base.id,
+            designAssetId: hero.id,
+            isHero: true,
+            ordinal: 1,
+          },
+        });
+        return base.id;
+      },
+    );
     const collection = await this.database.collection.findUniqueOrThrow({
       where: { id: collectionId },
       include: collectionInclude,
@@ -250,6 +293,24 @@ export class CollectionsService {
 
   async get(userId: string, collectionId: string): Promise<CollectionView> {
     return this.toView(await this.ownedCollection(userId, collectionId));
+  }
+
+  async update(
+    userId: string,
+    collectionId: string,
+    input: UpdateCollectionInput,
+  ): Promise<CollectionView> {
+    await this.ownedCollection(userId, collectionId);
+    const source = input.sourceGarmentType;
+    const updated = await this.database.collection.update({
+      where: { id: collectionId },
+      data: {
+        sourceGarmentTypeCode: source?.code ?? null,
+        sourceGarmentTypeLabel: source?.label ?? null,
+      },
+      include: collectionInclude,
+    });
+    return this.toView(updated);
   }
 
   async list(userId: string, projectId: string): Promise<CollectionView[]> {
@@ -298,6 +359,9 @@ export class CollectionsService {
         ...(input.referenceFileIds === undefined
           ? {}
           : { referenceFileIds: [...new Set(input.referenceFileIds)] }),
+        ...(input.signatureDetails === undefined
+          ? {}
+          : { signatureDetails: input.signatureDetails }),
         ...(input.silhouettes === undefined
           ? {}
           : { silhouettes: input.silhouettes }),
@@ -330,6 +394,31 @@ export class CollectionsService {
     const variationAxis = toDatabaseVariationAxis(input.variationAxis);
     const parameters = input.parameters;
 
+    if (input.slotKey) {
+      const [completed, active] = await Promise.all([
+        this.database.collectionLook.findFirst({
+          where: { collectionId, slotKey: input.slotKey },
+          select: { designAssetId: true },
+        }),
+        this.database.generationTask.findFirst({
+          where: {
+            collectionId,
+            slotKey: input.slotKey,
+            status: {
+              in: [GenerationTaskStatus.QUEUED, GenerationTaskStatus.RUNNING],
+            },
+          },
+          select: { id: true },
+        }),
+      ]);
+      if (completed || active) {
+        throw new ConflictException({
+          code: "COLLECTION_SLOT_ALREADY_EXISTS",
+          message: "该系列槽位已生成或正在生成，请勿重复提交",
+        });
+      }
+    }
+
     return this.generation.createForCollection(
       userId,
       {
@@ -346,7 +435,17 @@ export class CollectionsService {
         width: parameters?.width ?? 768,
         ...(parameters?.seed === undefined ? {} : { seed: parameters.seed }),
       },
-      { collectionId, variationAxis },
+      {
+        collectionId,
+        variationAxis,
+        ...(input.garmentType
+          ? {
+              garmentTypeCode: input.garmentType.code,
+              garmentTypeLabel: input.garmentType.label,
+            }
+          : {}),
+        ...(input.slotKey ? { slotKey: input.slotKey } : {}),
+      },
       idempotencyKey,
     );
   }
@@ -376,9 +475,14 @@ export class CollectionsService {
         analysisStatus:
           look.analysisStatus.toLowerCase() as CollectionLookView["analysisStatus"],
         assetId: look.designAssetId,
+        garmentType: parseGarmentType(
+          look.garmentTypeCode,
+          look.garmentTypeLabel,
+        ),
         isHero: look.isHero,
         ordinal: look.ordinal,
         similarityScore: look.similarityScore,
+        slotKey: look.slotKey,
         thumbnailUrl: look.designAsset.thumbnailUrl
           ? displayAssetUrl(
               look.designAssetId,
@@ -391,11 +495,7 @@ export class CollectionsService {
           "content",
           look.designAsset.url,
         ),
-        variationAxis: look.variationAxis
-          ? (look.variationAxis.toLowerCase() as NonNullable<
-              CollectionLookView["variationAxis"]
-            >)
-          : null,
+        variationAxis: fromDatabaseVariationAxis(look.variationAxis),
         warningIgnored: look.warningIgnored,
       })),
       referenceLabel: "参考相似度",
@@ -601,6 +701,10 @@ export class CollectionsService {
       id: collection.id,
       name: collection.name,
       projectId: collection.projectId,
+      sourceGarmentType: parseGarmentType(
+        collection.sourceGarmentTypeCode,
+        collection.sourceGarmentTypeLabel,
+      ),
       updatedAt: collection.updatedAt,
     };
   }
@@ -653,6 +757,7 @@ export class CollectionsService {
       moodWords: dna.moodWords,
       palette: palette.success ? palette.data : [],
       referenceFileIds: dna.referenceFileIds,
+      signatureDetails: dna.signatureDetails,
       silhouettes: dna.silhouettes,
       updatedAt: dna.updatedAt,
     };
@@ -694,9 +799,38 @@ function toDatabaseVariationAxis(
     color: CollectionVariationAxis.COLOR,
     detail: CollectionVariationAxis.DETAIL,
     fabric: CollectionVariationAxis.FABRIC,
+    garmentType: CollectionVariationAxis.GARMENT_TYPE,
     silhouette: CollectionVariationAxis.SILHOUETTE,
     styling: CollectionVariationAxis.STYLING,
   }[axis];
+}
+
+function fromDatabaseVariationAxis(
+  axis: CollectionVariationAxis | null,
+): CollectionLookView["variationAxis"] {
+  if (!axis) return null;
+  const mapped: Record<
+    CollectionVariationAxis,
+    NonNullable<CollectionLookView["variationAxis"]>
+  > = {
+    [CollectionVariationAxis.COLOR]: "color",
+    [CollectionVariationAxis.DETAIL]: "detail",
+    [CollectionVariationAxis.FABRIC]: "fabric",
+    [CollectionVariationAxis.GARMENT_TYPE]: "garmentType",
+    [CollectionVariationAxis.SILHOUETTE]: "silhouette",
+    [CollectionVariationAxis.STYLING]: "styling",
+  };
+  return mapped[axis];
+}
+
+function parseGarmentType(
+  code: string | null,
+  label: string | null,
+): GarmentType | null {
+  const parsed = garmentTypeSchema.safeParse(
+    code && label ? { code, label } : null,
+  );
+  return parsed.success ? parsed.data : null;
 }
 
 function variationStrength(
@@ -706,6 +840,7 @@ function variationStrength(
     color: 0.36,
     detail: 0.2,
     fabric: 0.42,
+    garmentType: 0.52,
     silhouette: 0.58,
     styling: 0.48,
   }[axis];
@@ -739,17 +874,58 @@ function collectionPrompt(
     `面料=${formatTerms(dna.fabrics)}`,
     `情绪词=${formatTerms(dna.moodWords)}`,
   ].join("；");
+  const axisDimensions = {
+    color: "色彩与配色关系",
+    detail: "领口、开合与局部构造",
+    fabric: "面料材质、织法、肌理与垂坠",
+    garmentType: "服装品类与对应结构",
+    silhouette: "廓形、体量与比例",
+    styling: "搭配层次与造型方式",
+  } as const;
+  const changedDimension = axisDimensions[input.variationAxis];
+  const preservedDimensions = Object.entries(axisDimensions)
+    .filter(([axis]) => axis !== input.variationAxis)
+    .map(([, dimension]) => dimension)
+    .join("、");
   return [
     `为系列“${collection.name}”扩展一套新的完整服装 Look。`,
-    `本次变化轴：${input.variationAxis}。在保持系列家族感的同时，围绕该轴做清晰、可辨识但受控的变化。`,
+    collection.sourceGarmentTypeLabel
+      ? `核心款来源类型：${collection.sourceGarmentTypeLabel}。`
+      : "核心款来源类型：未指定，以 Hero Look 的实际服装品类为准。",
+    input.garmentType
+      ? `当前扩展款类型：${input.garmentType.label}。必须生成该服装品类，并建立与核心款清晰可辨的系列关系。`
+      : "",
+    `本次变化轴：${input.variationAxis}。${variationAxisInstruction(input.variationAxis)}`,
     `必须保持的锁定 DNA：${locked.length > 0 ? locked.join("；") : "无硬锁维度"}。锁定维度不得被重新解释或替换。`,
-    `除“${input.variationAxis}”外，其余廓形、比例、色彩、面料和造型均需与 Hero Look 保持一致；若与锁定 DNA 冲突，以锁定 DNA 为最高优先级。`,
+    dna.signatureDetails.length > 0
+      ? `所有扩展款必须延续以下系列标志性构造细节：${formatTerms(dna.signatureDetails)}。`
+      : "",
+    `除变化轴“${changedDimension}”外，只保持以下维度与 Hero Look 一致：${preservedDimensions}；若与锁定 DNA 冲突，以锁定 DNA 为最高优先级。`,
     `其余系列 DNA 作为视觉参考：${reference}。`,
     "延续 Hero Look 的设计语言、造型完成度与摄影呈现，输出单人全身时装 Look，不要生成拼贴或文字。",
     input.prompt ? `设计师补充方向：${input.prompt}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function variationAxisInstruction(
+  axis: CreateCollectionLookInput["variationAxis"],
+): string {
+  return {
+    color:
+      "必须替换主色或配色关系，形成肉眼可见的新色彩方案；不得沿用 Hero 的原配色。",
+    detail:
+      "必须改变领口、开合或局部构造中的至少一项，形成清晰可辨的结构差异；不得只做装饰性微调。",
+    fabric:
+      "必须替换面料材质、织法、表面肌理或垂坠表现，生成肉眼可见的新面料效果；不得沿用 Hero 的原面料。",
+    garmentType:
+      "必须改变服装品类，并根据目标品类重新组织结构；品类变化不解除其他已锁定 DNA 与标志性构造细节。",
+    silhouette:
+      "必须改变廓形、体量或比例中的至少一项，形成清晰可辨的结构差异；不得沿用 Hero 的原廓形。",
+    styling:
+      "必须改变搭配层次或造型方式，形成清晰可辨的新造型；不得沿用 Hero 的原搭配。",
+  }[axis];
 }
 
 function formatTerms(values: readonly string[]): string {

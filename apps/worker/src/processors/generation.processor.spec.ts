@@ -927,7 +927,10 @@ describe("Generation processor", () => {
       where: { id: fixture.task.id },
       data: {
         collectionId: collection.id,
-        variationAxis: CollectionVariationAxis.DETAIL,
+        garmentTypeCode: "dress",
+        garmentTypeLabel: "连衣裙",
+        slotKey: "slot-02",
+        variationAxis: CollectionVariationAxis.GARMENT_TYPE,
       },
     });
     const similarityJobs = { enqueue: vi.fn().mockResolvedValue(undefined) };
@@ -948,9 +951,12 @@ describe("Generation processor", () => {
       });
       expect(looks).toHaveLength(2);
       expect(looks[1]).toMatchObject({
+        garmentTypeCode: "dress",
+        garmentTypeLabel: "连衣裙",
         isHero: false,
         ordinal: 2,
-        variationAxis: CollectionVariationAxis.DETAIL,
+        slotKey: "slot-02",
+        variationAxis: CollectionVariationAxis.GARMENT_TYPE,
       });
       expect(similarityJobs.enqueue).toHaveBeenCalledWith(
         collection.id,

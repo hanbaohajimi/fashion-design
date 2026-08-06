@@ -21,13 +21,11 @@ import {
   createCollectionLookSchema,
   createCollectionSchema,
   forceKeepCollectionLookSchema,
+  updateCollectionSchema,
   updateDnaSchema,
 } from "./collections.schemas";
 import { CollectionsService } from "./collections.service";
-import {
-  RateLimit,
-  RateLimitGuard,
-} from "../../security/rate-limit.guard";
+import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 
 @Controller("collections")
 export class CollectionsController {
@@ -44,7 +42,11 @@ export class CollectionsController {
       "INVALID_COLLECTION_REQUEST",
       "建系列参数不合法",
     );
-    return this.collections.createFromHero(user.userId, input.heroAssetId);
+    return this.collections.createFromHero(
+      user.userId,
+      input.heroAssetId,
+      input.sourceGarmentType,
+    );
   }
 
   @Get("by-hero/:heroAssetId")
@@ -78,6 +80,21 @@ export class CollectionsController {
     return this.collections.get(user.userId, collectionId);
   }
 
+  @Patch(":id")
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") collectionId: string,
+    @Body() body: unknown,
+  ) {
+    const input = this.parse(
+      updateCollectionSchema,
+      body,
+      "INVALID_COLLECTION_UPDATE",
+      "系列更新参数不合法",
+    );
+    return this.collections.update(user.userId, collectionId, input);
+  }
+
   @Get(":id/consistency")
   async consistency(
     @CurrentUser() user: AuthenticatedUser,
@@ -107,7 +124,12 @@ export class CollectionsController {
       "INVALID_COLLECTION_LOOK_REQUEST",
       "系列 Look 生成参数不合法",
     );
-    const parsedKey = z.string().trim().min(8).max(200).safeParse(idempotencyKey);
+    const parsedKey = z
+      .string()
+      .trim()
+      .min(8)
+      .max(200)
+      .safeParse(idempotencyKey);
     if (!parsedKey.success) {
       throw new BadRequestException({
         code: "INVALID_IDEMPOTENCY_KEY",

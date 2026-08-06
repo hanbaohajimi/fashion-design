@@ -75,6 +75,7 @@ enum ContentModerationStatus {
 }
 
 enum DesignAssetOperation {
+  IMPORTED
   GENERATED
   VARIATION
   INPAINT
@@ -88,6 +89,7 @@ enum CollectionVariationAxis {
   COLOR
   DETAIL
   STYLING
+  GARMENT_TYPE
 }
 
 enum SimilarityAnalysisStatus {
@@ -115,6 +117,9 @@ model GenerationTask {
   parentAssetId        String?                  @map("parent_asset_id")
   collectionId         String?                  @map("collection_id")
   variationAxis        CollectionVariationAxis? @map("variation_axis")
+  garmentTypeCode      String?                  @map("garment_type_code")
+  garmentTypeLabel     String?                  @map("garment_type_label")
+  slotKey              String?                  @map("slot_key")
   status               GenerationTaskStatus     @default(QUEUED)
   taskType             String                   @map("task_type")
   input                Json
@@ -190,6 +195,7 @@ model DesignAsset {
   id                  String                     @id @default(cuid(2))
   projectId           String                     @map("project_id")
   generationTaskId    String?                    @map("generation_task_id")
+  sourceFileId        String?                    @map("source_file_id")
   parentAssetId       String?                    @map("parent_asset_id")
   rootAssetId         String                     @map("root_asset_id")
   restoredFromAssetId String?                    @map("restored_from_asset_id")
@@ -203,6 +209,7 @@ model DesignAsset {
   createdAt           DateTime                   @default(now()) @map("created_at")
   project             Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   generationTask      GenerationTask?            @relation("TaskGeneratedAssets", fields: [generationTaskId], references: [id], onDelete: SetNull)
+  sourceFile          FileAsset?                 @relation(fields: [sourceFileId], references: [id], onDelete: SetNull)
   parent              DesignAsset?               @relation("AssetLineage", fields: [parentAssetId], references: [id], onDelete: SetNull)
   children            DesignAsset[]              @relation("AssetLineage")
   restoredFrom        DesignAsset?               @relation("AssetRestores", fields: [restoredFromAssetId], references: [id], onDelete: SetNull)
@@ -214,10 +221,12 @@ model DesignAsset {
   similarityRight     CollectionLookSimilarity[] @relation("SimilarityRightAsset")
   exportJobs          ExportJob[]
 
+  @@unique([projectId, sourceFileId])
   @@index([projectId, createdAt])
   @@index([rootAssetId, createdAt])
   @@index([parentAssetId])
   @@index([generationTaskId])
+  @@index([sourceFileId])
   @@index([archivedAt])
   @@map("design_assets")
 }
@@ -253,6 +262,7 @@ model FileAsset {
   updatedAt        DateTime       @updatedAt @map("updated_at")
   owner            User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   boardElements    BoardElement[]
+  designAssets     DesignAsset[]
   fabricMainImages Fabric[]       @relation("FabricMainFile")
   trendCovers      TrendItem[]    @relation("TrendCoverFile")
 
@@ -369,19 +379,21 @@ model Project {
 }
 
 model Collection {
-  id              String                     @id @default(cuid(2))
-  projectId       String                     @map("project_id")
-  heroAssetId     String                     @unique @map("hero_asset_id")
-  name            String
-  createdAt       DateTime                   @default(now()) @map("created_at")
-  updatedAt       DateTime                   @updatedAt @map("updated_at")
-  project         Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  heroAsset       DesignAsset                @relation("CollectionHero", fields: [heroAssetId], references: [id], onDelete: Restrict)
-  dna             CollectionDna?
-  generationTasks GenerationTask[]
-  looks           CollectionLook[]
-  similarities    CollectionLookSimilarity[]
-  exportJobs      ExportJob[]
+  id                     String                     @id @default(cuid(2))
+  projectId              String                     @map("project_id")
+  heroAssetId            String                     @unique @map("hero_asset_id")
+  name                   String
+  sourceGarmentTypeCode  String?                    @map("source_garment_type_code")
+  sourceGarmentTypeLabel String?                    @map("source_garment_type_label")
+  createdAt              DateTime                   @default(now()) @map("created_at")
+  updatedAt              DateTime                   @updatedAt @map("updated_at")
+  project                Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  heroAsset              DesignAsset                @relation("CollectionHero", fields: [heroAssetId], references: [id], onDelete: Restrict)
+  dna                    CollectionDna?
+  generationTasks        GenerationTask[]
+  looks                  CollectionLook[]
+  similarities           CollectionLookSimilarity[]
+  exportJobs             ExportJob[]
 
   @@index([projectId, createdAt])
   @@map("collections")
@@ -422,21 +434,25 @@ model ExportJob {
 }
 
 model CollectionLook {
-  collectionId    String                   @map("collection_id")
-  designAssetId   String                   @unique @map("design_asset_id")
-  ordinal         Int
-  variationAxis   CollectionVariationAxis? @map("variation_axis")
-  similarityScore Float?                   @map("similarity_score")
-  analysisStatus  SimilarityAnalysisStatus @default(PENDING) @map("analysis_status")
-  warningIgnored  Boolean                  @default(false) @map("warning_ignored")
-  isHero          Boolean                  @default(false) @map("is_hero")
-  createdAt       DateTime                 @default(now()) @map("created_at")
-  updatedAt       DateTime                 @updatedAt @map("updated_at")
-  collection      Collection               @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  designAsset     DesignAsset              @relation(fields: [designAssetId], references: [id], onDelete: Cascade)
+  collectionId     String                   @map("collection_id")
+  designAssetId    String                   @unique @map("design_asset_id")
+  ordinal          Int
+  variationAxis    CollectionVariationAxis? @map("variation_axis")
+  garmentTypeCode  String?                  @map("garment_type_code")
+  garmentTypeLabel String?                  @map("garment_type_label")
+  slotKey          String?                  @map("slot_key")
+  similarityScore  Float?                   @map("similarity_score")
+  analysisStatus   SimilarityAnalysisStatus @default(PENDING) @map("analysis_status")
+  warningIgnored   Boolean                  @default(false) @map("warning_ignored")
+  isHero           Boolean                  @default(false) @map("is_hero")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  collection       Collection               @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  designAsset      DesignAsset              @relation(fields: [designAssetId], references: [id], onDelete: Cascade)
 
   @@id([collectionId, designAssetId])
   @@unique([collectionId, ordinal])
+  @@unique([collectionId, slotKey])
   @@index([collectionId, createdAt])
   @@map("collection_looks")
 }
@@ -465,6 +481,7 @@ model CollectionDna {
   silhouettes       String[]
   fabrics           String[]
   moodWords         String[]            @map("mood_words")
+  signatureDetails  String[]            @default([]) @map("signature_details")
   referenceFileIds  String[]            @map("reference_file_ids")
   paletteLocked     Boolean             @default(false) @map("palette_locked")
   silhouettesLocked Boolean             @default(false) @map("silhouettes_locked")

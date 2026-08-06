@@ -3,9 +3,18 @@ import { expect, test } from "@playwright/test";
 test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考相似度", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   const createdAt = "2026-07-28T10:00:00.000Z";
   let lookCount = 1;
   let paletteLocked = false;
+  let signatureDetails: readonly string[] = [];
+  let sourceGarmentType: {
+    readonly code: string;
+    readonly label: string;
+  } | null = {
+    code: "jacket",
+    label: "夹克",
+  };
   let collectionCreated = false;
   let collectionListAvailable = false;
   let consistencyAvailable = false;
@@ -25,6 +34,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       { hex: "#E6D8C6", name: "暖象牙" },
     ],
     referenceFileIds: [],
+    signatureDetails,
     silhouettes: ["茧型", "低腰直筒"],
     updatedAt: createdAt,
   });
@@ -39,6 +49,7 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     id: "collection-e2e",
     name: "系列 · HERO",
     projectId: "e2e-collection",
+    sourceGarmentType,
     updatedAt: createdAt,
   });
   await page.route("**/api/projects/e2e-collection", (route) =>
@@ -159,6 +170,65 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.route("**/api/generations?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
+  await page.route(
+    "**/api/projects/e2e-collection/agent-conversations*",
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              archivedAt: null,
+              createdAt,
+              id: "conversation-collection",
+              messageCount: 0,
+              projectId: "e2e-collection",
+              title: "新的设计对话",
+              updatedAt: createdAt,
+            },
+          ],
+          nextCursor: null,
+        },
+      }),
+  );
+  await page.route(
+    "**/api/agent-conversations/conversation-collection/messages*",
+    async (route) => {
+      if (route.request().method() !== "POST") {
+        return route.fulfill({ json: { items: [], nextCursor: null } });
+      }
+      const body = route.request().postDataJSON() as {
+        readonly clientRequestId: string;
+        readonly content: string;
+        readonly shapeIds: readonly string[];
+      };
+      const userMessage = {
+        clientRequestId: body.clientRequestId,
+        content: body.content,
+        context: { fileAssetIds: [], shapeIds: body.shapeIds },
+        createdAt,
+        error: null,
+        generationTaskId: null,
+        id: "user-collection",
+        replyToId: null,
+        role: "user",
+        status: "completed",
+        updatedAt: createdAt,
+      };
+      const assistantMessage = {
+        ...userMessage,
+        clientRequestId: null,
+        content: "已生成系列 Hero。",
+        generationTaskId: "task-hero",
+        id: "assistant-collection",
+        replyToId: userMessage.id,
+        role: "assistant",
+      };
+      return route.fulfill({
+        json: { assistantMessage, taskId: "task-hero", userMessage },
+        status: 201,
+      });
+    },
+  );
   await page.route(/\/api\/generations$/u, (route) =>
     route.fulfill({ status: 202, json: { task_id: "task-hero" } }),
   );
@@ -180,6 +250,16 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
         createdAt,
         error: null,
         id: "task-hero",
+        request: {
+          cfg: 3.5,
+          height: 1024,
+          projectId: "e2e-collection",
+          prompt: "作为系列 Hero 的克制廓形",
+          shapeIds: [],
+          steps: 28,
+          taskType: "t2i",
+          width: 768,
+        },
         output: {
           images: [
             {
@@ -231,8 +311,10 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.route("**/api/collections/collection-e2e/dna", async (route) => {
     const body = route.request().postDataJSON() as {
       readonly locks?: { readonly palette?: boolean };
+      readonly signatureDetails?: readonly string[];
     };
     paletteLocked = body.locks?.palette ?? paletteLocked;
+    signatureDetails = body.signatureDetails ?? signatureDetails;
     await route.fulfill({ json: dna() });
   });
   await page.route("**/api/collections/collection-e2e/looks", (route) => {
@@ -251,9 +333,15 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       await route.fulfill({ json: look });
     },
   );
-  await page.route("**/api/collections/collection-e2e", (route) =>
-    route.fulfill({ json: collection() }),
-  );
+  await page.route("**/api/collections/collection-e2e", async (route) => {
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON() as {
+        readonly sourceGarmentType?: typeof sourceGarmentType;
+      };
+      sourceGarmentType = body.sourceGarmentType ?? null;
+    }
+    await route.fulfill({ json: collection() });
+  });
   await page.route("**/api/exports/capabilities", (route) =>
     route.fulfill({
       json: {
@@ -330,21 +418,22 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   });
 
   await page.goto("/e2e-collection");
-  await page.getByRole("button", { name: "系列", exact: true }).click();
-  const retryCollections = page.getByRole("button", {
-    name: /^(?:重试系列|重新加载系列)$/u,
-  });
+  await page.getByRole("button", { name: "打开系列工作台" }).click();
+  const retryCollections = page.getByRole("button", { name: "重试" });
   await expect(retryCollections).toBeVisible({ timeout: 10_000 });
   collectionListAvailable = true;
   await retryCollections.click();
-  await expect(page.getByLabel("选择系列")).toContainText("暂无系列");
-  await page.getByRole("button", { name: "系列", exact: true }).click();
+  await expect(page.getByText("暂无系列", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "关闭系列入口" }).click();
 
   await page.getByRole("button", { name: "便签" }).click();
+  await page.getByRole("button", { name: "展开设计助手" }).click();
   await page
-    .getByRole("textbox", { name: "设计描述" })
+    .getByRole("textbox", { name: "编辑描述" })
     .fill("作为系列 Hero 的克制廓形");
-  await page.getByRole("button", { name: "创建", exact: true }).click();
+  const sendButton = page.getByRole("button", { name: "发送", exact: true });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
   await page.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "设为 Hero → 建系列" }).click();
 
@@ -358,6 +447,28 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   consistencyAvailable = true;
   await retryConsistency.click();
   await expect(retryConsistency).toBeHidden();
+  const sourceTypeSelect = collectionDrawer.getByRole("combobox", {
+    name: "服装类型",
+  });
+  await expect(sourceTypeSelect).toHaveValue("jacket");
+  await sourceTypeSelect.selectOption("custom");
+  const customSourceType =
+    collectionDrawer.getByPlaceholder("输入团队使用的服装类型");
+  await customSourceType.fill("斗篷式上装");
+  await customSourceType.press("Tab");
+  await expect.poll(() => sourceGarmentType?.label).toBe("斗篷式上装");
+  await collectionDrawer
+    .getByRole("combobox", { name: "服装类型" })
+    .selectOption("jacket");
+  await expect.poll(() => sourceGarmentType?.code).toBe("jacket");
+
+  const signatureDetailsEditor = collectionDrawer.getByLabel(
+    "需要跨品类保留的细节，以逗号或换行分隔",
+  );
+  await signatureDetailsEditor.fill("模块化口袋，弧形分割线，金属扣件");
+  await expect
+    .poll(() => signatureDetails.join("，"))
+    .toBe("模块化口袋，弧形分割线，金属扣件");
   const paletteSection = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "色板" }) });
@@ -368,6 +479,91 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await expect(page.getByLabel("系列 DNA").getByText("已保存")).toBeVisible();
 
   await page.getByRole("button", { name: "Look 扩展" }).click();
+  await expect(page.getByLabel("系列款数")).toHaveValue("8");
+  const seriesBrief = collectionDrawer.getByLabel("系列开发目标");
+  await seriesBrief.fill("早秋城市通勤，面向需要轻量叠穿的创意从业者");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = window.localStorage.getItem(
+          "fashion:series-plan:v1:collection-e2e",
+        );
+        return raw
+          ? (JSON.parse(raw) as { readonly brief?: string }).brief
+          : null;
+      }),
+    )
+    .toBe("早秋城市通勤，面向需要轻量叠穿的创意从业者");
+  await expect(
+    collectionDrawer.getByLabel("品类结构分析"),
+  ).toContainText("8 款品类结构");
+  await expect(
+    collectionDrawer.getByText("品类结构覆盖完整"),
+  ).toBeVisible();
+  await expect(
+    collectionDrawer
+      .locator("article")
+      .filter({ hasText: "系列原点" })
+      .getByText("夹克", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成此款" }),
+  ).toHaveCount(7);
+  await collectionDrawer.getByLabel("选择 上装 01").uncheck();
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成选中 6 款" }),
+  ).toBeVisible();
+  await collectionDrawer.getByRole("button", { name: "添加槽位" }).click();
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成此款" }),
+  ).toHaveCount(8);
+  await collectionDrawer
+    .getByRole("button", { name: /^删除/u })
+    .last()
+    .click();
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成此款" }),
+  ).toHaveCount(7);
+  const firstSlotType = collectionDrawer
+    .getByRole("combobox", { name: "服装类型" })
+    .first();
+  await firstSlotType.selectOption("custom");
+  const customSlotType = collectionDrawer.getByPlaceholder("输入服装类型");
+  await customSlotType.fill("可拆卸披肩");
+  await page.getByLabel("系列款数").fill("12");
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成此款" }),
+  ).toHaveCount(11);
+  await page.getByLabel("系列款数").fill("2");
+  await expect(
+    collectionDrawer.getByRole("button", { name: "生成此款" }),
+  ).toHaveCount(1);
+  await expect(customSlotType).toHaveValue("可拆卸披肩");
+  await page.getByLabel("系列款数").fill("8");
+  await expect(seriesBrief).toHaveValue(
+    "早秋城市通勤，面向需要轻量叠穿的创意从业者",
+  );
+  await page.screenshot({ path: "output/playwright/series-plan-desktop.png" });
+  const desktopViewport = page.viewportSize() ?? { height: 720, width: 1280 };
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await page.screenshot({ path: "output/playwright/series-plan-mobile.png" });
+  await page.setViewportSize(desktopViewport);
+  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await page.getByRole("button", { name: "打开系列 DNA" }).click();
+  await page.getByRole("button", { name: "Look 扩展" }).click();
+  await expect(collectionDrawer.getByLabel("系列开发目标")).toHaveValue(
+    "早秋城市通勤，面向需要轻量叠穿的创意从业者",
+  );
+  await page.getByRole("button", { name: "单 Look 扩展" }).click();
   await page.getByText("细节", { exact: true }).click();
   await page.getByRole("button", { name: /沿「细节」扩展 Look/u }).click();
   await expect(page.getByText("2 LOOKS")).toBeVisible();
@@ -425,8 +621,35 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await page.getByRole("button", { name: "关闭导出窗口" }).click();
   await page.getByRole("button", { name: "关闭系列抽屉" }).click();
   await page.getByRole("button", { name: "关闭候选详情" }).click();
-  await page.getByRole("button", { name: "系列", exact: true }).click();
-  await expect(page.getByLabel("选择系列")).toHaveValue("collection-e2e");
+  await page.getByRole("button", { name: "关闭设计助手" }).click();
   await page.getByRole("button", { name: "打开系列工作台" }).click();
+  const collectionEntry = page.getByRole("button", {
+    name: "打开系列 系列 · HERO",
+  });
+  await expect(collectionEntry).toContainText("夹克");
+  await expect(collectionEntry).toContainText("DNA 已就绪");
+  await page.screenshot({
+    path: "output/playwright/series-library-desktop.png",
+  });
+  const libraryDesktopViewport = page.viewportSize() ?? {
+    height: 720,
+    width: 1280,
+  };
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await expect(collectionEntry).toBeVisible();
+  await page.screenshot({
+    path: "output/playwright/series-library-mobile.png",
+  });
+  await page.setViewportSize(libraryDesktopViewport);
+  await collectionEntry.click();
   await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
 });

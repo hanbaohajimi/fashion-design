@@ -18,12 +18,9 @@ export interface AnalyticsEventMap {
   };
   readonly collection_created: Record<string, never>;
   readonly collection_look_generated: {
+    readonly garment_type?: string;
     readonly variation_axis:
-      | "color"
-      | "detail"
-      | "fabric"
-      | "silhouette"
-      | "styling";
+      "color" | "detail" | "fabric" | "garmentType" | "silhouette" | "styling";
   };
   readonly export_completed: {
     readonly format: "jpg" | "pdf" | "png";
@@ -50,7 +47,7 @@ const SAFE_PROPERTIES: {
 } = {
   board_element_added: new Set(["element_type"]),
   collection_created: new Set(),
-  collection_look_generated: new Set(["variation_axis"]),
+  collection_look_generated: new Set(["garment_type", "variation_axis"]),
   export_completed: new Set(["format", "quality", "source_type"]),
   generation_adopted: new Set(["task_type"]),
   generation_submitted: new Set([
@@ -155,10 +152,7 @@ export function sanitizeAnalyticsProperties<
 
 function trackingForbidden(): boolean {
   if (typeof window === "undefined") return true;
-  return (
-    readConsent() === "denied" ||
-    privacySignalEnabled()
-  );
+  return readConsent() === "denied" || privacySignalEnabled();
 }
 
 function readConsent(): "denied" | "granted" | null {

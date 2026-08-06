@@ -19,6 +19,9 @@ export function DNACard({
   );
   const [fabricsText, setFabricsText] = useState(dna.fabrics.join("，"));
   const [moodWordsText, setMoodWordsText] = useState(dna.moodWords.join("，"));
+  const [signatureDetailsText, setSignatureDetailsText] = useState(
+    dna.signatureDetails.join("，"),
+  );
 
   const setLock = (key: LockKey, locked: boolean): void => {
     onChange({ ...dna, locks: { ...dna.locks, [key]: locked } });
@@ -86,7 +89,7 @@ export function DNACard({
           }
           type="button"
         >
-          添加颜色
+          {dna.palette.length >= 12 ? "已达 12 色上限" : "添加颜色"}
         </button>
       </DnaSection>
 
@@ -140,6 +143,18 @@ export function DNACard({
           value={moodWordsText}
         />
       </DnaSection>
+
+      <DnaSection label="05 / SIGNATURE DETAILS" title="标志性构造细节">
+        <TokenTextarea
+          disabled={false}
+          label="需要跨品类保留的细节，以逗号或换行分隔"
+          onChange={(text, values) => {
+            setSignatureDetailsText(text);
+            onChange({ ...dna, signatureDetails: values });
+          }}
+          value={signatureDetailsText}
+        />
+      </DnaSection>
     </div>
   );
 }
@@ -153,8 +168,8 @@ function DnaSection({
 }: {
   readonly children: ReactNode;
   readonly label: string;
-  readonly locked: boolean;
-  readonly onLock: (locked: boolean) => void;
+  readonly locked?: boolean;
+  readonly onLock?: (locked: boolean) => void;
   readonly title: string;
 }) {
   return (
@@ -164,13 +179,15 @@ function DnaSection({
           <span>{label}</span>
           <h3>{title}</h3>
         </div>
-        <button
-          aria-pressed={locked}
-          onClick={() => onLock(!locked)}
-          type="button"
-        >
-          {locked ? "解锁" : "锁定"}
-        </button>
+        {onLock ? (
+          <button
+            aria-pressed={locked}
+            onClick={() => onLock(!locked)}
+            type="button"
+          >
+            {locked ? "解锁" : "锁定"}
+          </button>
+        ) : null}
       </header>
       <div>{children}</div>
     </section>

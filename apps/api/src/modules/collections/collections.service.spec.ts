@@ -28,6 +28,7 @@ function collectionRecord(overrides: Record<string, unknown> = {}) {
       palette: [...extractedDna.palette],
       paletteLocked: false,
       referenceFileIds: [],
+      signatureDetails: [],
       silhouettes: [...extractedDna.silhouettes],
       silhouettesLocked: false,
       updatedAt: new Date("2026-07-28T08:00:00.000Z"),
@@ -42,6 +43,8 @@ function collectionRecord(overrides: Record<string, unknown> = {}) {
     name: "系列 · HERO-1",
     project: { workspace: { ownerId: "user-1" } },
     projectId: "project-1",
+    sourceGarmentTypeCode: null,
+    sourceGarmentTypeLabel: null,
     updatedAt: new Date("2026-07-28T08:00:00.000Z"),
     ...overrides,
   };
@@ -53,6 +56,7 @@ function setup() {
     collection: {
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn().mockResolvedValue(collectionRecord()),
+      update: vi.fn().mockResolvedValue(collectionRecord()),
       upsert: vi.fn().mockResolvedValue({ id: "collection-1" }),
     },
     collectionDna: {
@@ -60,10 +64,14 @@ function setup() {
       upsert: vi.fn(),
     },
     collectionLook: {
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
       upsert: vi.fn(),
+    },
+    generationTask: {
+      findFirst: vi.fn(),
     },
     collectionLookSimilarity: {
       findMany: vi.fn(),
@@ -286,6 +294,110 @@ describe("CollectionsService", () => {
       },
       "collection-look-1",
     );
+  });
+
+  it("面料变化轴要求替换面料且不会把面料列为保持项", async () => {
+    const { database, generation, service } = setup();
+    database.collection.findUnique.mockResolvedValue(collectionRecord());
+    generation.createForCollection.mockResolvedValue({ taskId: "task-fabric" });
+
+    await service.createLook(
+      "user-1",
+      "collection-1",
+      {
+        prompt: "改成有光泽且垂坠的面料",
+        variationAxis: "fabric",
+      },
+      "collection-look-fabric",
+    );
+
+    const request = generation.createForCollection.mock.calls[0]?.[1];
+    expect(request).toBeDefined();
+    expect(request?.strength).toBe(0.42);
+    expect(request?.prompt).toContain(
+      "必须替换面料材质、织法、表面肌理或垂坠表现",
+    );
+    expect(request?.prompt).toContain("设计师补充方向：改成有光泽且垂坠的面料");
+    const preserveLine = request?.prompt
+      .split("\n")
+      .find((line: string) => line.startsWith("除变化轴"));
+    expect(preserveLine).toBeDefined();
+    expect(preserveLine).not.toContain("保持以下维度与 Hero Look 一致：面料");
+    expect(preserveLine).not.toContain("、面料");
+  });
+
+  it("服装类型扩展会保存槽位上下文并注入核心款、目标类型与标志性细节", async () => {
+    const { database, generation, service } = setup();
+    database.collection.findUnique.mockResolvedValue(
+      collectionRecord({
+        dna: {
+          ...collectionRecord().dna,
+          signatureDetails: ["模块化口袋", "弧形分割线", "金属扣件"],
+        },
+        sourceGarmentTypeCode: "jacket",
+        sourceGarmentTypeLabel: "夹克",
+      }),
+    );
+    database.collectionLook.findFirst.mockResolvedValue(null);
+    database.generationTask.findFirst.mockResolvedValue(null);
+    generation.createForCollection.mockResolvedValue({ taskId: "task-dress" });
+
+    await service.createLook(
+      "user-1",
+      "collection-1",
+      {
+        garmentType: { code: "dress", label: "连衣裙" },
+        prompt: "中长比例",
+        slotKey: "slot-02",
+        variationAxis: "garmentType",
+      },
+      "collection-look-dress",
+    );
+
+    const request = generation.createForCollection.mock.calls[0]?.[1];
+    expect(request?.strength).toBe(0.52);
+    expect(request?.prompt).toContain("核心款来源类型：夹克");
+    expect(request?.prompt).toContain("当前扩展款类型：连衣裙");
+    expect(request?.prompt).toContain(
+      "所有扩展款必须延续以下系列标志性构造细节：模块化口袋、弧形分割线、金属扣件",
+    );
+    expect(generation.createForCollection).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Object),
+      {
+        collectionId: "collection-1",
+        garmentTypeCode: "dress",
+        garmentTypeLabel: "连衣裙",
+        slotKey: "slot-02",
+        variationAxis: "GARMENT_TYPE",
+      },
+      "collection-look-dress",
+    );
+  });
+
+  it("拒绝重复创建已完成的系列槽位", async () => {
+    const { database, generation, service } = setup();
+    database.collection.findUnique.mockResolvedValue(collectionRecord());
+    database.collectionLook.findFirst.mockResolvedValue({
+      designAssetId: "asset-existing",
+    });
+    database.generationTask.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.createLook(
+        "user-1",
+        "collection-1",
+        {
+          garmentType: { code: "pants", label: "长裤" },
+          slotKey: "slot-03",
+          variationAxis: "garmentType",
+        },
+        "collection-look-pants",
+      ),
+    ).rejects.toMatchObject({
+      response: { code: "COLLECTION_SLOT_ALREADY_EXISTS" },
+    });
+    expect(generation.createForCollection).not.toHaveBeenCalled();
   });
 
   it("拒绝沿已锁定的 DNA 维度生成", async () => {

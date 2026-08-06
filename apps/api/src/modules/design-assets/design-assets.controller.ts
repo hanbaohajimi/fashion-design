@@ -18,6 +18,10 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { DesignAssetsService } from "./design-assets.service";
 
 const PRIVATE_NO_STORE = "private, no-store";
+const importFileSchema = z.object({
+  fileId: z.string().min(1).max(100),
+  projectId: z.string().min(1).max(100),
+});
 
 @Controller("design-assets")
 export class DesignAssetsController {
@@ -25,6 +29,25 @@ export class DesignAssetsController {
     @Inject(DesignAssetsService)
     private readonly assets: DesignAssetsService,
   ) {}
+
+  @Post("import")
+  async importFile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: unknown,
+  ) {
+    const parsed = importFileSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_ASSET_IMPORT",
+        message: "设计资产导入参数不合法",
+      });
+    }
+    return this.assets.importFile(
+      user.userId,
+      parsed.data.projectId,
+      parsed.data.fileId,
+    );
+  }
 
   @Get(":id/versions")
   @Header("Cache-Control", PRIVATE_NO_STORE)

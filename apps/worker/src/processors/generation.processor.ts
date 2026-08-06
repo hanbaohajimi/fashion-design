@@ -296,6 +296,9 @@ export function createGenerationProcessor({
           projectId: task.projectId,
           taskType: task.taskType,
           variationAxis: task.variationAxis,
+          garmentTypeCode: task.garmentTypeCode,
+          garmentTypeLabel: task.garmentTypeLabel,
+          slotKey: task.slotKey,
         },
       );
       materializationCommitted = finalStatus === "succeeded";
@@ -548,7 +551,16 @@ async function persistSuccessOnce(
     readonly projectId: string | null;
     readonly taskType: string;
     readonly variationAxis:
-      "COLOR" | "DETAIL" | "FABRIC" | "SILHOUETTE" | "STYLING" | null;
+      | "COLOR"
+      | "DETAIL"
+      | "FABRIC"
+      | "GARMENT_TYPE"
+      | "SILHOUETTE"
+      | "STYLING"
+      | null;
+    readonly garmentTypeCode: string | null;
+    readonly garmentTypeLabel: string | null;
+    readonly slotKey: string | null;
   },
 ): Promise<"canceled" | "succeeded"> {
   return database.$transaction(async (transaction) => {
@@ -617,7 +629,16 @@ async function persistDesignAssets(
     readonly projectId: string | null;
     readonly taskType: string;
     readonly variationAxis:
-      "COLOR" | "DETAIL" | "FABRIC" | "SILHOUETTE" | "STYLING" | null;
+      | "COLOR"
+      | "DETAIL"
+      | "FABRIC"
+      | "GARMENT_TYPE"
+      | "SILHOUETTE"
+      | "STYLING"
+      | null;
+    readonly garmentTypeCode: string | null;
+    readonly garmentTypeLabel: string | null;
+    readonly slotKey: string | null;
   },
 ): Promise<AiProviderResult> {
   if (!lineage.projectId) return result;
@@ -679,6 +700,9 @@ async function persistDesignAssets(
           designAssetId: assetId,
           ordinal: nextOrdinal,
           variationAxis: lineage.variationAxis,
+          garmentTypeCode: lineage.garmentTypeCode,
+          garmentTypeLabel: lineage.garmentTypeLabel,
+          slotKey: lineage.slotKey,
         },
       });
     }

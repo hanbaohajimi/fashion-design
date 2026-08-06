@@ -2,6 +2,7 @@ import type {
   CollectionConsistency,
   CollectionDetail,
   CollectionDna,
+  GarmentType,
   CollectionLook,
   CollectionVariationAxis,
   UpdateDnaInput,
@@ -44,10 +45,14 @@ async function apiError(
 
 export async function createCollection(
   heroAssetId: string,
+  sourceGarmentType?: GarmentType,
 ): Promise<CollectionDetail> {
   const response = await fetch("/api/collections", {
     method: "POST",
-    body: JSON.stringify({ heroAssetId }),
+    body: JSON.stringify({
+      heroAssetId,
+      ...(sourceGarmentType ? { sourceGarmentType } : {}),
+    }),
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
@@ -55,6 +60,41 @@ export async function createCollection(
     throw await apiError(response, "系列创建失败，请稍后重试");
   }
   return (await response.json()) as CollectionDetail;
+}
+
+export async function updateCollection(
+  collectionId: string,
+  sourceGarmentType: GarmentType | null,
+): Promise<CollectionDetail> {
+  const response = await fetch(
+    `/api/collections/${encodeURIComponent(collectionId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ sourceGarmentType }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "核心款类型保存失败");
+  }
+  return (await response.json()) as CollectionDetail;
+}
+
+export async function importDesignAsset(
+  projectId: string,
+  fileId: string,
+): Promise<{ readonly id: string }> {
+  const response = await fetch("/api/design-assets/import", {
+    method: "POST",
+    body: JSON.stringify({ fileId, projectId }),
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw await apiError(response, "上传图片导入设计资产失败");
+  }
+  return (await response.json()) as { readonly id: string };
 }
 
 export async function fetchCollection(
@@ -107,6 +147,8 @@ export async function createCollectionLook(
   collectionId: string,
   variationAxis: CollectionVariationAxis,
   prompt?: string,
+  garmentType?: GarmentType,
+  slotKey?: string,
 ): Promise<string> {
   const response = await fetch(
     `/api/collections/${encodeURIComponent(collectionId)}/looks`,
@@ -114,6 +156,8 @@ export async function createCollectionLook(
       method: "POST",
       body: JSON.stringify({
         variationAxis,
+        ...(garmentType ? { garmentType } : {}),
+        ...(slotKey ? { slotKey } : {}),
         ...(prompt?.trim() ? { prompt: prompt.trim() } : {}),
       }),
       credentials: "include",

@@ -1,5 +1,6 @@
 import {
   DesignAssetOperation,
+  FileStatus,
   type DesignAsset,
   type PrismaClient,
 } from "@fashion/db";
@@ -15,7 +16,10 @@ import { S3FileStorage } from "../files/storage.service";
 
 export const DESIGN_ASSETS_DB = Symbol("DESIGN_ASSETS_DB");
 
-type DesignAssetDatabase = Pick<PrismaClient, "designAsset">;
+type DesignAssetDatabase = Pick<
+  PrismaClient,
+  "designAsset" | "fileAsset" | "project"
+>;
 
 interface OwnedDesignAsset extends DesignAsset {
   readonly project: {
@@ -48,6 +52,77 @@ export class DesignAssetsService {
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
   ) {}
+
+  async importFile(
+    userId: string,
+    projectId: string,
+    fileId: string,
+  ): Promise<DesignAssetView> {
+    const [project, file] = await Promise.all([
+      this.database.project.findUnique({
+        where: { id: projectId },
+        select: {
+          deletedAt: true,
+          workspace: { select: { ownerId: true } },
+        },
+      }),
+      this.database.fileAsset.findUnique({ where: { id: fileId } }),
+    ]);
+    if (!project || project.deletedAt) {
+      throw new NotFoundException({
+        code: "PROJECT_NOT_FOUND",
+        message: "项目不存在",
+      });
+    }
+    if (project.workspace.ownerId !== userId) {
+      throw new ForbiddenException({
+        code: "PROJECT_FORBIDDEN",
+        message: "无权向该项目导入图片",
+      });
+    }
+    if (!file) {
+      throw new NotFoundException({
+        code: "FILE_NOT_FOUND",
+        message: "上传图片不存在",
+      });
+    }
+    if (file.ownerId !== userId) {
+      throw new ForbiddenException({
+        code: "FILE_FORBIDDEN",
+        message: "无权使用该上传图片",
+      });
+    }
+    if (file.status !== FileStatus.READY) {
+      throw new BadRequestException({
+        code: "FILE_NOT_READY",
+        message: "图片仍在处理中，请稍后重试",
+      });
+    }
+
+    const id = randomUUID();
+    const imported = await this.database.designAsset.upsert({
+      where: {
+        projectId_sourceFileId: { projectId, sourceFileId: fileId },
+      },
+      update: {},
+      create: {
+        height: file.height,
+        id,
+        operation: DesignAssetOperation.IMPORTED,
+        projectId,
+        rootAssetId: id,
+        sourceFileId: file.id,
+        thumbnailUrl: file.thumbnail1024Key
+          ? `s3://${file.thumbnail1024Key}`
+          : file.thumbnail256Key
+            ? `s3://${file.thumbnail256Key}`
+            : null,
+        url: `s3://${file.objectKey}`,
+        width: file.width,
+      },
+    });
+    return this.toView(imported);
+  }
 
   async downloadUrl(
     userId: string,

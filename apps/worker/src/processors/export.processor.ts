@@ -293,6 +293,7 @@ async function renderLookbook(
       readonly dna: { readonly palette: unknown } | null;
       readonly looks: readonly {
         readonly designAsset: { readonly url: string };
+        readonly garmentTypeLabel: string | null;
         readonly ordinal: number;
       }[];
       readonly name: string;
@@ -330,6 +331,7 @@ async function renderLookbook(
     collectionName: collection.name,
     looks: collection.looks.map((look, index) => ({
       image: lookImages[index] ?? null,
+      garmentTypeLabel: look.garmentTypeLabel,
       ordinal: look.ordinal,
     })),
     palette: parsePalette(collection.dna?.palette),
@@ -345,6 +347,7 @@ async function renderLookbook(
 async function createLookbookPdf(input: {
   readonly collectionName: string;
   readonly looks: readonly {
+    readonly garmentTypeLabel: string | null;
     readonly image: Buffer | null;
     readonly ordinal: number;
   }[];
@@ -432,6 +435,16 @@ async function createLookbookPdf(input: {
         .text(`LOOK ${String(look.ordinal).padStart(2, "0")}`, x, 526, {
           width,
         });
+      if (look.garmentTypeLabel) {
+        document
+          .font(bodyFont)
+          .fillColor("#66645f")
+          .fontSize(8)
+          .text(pdfDisplayText(look.garmentTypeLabel, bodyFont), x, 526, {
+            align: "right",
+            width,
+          });
+      }
     });
     if (input.watermark) drawPdfWatermark(document, bodyFont);
   }

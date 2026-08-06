@@ -104,6 +104,54 @@
   pointer-events: none;
 }
 
+.toolButton.pinButton {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  color: #b85a56;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.toolButton.pinButton:hover:not(:disabled) {
+  border: 0;
+  background: #f5f1ef;
+  color: #aa4d49;
+}
+
+.toolButton.pinButton[aria-pressed="true"],
+.toolButton.pinButton[aria-pressed="true"]:hover:not(:disabled),
+.toolButton.pinButton:active:not(:disabled) {
+  border: 0;
+  background: #f8e9e7;
+  box-shadow: none;
+  color: #a84340;
+  transform: none;
+}
+
+.toolButton.pinButton:disabled {
+  background: transparent;
+  color: #c9c5c1;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.toolButton.pinButton:focus-visible {
+  outline: 2px solid #5d5a57;
+  outline-offset: 2px;
+}
+
+.pinIcon {
+  display: block;
+  transform: rotate(-8deg);
+  transform-origin: center;
+}
+
 /* ─── Divider ──────────────────────────────────────────────────────────────── */
 .toolDivider {
   width: 1px;
@@ -201,98 +249,11 @@
   opacity: 0.95;
 }
 
-/* ─── Mount tool variant picker ──────────────────────────────────────────── */
-.mountVariantPicker {
-  position: absolute;
-  right: 4px;
-  bottom: calc(100% + 9px);
-  display: flex;
-  width: 250px;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 9px;
-  margin: 0;
-  border: 1.5px solid rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-  background: rgb(251 249 244 / 98%);
-  box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.08);
-}
-
-.mountPickerLabel {
-  width: 100%;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.55);
-  text-align: center;
-  margin-bottom: 2px;
-  pointer-events: none;
-}
-
-.mountVariantButton {
-  position: relative;
-  width: calc(50% - 2px);
-  height: 38px;
-  padding: 4px 8px;
-  border: 1.5px solid transparent;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  transition:
-    background 100ms ease,
-    border-color 100ms ease,
-    color 100ms ease,
-    transform 100ms ease;
-  color: var(--color-ink-black);
-}
-
-.mountVariantButton:hover {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(0, 0, 0, 0.22);
-  transform: translateY(-1px);
-}
-
-.mountVariantButton[data-active="true"] {
-  border-color: var(--color-ink-black);
-  background: var(--color-ink-black);
-  color: var(--color-warm-white);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
-}
-
-.mountVariantButton[data-active="true"]:hover {
-  background: var(--color-ink-black);
-  color: var(--color-warm-white);
-}
-
-.mountVariantButton svg {
-  pointer-events: none;
-  flex-shrink: 0;
-}
-
-.mountVariantLabel {
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-align: center;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0.85;
-}
-
 /* ─── Mobile ─────────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
   .toolRail {
     top: auto;
-    bottom: 8px;
+    bottom: 10px;
     left: calc((100vw - 48px) / 2);
     width: auto;
     max-width: calc(100vw - 64px);

@@ -61,6 +61,9 @@ export interface GenerationTaskListView {
 
 export interface CollectionGenerationContext {
   readonly collectionId: string;
+  readonly garmentTypeCode?: string;
+  readonly garmentTypeLabel?: string;
+  readonly slotKey?: string;
   readonly variationAxis: CollectionVariationAxis;
 }
 
@@ -260,6 +263,13 @@ export class GenerationService {
               ? {
                   collectionId: context.collectionId,
                   variationAxis: context.variationAxis,
+                  ...(context.garmentTypeCode
+                    ? { garmentTypeCode: context.garmentTypeCode }
+                    : {}),
+                  ...(context.garmentTypeLabel
+                    ? { garmentTypeLabel: context.garmentTypeLabel }
+                    : {}),
+                  ...(context.slotKey ? { slotKey: context.slotKey } : {}),
                 }
               : {}),
             ...(generationInputs.length

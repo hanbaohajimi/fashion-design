@@ -29,7 +29,6 @@ import {
   BOARD_LAYOUT_CHANGE_EVENT,
   BoardProjectContext,
 } from "./board-context";
-import { GenerationBar } from "./generation/GenerationBar";
 import { GenerationWorkspace } from "./generation/GenerationWorkspace";
 import {
   type BoardPersistStatus,
@@ -106,12 +105,33 @@ function EmptyBoardGuide() {
 
 function BoardCanvasOverlay() {
   const [fabricsOpen, setFabricsOpen] = useState(false);
+  const [collectionLauncherOpen, setCollectionLauncherOpen] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const projectId = useContext(BoardProjectContext);
   const status = useContext(PersistStatusContext);
   const layout = useContext(BoardLayoutContext);
   return (
     <>
-      <BoardActionPanels status={status} />
-      <ToolRail onOpenFabrics={() => setFabricsOpen((v) => !v)} />
+      <BoardActionPanels
+        collectionLauncherOpen={collectionLauncherOpen}
+        exportMenuOpen={exportMenuOpen}
+        onCollectionLauncherOpenChange={setCollectionLauncherOpen}
+        onExportMenuOpenChange={setExportMenuOpen}
+        status={status}
+      />
+      <ToolRail
+        collectionsOpen={collectionLauncherOpen}
+        onOpenCollections={() => {
+          setCollectionLauncherOpen((current) => !current);
+          setExportMenuOpen(false);
+          setFabricsOpen(false);
+        }}
+        onOpenFabrics={() => {
+          setFabricsOpen((current) => !current);
+          setCollectionLauncherOpen(false);
+          setExportMenuOpen(false);
+        }}
+      />
       <ContextInspector />
       {fabricsOpen && <FabricDrawer onClose={() => setFabricsOpen(false)} />}
       <BoardFileDrop />
@@ -119,12 +139,10 @@ function BoardCanvasOverlay() {
       <EmptyBoardGuide />
       <AnchorOverlay />
       <ErrorBoundary area="generation">
-        <GenerationBar />
-      </ErrorBoundary>
-      <ErrorBoundary area="generation">
         <BoardAgentPanel
           boardStatus={status}
           collapsed={layout.chatCollapsed}
+          key={projectId}
           onToggle={layout.toggleChat}
         />
       </ErrorBoundary>
@@ -161,7 +179,7 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
     if (typeof window === "undefined") return false;
     const saved = window.localStorage.getItem("fashion-board-agent-collapsed");
     if (saved !== null) return saved === "1";
-    return window.matchMedia("(max-width: 1024px)").matches;
+    return window.matchMedia("(max-width: 1280px)").matches;
   });
   const store = useMemo(
     () =>

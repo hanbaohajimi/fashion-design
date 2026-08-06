@@ -1,17 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   fetchCollection,
   fetchCollectionConsistency,
+  updateCollection,
   updateCollectionDna,
 } from "./collection-api";
 import type {
   CollectionConsistency,
   CollectionDetail,
   CollectionDna,
+  GarmentType,
 } from "./collection-types";
+import { GARMENT_TYPE_OPTIONS } from "./collection-types";
 import { ConsistencyOverview } from "./ConsistencyOverview";
 import { DNACard } from "./DNACard";
 import { ExportModal } from "./ExportModal";
@@ -36,11 +40,14 @@ export function CollectionDrawer({
   const [collectionError, setCollectionError] = useState<string | null>(null);
   const [consistencyError, setConsistencyError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [sourceSaving, setSourceSaving] = useState(false);
   const [loadingCollection, setLoadingCollection] = useState(false);
   const [loadingConsistency, setLoadingConsistency] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [tab, setTab] = useState<DrawerTab>("dna");
   const [exportOpen, setExportOpen] = useState(false);
+  const [failedHeroUrl, setFailedHeroUrl] = useState("");
   const lastSaved = useRef("");
   const draftRef = useRef<CollectionDna | null>(null);
   const saveQueue = useRef(Promise.resolve());
@@ -58,6 +65,7 @@ export function CollectionDrawer({
         moodWords: snapshot.moodWords,
         palette: snapshot.palette,
         referenceFileIds: snapshot.referenceFileIds,
+        signatureDetails: snapshot.signatureDetails,
         silhouettes: snapshot.silhouettes,
       };
       setSaveState("saving");
@@ -211,9 +219,6 @@ export function CollectionDrawer({
         void closeAfterSave();
         return;
       }
-      if (event.key === "Tab" && drawerRef.current) {
-        trapFocus(event, drawerRef.current);
-      }
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
     return () =>
@@ -233,10 +238,33 @@ export function CollectionDrawer({
     return () => window.clearTimeout(timer);
   }, [draft, enqueueSave]);
 
-  return (
+  const heroImageUrl = collection
+    ? (collection.hero.thumbnailUrl ?? collection.hero.url)
+    : "";
+
+  const saveSourceGarmentType = async (
+    sourceGarmentType: GarmentType | null,
+  ): Promise<void> => {
+    setSourceSaving(true);
+    setSourceError(null);
+    try {
+      const updated = await updateCollection(collectionId, sourceGarmentType);
+      if (mountedRef.current) setCollection(updated);
+    } catch (reason) {
+      if (mountedRef.current) {
+        setSourceError(
+          reason instanceof Error ? reason.message : "核心款类型保存失败",
+        );
+      }
+      throw reason;
+    } finally {
+      if (mountedRef.current) setSourceSaving(false);
+    }
+  };
+
+  return createPortal(
     <aside
       aria-label="系列 DNA"
-      aria-modal="true"
       className={styles.collectionDrawer}
       inert={exportOpen ? true : undefined}
       ref={drawerRef}
@@ -348,11 +376,23 @@ export function CollectionDrawer({
             <>
               <section className={styles.collectionHero}>
                 <figure>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt="系列 Hero Look"
-                    src={collection.hero.thumbnailUrl ?? collection.hero.url}
-                  />
+                  {heroImageUrl && failedHeroUrl !== heroImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt="系列 Hero Look"
+                      onError={() => setFailedHeroUrl(heroImageUrl)}
+                      src={heroImageUrl}
+                    />
+                  ) : (
+                    <div
+                      aria-label="系列 Hero 预览暂不可用"
+                      className={styles.collectionHeroFallback}
+                      role="img"
+                    >
+                      <span>HERO</span>
+                      <small>预览暂不可用</small>
+                    </div>
+                  )}
                 </figure>
                 <div>
                   <span>FOUNDATION LOOK</span>
@@ -364,6 +404,13 @@ export function CollectionDrawer({
                   </p>
                 </div>
               </section>
+              <SourceGarmentTypeEditor
+                disabled={sourceSaving}
+                error={sourceError}
+                key={`${collection.sourceGarmentType?.code ?? "unspecified"}:${collection.sourceGarmentType?.label ?? ""}`}
+                onSave={saveSourceGarmentType}
+                value={collection.sourceGarmentType}
+              />
               <DNACard
                 dna={draft}
                 onChange={(next) => {
@@ -379,6 +426,7 @@ export function CollectionDrawer({
               consistency={consistency}
               dna={draft}
               onRefresh={refreshConsistency}
+              sourceGarmentType={collection.sourceGarmentType}
             />
           ) : consistency && tab === "consistency" ? (
             <ConsistencyOverview consistency={consistency} />
@@ -405,7 +453,8 @@ export function CollectionDrawer({
           }}
         />
       ) : null}
-    </aside>
+    </aside>,
+    document.body,
   );
 }
 
@@ -432,47 +481,83 @@ function dnaSignature(dna: CollectionDna | null): string {
     moodWords: dna.moodWords,
     palette: dna.palette,
     referenceFileIds: dna.referenceFileIds,
+    signatureDetails: dna.signatureDetails,
     silhouettes: dna.silhouettes,
   });
 }
 
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "summary",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
-function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
-  const focusable = Array.from(
-    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-  ).filter(
-    (element) =>
-      !element.closest("[inert]") &&
-      element.getAttribute("aria-hidden") !== "true" &&
-      element.tabIndex >= 0,
+function SourceGarmentTypeEditor({
+  disabled,
+  error,
+  onSave,
+  value,
+}: {
+  readonly disabled: boolean;
+  readonly error: string | null;
+  readonly onSave: (value: GarmentType | null) => Promise<void>;
+  readonly value: GarmentType | null;
+}) {
+  const [code, setCode] = useState(value?.code ?? "");
+  const [customLabel, setCustomLabel] = useState(
+    value?.code === "custom" ? value.label : "",
   );
-  const first = focusable[0];
-  const last = focusable.at(-1);
-  if (!first || !last) {
-    event.preventDefault();
-    container.focus();
-    return;
-  }
-  if (document.activeElement === container) {
-    event.preventDefault();
-    (event.shiftKey ? last : first).focus();
-  } else if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  } else if (!container.contains(document.activeElement)) {
-    event.preventDefault();
-    (event.shiftKey ? last : first).focus();
-  }
+
+  return (
+    <section className={styles.sourceGarmentEditor}>
+      <header>
+        <span>00 / FOUNDATION TYPE</span>
+        <h3>核心款类型</h3>
+      </header>
+      <div>
+        <label>
+          <span>服装类型</span>
+          <select
+            disabled={disabled}
+            onChange={(event) => {
+              const nextCode = event.target.value;
+              setCode(nextCode);
+              if (!nextCode) {
+                void onSave(null).catch(() => undefined);
+                return;
+              }
+              const option = GARMENT_TYPE_OPTIONS.find(
+                (item) => item.code === nextCode,
+              );
+              if (option && option.code !== "custom") {
+                void onSave(option).catch(() => undefined);
+              }
+            }}
+            value={code}
+          >
+            <option value="">未指定</option>
+            {GARMENT_TYPE_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {code === "custom" ? (
+          <label>
+            <span>自定义类型</span>
+            <input
+              disabled={disabled}
+              maxLength={64}
+              onBlur={() => {
+                const label = customLabel.trim();
+                if (label) {
+                  void onSave({ code: "custom", label }).catch(() => undefined);
+                }
+              }}
+              onChange={(event) => setCustomLabel(event.target.value)}
+              placeholder="输入团队使用的服装类型"
+              value={customLabel}
+            />
+          </label>
+        ) : null}
+      </div>
+      <small>{disabled ? "保存中…" : "用于生成系列类型建议"}</small>
+      {error ? <p role="alert">{error}</p> : null}
+    </section>
+  );
 }
