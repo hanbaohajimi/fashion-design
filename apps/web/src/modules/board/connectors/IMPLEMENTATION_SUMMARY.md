@@ -40,11 +40,11 @@ override onPointerUp = (): void => {
 };
 ```
 
-### 问题3：锚点不可见/不可点击
+### 问题3：锚点覆盖层拦截画布点击
 **根本原因**:
-- 锚点半径太小（3px）
-- CSS 中缺少 `pointer-events: all`
-- 锚点颜色不够突出
+- SVG 锚点位于 `InFrontOfTheCanvas` 覆盖层
+- `pointer-events: all` 使 `pointerdown` 命中圆点，而不是 tldraw 画布
+- ConnectorTool 因此无法接收两步点击事件
 
 ## 解决方案
 
@@ -131,15 +131,9 @@ override onPointerDown = (info: TLPointerEventInfo): void => {
 .anchorPoint {
   fill: rgba(59, 109, 255, 0.85);  /* 从灰色改为蓝色 */
   stroke: white;
-  transition: all 0.12s ease;
-  cursor: crosshair;
+  transition: fill 0.12s ease, transform 0.12s ease;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
-  pointer-events: all;  /* 关键：接收指针事件 */
-}
-
-.anchorPoint:hover {
-  fill: rgba(59, 109, 255, 1);
-  transform: scale(1.3);  /* 从 1.2 增加到 1.3 */
+  pointer-events: none;  /* 关键：让事件穿透到 tldraw 画布 */
 }
 ```
 
@@ -330,7 +324,7 @@ Local Space (元素局部坐标)
 ✅ **所有核心功能正常工作**:
 1. 锚点在所有缩放级别下清晰可见且大小恒定
 2. 锚点在画布平移和缩放时不跳动
-3. 可以从一个元素的锚点拖动到另一个元素的锚点
+3. 先后点击两个元素的锚点可以创建连接
 4. 成功创建连接后工具保持在连接器模式
 5. 可以连续创建多个连接
 6. 按 Esc 键退出连接器模式

@@ -34,6 +34,12 @@
   box-shadow: 0 2px 8px rgb(168 196 176 / 18%);
 }
 
+.roleBadge[data-role="garment_ref"] {
+  border-color: #b87f69;
+  background: linear-gradient(135deg, #ead5cb 0%, #ddc3b7 100%);
+  box-shadow: 0 2px 8px rgb(184 127 105 / 18%);
+}
+
 .roleBadge[data-role="palette"] {
   border-color: #d4ae3e;
   background: linear-gradient(135deg, #f2d978 0%, #e8cc65 100%);
@@ -268,6 +274,19 @@
 .noteTextEditor:focus {
   outline: 1px solid rgb(24 25 21 / 28%);
   outline-offset: calc(4px * var(--note-content-scale));
+}
+
+.noteSourceLink {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  margin-top: calc(8px * var(--note-content-scale));
+  color: #1f5f53;
+  font-size: calc(12px * var(--note-content-scale));
+  font-weight: 700;
+  pointer-events: auto;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .swatchShape {

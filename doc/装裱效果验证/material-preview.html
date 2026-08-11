@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>素材装裱效果预览 - 物理真实感验证</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: linear-gradient(90deg, #e8e6e1 1px, transparent 1px) 0 0 / 80px 100%,
+                  #f5f3ee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      padding: 40px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      color: #18191a;
+    }
+    .subtitle {
+      font-size: 0.95rem;
+      color: #666;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 60px;
+      margin-top: 40px;
+    }
+    .material-card {
+      position: relative;
+      background: transparent;
+    }
+    .label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 20px;
+    }
+    .material-shell {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+    }
+
+    /* Shadow layer */
+    .shadow-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      opacity: 0.5;
+      z-index: 1;
+    }
+
+    /* Substrate layer */
+    .substrate-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    /* Content layer */
+    .content-layer {
+      position: absolute;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      color: #666;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* Mounting layer */
+    .mounting-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    .notes {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #666;
+      line-height: 1.7;
+    }
+    .notes strong {
+      color: #333;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>素材装裱效果 — 物理真实感验证</h1>
+    <p class="subtitle">
+      以下是五种核心材质的装裱效果实际渲染。请检查：<br>
+      ① 阴影是否清晰可见 ② 边缘是否呈现有机形态 ③ 图钉/胶带/夹子是否明显<br>
+      ④ 纸张纹理是否真实 ⑤ 不同材质是否有明显区分度
+    </p>
+
+    <div class="grid">
+      <!-- Editorial Photo -->
+      <div class="material-card">
+        <div class="label">Editorial Photo / 照片纸</div>
+        <div class="material-shell">
+          <!-- Shadow -->
+          <div class="shadow-layer">
+            <svg width="100%" height="100%" style="overflow: visible;">
+              <defs>
+                <filter id="shadow-photo">
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="3.6" />
+                  <feOffset dx="0" dy="1" result="shadow1" />
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="7.2" />
+                  <feOffset dx="4" dy="6" result="shadow2" />
+                  <feGaussianBlur in="SourceAlpha" stdDeviation="12" />
+                  <feOffset dx="8" dy="12" result="shadow3" />
+                  <feMerge>
+                    <feMergeNode in="shadow3" />
+                    <feMergeNode in="shadow2" />
+                    <feMergeNode in="shadow1" />
+                  </feMerge>
+                  <feComponentTransfer>
+                    <feFuncA type="linear" slope="0.65" />
+                  </feComponentTransfer>
+                </filter>
+              </defs>
+              <rect width="100%" height="100%" fill="rgb(24 25 21)" filter="url(#shadow-photo)" />
+            </svg>
+          </div>
+
+          <!-- Substrate -->

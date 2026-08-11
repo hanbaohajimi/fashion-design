@@ -5,20 +5,46 @@ import type { TrendItem } from "./trend-types";
 import styles from "./trends.module.css";
 
 interface TrendCardProps {
+  readonly disabled?: boolean;
   readonly importing: boolean;
   readonly onImport: (trend: TrendItem) => void;
   readonly trend: TrendItem;
 }
 
 const PLATFORM_LABELS: Readonly<Record<string, string>> = {
+  "businessoffashion.com": "The Business of Fashion",
   fashionunited: "FashionUnited",
+  "fashionunited.com": "FashionUnited",
+  "highsnobiety.com": "Highsnobiety",
+  "hypebeast.com": "Hypebeast",
   pinterest: "Pinterest Trends",
+  "pinterest.com": "Pinterest Trends",
+  "ssense.com": "SSENSE",
   vogue: "Vogue",
+  "vogue.com": "Vogue",
   wwd: "WWD",
+  "wwd.com": "WWD",
+};
+
+const CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  accessories: "配饰",
+  color: "色彩",
+  culture: "文化",
+  fabric: "面料",
+  material: "材质",
+  men: "男装",
+  silhouette: "廓形",
+  styling: "造型",
+  sustainability: "可持续",
+  women: "女装",
 };
 
 export function platformLabel(platform: string): string {
   return PLATFORM_LABELS[platform.toLowerCase()] ?? platform;
+}
+
+export function trendCategoryLabel(category: string): string {
+  return CATEGORY_LABELS[category.toLowerCase()] ?? category;
 }
 
 function publishedDate(value: string): string {
@@ -33,14 +59,22 @@ function publishedDate(value: string): string {
       }).format(date);
 }
 
-export function TrendCard({ importing, onImport, trend }: TrendCardProps) {
+export function TrendCard({
+  disabled = false,
+  importing,
+  onImport,
+  trend,
+}: TrendCardProps) {
   const platform = platformLabel(trend.platform);
   const keywords = trend.extracted?.keywords.length
     ? trend.extracted.keywords
     : trend.tags;
 
   return (
-    <article className={styles.trendCard}>
+    <article
+      className={styles.trendCard}
+      data-has-cover={trend.coverImageUrl ? "true" : "false"}
+    >
       <div className={styles.cardVisual}>
         {trend.coverImageUrl ? (
           // Authenticated same-origin image endpoints may redirect to a private signed URL.
@@ -55,7 +89,9 @@ export function TrendCard({ importing, onImport, trend }: TrendCardProps) {
       </div>
 
       <div className={styles.cardBody}>
-        <span className={styles.cardCategory}>{trend.category}</span>
+        <span className={styles.cardCategory}>
+          {trendCategoryLabel(trend.category)}
+        </span>
         <h3>{trend.title}</h3>
 
         <div className={styles.sourceProof}>
@@ -74,16 +110,21 @@ export function TrendCard({ importing, onImport, trend }: TrendCardProps) {
           <ColorStrip colors={trend.extracted?.keyColors ?? []} />
           {keywords.length > 0 ? (
             <div aria-label="趋势关键词" className={styles.tagList}>
-              {keywords.slice(0, 6).map((keyword) => (
+              {keywords.slice(0, 4).map((keyword) => (
                 <span key={keyword}>{keyword}</span>
               ))}
+              {keywords.length > 4 ? (
+                <span aria-label={`另有 ${keywords.length - 4} 个关键词`}>
+                  +{keywords.length - 4}
+                </span>
+              ) : null}
             </div>
           ) : null}
         </section>
 
         <button
           className={styles.importButton}
-          disabled={importing}
+          disabled={disabled || importing}
           onClick={() => onImport(trend)}
           type="button"
         >

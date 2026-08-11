@@ -345,10 +345,18 @@
 
 .projectCard,
 .skeletonGrid > span {
+  position: relative;
+  z-index: var(--z-canvas);
   display: flex;
   flex-direction: column;
   min-width: 0;
   animation: card-in 400ms var(--ease-smooth) both;
+}
+
+/* The entrance transform gives every card its own stacking context. Lift the
+   active card so its action menu stays above cards rendered after it. */
+.projectCard:has(.cardMenu[open]) {
+  z-index: var(--z-dropdown);
 }
 
 .optimisticCard {
@@ -927,7 +935,14 @@
   }
 
   .navigation {
-    display: none;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: flex-start;
+    border-top: 1px solid var(--border-color-subtle);
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: var(--space-6);
   }
 
   .account > span:first-child {

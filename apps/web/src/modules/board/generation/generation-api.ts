@@ -155,6 +155,26 @@ export async function fetchGenerationTasks(
   return (await response.json()) as GenerationTaskList;
 }
 
+export async function setGenerationCandidateDisposition(
+  taskId: string,
+  index: number,
+  disposition: "adopted" | "dismissed",
+): Promise<GenerationTaskDetail> {
+  const response = await fetch(
+    `/api/generations/${encodeURIComponent(taskId)}/candidates/${index}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ disposition }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response, "候选状态保存失败");
+  }
+  return (await response.json()) as GenerationTaskDetail;
+}
+
 interface SignedMaskUpload {
   readonly expiresAt: string;
   readonly maskId: string;
@@ -186,13 +206,13 @@ export async function uploadTemporaryMask(
   width: number,
   height: number,
 ): Promise<string> {
-  const sha256 = await checksumSha256Base64(blob);
+  const checksumSha256 = await checksumSha256Base64(blob);
   const response = await fetch("/api/generations/masks/sign", {
     method: "POST",
     body: JSON.stringify({
       height,
       projectId,
-      sha256,
+      checksumSha256,
       size: blob.size,
       width,
     }),
@@ -203,7 +223,9 @@ export async function uploadTemporaryMask(
     throw await apiError(response, "临时掩码签名失败");
   }
   const signed = (await response.json()) as SignedMaskUpload;
-  if (signed.upload.headers["x-amz-checksum-sha256"] !== sha256) {
+  if (
+    signed.upload.headers["x-amz-checksum-sha256"] !== checksumSha256
+  ) {
     throw new GenerationApiError(
       "掩码签名摘要不匹配，请重试",
       "MASK_CHECKSUM_MISMATCH",

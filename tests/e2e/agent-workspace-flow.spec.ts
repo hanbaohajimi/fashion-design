@@ -9,13 +9,29 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   page,
 }) => {
   const conversations = [conversation("conversation-1", "新的设计对话")];
-  const messages = new Map<string, unknown[]>([["conversation-1", []]]);
+  const initialUserMessage = message({
+    clientRequestId: "request-existing",
+    content: "生成一组强调面料垂坠感的风衣方案",
+    id: "user-existing",
+    role: "user",
+  });
+  const initialAssistantMessage = message({
+    content: "已完成本轮风衣候选，请直接在这里筛选方案。",
+    generationTaskId: "task-existing",
+    id: "assistant-existing",
+    replyToId: initialUserMessage.id,
+    role: "assistant",
+  });
+  const messages = new Map<string, unknown[]>([
+    ["conversation-1", [initialUserMessage, initialAssistantMessage]],
+  ]);
   let conversationSequence = 1;
   let sendCount = 0;
   let sentShapeIds: readonly string[] = [];
 
   await mockWorkspace(page, {
     conversations,
+    generationTasks: [generationTask("task-existing")],
     messages,
     onCreateConversation: () => {
       conversationSequence += 1;
@@ -64,6 +80,55 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await expect(toolDock).toBeVisible();
   await expect(page.getByText("AGENT 工作区验收项目")).toBeVisible();
   await expect(page.locator(".tlui-main-toolbar")).toHaveCount(0);
+  await expect(page.locator('[class*="generationBar"]')).toHaveCount(0);
+  const toolOrder = await toolDock
+    .locator("button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("aria-label")),
+    );
+  const swatchToolIndex = toolOrder.indexOf("添加色卡");
+  expect(toolOrder.slice(swatchToolIndex, swatchToolIndex + 2)).toEqual([
+    "添加色卡",
+    "连接器工具",
+  ]);
+  expect(["红色图钉固定工具", "固定素材", "请先选择素材"]).toContain(
+    toolOrder[swatchToolIndex + 2],
+  );
+
+  const linkedReply = agent.locator("article").filter({
+    hasText: "已完成本轮风衣候选，请直接在这里筛选方案。",
+  });
+  const linkedCandidates = linkedReply.getByRole("region", {
+    name: "本轮生成候选",
+  });
+  await expect(linkedCandidates).toBeVisible();
+  await expect(
+    linkedCandidates.getByRole("img", { name: "候选设计" }),
+  ).toHaveCount(2);
+  await linkedCandidates
+    .getByRole("button", { name: "查看全部 3 个候选" })
+    .click();
+  await expect(
+    linkedCandidates.getByRole("img", { name: "候选设计" }),
+  ).toHaveCount(3);
+  await expect(agent.getByText("全部候选", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "打开历史" }).click();
+  await expect(page.getByRole("region", { name: "历史记录" })).toBeVisible();
+  await page.getByRole("tab", { name: "生成" }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "历史记录" })
+      .getByRole("img", { name: "候选设计" }),
+  ).toHaveCount(3);
+  await page.getByRole("button", { name: "返回对话" }).click();
+  await linkedCandidates
+    .getByRole("button", { name: "更多候选操作" })
+    .first()
+    .click();
+  await linkedCandidates.getByRole("button", { name: "丢弃" }).first().click();
+  await expect(
+    linkedCandidates.getByRole("img", { name: "候选设计" }),
+  ).toHaveCount(2);
 
   const desktopAgentBox = await agent.boundingBox();
   const desktopDockBox = await toolDock.boundingBox();
@@ -79,42 +144,72 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   );
 
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
-  const context = page.getByLabel("发送上下文");
-  await expect(context).toContainText("灵感便签");
-  await context.getByRole("button", { name: "移除 灵感便签" }).click();
+  const context = page.getByLabel("已附加内容");
+  await expect(context).toContainText("备注");
+  await expect(context.locator("img")).toHaveCount(0);
+  const attachmentChip = context.getByRole("button", {
+    name: "备注，设计备注",
+  });
+  expect(
+    await context.evaluate((element) => getComputedStyle(element).flexWrap),
+  ).toBe("wrap");
+  const contextBox = await context.boundingBox();
+  const inputBox = await page
+    .getByRole("textbox", { name: "编辑描述" })
+    .boundingBox();
+  expect(inputBox?.height).toBeGreaterThanOrEqual(44);
+  expect(inputBox?.y).toBeGreaterThanOrEqual(
+    (contextBox?.y ?? 0) + (contextBox?.height ?? 0) - 1,
+  );
+  await attachmentChip.hover();
+  const attachmentPreview = page.getByRole("tooltip");
+  await expect(attachmentPreview).toBeVisible();
+  await expect(attachmentPreview).toContainText("备注");
+  await attachmentPreview.hover();
+  await page.waitForTimeout(150);
+  await expect(attachmentPreview).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(attachmentPreview).toHaveCount(0);
+  await context.getByRole("button", { name: "移除 备注" }).click();
   await expect(context).toHaveCount(0);
 
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
-  await expect(page.getByLabel("发送上下文")).toContainText("灵感便签");
+  await expect(page.getByLabel("已附加内容")).toContainText("备注");
+  await page.mouse.click(620, 260);
+  await expect(page.getByLabel("已附加内容")).toContainText("备注");
 
   await page.getByRole("button", { name: "新建会话" }).click();
-  await expect(page.getByLabel("切换 Agent 会话")).toBeVisible();
+  await expect(agent.locator("header strong").first()).toHaveText(
+    "新的设计对话",
+  );
 
-  const composer = page.getByRole("textbox", {
-    name: "告诉 Agent 你想完成什么",
-  });
+  const composer = page.getByRole("textbox", { name: "编辑描述" });
   await composer.fill("请分析这个廓形并给出三个面料方向");
   const sendButton = page.getByRole("button", { name: "发送", exact: true });
   await expect(sendButton).toBeDisabled();
   await expect(sendButton).toBeEnabled();
   await composer.press("Enter");
   await composer.press("Enter");
-  await expect(
-    page.getByRole("status").filter({ hasText: "理解需求" }),
-  ).toBeVisible();
   await expect.poll(() => sendCount).toBe(1);
   await expect(agent).toContainText("已整理为三个可执行的廓形与面料方向。");
   expect(sentShapeIds).toHaveLength(1);
+  await expect(composer).toHaveValue("");
+  await expect(page.getByLabel("已附加内容")).toHaveCount(0);
 
   await page.getByRole("button", { name: "管理当前会话" }).click();
   await page.getByRole("button", { name: "重命名会话" }).click();
   await page.getByRole("textbox", { name: "会话标题" }).fill("面料方向讨论");
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(agent.locator("header strong").first()).toHaveText("面料方向讨论");
+  await expect(agent.locator("header strong").first()).toHaveText(
+    "面料方向讨论",
+  );
 
   await page.getByRole("button", { name: "管理当前会话" }).click();
   await page.getByRole("button", { name: "归档会话" }).click();
-  await expect(agent.locator("header strong").first()).toHaveText("新的设计对话");
+  await page.getByRole("button", { name: "再次点击确认归档" }).click();
+  await expect(agent.locator("header strong").first()).toHaveText(
+    "新的设计对话",
+  );
 
   await page.getByRole("button", { name: "折叠设计助手" }).click();
   const collapsed = page.getByRole("complementary", {
@@ -136,12 +231,17 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await expect(agent).toBeVisible();
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
   const inspector = page.locator('[data-label-design-panel="true"]');
+  await expect(inspector).toHaveCount(0);
+  await page.getByRole("button", { name: "编辑标签：备注" }).click();
   await expect(inspector).toBeVisible();
+  await expect(inspector.getByRole("radio", { name: "成衣" })).toBeVisible();
+  await expect(inspector.getByRole("radio", { name: "参考衣" })).toBeVisible();
 
   for (const viewport of [
     { height: 900, width: 1440 },
     { height: 768, width: 1024 },
     { height: 1024, width: 768 },
+    { height: 844, width: 390 },
   ]) {
     await page.setViewportSize(viewport);
     await expect(agent).toBeVisible();
@@ -164,6 +264,9 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
     expect(
       (inspectorBox?.y ?? 0) + (inspectorBox?.height ?? 0),
     ).toBeLessThanOrEqual(viewport.height - 76);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(viewport.width);
   }
   await expect(
     page.getByRole("button", { name: "关闭设计助手" }),
@@ -176,6 +279,7 @@ async function mockWorkspace(
   page: Page,
   options: {
     readonly conversations: Array<ReturnType<typeof conversation>>;
+    readonly generationTasks?: readonly unknown[];
     readonly messages: Map<string, unknown[]>;
     readonly onCreateConversation: () => ReturnType<typeof conversation>;
     readonly onSend: (
@@ -230,7 +334,12 @@ async function mockWorkspace(
     }),
   );
   await page.route("**/api/generations?*", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
+    route.fulfill({
+      json: { items: options.generationTasks ?? [], nextCursor: null },
+    }),
+  );
+  await page.route("**/api/generations/*/candidates/*", (route) =>
+    route.fulfill({ json: {} }),
   );
   await page.route(
     `**/api/projects/${PROJECT_ID}/agent-conversations*`,
@@ -315,6 +424,7 @@ function message(input: {
     readonly shapeIds: readonly string[];
   } | null;
   readonly id: string;
+  readonly generationTaskId?: string | null;
   readonly replyToId?: string | null;
   readonly role: "assistant" | "user";
 }) {
@@ -324,11 +434,39 @@ function message(input: {
     context: input.context ?? null,
     createdAt: NOW,
     error: null,
-    generationTaskId: null,
+    generationTaskId: input.generationTaskId ?? null,
     id: input.id,
     replyToId: input.replyToId ?? null,
     role: input.role,
     status: "completed",
+    updatedAt: NOW,
+  };
+}
+
+function generationTask(id: string) {
+  const image = (index: number) => ({
+    assetId: `asset-${index}`,
+    height: 4,
+    url: `data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==#${index}`,
+    width: 3,
+  });
+  return {
+    createdAt: NOW,
+    error: null,
+    id,
+    output: { images: [image(1), image(2), image(3)], seed: 42 },
+    request: {
+      cfg: 7,
+      height: 1024,
+      projectId: PROJECT_ID,
+      prompt: "强调面料垂坠感的风衣方案",
+      shapeIds: [],
+      steps: 30,
+      taskType: "t2i",
+      width: 768,
+    },
+    status: "succeeded",
+    taskType: "t2i",
     updatedAt: NOW,
   };
 }

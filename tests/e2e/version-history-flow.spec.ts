@@ -86,6 +86,16 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   await page.route("**/api/generations?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
+  await page.route("**/api/projects/e2e-history/agent-conversations*", (route) =>
+    route.fulfill({ json: { items: [{ archivedAt: null, createdAt, id: "conversation-history", messageCount: 0, projectId: "e2e-history", title: "新的设计对话", updatedAt: createdAt }], nextCursor: null } }),
+  );
+  await page.route("**/api/agent-conversations/conversation-history/messages*", async (route) => {
+    if (route.request().method() !== "POST") return route.fulfill({ json: { items: [], nextCursor: null } });
+    const body = route.request().postDataJSON() as { readonly clientRequestId: string; readonly content: string; readonly shapeIds: readonly string[] };
+    const userMessage = { clientRequestId: body.clientRequestId, content: body.content, context: { fileAssetIds: [], shapeIds: body.shapeIds }, createdAt, error: null, generationTaskId: null, id: "user-history", replyToId: null, role: "user", status: "completed", updatedAt: createdAt };
+    const assistantMessage = { ...userMessage, clientRequestId: null, content: "已生成版本。", generationTaskId: "task-history", id: "assistant-history", replyToId: userMessage.id, role: "assistant" };
+    return route.fulfill({ json: { assistantMessage, taskId: "task-history", userMessage }, status: 201 });
+  });
   await page.route(/\/api\/generations$/u, (route) =>
     route.fulfill({ status: 202, json: { task_id: "task-history" } }),
   );
@@ -106,8 +116,9 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
       json: {
         createdAt,
         error: null,
-        id: "task-history",
-        output: {
+         id: "task-history",
+         request: { cfg: 3.5, height: 1024, projectId: "e2e-history", prompt: "带明确肩线的短款夹克", shapeIds: [], steps: 28, taskType: "t2i", width: 768 },
+         output: {
           images: [
             {
               assetId: "asset-current",
@@ -186,10 +197,11 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
 
   await page.goto("/e2e-history");
   await page.getByRole("button", { name: "便签" }).click();
-  await page
-    .getByRole("textbox", { name: "设计描述" })
-    .fill("带明确肩线的短款夹克");
-  await page.getByRole("button", { name: "创建", exact: true }).click();
+  await page.getByRole("button", { name: "展开设计助手" }).click();
+  await page.getByRole("textbox", { name: "编辑描述" }).fill("带明确肩线的短款夹克");
+  const sendButton = page.getByRole("button", { name: "发送", exact: true });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
   await page.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "版本", exact: true }).click();
 

@@ -34,7 +34,8 @@ export function amuxAdapterConfigFromEnv(): AmuxAdapterConfig {
   return {
     apiKey: () => process.env.AMUX_API_KEY?.trim() || undefined,
     baseUrl: process.env.AMUX_BASE_URL?.trim() || "https://api.amux.ai/v1",
-    imageModel: process.env.AMUX_IMAGE_MODEL?.trim() || "gpt-image-2",
+    imageModel:
+      process.env.AMUX_IMAGE_MODEL?.trim() || "gpt-image-2-official",
     quality: imageQualityFromEnv(process.env.AMUX_IMAGE_QUALITY?.trim()),
     imageCostUsd: numberFromEnv(process.env.AMUX_IMAGE_COST_USD, 0),
     editCostUsd: numberFromEnv(process.env.AMUX_EDIT_COST_USD, 0),

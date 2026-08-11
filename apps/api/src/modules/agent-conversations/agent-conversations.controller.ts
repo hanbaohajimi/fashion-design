@@ -18,6 +18,7 @@ import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 import {
   agentIdSchema,
   createAgentConversationSchema,
+  attachGenerationTaskSchema,
   listAgentConversationsSchema,
   listAgentMessagesSchema,
   sendAgentMessageSchema,
@@ -134,6 +135,21 @@ export class AgentConversationsController {
       user.userId,
       parseOrThrow(agentIdSchema, conversationId),
       parseOrThrow(sendAgentMessageSchema, body),
+    );
+  }
+
+  @Post(":id/generation-tasks/:taskId")
+  attachGenerationTask(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") conversationId: string,
+    @Param("taskId") taskId: string,
+    @Body() body: unknown,
+  ) {
+    return this.conversations.attachGenerationTask(
+      user.userId,
+      parseOrThrow(agentIdSchema, conversationId),
+      parseOrThrow(agentIdSchema, taskId),
+      parseOrThrow(attachGenerationTaskSchema, body),
     );
   }
 }

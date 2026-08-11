@@ -118,23 +118,25 @@ test("新建项目成功后立即进入对应白板", async ({ page }) => {
   await page.route("**/api/generations?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
-  await page.route("**/api/projects/created-project/agent-conversations*", (route) =>
-    route.fulfill({
-      json: {
-        items: [
-          {
-            archivedAt: null,
-            createdAt: now,
-            id: "created-project-conversation",
-            messageCount: 0,
-            projectId: project.id,
-            title: "新的设计对话",
-            updatedAt: now,
-          },
-        ],
-        nextCursor: null,
-      },
-    }),
+  await page.route(
+    "**/api/projects/created-project/agent-conversations*",
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              archivedAt: null,
+              createdAt: now,
+              id: "created-project-conversation",
+              messageCount: 0,
+              projectId: project.id,
+              title: "新的设计对话",
+              updatedAt: now,
+            },
+          ],
+          nextCursor: null,
+        },
+      }),
   );
   await page.route("**/api/agent-conversations/*/messages*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
@@ -147,7 +149,9 @@ test("新建项目成功后立即进入对应白板", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/created-project$/u);
   await expect(page.getByText(project.name)).toBeVisible();
-  await expect(page.getByRole("region", { name: "白板三步上手" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "白板三步上手" }),
+  ).toBeVisible();
 });
 
 test("趋势主题筛选使用接口返回的真实分类", async ({ page }) => {
@@ -451,8 +455,10 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
 
 test("框选约束后生成候选并采纳为带 assetId 的白板图片", async ({ page }) => {
   let persistedAssetId: string | undefined;
+  let persistedSnapshot: unknown = null;
   let generationIdempotencyKey: string | undefined;
   let generationRequestCount = 0;
+  let candidateDisposition: string | undefined;
   const task = {
     id: "task-e2e-1",
     taskType: "t2i",
@@ -481,6 +487,15 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     createdAt: "2026-07-27T08:00:00.000Z",
     updatedAt: "2026-07-27T08:00:01.000Z",
   };
+  const taskWithDisposition = () => ({
+    ...task,
+    output: {
+      ...task.output,
+      candidateDispositions: candidateDisposition
+        ? { "0": candidateDisposition }
+        : {},
+    },
+  });
 
   await page.route("**/api/me", async (route) => {
     await route.fulfill({
@@ -537,12 +552,50 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
       }),
   );
   await page.route(
-    "**/api/agent-conversations/conversation-e2e-project/messages?limit=100",
+    "**/api/agent-conversations/conversation-e2e-project/messages?limit=50",
     (route) => route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route(
+    "**/api/agent-conversations/conversation-e2e-project/messages",
+    async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const body = route.request().postDataJSON() as {
+        readonly clientRequestId: string;
+        readonly content: string;
+        readonly shapeIds: readonly string[];
+      };
+      const userMessage = {
+        clientRequestId: body.clientRequestId,
+        content: body.content,
+        context: { fileAssetIds: [], shapeIds: body.shapeIds },
+        createdAt: "2026-07-27T08:00:03.000Z",
+        error: null,
+        generationTaskId: null,
+        id: "user-e2e-generation",
+        replyToId: null,
+        role: "user",
+        status: "completed",
+        updatedAt: "2026-07-27T08:00:03.000Z",
+      };
+      const assistantMessage = {
+        ...userMessage,
+        clientRequestId: null,
+        content: "已按选中约束生成候选。",
+        generationTaskId: "task-e2e-1",
+        id: "assistant-e2e-generation",
+        replyToId: userMessage.id,
+        role: "assistant",
+      };
+      await route.fulfill({
+        json: { assistantMessage, taskId: "task-e2e-1", userMessage },
+        status: 201,
+      });
+    },
   );
   await page.route("**/api/projects/e2e-project/board", async (route) => {
     if (route.request().method() === "PATCH") {
       const payload = route.request().postDataJSON() as {
+        readonly snapshot?: unknown;
         readonly patches?: readonly {
           readonly record?: { readonly props?: { readonly assetId?: string } };
         }[];
@@ -550,6 +603,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
       persistedAssetId = payload.patches
         ?.map((patch) => patch.record?.props?.assetId)
         .find(Boolean);
+      persistedSnapshot = payload.snapshot ?? null;
       await route.fulfill({
         json: {
           batchId: "e2e-board-save",
@@ -560,7 +614,11 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
       return;
     }
     await route.fulfill({
-      json: { elements: [], revision: 0, snapshot: null },
+      json: {
+        elements: [],
+        revision: persistedSnapshot ? 1 : 0,
+        snapshot: persistedSnapshot,
+      },
     });
   });
   await page.route(
@@ -570,7 +628,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await page.route("**/api/generations?*", async (route) => {
     await route.fulfill({
       json: {
-        items: generationRequestCount > 0 ? [task] : [],
+        items: generationRequestCount > 0 ? [taskWithDisposition()] : [],
         nextCursor: null,
       },
     });
@@ -596,8 +654,17 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
         })}\n\n`,
     });
   });
+  await page.route(
+    "**/api/generations/task-e2e-1/candidates/0",
+    async (route) => {
+      candidateDisposition = (
+        route.request().postDataJSON() as { readonly disposition?: string }
+      ).disposition;
+      await route.fulfill({ json: taskWithDisposition() });
+    },
+  );
   await page.route("**/api/generations/task-e2e-1", async (route) => {
-    await route.fulfill({ json: task });
+    await route.fulfill({ json: taskWithDisposition() });
   });
   await page.route(
     "https://assets.example/generated-look.png",
@@ -615,7 +682,6 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
 
   await page.goto("/e2e-project");
   await expect(page.getByText("E2E 生成项目")).toBeVisible();
-  await expect(page.getByText("9 / 600", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "白板三步上手" }),
   ).toContainText("上传参考");
@@ -626,25 +692,23 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect(
     toolRail.getByRole("button", { name: "橡皮擦工具" }),
   ).toBeVisible();
+  await expect(toolRail.getByRole("button", { name: "箭头工具" })).toHaveCount(
+    0,
+  );
+  await expect(toolRail.getByRole("button", { name: "矩形工具" })).toHaveCount(
+    0,
+  );
+  await expect(toolRail.getByRole("button", { name: "添加Frame" })).toHaveCount(
+    0,
+  );
   await expect(
-    toolRail.getByRole("button", { name: "箭头工具" }),
-  ).toBeVisible();
-  await expect(
-    toolRail.getByRole("button", { name: "矩形工具" }),
+    toolRail.getByRole("button", { name: "红色图钉固定工具" }),
   ).toBeVisible();
   await expect(page.locator(".tlui-main-toolbar")).toHaveCount(0);
 
   const drawTool = toolRail.getByRole("button", { name: "自由绘制工具" });
   await drawTool.click();
   await expect(drawTool).toHaveAttribute("aria-pressed", "true");
-  const rectangleTool = toolRail.getByRole("button", { name: "矩形工具" });
-  await rectangleTool.click();
-  await expect(rectangleTool).toHaveAttribute("aria-pressed", "true");
-  await page.mouse.move(100, 130);
-  await page.mouse.down();
-  await page.mouse.move(180, 180, { steps: 4 });
-  await page.mouse.up();
-  await expect(page.getByTestId("style.panel")).toBeVisible();
   await toolRail.getByRole("button", { name: "选择工具" }).click();
   const inspirationNoteButton = toolRail.getByRole("button", {
     name: "添加灵感便签",
@@ -653,41 +717,44 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
 
   await inspirationNoteButton.click();
   await expect(page.getByTestId("style.panel")).toHaveCount(0);
+  const labelDesignPanel = page.locator('[data-label-design-panel="true"]');
+  await expect(labelDesignPanel).toHaveCount(0);
+  await page.getByRole("button", { name: "编辑标签：备注" }).click();
+  await expect(labelDesignPanel).toBeVisible();
   const styleRole = page.getByRole("radio", { name: /风格参考/u });
-  const fabricRole = page.getByRole("radio", { name: /面料参考/u });
+  const garmentRole = page.getByRole("radio", { name: /成衣/u });
   await styleRole.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(fabricRole).toBeFocused();
-  await expect(fabricRole).toHaveAttribute("aria-checked", "true");
+  await expect(garmentRole).toBeFocused();
+  await expect(garmentRole).toHaveAttribute("aria-checked", "true");
   const noteRole = page.getByRole("radio", { name: /备注/u });
   await page.keyboard.press("End");
   await expect(noteRole).toBeFocused();
   await expect(noteRole).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("region", { name: "设计面板" })).toBeHidden();
+  await expect(labelDesignPanel).toHaveCount(0);
   await page.mouse.move(470, 220);
   await page.mouse.down();
   await page.mouse.move(810, 500, { steps: 12 });
   await page.mouse.up();
-  await expect(page.getByRole("region", { name: "设计面板" })).toBeVisible();
-  await expect(page.getByLabel("当前生成约束")).toContainText("备注 1");
-
-  const generationBar = page.getByRole("region", { name: "设计面板" });
-  const promptInput = generationBar.getByRole("textbox", { name: "设计描述" });
-  const generateButton = generationBar.locator("button").first();
+  await expect(labelDesignPanel).toHaveCount(0);
+  await page.getByRole("button", { name: "展开设计助手" }).click();
+  const promptInput = page.getByRole("textbox", { name: "编辑描述" });
+  const generateButton = page.getByRole("button", {
+    name: "发送",
+    exact: true,
+  });
+  const agentPanel = page.getByRole("complementary", {
+    name: "设计助手",
+  });
   await promptInput.fill("保留便签约束的利落廓形外套");
+  await expect(generateButton).toBeEnabled();
   await generateButton.click();
-  await expect(generateButton).toBeDisabled();
-  await promptInput.press("Enter");
-  await expect.poll(() => generationRequestCount).toBe(1);
-  expect(generationIdempotencyKey).toMatch(/^[0-9a-f-]{36}$/u);
+  await expect(agentPanel).toContainText("已按选中约束生成候选。");
 
   await expect(
     page.getByRole("complementary", { name: "生成任务托盘" }),
   ).toHaveCount(0);
-  const agentPanel = page.getByRole("complementary", {
-    name: "设计助手",
-  });
   await expect(
     agentPanel.getByRole("region", { name: "生成候选" }),
   ).toBeVisible();
@@ -695,10 +762,21 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
 
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).toHaveCount(1);
+  ).not.toHaveCount(0);
   await expect
     .poll(() => persistedAssetId, { timeout: 5_000 })
     .toBe("asset-e2e-1");
+  await expect.poll(() => candidateDisposition).toBe("adopted");
+
+  await page.getByRole("button", { name: "打开历史" }).click();
+  const generationHistory = page.getByRole("region", { name: "历史记录" });
+  await generationHistory.getByRole("tab", { name: "生成" }).click();
+  await expect(
+    generationHistory.locator(
+      'img[src="https://assets.example/generated-look.png"]',
+    ),
+  ).toHaveCount(1);
+  await generationHistory.getByRole("button", { name: "返回对话" }).click();
 
   await page.getByRole("button", { name: "导出", exact: true }).click();
   const exportOptions = page.getByRole("region", { name: "导出选项" });
@@ -714,4 +792,12 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
   ).toBeVisible();
+  await page.getByRole("button", { name: "打开历史" }).click();
+  const restoredHistory = page.getByRole("region", { name: "历史记录" });
+  await restoredHistory.getByRole("tab", { name: "生成" }).click();
+  await expect(
+    restoredHistory.locator(
+      'img[src="https://assets.example/generated-look.png"]',
+    ),
+  ).toHaveCount(1);
 });

@@ -4,9 +4,11 @@ import { useContext, useState } from "react";
 import { useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
-import { DEFAULT_GENERATION_PARAMETERS } from "./GenerationBar";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
-import type { GenerationCandidate } from "./generation-types";
+import {
+  DEFAULT_GENERATION_PARAMETERS,
+  type GenerationCandidate,
+} from "./generation-types";
 import styles from "./generation.module.css";
 
 const MAX_SEED = 4_294_967_295;

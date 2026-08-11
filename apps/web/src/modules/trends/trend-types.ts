@@ -1,5 +1,13 @@
 export type TrendCategory = "accessories" | "men" | "women";
-export type TrendPlatform = "fashionunited" | "pinterest" | "vogue" | "wwd";
+export type TrendPlatform =
+  | "businessoffashion.com"
+  | "fashionunited.com"
+  | "highsnobiety.com"
+  | "hypebeast.com"
+  | "pinterest.com"
+  | "ssense.com"
+  | "vogue.com"
+  | "wwd.com";
 
 export interface TrendExtracted {
   readonly fabricMentions: readonly string[];
@@ -33,6 +41,7 @@ export interface TrendDigest {
 }
 
 export interface TrendListPage {
+  readonly hasMore: boolean;
   readonly items: readonly TrendItem[];
   readonly page: number;
   readonly pageSize: number;

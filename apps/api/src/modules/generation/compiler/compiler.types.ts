@@ -2,6 +2,7 @@ export type SemanticImageChannel =
   | "fabric"
   | "pattern"
   | "detail"
+  | "palette"
   | "avoid";
 
 export interface ImageReference {
@@ -58,6 +59,7 @@ export interface CompiledGenInput {
   readonly positivePrompt: string;
   readonly negativePrompt: string;
   readonly palette: readonly string[];
+  readonly paletteReferences: readonly ImageReference[];
   readonly styleReferences: readonly (ImageReference | TrendReference)[];
   readonly silhouetteReferences: readonly SilhouetteReference[];
   readonly fabricReferences: readonly (FabricReference | ImageReference)[];

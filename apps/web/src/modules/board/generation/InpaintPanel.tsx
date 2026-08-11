@@ -5,14 +5,16 @@ import { useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
 import { uploadTemporaryMask } from "./generation-api";
-import { DEFAULT_GENERATION_PARAMETERS } from "./GenerationBar";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import {
   MaskCanvas,
   type MaskCanvasHandle,
   type MaskCanvasState,
 } from "./MaskCanvas";
-import type { GenerationCandidate } from "./generation-types";
+import {
+  DEFAULT_GENERATION_PARAMETERS,
+  type GenerationCandidate,
+} from "./generation-types";
 import styles from "./generation.module.css";
 
 function normalizedDimension(value: number | undefined): number {
@@ -25,7 +27,10 @@ export function InpaintPanel({
   onSubmitted,
 }: {
   readonly candidate: GenerationCandidate;
-  readonly onSubmitted: () => void;
+  readonly onSubmitted: (
+    taskId: string,
+    prompt: string,
+  ) => Promise<void> | void;
 }) {
   const editor = useEditor();
   const projectId = useContext(BoardProjectContext);
@@ -91,7 +96,7 @@ export function InpaintPanel({
         taskType: "inpaint",
       });
       if (result.ok) {
-        onSubmitted();
+        await onSubmitted(result.taskId, prompt.trim());
       } else {
         setError(result.error);
       }

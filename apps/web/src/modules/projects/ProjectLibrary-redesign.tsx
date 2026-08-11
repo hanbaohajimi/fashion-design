@@ -22,7 +22,11 @@ import {
   useProjects,
   useUpdateProject,
 } from "./use-projects";
-import { writeActiveBoardId } from "../trends/active-board";
+import {
+  clearActiveBoardId,
+  readActiveBoardId,
+  writeActiveBoardId,
+} from "../trends/active-board";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败，请稍后重试";
@@ -64,18 +68,7 @@ export function ProjectLibrary() {
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
 
-  // 计算仪表盘统计数据 (B级修复)
-  const stats = useMemo(() => {
-    const activeCount = projects.filter((p) => !p.archived).length;
-    const totalAssets = projects.reduce((sum, p) => sum + p.assetCount, 0);
-    const withCover = projects.filter((p) => p.coverUrl).length;
-
-    return {
-      active: activeCount,
-      assets: totalAssets,
-      coverage: projects.length > 0 ? Math.round((withCover / projects.length) * 100) : 0,
-    };
-  }, [projects]);
+  const stats = projectsQuery.data?.pages[0]?.stats;
 
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
@@ -98,6 +91,7 @@ export function ProjectLibrary() {
       });
     } catch (error) {
       setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -109,6 +103,9 @@ export function ProjectLibrary() {
         id: project.id,
         input: { archived: true },
       });
+      if (readActiveBoardId() === project.id) {
+        clearActiveBoardId();
+      }
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -134,6 +131,7 @@ export function ProjectLibrary() {
       await deleteMutation.mutateAsync(project.id);
     } catch (error) {
       setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -241,6 +239,9 @@ export function ProjectLibrary() {
           <Link className={styles.navLink} href="/trends">
             趋势档案
           </Link>
+          <Link className={styles.navLink} href="/fabrics">
+            面料档案
+          </Link>
         </nav>
         <div className={styles.account}>
           <span>{session.user.email}</span>
@@ -266,15 +267,17 @@ export function ProjectLibrary() {
         <div className={styles.dashboardStats}>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>进行中</span>
-            <span className={styles.statValue}>{stats.active}</span>
+            <span className={styles.statValue}>
+              {stats?.activeProjects ?? 0}
+            </span>
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>总资产</span>
-            <span className={styles.statValue}>{stats.assets}</span>
+            <span className={styles.statValue}>{stats?.totalAssets ?? 0}</span>
           </div>
           <div className={styles.statCard}>
             <span className={styles.statLabel}>封面率</span>
-            <span className={styles.statValue}>{stats.coverage}%</span>
+            <span className={styles.statValue}>{stats?.coverRate ?? 0}%</span>
           </div>
         </div>
       </section>
@@ -310,6 +313,7 @@ export function ProjectLibrary() {
           <span className={styles.srOnly}>搜索项目</span>
           <span aria-hidden="true">⌕</span>
           <input
+            maxLength={80}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="搜索项目名称"
             ref={searchInputRef}

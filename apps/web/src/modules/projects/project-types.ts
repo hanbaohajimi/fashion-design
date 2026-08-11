@@ -54,6 +54,11 @@ export interface ProjectPage {
   readonly items: readonly Project[];
   readonly page: number;
   readonly pageSize: number;
+  readonly stats: {
+    readonly activeProjects: number;
+    readonly coverRate: number;
+    readonly totalAssets: number;
+  };
   readonly total: number;
 }
 

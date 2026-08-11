@@ -11,7 +11,7 @@ test.describe("连接器功能", () => {
     await expect(page.locator(".tl-canvas")).toBeVisible();
   });
 
-  test("使用两次锚点点击创建连接，并可删除", async ({ page }) => {
+  test("连接器模式显示素材锚点，退出后全部隐藏", async ({ page }) => {
     await createSeparatedNotes(page);
     const connectorButton = page.getByRole("button", { name: "连接器工具" });
     await connectorButton.click();
@@ -22,17 +22,11 @@ test.describe("连接器功能", () => {
     const shapeIds = await uniqueShapeIds(anchors);
     expect(shapeIds).toHaveLength(2);
 
-    await clickAnchor(page, shapeIds[0] ?? "", "left");
-    await clickAnchor(page, shapeIds[1] ?? "", "left");
-
-    const connector = page.locator('[class*="connectorPath"][opacity="1"]');
-    await expect(connector).toHaveCount(1);
-    await expect(connector).toHaveAttribute("d", /M \d/u);
     await page.keyboard.press("Escape");
-    await page.keyboard.press("Delete");
-    await expect(page.locator('[class*="connectorPath"]')).toHaveCount(0);
-    await connectorButton.click();
-    await expect(anchors).toHaveCount(8);
+    await expect(anchors).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "选择工具" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   test("锚点在画布缩放和平移时保持在对应元素附近", async ({ page }) => {
@@ -71,11 +65,59 @@ test.describe("连接器功能", () => {
       page.getByRole("button", { name: "选择工具" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
+
+  test("固定工具创建红色图钉", async ({ page }) => {
+    await page.getByRole("button", { name: "添加灵感便签" }).click();
+    const anchors = page.locator("[data-anchor-side][data-shape-id]");
+    await page.getByRole("button", { name: "连接器工具" }).click();
+    await expect(anchors).toHaveCount(4);
+    const topAnchorBounds = await page
+      .locator('[data-anchor-side="top"]')
+      .boundingBox();
+    expect(topAnchorBounds).not.toBeNull();
+
+    const pinButton = page.getByRole("button", { name: "固定素材" });
+    await expect(pinButton).toHaveAttribute("aria-pressed", "false");
+    const pinStyles = await pinButton.evaluate((button) => {
+      const styles = window.getComputedStyle(button);
+      const icon = button.querySelector("svg");
+      return {
+        background: styles.backgroundColor,
+        borderWidth: styles.borderWidth,
+        color: styles.color,
+        height: styles.height,
+        iconHeight: icon?.getAttribute("height"),
+        iconTransform: icon ? window.getComputedStyle(icon).transform : "none",
+        iconWidth: icon?.getAttribute("width"),
+        width: styles.width,
+      };
+    });
+    expect(pinStyles).toMatchObject({
+      background: "rgba(0, 0, 0, 0)",
+      borderWidth: "0px",
+      color: "rgb(184, 90, 86)",
+      height: "32px",
+      iconHeight: "16",
+      iconWidth: "16",
+      width: "32px",
+    });
+    expect(pinStyles.iconTransform).not.toBe("none");
+    await pinButton.click();
+    await expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    await expect(anchors).toHaveCount(0);
+    await page.mouse.click(
+      (topAnchorBounds?.x ?? 0) + (topAnchorBounds?.width ?? 0) / 2,
+      (topAnchorBounds?.y ?? 0) + (topAnchorBounds?.height ?? 0) / 2 + 20,
+    );
+
+    await expect(page.locator('radialGradient[id^="rp-"]')).toHaveCount(1);
+    await expect(page.locator('radialGradient[id^="bp-"]')).toHaveCount(0);
+  });
 });
 
 async function createSeparatedNotes(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "添加Frame" }).click();
   await page.getByRole("button", { name: "添加灵感便签" }).click();
+  await page.getByRole("button", { name: "添加色卡" }).click();
 }
 
 async function uniqueShapeIds(anchors: Locator): Promise<string[]> {
@@ -83,23 +125,6 @@ async function uniqueShapeIds(anchors: Locator): Promise<string[]> {
     elements.map((element) => element.getAttribute("data-shape-id") ?? ""),
   );
   return [...new Set(ids.filter(Boolean))];
-}
-
-async function clickAnchor(
-  page: Page,
-  shapeId: string,
-  side: "left" | "right",
-): Promise<void> {
-  const anchor = page.locator(
-    `[data-shape-id="${shapeId}"][data-anchor-side="${side}"]`,
-  );
-  const box = await anchor.boundingBox();
-  if (!box) throw new Error(`未找到 ${side} 锚点`);
-  const inwardOffset = side === "left" ? 4 : -4;
-  await page.mouse.click(
-    box.x + box.width / 2 + inwardOffset,
-    box.y + box.height / 2,
-  );
 }
 
 async function mockWorkspace(page: Page): Promise<void> {

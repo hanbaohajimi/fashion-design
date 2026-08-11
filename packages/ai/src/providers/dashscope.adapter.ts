@@ -433,9 +433,29 @@ export class DashScopeAdapter implements AiProvider {
 }
 
 function promptFor(request: AiGenerationRequest): string {
-  return request.negativePrompt
-    ? `${request.prompt}\n\n请避免出现：${request.negativePrompt}`
-    : request.prompt;
+  const sections = [request.prompt];
+  if (request.referenceImageUrl && request.strength !== undefined) {
+    sections.push(referenceGuidance(request.taskType, request.strength));
+  }
+  if (request.negativePrompt) {
+    sections.push(`请避免出现：${request.negativePrompt}`);
+  }
+  return sections.join("\n\n");
+}
+
+function referenceGuidance(
+  taskType: AiGenerationRequest["taskType"],
+  strength: number,
+): string {
+  const variation =
+    strength <= 0.33
+      ? "仅做细微变化，尽量保持源图构图和主体身份。"
+      : strength <= 0.66
+        ? "在保持源图关键元素的同时，必须产生清晰可见的设计变化。"
+        : "允许较大幅度的视觉变化，但必须保留提示词要求的源图元素。";
+  return taskType === "inpaint"
+    ? `只修改蒙版区域。${variation}`
+    : `将上传图片作为高保真视觉参考。${variation}`;
 }
 
 function safeBodyText(body: unknown): string {

@@ -45,7 +45,9 @@ describe("AI Provider 环境配置", () => {
     vi.stubEnv("AMUX_IMAGE_MODEL", "");
 
     expect(amuxClaudeClientConfigFromEnv().model).toBe("claude-sonnet-5");
-    expect(amuxAdapterConfigFromEnv().imageModel).toBe("gpt-image-2");
+    expect(amuxAdapterConfigFromEnv().imageModel).toBe(
+      "gpt-image-2-official",
+    );
   });
 
   it("拒绝把无效的 Amux 图片质量值传给 GPT Image 2", () => {

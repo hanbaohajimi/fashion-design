@@ -5,12 +5,14 @@ interface WeeklyDigestCardProps {
   readonly digest: TrendDigest | null;
   readonly error: Error | null;
   readonly loading: boolean;
+  readonly onRetry: () => void;
 }
 
 export function WeeklyDigestCard({
   digest,
   error,
   loading,
+  onRetry,
 }: WeeklyDigestCardProps) {
   if (loading) {
     return (
@@ -28,6 +30,7 @@ export function WeeklyDigestCard({
           <span>WEEKLY SOURCE BRIEF</span>
           <h2>本周综述尚未生成</h2>
           <p>{error?.message ?? "定期采集完成后，这里会显示基于来源条目的分析整理。"}</p>
+          {error ? <button onClick={onRetry} type="button">重新读取周报</button> : null}
         </div>
       </section>
     );

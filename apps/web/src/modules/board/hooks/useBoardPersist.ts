@@ -160,9 +160,12 @@ type StoredBoardPatchPayload = Omit<BoardPatchPayload, "baseRevision"> & {
   readonly baseRevision?: number;
 };
 
-function readOutbox(key: string): StoredBoardPatchPayload | null {
+function readOutbox(
+  storage: Pick<Storage, "getItem">,
+  key: string,
+): StoredBoardPatchPayload | null {
   try {
-    const value = window.localStorage.getItem(key);
+    const value = storage.getItem(key);
     return value ? (JSON.parse(value) as StoredBoardPatchPayload) : null;
   } catch {
     return null;
@@ -193,6 +196,7 @@ export function useBoardPersist(
 
   useEffect(() => {
     const outboxKey = `fashion-board-outbox:${projectId}`;
+    const outboxStorage = window.sessionStorage;
     const pending = new Map<string, BoardElementPatch>();
     let snapshotDirty = false;
     let disposed = false;
@@ -206,7 +210,7 @@ export function useBoardPersist(
 
     const saveOutbox = (payload: BoardPatchPayload): void => {
       try {
-        window.localStorage.setItem(outboxKey, JSON.stringify(payload));
+        outboxStorage.setItem(outboxKey, JSON.stringify(payload));
       } catch {
         // Network retry still keeps the queue in memory when storage is full.
       }
@@ -257,7 +261,7 @@ export function useBoardPersist(
         setError(null);
 
         if (pending.size === 0 && !snapshotDirty) {
-          window.localStorage.removeItem(outboxKey);
+          outboxStorage.removeItem(outboxKey);
           setStatus("saved");
         }
       } catch (cause) {
@@ -337,7 +341,7 @@ export function useBoardPersist(
     const restore = async (): Promise<() => void> => {
       setStatus("loading");
       setError(null);
-      const localOutbox = readOutbox(outboxKey);
+      const localOutbox = readOutbox(outboxStorage, outboxKey);
       let serverRevision: number | null = null;
 
       try {

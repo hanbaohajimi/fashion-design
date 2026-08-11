@@ -44,9 +44,12 @@ export function fetchProjects(
 }
 
 export function fetchProject(projectId: string): Promise<Project> {
-  return requestJson<Project>(`/api/projects/${encodeURIComponent(projectId)}`, {
-    cache: "no-store",
-  });
+  return requestJson<Project>(
+    `/api/projects/${encodeURIComponent(projectId)}`,
+    {
+      cache: "no-store",
+    },
+  );
 }
 
 export function createProject(
@@ -86,10 +89,13 @@ export function duplicateProject(
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  const response = await fetch(`/api/projects/${projectId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, "删除项目失败，请重试"));

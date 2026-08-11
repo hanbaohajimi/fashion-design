@@ -75,6 +75,10 @@ describe("VLM role inference processor", () => {
     );
   });
 
+  it("maps a garment photo classification to garment_ref", () => {
+    expect(roleForVlmLabel("garment_photo")).toBe("garment_ref");
+  });
+
   it("falls back to style_ref without failing the upload flow", async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const processor = createVlmInferenceProcessor({

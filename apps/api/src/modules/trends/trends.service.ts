@@ -9,7 +9,7 @@ export interface TrendListResponse {
   readonly hasMore: boolean;
   readonly items: readonly {
     readonly category: string;
-    readonly coverFileId: string | null;
+    readonly coverImageUrl: string | null;
     readonly curatedAt: Date | null;
     readonly extracted: unknown;
     readonly id: string;
@@ -20,7 +20,7 @@ export interface TrendListResponse {
     readonly tags: readonly string[];
     readonly title: string;
   }[];
-  readonly limit: number;
+  readonly pageSize: number;
   readonly page: number;
   readonly total: number;
 }
@@ -61,16 +61,23 @@ export class TrendsService {
     ]);
 
     return {
-      items,
+      items: items.map(({ coverFileId, ...item }) => ({
+        ...item,
+        coverImageUrl: coverFileId
+          ? `/api/boards/trend-assets/${encodeURIComponent(item.id)}`
+          : null,
+        status: "published",
+      })),
       total,
       page: safePage,
-      limit: safeLimit,
+      pageSize: safeLimit,
       hasMore: skip + items.length < total,
     };
   }
 
   async getCurrentDigest() {
     const digest = await this.database.trendDigest.findFirst({
+      where: { period: isoWeekPeriod(new Date()) },
       orderBy: { createdAt: "desc" },
     });
 
@@ -88,4 +95,17 @@ export class TrendsService {
       updatedAt: digest.updatedAt,
     };
   }
+}
+
+function isoWeekPeriod(date: Date): string {
+  const current = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+  const weekday = current.getUTCDay() || 7;
+  current.setUTCDate(current.getUTCDate() + 4 - weekday);
+  const yearStart = new Date(Date.UTC(current.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(
+    ((current.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
+  return `${current.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }

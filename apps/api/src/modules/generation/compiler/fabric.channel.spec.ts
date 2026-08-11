@@ -59,9 +59,15 @@ describe("FabricChannel", () => {
         attributes: {
           composition: { cotton: 60, polyester: 40 },
           drape: "moderate",
+          opacity: "opaque",
+          seasonSuggestion: ["autumn", "winter"],
           sheen: "matte",
+          stretch: "slight",
           texture: "smooth",
+          useCases: ["suit", "outerwear"],
           weave: "plain",
+          weight: 260,
+          width: 150,
         },
         id: "fabric-cotton",
         mainFile: {
@@ -104,6 +110,12 @@ describe("FabricChannel", () => {
     expect(result.prompt).toContain(
       "fabric material: cotton 60%, polyester 40%, weave type: plain, fabric texture: smooth, drape: moderate, sheen: matte",
     );
+    expect(result.prompt).toContain("weight: 260 GSM");
+    expect(result.prompt).toContain("stretch: slight");
+    expect(result.prompt).toContain("opacity: opaque");
+    expect(result.prompt).toContain("fabric width: 150 cm");
+    expect(result.prompt).toContain("recommended seasons: autumn, winter");
+    expect(result.prompt).toContain("use cases: suit, outerwear");
     expect(result.prompt).toContain(
       "fabric material: silk 92%, spandex 8%, weave type: twill, fabric texture: smooth, drape: fluid, sheen: glossy",
     );

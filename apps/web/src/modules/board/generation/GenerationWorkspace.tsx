@@ -19,6 +19,7 @@ import {
   fetchGenerationTask,
   fetchGenerationTasks,
   GenerationApiError,
+  setGenerationCandidateDisposition,
 } from "./generation-api";
 import type {
   GenerationCandidate,
@@ -45,8 +46,12 @@ type GenerationBatchStartResult =
 
 interface GenerationWorkspaceValue {
   readonly cancel: (taskId: string) => Promise<void>;
-  readonly dismissCandidate: (candidateId: string) => void;
+  readonly dismissCandidate: (
+    candidateId: string,
+    disposition?: "adopted" | "dismissed",
+  ) => Promise<void>;
   readonly notice: string | null;
+  readonly refresh: () => Promise<void>;
   readonly retry: (taskId: string) => Promise<void>;
   readonly start: (
     input: GenerationStartRequest,
@@ -74,21 +79,34 @@ function candidatesFrom(
 ): GenerationCandidate[] {
   if (!task.output || typeof task.output !== "object") return [];
   const output = task.output as {
+    readonly candidateDispositions?: unknown;
     readonly images?: unknown;
     readonly seed?: unknown;
   };
   const images = output.images;
   if (!Array.isArray(images)) return [];
+  const candidateDispositions =
+    output.candidateDispositions &&
+    typeof output.candidateDispositions === "object" &&
+    !Array.isArray(output.candidateDispositions)
+      ? (output.candidateDispositions as Record<string, unknown>)
+      : {};
   return images.flatMap((image, index) => {
     if (!image || typeof image !== "object") return [];
     const candidate = image as Record<string, unknown>;
     if (typeof candidate.url !== "string") return [];
+    const dispositionValue = candidateDispositions[String(index)];
+    const disposition =
+      dispositionValue === "adopted" || dispositionValue === "dismissed"
+        ? dispositionValue
+        : undefined;
     return [
       {
         assetId:
           typeof candidate.assetId === "string"
             ? candidate.assetId
             : `${task.id}:${index}`,
+        ...(disposition ? { disposition } : {}),
         id: `${task.id}:${index}`,
         taskId: task.id,
         taskType: source.taskType,
@@ -138,6 +156,11 @@ function startRequestFrom(
       : {}),
     ...(request.strength !== undefined ? { strength: request.strength } : {}),
   };
+}
+
+function absoluteGenerationUrl(value: string): string {
+  if (/^https?:\/\//iu.test(value)) return value;
+  return new URL(value, window.location.origin).toString();
 }
 
 function taskItemFrom(
@@ -199,6 +222,43 @@ export function GenerationWorkspace({
   const settledQuota = useRef(new Set<string>());
   const submissionInFlight = useRef(false);
 
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!projectId) return;
+    const restored: GenerationTaskItem[] = [];
+    const seenCursors = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_HISTORY_PAGES; page += 1) {
+      const response = await fetchGenerationTasks(projectId, cursor);
+      restored.push(
+        ...response.items.flatMap((detail) => {
+          const task = taskItemFrom(detail, projectId);
+          return task ? [task] : [];
+        }),
+      );
+      if (!response.nextCursor || seenCursors.has(response.nextCursor)) break;
+      seenCursors.add(response.nextCursor);
+      cursor = response.nextCursor;
+    }
+    setTasks((current) => {
+      const merged = new Map(
+        restored.map((task) => [task.id, task] as const),
+      );
+      for (const task of current) {
+        if (task.request.projectId !== projectId) continue;
+        const restoredTask = merged.get(task.id);
+        if (
+          !restoredTask ||
+          (task.candidates.length > 0 && restoredTask.candidates.length === 0)
+        ) {
+          merged.set(task.id, task);
+        }
+      }
+      return [...merged.values()].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      );
+    });
+  }, [projectId]);
+
   useEffect(() => {
     if (!projectId) return;
     let disposed = false;
@@ -228,7 +288,12 @@ export function GenerationWorkspace({
             restored.map((task) => [task.id, task] as const),
           );
           for (const task of current) {
-            if (task.request.projectId === projectId) {
+            if (task.request.projectId !== projectId) continue;
+            const restoredTask = merged.get(task.id);
+            if (
+              !restoredTask ||
+              (task.candidates.length > 0 && restoredTask.candidates.length === 0)
+            ) {
               merged.set(task.id, task);
             }
           }
@@ -300,7 +365,7 @@ export function GenerationWorkspace({
           shapeIds: input.shapeIds,
           taskType: input.taskType ?? "t2i",
           ...(input.referenceImageUrl
-            ? { referenceImageUrl: input.referenceImageUrl }
+            ? { referenceImageUrl: absoluteGenerationUrl(input.referenceImageUrl) }
             : {}),
           ...(input.strength !== undefined ? { strength: input.strength } : {}),
         });
@@ -426,7 +491,12 @@ export function GenerationWorkspace({
   const retry = useCallback(
     async (taskId: string): Promise<void> => {
       const task = projectTasks.find((item) => item.id === taskId);
-      if (!task || (task.status !== "failed" && task.status !== "canceled")) {
+      if (
+        !task ||
+        (task.status !== "failed" &&
+          task.status !== "moderation_failed" &&
+          task.status !== "canceled")
+      ) {
         return;
       }
       await start(task.request);
@@ -460,22 +530,46 @@ export function GenerationWorkspace({
     [],
   );
 
-  const dismissCandidate = useCallback((candidateId: string): void => {
+  const dismissCandidate = useCallback(async (
+    candidateId: string,
+    disposition: "adopted" | "dismissed" = "dismissed",
+  ): Promise<void> => {
+    const separator = candidateId.lastIndexOf(":");
+    const taskId = candidateId.slice(0, separator);
+    const index = Number(candidateId.slice(separator + 1));
+    if (separator <= 0 || !Number.isInteger(index) || index < 0) {
+      setNotice("候选标识不合法，无法保存状态");
+      return;
+    }
     setTasks((current) =>
       current.map((task) => ({
         ...task,
-        candidates: task.candidates.filter(
-          (candidate) => candidate.id !== candidateId,
+        candidates: task.candidates.map((candidate) =>
+          candidate.id === candidateId
+            ? { ...candidate, disposition }
+            : candidate,
         ),
       })),
     );
-  }, []);
+    try {
+      await setGenerationCandidateDisposition(taskId, index, disposition);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "候选状态保存失败");
+      try {
+        const detail = await fetchGenerationTask(taskId);
+        updateTask(detail);
+      } catch {
+        setNotice("候选状态保存失败，任务状态重新读取也失败");
+      }
+    }
+  }, [updateTask]);
 
   const value = useMemo<GenerationWorkspaceValue>(
     () => ({
       cancel,
       dismissCandidate,
       notice,
+      refresh,
       retry,
       start,
       startBatch,
@@ -487,6 +581,7 @@ export function GenerationWorkspace({
       dismissCandidate,
       notice,
       projectTasks,
+      refresh,
       retry,
       start,
       startBatch,

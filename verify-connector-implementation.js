@@ -15,7 +15,7 @@ console.log('🔍 开始验证连接器实现...\n');
 const checks = [];
 
 // 检查 1: AnchorOverlay 是否渲染
-const overlay = document.querySelector('.anchorOverlay');
+const overlay = document.querySelector('[class*="anchorOverlay"]');
 checks.push({
   name: 'AnchorOverlay 组件渲染',
   passed: !!overlay,
@@ -81,7 +81,7 @@ try {
       for (const rule of sheet.cssRules) {
         if (rule.selectorText && rule.selectorText.includes('anchorPoint')) {
           anchorPointStyleFound = true;
-          if (rule.style.pointerEvents === 'all') {
+          if (rule.style.pointerEvents === 'none') {
             pointerEventsCorrect = true;
           }
         }
@@ -101,9 +101,9 @@ checks.push({
 });
 
 checks.push({
-  name: 'CSS pointer-events: all',
+  name: 'CSS pointer-events: none',
   passed: pointerEventsCorrect,
-  details: pointerEventsCorrect ? '✓ 正确设置' : '⚠ 无法验证（可能因 CORS）'
+  details: pointerEventsCorrect ? '✓ 锚点不会拦截画布事件' : '⚠ 无法验证（可能因 CORS）'
 });
 
 // 输出结果
@@ -126,7 +126,7 @@ if (passed === total) {
   console.log('📝 下一步：');
   console.log('1. 点击工具栏的连接器按钮（两个圆点连线图标）');
   console.log('2. 观察画布上元素的锚点（蓝色圆点）');
-  console.log('3. 从一个元素的锚点拖动到另一个元素的锚点');
+  console.log('3. 先点击源元素锚点，再点击目标元素锚点');
   console.log('4. 验证连接线创建成功');
   console.log('5. 缩放/平移画布，验证锚点不跳动');
 } else {

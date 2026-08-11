@@ -51,4 +51,44 @@ describe("TrendCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "存入白板" }));
     expect(onImport).toHaveBeenCalledWith(trend);
   });
+
+  it("本地化行业分类并为无封面档案提供紧凑布局标识", () => {
+    const { container } = render(
+      <TrendCard
+        importing={false}
+        onImport={vi.fn()}
+        trend={{ ...trend, category: "silhouette", coverImageUrl: null }}
+      />,
+    );
+
+    expect(screen.getByText("廓形")).toBeTruthy();
+    expect(container.querySelector("article")?.getAttribute("data-has-cover")).toBe(
+      "false",
+    );
+  });
+
+  it("压缩长关键词列表并在其他趋势导入时禁用操作", () => {
+    render(
+      <TrendCard
+        disabled
+        importing={false}
+        onImport={vi.fn()}
+        trend={{
+          ...trend,
+          extracted: {
+            fabricMentions: ["雪纺"],
+            keyColors: ["#FDB462", "#8DD3C7"],
+            keywords: ["一", "二", "三", "四", "五", "六"],
+            silhouettes: ["cocoon"],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("+2")).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "存入白板" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
 });

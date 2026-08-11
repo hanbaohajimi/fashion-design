@@ -13,15 +13,24 @@ const ROLE_LABELS: Readonly<Record<string, string>> = {
   avoid: "避用",
   detail_ref: "细节",
   fabric_ref: "面料",
+  garment_ref: "成衣",
   note: "备注",
   palette: "色板",
+  reference_garment: "参考衣",
   silhouette_ref: "廓形",
   style_ref: "风格",
 };
 
+export function resolveRoleBadgeLabel(
+  role: string,
+  label?: string | undefined,
+): string {
+  return label?.trim() || ROLE_LABELS[role] || role;
+}
+
 export function RoleBadge({ label, role, shapeId }: RoleBadgeProps) {
   const editor = useEditor();
-  const displayLabel = label?.trim() || ROLE_LABELS[role] || role;
+  const displayLabel = resolveRoleBadgeLabel(role, label);
 
   return (
     <button

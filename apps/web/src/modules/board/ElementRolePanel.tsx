@@ -29,8 +29,10 @@ const ROLE_LABELS: Readonly<Record<BoardElementRole, string>> = {
   avoid: "避用",
   detail_ref: "细节参考",
   fabric_ref: "面料参考",
+  garment_ref: "成衣",
   note: "备注",
   palette: "色彩方案",
+  reference_garment: "参考衣",
   silhouette_ref: "廓形参考",
   style_ref: "风格参考",
 };
@@ -163,7 +165,11 @@ export function ElementRolePanel({
 
   const setImageNote = (value: string): void => {
     const shape = editor.getShape(shapeId);
-    if (!shape || shape.type !== IMAGE_SHAPE_TYPE || shape.props.role !== "note") {
+    if (
+      !shape ||
+      shape.type !== IMAGE_SHAPE_TYPE ||
+      shape.props.role !== "note"
+    ) {
       return;
     }
 
@@ -259,9 +265,7 @@ export function ElementRolePanel({
                 }
                 type="button"
               >
-                <span className={styles.roleLabel}>
-                  {ROLE_LABELS[role]}
-                </span>
+                <span className={styles.roleLabel}>{ROLE_LABELS[role]}</span>
               </button>
             ))}
           </div>

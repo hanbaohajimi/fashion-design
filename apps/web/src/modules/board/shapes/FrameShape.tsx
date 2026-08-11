@@ -1,6 +1,8 @@
 import {
   BaseBoxShapeUtil,
+  Group2d,
   HTMLContainer,
+  Rectangle2d,
   type RecordProps,
   T,
 } from "tldraw";
@@ -24,6 +26,22 @@ export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
       title: "系列方向",
       w: 760,
     };
+  }
+
+  override isFrameLike(): boolean {
+    return true;
+  }
+
+  override getGeometry(shape: FrameShape): Group2d {
+    return new Group2d({
+      children: [
+        new Rectangle2d({
+          height: shape.props.h,
+          isFilled: false,
+          width: shape.props.w,
+        }),
+      ],
+    });
   }
 
   override component(shape: FrameShape) {

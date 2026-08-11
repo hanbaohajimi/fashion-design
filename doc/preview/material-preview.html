@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>素材装裱物理真实感验证</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#e8e4de;padding:60px;font-family:system-ui}
+h1{font:600 13px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;color:#888;margin-bottom:52px}
+.grid{display:flex;flex-wrap:wrap;align-items:flex-start}
+</style></head>
+<body>
+<h1>Material Mounting — Visual Verification (mounts rendered via production React components)</h1>
+<div class="grid"><div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">Editorial Photo / 照片纸</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-EditorialP">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-EditorialP"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+<linearGradient id="pg-gloss" x1="0%" y1="0%" x2="100%" y2="100%">
+  <stop offset="0%" stop-color="white" stop-opacity="0.18"/>
+  <stop offset="55%" stop-color="white" stop-opacity="0.04"/>
+  <stop offset="100%" stop-color="black" stop-opacity="0.06"/>
+</linearGradient>
+<clipPath id="clip-photo-ov"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+</defs>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-EditorialP)" opacity="0.6"/>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="#f8f6f2"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-EditorialP)" opacity="0.05"/>
+<rect x="28" y="28" width="460" height="340" fill="url(#pg-gloss)" clip-path="url(#clip-photo-ov)"/>
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(27.21496300875151, 34.63577308185995) rotate(279.348614888695)"><defs><radialGradient id="bc-mount-101-0" cx="36%" cy="32%" r="68%"><stop offset="0%" stop-color="#A88A43"></stop><stop offset="35%" stop-color="#8B6C27"></stop><stop offset="70%" stop-color="#756331"></stop><stop offset="100%" stop-color="#5F4B20"></stop></radialGradient></defs><ellipse cx="0" cy="8.8" rx="5" ry="2" fill="rgba(45,37,24,0.06)" filter="blur(1.5px)"></ellipse><ellipse cx="0.8" cy="1.5" rx="6.3" ry="4.8999999999999995" fill="rgba(45,37,24,0.18)" filter="blur(3px)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.790000000000001" fill="url(#bc-mount-101-0)"></ellipse><ellipse cx="0" cy="4.413500000000001" rx="4.9098" ry="2.3086000000000007" fill="rgba(45,37,24,0.14)"></ellipse><ellipse cx="0.039999999999999813" cy="-0.2400000000000002" rx="1.82" ry="1.26" fill="rgba(222,204,145,0.45)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.790000000000001" fill="none" stroke="#5F4B20" stroke-width="0.5" opacity="0.22"></ellipse><line x1="0.3" y1="3.3950000000000005" x2="0.5" y2="10.5" stroke="#5F4B20" stroke-width="1.2" stroke-linecap="round" opacity="0.38"></line><circle cx="0" cy="0" r="1" fill="#5F4B20" opacity="0.32"></circle></g><g transform="translate(369.6, 24.899990297693876) rotate(6.348912133489648)"><rect x="2" y="3.5" width="22" height="38" rx="2.5" fill="rgb(24 25 21)" opacity="0.18" filter="blur(5px)"></rect><rect x="1" y="1.5" width="22" height="38" rx="2.5" fill="rgb(24 25 21)" opacity="0.22" filter="blur(2px)"></rect><defs><linearGradient id="clip-gradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#a5a9b1"></stop><stop offset="40%" stop-color="#d4d8e0"></stop><stop offset="60%" stop-color="#c4c8d0"></stop><stop offset="100%" stop-color="#96999f"></stop></linearGradient><linearGradient id="clip-shine" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="rgb(255 255 255)" stop-opacity="0.7"></stop><stop offset="50%" stop-color="rgb(255 255 255)" stop-opacity="0.4"></stop><stop offset="100%" stop-color="rgb(255 255 255)" stop-opacity="0"></stop></linearGradient></defs><rect x="0" y="0" width="22" height="38" rx="3" fill="url(#clip-gradient)" stroke="#6e7178" stroke-width="0.8"></rect><rect x="2" y="2" width="18" height="16" rx="2" fill="url(#clip-shine)"></rect><rect x="16" y="5" width="2.5" height="28" fill="rgb(255 255 255)" opacity="0.45" rx="0.8"></rect><line x1="11" y1="10" x2="11" y2="28" stroke="#5a5e66" stroke-width="1.5" stroke-linecap="round"></line><circle cx="11" cy="19" r="4.5" fill="none" stroke="#5a5e66" stroke-width="1.5"></circle><circle cx="11" cy="19" r="4.5" fill="none" stroke="rgb(255 255 255)" stroke-width="0.5" opacity="0.4" stroke-dasharray="4,2.5"></circle><line x1="4" y1="5" x2="4" y2="33" stroke="#8a8e96" stroke-width="0.4" opacity="0.6"></line><line x1="18" y1="5" x2="18" y2="33" stroke="#8a8e96" stroke-width="0.4" opacity="0.6"></line><rect x="1.5" y="33" width="19" height="4" fill="rgb(24 25 21)" opacity="0.25" rx="1.5"></rect></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：直边　<b>固定</b>：黄铜图钉　<b>材质</b>：照片高光渐变　<b>阴影</b>：三层，偏移 (8,14)px</div>
+</div>
+
+<div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">Sketch Paper / 素描纸</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-SketchPape">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-SketchPape"><path d="M 0,0 L -22.0,-22.0 L -7.6,-8.7 L 6.1,-20.7 L 29.5,11.1 L 47.8,-9.3 L 57.6,12.8 L 84.8,-14.4 L 94.1,-10.0 L 99.1,-3.1 L 127.0,-13.4 L 133.4,7.8 L 140.1,6.2 L 161.6,-13.1 L 161.8,3.6 L 154.8,0.6 L 187.4,4.1 L 204.9,4.8 L 220.6,-16.3 L 213.3,-3.8 L 249.3,-0.2 L 256.5,15.6 L 271.5,11.2 L 246.5,21.5 L 296.6,-4.8 L 274.7,5.6 L 310.7,-17.8 L 295.2,-19.4 L 339.9,-4.5 L 330.3,-5.7 L 337.8,-14.7 L 352.5,-13.6 L 379.9,-13.4 L 396.1,13.8 L 408.0,20.9 L 392.5,5.2 L 427.4,12.9 L 418.1,-15.7 L 456.4,-21.0 L 444.1,15.8 L 460,0 L 460,340 L 443.5,335.3 L 433.6,351.4 L 440.7,347.4 L 421.0,352.1 L 402.0,332.3 L 382.3,355.1 L 394.3,324.6 L 361.0,350.4 L 376.0,337.7 L 353.8,356.4 L 327.5,321.2 L 346.2,345.9 L 318.5,340.4 L 298.3,336.9 L 300.0,338.8 L 271.3,344.3 L 274.5,345.1 L 264.3,328.6 L 235.8,320.3 L 240.2,351.8 L 214.6,337.2 L 189.6,327.3 L 179.5,333.4 L 164.4,333.7 L 177.7,335.1 L 174.9,333.9 L 145.4,339.7 L 119.1,341.1 L 138.5,346.0 L 90.2,320.1 L 112.7,329.8 L 80.6,340.8 L 50.9,333.8 L 57.6,323.9 L 35.4,321.4 L 28.4,341.6 L 29.3,353.7 L 16.4,345.6 L -10.9,327.9 L 0,340 Z" transform="translate(28,28)"/></clipPath>
+
+</defs>
+<path d="M 0,0 L -22.0,-22.0 L -7.6,-8.7 L 6.1,-20.7 L 29.5,11.1 L 47.8,-9.3 L 57.6,12.8 L 84.8,-14.4 L 94.1,-10.0 L 99.1,-3.1 L 127.0,-13.4 L 133.4,7.8 L 140.1,6.2 L 161.6,-13.1 L 161.8,3.6 L 154.8,0.6 L 187.4,4.1 L 204.9,4.8 L 220.6,-16.3 L 213.3,-3.8 L 249.3,-0.2 L 256.5,15.6 L 271.5,11.2 L 246.5,21.5 L 296.6,-4.8 L 274.7,5.6 L 310.7,-17.8 L 295.2,-19.4 L 339.9,-4.5 L 330.3,-5.7 L 337.8,-14.7 L 352.5,-13.6 L 379.9,-13.4 L 396.1,13.8 L 408.0,20.9 L 392.5,5.2 L 427.4,12.9 L 418.1,-15.7 L 456.4,-21.0 L 444.1,15.8 L 460,0 L 460,340 L 443.5,335.3 L 433.6,351.4 L 440.7,347.4 L 421.0,352.1 L 402.0,332.3 L 382.3,355.1 L 394.3,324.6 L 361.0,350.4 L 376.0,337.7 L 353.8,356.4 L 327.5,321.2 L 346.2,345.9 L 318.5,340.4 L 298.3,336.9 L 300.0,338.8 L 271.3,344.3 L 274.5,345.1 L 264.3,328.6 L 235.8,320.3 L 240.2,351.8 L 214.6,337.2 L 189.6,327.3 L 179.5,333.4 L 164.4,333.7 L 177.7,335.1 L 174.9,333.9 L 145.4,339.7 L 119.1,341.1 L 138.5,346.0 L 90.2,320.1 L 112.7,329.8 L 80.6,340.8 L 50.9,333.8 L 57.6,323.9 L 35.4,321.4 L 28.4,341.6 L 29.3,353.7 L 16.4,345.6 L -10.9,327.9 L 0,340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-SketchPape)" opacity="0.6"/>
+<path d="M 0,0 L -22.0,-22.0 L -7.6,-8.7 L 6.1,-20.7 L 29.5,11.1 L 47.8,-9.3 L 57.6,12.8 L 84.8,-14.4 L 94.1,-10.0 L 99.1,-3.1 L 127.0,-13.4 L 133.4,7.8 L 140.1,6.2 L 161.6,-13.1 L 161.8,3.6 L 154.8,0.6 L 187.4,4.1 L 204.9,4.8 L 220.6,-16.3 L 213.3,-3.8 L 249.3,-0.2 L 256.5,15.6 L 271.5,11.2 L 246.5,21.5 L 296.6,-4.8 L 274.7,5.6 L 310.7,-17.8 L 295.2,-19.4 L 339.9,-4.5 L 330.3,-5.7 L 337.8,-14.7 L 352.5,-13.6 L 379.9,-13.4 L 396.1,13.8 L 408.0,20.9 L 392.5,5.2 L 427.4,12.9 L 418.1,-15.7 L 456.4,-21.0 L 444.1,15.8 L 460,0 L 460,340 L 443.5,335.3 L 433.6,351.4 L 440.7,347.4 L 421.0,352.1 L 402.0,332.3 L 382.3,355.1 L 394.3,324.6 L 361.0,350.4 L 376.0,337.7 L 353.8,356.4 L 327.5,321.2 L 346.2,345.9 L 318.5,340.4 L 298.3,336.9 L 300.0,338.8 L 271.3,344.3 L 274.5,345.1 L 264.3,328.6 L 235.8,320.3 L 240.2,351.8 L 214.6,337.2 L 189.6,327.3 L 179.5,333.4 L 164.4,333.7 L 177.7,335.1 L 174.9,333.9 L 145.4,339.7 L 119.1,341.1 L 138.5,346.0 L 90.2,320.1 L 112.7,329.8 L 80.6,340.8 L 50.9,333.8 L 57.6,323.9 L 35.4,321.4 L 28.4,341.6 L 29.3,353.7 L 16.4,345.6 L -10.9,327.9 L 0,340 Z" transform="translate(28,28)" fill="#f4f1ea"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-SketchPape)" opacity="0.05"/>
+
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(210, -6) rotate(-0.1591655683114368)"><rect x="-71.5" y="3.5" width="147" height="26" rx="1.5" fill="rgb(24 25 21)" opacity="0.12" filter="blur(4px)"></rect><rect x="-72.5" y="2" width="147" height="26" rx="1.5" fill="rgb(24 25 21)" opacity="0.15" filter="blur(2px)"></rect><defs><linearGradient id="tape-gradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f5ead8"></stop><stop offset="50%" stop-color="#ebe0cc"></stop><stop offset="100%" stop-color="#dfd4c0"></stop></linearGradient><pattern id="tape-texture" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="rgb(24 25 21)" opacity="0.03"></rect></pattern><linearGradient id="tape-lift" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="rgb(24 25 21)" stop-opacity="0"></stop><stop offset="88%" stop-color="rgb(24 25 21)" stop-opacity="0"></stop><stop offset="100%" stop-color="rgb(24 25 21)" stop-opacity="0.25"></stop></linearGradient></defs><rect x="-73.5" y="0" width="147" height="26" rx="1.5" fill="url(#tape-gradient)" opacity="0.9" stroke="rgb(24 25 21)" stroke-width="0.6" stroke-opacity="0.2"></rect><rect x="-73.5" y="0" width="147" height="26" rx="1.5" fill="url(#tape-texture)"></rect><line x1="-73.5" y1="3" x2="-73.5" y2="23" stroke="rgb(24 25 21)" stroke-width="0.4" opacity="0.18" stroke-dasharray="1.5,2.5"></line><line x1="73.5" y1="3" x2="73.5" y2="23" stroke="rgb(24 25 21)" stroke-width="0.4" opacity="0.18" stroke-dasharray="1.5,2.5"></line><rect x="-70.5" y="3" width="141" height="8" rx="1" fill="rgb(255 255 255)" opacity="0.35"></rect><line x1="-29.4" y1="0" x2="-26.46" y2="26" stroke="rgb(24 25 21)" stroke-width="0.5" opacity="0.12"></line><line x1="29.39999999999999" y1="0" x2="26.460000000000008" y2="26" stroke="rgb(24 25 21)" stroke-width="0.5" opacity="0.12"></line><ellipse cx="-14.699999999999996" cy="14" rx="4" ry="2.5" fill="rgb(255 255 255)" opacity="0.2"></ellipse><ellipse cx="36.75" cy="10" rx="3.5" ry="2.2" fill="rgb(255 255 255)" opacity="0.18"></ellipse><path d="M 58.5 0 L 73.5 0 L 73.5 12 L 65.5 8 Z" fill="url(#tape-lift)"></path><path d="M 61.5 2 L 71.5 2 L 71.5 10" fill="none" stroke="rgb(255 255 255)" stroke-width="0.8" opacity="0.5"></path></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：撕裂边 ±22px　<b>固定</b>：遮蔽胶带（生产组件）　<b>材质</b>：纸张颗粒　<b>阴影</b>：沿撕裂边漫散</div>
+</div>
+
+<div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">Fabric Swatch / 面料</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-FabricSwat">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-FabricSwat"><path d="M 0,0 L 8,-19 L 16,0 L 24,-19 L 32,0 L 40,-19 L 48,0 L 56,-19 L 64,0 L 72,-19 L 80,0 L 88,-19 L 96,0 L 104,-19 L 112,0 L 120,-19 L 128,0 L 136,-19 L 144,0 L 152,-19 L 160,0 L 168,-19 L 176,0 L 184,-19 L 192,0 L 200,-19 L 208,0 L 216,-19 L 224,0 L 232,-19 L 240,0 L 248,-19 L 256,0 L 264,-19 L 272,0 L 280,-19 L 288,0 L 296,-19 L 304,0 L 312,-19 L 320,0 L 328,-19 L 336,0 L 344,-19 L 352,0 L 360,-19 L 368,0 L 376,-19 L 384,0 L 392,-19 L 400,0 L 408,-19 L 416,0 L 424,-19 L 432,0 L 440,-19 L 448,0 L 456,-19 L 460,0 L 460,0 L 460,340 L 452,359 L 444,340 L 436,359 L 428,340 L 420,359 L 412,340 L 404,359 L 396,340 L 388,359 L 380,340 L 372,359 L 364,340 L 356,359 L 348,340 L 340,359 L 332,340 L 324,359 L 316,340 L 308,359 L 300,340 L 292,359 L 284,340 L 276,359 L 268,340 L 260,359 L 252,340 L 244,359 L 236,340 L 228,359 L 220,340 L 212,359 L 204,340 L 196,359 L 188,340 L 180,359 L 172,340 L 164,359 L 156,340 L 148,359 L 140,340 L 132,359 L 124,340 L 116,359 L 108,340 L 100,359 L 92,340 L 84,359 L 76,340 L 68,359 L 60,340 L 52,359 L 44,340 L 36,359 L 28,340 L 20,359 L 12,340 L 4,359 L 0,340 L 0,340 Z" transform="translate(28,28)"/></clipPath>
+<pattern id="weave" x="0" y="0" width="7" height="7" patternUnits="userSpaceOnUse">
+  <line x1="0" y1="0" x2="7" y2="0" stroke="rgba(18,14,10,0.16)" stroke-width="0.7"/>
+  <line x1="0" y1="0" x2="0" y2="7" stroke="rgba(18,14,10,0.16)" stroke-width="0.7"/>
+  <line x1="0" y1="3.5" x2="7" y2="3.5" stroke="rgba(255,255,255,0.09)" stroke-width="0.5"/>
+  <line x1="3.5" y1="0" x2="3.5" y2="7" stroke="rgba(255,255,255,0.09)" stroke-width="0.5"/>
+</pattern>
+<clipPath id="clip-fabric-ov"><path d="M 0,0 L 8,-19 L 16,0 L 24,-19 L 32,0 L 40,-19 L 48,0 L 56,-19 L 64,0 L 72,-19 L 80,0 L 88,-19 L 96,0 L 104,-19 L 112,0 L 120,-19 L 128,0 L 136,-19 L 144,0 L 152,-19 L 160,0 L 168,-19 L 176,0 L 184,-19 L 192,0 L 200,-19 L 208,0 L 216,-19 L 224,0 L 232,-19 L 240,0 L 248,-19 L 256,0 L 264,-19 L 272,0 L 280,-19 L 288,0 L 296,-19 L 304,0 L 312,-19 L 320,0 L 328,-19 L 336,0 L 344,-19 L 352,0 L 360,-19 L 368,0 L 376,-19 L 384,0 L 392,-19 L 400,0 L 408,-19 L 416,0 L 424,-19 L 432,0 L 440,-19 L 448,0 L 456,-19 L 460,0 L 460,0 L 460,340 L 452,359 L 444,340 L 436,359 L 428,340 L 420,359 L 412,340 L 404,359 L 396,340 L 388,359 L 380,340 L 372,359 L 364,340 L 356,359 L 348,340 L 340,359 L 332,340 L 324,359 L 316,340 L 308,359 L 300,340 L 292,359 L 284,340 L 276,359 L 268,340 L 260,359 L 252,340 L 244,359 L 236,340 L 228,359 L 220,340 L 212,359 L 204,340 L 196,359 L 188,340 L 180,359 L 172,340 L 164,359 L 156,340 L 148,359 L 140,340 L 132,359 L 124,340 L 116,359 L 108,340 L 100,359 L 92,340 L 84,359 L 76,340 L 68,359 L 60,340 L 52,359 L 44,340 L 36,359 L 28,340 L 20,359 L 12,340 L 4,359 L 0,340 L 0,340 Z" transform="translate(28,28)"/></clipPath>
+</defs>
+<path d="M 0,0 L 8,-19 L 16,0 L 24,-19 L 32,0 L 40,-19 L 48,0 L 56,-19 L 64,0 L 72,-19 L 80,0 L 88,-19 L 96,0 L 104,-19 L 112,0 L 120,-19 L 128,0 L 136,-19 L 144,0 L 152,-19 L 160,0 L 168,-19 L 176,0 L 184,-19 L 192,0 L 200,-19 L 208,0 L 216,-19 L 224,0 L 232,-19 L 240,0 L 248,-19 L 256,0 L 264,-19 L 272,0 L 280,-19 L 288,0 L 296,-19 L 304,0 L 312,-19 L 320,0 L 328,-19 L 336,0 L 344,-19 L 352,0 L 360,-19 L 368,0 L 376,-19 L 384,0 L 392,-19 L 400,0 L 408,-19 L 416,0 L 424,-19 L 432,0 L 440,-19 L 448,0 L 456,-19 L 460,0 L 460,0 L 460,340 L 452,359 L 444,340 L 436,359 L 428,340 L 420,359 L 412,340 L 404,359 L 396,340 L 388,359 L 380,340 L 372,359 L 364,340 L 356,359 L 348,340 L 340,359 L 332,340 L 324,359 L 316,340 L 308,359 L 300,340 L 292,359 L 284,340 L 276,359 L 268,340 L 260,359 L 252,340 L 244,359 L 236,340 L 228,359 L 220,340 L 212,359 L 204,340 L 196,359 L 188,340 L 180,359 L 172,340 L 164,359 L 156,340 L 148,359 L 140,340 L 132,359 L 124,340 L 116,359 L 108,340 L 100,359 L 92,340 L 84,359 L 76,340 L 68,359 L 60,340 L 52,359 L 44,340 L 36,359 L 28,340 L 20,359 L 12,340 L 4,359 L 0,340 L 0,340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-FabricSwat)" opacity="0.6"/>
+<path d="M 0,0 L 8,-19 L 16,0 L 24,-19 L 32,0 L 40,-19 L 48,0 L 56,-19 L 64,0 L 72,-19 L 80,0 L 88,-19 L 96,0 L 104,-19 L 112,0 L 120,-19 L 128,0 L 136,-19 L 144,0 L 152,-19 L 160,0 L 168,-19 L 176,0 L 184,-19 L 192,0 L 200,-19 L 208,0 L 216,-19 L 224,0 L 232,-19 L 240,0 L 248,-19 L 256,0 L 264,-19 L 272,0 L 280,-19 L 288,0 L 296,-19 L 304,0 L 312,-19 L 320,0 L 328,-19 L 336,0 L 344,-19 L 352,0 L 360,-19 L 368,0 L 376,-19 L 384,0 L 392,-19 L 400,0 L 408,-19 L 416,0 L 424,-19 L 432,0 L 440,-19 L 448,0 L 456,-19 L 460,0 L 460,0 L 460,340 L 452,359 L 444,340 L 436,359 L 428,340 L 420,359 L 412,340 L 404,359 L 396,340 L 388,359 L 380,340 L 372,359 L 364,340 L 356,359 L 348,340 L 340,359 L 332,340 L 324,359 L 316,340 L 308,359 L 300,340 L 292,359 L 284,340 L 276,359 L 268,340 L 260,359 L 252,340 L 244,359 L 236,340 L 228,359 L 220,340 L 212,359 L 204,340 L 196,359 L 188,340 L 180,359 L 172,340 L 164,359 L 156,340 L 148,359 L 140,340 L 132,359 L 124,340 L 116,359 L 108,340 L 100,359 L 92,340 L 84,359 L 76,340 L 68,359 L 60,340 L 52,359 L 44,340 L 36,359 L 28,340 L 20,359 L 12,340 L 4,359 L 0,340 L 0,340 Z" transform="translate(28,28)" fill="#f9f7f3"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-FabricSwat)" opacity="0.05"/>
+<rect x="28" y="28" width="460" height="340" fill="url(#weave)" clip-path="url(#clip-fabric-ov)" opacity="0.82"/>
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(33.414718504223856, 34.47975509900061) rotate(40.84587584926339)"><defs><radialGradient id="bc-mount-77-0" cx="36%" cy="32%" r="68%"><stop offset="0%" stop-color="#A88A43"></stop><stop offset="35%" stop-color="#8B6C27"></stop><stop offset="70%" stop-color="#756331"></stop><stop offset="100%" stop-color="#5F4B20"></stop></radialGradient></defs><ellipse cx="0" cy="8.8" rx="5" ry="2" fill="rgba(45,37,24,0.06)" filter="blur(1.5px)"></ellipse><ellipse cx="0.8" cy="1.5" rx="6.3" ry="4.8999999999999995" fill="rgba(45,37,24,0.18)" filter="blur(3px)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.5695" fill="url(#bc-mount-77-0)"></ellipse><ellipse cx="0" cy="4.270175" rx="4.9098" ry="2.2336300000000002" fill="rgba(45,37,24,0.14)"></ellipse><ellipse cx="0.039999999999999813" cy="-1.2400000000000002" rx="1.82" ry="1.26" fill="rgba(222,204,145,0.45)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.5695" fill="none" stroke="#5F4B20" stroke-width="0.5" opacity="0.22"></ellipse><line x1="0.3" y1="3.28475" x2="0.5" y2="10.5" stroke="#5F4B20" stroke-width="1.2" stroke-linecap="round" opacity="0.38"></line><circle cx="0" cy="0" r="1" fill="#5F4B20" opacity="0.32"></circle></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：锯齿边，齿深 19px　<b>固定</b>：黄铜图钉　<b>材质</b>：7px 经纬编织纹理</div>
+</div>
+
+<div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">Color Card / 卡纸</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-ColorCard">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-ColorCard"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+<linearGradient id="card-sides" x1="0%" y1="0%" x2="100%" y2="0%">
+  <stop offset="0%" stop-color="rgba(18,14,10,0.12)"/>
+  <stop offset="3%" stop-color="rgba(18,14,10,0)"/>
+  <stop offset="97%" stop-color="rgba(18,14,10,0)"/>
+  <stop offset="100%" stop-color="rgba(18,14,10,0.15)"/>
+</linearGradient>
+<clipPath id="clip-card-ov"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+</defs>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-ColorCard)" opacity="0.6"/>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="#fdfcfa"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-ColorCard)" opacity="0.05"/>
+<rect x="28" y="28" width="460" height="340" fill="url(#card-sides)" clip-path="url(#clip-card-ov)"/>
+<rect x="28" y="28" width="460" height="3" fill="white" opacity="0.35" clip-path="url(#clip-card-ov)"/>
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(210, 18) rotate(246.153265697576)"><defs><radialGradient id="bc-mount-19-0" cx="36%" cy="32%" r="68%"><stop offset="0%" stop-color="#A88A43"></stop><stop offset="35%" stop-color="#8B6C27"></stop><stop offset="70%" stop-color="#756331"></stop><stop offset="100%" stop-color="#5F4B20"></stop></radialGradient></defs><ellipse cx="0" cy="8.8" rx="5" ry="2" fill="rgba(45,37,24,0.06)" filter="blur(1.5px)"></ellipse><ellipse cx="0.8" cy="1.5" rx="6.3" ry="4.8999999999999995" fill="rgba(45,37,24,0.18)" filter="blur(3px)"></ellipse><ellipse cx="0" cy="0" rx="6.818" ry="6.6675" fill="url(#bc-mount-19-0)"></ellipse><ellipse cx="0" cy="4.333875000000001" rx="4.7726" ry="2.2669500000000005" fill="rgba(45,37,24,0.14)"></ellipse><ellipse cx="0.039999999999999813" cy="-2.24" rx="1.82" ry="1.26" fill="rgba(222,204,145,0.45)"></ellipse><ellipse cx="0" cy="0" rx="6.818" ry="6.6675" fill="none" stroke="#5F4B20" stroke-width="0.5" opacity="0.22"></ellipse><line x1="0.3" y1="3.33375" x2="0.5" y2="10.5" stroke="#5F4B20" stroke-width="1.2" stroke-linecap="round" opacity="0.38"></line><circle cx="0" cy="0" r="1" fill="#5F4B20" opacity="0.32"></circle></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：直边 + 侧边厚度阴影　<b>固定</b>：居中黄铜图钉　<b>材质</b>：顶切高光线 + 侧边渐变</div>
+</div>
+
+<div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">Archive Note / 备注纸</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-ArchiveNot">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-ArchiveNot"><path d="M 0,0 L 11.2,-6.5 L 39.8,5.6 L 58.5,-0.9 L 64.8,-4.7 L 89.4,-0.9 L 110.6,-3.3 L 118.1,3.8 L 145.2,-3.2 L 164.1,5.0 L 172.8,-1.8 L 198.8,2.8 L 217.3,-5.1 L 232.7,3.7 L 248.2,-0.3 L 260.2,-1.7 L 282.4,-0.5 L 303.0,-3.3 L 324.5,-4.9 L 340.2,3.2 L 352.2,-3.4 L 374.1,2.9 L 395.1,6.2 L 402.5,-2.2 L 419.3,0.9 L 443.1,4.4 L 460,0 L 460,340 L 446.4,341.0 L 420.3,338.7 L 403.4,336.9 L 389.1,342.2 L 365.2,341.7 L 353.6,336.7 L 332.7,342.0 L 317.1,335.0 L 298.0,335.8 L 281.4,336.8 L 260.9,334.2 L 244.8,343.6 L 236.2,339.9 L 212.5,338.4 L 194.8,344.8 L 182.2,340.7 L 161.3,342.0 L 143.9,335.7 L 127.2,345.9 L 108.0,342.8 L 92.5,336.3 L 73.6,337.1 L 50.9,339.7 L 34.1,338.8 L 16.2,339.4 L 0,340 Z" transform="translate(28,28)"/></clipPath>
+<radialGradient id="arch-wear" cx="50%" cy="50%" r="75%">
+  <stop offset="60%" stop-color="transparent"/>
+  <stop offset="100%" stop-color="rgba(18,14,10,0.14)"/>
+</radialGradient>
+<clipPath id="clip-arch-ov"><path d="M 0,0 L 11.2,-6.5 L 39.8,5.6 L 58.5,-0.9 L 64.8,-4.7 L 89.4,-0.9 L 110.6,-3.3 L 118.1,3.8 L 145.2,-3.2 L 164.1,5.0 L 172.8,-1.8 L 198.8,2.8 L 217.3,-5.1 L 232.7,3.7 L 248.2,-0.3 L 260.2,-1.7 L 282.4,-0.5 L 303.0,-3.3 L 324.5,-4.9 L 340.2,3.2 L 352.2,-3.4 L 374.1,2.9 L 395.1,6.2 L 402.5,-2.2 L 419.3,0.9 L 443.1,4.4 L 460,0 L 460,340 L 446.4,341.0 L 420.3,338.7 L 403.4,336.9 L 389.1,342.2 L 365.2,341.7 L 353.6,336.7 L 332.7,342.0 L 317.1,335.0 L 298.0,335.8 L 281.4,336.8 L 260.9,334.2 L 244.8,343.6 L 236.2,339.9 L 212.5,338.4 L 194.8,344.8 L 182.2,340.7 L 161.3,342.0 L 143.9,335.7 L 127.2,345.9 L 108.0,342.8 L 92.5,336.3 L 73.6,337.1 L 50.9,339.7 L 34.1,338.8 L 16.2,339.4 L 0,340 Z" transform="translate(28,28)"/></clipPath>
+</defs>
+<path d="M 0,0 L 11.2,-6.5 L 39.8,5.6 L 58.5,-0.9 L 64.8,-4.7 L 89.4,-0.9 L 110.6,-3.3 L 118.1,3.8 L 145.2,-3.2 L 164.1,5.0 L 172.8,-1.8 L 198.8,2.8 L 217.3,-5.1 L 232.7,3.7 L 248.2,-0.3 L 260.2,-1.7 L 282.4,-0.5 L 303.0,-3.3 L 324.5,-4.9 L 340.2,3.2 L 352.2,-3.4 L 374.1,2.9 L 395.1,6.2 L 402.5,-2.2 L 419.3,0.9 L 443.1,4.4 L 460,0 L 460,340 L 446.4,341.0 L 420.3,338.7 L 403.4,336.9 L 389.1,342.2 L 365.2,341.7 L 353.6,336.7 L 332.7,342.0 L 317.1,335.0 L 298.0,335.8 L 281.4,336.8 L 260.9,334.2 L 244.8,343.6 L 236.2,339.9 L 212.5,338.4 L 194.8,344.8 L 182.2,340.7 L 161.3,342.0 L 143.9,335.7 L 127.2,345.9 L 108.0,342.8 L 92.5,336.3 L 73.6,337.1 L 50.9,339.7 L 34.1,338.8 L 16.2,339.4 L 0,340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-ArchiveNot)" opacity="0.6"/>
+<path d="M 0,0 L 11.2,-6.5 L 39.8,5.6 L 58.5,-0.9 L 64.8,-4.7 L 89.4,-0.9 L 110.6,-3.3 L 118.1,3.8 L 145.2,-3.2 L 164.1,5.0 L 172.8,-1.8 L 198.8,2.8 L 217.3,-5.1 L 232.7,3.7 L 248.2,-0.3 L 260.2,-1.7 L 282.4,-0.5 L 303.0,-3.3 L 324.5,-4.9 L 340.2,3.2 L 352.2,-3.4 L 374.1,2.9 L 395.1,6.2 L 402.5,-2.2 L 419.3,0.9 L 443.1,4.4 L 460,0 L 460,340 L 446.4,341.0 L 420.3,338.7 L 403.4,336.9 L 389.1,342.2 L 365.2,341.7 L 353.6,336.7 L 332.7,342.0 L 317.1,335.0 L 298.0,335.8 L 281.4,336.8 L 260.9,334.2 L 244.8,343.6 L 236.2,339.9 L 212.5,338.4 L 194.8,344.8 L 182.2,340.7 L 161.3,342.0 L 143.9,335.7 L 127.2,345.9 L 108.0,342.8 L 92.5,336.3 L 73.6,337.1 L 50.9,339.7 L 34.1,338.8 L 16.2,339.4 L 0,340 Z" transform="translate(28,28)" fill="#f2ede3"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-ArchiveNot)" opacity="0.05"/>
+<rect x="28" y="28" width="460" height="340" fill="url(#arch-wear)" clip-path="url(#clip-arch-ov)"/>
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(27.570030280691753, 24.603819679061417) rotate(103.2461643723218)"><defs><radialGradient id="bc-mount-55-0" cx="36%" cy="32%" r="68%"><stop offset="0%" stop-color="#A88A43"></stop><stop offset="35%" stop-color="#8B6C27"></stop><stop offset="70%" stop-color="#756331"></stop><stop offset="100%" stop-color="#5F4B20"></stop></radialGradient></defs><ellipse cx="0" cy="8.8" rx="5" ry="2" fill="rgba(45,37,24,0.06)" filter="blur(1.5px)"></ellipse><ellipse cx="0.8" cy="1.5" rx="6.3" ry="4.8999999999999995" fill="rgba(45,37,24,0.18)" filter="blur(3px)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.8635" fill="url(#bc-mount-55-0)"></ellipse><ellipse cx="0" cy="4.4612750000000005" rx="4.9098" ry="2.33359" fill="rgba(45,37,24,0.14)"></ellipse><ellipse cx="-0.9600000000000002" cy="-2.24" rx="1.82" ry="1.26" fill="rgba(222,204,145,0.45)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.8635" fill="none" stroke="#5F4B20" stroke-width="0.5" opacity="0.22"></ellipse><line x1="0.3" y1="3.43175" x2="0.5" y2="10.5" stroke="#5F4B20" stroke-width="1.2" stroke-linecap="round" opacity="0.38"></line><circle cx="0" cy="0" r="1" fill="#5F4B20" opacity="0.32"></circle></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：毛边 ±13px，26段　<b>固定</b>：黄铜图钉　<b>材质</b>：旧纸色 #f2ede3 + 四角磨损</div>
+</div>
+
+<div style="display:inline-block;vertical-align:top;margin:0 40px 72px 0">
+<div style="font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;color:#999;margin-bottom:18px">AVOID / 排除 — 红色图钉</div>
+<div style="position:relative;width:516px;height:396px">
+<svg width="516" height="396" style="position:absolute;top:0;left:0;overflow:visible">
+<defs>
+<filter id="shad-AVOID">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dx="0" dy="1" result="s1"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="8"/><feOffset dx="4" dy="7" result="s2"/>
+  <feGaussianBlur in="SourceAlpha" stdDeviation="18"/><feOffset dx="8" dy="14" result="s3"/>
+  <feMerge><feMergeNode in="s3"/><feMergeNode in="s2"/><feMergeNode in="s1"/></feMerge>
+  <feComponentTransfer><feFuncA type="linear" slope="0.62"/></feComponentTransfer>
+</filter>
+<clipPath id="clip-AVOID"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+<linearGradient id="pg-gloss" x1="0%" y1="0%" x2="100%" y2="100%">
+  <stop offset="0%" stop-color="white" stop-opacity="0.18"/>
+  <stop offset="55%" stop-color="white" stop-opacity="0.04"/>
+  <stop offset="100%" stop-color="black" stop-opacity="0.06"/>
+</linearGradient>
+<clipPath id="clip-avoid-ov"><path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)"/></clipPath>
+</defs>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="rgb(10,8,6)" filter="url(#shad-AVOID)" opacity="0.6"/>
+<path d="M 0 0 L 460 0 L 460 340 L 0 340 Z" transform="translate(28,28)" fill="#f8f6f2"/>
+<rect x="28" y="28" width="460" height="340" fill="rgb(20,16,12)" clip-path="url(#clip-AVOID)" opacity="0.05"/>
+<rect x="28" y="28" width="460" height="340" fill="url(#pg-gloss)" clip-path="url(#clip-avoid-ov)"/>
+<rect x="48" y="48" width="420" height="300" fill="rgba(18,14,10,0.035)" rx="2"/>
+<text x="258" y="198" text-anchor="middle" dominant-baseline="middle" fill="rgba(18,14,10,0.16)" font-size="12" font-family="system-ui" letter-spacing="0.1em">CONTENT AREA</text>
+<g transform="translate(48, 48)"><g transform="translate(32.328697494391236, 35.599632066936465) rotate(315.0423041646718)"><defs><radialGradient id="rc-mount-88-0" cx="36%" cy="32%" r="68%"><stop offset="0%" stop-color="#A34B3F"></stop><stop offset="52%" stop-color="#8A3A30"></stop><stop offset="100%" stop-color="#5C2820"></stop></radialGradient></defs><ellipse cx="0" cy="8.8" rx="5" ry="2" fill="rgba(45,37,24,0.06)" filter="blur(1.5px)"></ellipse><ellipse cx="0.8" cy="1.5" rx="6.3" ry="4.8999999999999995" fill="rgba(45,37,24,0.18)" filter="blur(3px)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.6185" fill="url(#rc-mount-88-0)"></ellipse><ellipse cx="0" cy="4.302025" rx="4.9098" ry="2.25029" fill="rgba(45,37,24,0.14)"></ellipse><ellipse cx="-2.96" cy="-1.2400000000000002" rx="1.61" ry="1.12" fill="rgba(210,160,145,0.38)"></ellipse><ellipse cx="0" cy="0" rx="7.014" ry="6.6185" fill="none" stroke="#5C2820" stroke-width="0.5" opacity="0.22"></ellipse><line x1="0.3" y1="3.30925" x2="0.5" y2="10.5" stroke="#5C2820" stroke-width="1.2" stroke-linecap="round" opacity="0.38"></line><circle cx="0" cy="0" r="1" fill="#5C2820" opacity="0.32"></circle><circle cx="0" cy="0" r="1.2" fill="#5C2820" opacity="0.4"></circle></g></g>
+</svg>
+</div>
+<div style="margin-top:14px;padding:14px 16px;background:rgba(255,255,255,0.55);border-radius:8px;font:12px/1.8 system-ui;color:#666;max-width:516px"><b>边缘</b>：直边　<b>固定</b>：红色图钉（语义强调）　<b>材质</b>：照片纸</div>
+</div></div>
+</body></html>

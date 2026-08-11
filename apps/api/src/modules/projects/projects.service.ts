@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { randomUUID } from "node:crypto";
 
 import type {
   CreateProjectInput,
@@ -17,26 +18,34 @@ export const PROJECTS_DB = Symbol("PROJECTS_DB");
 
 type ProjectsDatabase = Pick<
   PrismaClient,
-  "$transaction" | "project" | "workspace"
+  "$transaction" | "designAsset" | "project" | "workspace"
 >;
 
 interface ProjectRecord {
+  readonly _count?: {
+    readonly designAssets: number;
+  };
   readonly archived: boolean;
   readonly coverAssetId: string | null;
   readonly createdAt: Date;
   readonly deletedAt: Date | null;
   readonly id: string;
   readonly name: string;
+  readonly designAssets?: readonly {
+    readonly id: string;
+  }[];
   readonly updatedAt: Date;
 }
 
 function toProjectResponse(project: ProjectRecord) {
+  const coverAssetId =
+    project.coverAssetId ?? project.designAssets?.[0]?.id ?? null;
   return {
     archived: project.archived,
-    assetCount: project.coverAssetId ? 1 : 0,
-    coverAssetId: project.coverAssetId,
-    coverUrl: project.coverAssetId
-      ? `/api/assets/${encodeURIComponent(project.coverAssetId)}/thumbnail`
+    assetCount: project._count?.designAssets ?? 0,
+    coverAssetId,
+    coverUrl: coverAssetId
+      ? `/api/design-assets/${encodeURIComponent(coverAssetId)}/thumbnail`
       : null,
     createdAt: project.createdAt,
     id: project.id,
@@ -70,21 +79,53 @@ export class ProjectsService {
         : {}),
     };
     const skip = (input.page - 1) * input.limit;
-    const [projects, total] = await Promise.all([
-      this.database.project.findMany({
-        where,
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        skip,
-        take: input.limit,
-      }),
-      this.database.project.count({ where }),
-    ]);
+    const statsProjectWhere: Prisma.ProjectWhereInput = {
+      archived: false,
+      deletedAt: null,
+      workspace: { ownerId: userId },
+    };
+    const [projects, total, activeProjects, totalAssets, projectsWithAssets] =
+      await Promise.all([
+        this.database.project.findMany({
+          include: {
+            _count: { select: { designAssets: true } },
+            designAssets: {
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              select: { id: true },
+              take: 1,
+            },
+          },
+          where,
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+          skip,
+          take: input.limit,
+        }),
+        this.database.project.count({ where }),
+        this.database.project.count({ where: statsProjectWhere }),
+        this.database.designAsset.count({
+          where: { project: statsProjectWhere },
+        }),
+        this.database.project.count({
+          where: {
+            ...statsProjectWhere,
+            designAssets: { some: {} },
+          },
+        }),
+      ]);
 
     return {
       hasMore: skip + projects.length < total,
       items: projects.map(toProjectResponse),
       page: input.page,
       pageSize: input.limit,
+      stats: {
+        activeProjects,
+        coverRate:
+          activeProjects === 0
+            ? 0
+            : Math.round((projectsWithAssets / activeProjects) * 100),
+        totalAssets,
+      },
       total,
     };
   }
@@ -164,10 +205,16 @@ export class ProjectsService {
     await this.assertOwnership(userId, projectId);
     const project = await this.database.project.update({
       where: { id: projectId },
+      include: {
+        _count: { select: { designAssets: true } },
+        designAssets: {
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true },
+          take: 1,
+        },
+      },
       data: {
-        ...(input.archived === undefined
-          ? {}
-          : { archived: input.archived }),
+        ...(input.archived === undefined ? {} : { archived: input.archived }),
         ...(input.name === undefined ? {} : { name: input.name }),
       },
     });
@@ -175,17 +222,21 @@ export class ProjectsService {
     return toProjectResponse(project);
   }
 
-  async duplicate(
-    userId: string,
-    projectId: string,
-    idempotencyKey: string,
-  ) {
+  async duplicate(userId: string, projectId: string, idempotencyKey: string) {
     await this.assertOwnership(userId, projectId);
     const source = await this.database.project.findUnique({
       where: { id: projectId },
       include: {
         boardElements: true,
         boardSnapshot: true,
+        collections: {
+          include: {
+            dna: true,
+            looks: true,
+            similarities: true,
+          },
+        },
+        designAssets: true,
         workspace: { select: { ownerId: true } },
       },
     });
@@ -205,13 +256,46 @@ export class ProjectsService {
     try {
       const duplicated = await this.database.$transaction(
         async (transaction) => {
+          const assetIdMap = new Map(
+            source.designAssets.map((asset) => [asset.id, randomUUID()]),
+          );
+          const remappedCoverAssetId = source.coverAssetId
+            ? (assetIdMap.get(source.coverAssetId) ?? null)
+            : null;
           const project = await transaction.project.create({
             data: {
+              coverAssetId: remappedCoverAssetId,
               idempotencyKey,
               name: `${source.name} 副本`.slice(0, 80),
               wsId: source.wsId,
             },
           });
+          if (source.designAssets.length > 0) {
+            await transaction.designAsset.createMany({
+              data: source.designAssets.map((asset) => {
+                const id = requiredMappedId(assetIdMap, asset.id);
+                return {
+                  archivedAt: asset.archivedAt,
+                  generationTaskId: null,
+                  height: asset.height,
+                  id,
+                  operation: asset.operation,
+                  parentAssetId: asset.parentAssetId
+                    ? (assetIdMap.get(asset.parentAssetId) ?? null)
+                    : null,
+                  projectId: project.id,
+                  restoredFromAssetId: asset.restoredFromAssetId
+                    ? (assetIdMap.get(asset.restoredFromAssetId) ?? null)
+                    : null,
+                  rootAssetId: assetIdMap.get(asset.rootAssetId) ?? id,
+                  seed: asset.seed,
+                  thumbnailUrl: asset.thumbnailUrl,
+                  url: asset.url,
+                  width: asset.width,
+                };
+              }),
+            });
+          }
           if (source.boardSnapshot) {
             await transaction.boardSnapshot.create({
               data: {
@@ -220,8 +304,10 @@ export class ProjectsService {
                 snapshot:
                   source.boardSnapshot.snapshot === null
                     ? Prisma.JsonNull
-                    : (source.boardSnapshot
-                        .snapshot as Prisma.InputJsonValue),
+                    : (remapStructuredValue(
+                        source.boardSnapshot.snapshot,
+                        assetIdMap,
+                      ) as Prisma.InputJsonValue),
               },
             });
           }
@@ -234,7 +320,10 @@ export class ProjectsService {
                 record:
                   element.record === null
                     ? Prisma.JsonNull
-                    : (element.record as Prisma.InputJsonValue),
+                    : (remapStructuredValue(
+                        element.record,
+                        assetIdMap,
+                      ) as Prisma.InputJsonValue),
                 role: element.role,
                 roleConfidence: element.roleConfidence,
                 roleInferenceState: element.roleInferenceState,
@@ -245,7 +334,88 @@ export class ProjectsService {
               })),
             });
           }
-          return project;
+          for (const sourceCollection of source.collections) {
+            const collectionId = randomUUID();
+            await transaction.collection.create({
+              data: {
+                heroAssetId: requiredMappedId(
+                  assetIdMap,
+                  sourceCollection.heroAssetId,
+                ),
+                id: collectionId,
+                name: sourceCollection.name,
+                projectId: project.id,
+                sourceGarmentTypeCode: sourceCollection.sourceGarmentTypeCode,
+                sourceGarmentTypeLabel: sourceCollection.sourceGarmentTypeLabel,
+              },
+            });
+            if (sourceCollection.dna) {
+              const dna = sourceCollection.dna;
+              await transaction.collectionDna.create({
+                data: {
+                  collectionId,
+                  extractionStatus: dna.extractionStatus,
+                  fabrics: dna.fabrics,
+                  fabricsLocked: dna.fabricsLocked,
+                  moodWords: dna.moodWords,
+                  moodWordsLocked: dna.moodWordsLocked,
+                  palette: dna.palette as Prisma.InputJsonValue,
+                  paletteLocked: dna.paletteLocked,
+                  referenceFileIds: dna.referenceFileIds,
+                  signatureDetails: dna.signatureDetails,
+                  silhouettes: dna.silhouettes,
+                  silhouettesLocked: dna.silhouettesLocked,
+                },
+              });
+            }
+            if (sourceCollection.looks.length > 0) {
+              await transaction.collectionLook.createMany({
+                data: sourceCollection.looks.map((look) => ({
+                  analysisStatus: look.analysisStatus,
+                  collectionId,
+                  designAssetId: requiredMappedId(
+                    assetIdMap,
+                    look.designAssetId,
+                  ),
+                  isHero: look.isHero,
+                  garmentTypeCode: look.garmentTypeCode,
+                  garmentTypeLabel: look.garmentTypeLabel,
+                  ordinal: look.ordinal,
+                  similarityScore: look.similarityScore,
+                  slotKey: look.slotKey,
+                  variationAxis: look.variationAxis,
+                  warningIgnored: look.warningIgnored,
+                })),
+              });
+            }
+            if (sourceCollection.similarities.length > 0) {
+              await transaction.collectionLookSimilarity.createMany({
+                data: sourceCollection.similarities.map((similarity) => ({
+                  collectionId,
+                  leftAssetId: requiredMappedId(
+                    assetIdMap,
+                    similarity.leftAssetId,
+                  ),
+                  rightAssetId: requiredMappedId(
+                    assetIdMap,
+                    similarity.rightAssetId,
+                  ),
+                  score: similarity.score,
+                })),
+              });
+            }
+          }
+          return transaction.project.findUniqueOrThrow({
+            where: { id: project.id },
+            include: {
+              _count: { select: { designAssets: true } },
+              designAssets: {
+                orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+                select: { id: true },
+                take: 1,
+              },
+            },
+          });
         },
       );
       return toProjectResponse(duplicated);
@@ -286,6 +456,12 @@ export class ProjectsService {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
       include: {
+        _count: { select: { designAssets: true } },
+        designAssets: {
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true },
+          take: 1,
+        },
         workspace: {
           select: { ownerId: true },
         },
@@ -315,4 +491,34 @@ export class ProjectsService {
 
     return project;
   }
+}
+
+function requiredMappedId(
+  idMap: ReadonlyMap<string, string>,
+  sourceId: string,
+): string {
+  const mapped = idMap.get(sourceId);
+  if (!mapped) {
+    throw new Error(`项目复制缺少资产映射: ${sourceId}`);
+  }
+  return mapped;
+}
+
+function remapStructuredValue(
+  value: unknown,
+  idMap: ReadonlyMap<string, string>,
+): unknown {
+  if (typeof value === "string") return idMap.get(value) ?? value;
+  if (Array.isArray(value)) {
+    return value.map((item) => remapStructuredValue(item, idMap));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        remapStructuredValue(item, idMap),
+      ]),
+    );
+  }
+  return value;
 }

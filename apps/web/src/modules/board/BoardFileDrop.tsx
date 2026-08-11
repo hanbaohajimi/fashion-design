@@ -253,14 +253,22 @@ export function BoardFileDrop() {
       point: { readonly x: number; readonly y: number } =
         editor.getViewportPageBounds().center,
     ): void => {
+      const columns = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(files.length))));
+      const rows = Math.ceil(files.length / columns);
+      const cellWidth = 372;
+      const cellHeight = 292;
+      const startX = point.x - (columns * cellWidth - 32) / 2;
+      const startY = point.y - (rows * cellHeight - 32) / 2;
       files.forEach((file, index) => {
         const validationError = validateImage(file);
         const shapeId = createShapeId();
+        const column = index % columns;
+        const row = Math.floor(index / columns);
         editor.createShape<ImageShape>({
           id: shapeId,
           type: IMAGE_SHAPE_TYPE,
-          x: point.x + index * 24 - 170,
-          y: point.y + index * 24 - 130,
+          x: startX + column * cellWidth,
+          y: startY + row * cellHeight,
           props: {
             fileId: "",
             title: file.name,

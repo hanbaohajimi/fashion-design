@@ -3,15 +3,13 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import {
-  fetchAssetVersions,
-  restoreAssetVersion,
-} from "./generation-api";
+import { fetchAssetVersions, restoreAssetVersion } from "./generation-api";
 import type { DesignAssetVersion } from "./generation-types";
 import styles from "./generation.module.css";
 
 const OPERATION_LABEL: Record<DesignAssetVersion["operation"], string> = {
   generated: "初次生成",
+  imported: "素材导入",
   variation: "设计变体",
   inpaint: "局部重绘",
   upscale: "高清放大",
@@ -33,8 +31,7 @@ export function VersionTimeline({
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
-  const versions =
-    timeline.data?.pages.flatMap((page) => page.items) ?? [];
+  const versions = timeline.data?.pages.flatMap((page) => page.items) ?? [];
   const queryError =
     timeline.error instanceof Error
       ? timeline.error.message
@@ -51,9 +48,7 @@ export function VersionTimeline({
       const restored = await restoreAssetVersion(target.id, assetId);
       onRestore(restored);
     } catch (cause) {
-      setRestoreError(
-        cause instanceof Error ? cause.message : "版本恢复失败",
-      );
+      setRestoreError(cause instanceof Error ? cause.message : "版本恢复失败");
     } finally {
       setRestoringId(null);
     }
@@ -138,9 +133,7 @@ export function VersionTimeline({
               onClick={() => void timeline.fetchNextPage()}
               type="button"
             >
-              {timeline.isFetchingNextPage
-                ? "正在加载…"
-                : "加载更多版本"}
+              {timeline.isFetchingNextPage ? "正在加载…" : "加载更多版本"}
             </button>
           ) : (
             <p className={styles.versionEnd}>已显示完整资产链</p>

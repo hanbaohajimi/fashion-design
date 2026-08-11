@@ -8,22 +8,32 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { useEditor, useValue } from "tldraw";
+import { createPortal } from "react-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { type TLShape, type TLShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
 import type { BoardPersistStatus } from "../hooks/useBoardPersist";
 import { CandidateGrid } from "../generation/CandidateGrid";
 import { useGenerationWorkspace } from "../generation/GenerationWorkspace";
+import { resolveRoleBadgeLabel } from "../shapes/RoleBadge";
 import {
+  attachGenerationTaskToConversation,
   createAgentConversation,
+  getProjectConversationRequest,
   listAgentConversations,
   listAgentMessages,
   sendAgentMessage,
   updateAgentConversation,
+  MAX_AGENT_CONTEXT_ITEMS,
+  MAX_AGENT_MESSAGE_LENGTH,
+  validateAgentMessage,
 } from "./agent-api";
 import styles from "./board-agent-panel.module.css";
 
@@ -63,49 +73,94 @@ export function BoardAgentPanel({
   const [activeConversationId, setActiveConversationId] = useState("");
   const [messages, setMessages] = useState<readonly AgentMessageView[]>([]);
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
-  const [contextOverride, setContextOverride] = useState<{
-    readonly excludedIds: readonly string[];
-    readonly selectionKey: string;
-  }>({ excludedIds: [], selectionKey: "" });
+  const [draftShapeIds, setDraftShapeIds] = useState<readonly TLShapeId[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"conversations" | "generations">(
+    "conversations",
+  );
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [conversationMutating, setConversationMutating] = useState(false);
   const [conversationActionsOpen, setConversationActionsOpen] = useState(false);
+  const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [hydrateRevision, setHydrateRevision] = useState(0);
   const [messageRevision, setMessageRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const skipNextAutoScroll = useRef(false);
-  const initialConversationRef = useRef<
-    Promise<AgentConversationSummary> | null
-  >(null);
+  const initialConversationRef = useRef<{
+    readonly projectId: string;
+    readonly promise: Promise<AgentConversationSummary>;
+  } | null>(null);
+  const activeConversationIdRef = useRef(activeConversationId);
+  const projectIdRef = useRef(projectId);
 
-  const selection = useValue(
-    "agent-selection-context",
-    () =>
-      editor.getSelectedShapes().map((shape) => ({
-        id: shape.id,
-        label: shapeLabel(shape.type, shape.props),
-      })),
-    [editor],
-  );
-  const selectionKey = selection.map((item) => item.id).join("|");
-  const excludedIds =
-    contextOverride.selectionKey === selectionKey
-      ? new Set(contextOverride.excludedIds)
-      : new Set<string>();
-  const contextItems = selection.filter((item) => !excludedIds.has(item.id));
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  const contextItems = draftShapeIds.flatMap((id) => {
+    const shape = editor.getShape(id);
+    return shape ? [attachmentFromShape(shape)] : [];
+  });
+  const contextLimitExceeded = contextItems.length > MAX_AGENT_CONTEXT_ITEMS;
   const contextReady =
-    contextItems.length === 0 || boardStatus === "ready" || boardStatus === "saved";
+    !contextLimitExceeded &&
+    (contextItems.length === 0 ||
+      boardStatus === "ready" ||
+      boardStatus === "saved");
+  const activeConversation = conversations.find(
+    (item) => item.id === activeConversationId,
+  );
+  const attachInpaintTask = useCallback(
+    async (taskId: string, promptText: string): Promise<void> => {
+      if (!activeConversationId) {
+        await generation.track(taskId);
+        setError("局部重绘已提交；会话恢复后可在历史→生成查看");
+        return;
+      }
+      try {
+        const message = await attachGenerationTaskToConversation(
+          activeConversationId,
+          taskId,
+          {
+            content: `局部重绘：${promptText}`,
+            fileAssetIds: [],
+            shapeIds: [],
+          },
+        );
+        setMessages((current) =>
+          current.some((item) => item.id === message.id)
+            ? current
+            : [...current, message],
+        );
+      } catch {
+        setError("局部重绘已提交，但未能写入当前对话；可在历史→生成查看");
+      } finally {
+        await generation.track(taskId);
+      }
+    },
+    [activeConversationId, generation],
+  );
+  const activeConversationBelongsToProject =
+    activeConversation?.projectId === projectId;
 
   const refreshConversations = useCallback(async () => {
+    const targetProjectId = projectId;
     const response = await listAgentConversations(projectId);
-    setConversations(response.items);
+    if (response.items.some((item) => item.projectId !== targetProjectId)) {
+      throw new Error("会话列表包含其他项目的数据，请重新加载");
+    }
+    if (projectIdRef.current === targetProjectId) {
+      setConversations(response.items);
+    }
     return response.items;
   }, [projectId]);
 
@@ -113,17 +168,27 @@ export function BoardAgentPanel({
     let disposed = false;
     const hydrate = async (): Promise<void> => {
       setLoading(true);
-      setError(null);
+      setLoadError(null);
       try {
         let items = await refreshConversations();
         if (items.length === 0) {
-          initialConversationRef.current ??= createAgentConversation(
+          const request = getProjectConversationRequest(
+            initialConversationRef.current,
             projectId,
-          ).catch((cause: unknown) => {
-            initialConversationRef.current = null;
-            throw cause;
-          });
-          const created = await initialConversationRef.current;
+            createAgentConversation,
+          );
+          initialConversationRef.current = request;
+          let created: AgentConversationSummary;
+          try {
+            created = await request.promise;
+          } finally {
+            if (initialConversationRef.current === request) {
+              initialConversationRef.current = null;
+            }
+          }
+          if (created.projectId !== projectId) {
+            throw new Error("新会话不属于当前项目，请重新加载");
+          }
           items = [created];
           if (!disposed) setConversations(items);
         }
@@ -133,7 +198,9 @@ export function BoardAgentPanel({
         }
       } catch (cause) {
         if (!disposed) {
-          setError(cause instanceof Error ? cause.message : "Agent 初始化失败");
+          setLoadError(
+            cause instanceof Error ? cause.message : "Agent 初始化失败",
+          );
           setLoading(false);
         }
       }
@@ -145,27 +212,36 @@ export function BoardAgentPanel({
   }, [hydrateRevision, projectId, refreshConversations]);
 
   useEffect(() => {
-    if (!activeConversationId) return;
+    if (!activeConversationId || !activeConversationBelongsToProject) return;
+    const targetProjectId = projectId;
     let disposed = false;
     void listAgentMessages(activeConversationId)
       .then((response) => {
-        if (!disposed) {
+        if (!disposed && projectIdRef.current === targetProjectId) {
+          setLoadError(null);
           setMessages(response.items);
           setMessageCursor(response.nextCursor);
         }
       })
       .catch((cause: unknown) => {
-        if (!disposed) {
-          setError(cause instanceof Error ? cause.message : "消息读取失败");
+        if (!disposed && projectIdRef.current === targetProjectId) {
+          setLoadError(cause instanceof Error ? cause.message : "消息读取失败");
         }
       })
       .finally(() => {
-        if (!disposed) setLoading(false);
+        if (!disposed && projectIdRef.current === targetProjectId) {
+          setLoading(false);
+        }
       });
     return () => {
       disposed = true;
     };
-  }, [activeConversationId, messageRevision]);
+  }, [
+    activeConversationBelongsToProject,
+    activeConversationId,
+    messageRevision,
+    projectId,
+  ]);
 
   useEffect(() => {
     if (skipNextAutoScroll.current) {
@@ -176,46 +252,104 @@ export function BoardAgentPanel({
   }, [collapsed, messages]);
 
   useEffect(() => {
-    if (collapsed) return;
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (
-        event.key === "Escape" &&
-        window.matchMedia("(max-width: 1024px)").matches
-      ) {
+      if (event.key !== "Escape") return;
+      if (historyOpen) {
+        setHistoryOpen(false);
+        return;
+      }
+      if (!collapsed && window.matchMedia("(max-width: 1280px)").matches) {
         onToggle();
       }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [collapsed, onToggle]);
+  }, [collapsed, historyOpen, onToggle]);
+
+  useEffect(() => {
+    let previousSelectionKey = "";
+    return editor.store.listen(
+      () => {
+        const selectedShapes = editor.getSelectedShapes();
+        if (selectedShapes.length === 0) return;
+        const selectedIds = selectedShapes.map((shape) => shape.id);
+        const selectedKey = selectedIds.join("|");
+        if (selectedKey === previousSelectionKey) return;
+        previousSelectionKey = selectedKey;
+        setDraftShapeIds(selectedIds.slice(0, MAX_AGENT_CONTEXT_ITEMS));
+        if (!selectedShapes.some(isImageShape)) return;
+        setHistoryOpen(false);
+        if (collapsed) onToggle();
+        window.requestAnimationFrame(() => composerInputRef.current?.focus());
+      },
+      { scope: "session", source: "user" },
+    );
+  }, [collapsed, editor, onToggle]);
+
+  useEffect(
+    () =>
+      editor.store.listen(
+        () => {
+          const existing = new Set(
+            editor.getCurrentPageShapes().map((shape) => shape.id),
+          );
+          setDraftShapeIds((current) =>
+            current.filter((id) => existing.has(id)),
+          );
+        },
+        { scope: "document" },
+      ),
+    [editor],
+  );
 
   const taskById = useMemo(
     () => new Map(generation.tasks.map((task) => [task.id, task] as const)),
     [generation.tasks],
   );
-  const activeConversation = conversations.find(
-    (item) => item.id === activeConversationId,
+  const allCandidateCount = generation.tasks.reduce(
+    (total, task) =>
+      total +
+      task.candidates.filter(
+        (candidate) => candidate.disposition !== "dismissed",
+      ).length,
+    0,
   );
-  const linkedTaskIds = new Set(
-    messages.flatMap((message) =>
-      message.generationTaskId ? [message.generationTaskId] : [],
-    ),
-  );
-  const projectTasks = generation.tasks
-    .filter((task) => !linkedTaskIds.has(task.id))
-    .slice(0, 6);
+  const sendUnavailableReason = sending
+    ? "Agent 正在处理"
+    : !activeConversationBelongsToProject
+      ? "会话尚未就绪"
+      : !prompt.trim()
+        ? "请输入编辑描述"
+        : !contextReady
+          ? contextLimitExceeded
+            ? `附件不能超过 ${MAX_AGENT_CONTEXT_ITEMS} 项`
+            : "附件正在保存"
+          : null;
 
   const loadOlderMessages = useCallback(async (): Promise<void> => {
-    if (!activeConversationId || !messageCursor || loadingOlder) return;
+    if (
+      !activeConversationBelongsToProject ||
+      !activeConversationId ||
+      !messageCursor ||
+      loadingOlder
+    )
+      return;
+    const targetConversationId = activeConversationId;
+    const targetProjectId = projectId;
     const timeline = timelineRef.current;
     const previousHeight = timeline?.scrollHeight ?? 0;
     setLoadingOlder(true);
     setError(null);
     try {
       const response = await listAgentMessages(
-        activeConversationId,
+        targetConversationId,
         messageCursor,
       );
+      if (
+        projectIdRef.current !== targetProjectId ||
+        activeConversationIdRef.current !== targetConversationId
+      )
+        return;
       skipNextAutoScroll.current = true;
       setMessages((current) => {
         const existing = new Set(current.map((message) => message.id));
@@ -230,21 +364,41 @@ export function BoardAgentPanel({
           timeline.scrollTop += timeline.scrollHeight - previousHeight;
       });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "更早消息读取失败");
+      if (projectIdRef.current === targetProjectId) {
+        setError(cause instanceof Error ? cause.message : "更早消息读取失败");
+      }
     } finally {
-      setLoadingOlder(false);
+      if (projectIdRef.current === targetProjectId) setLoadingOlder(false);
     }
-  }, [activeConversationId, loadingOlder, messageCursor]);
+  }, [
+    activeConversationBelongsToProject,
+    activeConversationId,
+    loadingOlder,
+    messageCursor,
+    projectId,
+  ]);
 
   const renameConversation = async (): Promise<void> => {
     const title = titleDraft.trim();
-    if (!activeConversationId || !title || conversationMutating) return;
+    if (
+      !activeConversationBelongsToProject ||
+      !activeConversationId ||
+      conversationMutating
+    )
+      return;
+    const targetConversationId = activeConversationId;
+    const targetProjectId = projectId;
+    if (!title) {
+      setError("会话标题不能为空");
+      return;
+    }
     setConversationMutating(true);
     setError(null);
     try {
-      const updated = await updateAgentConversation(activeConversationId, {
+      const updated = await updateAgentConversation(targetConversationId, {
         title,
       });
+      if (projectIdRef.current !== targetProjectId) return;
       setConversations((current) =>
         current.map((conversation) =>
           conversation.id === updated.id ? updated : conversation,
@@ -252,23 +406,42 @@ export function BoardAgentPanel({
       );
       setEditingTitle(false);
       setConversationActionsOpen(false);
+      setConfirmingArchive(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "会话重命名失败");
+      if (projectIdRef.current === targetProjectId) {
+        setError(cause instanceof Error ? cause.message : "会话重命名失败");
+      }
     } finally {
-      setConversationMutating(false);
+      if (projectIdRef.current === targetProjectId) {
+        setConversationMutating(false);
+      }
     }
   };
 
   const archiveConversation = async (): Promise<void> => {
-    if (!activeConversationId || conversationMutating) return;
+    if (
+      !activeConversationBelongsToProject ||
+      !activeConversationId ||
+      conversationMutating
+    )
+      return;
+    const targetConversationId = activeConversationId;
+    const targetProjectId = projectId;
     setConversationMutating(true);
     setError(null);
     try {
-      await updateAgentConversation(activeConversationId, { archived: true });
+      await updateAgentConversation(targetConversationId, { archived: true });
+      if (projectIdRef.current !== targetProjectId) return;
       const remaining = conversations.filter(
-        (conversation) => conversation.id !== activeConversationId,
+        (conversation) => conversation.id !== targetConversationId,
       );
-      const next = remaining[0] ?? (await createAgentConversation(projectId));
+      const next =
+        remaining[0] ?? (await createAgentConversation(targetProjectId));
+      if (
+        projectIdRef.current !== targetProjectId ||
+        next.projectId !== targetProjectId
+      )
+        return;
       setConversations(remaining.length > 0 ? remaining : [next]);
       setMessages([]);
       setMessageCursor(null);
@@ -276,10 +449,15 @@ export function BoardAgentPanel({
       setActiveConversationId(next.id);
       setConversationActionsOpen(false);
       setEditingTitle(false);
+      setConfirmingArchive(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "会话归档失败");
+      if (projectIdRef.current === targetProjectId) {
+        setError(cause instanceof Error ? cause.message : "会话归档失败");
+      }
     } finally {
-      setConversationMutating(false);
+      if (projectIdRef.current === targetProjectId) {
+        setConversationMutating(false);
+      }
     }
   };
 
@@ -294,7 +472,15 @@ export function BoardAgentPanel({
       },
     ): Promise<void> => {
       const normalized = content.trim();
-      if (!normalized || !activeConversationId || sending) return;
+      if (!activeConversationBelongsToProject || !activeConversation || sending)
+        return;
+      const validationError = validateAgentMessage(content, shapeIds.length);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      const targetConversationId = activeConversation.id;
+      const targetProjectId = projectId;
       if (
         shapeIds.length > 0 &&
         boardStatus !== "ready" &&
@@ -348,52 +534,71 @@ export function BoardAgentPanel({
           optimisticUser,
           optimisticAssistant,
         ]);
-        setPrompt("");
       }
       setSending(true);
       setError(null);
       try {
-        const result = await sendAgentMessage(activeConversationId, {
+        const result = await sendAgentMessage(targetConversationId, {
           clientRequestId,
           content: normalized,
           fileAssetIds: [],
           shapeIds,
         });
-        setMessages((current) =>
-          retry
-            ? current.map((message) => {
-                if (message.id === retry.userMessageId)
-                  return result.userMessage;
-                if (message.id === retry.assistantMessageId)
-                  return result.assistantMessage;
-                return message;
-              })
-            : [
-                ...current.filter(
-                  (message) =>
-                    message.id !== optimisticUser.id &&
-                    message.id !== optimisticAssistant.id,
-                ),
-                result.userMessage,
-                result.assistantMessage,
-              ],
-        );
-        if (result.taskId) {
+        if (
+          projectIdRef.current === targetProjectId &&
+          activeConversationIdRef.current === targetConversationId
+        ) {
+          setMessages((current) =>
+            retry
+              ? current.map((message) => {
+                  if (message.id === retry.userMessageId)
+                    return result.userMessage;
+                  if (message.id === retry.assistantMessageId)
+                    return result.assistantMessage;
+                  return message;
+                })
+              : [
+                  ...current.filter(
+                    (message) =>
+                      message.id !== optimisticUser.id &&
+                      message.id !== optimisticAssistant.id,
+                  ),
+                  result.userMessage,
+                  result.assistantMessage,
+                ],
+          );
+        }
+        if (result.taskId && projectIdRef.current === targetProjectId) {
           void generation.track(result.taskId).catch(() => {
             setError("生成任务已创建，状态同步稍有延迟");
           });
         }
+        if (!retry && projectIdRef.current === targetProjectId) {
+          setPrompt("");
+          setDraftShapeIds([]);
+          if (composerInputRef.current) {
+            composerInputRef.current.style.height = "44px";
+          }
+        }
+        if (projectIdRef.current !== targetProjectId) return;
         void refreshConversations()
           .then((refreshed) => {
             if (
+              projectIdRef.current === targetProjectId &&
               refreshed.length > 0 &&
-              !refreshed.some((item) => item.id === activeConversationId)
+              !refreshed.some((item) => item.id === targetConversationId)
             ) {
               setActiveConversationId(refreshed[0]?.id ?? "");
             }
           })
           .catch(() => undefined);
       } catch (cause) {
+        if (
+          projectIdRef.current !== targetProjectId ||
+          activeConversationIdRef.current !== targetConversationId
+        ) {
+          return;
+        }
         if (retry) {
           setMessageRevision((current) => current + 1);
         } else {
@@ -404,27 +609,35 @@ export function BoardAgentPanel({
                 message.id !== optimisticAssistant.id,
             ),
           );
-          setPrompt(normalized);
         }
         setError(cause instanceof Error ? cause.message : "消息发送失败");
       } finally {
-        setSending(false);
+        if (projectIdRef.current === targetProjectId) setSending(false);
       }
     },
     [
-      activeConversationId,
+      activeConversation,
+      activeConversationBelongsToProject,
       boardStatus,
       generation,
+      projectId,
       refreshConversations,
       sending,
     ],
   );
 
   const newConversation = async (): Promise<void> => {
-    if (sending) return;
+    if (sending || conversationMutating) return;
+    const targetProjectId = projectId;
+    setConversationMutating(true);
     setError(null);
     try {
-      const created = await createAgentConversation(projectId);
+      const created = await createAgentConversation(targetProjectId);
+      if (
+        projectIdRef.current !== targetProjectId ||
+        created.projectId !== targetProjectId
+      )
+        return;
       setConversations((current) => [created, ...current]);
       setLoading(true);
       setActiveConversationId(created.id);
@@ -432,8 +645,15 @@ export function BoardAgentPanel({
       setMessageCursor(null);
       setConversationActionsOpen(false);
       setEditingTitle(false);
+      setConfirmingArchive(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "新会话创建失败");
+      if (projectIdRef.current === targetProjectId) {
+        setError(cause instanceof Error ? cause.message : "新会话创建失败");
+      }
+    } finally {
+      if (projectIdRef.current === targetProjectId) {
+        setConversationMutating(false);
+      }
     }
   };
 
@@ -484,7 +704,23 @@ export function BoardAgentPanel({
           </div>
           <div className={styles.headerActions}>
             <button
+              aria-expanded={historyOpen}
+              aria-label="打开历史"
+              onClick={() => {
+                setConversationActionsOpen(false);
+                void generation.refresh().catch(() => {
+                  setError("生成历史暂时无法刷新");
+                });
+                setHistoryOpen(true);
+              }}
+              title="历史"
+              type="button"
+            >
+              <HistoryIcon />
+            </button>
+            <button
               aria-label="新建会话"
+              disabled={sending || conversationMutating}
               onClick={() => void newConversation()}
               title="新建会话"
               type="button"
@@ -494,9 +730,11 @@ export function BoardAgentPanel({
             <button
               aria-expanded={conversationActionsOpen}
               aria-label="管理当前会话"
+              disabled={sending || conversationMutating}
               onClick={() => {
                 setConversationActionsOpen((current) => !current);
                 setEditingTitle(false);
+                setConfirmingArchive(false);
                 setTitleDraft(activeConversation?.title ?? "");
               }}
               title="管理会话"
@@ -552,309 +790,366 @@ export function BoardAgentPanel({
                   重命名会话
                 </button>
                 <button
-                  disabled={conversationMutating}
-                  onClick={() => void archiveConversation()}
+                  disabled={sending || conversationMutating}
+                  onClick={() => {
+                    if (!confirmingArchive) {
+                      setConfirmingArchive(true);
+                      return;
+                    }
+                    void archiveConversation();
+                  }}
                   type="button"
                 >
-                  {conversationMutating ? "归档中…" : "归档会话"}
+                  {conversationMutating
+                    ? "归档中…"
+                    : confirmingArchive
+                      ? "再次点击确认归档"
+                      : "归档会话"}
                 </button>
               </>
             )}
           </section>
         ) : null}
 
-        {conversations.length > 1 ? (
-          <label className={styles.historySelect}>
-            <span>会话历史</span>
-            <select
-              aria-label="切换 Agent 会话"
-              onChange={(event) => {
-                setLoading(true);
-                setMessages([]);
-                setMessageCursor(null);
-                setConversationActionsOpen(false);
-                setActiveConversationId(event.target.value);
-              }}
-              value={activeConversationId}
-            >
-              {conversations.map((conversation) => (
-                <option key={conversation.id} value={conversation.id}>
-                  {conversation.title}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        <div className={styles.timeline} ref={timelineRef}>
-          {messageCursor ? (
-            <button
-              className={styles.loadOlder}
-              disabled={loadingOlder}
-              onClick={() => void loadOlderMessages()}
-              type="button"
-            >
-              {loadingOlder ? "正在读取…" : "载入更早消息"}
-            </button>
-          ) : null}
-          {loading && messages.length === 0 ? (
-            <div className={styles.loadingState}>
-              <i />
-              <span>正在恢复项目会话</span>
-            </div>
-          ) : error && messages.length === 0 ? (
-            <section className={styles.loadError} role="alert">
-              <strong>项目会话暂时无法恢复</strong>
-              <p>{error}</p>
+        {historyOpen ? (
+          <section className={styles.historyPanel} aria-label="历史记录">
+            <header className={styles.historyHeader}>
               <button
-                onClick={() => {
-                  if (activeConversationId) {
-                    setLoading(true);
-                    setError(null);
-                    setMessageRevision((current) => current + 1);
-                    return;
-                  }
-                  setHydrateRevision((current) => current + 1);
-                }}
+                aria-label="返回对话"
+                onClick={() => setHistoryOpen(false)}
                 type="button"
               >
-                重新连接
+                <BackIcon />
               </button>
-            </section>
-          ) : messages.length === 0 ? (
-            <section className={styles.welcome}>
-              <span>START WITH A DIRECTION</span>
-              <h2>从一条设计想法开始</h2>
-              <p>
-                描述服装方向，或先在白板上选中参考素材。Agent
-                会判断是继续讨论，还是创建生成任务。
-              </p>
-              <div>
-                <button
-                  onClick={() =>
-                    setPrompt("基于选中的参考，提出三个可执行的设计方向")
-                  }
-                  type="button"
-                >
-                  提炼设计方向
-                </button>
-                <button
-                  onClick={() =>
-                    setPrompt("生成一版强调面料质感的完整成衣效果图")
-                  }
-                  type="button"
-                >
-                  生成成衣方案
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          {messages.map((message) => {
-            const task = message.generationTaskId
-              ? taskById.get(message.generationTaskId)
-              : undefined;
-            const repliedUser = message.replyToId
-              ? messages.find((item) => item.id === message.replyToId)
-              : undefined;
-            return (
-              <article
-                className={styles.message}
-                data-role={message.role}
-                key={message.id}
+              <strong>历史</strong>
+            </header>
+            <div
+              className={styles.historyTabs}
+              role="tablist"
+              aria-label="历史类型"
+            >
+              <button
+                aria-selected={historyTab === "conversations"}
+                onClick={() => setHistoryTab("conversations")}
+                role="tab"
+                type="button"
               >
-                <div className={styles.messageMeta}>
-                  <span>{message.role === "user" ? "你" : "设计助手"}</span>
-                  <time dateTime={message.createdAt}>
-                    {formatTime(message.createdAt)}
-                  </time>
-                </div>
-                <p>{message.content}</p>
-                {message.context?.shapeIds.length ? (
-                  <small>
-                    {message.context.shapeIds.length} 个白板元素作为上下文
-                  </small>
-                ) : null}
-                {message.status === "pending" ? (
-                  <div className={styles.agentProgress} role="status">
-                    <i />
-                    理解需求
-                  </div>
-                ) : null}
-                {task ? (
-                  <div className={styles.taskCard} data-status={task.status}>
-                    <div>
-                      <span>{STATUS_LABELS[task.status] ?? task.status}</span>
-                      <small>
-                        {task.connection === "sse"
-                          ? "实时更新"
-                          : "实时连接中断 · 轮询同步"}
-                      </small>
-                    </div>
-                    {!TERMINAL_TASKS.has(task.status) ? (
-                      <button
-                        onClick={() => void generation.cancel(task.id)}
-                        type="button"
-                      >
-                        停止
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {message.status === "failed" && repliedUser ? (
+                对话
+              </button>
+              <button
+                aria-selected={historyTab === "generations"}
+                onClick={() => setHistoryTab("generations")}
+                role="tab"
+                type="button"
+              >
+                生成
+              </button>
+            </div>
+            {historyTab === "conversations" ? (
+              <div className={styles.conversationHistory} role="tabpanel">
+                {conversations.map((conversation) => (
                   <button
-                    className={styles.retryButton}
-                    disabled={sending || !repliedUser.clientRequestId}
-                    onClick={() =>
-                      repliedUser.clientRequestId
-                        ? void submit(
-                            repliedUser.content,
-                            repliedUser.context?.shapeIds ?? [],
-                            {
-                              assistantMessageId: message.id,
-                              clientRequestId: repliedUser.clientRequestId,
-                              userMessageId: repliedUser.id,
-                            },
-                          )
+                    aria-current={
+                      conversation.id === activeConversationId
+                        ? "page"
                         : undefined
                     }
+                    disabled={sending}
+                    key={conversation.id}
+                    onClick={() => {
+                      if (conversation.id !== activeConversationId) {
+                        setLoading(true);
+                        setMessages([]);
+                        setMessageCursor(null);
+                        setLoadError(null);
+                        setActiveConversationId(conversation.id);
+                      }
+                      setHistoryOpen(false);
+                    }}
                     type="button"
                   >
-                    重试本次请求
-                  </button>
-                ) : null}
-              </article>
-            );
-          })}
-          {projectTasks.length > 0 ? (
-            <section className={styles.projectTasks} aria-label="项目生成记录">
-              <header>
-                <span>PROJECT GENERATIONS</span>
-                <strong>生成记录</strong>
-              </header>
-              {projectTasks.map((task) => (
-                <div
-                  className={styles.taskCard}
-                  data-status={task.status}
-                  key={task.id}
-                >
-                  <div>
-                    <span>{STATUS_LABELS[task.status] ?? task.status}</span>
-                    <small>
-                      {task.connection === "sse"
-                        ? "实时更新"
-                        : "实时连接中断 · 轮询同步"}
-                    </small>
-                  </div>
-                  {!TERMINAL_TASKS.has(task.status) ? (
-                    <button
-                      onClick={() => void generation.cancel(task.id)}
-                      type="button"
-                    >
-                      停止
-                    </button>
-                  ) : task.status === "failed" ||
-                    task.status === "moderation_failed" ? (
-                    <button
-                      onClick={() => void generation.retry(task.id)}
-                      type="button"
-                    >
-                      重试
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </section>
-          ) : null}
-          <div className={styles.results}>
-            <CandidateGrid />
-          </div>
-          <div ref={endRef} />
-        </div>
-
-        <div className={styles.composerDock}>
-          {contextItems.length > 0 ? (
-            <div className={styles.contextStrip} aria-label="发送上下文">
-              <span>画布上下文</span>
-              <div>
-                {contextItems.map((item) => (
-                  <button
-                    aria-label={`移除 ${item.label}`}
-                    key={item.id}
-                    onClick={() =>
-                      setContextOverride((current) => ({
-                        excludedIds:
-                          current.selectionKey === selectionKey
-                            ? [...current.excludedIds, item.id]
-                            : [item.id],
-                        selectionKey,
-                      }))
-                    }
-                    title="点击移除"
-                    type="button"
-                  >
-                    {item.label}
-                    <b aria-hidden="true">×</b>
+                    <span>{conversation.title}</span>
+                    <time dateTime={conversation.updatedAt}>
+                      {formatDate(conversation.updatedAt)}
+                    </time>
                   </button>
                 ))}
               </div>
+            ) : (
+              <div className={styles.generationHistory} role="tabpanel">
+                {generation.tasks.length === 0 ? (
+                  <p>暂无生成记录</p>
+                ) : (
+                  generation.tasks.map((task) => (
+                    <article key={task.id}>
+                      <div>
+                        <span>{STATUS_LABELS[task.status] ?? task.status}</span>
+                        <time dateTime={task.createdAt}>
+                          {formatDate(task.createdAt)}
+                        </time>
+                      </div>
+                      <p>{task.prompt}</p>
+                    </article>
+                  ))
+                )}
+                {allCandidateCount > 0 ? (
+                  <div className={styles.historyCandidates}>
+                    <CandidateGrid
+                      onTaskCreated={attachInpaintTask}
+                      showHeader={false}
+                      variant="history"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </section>
+        ) : (
+          <>
+            <div className={styles.timeline} ref={timelineRef}>
+              {messageCursor ? (
+                <button
+                  className={styles.loadOlder}
+                  disabled={loadingOlder}
+                  onClick={() => void loadOlderMessages()}
+                  type="button"
+                >
+                  {loadingOlder ? "正在读取…" : "载入更早消息"}
+                </button>
+              ) : null}
+              {loading && messages.length === 0 ? (
+                <div className={styles.loadingState}>
+                  <i />
+                  <span>正在恢复项目会话</span>
+                </div>
+              ) : loadError && messages.length === 0 ? (
+                <section className={styles.loadError} role="alert">
+                  <strong>项目会话暂时无法恢复</strong>
+                  <p>{loadError}</p>
+                  <button
+                    onClick={() => {
+                      if (activeConversationId) {
+                        setLoading(true);
+                        setLoadError(null);
+                        setMessageRevision((current) => current + 1);
+                        return;
+                      }
+                      setHydrateRevision((current) => current + 1);
+                    }}
+                    type="button"
+                  >
+                    重新连接
+                  </button>
+                </section>
+              ) : messages.length === 0 ? (
+                <section className={styles.welcome}>
+                  <span>START WITH A DIRECTION</span>
+                  <h2>从一条设计想法开始</h2>
+                  <p>
+                    描述服装方向，或先在白板上选中参考素材。Agent
+                    会判断是继续讨论，还是创建生成任务。
+                  </p>
+                  <div>
+                    <button
+                      onClick={() =>
+                        setPrompt("基于选中的参考，提出三个可执行的设计方向")
+                      }
+                      type="button"
+                    >
+                      提炼设计方向
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPrompt("生成一版强调面料质感的完整成衣效果图")
+                      }
+                      type="button"
+                    >
+                      生成成衣方案
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
+              {messages.map((message) => {
+                const task = message.generationTaskId
+                  ? taskById.get(message.generationTaskId)
+                  : undefined;
+                const repliedUser = message.replyToId
+                  ? messages.find((item) => item.id === message.replyToId)
+                  : undefined;
+                return (
+                  <article
+                    className={styles.message}
+                    data-role={message.role}
+                    key={message.id}
+                  >
+                    <div className={styles.messageMeta}>
+                      <span>{message.role === "user" ? "你" : "设计助手"}</span>
+                      <time dateTime={message.createdAt}>
+                        {formatTime(message.createdAt)}
+                      </time>
+                    </div>
+                    <div className={styles.messageContent}>
+                      {message.role === "assistant" ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                          {message.content}
+                        </ReactMarkdown>
+                      ) : (
+                        <p>{message.content}</p>
+                      )}
+                    </div>
+                    {message.context?.shapeIds.length ? (
+                      <small>
+                        {message.context.shapeIds.length} 个白板元素作为上下文
+                      </small>
+                    ) : null}
+                    {message.status === "pending" ? (
+                      <div className={styles.agentProgress} role="status">
+                        <i />
+                        理解需求
+                      </div>
+                    ) : null}
+                    {task ? (
+                      <div className={styles.taskResult}>
+                        {task.status !== "succeeded" ? (
+                          <div
+                            className={styles.taskCard}
+                            data-status={task.status}
+                          >
+                            <div>
+                              <span>
+                                {task.error ??
+                                  STATUS_LABELS[task.status] ??
+                                  task.status}
+                              </span>
+                              {task.connection === "polling" &&
+                              !TERMINAL_TASKS.has(task.status) ? (
+                                <small>连接中断，正在同步状态</small>
+                              ) : null}
+                            </div>
+                            {!TERMINAL_TASKS.has(task.status) ? (
+                              <button
+                                onClick={() => void generation.cancel(task.id)}
+                                type="button"
+                              >
+                                停止
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => void generation.retry(task.id)}
+                                type="button"
+                              >
+                                重试
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
+                        <CandidateGrid
+                          onTaskCreated={attachInpaintTask}
+                          showHeader={false}
+                          taskId={task.id}
+                          variant="conversation"
+                        />
+                      </div>
+                    ) : null}
+                    {message.status === "failed" && repliedUser ? (
+                      <button
+                        className={styles.retryButton}
+                        disabled={sending || !repliedUser.clientRequestId}
+                        onClick={() =>
+                          repliedUser.clientRequestId
+                            ? void submit(
+                                repliedUser.content,
+                                repliedUser.context?.shapeIds ?? [],
+                                {
+                                  assistantMessageId: message.id,
+                                  clientRequestId: repliedUser.clientRequestId,
+                                  userMessageId: repliedUser.id,
+                                },
+                              )
+                            : undefined
+                        }
+                        type="button"
+                      >
+                        重试本次请求
+                      </button>
+                    ) : null}
+                  </article>
+                );
+              })}
+              <div ref={endRef} />
             </div>
-          ) : null}
-          <label className={styles.composer}>
-            <span>告诉 Agent 你想完成什么</span>
-            <textarea
-              disabled={sending || !activeConversationId}
-              maxLength={4_000}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  void submit(
-                    prompt,
-                    contextItems.map((item) => item.id),
-                  );
-                }
-              }}
-              placeholder="例如：保留廓形，把面料改成轻薄防水材质…"
-              rows={3}
-              value={prompt}
-            />
-          </label>
-          {error ? (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
-          ) : null}
-          <div className={styles.composerFooter}>
-            <span>
-              {contextItems.length > 0
-                ? contextReady
-                  ? `${contextItems.length} 项参考`
-                  : `${contextItems.length} 项参考 · 保存中`
-                : "未附加画布内容"}
-              {prompt.length > 0 ? ` · ${prompt.length}/4000` : ""}
-            </span>
-            <button
-              disabled={
-                sending || prompt.trim().length === 0 || !contextReady
-              }
-              onClick={() =>
-                void submit(
-                  prompt,
-                  contextItems.map((item) => item.id),
-                )
-              }
-              type="button"
-            >
-              {sending ? "处理中…" : "发送"}
-              <SendIcon />
-            </button>
-          </div>
-        </div>
+
+            <div className={styles.composerDock}>
+              <div className={styles.composerSurface}>
+                {contextItems.length > 0 ? (
+                  <SelectedElementBar
+                    items={contextItems}
+                    onRemove={(id) =>
+                      setDraftShapeIds((current) =>
+                        current.filter((shapeId) => shapeId !== id),
+                      )
+                    }
+                  />
+                ) : null}
+                <label className={styles.composer}>
+                  <span className={styles.srOnly}>编辑描述</span>
+                  <textarea
+                    ref={composerInputRef}
+                    aria-label="编辑描述"
+                    disabled={sending || !activeConversationId}
+                    maxLength={MAX_AGENT_MESSAGE_LENGTH}
+                    onChange={(event) => {
+                      setPrompt(event.target.value);
+                      event.target.style.height = "44px";
+                      event.target.style.height = `${Math.min(
+                        132,
+                        Math.max(44, event.target.scrollHeight),
+                      )}px`;
+                      if (error) setError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        !event.nativeEvent.isComposing
+                      ) {
+                        event.preventDefault();
+                        void submit(
+                          prompt,
+                          contextItems.map((item) => item.id),
+                        );
+                      }
+                    }}
+                    placeholder="描述你想如何调整这张图…"
+                    rows={1}
+                    value={prompt}
+                  />
+                </label>
+                <button
+                  aria-label={sending ? "正在处理" : "发送"}
+                  className={styles.sendButton}
+                  disabled={sendUnavailableReason !== null}
+                  onClick={() =>
+                    void submit(
+                      prompt,
+                      contextItems.map((item) => item.id),
+                    )
+                  }
+                  title={sendUnavailableReason ?? "发送"}
+                  type="button"
+                >
+                  {sending ? <i aria-hidden="true" /> : <SendIcon />}
+                </button>
+              </div>
+              {error ? (
+                <p className={styles.error} role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          </>
+        )}
       </aside>
     </>
   );
@@ -883,6 +1178,450 @@ function optimisticMessage(input: {
     status: input.status,
     updatedAt: input.timestamp,
   };
+}
+
+interface DraftAttachment {
+  readonly colors: readonly string[];
+  readonly dimensions: string | null;
+  readonly id: TLShapeId;
+  readonly kind: string;
+  readonly label: string;
+  readonly previewUrl: string | null;
+  readonly role: string;
+  readonly sourceName: string | null;
+  readonly summary: string | null;
+}
+
+const ROLE_ASSIGNABLE_ATTACHMENT_TYPES = new Set([
+  "fashion-fabric",
+  "fashion-image",
+  "fashion-note",
+  "fashion-swatch",
+]);
+
+function attachmentFromShape(shape: TLShape): DraftAttachment {
+  const props = shape.props as Record<string, unknown>;
+  const colors = attachmentPaletteColors(props);
+  const previewUrl = [props.thumbnailUrl, props.url].find(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
+  const kindLabels: Readonly<Record<string, string>> = {
+    "fashion-fabric": "面料",
+    "fashion-frame": "框",
+    "fashion-note": "便签",
+    "fashion-swatch": "色卡",
+    arrow: "连接",
+    draw: "线稿",
+    frame: "框",
+    geo: "图形",
+    note: "便签",
+    text: "文字",
+  };
+  const width = typeof props.w === "number" ? Math.round(props.w) : null;
+  const height = typeof props.h === "number" ? Math.round(props.h) : null;
+  const label = boardElementLabel(shape, props);
+  const sourceName = shapeSourceName(props);
+  return {
+    colors,
+    dimensions: width && height ? `${width} × ${height}` : null,
+    id: shape.id,
+    kind: isImageShape(shape) ? "图片" : (kindLabels[shape.type] ?? "参考"),
+    label,
+    previewUrl: previewUrl ?? null,
+    role: attachmentRoleLabel(shape.type, props),
+    sourceName: sourceName && sourceName !== label ? sourceName : null,
+    summary:
+      colors.length > 1
+        ? `${colors.length} 色 · ${colors.map((color) => color.toUpperCase()).join(" · ")}`
+        : attachmentSummary(props),
+  };
+}
+
+function SelectedElementBar({
+  items,
+  onRemove,
+}: {
+  readonly items: readonly DraftAttachment[];
+  readonly onRemove: (id: TLShapeId) => void;
+}) {
+  const [activeId, setActiveId] = useState<TLShapeId | null>(null);
+  const [activeAnchor, setActiveAnchor] = useState<HTMLButtonElement | null>(
+    null,
+  );
+  const [pinnedId, setPinnedId] = useState<TLShapeId | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const triggerRefs = useRef(new Map<TLShapeId, HTMLButtonElement>());
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousIdsRef = useRef<readonly TLShapeId[]>([]);
+  const activeItem = items.find((item) => item.id === activeId) ?? null;
+
+  const clearTimers = useCallback((): void => {
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    openTimerRef.current = null;
+    closeTimerRef.current = null;
+  }, []);
+
+  const closePreview = useCallback((): void => {
+    clearTimers();
+    setActiveId(null);
+    setActiveAnchor(null);
+    setPinnedId(null);
+  }, [clearTimers]);
+
+  const openPreview = useCallback(
+    (id: TLShapeId, delay = 140): void => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (openTimerRef.current) clearTimeout(openTimerRef.current);
+      if (activeId === id) return;
+      openTimerRef.current = setTimeout(() => {
+        setActiveAnchor(triggerRefs.current.get(id) ?? null);
+        setActiveId(id);
+        openTimerRef.current = null;
+      }, delay);
+    },
+    [activeId],
+  );
+
+  const scheduleClose = useCallback((): void => {
+    if (pinnedId) return;
+    if (openTimerRef.current) clearTimeout(openTimerRef.current);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      setActiveId(null);
+      setActiveAnchor(null);
+      closeTimerRef.current = null;
+    }, 100);
+  }, [pinnedId]);
+
+  useEffect(() => clearTimers, [clearTimers]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const handlePointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (activeAnchor?.contains(target)) return;
+      if (document.getElementById("selected-element-preview")?.contains(target))
+        return;
+      closePreview();
+    };
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closePreview();
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [activeAnchor, activeId, closePreview]);
+
+  useLayoutEffect(() => {
+    const nextIds = items.map((item) => item.id);
+    const previousIds = previousIdsRef.current;
+    const added = nextIds.some((id) => !previousIds.includes(id));
+    previousIdsRef.current = nextIds;
+    if (!added || !rowRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = rowRef.current;
+      if (!row) return;
+      row.scrollTo({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        top: row.scrollHeight,
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [items]);
+
+  return (
+    <>
+      <div
+        aria-label="已附加内容"
+        className={styles.attachmentRow}
+        ref={rowRef}
+        role="list"
+      >
+        {items.map((item) => {
+          const isActive = activeId === item.id;
+          const isPinned = pinnedId === item.id;
+          return (
+            <div
+              className={styles.attachment}
+              data-kind={item.kind}
+              key={item.id}
+              onPointerEnter={() => openPreview(item.id)}
+              onPointerLeave={scheduleClose}
+              role="listitem"
+            >
+              <span aria-hidden="true" className={styles.attachmentMarker} />
+              <button
+                aria-describedby={
+                  isActive ? "selected-element-preview" : undefined
+                }
+                aria-label={`${item.label}，${item.role}`}
+                aria-pressed={isPinned}
+                className={styles.attachmentTrigger}
+                onBlur={scheduleClose}
+                onClick={() => {
+                  clearTimers();
+                  if (isPinned) {
+                    closePreview();
+                    return;
+                  }
+                  setActiveAnchor(triggerRefs.current.get(item.id) ?? null);
+                  setActiveId(item.id);
+                  setPinnedId(item.id);
+                }}
+                onFocus={() => openPreview(item.id, 0)}
+                ref={(node) => {
+                  if (node) triggerRefs.current.set(item.id, node);
+                  else triggerRefs.current.delete(item.id);
+                }}
+                title={item.label}
+                type="button"
+              >
+                <span>{item.label}</span>
+              </button>
+              <button
+                aria-label={`移除 ${item.label}（素材）`}
+                className={styles.attachmentRemove}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (isActive) closePreview();
+                  onRemove(item.id);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                title={`移除 ${item.label}`}
+                type="button"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {activeItem && activeAnchor ? (
+        <ElementPreviewPopover
+          anchor={activeAnchor}
+          item={activeItem}
+          key={`${activeItem.id}:${activeItem.previewUrl ?? "fallback"}`}
+          onPointerEnter={clearTimers}
+          onPointerLeave={scheduleClose}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function ElementPreviewPopover({
+  anchor,
+  item,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  readonly anchor: HTMLElement;
+  readonly item: DraftAttachment;
+  readonly onPointerEnter: () => void;
+  readonly onPointerLeave: () => void;
+}) {
+  const popoverRef = useRef<HTMLElement | null>(null);
+  const [imageState, setImageState] = useState<"error" | "loaded" | "loading">(
+    "loading",
+  );
+  const [position, setPosition] = useState({ left: 8, top: 8, visible: false });
+
+  useLayoutEffect(() => {
+    const updatePosition = (): void => {
+      const popover = popoverRef.current;
+      if (!popover || !anchor.isConnected) return;
+      const margin = 8;
+      const gap = 8;
+      const anchorRect = anchor.getBoundingClientRect();
+      const popoverRect = popover.getBoundingClientRect();
+      const left = Math.min(
+        window.innerWidth - popoverRect.width - margin,
+        Math.max(
+          margin,
+          anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2,
+        ),
+      );
+      const fitsAbove = anchorRect.top - popoverRect.height - gap >= margin;
+      const preferredTop = fitsAbove
+        ? anchorRect.top - popoverRect.height - gap
+        : anchorRect.bottom + gap;
+      const top = Math.min(
+        window.innerHeight - popoverRect.height - margin,
+        Math.max(margin, preferredTop),
+      );
+      setPosition({ left, top, visible: true });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchor, item.id]);
+
+  return createPortal(
+    <aside
+      className={styles.attachmentPreview}
+      id="selected-element-preview"
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      ref={popoverRef}
+      role="tooltip"
+      style={{
+        left: position.left,
+        opacity: position.visible ? 1 : 0,
+        top: position.top,
+      }}
+    >
+      <div className={styles.previewVisual} data-state={imageState}>
+        {item.previewUrl ? (
+          <>
+            <div aria-hidden="true" className={styles.previewPlaceholder}>
+              <span>
+                {imageState === "error" ? "预览不可用" : "正在加载预览"}
+              </span>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt={item.label}
+              onError={() => setImageState("error")}
+              onLoad={() => setImageState("loaded")}
+              src={item.previewUrl}
+            />
+          </>
+        ) : (
+          <div className={styles.previewFallback}>
+            {item.colors.length > 0 ? (
+              <div
+                aria-label={`色板，${item.colors.length} 种颜色`}
+                className={styles.previewPalette}
+              >
+                {item.colors.map((color) => (
+                  <i
+                    aria-hidden="true"
+                    key={color}
+                    style={{ backgroundColor: color }}
+                    title={color.toUpperCase()}
+                  />
+                ))}
+              </div>
+            ) : (
+              <strong aria-hidden="true">{item.kind.slice(0, 1)}</strong>
+            )}
+            {item.summary ? <span>{item.summary}</span> : null}
+          </div>
+        )}
+      </div>
+      <div className={styles.previewMeta}>
+        <strong>{item.label}</strong>
+        <span>
+          {item.role}
+          {item.dimensions ? ` · ${item.dimensions}` : ""}
+        </span>
+        {item.sourceName ? <small>源文件 · {item.sourceName}</small> : null}
+      </div>
+    </aside>,
+    document.body,
+  );
+}
+
+function boardElementLabel(
+  shape: TLShape,
+  props: Readonly<Record<string, unknown>>,
+): string {
+  const role = typeof props.role === "string" ? props.role : "";
+  if (ROLE_ASSIGNABLE_ATTACHMENT_TYPES.has(shape.type) && role) {
+    const customLabel =
+      shape.type === "fashion-image" && role === "note"
+        ? stringProp(props.roleLabel)
+        : undefined;
+    return resolveRoleBadgeLabel(role, customLabel);
+  }
+  if (isImageShape(shape)) return "图片";
+  return shapeLabel(shape.type, shape.props);
+}
+
+function shapeSourceName(
+  props: Readonly<Record<string, unknown>>,
+): string | null {
+  return stringProp(props.title) ?? stringProp(props.fabricName) ?? null;
+}
+
+function stringProp(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function attachmentPaletteColors(
+  props: Readonly<Record<string, unknown>>,
+): readonly string[] {
+  const stored = Array.isArray(props.colors) ? props.colors : [];
+  const colors = stored.flatMap((entry) => {
+    if (!entry || Array.isArray(entry) || typeof entry !== "object") return [];
+    const color = (entry as Record<string, unknown>).color;
+    return typeof color === "string" && /^#[\da-f]{6}$/iu.test(color)
+      ? [color.toLowerCase()]
+      : [];
+  });
+
+  if (colors.length > 0) return [...new Set(colors)];
+  return typeof props.color === "string" && /^#[\da-f]{6}$/iu.test(props.color)
+    ? [props.color.toLowerCase()]
+    : [];
+}
+
+function attachmentRoleLabel(
+  type: string,
+  props: Readonly<Record<string, unknown>>,
+): string {
+  const roleLabels: Readonly<Record<string, string>> = {
+    avoid: "避用参考",
+    detail_ref: "服装细节",
+    fabric_ref: "面料",
+    garment_ref: "成衣",
+    note: "设计备注",
+    palette: "色彩",
+    reference_garment: "参考衣",
+    silhouette_ref: "服装廓形",
+    style_ref: "参考图",
+  };
+  const role = typeof props.role === "string" ? props.role : "";
+  if (roleLabels[role]) return roleLabels[role];
+  const typeLabels: Readonly<Record<string, string>> = {
+    "fashion-fabric": "面料",
+    "fashion-note": "白板便签",
+    "fashion-swatch": "色彩",
+    draw: "白板线稿",
+    geo: "白板图形",
+    image: "参考图",
+    text: "白板文字",
+  };
+  return typeLabels[type] ?? "白板元素";
+}
+
+function attachmentSummary(
+  props: Readonly<Record<string, unknown>>,
+): string | null {
+  const summary = [props.text, props.fabricName, props.label].find(
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+  );
+  return summary?.trim().slice(0, 120) ?? null;
+}
+
+function isImageShape(shape: TLShape): boolean {
+  return shape.type === "fashion-image" || shape.type === "image";
 }
 
 function shapeLabel(type: string, props: unknown): string {
@@ -920,6 +1659,15 @@ function formatTime(value: string): string {
   }).format(date);
 }
 
+function formatDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 function AgentMark() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -950,6 +1698,31 @@ function MoreIcon() {
       <circle cx="5" cy="10" r="1" fill="currentColor" stroke="none" />
       <circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" />
       <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <path d="M4.5 6.5V3.8m0 0h2.7m-2.7 0A7 7 0 1 1 3 12" />
+      <path d="M10 6v4.4l2.8 1.6" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <path d="m12.5 4.5-5.5 5.5 5.5 5.5" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20">
+      <path d="m6 6 8 8M14 6l-8 8" />
     </svg>
   );
 }

@@ -77,6 +77,24 @@ describe("filterFabrics", () => {
       }),
     ).toEqual([]);
   });
+
+  it("规范英文筛选值可以匹配用户录入的中文成分键", () => {
+    const blend = fabric("blend", {
+      attributes: {
+        composition: { 棉: 60, 聚酯纤维: 40 },
+        weight: 180,
+      },
+      category: "blend",
+    });
+
+    expect(
+      filterFabrics([blend], {
+        composition: "polyester",
+        season: "all",
+        weight: "medium",
+      }).map((item) => item.id),
+    ).toEqual(["blend"]);
+  });
 });
 
 describe("fabric upload", () => {
@@ -102,6 +120,30 @@ describe("fabric upload", () => {
       weight: 180,
       weave: "plain",
     });
+  });
+
+  it("混纺按多种纤维占比建模且总和必须为 100", () => {
+    const input = {
+      category: "blend" as const,
+      composition: { 棉: 60, 聚酯纤维: 35, 氨纶: 5 },
+      compositionName: "棉",
+      file: image,
+      name: "弹力棉混纺",
+      weight: 210,
+      weave: "twill" as const,
+    };
+
+    expect(validateFabricUpload(input)).toBeNull();
+    const formData = buildFabricUploadFormData(input);
+    expect(JSON.parse(String(formData.get("attributes")))).toMatchObject({
+      composition: { 棉: 60, 聚酯纤维: 35, 氨纶: 5 },
+    });
+    expect(
+      validateFabricUpload({
+        ...input,
+        composition: { 棉: 60, 聚酯纤维: 30 },
+      }),
+    ).toBe("成分占比总和必须等于 100%");
   });
 
   it("在请求前拒绝缺失图片和无效文件类型", () => {

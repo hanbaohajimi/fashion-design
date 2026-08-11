@@ -433,9 +433,98 @@ describe("GenerationService", () => {
       database.generationTask.create.mock.calls.at(0)?.[0].data;
     expect(createData.input).toMatchObject({
       referenceImageUrl: "https://signed.test/fabric.png",
+      referenceImages: [
+        {
+          order: 0,
+          role: "fabric_texture",
+          url: "https://signed.test/fabric.png",
+          weight: 0.7,
+        },
+      ],
       strength: 0.7,
       taskType: "t2i",
     });
+  });
+
+  it("保留多标签参考图的角色、权重和稳定顺序并让细节参考参与 Provider", async () => {
+    compiler.compile.mockResolvedValueOnce({
+      avoidLabels: [],
+      detailReferences: [
+        {
+          elementId: "detail-1",
+          imageUrl: "https://signed.test/detail.png",
+          labels: ["bound seam"],
+        },
+      ],
+      enhancement: "keywords",
+      fabricInputs: [],
+      fabricReferences: [
+        {
+          elementId: "fabric-1",
+          fabricId: "fabric-1",
+          imageUrl: "https://signed.test/fabric.png",
+          labels: ["silk"],
+          role: "fabric_texture",
+          weight: 0.7,
+        },
+      ],
+      mode: "board_guided",
+      negativePrompt: "watermark",
+      notes: [],
+      palette: [],
+      paletteReferences: [],
+      patternReferences: [],
+      positivePrompt: "silk dress with bound seam",
+      silhouetteReferences: [
+        {
+          edgeImageUrl: "https://signed.test/silhouette.png",
+          elementId: "silhouette-1",
+        },
+      ],
+      styleReferences: [
+        {
+          elementId: "style-1",
+          imageUrl: "https://signed.test/style.png",
+          labels: [],
+        },
+      ],
+      version: 1,
+    });
+
+    await service.create("user-1", {
+      ...request,
+      projectId: "project-1",
+      shapeIds: ["style-1", "fabric-1", "silhouette-1", "detail-1"],
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.referenceImages).toEqual([
+      {
+        order: 0,
+        role: "style_ref",
+        url: "https://signed.test/style.png",
+        weight: 0.72,
+      },
+      {
+        order: 1,
+        role: "fabric_texture",
+        url: "https://signed.test/fabric.png",
+        weight: 0.7,
+      },
+      {
+        order: 2,
+        role: "detail_ref",
+        url: "https://signed.test/detail.png",
+        weight: 0.65,
+      },
+      {
+        order: 3,
+        role: "silhouette_ref",
+        url: "https://signed.test/silhouette.png",
+        weight: 0.55,
+      },
+    ]);
   });
 
   it("变体任务校验父资产归属并保存 parentAssetId", async () => {
@@ -460,6 +549,63 @@ describe("GenerationService", () => {
         }),
       }),
     );
+  });
+
+  it("持久化候选采纳状态并保留生成结果", async () => {
+    const images = [
+      { assetId: "asset-1", url: "/api/design-assets/asset-1/content" },
+    ];
+    const existing = taskRecord({
+      output: {
+        images,
+        seed: 7,
+      },
+      status: GenerationTaskStatus.SUCCEEDED,
+    });
+    database.generationTask.findFirst.mockResolvedValue(existing);
+    database.generationTask.update.mockResolvedValue({
+      ...existing,
+      output: {
+        candidateDispositions: { "0": "adopted" },
+        images,
+        seed: 7,
+      },
+    });
+
+    const result = await service.setCandidateDisposition(
+      "user-1",
+      "task-1",
+      0,
+      "adopted",
+    );
+
+    expect(database.generationTask.update).toHaveBeenCalledWith({
+      data: {
+        output: {
+          candidateDispositions: { "0": "adopted" },
+          images,
+          seed: 7,
+        },
+      },
+      where: { id: "task-1" },
+    });
+    expect(result.output).toMatchObject({
+      candidateDispositions: { "0": "adopted" },
+    });
+  });
+
+  it("拒绝处置不存在的候选序号", async () => {
+    database.generationTask.findFirst.mockResolvedValue(
+      taskRecord({
+        output: { images: [{ assetId: "asset-1", url: "https://cdn.test/1" }] },
+        status: GenerationTaskStatus.SUCCEEDED,
+      }),
+    );
+
+    await expect(
+      service.setCandidateDisposition("user-1", "task-1", 2, "dismissed"),
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    expect(database.generationTask.update).not.toHaveBeenCalled();
   });
 
   it("相同幂等键命中 queued 任务时补投队列且不重复检查额度", async () => {
@@ -544,6 +690,35 @@ describe("GenerationService", () => {
       response: { code: "IDEMPOTENCY_KEY_REUSED" },
       status: HttpStatus.CONFLICT,
     });
+  });
+
+  it("系列任务最终请求保留原始变化轴硬约束", async () => {
+    compiler.compile.mockResolvedValue({
+      enhancement: "llm",
+      mode: "text_only",
+      negativePrompt: "watermark",
+      positivePrompt: "normalized fashion collection prompt",
+      version: 1,
+    });
+
+    await service.createForCollection(
+      "user-1",
+      {
+        ...request,
+        prompt: "本次变化轴：fabric。必须替换面料，不得沿用 Hero 的原面料。",
+      },
+      {
+        collectionId: "collection-1",
+        variationAxis: "FABRIC",
+      },
+      "collection-axis-prompt",
+    );
+
+    const input = database.generationTask.create.mock.calls.at(0)?.[0].data
+      .input as { readonly prompt: string } | undefined;
+    expect(input?.prompt).toContain("normalized fashion collection prompt");
+    expect(input?.prompt).toContain("系列变化硬约束（必须逐条执行）");
+    expect(input?.prompt).toContain("必须替换面料，不得沿用 Hero 的原面料");
   });
 
   it("入队响应丢失时保留 queued，并允许同幂等键补投", async () => {

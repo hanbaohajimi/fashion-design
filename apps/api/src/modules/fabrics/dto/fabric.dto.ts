@@ -94,8 +94,12 @@ export const updateFabricSchema = z
 
 export const listFabricsSchema = z.object({
   category: fabricCategorySchema.optional(),
+  composition: z.string().trim().min(1).max(50).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(24),
+  maxWeight: z.coerce.number().finite().positive().max(2_000).optional(),
+  minWeight: z.coerce.number().finite().nonnegative().max(2_000).optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
+  season: z.enum(["spring", "summer", "autumn", "winter"]).optional(),
   scope: z.enum(["all", "preset", "user"]).default("all"),
   search: z.string().trim().max(120).default(""),
 });

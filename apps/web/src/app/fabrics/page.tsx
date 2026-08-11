@@ -72,10 +72,21 @@ export default function FabricsPage() {
   const [weight, setWeight] = useState<FabricWeightFilter>("all");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const weightRange =
+    weight === "light"
+      ? { maxWeight: 99.999 }
+      : weight === "medium"
+        ? { maxWeight: 200, minWeight: 100 }
+        : weight === "heavy"
+          ? { minWeight: 200.001 }
+          : {};
   const fabrics = useFabrics({
     category,
+    composition,
     scope: "all",
     search: deferredSearch,
+    season,
+    ...weightRange,
   });
   const filtered = useMemo(
     () => filterFabrics(fabrics.items, { composition, season, weight }),
@@ -151,7 +162,7 @@ export default function FabricsPage() {
           ) : filtered.length === 0 ? (
             <div className={styles.libraryState}><span>NO MATCH</span><p>没有符合当前条件的面料，试试放宽筛选。</p></div>
           ) : (
-            <FabricVirtualGrid fabrics={filtered} height={680} onNearEnd={fabrics.loadMore} />
+            <FabricVirtualGrid fabrics={filtered} height={680} onChanged={fabrics.refresh} onNearEnd={fabrics.loadMore} />
           )}
           {fabrics.isLoadingMore ? <p className={styles.loadingMore}>正在展开下一柜档案…</p> : null}
         </section>

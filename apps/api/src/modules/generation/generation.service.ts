@@ -31,6 +31,8 @@ export const GENERATION_JOBS = Symbol("GENERATION_JOBS");
 const STYLE_REFERENCE_STRENGTH = 0.72;
 const SILHOUETTE_REFERENCE_STRENGTH = 0.55;
 const FABRIC_REFERENCE_STRENGTH = 0.7;
+const DETAIL_REFERENCE_STRENGTH = 0.65;
+const PALETTE_REFERENCE_STRENGTH = 0.6;
 
 type GenerationDatabase = Pick<PrismaClient, "designAsset" | "generationTask">;
 
@@ -164,6 +166,12 @@ export class GenerationService {
     ) {
       // 收集所有参考图片及其权重
       interface WeightedReference {
+        role:
+          | "detail_ref"
+          | "fabric_texture"
+          | "palette_ref"
+          | "silhouette_ref"
+          | "style_ref";
         url: string;
         weight: number;
         priority: number; // 类型优先级：style=3, fabric=2, silhouette=1
@@ -175,6 +183,7 @@ export class GenerationService {
       for (const ref of compiledPrompt.styleReferences ?? []) {
         allReferences.push({
           url: ref.imageUrl,
+          role: "style_ref",
           weight: "weight" in ref ? ref.weight : STYLE_REFERENCE_STRENGTH,
           priority: 3,
         });
@@ -184,6 +193,7 @@ export class GenerationService {
       for (const ref of compiledPrompt.fabricReferences ?? []) {
         allReferences.push({
           url: ref.imageUrl,
+          role: "fabric_texture",
           weight: "weight" in ref ? ref.weight : FABRIC_REFERENCE_STRENGTH,
           priority: 2,
         });
@@ -193,8 +203,27 @@ export class GenerationService {
       for (const ref of compiledPrompt.silhouetteReferences ?? []) {
         allReferences.push({
           url: ref.edgeImageUrl,
+          role: "silhouette_ref",
           weight: SILHOUETTE_REFERENCE_STRENGTH,
           priority: 1,
+        });
+      }
+
+      for (const ref of compiledPrompt.detailReferences ?? []) {
+        allReferences.push({
+          role: "detail_ref",
+          url: ref.imageUrl,
+          weight: DETAIL_REFERENCE_STRENGTH,
+          priority: 2,
+        });
+      }
+
+      for (const ref of compiledPrompt.paletteReferences ?? []) {
+        allReferences.push({
+          role: "palette_ref",
+          url: ref.imageUrl,
+          weight: PALETTE_REFERENCE_STRENGTH,
+          priority: 2,
         });
       }
 
@@ -207,9 +236,16 @@ export class GenerationService {
         });
 
         // 使用 referenceImageUrls 传递所有图片（最多16张）
-        providerRequest.referenceImageUrls = sorted
-          .slice(0, 16)
-          .map((reference) => reference.url);
+        const selected = sorted.slice(0, 16);
+        providerRequest.referenceImageUrls = selected.map(
+          (reference) => reference.url,
+        );
+        providerRequest.referenceImages = selected.map((reference, order) => ({
+          order,
+          role: reference.role,
+          url: reference.url,
+          weight: reference.weight,
+        }));
         // 保持向后兼容：referenceImageUrl 设为权重最高的
         const primaryReference = sorted[0];
         if (primaryReference) {
@@ -221,10 +257,16 @@ export class GenerationService {
     const input: AiGenerationRequest = {
       ...providerRequest,
       negativePrompt: compiledPrompt.negativePrompt.slice(0, 3_000),
-      prompt: compiledPrompt.positivePrompt.slice(0, 4_000),
+      prompt: context
+        ? collectionProviderPrompt(
+            compiledPrompt.positivePrompt,
+            request.prompt,
+          )
+        : compiledPrompt.positivePrompt.slice(0, 4_000),
     };
     const persistedCompiledPrompt = {
       ...compiledPrompt,
+      ...(context ? { collectionContext: context } : {}),
       request,
       requestFingerprint,
     };
@@ -512,6 +554,49 @@ export class GenerationService {
     return this.toView(task);
   }
 
+  async setCandidateDisposition(
+    userId: string,
+    taskId: string,
+    index: number,
+    disposition: "adopted" | "dismissed",
+  ): Promise<GenerationTaskView> {
+    const task = await this.database.generationTask.findFirst({
+      where: { id: taskId, userId },
+    });
+    if (!task) {
+      throw new NotFoundException({
+        code: "GENERATION_TASK_NOT_FOUND",
+        message: "生成任务不存在",
+      });
+    }
+    const output = jsonObject(task.output);
+    if (
+      !output ||
+      !Array.isArray(output.images) ||
+      index >= output.images.length
+    ) {
+      throw new BadRequestException({
+        code: "GENERATION_CANDIDATE_NOT_FOUND",
+        message: "生成候选不存在",
+      });
+    }
+    const existingDispositions = jsonObject(
+      output.candidateDispositions as Prisma.JsonValue | null,
+    );
+    const updatedOutput: Prisma.InputJsonObject = {
+      ...output,
+      candidateDispositions: {
+        ...existingDispositions,
+        [String(index)]: disposition,
+      },
+    };
+    const updated = await this.database.generationTask.update({
+      data: { output: updatedOutput },
+      where: { id: taskId },
+    });
+    return this.toView(updated);
+  }
+
   private toView(task: {
     id: string;
     status: GenerationTaskStatus;
@@ -616,6 +701,19 @@ function generationRequestFingerprint(
   return createHash("sha256")
     .update(stableJson({ context: context ?? null, request }))
     .digest("hex");
+}
+
+function collectionProviderPrompt(
+  enhancedPrompt: string,
+  originalPrompt: string,
+): string {
+  if (enhancedPrompt.includes(originalPrompt)) {
+    return enhancedPrompt.slice(0, 4_000);
+  }
+  const directive = `系列变化硬约束（必须逐条执行）：\n${originalPrompt}`;
+  const enhancedLimit = Math.max(0, 4_000 - directive.length - 2);
+  const prefix = enhancedPrompt.slice(0, enhancedLimit);
+  return prefix ? `${prefix}\n\n${directive}` : directive.slice(0, 4_000);
 }
 
 function stableJson(value: unknown): string {

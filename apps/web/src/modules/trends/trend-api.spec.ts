@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { importTrendToBoard, TrendApiError } from "./trend-api";
+import {
+  fetchCurrentTrendDigest,
+  importTrendToBoard,
+  TrendApiError,
+} from "./trend-api";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -60,6 +64,29 @@ describe("importTrendToBoard", () => {
       code: "TREND_ALREADY_IMPORTED",
       message: "该趋势已存在于白板",
       status: 409,
+    });
+  });
+});
+
+describe("fetchCurrentTrendDigest", () => {
+  it("将尚未生成周报的空成功响应解析为 null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    );
+
+    await expect(fetchCurrentTrendDigest()).resolves.toBeNull();
+  });
+
+  it("对损坏的成功响应返回可理解的格式错误", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{", { status: 200 })),
+    );
+
+    await expect(fetchCurrentTrendDigest()).rejects.toMatchObject({
+      message: "趋势数据响应格式错误",
+      status: 200,
     });
   });
 });

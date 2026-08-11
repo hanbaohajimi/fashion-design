@@ -121,26 +121,15 @@ export class AmuxAdapter implements AiProvider {
     signal: AbortSignal,
   ): Promise<AiProviderJob> {
     this.assertCredentials();
-    let usesEdit =
+    const usesEdit =
       request.taskType !== "t2i" || Boolean(request.referenceImageUrl);
     try {
       let response: unknown;
       if (usesEdit) {
-        try {
-          response = await this.transport.edit(
-            await this.editForm(request, signal),
-            signal,
-          );
-        } catch (error) {
-          if (!canFallbackReferenceT2iToGeneration(request, error)) {
-            throw error;
-          }
-          usesEdit = false;
-          response = await this.transport.generate(
-            this.generationBody(request, false),
-            signal,
-          );
-        }
+        response = await this.transport.edit(
+          await this.editForm(request, signal),
+          signal,
+        );
       } else {
         response = await this.transport.generate(
           this.generationBody(request),
@@ -229,10 +218,9 @@ export class AmuxAdapter implements AiProvider {
     }
 
     // 加载并添加所有参考图片
-    const referenceUrls =
-      "referenceImageUrls" in request && request.referenceImageUrls
-        ? request.referenceImageUrls
-        : [request.referenceImageUrl];
+    const referenceUrls = orderedReferenceImages(request).map(
+      (reference) => reference.url,
+    );
 
     for (const url of referenceUrls) {
       const source = await this.loadReferenceImage(url, signal);
@@ -428,22 +416,78 @@ function promptFor(
   ) {
     sections.push(referenceGuidance(request.taskType, request.strength));
   }
+  const referenceInstructions = (
+    "referenceImages" in request ? (request.referenceImages ?? []) : []
+  )
+    .slice()
+    .sort((left, right) => left.order - right.order)
+    .map(
+      (reference, index) =>
+        `Reference ${index + 1}: ${referenceRoleGuidance(reference.role)}; influence ${Math.round(reference.weight * 100)}%`,
+    )
+    .join("\n");
+  if (includeReferenceGuidance && referenceInstructions) {
+    sections.push(referenceInstructions);
+  }
   if (request.negativePrompt) {
     sections.push(`Avoid the following elements: ${request.negativePrompt}`);
   }
   return sections.join("\n\n");
 }
 
-function canFallbackReferenceT2iToGeneration(
-  request: AiGenerationRequest,
-  error: unknown,
-): boolean {
-  return (
-    request.taskType === "t2i" &&
-    Boolean(request.referenceImageUrl) &&
-    error instanceof AmuxHttpError &&
-    error.status >= 500
-  );
+function orderedReferenceImages(request: AiGenerationRequest): Array<{
+  readonly order: number;
+  readonly role:
+    | "detail_ref"
+    | "fabric_texture"
+    | "palette_ref"
+    | "silhouette_ref"
+    | "style_ref";
+  readonly url: string;
+  readonly weight: number;
+}> {
+  if ("referenceImages" in request && request.referenceImages?.length) {
+    return [...request.referenceImages].sort(
+      (left, right) => left.order - right.order,
+    );
+  }
+  const urls =
+    "referenceImageUrls" in request && request.referenceImageUrls?.length
+      ? request.referenceImageUrls
+      : "referenceImageUrl" in request && request.referenceImageUrl
+        ? [request.referenceImageUrl]
+        : [];
+  return urls.map((url, order) => ({
+    order,
+    role: "style_ref" as const,
+    url,
+    weight:
+      "strength" in request && request.strength !== undefined
+        ? request.strength
+        : 0.5,
+  }));
+}
+
+function referenceRoleGuidance(
+  role:
+    | "detail_ref"
+    | "fabric_texture"
+    | "palette_ref"
+    | "silhouette_ref"
+    | "style_ref",
+): string {
+  switch (role) {
+    case "fabric_texture":
+      return "fabric texture and material behavior";
+    case "palette_ref":
+      return "color palette only";
+    case "silhouette_ref":
+      return "garment silhouette and proportion only";
+    case "detail_ref":
+      return "garment construction detail only";
+    case "style_ref":
+      return "style and visual language";
+  }
 }
 
 function referenceGuidance(
@@ -461,25 +505,82 @@ function referenceGuidance(
     : `Use the uploaded image as a high-fidelity visual reference. ${variation}`;
 }
 
+const GPT_IMAGE_2_DIMENSION_MULTIPLE = 16;
+const GPT_IMAGE_2_MAX_DIMENSION = 3_840;
+const GPT_IMAGE_2_MAX_PIXELS = 8_294_400;
+const GPT_IMAGE_2_MIN_PIXELS = 655_360;
+const GPT_IMAGE_2_MAX_RATIO = 3;
+
 function gptImage2Size(width: number, height: number): string {
-  const pixels = width * height;
-  const ratio = Math.max(width, height) / Math.min(width, height);
   if (
-    width % 16 !== 0 ||
-    height % 16 !== 0 ||
-    Math.max(width, height) > 3_840 ||
-    ratio > 3 ||
-    pixels < 655_360 ||
-    pixels > 8_294_400
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
   ) {
     throw new AiProviderError({
       code: "INVALID_REQUEST",
       provider: "amux",
-      message:
-        "GPT Image 2 尺寸无效：边长须为 16 的倍数、比例不超过 3:1，且总像素在 655360 至 8294400 之间",
+      message: `GPT Image 2 尺寸无效：${width}x${height}`,
     });
   }
-  return `${width}x${height}`;
+
+  let normalizedWidth = alignedDimension(width, "nearest");
+  let normalizedHeight = alignedDimension(height, "nearest");
+
+  [normalizedWidth, normalizedHeight] = constrainAspectRatio(
+    normalizedWidth,
+    normalizedHeight,
+  );
+
+  let pixels = normalizedWidth * normalizedHeight;
+  if (pixels < GPT_IMAGE_2_MIN_PIXELS) {
+    const scale = Math.sqrt(GPT_IMAGE_2_MIN_PIXELS / pixels);
+    normalizedWidth = alignedDimension(normalizedWidth * scale, "up");
+    normalizedHeight = alignedDimension(normalizedHeight * scale, "up");
+  }
+
+  pixels = normalizedWidth * normalizedHeight;
+  if (pixels > GPT_IMAGE_2_MAX_PIXELS) {
+    const scale = Math.sqrt(GPT_IMAGE_2_MAX_PIXELS / pixels);
+    normalizedWidth = alignedDimension(normalizedWidth * scale, "down");
+    normalizedHeight = alignedDimension(normalizedHeight * scale, "down");
+    [normalizedWidth, normalizedHeight] = constrainAspectRatio(
+      normalizedWidth,
+      normalizedHeight,
+    );
+  }
+
+  return `${normalizedWidth}x${normalizedHeight}`;
+}
+
+function alignedDimension(
+  value: number,
+  direction: "down" | "nearest" | "up",
+): number {
+  const align =
+    direction === "up"
+      ? Math.ceil
+      : direction === "down"
+        ? Math.floor
+        : Math.round;
+  const aligned =
+    align(value / GPT_IMAGE_2_DIMENSION_MULTIPLE) *
+    GPT_IMAGE_2_DIMENSION_MULTIPLE;
+  return Math.min(
+    GPT_IMAGE_2_MAX_DIMENSION,
+    Math.max(GPT_IMAGE_2_DIMENSION_MULTIPLE, aligned),
+  );
+}
+
+function constrainAspectRatio(width: number, height: number): [number, number] {
+  if (width > height * GPT_IMAGE_2_MAX_RATIO) {
+    return [width, alignedDimension(width / GPT_IMAGE_2_MAX_RATIO, "up")];
+  }
+  if (height > width * GPT_IMAGE_2_MAX_RATIO) {
+    return [alignedDimension(height / GPT_IMAGE_2_MAX_RATIO, "up"), height];
+  }
+  return [width, height];
 }
 
 function contentTypeFor(outputFormat: string): string {

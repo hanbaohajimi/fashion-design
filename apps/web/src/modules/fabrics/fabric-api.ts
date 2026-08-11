@@ -31,6 +31,7 @@ export type FabricUploadWeave =
 
 export interface FabricUploadInput {
   readonly category: FabricUploadCategory;
+  readonly composition?: Readonly<Record<string, number>>;
   readonly compositionName: string;
   readonly file: File | null;
   readonly name: string;
@@ -48,6 +49,23 @@ export function validateFabricUpload(input: FabricUploadInput): string | null {
   }
   if (!input.name.trim()) return "请填写面料名称";
   if (!input.compositionName.trim()) return "请填写主要成分";
+  const composition = normalizedComposition(input);
+  if (Object.keys(composition).length === 0) return "请填写主要成分";
+  if (
+    Object.values(composition).some(
+      (percentage) =>
+        !Number.isFinite(percentage) || percentage <= 0 || percentage > 100,
+    )
+  ) {
+    return "成分占比必须大于 0 且不超过 100%";
+  }
+  const total = Object.values(composition).reduce(
+    (sum, percentage) => sum + percentage,
+    0,
+  );
+  if (Math.abs(total - 100) > 0.000_001) {
+    return "成分占比总和必须等于 100%";
+  }
   if (!Number.isFinite(input.weight) || input.weight <= 0 || input.weight > 2_000) {
     return "克重必须在 0–2000 GSM 之间";
   }
@@ -69,12 +87,69 @@ export function buildFabricUploadFormData(
   formData.set(
     "attributes",
     JSON.stringify({
-      composition: { [input.compositionName.trim()]: 100 },
+      composition: normalizedComposition(input),
       weight: input.weight,
       weave: input.weave,
     }),
   );
   return formData;
+}
+
+function normalizedComposition(
+  input: FabricUploadInput,
+): Record<string, number> {
+  if (!input.composition) {
+    return input.compositionName.trim()
+      ? { [input.compositionName.trim()]: 100 }
+      : {};
+  }
+  return Object.fromEntries(
+    Object.entries(input.composition).flatMap(([name, percentage]) => {
+      const normalizedName = name.trim();
+      return normalizedName ? [[normalizedName, percentage]] : [];
+    }),
+  );
+}
+
+export async function fetchFabric(fabricId: string): Promise<Fabric> {
+  const response = await fetch(`/api/fabrics/${encodeURIComponent(fabricId)}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(await readFabricError(response, "面料详情加载失败"));
+  }
+  return (await response.json()) as Fabric;
+}
+
+export async function updateFabric(
+  fabricId: string,
+  input: {
+    readonly attributes?: Fabric["attributes"];
+    readonly category?: FabricUploadCategory;
+    readonly name?: string;
+    readonly subCategory?: string | null;
+  },
+): Promise<Fabric> {
+  const response = await fetch(`/api/fabrics/${encodeURIComponent(fabricId)}`, {
+    body: JSON.stringify(input),
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+  if (!response.ok) {
+    throw new Error(await readFabricError(response, "面料更新失败"));
+  }
+  return (await response.json()) as Fabric;
+}
+
+export async function deleteFabric(fabricId: string): Promise<void> {
+  const response = await fetch(`/api/fabrics/${encodeURIComponent(fabricId)}`, {
+    credentials: "include",
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(await readFabricError(response, "面料删除失败"));
+  }
 }
 
 async function readFabricError(
@@ -122,6 +197,18 @@ export function useFabrics(query: FabricListQuery) {
       });
       if (query.category && query.category !== "all") {
         params.set("category", query.category);
+      }
+      if (query.composition && query.composition !== "all") {
+        params.set("composition", query.composition);
+      }
+      if (query.season && query.season !== "all") {
+        params.set("season", query.season);
+      }
+      if (query.minWeight !== undefined) {
+        params.set("minWeight", String(query.minWeight));
+      }
+      if (query.maxWeight !== undefined) {
+        params.set("maxWeight", String(query.maxWeight));
       }
       if (query.search?.trim()) params.set("search", query.search.trim());
       return `/api/fabrics?${params.toString()}`;

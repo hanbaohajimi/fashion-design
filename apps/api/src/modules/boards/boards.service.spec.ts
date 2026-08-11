@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { boardPatchSchema, importTrendSchema } from "./boards.schemas";
@@ -50,6 +54,26 @@ describe("BoardsService ownership and semantic rows", () => {
 
     await expect(service.get("user-a", "project-b")).rejects.toBeInstanceOf(
       ForbiddenException,
+    );
+  });
+
+  it("rejects reads and writes after a project is archived", async () => {
+    const database = {
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          archived: true,
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    await expect(service.get("user-a", "project-a")).rejects.toMatchObject({
+      response: { code: "PROJECT_ARCHIVED" },
+    });
+    await expect(service.get("user-a", "project-a")).rejects.toBeInstanceOf(
+      NotFoundException,
     );
   });
 

@@ -76,7 +76,9 @@ export function ProjectCard({
   const [renaming, setRenaming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [name, setName] = useState(project.name);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const fabricColor = FABRIC_COLORS[index % FABRIC_COLORS.length];
   const coverStyle = {
@@ -90,15 +92,23 @@ export function ProjectCard({
     const trimmed = name.trim();
     const length = Array.from(trimmed).length;
 
-    if (length < 3 || length > 80 || trimmed === project.name) {
-      if (trimmed === project.name) {
-        setRenaming(false);
-      }
+    if (trimmed === project.name) {
+      setRenameError(null);
+      setRenaming(false);
       return;
     }
-
-    await onRename(project, trimmed);
-    setRenaming(false);
+    if (length < 3 || length > 80) {
+      setRenameError("项目名称需为 3–80 个字");
+      return;
+    }
+    setRenameError(null);
+    try {
+      await onRename(project, trimmed);
+      setName(trimmed);
+      setRenaming(false);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "重命名失败");
+    }
   };
 
   const runDelete = async (): Promise<void> => {
@@ -107,12 +117,17 @@ export function ProjectCard({
     }
 
     setDeletePending(true);
+    setDeleteError(null);
 
     try {
       await onDelete(project);
+      setConfirmingDelete(false);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "删除项目失败，请重试",
+      );
     } finally {
       setDeletePending(false);
-      setConfirmingDelete(false);
     }
   };
 
@@ -168,6 +183,7 @@ export function ProjectCard({
                 value={name}
               />
               <button type="submit">保存</button>
+              {renameError ? <small role="alert">{renameError}</small> : null}
             </form>
           ) : (
             <h2>
@@ -179,7 +195,14 @@ export function ProjectCard({
             <details className={styles.cardMenu}>
               <summary aria-label={`${project.name} 项目操作`}>•••</summary>
               <div className={styles.menuPanel}>
-                <button onClick={() => setRenaming(true)} type="button">
+                <button
+                  onClick={() => {
+                    setName(project.name);
+                    setRenameError(null);
+                    setRenaming(true);
+                  }}
+                  type="button"
+                >
                   重命名
                 </button>
                 <button
@@ -202,7 +225,13 @@ export function ProjectCard({
                 </button>
                 <button
                   className={styles.deleteAction}
-                  onClick={() => setConfirmingDelete(true)}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    setDeleteError(null);
+                    setConfirmingDelete(true);
+                  }}
                   type="button"
                 >
                   删除
@@ -216,7 +245,9 @@ export function ProjectCard({
         {project.metadata && (
           <div className={styles.cardTags}>
             {project.metadata.season && (
-              <span className={styles.tagSeason}>{project.metadata.season}</span>
+              <span className={styles.tagSeason}>
+                {project.metadata.season}
+              </span>
             )}
             {project.metadata.style && (
               <span className={styles.tagStyle}>
@@ -228,11 +259,12 @@ export function ProjectCard({
                 {getMaterialLabel(project.metadata.materialType)}
               </span>
             )}
-            {project.metadata.fabricCount && project.metadata.fabricCount > 0 && (
-              <span className={styles.tagMaterial}>
-                {project.metadata.fabricCount} 款面料
-              </span>
-            )}
+            {project.metadata.fabricCount &&
+              project.metadata.fabricCount > 0 && (
+                <span className={styles.tagMaterial}>
+                  {project.metadata.fabricCount} 款面料
+                </span>
+              )}
           </div>
         )}
 
@@ -255,6 +287,7 @@ export function ProjectCard({
                 ? `"${project.name}"含 ${project.assetCount} 项设计资产，删除后无法找回。`
                 : `确认删除"${project.name}"？`}
             </p>
+            {deleteError ? <small role="alert">{deleteError}</small> : null}
             <div className={styles.confirmActions}>
               <button
                 autoFocus

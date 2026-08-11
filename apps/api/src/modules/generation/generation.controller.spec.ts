@@ -29,6 +29,7 @@ describe("generation HTTP contract", () => {
     create: vi.fn(),
     get: vi.fn(),
     list: vi.fn(),
+    setCandidateDisposition: vi.fn(),
   };
   const maskService = {
     sign: vi.fn(),
@@ -73,6 +74,10 @@ describe("generation HTTP contract", () => {
     generationService.list.mockResolvedValue({
       items: [],
       nextCursor: null,
+    });
+    generationService.setCandidateDisposition.mockResolvedValue({
+      id: "task-1",
+      output: { candidateDispositions: { "0": "dismissed" }, images: [] },
     });
     maskService.sign.mockResolvedValue({
       expiresAt: "2026-01-01T00:30:00.000Z",
@@ -225,5 +230,33 @@ describe("generation HTTP contract", () => {
       .expect(400);
 
     expect(generationService.list).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /generations/:id/candidates/:index 持久化候选处置", async () => {
+    const response = await request(app.getHttpServer())
+      .patch("/generations/task-1/candidates/0")
+      .set("Cookie", "fashion_access_token=valid-token")
+      .send({ disposition: "dismissed" })
+      .expect(200);
+
+    expect(generationService.setCandidateDisposition).toHaveBeenCalledWith(
+      "user-1",
+      "task-1",
+      0,
+      "dismissed",
+    );
+    expect(response.body.output).toMatchObject({
+      candidateDispositions: { "0": "dismissed" },
+    });
+  });
+
+  it("PATCH 候选处置拒绝负序号和未知状态", async () => {
+    await request(app.getHttpServer())
+      .patch("/generations/task-1/candidates/-1")
+      .set("Cookie", "fashion_access_token=valid-token")
+      .send({ disposition: "unknown" })
+      .expect(400);
+
+    expect(generationService.setCandidateDisposition).not.toHaveBeenCalled();
   });
 });

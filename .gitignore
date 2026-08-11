@@ -5,9 +5,12 @@ dist/
 coverage/
 output/playwright/
 .playwright-cli/
+.playwright-mcp/
+.vs/
 playwright-report/
 test-results/
 generated/
+tmp/
 
 .env
 .env.local

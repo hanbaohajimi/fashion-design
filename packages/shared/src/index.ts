@@ -9,6 +9,8 @@ export const FREE_EXPORT_MAX_EDGE = 1_600;
 export const STANDARD_EXPORT_MAX_EDGE = 2_048;
 export const BOARD_ELEMENT_ROLES = [
   "style_ref",
+  "garment_ref",
+  "reference_garment",
   "fabric_ref",
   "palette",
   "silhouette_ref",

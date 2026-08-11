@@ -92,6 +92,29 @@ describe("AmuxAdapter", () => {
     expect(result.job).not.toHaveProperty("completedResult");
   });
 
+  it.each([
+    { expected: "1008x1008", height: 1_000, width: 1_000 },
+    { expected: "816x816", height: 512, width: 512 },
+    { expected: "688x2048", height: 2_048, width: 256 },
+  ])(
+    "把 $width x $height 自动规整为 GPT Image 2 支持的 $expected",
+    async ({ expected, height, width }) => {
+      vi.mocked(transport.generate).mockResolvedValue({
+        data: [{ b64_json: "iVBORw0KGgo=" }],
+      });
+
+      await adapter.submit(
+        { ...t2iRequest, height, width },
+        new AbortController().signal,
+      );
+
+      expect(transport.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ size: expected }),
+        expect.any(AbortSignal),
+      );
+    },
+  );
+
   it("把参考图和局部蒙版下载后作为 multipart 文件提交", async () => {
     vi.mocked(loadReferenceImage)
       .mockResolvedValueOnce({
@@ -170,7 +193,7 @@ describe("AmuxAdapter", () => {
     expect(transport.generate).not.toHaveBeenCalled();
   });
 
-  it("special/openai 图片编辑返回 5xx 时把带参考图的 t2i 降级为纯生成", async () => {
+  it("图片编辑返回 5xx 时保留失败，不静默降级为纯文生图", async () => {
     vi.mocked(loadReferenceImage).mockResolvedValue({
       bytes: new Uint8Array([1]),
       contentType: "image/webp",
@@ -179,29 +202,72 @@ describe("AmuxAdapter", () => {
     vi.mocked(transport.edit).mockRejectedValue(
       new AmuxHttpError(503, { error: "upstream unavailable" }),
     );
-    vi.mocked(transport.generate).mockResolvedValue({
+    await expect(
+      adapter.submit(
+        {
+          ...t2iRequest,
+          referenceImageUrl: "https://assets.test/style.webp",
+          strength: 0.72,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE", status: 503 });
+
+    expect(transport.edit).toHaveBeenCalledOnce();
+    expect(transport.generate).not.toHaveBeenCalled();
+  });
+
+  it("按 referenceImages.order 上传并把每张图的角色和权重写入提示词", async () => {
+    vi.mocked(loadReferenceImage).mockResolvedValue({
+      bytes: new Uint8Array([1]),
+      contentType: "image/webp",
+      filename: "reference.webp",
+    });
+    vi.mocked(transport.edit).mockResolvedValue({
       data: [{ b64_json: "iVBORw0KGgo=" }],
     });
 
-    const job = await adapter.submit(
+    await adapter.submit(
       {
         ...t2iRequest,
         referenceImageUrl: "https://assets.test/style.webp",
+        referenceImages: [
+          {
+            order: 1,
+            role: "fabric_texture",
+            url: "https://assets.test/fabric.webp",
+            weight: 0.7,
+          },
+          {
+            order: 0,
+            role: "style_ref",
+            url: "https://assets.test/style.webp",
+            weight: 0.72,
+          },
+        ],
         strength: 0.72,
       },
       new AbortController().signal,
     );
 
-    expect(transport.edit).toHaveBeenCalledOnce();
-    expect(transport.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "gpt-image-2",
-        prompt:
-          "minimal runway look\n\nAvoid the following elements: watermark, extra fingers",
-      }),
+    expect(loadReferenceImage).toHaveBeenNthCalledWith(
+      1,
+      "https://assets.test/style.webp",
       expect.any(AbortSignal),
     );
-    expect(job.cost).toMatchObject({ rawCost: 0.08, credits: 8 });
+    expect(loadReferenceImage).toHaveBeenNthCalledWith(
+      2,
+      "https://assets.test/fabric.webp",
+      expect.any(AbortSignal),
+    );
+    const form = vi.mocked(transport.edit).mock.calls[0]?.[0];
+    expect(form?.getAll("image")).toHaveLength(2);
+    expect(form?.get("prompt")).toContain(
+      "Reference 1: style and visual language; influence 72%",
+    );
+    expect(form?.get("prompt")).toContain(
+      "Reference 2: fabric texture and material behavior; influence 70%",
+    );
   });
 
   it("inpaint 图片编辑返回 5xx 时不降级为会修改整张图的纯生成", async () => {

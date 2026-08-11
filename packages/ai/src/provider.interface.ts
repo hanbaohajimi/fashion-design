@@ -3,6 +3,22 @@ import { z } from "zod";
 export const AI_TASK_TYPES = ["t2i", "i2i", "inpaint"] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
 
+export const AI_REFERENCE_IMAGE_ROLES = [
+  "style_ref",
+  "fabric_texture",
+  "palette_ref",
+  "silhouette_ref",
+  "detail_ref",
+] as const;
+export type AiReferenceImageRole = (typeof AI_REFERENCE_IMAGE_ROLES)[number];
+
+const referenceImageSchema = z.object({
+  order: z.number().int().min(0).max(15),
+  role: z.enum(AI_REFERENCE_IMAGE_ROLES),
+  url: z.url(),
+  weight: z.number().min(0).max(1),
+});
+
 const commonRequestSchema = z.object({
   background: z.enum(["auto", "opaque"]).optional(),
   prompt: z.string().trim().min(1).max(4_000),
@@ -22,12 +38,14 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
     taskType: z.literal("t2i"),
     referenceImageUrl: z.url().optional(),
     referenceImageUrls: z.array(z.url()).max(16).optional(),
+    referenceImages: z.array(referenceImageSchema).max(16).optional(),
     strength: z.number().min(0).max(1).optional(),
   }),
   commonRequestSchema.extend({
     taskType: z.literal("i2i"),
     referenceImageUrl: z.url(),
     referenceImageUrls: z.array(z.url()).max(16).optional(),
+    referenceImages: z.array(referenceImageSchema).max(16).optional(),
     strength: z.number().min(0).max(1),
   }),
   commonRequestSchema.extend({

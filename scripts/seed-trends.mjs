@@ -98,6 +98,47 @@ function parseJson(text) {
   return JSON.parse(raw);
 }
 
+const ALLOWED_SOURCE_HOSTS = new Set([
+  "businessoffashion.com",
+  "fashionunited.com",
+  "highsnobiety.com",
+  "hypebeast.com",
+  "ssense.com",
+  "vogue.com",
+  "wwd.com",
+]);
+
+async function verifiedSourceUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  if (url.protocol !== "https:" || !ALLOWED_SOURCE_HOSTS.has(host)) {
+    return null;
+  }
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "FashionTrendVerifier/1.0" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+    });
+    const finalHost = new URL(response.url).hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+    const contentType = response.headers.get("content-type") ?? "";
+    return response.ok &&
+      ALLOWED_SOURCE_HOSTS.has(finalHost) &&
+      contentType.includes("text/html")
+      ? response.url
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`🌐  Calling Claude (${AMUX_MODEL}) via AMUX to generate 2026 fashion trend data…\n`);
@@ -162,26 +203,42 @@ Do NOT wrap in markdown — return the raw JSON object only.`
   }
   console.log(`✅  Generated digest: "${digest.theme}"\n`);
 
-  // Step 3: Seed DB
-  console.log("📦  Seeding database…");
-
-  // Clear existing data first (idempotent)
-  await prisma.trendDigest.deleteMany({});
-  await prisma.trendItem.deleteMany({});
-  console.log("   🗑   Cleared existing trend_items + trend_digests");
-
-  // Insert items
-  const insertedIds = [];
+  // Step 3: Verify every source before touching existing data.
+  console.log("📦  Verifying sources before seeding…");
+  const verifiedItems = [];
   for (const item of items) {
-    const id = cuid2();
     try {
-      await prisma.trendItem.create({
+      const sourceUrl = await verifiedSourceUrl(item.sourceUrl);
+      if (!sourceUrl) {
+        console.warn(`   skipped unverifiable source: ${String(item.sourceUrl).slice(0, 120)}`);
+        continue;
+      }
+      const platform = new URL(sourceUrl).hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
+      verifiedItems.push({ ...item, platform, sourceUrl });
+    } catch (err) {
+      console.warn(`   ⚠️   Skipped (${err.message.slice(0, 80)})`);
+    }
+  }
+  if (verifiedItems.length === 0) {
+    throw new Error("没有可验证的真实趋势来源；已保留数据库原有数据");
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    await transaction.trendDigest.deleteMany({});
+    await transaction.trendItem.deleteMany({});
+
+    const insertedIds = [];
+    for (const item of verifiedItems) {
+      const id = cuid2();
+      await transaction.trendItem.create({
         data: {
           id,
           title:       String(item.title).slice(0, 255),
           summary:     String(item.summary),
-          platform:    String(item.platform),
-          sourceUrl:   String(item.sourceUrl),
+          platform: item.platform,
+          sourceUrl: item.sourceUrl,
           publishedAt: new Date(item.publishedAt),
           category:    String(item.category),
           tags:        Array.isArray(item.tags) ? item.tags.map(String) : [],
@@ -191,29 +248,21 @@ Do NOT wrap in markdown — return the raw JSON object only.`
       });
       insertedIds.push(id);
       console.log(`   ✓  [${item.category}] ${item.title.slice(0, 60)}…`);
-    } catch (err) {
-      console.warn(`   ⚠️   Skipped (${err.message.slice(0, 80)})`);
     }
-  }
 
-  // Insert digest
-  const period = "2026-W31"; // ISO week 31 = July 28–Aug 3 2026
-  await prisma.trendDigest.upsert({
-    where: { period },
-    create: {
-      id:      cuid2(),
-      period,
-      theme:   digest.theme,
-      itemIds: insertedIds,
-      overview: digest.overview,
-    },
-    update: {
-      theme:    digest.theme,
-      itemIds:  insertedIds,
-      overview: digest.overview,
-    },
+    const now = new Date();
+    const period = isoWeekPeriod(now);
+    await transaction.trendDigest.create({
+      data: {
+        id:      cuid2(),
+        period,
+        theme:   digest.theme,
+        itemIds: insertedIds,
+        overview: digest.overview,
+      },
+    });
+    console.log(`   ✓  Digest created (period: ${period}, ${insertedIds.length} items)\n`);
   });
-  console.log(`   ✓  Digest upserted (period: ${period}, ${insertedIds.length} items)\n`);
 
   // Step 4: Verify via API
   console.log("🔍  Querying API to verify…\n");
@@ -256,6 +305,15 @@ Do NOT wrap in markdown — return the raw JSON object only.`
   }
 
   await prisma.$disconnect();
+}
+
+function isoWeekPeriod(date) {
+  const current = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const weekday = current.getUTCDay() || 7;
+  current.setUTCDate(current.getUTCDate() + 4 - weekday);
+  const yearStart = new Date(Date.UTC(current.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((current - yearStart) / 86400000 + 1) / 7);
+  return `${current.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
 main().catch(async (err) => {

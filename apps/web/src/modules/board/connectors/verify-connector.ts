@@ -18,7 +18,7 @@ export function verifyConnectorImplementation() {
   };
 
   // 检查1: AnchorOverlay 组件是否渲染
-  const anchorOverlay = document.querySelector('.anchorOverlay');
+  const anchorOverlay = document.querySelector('[class*="anchorOverlay"]');
   if (anchorOverlay) {
     results.passed.push("✅ AnchorOverlay 组件已渲染");
   } else {
@@ -61,7 +61,6 @@ export function verifyConnectorImplementation() {
   // 检查6: CSS 样式是否正确加载
   const styleSheets = Array.from(document.styleSheets);
   let anchorPointStyleFound = false;
-  let pointerEventsFound = false;
 
   try {
     for (const sheet of styleSheets) {
@@ -69,10 +68,6 @@ export function verifyConnectorImplementation() {
       for (const rule of Array.from(sheet.cssRules)) {
         if (rule instanceof CSSStyleRule && rule.selectorText?.includes('anchorPoint')) {
           anchorPointStyleFound = true;
-          const style = rule.style;
-          if (style.pointerEvents === 'all') {
-            pointerEventsFound = true;
-          }
         }
       }
     }
@@ -86,10 +81,15 @@ export function verifyConnectorImplementation() {
     results.failed.push("❌ .anchorPoint CSS 样式未找到");
   }
 
-  if (pointerEventsFound) {
-    results.passed.push("✅ .anchorPoint pointer-events: all 已设置");
+  const firstAnchor = document.querySelector<SVGCircleElement>('[data-anchor-side]');
+  const pointerEventsPassThrough = firstAnchor
+    ? window.getComputedStyle(firstAnchor).pointerEvents === 'none'
+    : false;
+
+  if (pointerEventsPassThrough) {
+    results.passed.push("✅ 锚点不会拦截 tldraw 画布指针事件");
   } else {
-    results.failed.push("❌ .anchorPoint pointer-events 未正确设置");
+    results.failed.push("❌ 锚点正在拦截 tldraw 画布指针事件");
   }
 
   // 检查7: ConnectorShape 类型是否注册

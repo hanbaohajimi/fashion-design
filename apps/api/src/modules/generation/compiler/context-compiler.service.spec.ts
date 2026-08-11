@@ -95,6 +95,67 @@ describe("ContextCompilerService", () => {
     expect(result.enhancement).toBe("keywords");
   });
 
+  it("多色色卡会把每个颜色都写入生成上下文", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        element("palette-multi", "palette", {
+          color: "#C8AB84",
+          colors: [
+            { color: "#C8AB84", id: "oat", label: "OAT" },
+            { color: "#708090", id: "slate", label: "SLATE" },
+            { color: "#1C1C1C", id: "ink", label: "INK" },
+          ],
+          label: "OAT",
+        }),
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile(
+      "user-1",
+      "project-1",
+      "three-tone tailored coat",
+      ["palette-multi"],
+    );
+
+    expect(result.palette).toEqual(["OAT", "SLATE", "INK"]);
+    expect(result.positivePrompt).toContain("palette: OAT, SLATE, INK");
+  });
+
+  it("图片色卡与图片备注都进入编译上下文且保留视觉参考", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        element(
+          "palette-image",
+          "palette",
+          { url: "https://cdn.example/palette.webp" },
+          "burgundy, ivory, black",
+        ),
+        element("note-image", "note", {
+          roleLabel: "门襟保持隐藏式结构",
+          url: "https://cdn.example/note.webp",
+        }),
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile("user-1", "project-1", "coat");
+
+    expect(result.palette).toContain("burgundy, ivory, black");
+    expect(result.notes).toContain("门襟保持隐藏式结构");
+    expect(result.paletteReferences).toEqual([
+      {
+        elementId: "palette-image",
+        imageUrl: "https://cdn.example/palette.webp",
+        labels: ["burgundy, ivory, black"],
+      },
+    ]);
+    expect(result.positivePrompt).toContain("palette: burgundy, ivory, black");
+    expect(result.positivePrompt).toContain("design notes: 门襟保持隐藏式结构");
+  });
+
   it("avoid 通道优先使用已入库的结构化标签并写入负向 prompt", async () => {
     database.project.findUnique.mockResolvedValue({
       boardElements: [
@@ -254,7 +315,7 @@ describe("ContextCompilerService", () => {
     expect(model.analyzeImage).not.toHaveBeenCalled();
   });
 
-  it("style 只保留 URL 引用，silhouette 映射为边缘参考且拒绝 base64", async () => {
+  it("style 和 garment 只保留 URL 引用，silhouette 映射为边缘参考且拒绝 base64", async () => {
     database.project.findUnique.mockResolvedValue({
       boardElements: [
         element("style-1", "style_ref", {
@@ -262,6 +323,12 @@ describe("ContextCompilerService", () => {
         }),
         element("style-inline", "style_ref", {
           url: "data:image/png;base64,AAAA",
+        }),
+        element("garment-1", "garment_ref", {
+          url: "https://cdn.example/garment.webp",
+        }),
+        element("reference-garment-1", "reference_garment", {
+          url: "https://cdn.example/reference-garment.webp",
         }),
         element("silhouette-1", "silhouette_ref", {
           url: "https://cdn.example/edge.webp",
@@ -273,9 +340,15 @@ describe("ContextCompilerService", () => {
 
     const result = await service.compile("user-1", "project-1", "dress");
 
-    expect(result.styleReferences).toHaveLength(1);
+    expect(result.styleReferences).toHaveLength(3);
     expect(result.styleReferences[0]?.imageUrl).toBe(
       "https://cdn.example/style.webp",
+    );
+    expect(result.styleReferences[1]?.imageUrl).toBe(
+      "https://cdn.example/garment.webp",
+    );
+    expect(result.styleReferences[2]?.imageUrl).toBe(
+      "https://cdn.example/reference-garment.webp",
     );
     expect(result.silhouetteReferences).toEqual([
       {

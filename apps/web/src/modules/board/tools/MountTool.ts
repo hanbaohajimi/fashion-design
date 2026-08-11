@@ -1,23 +1,12 @@
 import { StateNode, type TLPointerEventInfo, type TLShape } from "tldraw";
 
-import { createUserMount, type Mount, type MountVariant } from "../shapes/material-appearance";
+import { createUserMount, type Mount } from "../shapes/material-appearance";
 import {
   FABRIC_SHAPE_TYPE,
   IMAGE_SHAPE_TYPE,
   NOTE_SHAPE_TYPE,
   SWATCH_SHAPE_TYPE,
 } from "../shapes/shape-types";
-
-// ---------------------------------------------------------------------------
-// Module-level active variant — shared with the ToolRail picker without
-// threading a React context through tldraw's tool layer.
-// ---------------------------------------------------------------------------
-let activeVariant: MountVariant = "brass-pin";
-
-export const getActiveMountVariant = (): MountVariant => activeVariant;
-export const setActiveMountVariant = (variant: MountVariant): void => {
-  activeVariant = variant;
-};
 
 // ---------------------------------------------------------------------------
 // Mountable shapes — the four board shapes that carry a `mounts` prop
@@ -84,10 +73,9 @@ export class MountTool extends StateNode {
 
     // Mount coordinates are stored normalised (0..1) against the content box so
     // they survive resizing.
-    const clamp01 = (value: number): number =>
-      Math.max(0, Math.min(1, value));
+    const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
     const mount = createUserMount(
-      activeVariant,
+      "red-pin",
       clamp01((point.x - bounds.x) / bounds.w),
       clamp01((point.y - bounds.y) / bounds.h),
     );

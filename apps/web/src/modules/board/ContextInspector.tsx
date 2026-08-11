@@ -79,12 +79,9 @@ export function ContextInspector() {
   const selection = useValue(
     "inspector-selection",
     () => {
-      const selectedShapes = editor.getSelectedShapes();
       const candidate = labelDesignShapeId
         ? editor.getShape(labelDesignShapeId)
-        : selectedShapes.length === 1
-          ? selectedShapes[0]
-          : null;
+        : null;
       const labelDesignShape =
         candidate && isRoleAssignableShape(candidate) ? candidate : null;
       const bounds = labelDesignShape

@@ -35,6 +35,12 @@ export const sendAgentMessageSchema = z.object({
   shapeIds: z.array(agentIdSchema).max(100).default([]),
 });
 
+export const attachGenerationTaskSchema = z.object({
+  content: z.string().trim().min(1).max(4_000),
+  fileAssetIds: z.array(agentIdSchema).max(8).default([]),
+  shapeIds: z.array(agentIdSchema).max(100).default([]),
+});
+
 export type CreateAgentConversationInput = z.infer<
   typeof createAgentConversationSchema
 >;
@@ -46,3 +52,6 @@ export type ListAgentConversationsInput = z.infer<
 >;
 export type ListAgentMessagesInput = z.infer<typeof listAgentMessagesSchema>;
 export type SendAgentMessageInput = z.infer<typeof sendAgentMessageSchema>;
+export type AttachGenerationTaskInput = z.infer<
+  typeof attachGenerationTaskSchema
+>;

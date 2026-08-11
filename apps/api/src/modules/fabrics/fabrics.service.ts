@@ -82,6 +82,32 @@ export class FabricsService {
   ) {}
 
   async list(userId: string, input: ListFabricsInput): Promise<FabricListView> {
+    const searchTerms = fabricSearchTerms(input.search);
+    const attributeFilters: Prisma.FabricWhereInput[] = [];
+    if (input.composition) {
+      attributeFilters.push({
+        OR: fabricCompositionKeys(input.composition).map((composition) => ({
+          attributes: { gt: 0, path: ["composition", composition] },
+        })),
+      });
+    }
+    if (input.season) {
+      attributeFilters.push({
+        attributes: {
+          array_contains: [input.season],
+          path: ["seasonSuggestion"],
+        },
+      });
+    }
+    if (input.minWeight !== undefined || input.maxWeight !== undefined) {
+      attributeFilters.push({
+        attributes: {
+          ...(input.minWeight === undefined ? {} : { gte: input.minWeight }),
+          ...(input.maxWeight === undefined ? {} : { lte: input.maxWeight }),
+          path: ["weight"],
+        },
+      });
+    }
     const visibility: Prisma.FabricWhereInput =
       input.scope === "preset"
         ? { scope: FabricScope.PRESET }
@@ -96,76 +122,88 @@ export class FabricsService {
     const where: Prisma.FabricWhereInput = {
       ...visibility,
       ...(input.category ? { category: input.category } : {}),
-      ...(input.search
+      ...(searchTerms.length > 0
         ? {
             AND: [
               {
-                OR: [
+                OR: searchTerms.flatMap((search) => [
                   {
-                    name: { contains: input.search, mode: "insensitive" },
+                    name: { contains: search, mode: "insensitive" as const },
                   },
                   {
                     subCategory: {
-                      contains: input.search,
-                      mode: "insensitive",
+                      contains: search,
+                      mode: "insensitive" as const,
                     },
                   },
                   {
-                    category: { contains: input.search, mode: "insensitive" },
+                    category: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                  {
+                    attributes: {
+                      gt: 0,
+                      path: ["composition", search],
+                    },
                   },
                   {
                     attributes: {
                       path: ["weave"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
                       path: ["drape"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
                       path: ["stretch"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
                       path: ["opacity"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
                       path: ["sheen"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
                       path: ["texture"],
-                      string_contains: input.search,
+                      string_contains: search,
                     },
                   },
                   {
                     attributes: {
-                      array_contains: [input.search],
+                      array_contains: [search],
                       path: ["seasonSuggestion"],
                     },
                   },
                   {
                     attributes: {
-                      array_contains: [input.search],
+                      array_contains: [search],
                       path: ["useCases"],
                     },
                   },
-                ],
+                ]),
               },
+              ...attributeFilters,
             ],
           }
-        : {}),
+        : attributeFilters.length > 0
+          ? { AND: attributeFilters }
+          : {}),
       status: "active",
     };
     const skip = (input.page - 1) * input.limit;
@@ -245,21 +283,27 @@ export class FabricsService {
   async remove(userId: string, fabricId: string): Promise<void> {
     const existing = await this.findRecord(fabricId);
     this.assertMutable(userId, existing);
-    await this.database.fabric.delete({ where: { id: fabricId } });
+    await this.database.fabric.update({
+      data: { status: "archived" },
+      where: { id: fabricId },
+    });
   }
 
   async imageUrl(userId: string, fabricId: string): Promise<string> {
-    const record = await this.findRecord(fabricId);
+    const record = await this.findRecord(fabricId, true);
     this.assertReadable(userId, record);
     return this.storage.createDownloadUrl(record.mainFile.objectKey, 60);
   }
 
-  private async findRecord(fabricId: string): Promise<FabricRecord> {
+  private async findRecord(
+    fabricId: string,
+    includeArchived = false,
+  ): Promise<FabricRecord> {
     const record = await this.database.fabric.findUnique({
       include: FABRIC_INCLUDE,
       where: { id: fabricId },
     });
-    if (!record || record.status !== "active") {
+    if (!record || (!includeArchived && record.status !== "active")) {
       throw new NotFoundException({
         code: "FABRIC_NOT_FOUND",
         message: "面料不存在",
@@ -446,4 +490,36 @@ export class FabricsService {
       updatedAt: record.updatedAt,
     };
   }
+}
+
+const FABRIC_SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  化纤: ["synthetic", "polyester", "聚酯纤维", "nylon", "尼龙", "锦纶"],
+  斜纹: ["twill"],
+  棉: ["cotton"],
+  棉纤维: ["cotton"],
+  氨纶: ["spandex"],
+  混纺: ["blend"],
+  真丝: ["silk"],
+  羊毛: ["wool"],
+  聚酯纤维: ["polyester", "synthetic"],
+};
+
+const FABRIC_COMPOSITION_ALIASES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  cotton: ["cotton", "棉", "棉纤维"],
+  polyester: ["polyester", "聚酯纤维", "涤纶"],
+  silk: ["silk", "真丝"],
+  spandex: ["spandex", "氨纶"],
+  wool: ["wool", "羊毛"],
+};
+
+function fabricCompositionKeys(composition: string): readonly string[] {
+  return FABRIC_COMPOSITION_ALIASES[composition] ?? [composition];
+}
+
+function fabricSearchTerms(search: string): readonly string[] {
+  const normalized = search.trim();
+  if (!normalized) return [];
+  return [...new Set([normalized, ...(FABRIC_SEARCH_ALIASES[normalized] ?? [])])];
 }

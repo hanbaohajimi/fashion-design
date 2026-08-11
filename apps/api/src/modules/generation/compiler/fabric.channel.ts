@@ -19,6 +19,17 @@ const WEAVES = new Set(["plain", "twill", "knit"]);
 const TEXTURES = new Set(["smooth", "textured"]);
 const DRAPES = new Set(["stiff", "moderate", "fluid"]);
 const SHEENS = new Set(["matte", "subtle", "glossy"]);
+const STRETCHES = new Set(["none", "slight", "high"]);
+const OPACITIES = new Set(["opaque", "semi", "sheer"]);
+const SEASONS = new Set(["spring", "summer", "autumn", "winter"]);
+const USE_CASES = new Set([
+  "shirt",
+  "dress",
+  "outerwear",
+  "pants",
+  "skirt",
+  "suit",
+]);
 
 type FabricChannelDatabase = Pick<PrismaClient, "fabric">;
 
@@ -63,7 +74,7 @@ export class FabricChannel implements CompilerChannel {
           { ownerId: this.userId, scope: FabricScope.USER },
         ],
         id: { in: fabricIds },
-        status: "active",
+        status: { in: ["active", "archived"] },
       },
       select: {
         attributes: true,
@@ -169,6 +180,30 @@ function enumAttribute(value: unknown, allowed: ReadonlySet<string>) {
   return allowed.has(normalized) ? normalized : null;
 }
 
+function numberAttribute(value: unknown, max: number): number | null {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= max
+    ? value
+    : null;
+}
+
+function enumArrayAttribute(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.flatMap((item) => {
+        const normalized = enumAttribute(item, allowed);
+        return normalized ? [normalized] : [];
+      }),
+    ),
+  ];
+}
+
 function compositionEntries(
   value: unknown,
 ): readonly (readonly [string, number])[] {
@@ -223,6 +258,10 @@ function fabricLabels(attributes: Record<string, unknown>): string[] {
     enumAttribute(attributes.texture, TEXTURES),
     enumAttribute(attributes.drape, DRAPES),
     enumAttribute(attributes.sheen, SHEENS),
+    enumAttribute(attributes.stretch, STRETCHES),
+    enumAttribute(attributes.opacity, OPACITIES),
+    ...enumArrayAttribute(attributes.seasonSuggestion, SEASONS),
+    ...enumArrayAttribute(attributes.useCases, USE_CASES),
   ].filter((value): value is string => Boolean(value));
 }
 
@@ -234,12 +273,24 @@ function compileFabricPrompt(attributes: Record<string, unknown>): string {
   const texture = enumAttribute(attributes.texture, TEXTURES);
   const drape = enumAttribute(attributes.drape, DRAPES);
   const sheen = enumAttribute(attributes.sheen, SHEENS);
+  const stretch = enumAttribute(attributes.stretch, STRETCHES);
+  const opacity = enumAttribute(attributes.opacity, OPACITIES);
+  const weight = numberAttribute(attributes.weight ?? attributes.gsm, 2_000);
+  const width = numberAttribute(attributes.width, 1_000);
+  const seasons = enumArrayAttribute(attributes.seasonSuggestion, SEASONS);
+  const useCases = enumArrayAttribute(attributes.useCases, USE_CASES);
   return [
     composition ? `fabric material: ${composition}` : null,
     weave ? `weave type: ${weave}` : null,
     texture ? `fabric texture: ${texture}` : null,
     drape ? `drape: ${drape}` : null,
     sheen ? `sheen: ${sheen}` : null,
+    weight ? `weight: ${weight} GSM` : null,
+    stretch ? `stretch: ${stretch}` : null,
+    opacity ? `opacity: ${opacity}` : null,
+    width ? `fabric width: ${width} cm` : null,
+    seasons.length ? `recommended seasons: ${seasons.join(", ")}` : null,
+    useCases.length ? `use cases: ${useCases.join(", ")}` : null,
   ]
     .filter((value): value is string => Boolean(value))
     .join(", ");

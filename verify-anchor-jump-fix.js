@@ -9,7 +9,7 @@ console.log('🔍 验证锚点跳动修复...\n');
 const results = [];
 
 // 检查1: SVG transform 使用 translate3d
-const svg = document.querySelector('.anchorOverlay svg');
+const svg = document.querySelector('[class*="anchorOverlay"] svg');
 if (svg) {
   const transform = svg.style.transform;
   const usesTranslate3d = transform && transform.includes('translate3d');
@@ -86,8 +86,8 @@ results.push({
     : '⚠ 无法验证（可能因 CORS 限制）'
 });
 
-// 检查4: 锚点存在且可点击
-const anchors = document.querySelectorAll('.anchorPoint');
+// 检查4: 锚点存在且不会拦截画布事件
+const anchors = document.querySelectorAll('[data-anchor-side]');
 const hasAnchors = anchors.length > 0;
 results.push({
   name: '锚点渲染',
@@ -101,10 +101,10 @@ if (hasAnchors) {
   const firstAnchor = anchors[0];
   const pointerEvents = window.getComputedStyle(firstAnchor).pointerEvents;
   results.push({
-    name: '锚点可点击（pointer-events）',
-    passed: pointerEvents === 'all',
-    details: pointerEvents === 'all'
-      ? '✓ pointer-events: all'
+    name: '锚点事件穿透（pointer-events）',
+    passed: pointerEvents === 'none',
+    details: pointerEvents === 'none'
+      ? '✓ pointer-events: none，点击由 ConnectorTool 处理'
       : `✗ pointer-events: ${pointerEvents}`
   });
 }

@@ -92,6 +92,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
     NOTE_REFERENCE_WIDTH,
     NOTE_REFERENCE_HEIGHT,
   );
+  const sourceUrl = safeSourceUrl(shape.meta.source);
 
   const handleRemoveMount = (mountId: string): void => {
     const nextMounts = (shape.props.mounts ?? []).filter((m) => m.id !== mountId);
@@ -133,6 +134,18 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
         spellCheck={false}
         value={shape.props.text}
       />
+      {sourceUrl ? (
+        <a
+          className={styles.noteSourceLink}
+          href={sourceUrl}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          rel="noreferrer"
+          target="_blank"
+        >
+          查看趋势原文
+        </a>
+      ) : null}
     </HTMLContainer>
   );
 
@@ -150,4 +163,16 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
       {content}
     </MaterialShell>
   );
+}
+
+function safeSourceUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }

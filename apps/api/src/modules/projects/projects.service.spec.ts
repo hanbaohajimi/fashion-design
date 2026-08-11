@@ -21,8 +21,56 @@ function projectFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ProjectsService ownership and soft deletion", () => {
+  it("returns the real design asset count and falls back to the latest asset as cover", async () => {
+    const database = {
+      designAsset: { count: vi.fn().mockResolvedValue(3) },
+      project: {
+        count: vi.fn().mockResolvedValue(1),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            ...projectFixture(),
+            _count: { designAssets: 3 },
+            designAssets: [{ id: "asset-latest" }],
+          },
+        ]),
+      },
+      workspace: {},
+    };
+    const service = new ProjectsService(database as never);
+
+    await expect(
+      service.list("user-a", {
+        archived: "active",
+        limit: 50,
+        page: 1,
+        search: "",
+      }),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          assetCount: 3,
+          coverAssetId: "asset-latest",
+          coverUrl: "/api/design-assets/asset-latest/thumbnail",
+        },
+      ],
+    });
+    expect(database.project.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: {
+          _count: { select: { designAssets: true } },
+          designAssets: {
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            select: { id: true },
+            take: 1,
+          },
+        },
+      }),
+    );
+  });
+
   it("returns an owned project detail for the board header", async () => {
     const database = {
+      designAsset: { count: vi.fn().mockResolvedValue(0) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           ...projectFixture(),
@@ -70,6 +118,7 @@ describe("ProjectsService ownership and soft deletion", () => {
     const storedProject = projectFixture();
     let deletedAt: Date | null = null;
     const database = {
+      designAsset: { count: vi.fn().mockResolvedValue(0) },
       project: {
         count: vi.fn().mockImplementation(() =>
           Promise.resolve(deletedAt ? 0 : 1),
@@ -158,5 +207,103 @@ describe("ProjectsService ownership and soft deletion", () => {
 
     expect(result.id).toBe("project-a");
     expect(database.project.create).not.toHaveBeenCalled();
+  });
+
+  it("duplicates design assets and remaps asset references in board records", async () => {
+    const source = {
+      ...projectFixture(),
+      boardElements: [
+        {
+          deletedAt: null,
+          fileAssetId: "file-a",
+          record: {
+            id: "shape:image",
+            props: { assetId: "asset-source", role: "style_ref" },
+          },
+          role: "style_ref",
+          roleConfidence: 1,
+          roleInferenceState: "READY",
+          roleLabel: "风格参考",
+          roleSource: "MANUAL",
+          shapeId: "shape:image",
+          shapeType: "fashion-image",
+        },
+      ],
+      boardSnapshot: {
+        snapshot: { selectedAssetId: "asset-source" },
+      },
+      collections: [],
+      designAssets: [
+        {
+          archivedAt: null,
+          height: 1024,
+          id: "asset-source",
+          operation: "GENERATED",
+          parentAssetId: null,
+          restoredFromAssetId: null,
+          rootAssetId: "asset-source",
+          seed: 7n,
+          thumbnailUrl: "https://cdn.example.com/thumb.png",
+          url: "https://cdn.example.com/design.png",
+          width: 768,
+        },
+      ],
+      workspace: { ownerId: "user-a" },
+    };
+    const designAssetCreateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const boardElementCreateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const boardSnapshotCreate = vi.fn().mockResolvedValue({});
+    const transaction = {
+      boardElement: { createMany: boardElementCreateMany },
+      boardSnapshot: { create: boardSnapshotCreate },
+      collection: { create: vi.fn() },
+      collectionDna: { create: vi.fn() },
+      collectionLook: { createMany: vi.fn() },
+      collectionLookSimilarity: { createMany: vi.fn() },
+      designAsset: { createMany: designAssetCreateMany },
+      project: {
+        create: vi.fn().mockResolvedValue(
+          projectFixture({ id: "project-copy", name: "春季系列 副本" }),
+        ),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          ...projectFixture({ id: "project-copy", name: "春季系列 副本" }),
+          _count: { designAssets: 1 },
+          designAssets: [{ id: "asset-copy" }],
+        }),
+      },
+    };
+    const database = {
+      $transaction: vi.fn(
+        async (operation: (client: typeof transaction) => unknown) =>
+          operation(transaction),
+      ),
+      project: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            ...projectFixture(),
+            workspace: { ownerId: "user-a" },
+          })
+          .mockResolvedValueOnce(source),
+      },
+      workspace: {},
+    };
+    const service = new ProjectsService(database as never);
+
+    await expect(
+      service.duplicate("user-a", "project-a", "copy-key"),
+    ).resolves.toMatchObject({ assetCount: 1, id: "project-copy" });
+
+    const duplicatedAsset = designAssetCreateMany.mock.calls[0]?.[0].data[0];
+    expect(duplicatedAsset.id).not.toBe("asset-source");
+    expect(duplicatedAsset.projectId).toBe("project-copy");
+    expect(duplicatedAsset.rootAssetId).toBe(duplicatedAsset.id);
+    expect(boardElementCreateMany.mock.calls[0]?.[0].data[0].record).toMatchObject({
+      props: { assetId: duplicatedAsset.id },
+    });
+    expect(boardSnapshotCreate.mock.calls[0]?.[0].data.snapshot).toEqual({
+      selectedAssetId: duplicatedAsset.id,
+    });
   });
 });

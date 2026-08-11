@@ -41,7 +41,6 @@ function setup() {
     fabric: {
       count: vi.fn(),
       create: vi.fn(),
-      delete: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -121,6 +120,91 @@ describe("FabricsService 权限边界", () => {
                   attributes: {
                     array_contains: ["shirt"],
                     path: ["useCases"],
+                  },
+                },
+              ]),
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it("成分筛选同时匹配规范英文键和用户录入的中文键", async () => {
+    const { database, service } = setup();
+    database.fabric.count.mockResolvedValue(0);
+    database.fabric.findMany.mockResolvedValue([]);
+
+    await service.list("user-1", {
+      category: undefined,
+      composition: "polyester",
+      limit: 24,
+      page: 1,
+      scope: "all",
+      search: "",
+    });
+
+    expect(database.fabric.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            {
+              OR: [
+                {
+                  attributes: {
+                    gt: 0,
+                    path: ["composition", "polyester"],
+                  },
+                },
+                {
+                  attributes: {
+                    gt: 0,
+                    path: ["composition", "聚酯纤维"],
+                  },
+                },
+                {
+                  attributes: {
+                    gt: 0,
+                    path: ["composition", "涤纶"],
+                  },
+                },
+              ],
+            },
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it("化纤上位词同时匹配常见化学纤维成分", async () => {
+    const { database, service } = setup();
+    database.fabric.count.mockResolvedValue(0);
+    database.fabric.findMany.mockResolvedValue([]);
+
+    await service.list("user-1", {
+      category: undefined,
+      limit: 24,
+      page: 1,
+      scope: "all",
+      search: "化纤",
+    });
+
+    expect(database.fabric.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                {
+                  attributes: {
+                    gt: 0,
+                    path: ["composition", "聚酯纤维"],
+                  },
+                },
+                {
+                  attributes: {
+                    gt: 0,
+                    path: ["composition", "nylon"],
                   },
                 },
               ]),
@@ -220,19 +304,39 @@ describe("FabricsService 权限边界", () => {
     expect(database.fabric.update).not.toHaveBeenCalled();
   });
 
-  it("仅删除当前用户自己的面料", async () => {
+  it("仅软删除当前用户自己的面料，以保留白板和生成引用", async () => {
     const { database, service } = setup();
     database.fabric.findUnique
       .mockResolvedValueOnce(fabricRecord())
       .mockResolvedValueOnce(fabricRecord());
-    database.fabric.delete.mockResolvedValue(fabricRecord());
+    database.fabric.update.mockResolvedValue(
+      fabricRecord({ status: "archived" }),
+    );
 
     await expect(service.remove("user-2", "fabric-1")).rejects.toBeInstanceOf(
       ForbiddenException,
     );
     await expect(service.remove("user-1", "fabric-1")).resolves.toBeUndefined();
-    expect(database.fabric.delete).toHaveBeenCalledWith({
+    expect(database.fabric.update).toHaveBeenCalledWith({
+      data: { status: "archived" },
       where: { id: "fabric-1" },
     });
+  });
+
+  it("允许拥有者继续读取已归档面料主图，但不放宽私有权限", async () => {
+    const { database, service, storage } = setup();
+    database.fabric.findUnique.mockResolvedValue(
+      fabricRecord({ status: "archived" }),
+    );
+    storage.createDownloadUrl.mockResolvedValue(
+      "https://storage.example.com/fabric-1.png",
+    );
+
+    await expect(service.imageUrl("user-1", "fabric-1")).resolves.toBe(
+      "https://storage.example.com/fabric-1.png",
+    );
+    await expect(service.imageUrl("user-2", "fabric-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });

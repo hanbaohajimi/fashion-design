@@ -21,12 +21,17 @@ import { ErrorBoundary } from "../../../observability/ErrorBoundary";
 export function CandidateLightbox({
   candidate,
   initialMode,
+  onTaskCreated,
   onAdopt,
   onClose,
   onDiscard,
 }: {
   readonly candidate: GenerationCandidate;
   readonly initialMode: "view" | "inpaint";
+  readonly onTaskCreated?: (
+    taskId: string,
+    prompt: string,
+  ) => Promise<void> | void;
   readonly onAdopt: (candidate: GenerationCandidate) => void;
   readonly onClose: () => void;
   readonly onDiscard: () => void;
@@ -217,7 +222,13 @@ export function CandidateLightbox({
           </p>
         ) : null}
         {mode === "inpaint" ? (
-          <InpaintPanel candidate={activeCandidate} onSubmitted={onClose} />
+          <InpaintPanel
+            candidate={activeCandidate}
+            onSubmitted={async (taskId, prompt) => {
+              await onTaskCreated?.(taskId, prompt);
+              onClose();
+            }}
+          />
         ) : mode === "history" ? (
           <VersionTimeline
             assetId={activeCandidate.assetId}

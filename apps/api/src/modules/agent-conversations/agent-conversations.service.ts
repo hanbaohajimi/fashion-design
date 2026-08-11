@@ -23,6 +23,7 @@ import { AMUX_CLAUDE_CLIENT, type AmuxClaudeJsonClient } from "../ai/ai.tokens";
 import { S3FileStorage } from "../files/storage.service";
 import { GenerationService } from "../generation/generation.service";
 import type {
+  AttachGenerationTaskInput,
   CreateAgentConversationInput,
   ListAgentConversationsInput,
   ListAgentMessagesInput,
@@ -34,8 +35,16 @@ export const AGENT_CONVERSATIONS_DB = Symbol("AGENT_CONVERSATIONS_DB");
 
 const DEFAULT_TITLE = "新的设计对话";
 const HISTORY_LIMIT = 20;
-const AGENT_IMAGE_LIMIT = 5;
+const AGENT_IMAGE_LIMIT = 16;
 const IDEMPOTENCY_REPLAY_ATTEMPTS = 3;
+const FIXED_GENERATION_PARAMETERS = {
+  background: "opaque" as const,
+  cfg: 3.5,
+  outputCompression: 90,
+  outputFormat: "png" as const,
+  quality: "high" as const,
+  steps: 28,
+};
 
 type AgentDatabase = Pick<
   PrismaClient,
@@ -43,22 +52,36 @@ type AgentDatabase = Pick<
   | "agentConversation"
   | "agentMessage"
   | "boardElement"
+  | "fabric"
   | "fileAsset"
+  | "generationTask"
   | "project"
 >;
+
+interface AgentCanvasElementContext {
+  readonly color?: string;
+  readonly fabricAttributes?: unknown;
+  readonly fabricId?: string;
+  readonly fabricName?: string;
+  readonly label?: string;
+  readonly role: string;
+  readonly roleLabel?: string;
+  readonly shapeId: string;
+  readonly shapeType: string;
+  readonly text?: string;
+}
+
+interface ValidatedAgentContext extends AgentMessageContext {
+  readonly elements: readonly AgentCanvasElementContext[];
+}
 
 const agentDecisionSchema = z
   .object({
     action: z.enum(["reply", "generate"]),
     generation: z
       .object({
-        background: z.enum(["auto", "opaque"]),
-        height: z.union([z.literal(768), z.literal(1024)]),
         negativePrompt: z.string().max(3_000),
-        outputFormat: z.enum(["jpeg", "png", "webp"]),
         prompt: z.string().trim().min(1).max(4_000),
-        quality: z.enum(["auto", "low", "medium", "high"]),
-        width: z.union([z.literal(768), z.literal(1024)]),
       })
       .nullable(),
     message: z.string().trim().min(1).max(2_000),
@@ -78,29 +101,10 @@ const agentDecisionJsonSchema = {
         {
           additionalProperties: false,
           properties: {
-            background: { enum: ["auto", "opaque"], type: "string" },
-            height: { enum: [768, 1024], type: "integer" },
             negativePrompt: { maxLength: 3000, type: "string" },
-            outputFormat: {
-              enum: ["jpeg", "png", "webp"],
-              type: "string",
-            },
             prompt: { maxLength: 4000, minLength: 1, type: "string" },
-            quality: {
-              enum: ["auto", "low", "medium", "high"],
-              type: "string",
-            },
-            width: { enum: [768, 1024], type: "integer" },
           },
-          required: [
-            "background",
-            "height",
-            "negativePrompt",
-            "outputFormat",
-            "prompt",
-            "quality",
-            "width",
-          ],
+          required: ["negativePrompt", "prompt"],
           type: "object",
         },
       ],
@@ -135,13 +139,8 @@ function normalizeAgentDecision(value: unknown): unknown {
     // Some compatible providers return the image prompt directly in this field.
   }
   decision.generation = {
-    background: "auto",
-    height: 1024,
     negativePrompt: "",
-    outputFormat: "png",
     prompt: serialized,
-    quality: "high",
-    width: 1024,
   };
   return decision;
 }
@@ -235,6 +234,66 @@ export class AgentConversationsService {
     };
   }
 
+  async attachGenerationTask(
+    userId: string,
+    conversationId: string,
+    generationTaskId: string,
+    input: AttachGenerationTaskInput,
+  ): Promise<AgentMessageView> {
+    const conversation = await this.assertConversationOwnership(
+      userId,
+      conversationId,
+    );
+    if (conversation.archivedAt) {
+      throw new BadRequestException({
+        code: "AGENT_CONVERSATION_ARCHIVED",
+        message: "已归档会话不能继续添加生成记录",
+      });
+    }
+    const task = await this.database.generationTask.findFirst({
+      where: {
+        id: generationTaskId,
+        projectId: conversation.projectId,
+        userId,
+      },
+    });
+    if (!task) {
+      throw new NotFoundException("生成任务不存在或无权访问");
+    }
+    const existing = await this.database.agentMessage.findUnique({
+      where: { generationTaskId },
+    });
+    if (existing) {
+      if (existing.conversationId !== conversationId) {
+        throw new BadRequestException("生成任务已关联其他会话");
+      }
+      return toMessage(existing);
+    }
+
+    const context = {
+      fileAssetIds: input.fileAssetIds,
+      shapeIds: input.shapeIds,
+    } satisfies AgentMessageContext;
+    const message = await this.database.$transaction(async (transaction) => {
+      const created = await transaction.agentMessage.create({
+        data: {
+          content: input.content,
+          context: context as unknown as Prisma.InputJsonValue,
+          conversationId,
+          generationTaskId,
+          role: AgentMessageRole.ASSISTANT,
+          status: AgentMessageStatus.COMPLETED,
+        },
+      });
+      await transaction.agentConversation.update({
+        where: { id: conversationId },
+        data: { updatedAt: new Date() },
+      });
+      return created;
+    });
+    return toMessage(message);
+  }
+
   async send(
     userId: string,
     conversationId: string,
@@ -293,12 +352,12 @@ export class AgentConversationsService {
     }
 
     try {
-      const [history, images] = await Promise.all([
+      const [history, imageContext] = await Promise.all([
         this.loadHistory(conversationId, turn.userMessage.id),
         this.loadContextImages(userId, context.fileAssetIds),
       ]);
       const decision = await this.model.generateJson({
-        images,
+        images: imageContext.images,
         instructions: agentInstructions,
         jsonSchema: agentDecisionJsonSchema,
         maxTokens: 1_200,
@@ -309,22 +368,18 @@ export class AgentConversationsService {
 
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
+        const outputSize = generationSizeFrom(imageContext.primaryDimensions);
         const result = await this.generation.create(
           userId,
           {
-            background: decision.generation.background,
-            cfg: 3.5,
-            height: decision.generation.height,
+            ...FIXED_GENERATION_PARAMETERS,
+            height: outputSize.height,
             negativePrompt: decision.generation.negativePrompt,
-            outputCompression: 90,
-            outputFormat: decision.generation.outputFormat,
             projectId: conversation.projectId,
             prompt: decision.generation.prompt,
-            quality: decision.generation.quality,
             shapeIds: [...context.shapeIds],
-            steps: 28,
             taskType: "t2i",
-            width: decision.generation.width,
+            width: outputSize.width,
           },
           `agent:${conversationId}:${input.clientRequestId}`,
         );
@@ -471,13 +526,20 @@ export class AgentConversationsService {
     userId: string,
     projectId: string,
     input: SendAgentMessageInput,
-  ): Promise<AgentMessageContext> {
+  ): Promise<ValidatedAgentContext> {
     const shapeIds = [...new Set(input.shapeIds)];
     const requestedFileIds = [...new Set(input.fileAssetIds)];
     const elements = shapeIds.length
       ? await this.database.boardElement.findMany({
           where: { deletedAt: null, projectId, shapeId: { in: shapeIds } },
-          select: { fileAssetId: true, shapeId: true },
+          select: {
+            fileAssetId: true,
+            record: true,
+            role: true,
+            roleLabel: true,
+            shapeId: true,
+            shapeType: true,
+          },
         })
       : [];
     if (elements.length !== shapeIds.length) {
@@ -509,12 +571,16 @@ export class AgentConversationsService {
       }
     }
 
+    const elementByShapeId = new Map(
+      elements.map((element) => [element.shapeId, element] as const),
+    );
     const fileAssetIds = [
       ...new Set([
         ...requestedFileIds,
-        ...elements.flatMap((element) =>
-          element.fileAssetId ? [element.fileAssetId] : [],
-        ),
+        ...shapeIds.flatMap((shapeId) => {
+          const element = elementByShapeId.get(shapeId);
+          return element?.fileAssetId ? [element.fileAssetId] : [];
+        }),
       ]),
     ];
     if (fileAssetIds.length > 0) {
@@ -528,14 +594,63 @@ export class AgentConversationsService {
         });
       }
     }
-    return { fileAssetIds, shapeIds };
+    const fabricIds = elements.flatMap((element) => {
+      const props = propsOf(element.record);
+      return typeof props.fabricId === "string" && props.fabricId.trim()
+        ? [props.fabricId.trim()]
+        : [];
+    });
+    const fabrics = fabricIds.length
+      ? await this.database.fabric.findMany({
+          where: { id: { in: [...new Set(fabricIds)] }, ownerId: userId },
+          select: { attributes: true, id: true, name: true },
+        })
+      : [];
+    const fabricById = new Map(fabrics.map((fabric) => [fabric.id, fabric]));
+    const elementContexts = shapeIds.flatMap((shapeId) => {
+      const element = elementByShapeId.get(shapeId);
+      if (!element) return [];
+      const props = propsOf(element.record);
+      const fabricId = cleanContextText(props.fabricId, 128);
+      const fabric = fabricId ? fabricById.get(fabricId) : undefined;
+      const roleLabel =
+        cleanContextText(element.roleLabel, 120) ??
+        cleanContextText(props.roleLabel, 120);
+      const text = cleanContextText(props.text, 1_000);
+      const color = cleanContextText(props.color, 32);
+      const label = cleanContextText(props.label, 120);
+      const fallbackFabricName = cleanContextText(props.fabricName, 160);
+      return [
+        {
+          role: element.role,
+          shapeId: element.shapeId,
+          shapeType: element.shapeType,
+          ...(roleLabel ? { roleLabel } : {}),
+          ...(text ? { text } : {}),
+          ...(color ? { color } : {}),
+          ...(label ? { label } : {}),
+          ...(fabricId ? { fabricId } : {}),
+          ...(fabric
+            ? {
+                fabricAttributes: fabric.attributes,
+                fabricName: fabric.name,
+              }
+            : fallbackFabricName
+              ? { fabricName: fallbackFabricName }
+              : {}),
+        },
+      ];
+    });
+    return { elements: elementContexts, fileAssetIds, shapeIds };
   }
 
   private async loadContextImages(
     userId: string,
     fileAssetIds: readonly string[],
   ) {
-    if (fileAssetIds.length === 0) return [];
+    if (fileAssetIds.length === 0) {
+      return { images: [], primaryDimensions: null };
+    }
     const files = await this.database.fileAsset.findMany({
       where: {
         id: { in: [...fileAssetIds] },
@@ -543,14 +658,32 @@ export class AgentConversationsService {
         status: FileStatus.READY,
       },
       take: AGENT_IMAGE_LIMIT,
-      select: { objectKey: true },
+      select: { height: true, id: true, objectKey: true, width: true },
     });
-    return Promise.all(
-      files.map(async (file) => ({
+    const fileById = new Map(files.map((file) => [file.id, file] as const));
+    const orderedFiles = fileAssetIds.flatMap((id) => {
+      const file = fileById.get(id);
+      return file ? [file] : [];
+    });
+    const primary = orderedFiles.find(
+      (file) =>
+        typeof file.width === "number" &&
+        file.width > 0 &&
+        typeof file.height === "number" &&
+        file.height > 0,
+    );
+    const images = await Promise.all(
+      orderedFiles.map(async (file) => ({
         detail: "auto" as const,
         url: await this.storage.createDownloadUrl(file.objectKey, 60 * 60),
       })),
     );
+    return {
+      images,
+      primaryDimensions: primary
+        ? { height: primary.height as number, width: primary.width as number }
+        : null,
+    };
   }
 
   private async assertProjectOwnership(userId: string, projectId: string) {
@@ -614,22 +747,49 @@ export class AgentConversationsService {
 const agentInstructions = [
   "你是服装设计白板中的项目 Agent。",
   "先理解用户是否只需要建议，还是明确希望生成、绘制、制作或修改视觉方案。",
-  "仅在明确需要产出图片时选择 generate；解释、讨论和澄清使用 reply。",
-  "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 必须是完整 JSON 对象，禁止输出字符串。",
+  "选中图片后，用户出现修改、替换、调整、生成、绘制、制作等明确视觉操作意图时选择 generate；咨询、分析、解释和澄清使用 reply。",
+  "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 只包含 prompt 与 negativePrompt，禁止输出尺寸、质量、格式、背景、采样步数或 CFG。",
   "回复使用简体中文，简洁说明理解和下一步，不承诺未执行的操作。",
+  "canvasContext.elements 是从当前项目读取并校验过的权威事实；必须使用其中的便签、色值、标签和面料参数，禁止补造缺失属性。",
   "生成提示词应具体描述服装品类、廓形、材质、色彩、细节、视角和光线。",
 ].join("\n");
 
 function buildAgentPrompt(
   content: string,
   history: readonly { readonly content: string; readonly role: string }[],
-  context: AgentMessageContext,
+  context: ValidatedAgentContext,
 ): string {
   return JSON.stringify({
     canvasContext: context,
     currentUserMessage: content,
     recentConversation: history,
   });
+}
+
+function generationSizeFrom(
+  dimensions: { readonly height: number; readonly width: number } | null,
+): { readonly height: 768 | 1024; readonly width: 768 | 1024 } {
+  if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) {
+    return { height: 1024, width: 1024 };
+  }
+  const ratio = dimensions.width / dimensions.height;
+  if (ratio > 1) return { height: 768, width: 1024 };
+  if (ratio < 1) return { height: 1024, width: 768 };
+  return { height: 1024, width: 1024 };
+}
+
+function propsOf(value: Prisma.JsonValue | null): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const props = (value as Record<string, unknown>).props;
+  return props && typeof props === "object" && !Array.isArray(props)
+    ? (props as Record<string, unknown>)
+    : {};
+}
+
+function cleanContextText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/gu, " ").trim();
+  return cleaned ? cleaned.slice(0, maxLength) : null;
 }
 
 function conversationTitle(content: string): string {

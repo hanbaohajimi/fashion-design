@@ -13,6 +13,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
   Sse,
@@ -151,6 +152,36 @@ export class GenerationController {
     @Param("id") taskId: string,
   ): Promise<GenerationTaskView> {
     return this.generationService.cancel(user.userId, taskId);
+  }
+
+  @Patch(":id/candidates/:index")
+  async setCandidateDisposition(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") taskId: string,
+    @Param("index") rawIndex: string,
+    @Body() body: unknown,
+  ): Promise<GenerationTaskView> {
+    const parsed = z
+      .object({
+        disposition: z.enum(["adopted", "dismissed"]),
+        index: z.coerce.number().int().min(0).max(15),
+      })
+      .safeParse({
+        ...(body && typeof body === "object" ? body : {}),
+        index: rawIndex,
+      });
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_CANDIDATE_DISPOSITION",
+        message: "候选序号或处置状态不合法",
+      });
+    }
+    return this.generationService.setCandidateDisposition(
+      user.userId,
+      taskId,
+      parsed.data.index,
+      parsed.data.disposition,
+    );
   }
 
   @Sse(":id/events")

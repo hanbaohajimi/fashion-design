@@ -37,31 +37,6 @@
   padding: 4px;
 }
 
-.brandMark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: #292a26;
-  color: #fffdf7;
-  font-family: var(--font-serif);
-  font-size: 16px;
-  font-weight: var(--font-weight-normal);
-  letter-spacing: var(--letter-spacing-tight);
-  text-decoration: none;
-  place-items: center;
-  transition: opacity var(--transition-fast);
-}
-
-.brandMark:hover {
-  opacity: 0.64;
-}
-
-.brandMark:focus-visible {
-  outline: 2px solid var(--color-accent-terracotta);
-  outline-offset: 4px;
-}
-
 .projectInfo {
   display: flex;
   flex-direction: column;

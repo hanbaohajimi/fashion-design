@@ -51,6 +51,7 @@ const COMMON_NEGATIVE_TERMS = [
   "low-resolution fabric texture",
 ] as const;
 const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
+const MAX_PALETTE_COLORS_PER_ELEMENT = 12;
 
 function propsOf(record: Prisma.JsonValue | null): Record<string, unknown> {
   if (!record || Array.isArray(record) || typeof record !== "object") return {};
@@ -64,6 +65,22 @@ function cleanText(value: unknown, limit = 240): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
   return cleaned ? cleaned.slice(0, limit) : null;
+}
+
+function compilePaletteEntries(props: Record<string, unknown>): string[] {
+  const stored = Array.isArray(props.colors)
+    ? props.colors.slice(0, MAX_PALETTE_COLORS_PER_ELEMENT)
+    : [];
+  const compiled = stored.flatMap((entry) => {
+    if (!entry || Array.isArray(entry) || typeof entry !== "object") return [];
+    const color = entry as Record<string, unknown>;
+    const value = compilePaletteColor(color.color, color.label);
+    return value ? [value] : [];
+  });
+
+  if (compiled.length > 0) return compiled;
+  const legacy = compilePaletteColor(props.color, props.label);
+  return legacy ? [legacy] : [];
 }
 
 function safeRemoteUrl(value: unknown): string | null {
@@ -104,26 +121,31 @@ export class ContextCompilerService {
     const elements = projectId
       ? await this.loadOwnedElements(userId, projectId, shapeIds)
       : [];
-    const palette = unique(
+    const swatchPalette = unique(
       elements
         .filter((element) => element.role === "palette")
-        .map((element) => {
-          const props = propsOf(element.record);
-          return compilePaletteColor(props.color, props.label);
-        }),
+        .flatMap((element) => compilePaletteEntries(propsOf(element.record))),
     );
     const notes = unique(
       elements
         .filter((element) => element.role === "note")
-        .map((element) => cleanText(propsOf(element.record).text, 500)),
+        .map((element) => {
+          const props = propsOf(element.record);
+          return (
+            cleanText(props.text, 500) ??
+            cleanText(props.roleLabel, 500) ??
+            cleanText(element.roleLabel, 500)
+          );
+        }),
     );
     const channels = [
       new FabricChannel(this.database, userId, this.storage),
       new TrendChannel(this.database, this.storage),
     ] as const satisfies readonly CompilerChannel[];
-    const [structuredFabric, structuredTrend] = await Promise.all(
-      [channels[0].compile(elements), channels[1].compile(elements)],
-    );
+    const [structuredFabric, structuredTrend] = await Promise.all([
+      channels[0].compile(elements),
+      channels[1].compile(elements),
+    ]);
     const structuredFabricElementIds = new Set(
       structuredFabric.fabricInputs?.map((input) => input.boardElementId) ?? [],
     );
@@ -135,7 +157,9 @@ export class ContextCompilerService {
         elements
           .filter(
             (element) =>
-              element.role === "style_ref" &&
+              (element.role === "style_ref" ||
+                element.role === "garment_ref" ||
+                element.role === "reference_garment") &&
               !structuredTrendElementIds.has(element.id),
           )
           .map((element) => this.referenceFrom(element, userId, projectId)),
@@ -186,6 +210,20 @@ export class ContextCompilerService {
       userId,
       projectId,
     );
+    const paletteReferences = await this.compileSemanticReferences(
+      elements.filter(
+        (element) =>
+          element.role === "palette" &&
+          compilePaletteEntries(propsOf(element.record)).length === 0,
+      ),
+      "palette",
+      userId,
+      projectId,
+    );
+    const palette = unique([
+      ...swatchPalette,
+      ...paletteReferences.flatMap((reference) => [...reference.labels]),
+    ]);
     const patternReferences = fabricReferences.filter((reference) =>
       reference.labels.some((label) =>
         /pattern|print|motif|纹样|图案/i.test(label),
@@ -267,6 +305,7 @@ export class ContextCompilerService {
       negativePrompt,
       notes,
       palette,
+      paletteReferences,
       patternReferences,
       positivePrompt,
       silhouetteReferences,

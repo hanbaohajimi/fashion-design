@@ -26,7 +26,7 @@ const ROLE_BY_LABEL: Readonly<Record<VlmRoleLabel, BoardElementRole>> = {
   fabric_texture: "fabric_ref",
   fashion_sketch: "silhouette_ref",
   garment_detail: "detail_ref",
-  garment_photo: "style_ref",
+  garment_photo: "garment_ref",
   non_fashion: "style_ref",
   other_fashion: "style_ref",
   silhouette: "silhouette_ref",

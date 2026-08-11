@@ -87,9 +87,6 @@ export function AtelierTopBar({
   return (
     <header className={styles.topBar}>
       <div className={styles.topBarLeft}>
-        <Link href="/" className={styles.brandMark} aria-label="返回项目库">
-          a.
-        </Link>
         <button
           aria-expanded={overviewOpen}
           className={styles.projectButton}

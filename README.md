@@ -53,7 +53,7 @@ pnpm dev
 Amux 令牌，但按模型明确分工：
 
 - `special/anthropic` 下的 `claude-sonnet-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
-- `special/openai` 下的 `gpt-image-2`：只负责实际生成与编辑图片。
+- `premium/openai` 下的 `gpt-image-2-official`：只负责实际生成与编辑图片。
 
 首次配置只需要在 `.env` 中填写：
 
@@ -63,22 +63,22 @@ AMUX_API_KEY=在这里填写你的令牌
 AMUX_BASE_URL=https://api.amux.ai/v1
 AMUX_CLAUDE_MODEL=claude-sonnet-5
 AMUX_CLAUDE_TIMEOUT_MS=20000
-AMUX_IMAGE_MODEL=gpt-image-2
+AMUX_IMAGE_MODEL=gpt-image-2-official
 AI_PROVIDER_TIMEOUT_MS=600000
 GENERATION_TIMEOUT_MS=720000
 ```
 
-Amux 令牌需要同时包含 `special/anthropic` 和 `special/openai` 分组，并且模型列表中
+Amux 令牌需要同时包含 `special/anthropic` 和 `premium/openai` 分组，并且模型列表中
 确实存在上述两个模型。Claude 通过原生 Anthropic `/messages` 接口，并使用强制
 `tool_choice` 与 `strict input_schema` 返回结构化结果；系统使用 `/images/generations` 生成图片，使用
-`/images/edits` 处理参考图和透明蒙版。`gpt-image-2` 按原生格式返回
+`/images/edits` 处理参考图和透明蒙版。`gpt-image-2-official` 按原生格式返回
 `b64_json`；Worker 只在内存中短暂接收并立即写入私有 MinIO，不会把 Base64 图片写入
 任务数据库。送审时，系统会把该 Data URL 转换为 Anthropic 原生 `base64` 图片源，
 避免 Amux 静默忽略图片并返回普通文字。
 
 Amux 分组由令牌在平台侧路由，请求体不额外发送渠道字段。Provider 最长等待 10 分钟，
 Worker 总任务最长等待 12 分钟，额外两分钟用于内容审核、对象存储和缩略图处理。
-带参考图的文生图会优先使用 `/images/edits`；若 `special/openai` 对该请求返回 5xx，
+带参考图的文生图会优先使用 `/images/edits`；若 `premium/openai` 对该请求返回 5xx，
 系统会保留已编译的文字设计要求并降级到 `/images/generations`。真正的图片编辑与局部重绘
 不会降级，以免错误修改整张图片。Provider 内不再叠加重试，队列层仍会重试一次。
 

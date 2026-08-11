@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import {
+  AUTH_EXPIRED_EVENT,
   fetchMe,
   logoutSession,
   type MeResponse,
@@ -130,6 +131,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
+  }, [isPublicPath, loadSession]);
+
+  useEffect(() => {
+    if (isPublicPath) return;
+    const handleExpired = (): void => {
+      setSession(null);
+      void loadSession();
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, [isPublicPath, loadSession]);
 
   useEffect(() => {

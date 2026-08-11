@@ -1,8 +1,4 @@
-import {
-  ExportFormat,
-  ExportStatus,
-  type PrismaClient,
-} from "@fashion/db";
+import { ExportFormat, ExportStatus, type PrismaClient } from "@fashion/db";
 import { EXPORT_RETENTION_MS, PLATFORM_NAME } from "@fashion/shared";
 import { existsSync } from "node:fs";
 import PDFDocument from "pdfkit";
@@ -66,10 +62,7 @@ export function createExportProcessor({
         include: exportInclude,
       });
       if (!exportJob) {
-        throw exportFailure(
-          "EXPORT_NOT_FOUND",
-          "导出任务不存在或已被清理",
-        );
+        throw exportFailure("EXPORT_NOT_FOUND", "导出任务不存在或已被清理");
       }
 
       const rendered =
@@ -82,16 +75,10 @@ export function createExportProcessor({
             );
       const extension = exportJob.format.toLowerCase();
       const objectKey = `temporary/exports/${exportJob.userId}/${exportJob.id}.${extension}`;
-      await storage.putTemporary(
-        objectKey,
-        rendered.body,
-        rendered.mimeType,
-      );
+      await storage.putTemporary(objectKey, rendered.body, rendered.mimeType);
 
       const completedAt = now();
-      const expiresAt = new Date(
-        completedAt.getTime() + EXPORT_RETENTION_MS,
-      );
+      const expiresAt = new Date(completedAt.getTime() + EXPORT_RETENTION_MS);
       await database.exportJob.update({
         where: { id: exportJob.id },
         data: {
@@ -129,10 +116,7 @@ async function downloadStored(
 ): Promise<Buffer> {
   if (!stored.startsWith("s3://")) return download(stored);
   if (!storage.get) {
-    throw exportFailure(
-      "EXPORT_STORAGE_UNAVAILABLE",
-      "无法读取私有设计资产",
-    );
+    throw exportFailure("EXPORT_STORAGE_UNAVAILABLE", "无法读取私有设计资产");
   }
   return storage.get(stored.slice("s3://".length));
 }
@@ -586,7 +570,10 @@ async function downloadUrl(url: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
-function exportFailure(code: string, message: string): Error & { code: string } {
+function exportFailure(
+  code: string,
+  message: string,
+): Error & { code: string } {
   return Object.assign(new Error(message), { code });
 }
 

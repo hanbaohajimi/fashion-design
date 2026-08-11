@@ -120,7 +120,11 @@ describe("DashScopeAdapter", () => {
           {
             content: [
               { image: "data:image/png;base64,AQID" },
-              { text: "保留廓形并调整面料" },
+              {
+                text:
+                  "保留廓形并调整面料\n\n" +
+                  "将上传图片作为高保真视觉参考。允许较大幅度的视觉变化，但必须保留提示词要求的源图元素。",
+              },
             ],
           },
         ],

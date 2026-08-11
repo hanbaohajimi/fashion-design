@@ -358,6 +358,7 @@ export class BoardsService {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
       select: {
+        archived: true,
         deletedAt: true,
         workspace: {
           select: { ownerId: true },
@@ -369,6 +370,13 @@ export class BoardsService {
       throw new NotFoundException({
         code: "PROJECT_NOT_FOUND",
         message: "项目不存在",
+      });
+    }
+
+    if (project.archived) {
+      throw new NotFoundException({
+        code: "PROJECT_ARCHIVED",
+        message: "项目已归档，请先恢复项目后继续编辑",
       });
     }
 

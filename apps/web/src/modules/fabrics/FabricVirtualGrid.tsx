@@ -12,6 +12,7 @@ interface GridCellData {
   readonly compact: boolean;
   readonly fabrics: readonly Fabric[];
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
+  readonly onChanged?: (() => void) | undefined;
 }
 
 function FabricCell({
@@ -20,6 +21,7 @@ function FabricCell({
   compact,
   fabrics,
   onAdd,
+  onChanged,
   rowIndex,
   style,
 }: CellComponentProps<GridCellData>) {
@@ -32,7 +34,9 @@ function FabricCell({
       <FabricCard
         compact={compact}
         fabric={fabric}
+        key={fabric.id}
         onAdd={onAdd}
+        onChanged={onChanged}
         variant={(rowIndex + columnIndex) % 3 === 0 ? "tall" : "short"}
       />
     </div>
@@ -44,6 +48,7 @@ interface FabricVirtualGridProps {
   readonly fabrics: readonly Fabric[];
   readonly height?: number;
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
+  readonly onChanged?: (() => void) | undefined;
   readonly onNearEnd?: () => void;
 }
 
@@ -52,6 +57,7 @@ export function FabricVirtualGrid({
   fabrics,
   height = 680,
   onAdd,
+  onChanged,
   onNearEnd,
 }: FabricVirtualGridProps) {
   const host = useRef<HTMLDivElement>(null);
@@ -73,8 +79,8 @@ export function FabricVirtualGrid({
     : Math.max(1, Math.min(4, Math.floor(width / 260)));
   const rowCount = Math.ceil(fabrics.length / columnCount);
   const cellProps = useMemo<GridCellData>(
-    () => ({ columnCount, compact, fabrics, onAdd }),
-    [columnCount, compact, fabrics, onAdd],
+    () => ({ columnCount, compact, fabrics, onAdd, onChanged }),
+    [columnCount, compact, fabrics, onAdd, onChanged],
   );
 
   return (

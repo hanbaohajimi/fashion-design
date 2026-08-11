@@ -1,11 +1,7 @@
 import type { BoardElementRole } from "@fashion/shared";
 
 export type SubstrateMaterial =
-  | "paper"
-  | "photo"
-  | "card"
-  | "fabric"
-  | "tracing-paper";
+  "paper" | "photo" | "card" | "fabric" | "tracing-paper";
 
 export type EdgeStyle =
   | "straight"
@@ -88,44 +84,6 @@ export interface MaterialAppearance {
 }
 
 // ---------------------------------------------------------------------------
-// Mount catalog — exposed in the tool-rail picker
-// ---------------------------------------------------------------------------
-
-export interface MountCatalogEntry {
-  readonly variant: MountVariant;
-  readonly type: MountType;
-  readonly label: string;
-  readonly description: string;
-}
-
-export const MOUNT_CATALOG: readonly MountCatalogEntry[] = [
-  {
-    variant: "brass-pin",
-    type: "pin",
-    label: "黄铜图钉",
-    description: "固定参考图片",
-  },
-  {
-    variant: "red-pin",
-    type: "pin",
-    label: "红色图钉",
-    description: "标记需规避的设计方向",
-  },
-  {
-    variant: "masking-tape",
-    type: "tape",
-    label: "美纹纸胶带",
-    description: "临时粘贴草稿",
-  },
-  {
-    variant: "washi-tape",
-    type: "tape",
-    label: "和纸胶带",
-    description: "装饰性固定",
-  },
-] as const;
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -162,6 +120,8 @@ export function resolveMaterialAppearance(
 ): MaterialPreset {
   switch (role) {
     case "style_ref":
+    case "garment_ref":
+    case "reference_garment":
       return "editorial-photo";
     case "fabric_ref":
       return "fabric-swatch";
@@ -232,7 +192,12 @@ const PRESET_CONFIGS: Record<MaterialPreset, PresetConfig> = {
     imperfections: { crease: 0.05, grain: 0.25, cornerWear: 0.12 },
   },
   "sketch-paper": {
-    substrate: { material: "paper", tone: "#f4f1ea", opacity: 0.98, padding: 16 },
+    substrate: {
+      material: "paper",
+      tone: "#f4f1ea",
+      opacity: 0.98,
+      padding: 16,
+    },
     edge: { style: "torn", intensity: 2.0 },
     shadow: { elevation: 2, softness: 8, offsetX: 6, offsetY: 10 },
     imperfections: { crease: 0.18, grain: 0.45, cornerWear: 0.28 },
@@ -254,7 +219,12 @@ const PRESET_CONFIGS: Record<MaterialPreset, PresetConfig> = {
     imperfections: { crease: 0.02, grain: 0.15, cornerWear: 0.05 },
   },
   "archive-note": {
-    substrate: { material: "paper", tone: "#f2ede3", opacity: 0.96, padding: 14 },
+    substrate: {
+      material: "paper",
+      tone: "#f2ede3",
+      opacity: 0.96,
+      padding: 14,
+    },
     edge: { style: "deckled", intensity: 1.8 },
     shadow: { elevation: 2, softness: 9, offsetX: 6, offsetY: 10 },
     imperfections: { crease: 0.15, grain: 0.4, cornerWear: 0.22 },

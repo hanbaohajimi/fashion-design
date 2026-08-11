@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 
 import { readErrorMessage } from "../auth/auth-api";
 import type {
@@ -43,35 +44,62 @@ async function requestJson<T>(
     }
     throw new TrendApiError(message, response.status, code);
   }
-  return (await response.json()) as T;
+
+  const body = await response.text();
+  if (!body.trim()) {
+    return null as T;
+  }
+
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new TrendApiError("趋势数据响应格式错误", response.status);
+  }
 }
 
 export function useTrends() {
-  const query = useSWR<TrendListPage>(
-    "/api/trends?limit=60&page=1",
+  const query = useSWRInfinite<TrendListPage>(
+    (pageIndex, previousPage) => {
+      if (previousPage && !previousPage.hasMore) return null;
+      return `/api/trends?limit=60&page=${pageIndex + 1}`;
+    },
     requestJson,
     { keepPreviousData: true, revalidateOnFocus: false },
   );
+  const items = query.data?.flatMap((page) => page.items) ?? [];
+  const lastPage = query.data?.at(-1);
   return {
     error: query.error instanceof Error ? query.error : null,
+    hasMore: Boolean(lastPage?.hasMore),
     isLoading: query.isLoading,
-    items: query.data?.items ?? [],
+    isLoadingMore: query.isValidating && Boolean(query.data?.length),
+    items,
+    loadMore: () => {
+      if (lastPage?.hasMore && !query.isValidating) {
+        void query.setSize(query.size + 1);
+      }
+    },
     refresh: () => void query.mutate(),
-    total: query.data?.total ?? 0,
+    total: query.data?.[0]?.total ?? 0,
   };
 }
 
 export function useCurrentTrendDigest() {
-  const query = useSWR<TrendDigest>(
+  const query = useSWR<TrendDigest | null>(
     "/api/trends/digest/current",
-    requestJson,
+    fetchCurrentTrendDigest,
     { revalidateOnFocus: false },
   );
   return {
     data: query.data ?? null,
     error: query.error instanceof Error ? query.error : null,
     isLoading: query.isLoading,
+    refresh: () => void query.mutate(),
   };
+}
+
+export function fetchCurrentTrendDigest(): Promise<TrendDigest | null> {
+  return requestJson<TrendDigest | null>("/api/trends/digest/current");
 }
 
 export function importTrendToBoard(

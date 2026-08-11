@@ -41,10 +41,14 @@ export interface FabricListPage {
 
 export interface FabricListQuery {
   readonly category?: string;
+  readonly composition?: string;
   readonly limit?: number;
+  readonly maxWeight?: number;
+  readonly minWeight?: number;
   readonly page?: number;
   readonly scope?: "all" | FabricScope;
   readonly search?: string;
+  readonly season?: string;
 }
 
 export function getCompositionEntries(
@@ -110,6 +114,18 @@ export const FABRIC_SEASON_LABELS: Readonly<Record<string, string>> = {
   winter: "冬",
 };
 
+export const FABRIC_STRETCH_LABELS: Readonly<Record<string, string>> = {
+  high: "高弹",
+  none: "无弹",
+  slight: "微弹",
+};
+
+export const FABRIC_OPACITY_LABELS: Readonly<Record<string, string>> = {
+  opaque: "不透",
+  semi: "半透",
+  sheer: "透明",
+};
+
 /** Ordinal handfeel scales. `level` is the position on the scale, so the
  * lowest value still fills one step instead of reading as missing data. */
 const DRAPE_SCALE: Readonly<Record<string, { label: string; level: number }>> = {
@@ -120,9 +136,9 @@ const DRAPE_SCALE: Readonly<Record<string, { label: string; level: number }>> = 
 
 const STRETCH_SCALE: Readonly<Record<string, { label: string; level: number }>> =
   {
-    high: { label: "高弹", level: 3 },
-    none: { label: "无弹", level: 1 },
-    slight: { label: "微弹", level: 2 },
+    high: { label: FABRIC_STRETCH_LABELS.high ?? "高弹", level: 3 },
+    none: { label: FABRIC_STRETCH_LABELS.none ?? "无弹", level: 1 },
+    slight: { label: FABRIC_STRETCH_LABELS.slight ?? "微弹", level: 2 },
   };
 
 export const FABRIC_METRIC_STEPS = 3;

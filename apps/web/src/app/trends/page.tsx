@@ -18,21 +18,13 @@ import {
 } from "../../modules/trends/trend-api";
 import type { TrendItem } from "../../modules/trends/trend-types";
 import { TrendBoardPickerDialog } from "../../modules/trends/TrendBoardPickerDialog";
-import { TrendCard, platformLabel } from "../../modules/trends/TrendCard";
+import {
+  TrendCard,
+  platformLabel,
+  trendCategoryLabel,
+} from "../../modules/trends/TrendCard";
 import styles from "../../modules/trends/trends.module.css";
 import { WeeklyDigestCard } from "../../modules/trends/WeeklyDigestCard";
-
-const PLATFORMS = ["all", "vogue", "wwd", "pinterest", "fashionunited"] as const;
-const CATEGORY_LABELS: Readonly<Record<string, string>> = {
-  accessories: "配饰",
-  all: "全部",
-  color: "色彩",
-  culture: "文化",
-  material: "材质",
-  men: "男装",
-  styling: "造型",
-  women: "女装",
-};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "存入白板失败，请稍后重试";
@@ -79,6 +71,17 @@ export default function TrendsPage() {
     ],
     [trends.items],
   );
+  const availablePlatforms = useMemo(
+    () => [
+      "all",
+      ...new Set(
+        trends.items
+          .map((trend) => trend.platform.trim().toLowerCase())
+          .filter((value) => value.length > 0),
+      ),
+    ],
+    [trends.items],
+  );
 
   const filtered = useMemo(
     () =>
@@ -116,6 +119,7 @@ export default function TrendsPage() {
   };
 
   const requestImport = (trend: TrendItem): void => {
+    if (importingTrendId) return;
     const activeBoardId = readActiveBoardId();
     if (!activeBoardId) {
       setPendingTrend(trend);
@@ -136,16 +140,32 @@ export default function TrendsPage() {
         <p>这里展示的是对公开来源的分析整理。每一条摘要都与平台、发布日期和原文入口并列呈现。</p>
       </section>
 
-      <WeeklyDigestCard digest={digest.data} error={digest.error} loading={digest.isLoading} />
+      <WeeklyDigestCard
+        digest={digest.data}
+        error={digest.error}
+        loading={digest.isLoading}
+        onRetry={digest.refresh}
+      />
 
       <section aria-label="趋势筛选" className={styles.filterBar}>
-        <FilterGroup label="主题" onChange={setCategory} options={availableCategories} value={category} labels={CATEGORY_LABELS} />
+        <FilterGroup
+          label="主题"
+          onChange={setCategory}
+          options={availableCategories}
+          value={category}
+          labels={Object.fromEntries(
+            availableCategories.map((value) => [
+              value,
+              value === "all" ? "全部" : trendCategoryLabel(value),
+            ]),
+          )}
+        />
         <FilterGroup
           label="平台"
           onChange={setPlatform}
-          options={PLATFORMS}
+          options={availablePlatforms}
           value={platform}
-          labels={Object.fromEntries(PLATFORMS.map((value) => [value, value === "all" ? "全部" : platformLabel(value)]))}
+          labels={Object.fromEntries(availablePlatforms.map((value) => [value, value === "all" ? "全部" : platformLabel(value)]))}
         />
         <FilterGroup label="标签" onChange={setTag} options={["all", ...availableTags]} value={tag} labels={{ all: "全部" }} />
         <button className={styles.resetFilters} onClick={() => { setCategory("all"); setPlatform("all"); setTag("all"); }} type="button">重置筛选</button>
@@ -166,10 +186,25 @@ export default function TrendsPage() {
         ) : (
           <div className={styles.trendGrid}>
             {filtered.map((trend) => (
-              <TrendCard importing={importingTrendId === trend.id} key={trend.id} onImport={requestImport} trend={trend} />
+              <TrendCard
+                disabled={Boolean(importingTrendId) && importingTrendId !== trend.id}
+                importing={importingTrendId === trend.id}
+                key={trend.id}
+                onImport={requestImport}
+                trend={trend}
+              />
             ))}
           </div>
         )}
+        {trends.hasMore ? (
+          <button
+            disabled={trends.isLoadingMore}
+            onClick={trends.loadMore}
+            type="button"
+          >
+            {trends.isLoadingMore ? "正在加载更多…" : "加载更多趋势"}
+          </button>
+        ) : null}
       </section>
 
       <TrendBoardPickerDialog

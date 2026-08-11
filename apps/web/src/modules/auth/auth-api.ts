@@ -21,10 +21,15 @@ interface ErrorResponse {
   readonly message?: string;
 }
 
+export const AUTH_EXPIRED_EVENT = "fashion:auth-expired";
+
 export async function readErrorMessage(
   response: Response,
   fallback: string,
 ): Promise<string> {
+  if (response.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
   try {
     const body = (await response.json()) as ErrorResponse;
     return body.message ?? fallback;

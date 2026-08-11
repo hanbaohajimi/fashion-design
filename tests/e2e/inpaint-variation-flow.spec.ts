@@ -7,6 +7,8 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   const taskDetails = new Map<string, Record<string, unknown>>();
   let sequence = 0;
   let sourceTaskReads = 0;
+  let inpaintTaskReads = 0;
+  let linkedInpaintTaskId: string | undefined;
   let uploadedMaskBytes = 0;
   let rejectedInpaintOnce = false;
 
@@ -57,8 +59,10 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
     );
   });
   await page.route("**/api/generations/masks/sign", async (route) => {
-    const body = route.request().postDataJSON() as { readonly sha256: string };
-    expect(body.sha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
+    const body = route.request().postDataJSON() as {
+      readonly checksumSha256: string;
+    };
+    expect(body.checksumSha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
     await route.fulfill({
       json: {
         expiresAt: "2026-07-27T09:00:00.000Z",
@@ -67,7 +71,7 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
         upload: {
           headers: {
             "Content-Type": "image/png",
-            "x-amz-checksum-sha256": body.sha256,
+            "x-amz-checksum-sha256": body.checksumSha256,
           },
           method: "PUT",
           url: "https://signed.example/mask-e2e.png?write=1",
@@ -84,6 +88,44 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   );
   await page.route("**/api/generations?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/projects/e2e-inpaint/agent-conversations*", (route) =>
+    route.fulfill({ json: { items: [{ archivedAt: null, createdAt: "2026-07-27T08:00:00.000Z", id: "conversation-inpaint", messageCount: 0, projectId: "e2e-inpaint", title: "新的设计对话", updatedAt: "2026-07-27T08:00:00.000Z" }], nextCursor: null } }),
+  );
+  await page.route("**/api/agent-conversations/conversation-inpaint/messages*", async (route) => {
+    if (route.request().method() !== "POST") return route.fulfill({ json: { items: [], nextCursor: null } });
+    const body = route.request().postDataJSON() as { readonly clientRequestId: string; readonly content: string; readonly shapeIds: readonly string[] };
+    const userMessage = { clientRequestId: body.clientRequestId, content: body.content, context: { fileAssetIds: [], shapeIds: body.shapeIds }, createdAt: "2026-07-27T08:00:00.000Z", error: null, generationTaskId: null, id: "user-inpaint", replyToId: null, role: "user", status: "completed", updatedAt: "2026-07-27T08:00:00.000Z" };
+    const assistantMessage = { ...userMessage, clientRequestId: null, content: "已生成基础方案。", generationTaskId: "task-source", id: "assistant-inpaint", replyToId: userMessage.id, role: "assistant" };
+    taskDetails.set("task-source", { createdAt: "2026-07-27T08:00:00.000Z", error: null, id: "task-source", output: { images: [{ assetId: "asset-source", height: 1024, url: "https://assets.example/source.png", width: 768 }], seed: 700 }, request: { cfg: 3.5, height: 1024, projectId: "e2e-inpaint", prompt: body.content, shapeIds: body.shapeIds, steps: 28, taskType: "t2i", width: 768 }, status: "succeeded", taskType: "t2i", updatedAt: "2026-07-27T08:00:00.000Z" });
+    return route.fulfill({ json: { assistantMessage, taskId: "task-source", userMessage }, status: 201 });
+  });
+  await page.route(
+    "**/api/agent-conversations/conversation-inpaint/generation-tasks/*",
+    async (route) => {
+      linkedInpaintTaskId = new URL(route.request().url()).pathname
+        .split("/")
+        .at(-1);
+      const body = route.request().postDataJSON() as {
+        readonly content: string;
+      };
+      await route.fulfill({
+        json: {
+          clientRequestId: null,
+          content: body.content,
+          context: { fileAssetIds: [], shapeIds: [] },
+          createdAt: "2026-07-27T08:00:03.000Z",
+          error: null,
+          generationTaskId: linkedInpaintTaskId,
+          id: "assistant-inpaint-result",
+          replyToId: null,
+          role: "assistant",
+          status: "completed",
+          updatedAt: "2026-07-27T08:00:03.000Z",
+        },
+        status: 201,
+      });
+    },
   );
   await page.route(/\/api\/generations$/u, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -143,6 +185,9 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await page.route(/\/api\/generations\/[^/]+$/u, async (route) => {
     const taskId = new URL(route.request().url()).pathname.split("/").at(-1);
     const detail = taskDetails.get(taskId ?? "");
+    if (taskId?.startsWith("task-inpaint-")) {
+      inpaintTaskReads += 1;
+    }
     if (taskId === "task-source" && detail) {
       sourceTaskReads += 1;
       const completed = sourceTaskReads >= 3;
@@ -183,13 +228,11 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await expect(uploadTray).toBeHidden();
 
   await page.getByRole("button", { name: "便签" }).click();
-  await page
-    .getByRole("textbox", { name: "设计描述" })
-    .fill("结构清晰的短款外套");
-  await page.getByRole("button", { name: "创建", exact: true }).click();
-  await expect(page.getByText("实时连接中断 · 轮询同步")).toBeVisible({
-    timeout: 12_000,
-  });
+  await page.getByRole("button", { name: "展开设计助手" }).click();
+  await page.getByRole("textbox", { name: "编辑描述" }).fill("结构清晰的短款外套");
+  const sendButton = page.getByRole("button", { name: "发送", exact: true });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
   await expect(
     page.locator('img[src="https://assets.example/source.png"]'),
   ).toBeVisible();
@@ -209,7 +252,9 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   expect(Math.round(agentBox.x + agentBox.width)).toBe(390);
   expect(candidateDockBox.x).toBeGreaterThanOrEqual(agentBox.x);
   await page.getByRole("button", { name: "折叠设计助手" }).click();
-  await expect(page.getByRole("region", { name: "设计面板" })).toBeVisible();
+  await expect(
+    page.getByRole("complementary", { name: "设计助手（已折叠）" }),
+  ).toBeVisible();
   await page.setViewportSize({ height: 720, width: 1280 });
   await page.getByRole("button", { name: "展开设计助手" }).click();
 
@@ -244,6 +289,7 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   ).toEqual([701, 702, 703]);
   await page.getByRole("button", { name: "关闭候选详情" }).click();
 
+  await sourceCard.getByRole("button", { name: "更多候选操作" }).click();
   await sourceCard.getByRole("button", { name: "局部改" }).click();
   await page
     .getByRole("textbox", { name: "局部重绘说明" })
@@ -309,6 +355,17 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
     referenceImageUrl: "https://assets.example/source.png",
     taskType: "inpaint",
   });
+  await expect.poll(() => inpaintTaskReads).toBeGreaterThan(0);
+  await expect.poll(() => linkedInpaintTaskId).toMatch(/^task-inpaint-/u);
+  const agentPanel = page.getByRole("complementary", { name: "设计助手" });
+  await expect(agentPanel).toContainText(
+    "局部重绘：将领口改成窄驳领，保持原有面料",
+  );
+  await expect(
+    agentPanel.locator('img[src="https://assets.example/inpaint.png"]'),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "打开历史" }).click();
+  await page.getByRole("tab", { name: "生成" }).click();
   await expect(
     page.locator('img[src="https://assets.example/inpaint.png"]'),
   ).toBeVisible();

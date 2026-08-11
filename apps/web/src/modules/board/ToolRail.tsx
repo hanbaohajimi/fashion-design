@@ -442,16 +442,22 @@ export function ToolRail({
             title="系列工作台"
             type="button"
           >
-            <svg aria-hidden="true" fill="none" viewBox="0 0 20 20">
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="18"
+              viewBox="0 0 20 20"
+              width="18"
+            >
               <path
-                d="M5 4.5h8.5v10H5z"
+                d="M4.5 5.25h8.75v10H4.5z"
                 fill="currentColor"
                 fillOpacity="0.08"
                 stroke="currentColor"
                 strokeWidth="1.35"
               />
               <path
-                d="M7.5 2.5H16v10h-2.5M7.5 7.5H11M7.5 10h3"
+                d="M7.25 2.75H15.5v10h-2.25M7.25 7.25h3.5M7.25 10h2.5"
                 stroke="currentColor"
                 strokeLinecap="round"
                 strokeLinejoin="round"

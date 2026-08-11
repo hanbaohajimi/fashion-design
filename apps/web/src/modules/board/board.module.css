@@ -12,6 +12,16 @@
   --board-agent-current-width: var(--agent-rail-width);
 }
 
+@media (max-width: 1280px) {
+  .boardShell {
+    --board-agent-current-width: 0px;
+  }
+
+  .boardShell[data-chat-collapsed="true"] {
+    --board-agent-current-width: var(--agent-rail-width);
+  }
+}
+
 /* Canvas viewport — full-height workspace, reduced only by the desktop agent. */
 .canvasWrapper {
   position: fixed;

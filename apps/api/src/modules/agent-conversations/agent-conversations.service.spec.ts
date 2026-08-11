@@ -80,9 +80,15 @@ function createHarness() {
     boardElement: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    fabric: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     fileAsset: {
       count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
+    },
+    generationTask: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     project: {
       findUnique: vi.fn().mockResolvedValue({
@@ -173,21 +179,64 @@ describe("AgentConversationsService", () => {
     );
   });
 
-  it("uses selected project shapes and the existing generation service", async () => {
+  it.each([
+    {
+      files: [{ height: 900, id: "file-a", objectKey: "a", width: 1600 }],
+      height: 768,
+      label: "横图",
+      width: 1024,
+    },
+    {
+      files: [{ height: 1600, id: "file-a", objectKey: "a", width: 900 }],
+      height: 1024,
+      label: "竖图",
+      width: 768,
+    },
+    {
+      files: [{ height: 1200, id: "file-a", objectKey: "a", width: 1200 }],
+      height: 1024,
+      label: "方图",
+      width: 1024,
+    },
+    {
+      files: [{ height: null, id: "file-a", objectKey: "a", width: 0 }],
+      height: 1024,
+      label: "异常尺寸",
+      width: 1024,
+    },
+    {
+      files: [
+        { height: 900, id: "file-a", objectKey: "a", width: 1600 },
+        { height: 1600, id: "file-b", objectKey: "b", width: 900 },
+      ],
+      height: 768,
+      label: "多图以首图为准",
+      width: 1024,
+    },
+  ])(
+    "uses fixed generation parameters and resolves $label output size",
+    async ({ files, height, width }) => {
     const harness = createHarness();
-    harness.database.boardElement.findMany.mockResolvedValue([
-      { fileAssetId: null, shapeId: "shape-a" },
-    ]);
+    harness.database.boardElement.findMany.mockResolvedValue(
+      files.map((file, index) => ({
+        fileAssetId: file.id,
+        record: { props: {} },
+        role: index === 0 ? "style_ref" : "detail_ref",
+        roleLabel: null,
+        shapeId: `shape-${index}`,
+        shapeType: "fashion-image",
+      })),
+    );
+    harness.database.fileAsset.count.mockResolvedValue(files.length);
+    harness.database.fileAsset.findMany.mockResolvedValue(files);
+    harness.storage.createDownloadUrl.mockImplementation(
+      async (objectKey: string) => `https://assets.test/${objectKey}`,
+    );
     harness.model.generateJson.mockResolvedValue({
       action: "generate",
       generation: {
-        background: "opaque",
-        height: 1024,
         negativePrompt: "watermark",
-        outputFormat: "png",
         prompt: "structured trench coat editorial",
-        quality: "high",
-        width: 768,
       },
       message: "我会按选中的廓形参考生成一版风衣。",
     });
@@ -204,19 +253,124 @@ describe("AgentConversationsService", () => {
       clientRequestId: "request-123",
       content: "参考选中廓形生成一件风衣",
       fileAssetIds: [],
-      shapeIds: ["shape-a"],
+      shapeIds: files.map((_, index) => `shape-${index}`),
     });
 
     expect(result.taskId).toBe("task-a");
     expect(harness.generation.create).toHaveBeenCalledWith(
       "user-a",
-      expect.objectContaining({
+      {
+        background: "opaque",
+        cfg: 3.5,
+        height,
+        negativePrompt: "watermark",
+        outputCompression: 90,
+        outputFormat: "png",
         projectId: "project-a",
-        shapeIds: ["shape-a"],
+        prompt: "structured trench coat editorial",
+        quality: "high",
+        shapeIds: files.map((_, index) => `shape-${index}`),
+        steps: 28,
         taskType: "t2i",
-      }),
+        width,
+      },
       "agent:conversation-a:request-123",
     );
+    },
+  );
+
+  it("把便签、色值和面料参数作为权威事实传给 Agent", async () => {
+    const harness = createHarness();
+    let receivedElements: unknown;
+    harness.database.boardElement.findMany.mockResolvedValue([
+      {
+        fileAssetId: null,
+        record: {
+          props: {
+            roleLabel: "保留不对称门襟，降低肩部体积",
+            text: "袖口使用隐藏式按扣",
+          },
+        },
+        role: "note",
+        roleLabel: null,
+        shapeId: "note-a",
+        shapeType: "fashion-note",
+      },
+      {
+        fileAssetId: null,
+        record: { props: { color: "#8B1E2D", label: "酒红" } },
+        role: "palette",
+        roleLabel: null,
+        shapeId: "swatch-a",
+        shapeType: "fashion-swatch",
+      },
+      {
+        fileAssetId: null,
+        record: { props: { fabricId: "fabric-a", fabricName: "精纺羊毛" } },
+        role: "fabric_ref",
+        roleLabel: null,
+        shapeId: "fabric-a-shape",
+        shapeType: "fashion-fabric",
+      },
+    ]);
+    harness.database.fabric.findMany.mockResolvedValue([
+      {
+        attributes: {
+          composition: { wool: 98, elastane: 2 },
+          gsm: 260,
+          stretch: "low",
+        },
+        id: "fabric-a",
+        name: "精纺羊毛",
+      },
+    ]);
+    harness.model.generateJson.mockImplementation(
+      async (options: { prompt: string }) => {
+        const prompt = JSON.parse(options.prompt) as {
+          canvasContext: { elements: unknown[] };
+        };
+        receivedElements = prompt.canvasContext.elements;
+        return {
+          action: "reply",
+          generation: null,
+          message: "已读取所选设计约束。",
+        };
+      },
+    );
+    harness.database.agentMessage.update.mockResolvedValue(
+      messageFixture(AgentMessageRole.ASSISTANT, {
+        content: "已读取所选设计约束。",
+        status: AgentMessageStatus.COMPLETED,
+      }),
+    );
+
+    const result = await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-context",
+      content: "总结所选约束",
+      fileAssetIds: [],
+      shapeIds: ["note-a", "swatch-a", "fabric-a-shape"],
+    });
+
+    expect(harness.model.generateJson).toHaveBeenCalledOnce();
+    expect(result.assistantMessage.status).toBe("completed");
+    expect(receivedElements).toEqual([
+      expect.objectContaining({
+        role: "note",
+        roleLabel: "保留不对称门襟，降低肩部体积",
+        shapeId: "note-a",
+        text: "袖口使用隐藏式按扣",
+      }),
+      expect.objectContaining({
+        color: "#8B1E2D",
+        label: "酒红",
+        role: "palette",
+      }),
+      expect.objectContaining({
+        fabricAttributes: expect.objectContaining({ gsm: 260 }),
+        fabricId: "fabric-a",
+        role: "fabric_ref",
+      }),
+    ]);
   });
 
   it("rejects shape ids that do not belong to the conversation project", async () => {
@@ -403,5 +557,52 @@ describe("AgentConversationsService", () => {
     expect(page.items).toHaveLength(1);
     expect(page.nextCursor).toBe("conversation-a");
     expect(updated.title).toBe("机能风系列");
+  });
+
+  it("attaches an owned generation task to the current conversation", async () => {
+    const harness = createHarness();
+    const attachedMessage = messageFixture(AgentMessageRole.ASSISTANT, {
+      content: "局部重绘：调整领口结构",
+      generationTaskId: "task-inpaint",
+      status: AgentMessageStatus.COMPLETED,
+    });
+    const createMessage = vi.fn().mockResolvedValue(attachedMessage);
+    harness.database.generationTask.findFirst.mockResolvedValue({
+      id: "task-inpaint",
+    });
+    harness.database.$transaction.mockImplementationOnce(
+      async (callback: (transaction: unknown) => unknown) =>
+        callback({
+          agentConversation: { update: vi.fn().mockResolvedValue(undefined) },
+          agentMessage: { create: createMessage },
+        }),
+    );
+
+    const result = await harness.service.attachGenerationTask(
+      "user-a",
+      "conversation-a",
+      "task-inpaint",
+      {
+        content: "局部重绘：调整领口结构",
+        fileAssetIds: [],
+        shapeIds: [],
+      },
+    );
+
+    expect(result.generationTaskId).toBe("task-inpaint");
+    expect(harness.database.generationTask.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "task-inpaint",
+        projectId: "project-a",
+        userId: "user-a",
+      },
+    });
+    expect(createMessage).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        conversationId: "conversation-a",
+        generationTaskId: "task-inpaint",
+        role: AgentMessageRole.ASSISTANT,
+      }),
+    });
   });
 });
