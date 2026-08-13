@@ -156,16 +156,16 @@ model GenerationTask {
 }
 
 model GenerationInput {
-  id                 String         @id @default(cuid(2))
-  generationTaskId   String         @map("generation_task_id")
-  inputType          String         @default("fabric") @map("input_type")
-  fabricId           String         @map("fabric_id")
-  boardElementId     String         @map("board_element_id")
-  role               String
-  weight             Float          @default(0.7)
-  attributesSnapshot Json           @map("attributes_snapshot")
-  createdAt          DateTime       @default(now()) @map("created_at")
-  generationTask     GenerationTask @relation(fields: [generationTaskId], references: [id], onDelete: Cascade)
+  id               String         @id @default(cuid(2))
+  generationTaskId String         @map("generation_task_id")
+  inputType        String         @default("fabric") @map("input_type")
+  fabricId         String         @map("fabric_id")
+  boardElementId   String         @map("board_element_id")
+  role             String
+  weight           Float          @default(0.7)
+  tagsSnapshot     String[]       @map("tags_snapshot")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  generationTask   GenerationTask @relation(fields: [generationTaskId], references: [id], onDelete: Cascade)
 
   @@unique([generationTaskId, boardElementId, fabricId])
   @@index([generationTaskId])
@@ -272,25 +272,20 @@ model FileAsset {
 }
 
 model Fabric {
-  id          String      @id @default(cuid(2))
-  scope       FabricScope
-  ownerId     String?     @map("owner_id")
-  name        String
-  category    String
-  subCategory String?     @map("sub_category")
-  mainFileId  String      @map("main_file_id")
-  attributes  Json
-  aiTags      Json?       @map("ai_tags")
-  source      String?
-  license     String?
-  status      String      @default("active")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  owner       User?       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  mainFile    FileAsset   @relation("FabricMainFile", fields: [mainFileId], references: [id], onDelete: Restrict)
+  id         String      @id @default(cuid(2))
+  scope      FabricScope
+  ownerId    String?     @map("owner_id")
+  mainFileId String      @map("main_file_id")
+  tags       String[]
+  status     String      @default("active")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  owner      User?       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  mainFile   FileAsset   @relation("FabricMainFile", fields: [mainFileId], references: [id], onDelete: Restrict)
 
-  @@index([scope, category])
+  @@index([scope])
   @@index([ownerId])
+  @@index([tags], type: Gin)
   @@map("fabrics")
 }
 

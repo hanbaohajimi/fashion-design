@@ -176,6 +176,30 @@ export async function fetchElementRole(
   return (await response.json()) as RoleInferenceResult;
 }
 
+export async function bindSketchReference(
+  projectId: string,
+  shapeId: string,
+  input: {
+    readonly fileId: string;
+    readonly fingerprint: string;
+    readonly record: TLShape;
+  },
+): Promise<RoleInferenceResult> {
+  const response = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/board-elements/${encodeURIComponent(shapeId)}/sketch-reference`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "草图 AI 引用保存失败"));
+  }
+  return (await response.json()) as RoleInferenceResult;
+}
+
 export async function setElementRoles(
   projectId: string,
   shapeIds: readonly string[],

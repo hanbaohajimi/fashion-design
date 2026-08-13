@@ -18,6 +18,7 @@ import type {
 import { FabricChannel } from "./fabric.channel";
 import { compilePaletteColor } from "./palette-channel";
 import { TrendChannel } from "./trend.channel";
+import { RETIRED_BOARD_SHAPE_TYPE } from "../../boards/boards.schemas";
 import { S3FileStorage } from "../../files/storage.service";
 
 export const COMPILER_DB = Symbol("COMPILER_DB");
@@ -59,6 +60,22 @@ function propsOf(record: Prisma.JsonValue | null): Record<string, unknown> {
   return props && !Array.isArray(props) && typeof props === "object"
     ? (props as Record<string, unknown>)
     : {};
+}
+
+function metaOf(record: Prisma.JsonValue | null): Record<string, unknown> {
+  if (!record || Array.isArray(record) || typeof record !== "object") return {};
+  const meta = (record as Record<string, unknown>).meta;
+  return meta && !Array.isArray(meta) && typeof meta === "object"
+    ? (meta as Record<string, unknown>)
+    : {};
+}
+
+function canUseSilhouetteReference(element: BoardElement): boolean {
+  if (element.role !== "silhouette_ref") return false;
+  if (element.shapeType !== "frame") return true;
+  const meta = metaOf(element.record);
+  if (meta.fashionSketch !== true) return true;
+  return meta.sketchStatus === "ready" && meta.sketchDirty !== true;
 }
 
 function cleanText(value: unknown, limit = 240): string | null {
@@ -172,7 +189,7 @@ export class ContextCompilerService {
     const silhouetteReferences = (
       await Promise.all(
         elements
-          .filter((element) => element.role === "silhouette_ref")
+          .filter(canUseSilhouetteReference)
           .map(async (element) => {
             const reference = await this.referenceFrom(
               element,
@@ -327,6 +344,7 @@ export class ContextCompilerService {
         boardElements: {
           where: {
             deletedAt: null,
+            shapeType: { not: RETIRED_BOARD_SHAPE_TYPE },
             ...(shapeIds ? { shapeId: { in: [...shapeIds] } } : {}),
           },
           select: {

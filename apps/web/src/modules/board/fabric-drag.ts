@@ -83,7 +83,8 @@ export function createNativeFileDropController({
         shouldIgnore(event) ||
         !carriesNativeFiles(event) ||
         !event.dataTransfer
-      ) return;
+      )
+        return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
     },
@@ -101,9 +102,8 @@ export function createNativeFileDropController({
 }
 
 export interface FabricDragPayload {
-  readonly fabricCategory: string;
   readonly fabricId: string;
-  readonly fabricName: string;
+  readonly fabricTags: readonly string[];
   readonly thumbnailUrl: string;
 }
 
@@ -111,20 +111,21 @@ function isFabricDragPayload(value: unknown): value is FabricDragPayload {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
   return (
-    typeof candidate.fabricCategory === "string" &&
     typeof candidate.fabricId === "string" &&
     candidate.fabricId.length > 0 &&
-    typeof candidate.fabricName === "string" &&
-    candidate.fabricName.length > 0 &&
+    Array.isArray(candidate.fabricTags) &&
+    candidate.fabricTags.length > 0 &&
+    candidate.fabricTags.every(
+      (tag) => typeof tag === "string" && tag.trim().length > 0,
+    ) &&
     typeof candidate.thumbnailUrl === "string"
   );
 }
 
 export function fabricToDragPayload(fabric: Fabric): FabricDragPayload {
   return {
-    fabricCategory: fabric.category,
     fabricId: fabric.id,
-    fabricName: fabric.name,
+    fabricTags: fabric.tags,
     thumbnailUrl: fabric.mainImageUrl,
   };
 }
@@ -140,9 +141,8 @@ export function decodeFabricDragPayload(raw: string): FabricDragPayload | null {
 
 export function fabricToShapeProps(payload: FabricDragPayload) {
   return {
-    fabricCategory: payload.fabricCategory,
     fabricId: payload.fabricId,
-    fabricName: payload.fabricName,
+    fabricTags: payload.fabricTags,
     // Landscape: typical offcuts are wider than tall.
     h: 174,
     role: "fabric_ref",

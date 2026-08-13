@@ -1,9 +1,5 @@
 export type SemanticImageChannel =
-  | "fabric"
-  | "pattern"
-  | "detail"
-  | "palette"
-  | "avoid";
+  "fabric" | "pattern" | "detail" | "palette" | "avoid";
 
 export interface ImageReference {
   readonly elementId: string;
@@ -24,10 +20,10 @@ export interface TrendReference extends ImageReference {
 }
 
 export interface FabricGenerationInput {
-  readonly attributes: unknown;
   readonly boardElementId: string;
   readonly fabricId: string;
   readonly role: "fabric_texture";
+  readonly tags: readonly string[];
   readonly weight: number;
 }
 

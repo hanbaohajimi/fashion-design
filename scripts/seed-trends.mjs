@@ -35,7 +35,7 @@ loadEnv(path.join(__dirname, "../apps/api/.env"));
 
 const AMUX_BASE_URL   = process.env.AMUX_BASE_URL;
 const AMUX_API_KEY    = process.env.AMUX_API_KEY;
-const AMUX_MODEL      = process.env.AMUX_CLAUDE_MODEL ?? "claude-sonnet-5";
+const AMUX_MODEL      = process.env.AMUX_CLAUDE_MODEL ?? "claude-opus-5";
 const DATABASE_URL    = process.env.DATABASE_URL;
 
 if (!AMUX_BASE_URL || !AMUX_API_KEY) {

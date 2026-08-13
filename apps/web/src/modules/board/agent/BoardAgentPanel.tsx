@@ -20,11 +20,9 @@ import { type TLShape, type TLShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
 import type { BoardPersistStatus } from "../hooks/useBoardPersist";
-import { CandidateGrid } from "../generation/CandidateGrid";
 import { useGenerationWorkspace } from "../generation/GenerationWorkspace";
 import { resolveRoleBadgeLabel } from "../shapes/RoleBadge";
 import {
-  attachGenerationTaskToConversation,
   createAgentConversation,
   getProjectConversationRequest,
   listAgentConversations,
@@ -118,36 +116,6 @@ export function BoardAgentPanel({
       boardStatus === "saved");
   const activeConversation = conversations.find(
     (item) => item.id === activeConversationId,
-  );
-  const attachInpaintTask = useCallback(
-    async (taskId: string, promptText: string): Promise<void> => {
-      if (!activeConversationId) {
-        await generation.track(taskId);
-        setError("局部重绘已提交；会话恢复后可在历史→生成查看");
-        return;
-      }
-      try {
-        const message = await attachGenerationTaskToConversation(
-          activeConversationId,
-          taskId,
-          {
-            content: `局部重绘：${promptText}`,
-            fileAssetIds: [],
-            shapeIds: [],
-          },
-        );
-        setMessages((current) =>
-          current.some((item) => item.id === message.id)
-            ? current
-            : [...current, message],
-        );
-      } catch {
-        setError("局部重绘已提交，但未能写入当前对话；可在历史→生成查看");
-      } finally {
-        await generation.track(taskId);
-      }
-    },
-    [activeConversationId, generation],
   );
   const activeConversationBelongsToProject =
     activeConversation?.projectId === projectId;
@@ -279,6 +247,19 @@ export function BoardAgentPanel({
         setDraftShapeIds(selectedIds.slice(0, MAX_AGENT_CONTEXT_ITEMS));
         if (!selectedShapes.some(isImageShape)) return;
         setHistoryOpen(false);
+        const selectedGarment =
+          selectedShapes.length === 1 ? selectedShapes[0] : undefined;
+        const selectedGarmentProps = selectedGarment?.props as
+          | Readonly<Record<string, unknown>>
+          | undefined;
+        const hasLocalEditEntry =
+          selectedGarment?.type === "fashion-image" &&
+          selectedGarmentProps?.role === "garment_ref" &&
+          typeof selectedGarmentProps.assetId === "string" &&
+          selectedGarmentProps.assetId.length > 0 &&
+          typeof selectedGarmentProps.url === "string" &&
+          selectedGarmentProps.url.length > 0;
+        if (hasLocalEditEntry) return;
         if (collapsed) onToggle();
         window.requestAnimationFrame(() => composerInputRef.current?.focus());
       },
@@ -305,14 +286,6 @@ export function BoardAgentPanel({
   const taskById = useMemo(
     () => new Map(generation.tasks.map((task) => [task.id, task] as const)),
     [generation.tasks],
-  );
-  const allCandidateCount = generation.tasks.reduce(
-    (total, task) =>
-      total +
-      task.candidates.filter(
-        (candidate) => candidate.disposition !== "dismissed",
-      ).length,
-    0,
   );
   const sendUnavailableReason = sending
     ? "Agent 正在处理"
@@ -892,15 +865,6 @@ export function BoardAgentPanel({
                     </article>
                   ))
                 )}
-                {allCandidateCount > 0 ? (
-                  <div className={styles.historyCandidates}>
-                    <CandidateGrid
-                      onTaskCreated={attachInpaintTask}
-                      showHeader={false}
-                      variant="history"
-                    />
-                  </div>
-                ) : null}
               </div>
             )}
           </section>
@@ -1043,13 +1007,12 @@ export function BoardAgentPanel({
                               </button>
                             )}
                           </div>
-                        ) : null}
-                        <CandidateGrid
-                          onTaskCreated={attachInpaintTask}
-                          showHeader={false}
-                          taskId={task.id}
-                          variant="conversation"
-                        />
+                        ) : (
+                          <div className={styles.taskCanvasReceipt}>
+                            <span>成图已放到画布</span>
+                            <small>选中画布图片，可继续让设计助手修改</small>
+                          </div>
+                        )}
                       </div>
                     ) : null}
                     {message.status === "failed" && repliedUser ? (
@@ -1541,7 +1504,13 @@ function boardElementLabel(
   shape: TLShape,
   props: Readonly<Record<string, unknown>>,
 ): string {
-  const role = typeof props.role === "string" ? props.role : "";
+  const storedRole = typeof props.role === "string" ? props.role : "";
+  const role =
+    storedRole === "garment_ref" &&
+    typeof props.fileId === "string" &&
+    props.fileId.length > 0
+      ? "reference_garment"
+      : storedRole;
   if (ROLE_ASSIGNABLE_ATTACHMENT_TYPES.has(shape.type) && role) {
     const customLabel =
       shape.type === "fashion-image" && role === "note"
@@ -1556,11 +1525,20 @@ function boardElementLabel(
 function shapeSourceName(
   props: Readonly<Record<string, unknown>>,
 ): string | null {
-  return stringProp(props.title) ?? stringProp(props.fabricName) ?? null;
+  return stringProp(props.title) ?? fabricTagSummary(props.fabricTags);
 }
 
 function stringProp(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function fabricTagSummary(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const tags = value.flatMap((tag) => {
+    const normalized = stringProp(tag);
+    return normalized ? [normalized] : [];
+  });
+  return tags.length > 0 ? tags.join("、").slice(0, 120) : null;
 }
 
 function attachmentPaletteColors(
@@ -1613,11 +1591,11 @@ function attachmentRoleLabel(
 function attachmentSummary(
   props: Readonly<Record<string, unknown>>,
 ): string | null {
-  const summary = [props.text, props.fabricName, props.label].find(
+  const summary = [props.text, props.label].find(
     (value): value is string =>
       typeof value === "string" && value.trim().length > 0,
   );
-  return summary?.trim().slice(0, 120) ?? null;
+  return summary?.trim().slice(0, 120) ?? fabricTagSummary(props.fabricTags);
 }
 
 function isImageShape(shape: TLShape): boolean {

@@ -75,8 +75,8 @@ describe("VLM role inference processor", () => {
     );
   });
 
-  it("maps a garment photo classification to garment_ref", () => {
-    expect(roleForVlmLabel("garment_photo")).toBe("garment_ref");
+  it("maps an uploaded garment photo to reference_garment", () => {
+    expect(roleForVlmLabel("garment_photo")).toBe("reference_garment");
   });
 
   it("falls back to style_ref without failing the upload flow", async () => {

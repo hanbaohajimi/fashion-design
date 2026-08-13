@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activeBoardPath,
   clearActiveBoardId,
   readActiveBoardId,
   writeActiveBoardId,
@@ -26,5 +27,13 @@ describe("active board persistence", () => {
     expect(readActiveBoardId(storage)).toBe("project-a");
     clearActiveBoardId(storage);
     expect(readActiveBoardId(storage)).toBeNull();
+  });
+
+  it("为活动画布生成返回路径，无记录时回退项目库", () => {
+    const storage = createStorage();
+
+    expect(activeBoardPath(storage)).toBe("/");
+    writeActiveBoardId("project/a", storage);
+    expect(activeBoardPath(storage)).toBe("/project%2Fa");
   });
 });

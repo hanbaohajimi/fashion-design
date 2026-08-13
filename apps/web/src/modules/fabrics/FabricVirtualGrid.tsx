@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Grid, type CellComponentProps } from "react-window";
 
@@ -46,7 +47,7 @@ function FabricCell({
 interface FabricVirtualGridProps {
   readonly compact?: boolean;
   readonly fabrics: readonly Fabric[];
-  readonly height?: number;
+  readonly height?: CSSProperties["height"];
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
   readonly onChanged?: (() => void) | undefined;
   readonly onNearEnd?: () => void;
@@ -86,8 +87,10 @@ export function FabricVirtualGrid({
   return (
     <div className={styles.virtualGridHost} ref={host}>
       <Grid
+        aria-label="面料卡片列表"
         cellComponent={FabricCell}
         cellProps={cellProps}
+        className={styles.virtualGrid ?? ""}
         columnCount={columnCount}
         columnWidth={Math.max(220, width / columnCount)}
         onCellsRendered={({ rowStopIndex }) => {
@@ -95,7 +98,7 @@ export function FabricVirtualGrid({
         }}
         overscanCount={2}
         rowCount={rowCount}
-        rowHeight={compact ? 338 : 448}
+        rowHeight={compact ? 278 : 372}
         style={{ height, width }}
       />
     </div>

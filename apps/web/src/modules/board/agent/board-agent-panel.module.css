@@ -1,7 +1,7 @@
 .panel,
 .collapsedRail {
   position: fixed;
-  z-index: calc(var(--z-panel) + 8);
+  z-index: calc(var(--tl-layer-canvas-overlays, 500) + 100);
   top: 0;
   right: 0;
   bottom: 0;
@@ -488,10 +488,16 @@
 }
 
 .message[data-role="user"] {
-  margin-left: 34px;
+  width: fit-content;
+  max-width: calc(100% - 34px);
+  margin-left: auto;
 }
 
 .message[data-role="user"] > .messageContent {
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  justify-self: end;
   border-radius: 15px 15px 4px;
   padding: 11px 13px;
   background: #292a26;
@@ -702,6 +708,27 @@
 .taskResult {
   display: grid;
   gap: 7px;
+}
+
+.taskCanvasReceipt {
+  display: grid;
+  min-height: 48px;
+  align-content: center;
+  border-left: 2px solid #4f765a;
+  padding: 8px 10px;
+  background: #edf0e9;
+  gap: 3px;
+}
+
+.taskCanvasReceipt span {
+  color: #2f4835;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.taskCanvasReceipt small {
+  color: #777d72;
+  font-size: 8px;
 }
 
 .retryButton {
@@ -1098,7 +1125,7 @@
   line-height: 1.45;
 }
 
-.panel :where(button, select, textarea):focus-visible,
+.panel :where(button, select):focus-visible,
 .collapsedRail button:focus-visible {
   outline: 2px solid #b94d31;
   outline-offset: 2px;

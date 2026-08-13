@@ -47,7 +47,7 @@ export function amuxClaudeClientConfigFromEnv(): AmuxClaudeClientConfig {
   return {
     apiKey: () => process.env.AMUX_API_KEY?.trim() || undefined,
     baseUrl: process.env.AMUX_BASE_URL?.trim() || "https://api.amux.ai/v1",
-    model: process.env.AMUX_CLAUDE_MODEL?.trim() || "claude-sonnet-5",
+    model: process.env.AMUX_CLAUDE_MODEL?.trim() || "claude-opus-5",
     timeoutMs: numberFromEnv(process.env.AMUX_CLAUDE_TIMEOUT_MS, 20_000),
   };
 }

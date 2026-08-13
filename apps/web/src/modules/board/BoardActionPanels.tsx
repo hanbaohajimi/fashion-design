@@ -8,8 +8,6 @@ import { ErrorBoundary } from "../../observability/ErrorBoundary";
 import { AtelierTopBar } from "./AtelierTopBar";
 import { BoardProjectContext } from "./board-context";
 import { CollectionDrawer } from "./generation/CollectionDrawer";
-import { ExportModal } from "./generation/ExportModal";
-import { useGenerationWorkspace } from "./generation/GenerationWorkspace";
 import {
   collectionKeys,
   createCollection,
@@ -17,7 +15,6 @@ import {
   listCollections,
 } from "./generation/collection-api";
 import type { CollectionDetail } from "./generation/collection-types";
-import type { ExportSource } from "./generation/export-api";
 import {
   completeUpload,
   putOriginal,
@@ -46,7 +43,6 @@ export function BoardActionPanels({
 }) {
   const projectId = useContext(BoardProjectContext);
   const editor = useEditor();
-  const generation = useGenerationWorkspace();
   const queryClient = useQueryClient();
   const [collectionAction, setCollectionAction] =
     useState<CollectionAction>("idle");
@@ -54,7 +50,8 @@ export function BoardActionPanels({
   const [drawerCollectionId, setDrawerCollectionId] = useState<string | null>(
     null,
   );
-  const [exportSource, setExportSource] = useState<ExportSource | null>(null);
+  const [exportingCanvas, setExportingCanvas] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const collectionFileInput = useRef<HTMLInputElement>(null);
   const collectionsQuery = useQuery({
     queryFn: () => listCollections(projectId),
@@ -90,31 +87,11 @@ export function BoardActionPanels({
     },
     [editor],
   );
-  const latestCanvasAsset = useValue(
-    "latest-adopted-generation-asset",
-    () => {
-      const shapes = editor.getCurrentPageShapes();
-      for (let index = shapes.length - 1; index >= 0; index -= 1) {
-        const shape = shapes[index];
-        if (
-          shape?.type === IMAGE_SHAPE_TYPE &&
-          typeof shape.props.assetId === "string" &&
-          shape.props.assetId.length > 0 &&
-          !shape.props.assetId.includes(":") &&
-          shape.props.url
-        ) {
-          return { assetId: shape.props.assetId, url: shape.props.url };
-        }
-      }
-      return null;
-    },
+  const canvasShapeCount = useValue(
+    "canvas-export-shape-count",
+    () => editor.getCurrentPageShapes().length,
     [editor],
   );
-  const latestCandidate =
-    generation.tasks
-      .flatMap((task) => task.candidates)
-      .find((candidate) => !candidate.assetId.includes(":")) ??
-    latestCanvasAsset;
   const selectedImage = selectedImageState.image;
   const selectedAssetReady = Boolean(
     selectedImage &&
@@ -122,6 +99,41 @@ export function BoardActionPanels({
       (selectedImage.fileId && selectedImage.uploadStatus === "ready")),
   );
   const busy = collectionAction !== "idle";
+
+  const exportEntireCanvas = async (): Promise<void> => {
+    if (exportingCanvas) return;
+    const shapeIds = editor.getCurrentPageShapes().map((shape) => shape.id);
+    if (shapeIds.length === 0) {
+      setExportError("画布为空，请先添加内容后再导出");
+      return;
+    }
+
+    setExportError(null);
+    setExportingCanvas(true);
+    try {
+      const rendered = await editor.toImage(shapeIds, {
+        background: true,
+        format: "png",
+        padding: 64,
+        pixelRatio: 2,
+      });
+      if (!rendered.blob.size) throw new Error("画布渲染结果为空");
+
+      const downloadUrl = URL.createObjectURL(rendered.blob);
+      const link = document.createElement("a");
+      link.download = `fashion-canvas-${projectId}.png`;
+      link.href = downloadUrl;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+      onExportMenuOpenChange(false);
+    } catch (error) {
+      setExportError(
+        error instanceof Error ? error.message : "画布导出失败，请稍后重试",
+      );
+    } finally {
+      setExportingCanvas(false);
+    }
+  };
 
   useEffect(() => {
     if (!collectionLauncherOpen) return;
@@ -435,29 +447,26 @@ export function BoardActionPanels({
         >
           <header>
             <span>EXPORT</span>
-            <strong>导出最新生成结果</strong>
+            <strong>导出整个画布</strong>
           </header>
           <div className={styles.actionPopoverState}>
             <p>
-              {latestCandidate
-                ? "已定位到最近生成的设计资产。"
-                : "完成一次生成后，可从这里快速导出 PNG、JPG 或 PDF。"}
+              {canvasShapeCount > 0
+                ? `将画布中的全部 ${canvasShapeCount} 个元素导出为高清 PNG。`
+                : "画布为空，请先添加图片、草图或其他设计元素。"}
             </p>
             <button
-              disabled={!latestCandidate}
-              onClick={() => {
-                if (!latestCandidate) return;
-                setExportSource({
-                  assetId: latestCandidate.assetId,
-                  previewUrl: latestCandidate.url,
-                  type: "asset",
-                });
-                onExportMenuOpenChange(false);
-              }}
+              disabled={canvasShapeCount === 0 || exportingCanvas}
+              onClick={() => void exportEntireCanvas()}
               type="button"
             >
-              {latestCandidate ? "打开导出设置" : "暂无生成结果"}
+              {exportingCanvas
+                ? "正在导出…"
+                : canvasShapeCount > 0
+                  ? "下载整个画布"
+                  : "画布暂无内容"}
             </button>
+            {exportError ? <p role="alert">{exportError}</p> : null}
           </div>
         </section>
       ) : null}
@@ -469,12 +478,6 @@ export function BoardActionPanels({
             onClose={() => setDrawerCollectionId(null)}
           />
         </ErrorBoundary>
-      ) : null}
-      {exportSource ? (
-        <ExportModal
-          onClose={() => setExportSource(null)}
-          source={exportSource}
-        />
       ) : null}
     </>
   );

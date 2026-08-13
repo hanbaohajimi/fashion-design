@@ -52,7 +52,7 @@ pnpm dev
 系统不再依赖 fal.ai，也不再需要单独的 OpenAI Key。图片理解与生图使用同一个
 Amux 令牌，但按模型明确分工：
 
-- `special/anthropic` 下的 `claude-sonnet-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
+- `special/anthropic` 下的 `claude-opus-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
 - `premium/openai` 下的 `gpt-image-2-official`：只负责实际生成与编辑图片。
 
 首次配置只需要在 `.env` 中填写：
@@ -61,7 +61,7 @@ Amux 令牌，但按模型明确分工：
 AI_PRIMARY_PROVIDER=amux
 AMUX_API_KEY=在这里填写你的令牌
 AMUX_BASE_URL=https://api.amux.ai/v1
-AMUX_CLAUDE_MODEL=claude-sonnet-5
+AMUX_CLAUDE_MODEL=claude-opus-5
 AMUX_CLAUDE_TIMEOUT_MS=20000
 AMUX_IMAGE_MODEL=gpt-image-2-official
 AI_PROVIDER_TIMEOUT_MS=600000

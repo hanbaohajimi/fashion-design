@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useContext, useEffect, useRef, useState } from "react";
-import { useEditor, useValue } from "tldraw";
 
 import { fetchProject } from "../projects/projects-api";
 import { BoardProjectContext } from "./board-context";
@@ -15,35 +14,15 @@ interface AtelierTopBarProps {
   readonly status: BoardPersistStatus;
 }
 
-const STATUS_LABELS: Readonly<Record<BoardPersistStatus, string>> = {
-  conflict: "版本冲突",
-  error: "加载失败",
-  loading: "正在加载",
-  offline: "离线",
-  ready: "已就绪",
-  saved: "已保存",
-  saving: "保存中",
-};
-
 export function AtelierTopBar({
   exportOpen = false,
   onOpenExport,
-  status,
 }: AtelierTopBarProps) {
   const projectId = useContext(BoardProjectContext);
-  const editor = useEditor();
   const [projectName, setProjectName] = useState("设计项目");
   const [overviewOpen, setOverviewOpen] = useState(false);
   const projectButtonRef = useRef<HTMLButtonElement>(null);
   const projectPopoverRef = useRef<HTMLElement>(null);
-  const boardStats = useValue(
-    "project-capsule-stats",
-    () => ({
-      selected: editor.getSelectedShapeIds().length,
-      total: editor.getCurrentPageShapes().length,
-    }),
-    [editor],
-  );
 
   useEffect(() => {
     let active = true;
@@ -95,7 +74,6 @@ export function AtelierTopBar({
           type="button"
         >
           <span className={styles.projectInfo}>
-            <span className={styles.projectLabel}>PROJECT</span>
             <strong className={styles.projectName} title={projectName}>
               {projectName}
             </strong>
@@ -105,31 +83,13 @@ export function AtelierTopBar({
           </svg>
         </button>
         {overviewOpen ? (
-          <section
+          <nav
             className={styles.projectPopover}
-            aria-label="项目概览"
+            aria-label="项目导航"
             ref={projectPopoverRef}
           >
-            <header>
-              <span>PROJECT / OVERVIEW</span>
-              <strong>{projectName}</strong>
-            </header>
-            <dl>
-              <div>
-                <dt>画布元素</dt>
-                <dd>{boardStats.total}</dd>
-              </div>
-              <div>
-                <dt>当前选中</dt>
-                <dd>{boardStats.selected}</dd>
-              </div>
-              <div>
-                <dt>同步状态</dt>
-                <dd>{STATUS_LABELS[status]}</dd>
-              </div>
-            </dl>
             <Link href="/">返回项目库</Link>
-          </section>
+          </nav>
         ) : null}
       </div>
 

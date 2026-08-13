@@ -16,14 +16,13 @@ import type {
   GarmentType,
 } from "./collection-types";
 import { GARMENT_TYPE_OPTIONS } from "./collection-types";
-import { ConsistencyOverview } from "./ConsistencyOverview";
 import { DNACard } from "./DNACard";
 import { ExportModal } from "./ExportModal";
 import styles from "./generation.module.css";
 import { LookGrid } from "./LookGrid";
 
 type SaveState = "error" | "saved" | "saving" | "unsaved";
-type DrawerTab = "consistency" | "dna" | "looks";
+type DrawerTab = "dna" | "looks";
 
 export function CollectionDrawer({
   collectionId,
@@ -161,7 +160,7 @@ export function CollectionDrawer({
     } catch (reason) {
       if (mountedRef.current && requestId === consistencyRequestId.current) {
         setConsistencyError(
-          reason instanceof Error ? reason.message : "系列参考相似度读取失败",
+          reason instanceof Error ? reason.message : "系列状态读取失败",
         );
       }
       throw reason;
@@ -273,8 +272,7 @@ export function CollectionDrawer({
     >
       <header className={styles.collectionHeader}>
         <div>
-          <span>COLLECTION / LAB</span>
-          <strong>{collection?.name ?? "正在读取系列"}</strong>
+          <strong>{collection ? "系列" : "正在读取系列"}</strong>
         </div>
         <div>
           <SaveIndicator state={saveState} />
@@ -312,13 +310,6 @@ export function CollectionDrawer({
           >
             Look 扩展
           </button>
-          <button
-            aria-current={tab === "consistency" ? "page" : undefined}
-            onClick={() => setTab("consistency")}
-            type="button"
-          >
-            一致性
-          </button>
         </nav>
       ) : null}
 
@@ -334,15 +325,11 @@ export function CollectionDrawer({
           <strong>DNA 暂时无法打开</strong>
           <p>{collectionError}</p>
           <button
-            disabled={loadingCollection || loadingConsistency}
-            onClick={() =>
-              void Promise.allSettled([loadCollection(), refreshConsistency()])
-            }
+            disabled={loadingCollection}
+            onClick={() => void loadCollection().catch(() => undefined)}
             type="button"
           >
-            {loadingCollection || loadingConsistency
-              ? "重新读取中…"
-              : "重新读取"}
+            {loadingCollection ? "重新读取中…" : "重新读取"}
           </button>
         </div>
       ) : collection && draft ? (
@@ -359,16 +346,16 @@ export function CollectionDrawer({
               </button>
             </div>
           ) : null}
-          {consistencyError ? (
+          {consistencyError && tab === "looks" ? (
             <div className={styles.collectionInlineError} role="alert">
-              <span>{consistencyError}</span>
+              <span>系列状态读取失败</span>
               <button
-                aria-label="重新读取一致性"
+                aria-label="重新读取系列状态"
                 disabled={loadingConsistency}
                 onClick={() => void refreshConsistency().catch(() => undefined)}
                 type="button"
               >
-                {loadingConsistency ? "读取中…" : "重新读取一致性"}
+                {loadingConsistency ? "读取中…" : "重新读取"}
               </button>
             </div>
           ) : null}
@@ -395,13 +382,10 @@ export function CollectionDrawer({
                   )}
                 </figure>
                 <div>
-                  <span>FOUNDATION LOOK</span>
-                  <strong>Hero 已锁定为系列原点</strong>
-                  <p>
-                    {draft.extractionStatus === "failed"
-                      ? "自动提取未完成，已为你保留空白 DNA，可直接手动定义。"
-                      : "DNA 草案已从 Hero 提取。锁定稳定维度，再继续扩展系列。"}
-                  </p>
+                  <strong>系列原点</strong>
+                  {draft.extractionStatus === "failed" ? (
+                    <p>自动提取未完成，可直接定义系列 DNA。</p>
+                  ) : null}
                 </div>
               </section>
               <SourceGarmentTypeEditor
@@ -424,12 +408,9 @@ export function CollectionDrawer({
               beforeGenerate={flushDna}
               collectionId={collectionId}
               consistency={consistency}
-              dna={draft}
               onRefresh={refreshConsistency}
               sourceGarmentType={collection.sourceGarmentType}
             />
-          ) : consistency && tab === "consistency" ? (
-            <ConsistencyOverview consistency={consistency} />
           ) : (
             <div
               className={styles.collectionSkeleton}
@@ -505,13 +486,12 @@ function SourceGarmentTypeEditor({
   return (
     <section className={styles.sourceGarmentEditor}>
       <header>
-        <span>00 / FOUNDATION TYPE</span>
         <h3>核心款类型</h3>
       </header>
       <div>
         <label>
-          <span>服装类型</span>
           <select
+            aria-label="服装类型"
             disabled={disabled}
             onChange={(event) => {
               const nextCode = event.target.value;
@@ -539,8 +519,8 @@ function SourceGarmentTypeEditor({
         </label>
         {code === "custom" ? (
           <label>
-            <span>自定义类型</span>
             <input
+              aria-label="自定义类型"
               disabled={disabled}
               maxLength={64}
               onBlur={() => {
@@ -556,7 +536,6 @@ function SourceGarmentTypeEditor({
           </label>
         ) : null}
       </div>
-      <small>{disabled ? "保存中…" : "用于生成系列类型建议"}</small>
       {error ? <p role="alert">{error}</p> : null}
     </section>
   );

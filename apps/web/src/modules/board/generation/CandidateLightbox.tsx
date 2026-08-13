@@ -32,9 +32,9 @@ export function CandidateLightbox({
     taskId: string,
     prompt: string,
   ) => Promise<void> | void;
-  readonly onAdopt: (candidate: GenerationCandidate) => void;
+  readonly onAdopt?: (candidate: GenerationCandidate) => void;
   readonly onClose: () => void;
-  readonly onDiscard: () => void;
+  readonly onDiscard?: () => void;
 }) {
   const projectId = useContext(BoardProjectContext);
   const queryClient = useQueryClient();
@@ -147,7 +147,10 @@ export function CandidateLightbox({
   return createPortal(
     <div
       className={styles.lightboxBackdrop}
+      onClick={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => {
+        event.stopPropagation();
         if (event.target === event.currentTarget && !collectionOpen) onClose();
       }}
     >
@@ -162,7 +165,7 @@ export function CandidateLightbox({
       >
         <header>
           <div>
-            <span>LIGHTBOX / EDIT</span>
+            <span>{mode === "inpaint" ? "LOCAL EDIT" : "LIGHTBOX / EDIT"}</span>
             <strong>
               {mode === "inpaint"
                 ? "局部编辑模式"
@@ -171,41 +174,49 @@ export function CandidateLightbox({
                   : "候选设计"}
             </strong>
           </div>
-          <nav aria-label="候选操作">
-            <button onClick={() => setMode("view")} type="button">
-              预览
-            </button>
-            <button onClick={() => setMode("inpaint")} type="button">
-              局部重绘
-            </button>
-            <button onClick={() => setMode("history")} type="button">
-              版本
-            </button>
-            <button
-              disabled={creatingCollection}
-              onClick={() => void openCollection()}
-              ref={collectionTriggerRef}
-              type="button"
-            >
-              {creatingCollection
-                ? "提取 DNA…"
-                : collectionId
-                  ? "打开系列 DNA"
-                  : "设为 Hero → 建系列"}
-            </button>
-            <button
-              onClick={() => setExportOpen(true)}
-              ref={exportTriggerRef}
-              type="button"
-            >
-              导出
-            </button>
-            <button onClick={() => onAdopt(activeCandidate)} type="button">
-              采纳
-            </button>
-            <button onClick={onDiscard} type="button">
-              丢弃
-            </button>
+          <nav aria-label={mode === "inpaint" ? "局部编辑操作" : "候选操作"}>
+            {mode !== "inpaint" ? (
+              <>
+                <button onClick={() => setMode("view")} type="button">
+                  预览
+                </button>
+                <button onClick={() => setMode("inpaint")} type="button">
+                  局部重绘
+                </button>
+                <button onClick={() => setMode("history")} type="button">
+                  版本
+                </button>
+                <button
+                  disabled={creatingCollection}
+                  onClick={() => void openCollection()}
+                  ref={collectionTriggerRef}
+                  type="button"
+                >
+                  {creatingCollection
+                    ? "提取 DNA…"
+                    : collectionId
+                      ? "打开系列 DNA"
+                      : "设为 Hero → 建系列"}
+                </button>
+                <button
+                  onClick={() => setExportOpen(true)}
+                  ref={exportTriggerRef}
+                  type="button"
+                >
+                  导出
+                </button>
+                {onAdopt ? (
+                  <button onClick={() => onAdopt(activeCandidate)} type="button">
+                    采纳
+                  </button>
+                ) : null}
+                {onDiscard ? (
+                  <button onClick={onDiscard} type="button">
+                    丢弃
+                  </button>
+                ) : null}
+              </>
+            ) : null}
             <button aria-label="关闭候选详情" onClick={onClose} type="button">
               关闭
             </button>

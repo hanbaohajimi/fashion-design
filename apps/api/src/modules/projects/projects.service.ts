@@ -8,6 +8,11 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 
+import {
+  isRetiredBoardShapeType,
+  RETIRED_BOARD_SHAPE_TYPE,
+  stripRetiredBoardShapes,
+} from "../boards/boards.schemas";
 import type {
   CreateProjectInput,
   ListProjectsInput,
@@ -227,7 +232,9 @@ export class ProjectsService {
     const source = await this.database.project.findUnique({
       where: { id: projectId },
       include: {
-        boardElements: true,
+        boardElements: {
+          where: { shapeType: { not: RETIRED_BOARD_SHAPE_TYPE } },
+        },
         boardSnapshot: true,
         collections: {
           include: {
@@ -305,15 +312,20 @@ export class ProjectsService {
                   source.boardSnapshot.snapshot === null
                     ? Prisma.JsonNull
                     : (remapStructuredValue(
-                        source.boardSnapshot.snapshot,
+                        stripRetiredBoardShapes(
+                          source.boardSnapshot.snapshot,
+                        ),
                         assetIdMap,
                       ) as Prisma.InputJsonValue),
               },
             });
           }
-          if (source.boardElements.length > 0) {
+          const copyableBoardElements = source.boardElements.filter(
+            (element) => !isRetiredBoardShapeType(element.shapeType),
+          );
+          if (copyableBoardElements.length > 0) {
             await transaction.boardElement.createMany({
-              data: source.boardElements.map((element) => ({
+              data: copyableBoardElements.map((element) => ({
                 deletedAt: element.deletedAt,
                 fileAssetId: element.fileAssetId,
                 projectId: project.id,

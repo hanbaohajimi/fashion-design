@@ -68,8 +68,6 @@ export function ProjectLibrary() {
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
 
-  const stats = projectsQuery.data?.pages[0]?.stats;
-
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
     const created = await createMutation.mutateAsync({
@@ -232,17 +230,8 @@ export function ProjectLibrary() {
           href="/"
           aria-label="Atelier 设计工作室 首页"
         >
-          <span>A</span>
           <strong>ATELIER / STUDIO</strong>
         </Link>
-        <nav className={styles.navigation}>
-          <Link className={styles.navLink} href="/trends">
-            趋势档案
-          </Link>
-          <Link className={styles.navLink} href="/fabrics">
-            面料档案
-          </Link>
-        </nav>
         <div className={styles.account}>
           <span>{session.user.email}</span>
           <span className={styles.avatar} aria-hidden="true">
@@ -261,25 +250,8 @@ export function ProjectLibrary() {
         </div>
       </header>
 
-      {/* B级修复：Hero改为工作台仪表盘 */}
-      <section className={styles.dashboard} aria-label="工作台仪表盘">
+      <section className={styles.dashboard} aria-label="项目库">
         <h1 className={styles.dashboardTitle}>项目库</h1>
-        <div className={styles.dashboardStats}>
-          <div className={styles.statCard}>
-            <span className={styles.statLabel}>进行中</span>
-            <span className={styles.statValue}>
-              {stats?.activeProjects ?? 0}
-            </span>
-          </div>
-          <div className={styles.statCard}>
-            <span className={styles.statLabel}>总资产</span>
-            <span className={styles.statValue}>{stats?.totalAssets ?? 0}</span>
-          </div>
-          <div className={styles.statCard}>
-            <span className={styles.statLabel}>封面率</span>
-            <span className={styles.statValue}>{stats?.coverRate ?? 0}%</span>
-          </div>
-        </div>
       </section>
 
       <section className={styles.toolbar} aria-label="项目工具栏">
@@ -394,7 +366,6 @@ export function ProjectLibrary() {
             setSearch("");
             searchInputRef.current?.focus();
           }}
-          onCreate={() => setCreateOpen(true)}
           searching={Boolean(deferredSearch)}
         />
       )}

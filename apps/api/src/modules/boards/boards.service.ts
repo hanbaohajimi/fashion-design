@@ -15,7 +15,13 @@ import {
 } from "@nestjs/common";
 
 import { S3FileStorage } from "../files/storage.service";
-import type { BoardPatchInput, ImportTrendInput } from "./boards.schemas";
+import {
+  isRetiredBoardShapeRecord,
+  isRetiredBoardShapeType,
+  stripRetiredBoardShapes,
+  type BoardPatchInput,
+  type ImportTrendInput,
+} from "./boards.schemas";
 
 export const BOARDS_DB = Symbol("BOARDS_DB");
 
@@ -88,20 +94,29 @@ export class BoardsService {
     ]);
 
     return {
-      elements: elements.map((element) => ({
-        deleted: Boolean(element.deletedAt),
-        record: element.record,
-        role: element.role,
-        roleConfidence: element.roleConfidence ?? null,
-        roleInferenceState: element.roleInferenceState?.toLowerCase() ?? "none",
-        roleLabel: element.roleLabel ?? null,
-        roleSource: element.roleSource?.toLowerCase() ?? "default",
-        shapeId: element.shapeId,
-        shapeType: element.shapeType,
-        updatedAt: element.updatedAt,
-      })),
+      elements: elements
+        .filter(
+          (element) =>
+            !isRetiredBoardShapeType(element.shapeType) &&
+            !isRetiredBoardShapeRecord(element.record),
+        )
+        .map((element) => ({
+          deleted: Boolean(element.deletedAt),
+          record: element.record,
+          role: element.role,
+          roleConfidence: element.roleConfidence ?? null,
+          roleInferenceState:
+            element.roleInferenceState?.toLowerCase() ?? "none",
+          roleLabel: element.roleLabel ?? null,
+          roleSource: element.roleSource?.toLowerCase() ?? "default",
+          shapeId: element.shapeId,
+          shapeType: element.shapeType,
+          updatedAt: element.updatedAt,
+        })),
       revision: snapshot?.revision ?? 0,
-      snapshot: snapshot?.snapshot ?? null,
+      snapshot: snapshot
+        ? stripRetiredBoardShapes(snapshot.snapshot)
+        : null,
     };
   }
 
@@ -110,7 +125,10 @@ export class BoardsService {
     projectId: string,
     input: BoardPatchInput,
   ): Promise<BoardPatchResult> {
-    await this.assertOwnership(userId, projectId);
+    await this.assertWritable(userId, projectId);
+    const sanitizedSnapshot = stripRetiredBoardShapes(
+      input.snapshot,
+    ) as Prisma.InputJsonValue;
 
     const result = await this.database.$transaction(async (transaction) => {
       const currentSnapshot = await transaction.boardSnapshot.findUnique({
@@ -129,7 +147,7 @@ export class BoardsService {
             data: {
               projectId,
               revision: 1,
-              snapshot: input.snapshot as Prisma.InputJsonValue,
+              snapshot: sanitizedSnapshot,
             },
             select: {
               revision: true,
@@ -157,7 +175,7 @@ export class BoardsService {
           },
           data: {
             revision: { increment: 1 },
-            snapshot: input.snapshot as Prisma.InputJsonValue,
+            snapshot: sanitizedSnapshot,
           },
         });
 
@@ -186,7 +204,11 @@ export class BoardsService {
       }
 
       for (const patch of input.patches) {
-        if (patch.deleted) {
+        const retiredShape =
+          !patch.deleted &&
+          (isRetiredBoardShapeType(patch.shapeType) ||
+            isRetiredBoardShapeRecord(patch.record));
+        if (patch.deleted || retiredShape) {
           await transaction.boardElement.upsert({
             where: {
               projectId_shapeId: {
@@ -263,7 +285,7 @@ export class BoardsService {
     projectId: string,
     input: ImportTrendInput,
   ): Promise<ImportTrendResult> {
-    await this.assertOwnership(userId, projectId);
+    await this.assertWritable(userId, projectId);
 
     return this.database.$transaction(async (transaction) => {
       const trend = await transaction.trendItem.findUnique({
@@ -289,14 +311,19 @@ export class BoardsService {
       const expectedShapeIds = trendShapeIds(trend.id, colors.length, Boolean(trend.coverFileId));
       const existing = await transaction.boardElement.findMany({
         where: { deletedAt: null, projectId },
-        select: { record: true, shapeId: true },
+        select: { record: true, shapeId: true, shapeType: true },
       });
-      if (existing.some(({ shapeId }) => expectedShapeIds.includes(shapeId))) {
+      const activeExisting = existing.filter(
+        ({ record, shapeType }) =>
+          !isRetiredBoardShapeType(shapeType) &&
+          !isRetiredBoardShapeRecord(record),
+      );
+      if (activeExisting.some(({ shapeId }) => expectedShapeIds.includes(shapeId))) {
         throw trendAlreadyImported();
       }
 
       const position = availableTrendPosition(
-        existing.map(({ record }) => record),
+        activeExisting.map(({ record }) => record),
         input.position,
         colors.length,
       );
@@ -354,7 +381,7 @@ export class BoardsService {
   private async assertOwnership(
     userId: string,
     projectId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
       select: {
@@ -373,17 +400,26 @@ export class BoardsService {
       });
     }
 
-    if (project.archived) {
-      throw new NotFoundException({
-        code: "PROJECT_ARCHIVED",
-        message: "项目已归档，请先恢复项目后继续编辑",
-      });
-    }
-
     if (project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "PROJECT_FORBIDDEN",
         message: "无权访问该项目画布",
+      });
+    }
+
+    return project.archived;
+  }
+
+  private async assertWritable(
+    userId: string,
+    projectId: string,
+  ): Promise<void> {
+    const archived = await this.assertOwnership(userId, projectId);
+
+    if (archived) {
+      throw new NotFoundException({
+        code: "PROJECT_ARCHIVED",
+        message: "项目已归档，请先恢复项目后继续编辑",
       });
     }
   }

@@ -53,52 +53,25 @@ describe("FabricChannel", () => {
     expect(database.fabric.findMany).not.toHaveBeenCalled();
   });
 
-  it("把多块面料编译成材质 prompt、纹理引用和血缘输入", async () => {
+  it("把多块面料的图片和标签编译成纹理引用及血缘输入", async () => {
     database.fabric.findMany.mockResolvedValue([
       {
-        attributes: {
-          composition: { cotton: 60, polyester: 40 },
-          drape: "moderate",
-          opacity: "opaque",
-          seasonSuggestion: ["autumn", "winter"],
-          sheen: "matte",
-          stretch: "slight",
-          texture: "smooth",
-          useCases: ["suit", "outerwear"],
-          weave: "plain",
-          weight: 260,
-          width: 150,
-        },
         id: "fabric-cotton",
         mainFile: {
           objectKey: "presets/cotton.webp",
           status: FileStatus.READY,
           thumbnail1024Key: "presets/cotton-1024.webp",
         },
-        name: "Cotton Blend",
-        ownerId: null,
-        scope: FabricScope.PRESET,
+        tags: ["cotton blend", "matte", "structured"],
       },
       {
-        attributes: {
-          composition: [
-            { name: "silk", percentage: 92 },
-            { name: "spandex", percentage: 8 },
-          ],
-          drape: "fluid",
-          sheen: "glossy",
-          texture: "smooth",
-          weave: "twill",
-        },
         id: "fabric-silk",
         mainFile: {
           objectKey: "users/user-1/silk.webp",
           status: FileStatus.READY,
           thumbnail1024Key: null,
         },
-        name: "Stretch Silk",
-        ownerId: "user-1",
-        scope: FabricScope.USER,
+        tags: ["stretch silk", "glossy", "fluid"],
       },
     ]);
 
@@ -108,21 +81,14 @@ describe("FabricChannel", () => {
     ]);
 
     expect(result.prompt).toContain(
-      "fabric material: cotton 60%, polyester 40%, weave type: plain, fabric texture: smooth, drape: moderate, sheen: matte",
+      "fabric tags: cotton blend, matte, structured",
     );
-    expect(result.prompt).toContain("weight: 260 GSM");
-    expect(result.prompt).toContain("stretch: slight");
-    expect(result.prompt).toContain("opacity: opaque");
-    expect(result.prompt).toContain("fabric width: 150 cm");
-    expect(result.prompt).toContain("recommended seasons: autumn, winter");
-    expect(result.prompt).toContain("use cases: suit, outerwear");
-    expect(result.prompt).toContain(
-      "fabric material: silk 92%, spandex 8%, weave type: twill, fabric texture: smooth, drape: fluid, sheen: glossy",
-    );
+    expect(result.prompt).toContain("fabric tags: stretch silk, glossy, fluid");
     expect(result.refImages).toEqual([
       expect.objectContaining({
         fabricId: "fabric-cotton",
         imageUrl: "https://signed.example/presets/cotton-1024.webp",
+        labels: ["cotton blend", "matte", "structured"],
         role: "fabric_texture",
         weight: 0.7,
       }),
@@ -137,10 +103,12 @@ describe("FabricChannel", () => {
       expect.objectContaining({
         boardElementId: "element-cotton",
         fabricId: "fabric-cotton",
+        tags: ["cotton blend", "matte", "structured"],
       }),
       expect.objectContaining({
         boardElementId: "element-silk",
         fabricId: "fabric-silk",
+        tags: ["stretch silk", "glossy", "fluid"],
       }),
     ]);
   });

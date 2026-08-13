@@ -1,5 +1,5 @@
 import { RoleInferenceState, RoleSource } from "@fashion/db";
-import { ForbiddenException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { BoardElementsService } from "./board-elements.service";
@@ -120,6 +120,137 @@ describe("BoardElementsService", () => {
       ],
     });
     expect(upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("binds a rendered sketch as one finalized silhouette image", async () => {
+    const record = {
+      id: "shape:sketch",
+      meta: {
+        fashionSketch: true,
+        fashionSketchImage: true,
+        sketchDirty: false,
+        sketchFingerprint: "a".repeat(64),
+        sketchStatus: "ready",
+      },
+      parentId: "page:page",
+      props: {
+        fileId: "file-sketch",
+        h: 860,
+        role: "silhouette_ref",
+        roleInferenceState: "ready",
+        roleLabel: "fashion_sketch",
+        roleSource: "manual",
+        title: "廓形草图 01",
+        uploadStatus: "ready",
+        url: "https://files.example/sketch.png",
+        w: 640,
+      },
+      type: "fashion-image",
+      typeName: "shape",
+      x: 0,
+      y: 0,
+    };
+    const bound = element({
+      fileAssetId: "file-sketch",
+      role: "silhouette_ref",
+      roleInferenceState: RoleInferenceState.READY,
+      roleSource: RoleSource.MANUAL,
+      shapeId: "shape:sketch",
+      shapeType: "fashion-image",
+    });
+    const upsert = vi.fn().mockResolvedValue(bound);
+    const database = {
+      boardElement: { upsert },
+      fileAsset: {
+        findUnique: vi.fn().mockResolvedValue({ ownerId: "user-a" }),
+      },
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const enqueue = vi.fn();
+    const service = new BoardElementsService(database as never, { enqueue });
+
+    await expect(
+      service.bindSketchReference(
+        "user-a",
+        "project-a",
+        "shape:sketch",
+        {
+          fileId: "file-sketch",
+          fingerprint: "a".repeat(64),
+          record,
+        },
+      ),
+    ).resolves.toMatchObject({
+      role: "silhouette_ref",
+      shapeId: "shape:sketch",
+      source: "manual",
+      state: "ready",
+    });
+    expect(upsert).toHaveBeenCalledWith({
+      where: {
+        projectId_shapeId: {
+          projectId: "project-a",
+          shapeId: "shape:sketch",
+        },
+      },
+      create: expect.objectContaining({
+        fileAssetId: "file-sketch",
+        record,
+        role: "silhouette_ref",
+        roleSource: RoleSource.MANUAL,
+        shapeType: "fashion-image",
+      }),
+      update: expect.objectContaining({
+        fileAssetId: "file-sketch",
+        record,
+        role: "silhouette_ref",
+        roleSource: RoleSource.MANUAL,
+        shapeType: "fashion-image",
+      }),
+    });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("rejects a sketch record that does not match the route shape", async () => {
+    const database = {
+      boardElement: { upsert: vi.fn() },
+      fileAsset: {
+        findUnique: vi.fn().mockResolvedValue({ ownerId: "user-a" }),
+      },
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardElementsService(database as never, {
+      enqueue: vi.fn(),
+    });
+
+    await expect(
+      service.bindSketchReference("user-a", "project-a", "shape:sketch", {
+        fileId: "file-sketch",
+        fingerprint: "a".repeat(64),
+        record: {
+          id: "shape:other",
+          meta: {
+            fashionSketch: true,
+            sketchDirty: false,
+            sketchFingerprint: "a".repeat(64),
+            sketchStatus: "ready",
+          },
+          type: "frame",
+          typeName: "shape",
+        },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(database.boardElement.upsert).not.toHaveBeenCalled();
   });
 
   it("does not enqueue inference after a manual override", async () => {

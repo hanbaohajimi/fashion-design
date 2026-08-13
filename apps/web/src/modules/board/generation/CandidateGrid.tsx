@@ -85,8 +85,10 @@ export function CandidateGrid({
       y,
       props: {
         assetId: candidate.assetId,
+        generationCandidateId: candidate.id,
+        generationTaskId: candidate.taskId,
         h: height,
-        role: "style_ref",
+        role: "garment_ref",
         roleInferenceState: "ready",
         roleSource: "default",
         title: "候选设计",

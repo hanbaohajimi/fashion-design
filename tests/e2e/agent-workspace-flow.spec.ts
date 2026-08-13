@@ -5,6 +5,48 @@ const NOW = "2026-08-05T06:00:00.000Z";
 
 test.setTimeout(60_000);
 
+test("长备注自动扩展便签且不出现内部滚动", async ({ page }) => {
+  const conversations = [conversation("conversation-note", "便签测试")];
+  await mockWorkspace(page, {
+    conversations,
+    messages: new Map([["conversation-note", []]]),
+    onCreateConversation: () => conversation("conversation-new", "新的设计对话"),
+    onSend: async () => {
+      throw new Error("本用例不应发送 Agent 消息");
+    },
+  });
+
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto(`/${PROJECT_ID}`);
+
+  const toolDock = page.getByRole("complementary", { name: "工具条" });
+  await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
+
+  const noteEditor = page.getByRole("textbox", { name: "备注内容" });
+  const initialHeight = (await noteEditor.boundingBox())?.height ?? 0;
+  await noteEditor.fill(
+    "全身正面平视视角，一位身材纤细、气场干练的短发亚裔女模特，身穿短款雕塑感通勤夹克。" +
+      "模特双臂自然下垂，双手轻插裤袋，以凸显短款利落的腰线和衣身的立体建筑感折痕。" +
+      "纯白无影棚拍摄，柔光箱均匀布光，高清晰度，商业服装摄影，超写实。",
+  );
+
+  await expect
+    .poll(async () => (await noteEditor.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(initialHeight);
+  await expect
+    .poll(async () =>
+      noteEditor.evaluate(
+        (element) => element.scrollHeight <= element.clientHeight + 1,
+      ),
+    )
+    .toBe(true);
+  await expect
+    .poll(async () =>
+      noteEditor.evaluate((element) => getComputedStyle(element).overflowY),
+    )
+    .toBe("hidden");
+});
+
 test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互", async ({
   page,
 }) => {
@@ -87,12 +129,9 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
       buttons.map((button) => button.getAttribute("aria-label")),
     );
   const swatchToolIndex = toolOrder.indexOf("添加色卡");
-  expect(toolOrder.slice(swatchToolIndex, swatchToolIndex + 2)).toEqual([
-    "添加色卡",
-    "连接器工具",
-  ]);
+  expect(toolOrder[swatchToolIndex]).toBe("添加色卡");
   expect(["红色图钉固定工具", "固定素材", "请先选择素材"]).toContain(
-    toolOrder[swatchToolIndex + 2],
+    toolOrder[swatchToolIndex + 1],
   );
 
   const linkedReply = agent.locator("article").filter({
@@ -137,11 +176,13 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   expect(desktopDockBox?.y).toBeGreaterThan(970);
 
   await page
-    .getByRole("button", { name: /PROJECT AGENT 工作区验收项目/u })
+    .getByRole("button", { name: "AGENT 工作区验收项目" })
     .click();
-  await expect(page.getByRole("region", { name: "项目概览" })).toContainText(
-    "画布元素",
-  );
+  const projectNavigation = page.getByRole("navigation", { name: "项目导航" });
+  await expect(
+    projectNavigation.getByRole("link", { name: "返回项目库" }),
+  ).toBeVisible();
+  await expect(projectNavigation).not.toContainText("画布元素");
 
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
   const context = page.getByLabel("已附加内容");

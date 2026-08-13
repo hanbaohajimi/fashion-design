@@ -100,7 +100,9 @@ function createHarness() {
   };
   const model = { generateJson: vi.fn() };
   const generation = { create: vi.fn() };
-  const storage = { createDownloadUrl: vi.fn() };
+  const storage = {
+    readPrefix: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3])),
+  };
   return {
     database,
     generation,
@@ -216,70 +218,90 @@ describe("AgentConversationsService", () => {
   ])(
     "uses fixed generation parameters and resolves $label output size",
     async ({ files, height, width }) => {
-    const harness = createHarness();
-    harness.database.boardElement.findMany.mockResolvedValue(
-      files.map((file, index) => ({
-        fileAssetId: file.id,
-        record: { props: {} },
-        role: index === 0 ? "style_ref" : "detail_ref",
-        roleLabel: null,
-        shapeId: `shape-${index}`,
-        shapeType: "fashion-image",
-      })),
-    );
-    harness.database.fileAsset.count.mockResolvedValue(files.length);
-    harness.database.fileAsset.findMany.mockResolvedValue(files);
-    harness.storage.createDownloadUrl.mockImplementation(
-      async (objectKey: string) => `https://assets.test/${objectKey}`,
-    );
-    harness.model.generateJson.mockResolvedValue({
-      action: "generate",
-      generation: {
-        negativePrompt: "watermark",
-        prompt: "structured trench coat editorial",
-      },
-      message: "我会按选中的廓形参考生成一版风衣。",
-    });
-    harness.generation.create.mockResolvedValue({ taskId: "task-a" });
-    harness.database.agentMessage.update.mockResolvedValue(
-      messageFixture(AgentMessageRole.ASSISTANT, {
-        content: "我会按选中的廓形参考生成一版风衣。",
-        generationTaskId: "task-a",
-        status: AgentMessageStatus.COMPLETED,
-      }),
-    );
+      const harness = createHarness();
+      harness.database.boardElement.findMany.mockResolvedValue(
+        files.map((file, index) => ({
+          fileAssetId: file.id,
+          record: { props: {} },
+          role: index === 0 ? "style_ref" : "detail_ref",
+          roleLabel: null,
+          shapeId: `shape-${index}`,
+          shapeType: "fashion-image",
+        })),
+      );
+      harness.database.fileAsset.count.mockResolvedValue(files.length);
+      harness.database.fileAsset.findMany.mockResolvedValue(
+        files.map((file) => ({
+          ...file,
+          mimeType: "image/png",
+          sizeBytes: 3,
+          thumbnail1024Key: `thumbnail-${file.objectKey}`,
+        })),
+      );
+      harness.model.generateJson.mockResolvedValue({
+        action: "generate",
+        generation: {
+          negativePrompt: "watermark",
+          prompt: "structured trench coat editorial",
+        },
+        message: "我会按选中的廓形参考生成一版风衣。",
+      });
+      harness.generation.create.mockResolvedValue({ taskId: "task-a" });
+      harness.database.agentMessage.update.mockResolvedValue(
+        messageFixture(AgentMessageRole.ASSISTANT, {
+          content: "我会按选中的廓形参考生成一版风衣。",
+          generationTaskId: "task-a",
+          status: AgentMessageStatus.COMPLETED,
+        }),
+      );
 
-    const result = await harness.service.send("user-a", "conversation-a", {
-      clientRequestId: "request-123",
-      content: "参考选中廓形生成一件风衣",
-      fileAssetIds: [],
-      shapeIds: files.map((_, index) => `shape-${index}`),
-    });
-
-    expect(result.taskId).toBe("task-a");
-    expect(harness.generation.create).toHaveBeenCalledWith(
-      "user-a",
-      {
-        background: "opaque",
-        cfg: 3.5,
-        height,
-        negativePrompt: "watermark",
-        outputCompression: 90,
-        outputFormat: "png",
-        projectId: "project-a",
-        prompt: "structured trench coat editorial",
-        quality: "high",
+      const result = await harness.service.send("user-a", "conversation-a", {
+        clientRequestId: "request-123",
+        content: "参考选中廓形生成一件风衣",
+        fileAssetIds: [],
         shapeIds: files.map((_, index) => `shape-${index}`),
-        steps: 28,
-        taskType: "t2i",
-        width,
-      },
-      "agent:conversation-a:request-123",
-    );
+      });
+
+      expect(result.taskId).toBe("task-a");
+      expect(harness.model.generateJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          images: files.map(() => ({
+            detail: "auto",
+            url: "data:image/webp;base64,AQID",
+          })),
+        }),
+      );
+      expect(harness.storage.readPrefix).toHaveBeenCalledTimes(files.length);
+      files.forEach((file) => {
+        expect(harness.storage.readPrefix).toHaveBeenCalledWith(
+          `thumbnail-${file.objectKey}`,
+          expect.any(Number),
+        );
+      });
+      expect(harness.generation.create).toHaveBeenCalledWith(
+        "user-a",
+        {
+          background: "opaque",
+          cfg: 3.5,
+          height,
+          negativePrompt: "watermark",
+          outputCompression: 90,
+          outputFormat: "png",
+          projectId: "project-a",
+          prompt: "structured trench coat editorial",
+          quality: "high",
+          shapeIds: files.map((_, index) => `shape-${index}`),
+          steps: 28,
+          taskType: "t2i",
+          width,
+        },
+        "agent:conversation-a:request-123",
+        "参考选中廓形生成一件风衣",
+      );
     },
   );
 
-  it("把便签、色值和面料参数作为权威事实传给 Agent", async () => {
+  it("把便签、色值和面料标签作为权威事实传给 Agent", async () => {
     const harness = createHarness();
     let receivedElements: unknown;
     harness.database.boardElement.findMany.mockResolvedValue([
@@ -306,7 +328,9 @@ describe("AgentConversationsService", () => {
       },
       {
         fileAssetId: null,
-        record: { props: { fabricId: "fabric-a", fabricName: "精纺羊毛" } },
+        record: {
+          props: { fabricId: "fabric-a", fabricTags: ["精纺羊毛", "挺括"] },
+        },
         role: "fabric_ref",
         roleLabel: null,
         shapeId: "fabric-a-shape",
@@ -315,13 +339,8 @@ describe("AgentConversationsService", () => {
     ]);
     harness.database.fabric.findMany.mockResolvedValue([
       {
-        attributes: {
-          composition: { wool: 98, elastane: 2 },
-          gsm: 260,
-          stretch: "low",
-        },
         id: "fabric-a",
-        name: "精纺羊毛",
+        tags: ["精纺羊毛", "挺括"],
       },
     ]);
     harness.model.generateJson.mockImplementation(
@@ -366,8 +385,8 @@ describe("AgentConversationsService", () => {
         role: "palette",
       }),
       expect.objectContaining({
-        fabricAttributes: expect.objectContaining({ gsm: 260 }),
         fabricId: "fabric-a",
+        fabricTags: ["精纺羊毛", "挺括"],
         role: "fabric_ref",
       }),
     ]);

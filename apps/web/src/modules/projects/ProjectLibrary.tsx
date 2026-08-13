@@ -368,7 +368,6 @@ export function ProjectLibrary() {
             setSearch("");
             searchInputRef.current?.focus();
           }}
-          onCreate={() => setCreateOpen(true)}
           searching={Boolean(deferredSearch)}
         />
       )}

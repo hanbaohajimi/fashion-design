@@ -1,7 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  createShapeId,
   createTLStore,
   defaultBindingUtils,
   defaultShapeUtils,
@@ -10,6 +18,7 @@ import {
   type TLAnyShapeUtilConstructor,
   type TLComponents,
   type TLStateNodeConstructor,
+  type TLShapeId,
   type TLUiOverrides,
   type TLUiStylePanelProps,
   useEditor,
@@ -29,15 +38,21 @@ import {
   BOARD_LAYOUT_CHANGE_EVENT,
   BoardProjectContext,
 } from "./board-context";
-import { GenerationWorkspace } from "./generation/GenerationWorkspace";
+import {
+  GenerationWorkspace,
+  useGenerationWorkspace,
+} from "./generation/GenerationWorkspace";
+import type {
+  GenerationCandidate,
+  GenerationTaskItem,
+} from "./generation/generation-types";
+import { shouldCreateGenerationPlaceholder } from "./generation/generation-types";
 import {
   type BoardPersistStatus,
   useBoardPersist,
 } from "./hooks/useBoardPersist";
-import { boardShapeUtils } from "./shapes";
-import { MountTool } from "./tools/MountTool";
-import { ConnectorTool } from "./tools/ConnectorTool";
-import { AnchorOverlay } from "./connectors/AnchorOverlay";
+import { boardShapeUtils, IMAGE_SHAPE_TYPE, type ImageShape } from "./shapes";
+import { MountTool, SketchEraserTool } from "./tools/MountTool";
 import styles from "./board.module.css";
 import { ErrorBoundary } from "../../observability/ErrorBoundary";
 
@@ -56,6 +71,100 @@ const BoardLayoutContext = createContext<BoardLayoutValue>({
   toggleChat: () => undefined,
 });
 const DRAWING_SHAPE_TYPES = new Set(["arrow", "draw", "geo", "text"]);
+const GENERATION_TILE_WIDTH = 420;
+const GENERATION_TILE_GAP = 56;
+const FRESH_GENERATION_WINDOW_MS = 30_000;
+
+function generationTileSize(
+  task: GenerationTaskItem,
+  candidate?: GenerationCandidate,
+): { readonly height: number; readonly width: number } {
+  const sourceWidth = candidate?.width ?? task.request.parameters.width;
+  const sourceHeight = candidate?.height ?? task.request.parameters.height;
+  const ratio = Math.min(1.65, Math.max(0.58, sourceHeight / sourceWidth));
+  const width = Math.min(
+    480,
+    Math.max(320, candidate?.width ?? GENERATION_TILE_WIDTH),
+  );
+  return {
+    height: Math.round(width * ratio),
+    width,
+  };
+}
+
+function taskAnchor(
+  editor: ReturnType<typeof useEditor>,
+  task: GenerationTaskItem,
+  width: number,
+  height: number,
+): { readonly x: number; readonly y: number } {
+  const referenceBounds = task.request.shapeIds.flatMap((id) => {
+    const shape = editor.getShape(id as TLShapeId);
+    const bounds = shape ? editor.getShapePageBounds(shape) : null;
+    return bounds ? [bounds] : [];
+  });
+  if (referenceBounds.length > 0) {
+    return {
+      x: Math.max(...referenceBounds.map((bounds) => bounds.maxX)) + 88,
+      y: Math.min(...referenceBounds.map((bounds) => bounds.minY)),
+    };
+  }
+  const viewport = editor.getViewportPageBounds();
+  return {
+    x: viewport.center.x - width / 2,
+    y: viewport.center.y - height / 2,
+  };
+}
+
+function overlapsGenerationTile(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  occupied: readonly {
+    readonly height: number;
+    readonly width: number;
+    readonly x: number;
+    readonly y: number;
+  }[],
+): boolean {
+  return occupied.some(
+    (item) =>
+      x < item.x + item.width + GENERATION_TILE_GAP &&
+      x + width + GENERATION_TILE_GAP > item.x &&
+      y < item.y + item.height + GENERATION_TILE_GAP &&
+      y + height + GENERATION_TILE_GAP > item.y,
+  );
+}
+
+function openGenerationPosition(
+  editor: ReturnType<typeof useEditor>,
+  task: GenerationTaskItem,
+  width: number,
+  height: number,
+  occupied: readonly {
+    readonly height: number;
+    readonly width: number;
+    readonly x: number;
+    readonly y: number;
+  }[],
+): { readonly x: number; readonly y: number } {
+  const anchor = taskAnchor(editor, task, width, height);
+  let x = anchor.x;
+  let y = anchor.y;
+  let attempts = 0;
+  while (
+    attempts < 24 &&
+    overlapsGenerationTile(x, y, width, height, occupied)
+  ) {
+    const column = (attempts + 1) % 3;
+    const row = Math.floor((attempts + 1) / 3);
+    x = anchor.x + column * (width + GENERATION_TILE_GAP);
+    y = anchor.y + row * (height + GENERATION_TILE_GAP);
+    attempts += 1;
+  }
+  return { x, y };
+}
 
 function DrawingStylePanel(props: TLUiStylePanelProps) {
   const editor = useEditor();
@@ -103,6 +212,165 @@ function EmptyBoardGuide() {
   );
 }
 
+function GenerationCanvasBridge() {
+  const editor = useEditor();
+  const { dismissCandidate, tasks } = useGenerationWorkspace();
+  const focusedTasks = useRef(new Set<string>());
+
+  useEffect(() => {
+    const imageShapes = editor
+      .getCurrentPageShapes()
+      .filter((shape) => shape.type === IMAGE_SHAPE_TYPE) as ImageShape[];
+    const occupied = imageShapes
+      .filter((shape) => shape.props.generationTaskId)
+      .map((shape) => ({
+        height: shape.props.h,
+        width: shape.props.w,
+        x: shape.x,
+        y: shape.y,
+      }));
+    let focusedThisPass = false;
+
+    for (const task of tasks) {
+      const candidates = task.candidates.filter(
+        (candidate) => candidate.disposition !== "dismissed",
+      );
+      const taskShapes = imageShapes.filter(
+        (shape) => shape.props.generationTaskId === task.id,
+      );
+      const firstTaskShape = taskShapes[0];
+      const firstSize = generationTileSize(task, candidates[0]);
+      const origin = firstTaskShape
+        ? { x: firstTaskShape.x, y: firstTaskShape.y }
+        : openGenerationPosition(
+            editor,
+            task,
+            firstSize.width,
+            firstSize.height,
+            occupied,
+          );
+
+      const placeShape = (
+        index: number,
+        candidate?: GenerationCandidate,
+      ): void => {
+        const size = generationTileSize(task, candidate);
+        const candidateId = candidate?.id;
+        const existing = candidate
+          ? (imageShapes.find(
+              (shape) =>
+                shape.props.generationCandidateId === candidate.id ||
+                (candidate.assetId &&
+                  shape.props.assetId === candidate.assetId),
+            ) ??
+            (index === 0
+              ? taskShapes.find((shape) => !shape.props.generationCandidateId)
+              : undefined))
+          : firstTaskShape;
+        const x = origin.x + (index % 2) * (size.width + GENERATION_TILE_GAP);
+        const y =
+          origin.y +
+          Math.floor(index / 2) * (size.height + GENERATION_TILE_GAP);
+
+        if (existing) {
+          const wasPlaceholder = Boolean(
+            existing.props.generationTaskId && !existing.props.url,
+          );
+          const nextProps = {
+            ...(candidate ? { assetId: candidate.assetId } : {}),
+            ...(candidateId ? { generationCandidateId: candidateId } : {}),
+            generationError: task.error ?? "",
+            generationPrompt: task.prompt,
+            generationStatus: task.status,
+            generationTaskId: task.id,
+            ...(wasPlaceholder && candidate
+              ? { h: size.height, w: size.width }
+              : {}),
+            ...(candidate ? { url: candidate.url } : {}),
+          };
+          const changed =
+            existing.props.generationCandidateId !== candidateId ||
+            existing.props.generationError !== (task.error ?? "") ||
+            existing.props.generationPrompt !== task.prompt ||
+            existing.props.generationStatus !== task.status ||
+            existing.props.generationTaskId !== task.id ||
+            (candidate !== undefined &&
+              (existing.props.assetId !== candidate.assetId ||
+                existing.props.url !== candidate.url ||
+                (wasPlaceholder &&
+                  (existing.props.w !== size.width ||
+                    existing.props.h !== size.height))));
+          if (changed) {
+            editor.updateShape<ImageShape>({
+              id: existing.id,
+              props: nextProps,
+              type: IMAGE_SHAPE_TYPE,
+            });
+          }
+          if (candidate && candidate.disposition !== "adopted") {
+            void dismissCandidate(candidate.id, "adopted");
+          }
+          return;
+        }
+
+        const shapeId = createShapeId(`generation-${task.id}-${index}`);
+        editor.createShape<ImageShape>({
+          id: shapeId,
+          props: {
+            ...(candidate ? { assetId: candidate.assetId } : {}),
+            ...(candidateId ? { generationCandidateId: candidateId } : {}),
+            generationError: task.error ?? "",
+            generationPrompt: task.prompt,
+            generationStatus: task.status,
+            generationTaskId: task.id,
+            h: size.height,
+            role: "garment_ref",
+            roleInferenceState: "ready",
+            roleSource: "default",
+            title: candidate ? "AI 生成设计" : "AI 生成中",
+            uploadStatus: "ready",
+            url: candidate?.url ?? "",
+            w: size.width,
+          },
+          type: IMAGE_SHAPE_TYPE,
+          x,
+          y,
+        });
+        imageShapes.push(editor.getShape(shapeId) as ImageShape);
+        occupied.push({ height: size.height, width: size.width, x, y });
+        if (candidate && candidate.disposition !== "adopted") {
+          void dismissCandidate(candidate.id, "adopted");
+        }
+
+        const createdRecently =
+          Date.now() - Date.parse(task.createdAt) < FRESH_GENERATION_WINDOW_MS;
+        if (
+          !focusedThisPass &&
+          createdRecently &&
+          !focusedTasks.current.has(task.id)
+        ) {
+          focusedThisPass = true;
+          focusedTasks.current.add(task.id);
+          editor.select(shapeId);
+          if (task.taskType === "inpaint") {
+            editor.zoomToSelection({ animation: { duration: 220 } });
+          }
+        }
+      };
+
+      if (candidates.length > 0) {
+        candidates.forEach((candidate, index) => placeShape(index, candidate));
+      } else if (
+        shouldCreateGenerationPlaceholder(task.status, Boolean(firstTaskShape))
+      ) {
+        placeShape(0);
+      }
+    }
+  }, [dismissCandidate, editor, tasks]);
+
+  return null;
+}
+
 function BoardCanvasOverlay() {
   const [fabricsOpen, setFabricsOpen] = useState(false);
   const [collectionLauncherOpen, setCollectionLauncherOpen] = useState(false);
@@ -137,7 +405,7 @@ function BoardCanvasOverlay() {
       <BoardFileDrop />
       <BoardFabricDrop />
       <EmptyBoardGuide />
-      <AnchorOverlay />
+      <GenerationCanvasBridge />
       <ErrorBoundary area="generation">
         <BoardAgentPanel
           boardStatus={status}
@@ -251,10 +519,7 @@ export default function BoardCanvas({ projectId }: BoardCanvasProps) {
                     : {})}
                   shapeUtils={boardShapeUtils}
                   tools={
-                    [
-                      MountTool,
-                      ConnectorTool,
-                    ] as unknown as TLStateNodeConstructor[]
+                    [MountTool, SketchEraserTool] as unknown as TLStateNodeConstructor[]
                   }
                   store={store}
                 />

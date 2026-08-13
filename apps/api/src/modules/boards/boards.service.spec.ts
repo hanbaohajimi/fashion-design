@@ -1,7 +1,6 @@
 import {
   ConflictException,
   ForbiddenException,
-  NotFoundException,
 } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
@@ -57,24 +56,40 @@ describe("BoardsService ownership and semantic rows", () => {
     );
   });
 
-  it("rejects reads and writes after a project is archived", async () => {
+  it("allows archived projects to be read but rejects writes", async () => {
     const database = {
       project: {
-        findUnique: vi.fn().mockResolvedValue({
-          archived: true,
-          deletedAt: null,
-          workspace: { ownerId: "user-a" },
-        }),
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            archived: true,
+            deletedAt: null,
+            workspace: { ownerId: "user-a" },
+          })
+          .mockResolvedValueOnce({
+            archived: true,
+            deletedAt: null,
+            workspace: { ownerId: "user-a" },
+          }),
       },
+      boardElement: { findMany: vi.fn().mockResolvedValue([]) },
+      boardSnapshot: { findUnique: vi.fn().mockResolvedValue(null) },
     };
     const service = new BoardsService(database as never);
 
-    await expect(service.get("user-a", "project-a")).rejects.toMatchObject({
-      response: { code: "PROJECT_ARCHIVED" },
+    await expect(service.get("user-a", "project-a")).resolves.toMatchObject({
+      elements: [],
+      revision: 0,
+      snapshot: null,
     });
-    await expect(service.get("user-a", "project-a")).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.patch("user-a", "project-a", {
+        baseRevision: 0,
+        batchId: "batch-archived",
+        patches: [],
+        snapshot: {},
+      }),
+    ).rejects.toMatchObject({ response: { code: "PROJECT_ARCHIVED" } });
   });
 
   it("returns row-level role data beside the snapshot", async () => {
@@ -130,6 +145,72 @@ describe("BoardsService ownership and semantic rows", () => {
         },
       ],
       revision: 3,
+    });
+  });
+
+  it("removes retired connector records from loaded boards", async () => {
+    const updatedAt = new Date("2026-08-11T08:00:00.000Z");
+    const connectorRecord = {
+      id: "shape:legacy-connector",
+      props: {},
+      type: "fashion-connector",
+      typeName: "shape",
+    };
+    const imageRecord = {
+      id: "shape:image",
+      props: {},
+      type: "fashion-image",
+      typeName: "shape",
+    };
+    const database = {
+      boardElement: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            deletedAt: null,
+            record: connectorRecord,
+            role: "generic",
+            shapeId: connectorRecord.id,
+            shapeType: connectorRecord.type,
+            updatedAt,
+          },
+          {
+            deletedAt: null,
+            record: imageRecord,
+            role: "style_ref",
+            shapeId: imageRecord.id,
+            shapeType: imageRecord.type,
+            updatedAt,
+          },
+        ]),
+      },
+      boardSnapshot: {
+        findUnique: vi.fn().mockResolvedValue({
+          revision: 4,
+          snapshot: {
+            document: {
+              store: {
+                [connectorRecord.id]: connectorRecord,
+                [imageRecord.id]: imageRecord,
+              },
+            },
+          },
+        }),
+      },
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    const result = await service.get("user-a", "project-a");
+
+    expect(result.elements).toHaveLength(1);
+    expect(result.elements[0]?.shapeId).toBe(imageRecord.id);
+    expect(result.snapshot).toEqual({
+      document: { store: { [imageRecord.id]: imageRecord } },
     });
   });
 
@@ -232,6 +313,75 @@ describe("BoardsService ownership and semantic rows", () => {
         snapshot: { document: { store: {} } },
       },
     });
+  });
+
+  it("drops retired connector data submitted by an old client", async () => {
+    const savedAt = new Date("2026-08-11T09:00:00.000Z");
+    const connectorRecord = {
+      id: "shape:legacy-connector",
+      props: {},
+      type: "fashion-connector",
+      typeName: "shape",
+    };
+    const boardElementUpsert = vi.fn().mockResolvedValue({});
+    const boardSnapshotCreate = vi.fn().mockResolvedValue({
+      revision: 1,
+      updatedAt: savedAt,
+    });
+    const transaction = {
+      boardElement: { upsert: boardElementUpsert },
+      boardSnapshot: {
+        create: boardSnapshotCreate,
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const database = {
+      $transaction: vi.fn(
+        async (operation: (client: typeof transaction) => unknown) =>
+          operation(transaction),
+      ),
+      project: {
+        findUnique: vi.fn().mockResolvedValue({
+          deletedAt: null,
+          workspace: { ownerId: "user-a" },
+        }),
+      },
+    };
+    const service = new BoardsService(database as never);
+
+    await service.patch("user-a", "project-a", {
+      baseRevision: 0,
+      batchId: "b1dd67d8-dd76-4543-bbf9-94cf34c57d37",
+      patches: [
+        {
+          deleted: false,
+          record: connectorRecord,
+          role: "generic",
+          shapeId: connectorRecord.id,
+          shapeType: connectorRecord.type,
+        },
+      ],
+      snapshot: {
+        document: { store: { [connectorRecord.id]: connectorRecord } },
+      },
+    });
+
+    expect(boardSnapshotCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshot: { document: { store: {} } },
+        }),
+      }),
+    );
+    expect(boardElementUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          deletedAt: expect.any(Date),
+          shapeType: "unknown",
+        }),
+        update: expect.objectContaining({ deletedAt: expect.any(Date) }),
+      }),
+    );
   });
 
   it("creates revision one when the board has no snapshot yet", async () => {

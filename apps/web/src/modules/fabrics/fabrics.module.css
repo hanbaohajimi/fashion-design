@@ -3,7 +3,13 @@
   padding: 0 clamp(1rem, 4vw, 4rem) 64px;
   overflow: hidden;
   background:
-    repeating-linear-gradient(90deg, transparent, transparent 79px, #d4cfc0 79px, #d4cfc0 80px),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 79px,
+      #d4cfc0 79px,
+      #d4cfc0 80px
+    ),
     var(--surface-paper, #ece9e0);
   color: var(--text-primary, #181915);
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
@@ -120,10 +126,7 @@
 }
 
 .libraryBody {
-  display: grid;
-  align-items: start;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 4rem;
+  display: block;
 }
 
 .filterRail {
@@ -228,12 +231,19 @@
 
 .virtualGridHost {
   width: 100%;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
 }
 
-.virtualGridHost > div {
+.virtualGrid {
+  min-height: 0;
+  overscroll-behavior-y: auto;
   scrollbar-color: #2d2d28 transparent;
   scrollbar-width: thin;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .virtualCell {
@@ -245,18 +255,15 @@
   border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-xl, 16px);
   background: var(--surface-card, #f8f5ec);
-  box-shadow: 8px 8px 0 var(--border-primary, #2d2d28);
   color: var(--text-primary, #181915);
   cursor: grab;
   transition:
     transform var(--transition-base, 200ms),
-    border-color var(--transition-base, 200ms),
-    box-shadow var(--transition-base, 200ms);
+    border-color var(--transition-base, 200ms);
 }
 
 .fabricCard:hover {
   border-color: var(--accent-primary, #e9522c);
-  box-shadow: 12px 12px 0 var(--accent-primary, #e9522c);
   transform: translate(-2px, -2px);
 }
 
@@ -287,7 +294,6 @@
   transform: scale(1.035);
 }
 
-.cardIndex,
 .dragHint {
   position: absolute;
   z-index: 1;
@@ -297,12 +303,6 @@
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
-}
-
-.cardIndex {
-  top: 12px;
-  left: 12px;
-  padding: 6px 9px;
 }
 
 .dragHint {
@@ -321,6 +321,32 @@
 
 .cardBody {
   padding: 16px 17px 18px;
+}
+
+.fabricTags,
+.fabricDialogTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.fabricTags {
+  min-height: 54px;
+  align-content: flex-start;
+}
+
+.fabricTags span,
+.fabricDialogTags span {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  border: 1px solid var(--border-primary, #2d2d28);
+  border-radius: var(--radius-pill, 999px);
+  padding: 4px 9px;
+  background: var(--surface-paper, #ece9e0);
+  color: var(--text-primary, #181915);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .categoryPill {
@@ -433,6 +459,28 @@
 .cardBody button:hover {
   background: var(--accent-secondary, #d1421f);
   transform: translateY(-2px);
+}
+
+.fabricCardActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fabricCardActions > button:only-child {
+  grid-column: 1 / -1;
+}
+
+.cardBody .fabricManageButton {
+  border: 1px solid var(--border-primary, #2d2d28);
+  background: transparent;
+  color: var(--text-primary, #181915);
+}
+
+.cardBody .fabricManageButton:hover {
+  border-color: var(--accent-primary, #e9522c);
+  background: rgb(233 82 44 / 10%);
+  color: var(--accent-secondary, #d1421f);
 }
 
 .fabricCard[data-compact="true"] .cardVisual {
@@ -587,6 +635,13 @@
 
 .fabricUploadFields label:first-child {
   grid-column: 1 / -1;
+}
+
+.tagHelp {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted, #65655d);
+  font-size: 10px;
 }
 
 .fabricUploadFields span {
@@ -756,6 +811,22 @@
   font-size: 24px;
 }
 
+.fabricDialogImage {
+  height: min(340px, 42vh);
+  overflow: hidden;
+  background: #e0ddd0;
+}
+
+.fabricDialogImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fabricDialogTags {
+  padding: 20px;
+}
+
 .fabricDetailList {
   display: grid;
   margin: 0;
@@ -817,6 +888,10 @@
 .fabricEditForm label {
   display: grid;
   gap: 5px;
+}
+
+.fabricEditForm label:first-child {
+  grid-column: 1 / -1;
 }
 
 .fabricEditForm label > span {

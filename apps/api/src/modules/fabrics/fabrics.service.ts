@@ -52,15 +52,13 @@ export interface FabricImageUpload {
 }
 
 export interface FabricView {
-  readonly attributes: Prisma.JsonValue;
-  readonly category: string;
+  readonly canManage: boolean;
   readonly createdAt: Date;
   readonly id: string;
   readonly mainFileId: string;
   readonly mainImageUrl: string;
-  readonly name: string;
   readonly scope: "preset" | "user";
-  readonly subCategory: string | null;
+  readonly tags: readonly string[];
   readonly updatedAt: Date;
 }
 
@@ -83,31 +81,6 @@ export class FabricsService {
 
   async list(userId: string, input: ListFabricsInput): Promise<FabricListView> {
     const searchTerms = fabricSearchTerms(input.search);
-    const attributeFilters: Prisma.FabricWhereInput[] = [];
-    if (input.composition) {
-      attributeFilters.push({
-        OR: fabricCompositionKeys(input.composition).map((composition) => ({
-          attributes: { gt: 0, path: ["composition", composition] },
-        })),
-      });
-    }
-    if (input.season) {
-      attributeFilters.push({
-        attributes: {
-          array_contains: [input.season],
-          path: ["seasonSuggestion"],
-        },
-      });
-    }
-    if (input.minWeight !== undefined || input.maxWeight !== undefined) {
-      attributeFilters.push({
-        attributes: {
-          ...(input.minWeight === undefined ? {} : { gte: input.minWeight }),
-          ...(input.maxWeight === undefined ? {} : { lte: input.maxWeight }),
-          path: ["weight"],
-        },
-      });
-    }
     const visibility: Prisma.FabricWhereInput =
       input.scope === "preset"
         ? { scope: FabricScope.PRESET }
@@ -121,89 +94,11 @@ export class FabricsService {
             };
     const where: Prisma.FabricWhereInput = {
       ...visibility,
-      ...(input.category ? { category: input.category } : {}),
       ...(searchTerms.length > 0
         ? {
-            AND: [
-              {
-                OR: searchTerms.flatMap((search) => [
-                  {
-                    name: { contains: search, mode: "insensitive" as const },
-                  },
-                  {
-                    subCategory: {
-                      contains: search,
-                      mode: "insensitive" as const,
-                    },
-                  },
-                  {
-                    category: {
-                      contains: search,
-                      mode: "insensitive" as const,
-                    },
-                  },
-                  {
-                    attributes: {
-                      gt: 0,
-                      path: ["composition", search],
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["weave"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["drape"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["stretch"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["opacity"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["sheen"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      path: ["texture"],
-                      string_contains: search,
-                    },
-                  },
-                  {
-                    attributes: {
-                      array_contains: [search],
-                      path: ["seasonSuggestion"],
-                    },
-                  },
-                  {
-                    attributes: {
-                      array_contains: [search],
-                      path: ["useCases"],
-                    },
-                  },
-                ]),
-              },
-              ...attributeFilters,
-            ],
+            tags: { hasSome: [...searchTerms] },
           }
-        : attributeFilters.length > 0
-          ? { AND: attributeFilters }
-          : {}),
+        : {}),
       status: "active",
     };
     const skip = (input.page - 1) * input.limit;
@@ -219,7 +114,7 @@ export class FabricsService {
     ]);
 
     return {
-      items: records.map((record) => this.toView(record)),
+      items: records.map((record) => this.toView(record, userId)),
       limit: input.limit,
       page: input.page,
       total,
@@ -230,7 +125,7 @@ export class FabricsService {
   async findOne(userId: string, fabricId: string): Promise<FabricView> {
     const record = await this.findRecord(fabricId);
     this.assertReadable(userId, record);
-    return this.toView(record);
+    return this.toView(record, userId);
   }
 
   async create(
@@ -241,18 +136,14 @@ export class FabricsService {
     const mainFileId = await this.storeMainImage(userId, image);
     const created = await this.database.fabric.create({
       data: {
-        attributes: input.attributes,
-        category: input.category,
         mainFileId,
-        name: input.name,
         ownerId: userId,
         scope: FabricScope.USER,
-        source: "user_upload",
-        subCategory: input.subCategory ?? null,
+        tags: input.tags,
       },
       include: FABRIC_INCLUDE,
     });
-    return this.toView(created);
+    return this.toView(created, userId);
   }
 
   async update(
@@ -263,21 +154,14 @@ export class FabricsService {
     const existing = await this.findRecord(fabricId);
     this.assertMutable(userId, existing);
     const data: Prisma.FabricUpdateInput = {
-      ...(input.attributes !== undefined
-        ? { attributes: input.attributes }
-        : {}),
-      ...(input.category !== undefined ? { category: input.category } : {}),
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.subCategory !== undefined
-        ? { subCategory: input.subCategory }
-        : {}),
+      tags: input.tags,
     };
     const updated = await this.database.fabric.update({
       data,
       include: FABRIC_INCLUDE,
       where: { id: fabricId },
     });
-    return this.toView(updated);
+    return this.toView(updated, userId);
   }
 
   async remove(userId: string, fabricId: string): Promise<void> {
@@ -322,16 +206,19 @@ export class FabricsService {
   }
 
   private assertMutable(userId: string, record: FabricRecord): void {
-    if (
-      record.scope !== FabricScope.USER ||
-      record.ownerId === null ||
-      record.ownerId !== userId
-    ) {
+    if (!this.canManage(userId, record)) {
       throw new ForbiddenException({
         code: "FABRIC_MUTATION_FORBIDDEN",
-        message: "只能修改或删除自己的面料",
+        message: "没有权限修改或删除该面料",
       });
     }
+  }
+
+  private canManage(userId: string, record: FabricRecord): boolean {
+    return (
+      (record.scope === FabricScope.USER && record.ownerId === userId) ||
+      (record.scope === FabricScope.PRESET && isFabricLibraryAdmin(userId))
+    );
   }
 
   private async storeMainImage(
@@ -473,23 +360,29 @@ export class FabricsService {
     }
   }
 
-  private toView(record: FabricRecord): FabricView {
+  private toView(record: FabricRecord, userId: string): FabricView {
     return {
-      attributes: record.attributes,
-      category: record.category,
+      canManage: this.canManage(userId, record),
       createdAt: record.createdAt,
       id: record.id,
       mainFileId: record.mainFileId,
       mainImageUrl: `/api/fabrics/${encodeURIComponent(record.id)}/image`,
-      name: record.name,
       scope:
         record.scope === FabricScope.PRESET
           ? ("preset" as const)
           : ("user" as const),
-      subCategory: record.subCategory,
+      tags: record.tags,
       updatedAt: record.updatedAt,
     };
   }
+}
+
+function isFabricLibraryAdmin(userId: string): boolean {
+  return (process.env.FABRIC_LIBRARY_ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(userId);
 }
 
 const FABRIC_SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
@@ -504,22 +397,10 @@ const FABRIC_SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
   聚酯纤维: ["polyester", "synthetic"],
 };
 
-const FABRIC_COMPOSITION_ALIASES: Readonly<
-  Record<string, readonly string[]>
-> = {
-  cotton: ["cotton", "棉", "棉纤维"],
-  polyester: ["polyester", "聚酯纤维", "涤纶"],
-  silk: ["silk", "真丝"],
-  spandex: ["spandex", "氨纶"],
-  wool: ["wool", "羊毛"],
-};
-
-function fabricCompositionKeys(composition: string): readonly string[] {
-  return FABRIC_COMPOSITION_ALIASES[composition] ?? [composition];
-}
-
 function fabricSearchTerms(search: string): readonly string[] {
   const normalized = search.trim();
   if (!normalized) return [];
-  return [...new Set([normalized, ...(FABRIC_SEARCH_ALIASES[normalized] ?? [])])];
+  return [
+    ...new Set([normalized, ...(FABRIC_SEARCH_ALIASES[normalized] ?? [])]),
+  ];
 }

@@ -228,9 +228,44 @@ describe("ProjectsService ownership and soft deletion", () => {
           shapeId: "shape:image",
           shapeType: "fashion-image",
         },
+        {
+          deletedAt: null,
+          fileAssetId: null,
+          record: {
+            id: "shape:legacy-connector",
+            props: {},
+            type: "fashion-connector",
+            typeName: "shape",
+          },
+          role: "generic",
+          roleConfidence: null,
+          roleInferenceState: "READY",
+          roleLabel: null,
+          roleSource: "DEFAULT",
+          shapeId: "shape:legacy-connector",
+          shapeType: "fashion-connector",
+        },
       ],
       boardSnapshot: {
-        snapshot: { selectedAssetId: "asset-source" },
+        snapshot: {
+          document: {
+            store: {
+              "shape:image": {
+                id: "shape:image",
+                props: { assetId: "asset-source" },
+                type: "fashion-image",
+                typeName: "shape",
+              },
+              "shape:legacy-connector": {
+                id: "shape:legacy-connector",
+                props: {},
+                type: "fashion-connector",
+                typeName: "shape",
+              },
+            },
+          },
+          selectedAssetId: "asset-source",
+        },
       },
       collections: [],
       designAssets: [
@@ -302,7 +337,18 @@ describe("ProjectsService ownership and soft deletion", () => {
     expect(boardElementCreateMany.mock.calls[0]?.[0].data[0].record).toMatchObject({
       props: { assetId: duplicatedAsset.id },
     });
+    expect(boardElementCreateMany.mock.calls[0]?.[0].data).toHaveLength(1);
     expect(boardSnapshotCreate.mock.calls[0]?.[0].data.snapshot).toEqual({
+      document: {
+        store: {
+          "shape:image": {
+            id: "shape:image",
+            props: { assetId: duplicatedAsset.id },
+            type: "fashion-image",
+            typeName: "shape",
+          },
+        },
+      },
       selectedAssetId: duplicatedAsset.id,
     });
   });

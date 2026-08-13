@@ -8,9 +8,16 @@ import {
 } from "tldraw";
 
 import { RoleBadge } from "./RoleBadge";
-import { FABRIC_SHAPE_TYPE, type FabricShape, normalizeBoardRole } from "./shape-types";
+import {
+  FABRIC_SHAPE_TYPE,
+  type FabricShape,
+  normalizeBoardRole,
+} from "./shape-types";
 import { computeAnnotationScale, MaterialShell } from "./MaterialShell";
-import { generateMaterialAppearance, resolveMaterialAppearance } from "./material-appearance";
+import {
+  generateMaterialAppearance,
+  resolveMaterialAppearance,
+} from "./material-appearance";
 import { deriveShapeSeed } from "./fabric-silhouette";
 import { generateEdgePath } from "./edge-path";
 import styles from "./shapes.module.css";
@@ -19,9 +26,8 @@ export class FabricShapeUtil extends BaseBoxShapeUtil<FabricShape> {
   static override type = FABRIC_SHAPE_TYPE;
   static override props: RecordProps<FabricShape> = {
     appearance: T.any.optional(),
-    fabricCategory: T.string,
     fabricId: T.string,
-    fabricName: T.string,
+    fabricTags: T.arrayOf(T.string),
     h: T.number,
     mounts: T.any.optional(),
     role: T.string,
@@ -31,9 +37,8 @@ export class FabricShapeUtil extends BaseBoxShapeUtil<FabricShape> {
 
   override getDefaultProps(): FabricShape["props"] {
     return {
-      fabricCategory: "fabric",
       fabricId: "",
-      fabricName: "未命名面料",
+      fabricTags: ["面料"],
       // Landscape — a real offcut is wider than it is tall.
       h: 174,
       role: "fabric_ref",
@@ -78,10 +83,9 @@ function FabricShapeContent({ shape }: { readonly shape: FabricShape }) {
   // FNV-1a seed: stable across renders, reloads and collaborators.
   const seed = deriveShapeSeed(shape.id);
 
-  const appearance = shape.props.appearance ?? generateMaterialAppearance(
-    resolveMaterialAppearance(role),
-    seed,
-  );
+  const appearance =
+    shape.props.appearance ??
+    generateMaterialAppearance(resolveMaterialAppearance(role), seed);
 
   // Override edge style to pinked — matches the .fabric clip-path from
   // natural_fabric_pinboard_demo.html: clean uniform zigzag on all four sides.
@@ -94,7 +98,9 @@ function FabricShapeContent({ shape }: { readonly shape: FabricShape }) {
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
 
   const handleRemoveMount = (mountId: string): void => {
-    const nextMounts = (shape.props.mounts ?? []).filter((m) => m.id !== mountId);
+    const nextMounts = (shape.props.mounts ?? []).filter(
+      (m) => m.id !== mountId,
+    );
     editor.updateShape({
       id: shape.id,
       type: shape.type,
@@ -110,7 +116,7 @@ function FabricShapeContent({ shape }: { readonly shape: FabricShape }) {
       {shape.props.thumbnailUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          alt={shape.props.fabricName}
+          alt={shape.props.fabricTags.join("、")}
           draggable={false}
           src={shape.props.thumbnailUrl}
           className={styles.fabricSwatchImage}

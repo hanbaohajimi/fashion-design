@@ -1,36 +1,23 @@
 import { FabricScope, FileStatus } from "@fashion/db";
 import { ForbiddenException } from "@nestjs/common";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FabricsService } from "./fabrics.service";
 
-const attributes = {
-  composition: { cotton: 100 },
-  drape: "moderate" as const,
-  weave: "plain" as const,
-  weight: 120,
-};
-
 function fabricRecord(overrides: Record<string, unknown> = {}) {
   return {
-    aiTags: null,
-    attributes,
-    category: "cotton",
     createdAt: new Date("2026-08-02T08:00:00.000Z"),
     id: "fabric-1",
-    license: null,
     mainFile: {
       id: "file-1",
       mimeType: "image/png",
       objectKey: "originals/user-1/file-1/source",
     },
     mainFileId: "file-1",
-    name: "纯棉府绸",
     ownerId: "user-1",
     scope: FabricScope.USER,
-    source: "user_upload",
     status: "active",
-    subCategory: "poplin",
+    tags: ["轻薄", "垂坠"],
     updatedAt: new Date("2026-08-02T08:00:00.000Z"),
     ...overrides,
   };
@@ -67,10 +54,9 @@ function setup() {
   };
 }
 
-describe("FabricsService 权限边界", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+describe("FabricsService", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.unstubAllEnvs());
 
   it("all 列表只查询预置面料和当前用户面料", async () => {
     const { database, service } = setup();
@@ -78,7 +64,6 @@ describe("FabricsService 权限边界", () => {
     database.fabric.findMany.mockResolvedValue([]);
 
     await service.list("user-1", {
-      category: undefined,
       limit: 24,
       page: 1,
       scope: "all",
@@ -97,146 +82,45 @@ describe("FabricsService 权限边界", () => {
     );
   });
 
-  it("搜索同时覆盖名称与结构化 attributes", async () => {
+  it("仅搜索标签", async () => {
     const { database, service } = setup();
     database.fabric.count.mockResolvedValue(0);
     database.fabric.findMany.mockResolvedValue([]);
 
     await service.list("user-1", {
-      category: undefined,
       limit: 24,
       page: 1,
       scope: "all",
-      search: "shirt",
+      search: "轻薄",
     });
 
     expect(database.fabric.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          AND: [
-            expect.objectContaining({
-              OR: expect.arrayContaining([
-                {
-                  attributes: {
-                    array_contains: ["shirt"],
-                    path: ["useCases"],
-                  },
-                },
-              ]),
-            }),
-          ],
+          tags: { hasSome: ["轻薄"] },
         }),
       }),
     );
   });
 
-  it("成分筛选同时匹配规范英文键和用户录入的中文键", async () => {
-    const { database, service } = setup();
-    database.fabric.count.mockResolvedValue(0);
-    database.fabric.findMany.mockResolvedValue([]);
-
-    await service.list("user-1", {
-      category: undefined,
-      composition: "polyester",
-      limit: 24,
-      page: 1,
-      scope: "all",
-      search: "",
-    });
-
-    expect(database.fabric.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          AND: expect.arrayContaining([
-            {
-              OR: [
-                {
-                  attributes: {
-                    gt: 0,
-                    path: ["composition", "polyester"],
-                  },
-                },
-                {
-                  attributes: {
-                    gt: 0,
-                    path: ["composition", "聚酯纤维"],
-                  },
-                },
-                {
-                  attributes: {
-                    gt: 0,
-                    path: ["composition", "涤纶"],
-                  },
-                },
-              ],
-            },
-          ]),
-        }),
-      }),
-    );
-  });
-
-  it("化纤上位词同时匹配常见化学纤维成分", async () => {
-    const { database, service } = setup();
-    database.fabric.count.mockResolvedValue(0);
-    database.fabric.findMany.mockResolvedValue([]);
-
-    await service.list("user-1", {
-      category: undefined,
-      limit: 24,
-      page: 1,
-      scope: "all",
-      search: "化纤",
-    });
-
-    expect(database.fabric.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          AND: [
-            expect.objectContaining({
-              OR: expect.arrayContaining([
-                {
-                  attributes: {
-                    gt: 0,
-                    path: ["composition", "聚酯纤维"],
-                  },
-                },
-                {
-                  attributes: {
-                    gt: 0,
-                    path: ["composition", "nylon"],
-                  },
-                },
-              ]),
-            }),
-          ],
-        }),
-      }),
-    );
-  });
-
-  it("允许任意登录用户读取预置面料", async () => {
-    const { database, service } = setup();
-    database.fabric.findUnique.mockResolvedValue(
-      fabricRecord({ ownerId: null, scope: FabricScope.PRESET }),
-    );
-
-    await expect(service.findOne("user-2", "fabric-1")).resolves.toMatchObject({
-      id: "fabric-1",
-      scope: "preset",
-    });
-  });
-
-  it("拒绝读取其他用户的私有面料", async () => {
+  it("对外仅返回图片和标签业务信息", async () => {
     const { database, service } = setup();
     database.fabric.findUnique.mockResolvedValue(fabricRecord());
 
-    await expect(service.findOne("user-2", "fabric-1")).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    const result = await service.findOne("user-1", "fabric-1");
+
+    expect(result).toMatchObject({
+      canManage: true,
+      id: "fabric-1",
+      mainImageUrl: "/api/fabrics/fabric-1/image",
+      tags: ["轻薄", "垂坠"],
+    });
+    expect(result).not.toHaveProperty("attributes");
+    expect(result).not.toHaveProperty("category");
+    expect(result).not.toHaveProperty("name");
   });
 
-  it("创建时强制写入 user scope 和当前 ownerId", async () => {
+  it("创建时只写入图片关联、标签和必要系统字段", async () => {
     const { database, service, storage } = setup();
     const image = {
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -259,63 +143,48 @@ describe("FabricsService 权限边界", () => {
         width: null,
       }),
     );
-    database.fileAsset.update.mockResolvedValue({
-      id: "file-1",
-      status: FileStatus.READY,
-    });
+    database.fileAsset.update.mockResolvedValue({ id: "file-1" });
     database.fabric.create.mockResolvedValue(fabricRecord());
     storage.uploadBuffer.mockResolvedValue(undefined);
 
-    await service.create(
-      "user-1",
-      {
-        attributes,
-        category: "cotton",
-        name: "纯棉府绸",
-        subCategory: "poplin",
-      },
-      image,
-    );
+    await service.create("user-1", { tags: ["轻薄", "垂坠"] }, image);
 
     expect(database.fabric.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           ownerId: "user-1",
           scope: FabricScope.USER,
+          tags: ["轻薄", "垂坠"],
         }),
       }),
     );
   });
 
-  it("拒绝修改预置面料或其他用户面料", async () => {
+  it("仅允许拥有者更新标签", async () => {
     const { database, service } = setup();
-    database.fabric.findUnique
-      .mockResolvedValueOnce(
-        fabricRecord({ ownerId: null, scope: FabricScope.PRESET }),
-      )
-      .mockResolvedValueOnce(fabricRecord());
+    database.fabric.findUnique.mockResolvedValue(fabricRecord());
+    database.fabric.update.mockResolvedValue(fabricRecord({ tags: ["哑光"] }));
 
+    await service.update("user-1", "fabric-1", { tags: ["哑光"] });
+    expect(database.fabric.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { tags: ["哑光"] } }),
+    );
+
+    database.fabric.findUnique.mockResolvedValue(
+      fabricRecord({ ownerId: null, scope: FabricScope.PRESET }),
+    );
     await expect(
-      service.update("user-1", "fabric-1", { name: "新名称" }),
+      service.update("user-1", "fabric-1", { tags: ["哑光"] }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      service.update("user-2", "fabric-1", { name: "新名称" }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(database.fabric.update).not.toHaveBeenCalled();
   });
 
-  it("仅软删除当前用户自己的面料，以保留白板和生成引用", async () => {
+  it("软删除自己的面料并保留白板引用", async () => {
     const { database, service } = setup();
-    database.fabric.findUnique
-      .mockResolvedValueOnce(fabricRecord())
-      .mockResolvedValueOnce(fabricRecord());
+    database.fabric.findUnique.mockResolvedValue(fabricRecord());
     database.fabric.update.mockResolvedValue(
       fabricRecord({ status: "archived" }),
     );
 
-    await expect(service.remove("user-2", "fabric-1")).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
     await expect(service.remove("user-1", "fabric-1")).resolves.toBeUndefined();
     expect(database.fabric.update).toHaveBeenCalledWith({
       data: { status: "archived" },
@@ -323,20 +192,23 @@ describe("FabricsService 权限边界", () => {
     });
   });
 
-  it("允许拥有者继续读取已归档面料主图，但不放宽私有权限", async () => {
-    const { database, service, storage } = setup();
+  it("面料库管理员可以软删除系统预置面料", async () => {
+    vi.stubEnv("FABRIC_LIBRARY_ADMIN_USER_IDS", "admin-1, admin-2");
+    const { database, service } = setup();
     database.fabric.findUnique.mockResolvedValue(
-      fabricRecord({ status: "archived" }),
+      fabricRecord({ ownerId: null, scope: FabricScope.PRESET }),
     );
-    storage.createDownloadUrl.mockResolvedValue(
-      "https://storage.example.com/fabric-1.png",
+    database.fabric.update.mockResolvedValue(
+      fabricRecord({
+        ownerId: null,
+        scope: FabricScope.PRESET,
+        status: "archived",
+      }),
     );
 
-    await expect(service.imageUrl("user-1", "fabric-1")).resolves.toBe(
-      "https://storage.example.com/fabric-1.png",
-    );
-    await expect(service.imageUrl("user-2", "fabric-1")).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.remove("admin-1", "fabric-1")).resolves.toBeUndefined();
+    await expect(service.findOne("admin-1", "fabric-1")).resolves.toMatchObject({
+      canManage: true,
+    });
   });
 });

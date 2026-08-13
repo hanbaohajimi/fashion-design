@@ -33,13 +33,12 @@ export function DNACard({
   return (
     <div className={styles.dnaCard}>
       <DnaSection
-        label="01 / COLOR SYSTEM"
         locked={dna.locks.palette}
         onLock={(locked) => setLock("palette", locked)}
         title="色板"
       >
         {dna.palette.length === 0 ? (
-          <p className={styles.dnaEmpty}>暂无色彩。添加第一枚系列色。</p>
+          <p className={styles.dnaEmpty}>暂无颜色</p>
         ) : (
           <div className={styles.paletteEditor}>
             {dna.palette.map((color, index) => (
@@ -89,12 +88,11 @@ export function DNACard({
           }
           type="button"
         >
-          {dna.palette.length >= 12 ? "已达 12 色上限" : "添加颜色"}
+          {dna.palette.length >= 12 ? "已达上限" : "添加颜色"}
         </button>
       </DnaSection>
 
       <DnaSection
-        label="02 / SILHOUETTE"
         locked={dna.locks.silhouettes}
         onLock={(locked) => setLock("silhouettes", locked)}
         title="廓形"
@@ -111,7 +109,6 @@ export function DNACard({
       </DnaSection>
 
       <DnaSection
-        label="03 / MATERIAL"
         locked={dna.locks.fabrics}
         onLock={(locked) => setLock("fabrics", locked)}
         title="面料"
@@ -128,7 +125,6 @@ export function DNACard({
       </DnaSection>
 
       <DnaSection
-        label="04 / MOOD"
         locked={dna.locks.moodWords}
         onLock={(locked) => setLock("moodWords", locked)}
         title="情绪词"
@@ -144,7 +140,7 @@ export function DNACard({
         />
       </DnaSection>
 
-      <DnaSection label="05 / SIGNATURE DETAILS" title="标志性构造细节">
+      <DnaSection title="标志性细节">
         <TokenTextarea
           disabled={false}
           label="需要跨品类保留的细节，以逗号或换行分隔"
@@ -161,13 +157,11 @@ export function DNACard({
 
 function DnaSection({
   children,
-  label,
   locked,
   onLock,
   title,
 }: {
   readonly children: ReactNode;
-  readonly label: string;
   readonly locked?: boolean;
   readonly onLock?: (locked: boolean) => void;
   readonly title: string;
@@ -176,7 +170,6 @@ function DnaSection({
     <section className={styles.dnaSection} data-locked={locked}>
       <header>
         <div>
-          <span>{label}</span>
           <h3>{title}</h3>
         </div>
         {onLock ? (
@@ -207,8 +200,8 @@ function TokenTextarea({
 }) {
   return (
     <label className={styles.dnaTextarea}>
-      <span>{label}</span>
       <textarea
+        aria-label={label}
         disabled={disabled}
         maxLength={780}
         onChange={(event) => {
@@ -220,7 +213,7 @@ function TokenTextarea({
             .slice(0, 12);
           onChange(text, values);
         }}
-        rows={3}
+        rows={2}
         value={value}
       />
     </label>

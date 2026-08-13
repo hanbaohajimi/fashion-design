@@ -17,7 +17,7 @@
 
 .topbar {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   min-height: var(--topbar-height);
   align-items: center;
   border-bottom: 1px solid var(--border-color-default);
@@ -30,17 +30,6 @@
   color: inherit;
   gap: var(--space-3);
   text-decoration: none;
-}
-
-.brand > span {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  border: 2px solid var(--text-primary);
-  place-items: center;
-  font-family: var(--font-serif);
-  font-size: var(--font-sm);
-  font-style: italic;
 }
 
 .brand strong {
@@ -80,6 +69,7 @@
 .account {
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: var(--space-3);
   font-size: var(--font-sm);
   letter-spacing: var(--tracking-normal);
@@ -132,12 +122,8 @@
    ======================================== */
 
 .dashboard {
-  display: grid;
-  min-height: 200px;
-  align-items: center;
+  min-height: 128px;
   padding: var(--space-12) 0 var(--space-8);
-  grid-template-columns: 1fr auto;
-  gap: var(--space-12);
 }
 
 .dashboardTitle {
@@ -147,38 +133,6 @@
   font-weight: var(--font-weight-normal);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
-}
-
-.dashboardStats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-6);
-}
-
-.statCard {
-  min-width: 120px;
-  border: 1px solid var(--border-color-default);
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  background: var(--surface-card);
-}
-
-.statLabel {
-  display: block;
-  margin-bottom: var(--space-1);
-  color: var(--text-tertiary);
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-}
-
-.statValue {
-  display: block;
-  font-family: var(--font-serif);
-  font-size: var(--font-xl);
-  font-weight: var(--font-weight-normal);
-  letter-spacing: var(--tracking-tight);
 }
 
 /* ========================================
@@ -259,7 +213,7 @@
 }
 
 .search input::placeholder {
-  color: var(--text-tertiary);  /* 修复: WCAG AA合规 */
+  color: var(--text-tertiary); /* 修复: WCAG AA合规 */
 }
 
 .projectCount {
@@ -888,7 +842,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -897,7 +852,8 @@
 }
 
 @keyframes loading-rule {
-  0%, 100% {
+  0%,
+  100% {
     transform: scaleX(0.2);
   }
   50% {
@@ -913,14 +869,6 @@
   .projectGrid,
   .skeletonGrid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  }
-
-  .dashboard {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboardStats {
-    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -965,10 +913,6 @@
 
   .projectCount {
     order: -1;
-  }
-
-  .dashboardStats {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .projectGrid,
@@ -1030,6 +974,6 @@
   }
 
   .coverMeasure {
-    opacity: 1;  /* 始终显示，不做动画 */
+    opacity: 1; /* 始终显示，不做动画 */
   }
 }

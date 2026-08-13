@@ -13,6 +13,7 @@ import { z } from "zod";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import {
+  bindSketchReferenceSchema,
   inferRoleSchema,
   projectIdSchema,
   setElementRolesSchema,
@@ -51,6 +52,22 @@ export class BoardElementsController {
       parseOrThrow(projectIdSchema, projectId),
       parseOrThrow(shapeIdSchema, shapeId),
       input.fileId,
+    );
+  }
+
+  @Post(":shapeId/sketch-reference")
+  bindSketchReference(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("shapeId") shapeId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrThrow(bindSketchReferenceSchema, body);
+    return this.boardElementsService.bindSketchReference(
+      user.userId,
+      parseOrThrow(projectIdSchema, projectId),
+      parseOrThrow(shapeIdSchema, shapeId),
+      input,
     );
   }
 

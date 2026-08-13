@@ -573,25 +573,6 @@
   line-height: 1.5;
 }
 
-.maskMetrics {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid rgb(36 37 31 / 26%);
-  border-bottom: 1px solid rgb(36 37 31 / 26%);
-}
-
-.maskMetrics span {
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.maskMetrics strong {
-  font-size: 18px;
-  font-weight: 500;
-}
-
 .maskActions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -862,7 +843,7 @@
   /* Opaque paper, not frosted glass: at 96% the blur was invisible anyway
      and cost a composited layer on every scroll frame. */
   background: #f8f5ec;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .collectionTabs button {
@@ -907,7 +888,7 @@
   min-width: 0;
   padding: 11px 14px;
   align-content: center;
-  gap: 4px;
+  gap: 0;
 }
 
 .collectionHeader > div:last-child {
@@ -981,7 +962,7 @@
 
 .collectionHero {
   display: grid;
-  min-height: 170px;
+  min-height: 132px;
   border-bottom: 1px solid #24251f;
   grid-template-columns: 156px minmax(0, 1fr);
 }
@@ -998,7 +979,7 @@
 .collectionHero img {
   width: 100%;
   height: 100%;
-  min-height: 170px;
+  min-height: 132px;
   object-fit: cover;
 }
 
@@ -1022,14 +1003,14 @@
 
 .collectionHero > div {
   display: grid;
-  padding: 18px;
+  padding: 14px 18px;
   align-content: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .collectionHero strong {
-  max-width: 15ch;
-  font-size: 22px;
+  max-width: none;
+  font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.04em;
   line-height: 1.02;
@@ -1099,7 +1080,7 @@
 
 .dnaSection > header {
   display: flex;
-  min-height: 58px;
+  min-height: 48px;
   align-items: stretch;
   justify-content: space-between;
   border-bottom: 1px solid rgb(36 37 31 / 22%);
@@ -1107,14 +1088,14 @@
 
 .dnaSection > header > div {
   display: grid;
-  padding: 9px 14px;
+  padding: 7px 14px;
   align-content: center;
   gap: 2px;
 }
 
 .dnaSection h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 500;
   letter-spacing: -0.035em;
 }
@@ -1137,8 +1118,8 @@
 
 .dnaSection > div {
   display: grid;
-  padding: 13px 14px 16px;
-  gap: 10px;
+  padding: 10px 14px 12px;
+  gap: 8px;
 }
 
 .paletteEditor {
@@ -1257,21 +1238,21 @@
   display: grid;
   border-bottom: 1px solid #24251f;
   background: #ece8de;
+  grid-template-columns: 156px minmax(0, 1fr);
 }
 
 .sourceGarmentEditor > header {
   display: grid;
-  min-height: 58px;
-  border-bottom: 1px solid rgb(36 37 31 / 22%);
-  padding: 9px 14px;
+  min-height: 56px;
+  border-right: 1px solid rgb(36 37 31 / 22%);
+  padding: 7px 14px;
   align-content: center;
   gap: 2px;
 }
 
 .sourceGarmentEditor > header span,
 .sourceGarmentEditor label > span,
-.seriesPlan span,
-.seriesPlan label > span {
+.lookGenerator label > span {
   color: #716e65;
   font-size: 8px;
   font-weight: 800;
@@ -1280,26 +1261,25 @@
 
 .sourceGarmentEditor h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 500;
 }
 
 .sourceGarmentEditor > div {
   display: grid;
-  padding: 13px 14px;
+  padding: 10px 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .sourceGarmentEditor label,
-.seriesPlan label,
-.seriesSlotFields label {
+.lookGenerator label {
   display: grid;
   gap: 6px;
 }
 
 .sourceGarmentEditor :is(select, input),
-.seriesPlan :is(select, input, textarea) {
+.lookGenerator :is(select, input) {
   width: 100%;
   min-width: 0;
   border: 1px solid rgb(36 37 31 / 52%);
@@ -1313,15 +1293,17 @@
 }
 
 .sourceGarmentEditor :is(select, input):focus,
-.seriesPlan :is(select, input, textarea):focus {
+.lookGenerator :is(select, input):focus {
   border-color: #e9522c;
   box-shadow: inset 3px 0 0 #e9522c;
 }
 
 .sourceGarmentEditor > small,
 .sourceGarmentEditor > p {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 0 14px 12px;
+  border-top: 1px solid rgb(36 37 31 / 22%);
+  padding: 8px 14px;
   color: #716e65;
   font-size: 8px;
 }
@@ -1331,468 +1313,33 @@
   font-weight: 700;
 }
 
-.expansionMode {
+.lookGenerator {
   display: grid;
+  align-items: end;
   border-bottom: 1px solid #24251f;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.expansionMode button {
-  min-height: 42px;
-  border: 0;
-  border-right: 1px solid #24251f;
-  background: #ece8de;
-  color: #24251f;
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.expansionMode button:last-child {
-  border-right: 0;
-}
-
-.expansionMode button[aria-pressed="true"] {
-  background: #24251f;
-  color: #fffdf7;
-}
-
-.seriesPlan {
-  display: grid;
-  border-bottom: 1px solid #24251f;
-}
-
-.seriesPlan > header {
-  display: flex;
-  min-height: 68px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgb(36 37 31 / 24%);
-  padding: 12px 18px;
-  gap: 18px;
-}
-
-.seriesPlan > header > div {
-  display: grid;
-  gap: 4px;
-}
-
-.seriesPlan > header strong {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.seriesPlan > header small {
-  color: #716e65;
-  font-size: 9px;
-}
-
-.seriesPlan > header label {
-  width: 90px;
-}
-
-.seriesPlan > header input {
-  height: 34px;
-}
-
-.seriesPlanProgress {
-  position: relative;
-  overflow: hidden;
-  height: 3px;
-  background: #d8d3c7;
-}
-
-.seriesPlanProgress > i {
-  position: absolute;
-  inset: 0;
-  background: #39735c;
-  transform-origin: left center;
-  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.seriesBrief {
-  position: relative;
-  border-bottom: 1px solid rgb(36 37 31 / 24%);
   padding: 14px 18px;
   background: #f5f1e8;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
 }
 
-.seriesBrief textarea {
-  min-height: 74px;
-  padding-right: 52px;
-  resize: vertical;
-  line-height: 1.55;
-}
-
-.seriesBrief > small {
-  position: absolute;
-  right: 27px;
-  bottom: 23px;
-  color: #8a867c;
-  font-size: 8px;
-  font-variant-numeric: tabular-nums;
-}
-
-.seriesBalance {
-  display: grid;
-  border-bottom: 1px solid #24251f;
-  background: #e9e5da;
-}
-
-.seriesBalance > header {
-  display: flex;
-  min-height: 50px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgb(36 37 31 / 20%);
-  padding: 9px 18px;
-  gap: 16px;
-}
-
-.seriesBalance > header > div {
-  display: grid;
-  gap: 3px;
-}
-
-.seriesBalance > header strong {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.seriesBalance > header button,
-.seriesPlanToolbar > button,
-.seriesSlotActions button {
-  border: 1px solid rgb(36 37 31 / 48%);
+.lookGenerator button {
+  min-width: 92px;
+  min-height: 35px;
+  border: 1px solid #24251f;
   border-radius: 0;
-  background: transparent;
-  color: #24251f;
+  padding: 0 18px;
+  background: #e9522c;
+  color: #fffdf7;
   cursor: pointer;
   font: inherit;
-  font-size: 8px;
-  font-weight: 800;
-  transition:
-    background 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-
-.seriesBalance > header button {
-  min-height: 30px;
-  padding: 0 10px;
-}
-
-.seriesBalance > header button:hover:not(:disabled),
-.seriesPlanToolbar > button:hover:not(:disabled),
-.seriesSlotActions button:hover:not(:disabled) {
-  background: #24251f;
-  color: #fffdf7;
-}
-
-.seriesBalance > header button:active:not(:disabled),
-.seriesPlanToolbar > button:active:not(:disabled),
-.seriesSlotActions button:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.seriesBalance > header button:focus-visible,
-.seriesPlanToolbar > button:focus-visible,
-.seriesSlotActions button:focus-visible {
-  outline: 2px solid #e9522c;
-  outline-offset: 2px;
-}
-
-.seriesBalance button:disabled,
-.seriesPlanToolbar button:disabled,
-.seriesSlotActions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.38;
-}
-
-.seriesBalance dl {
-  display: grid;
-  margin: 0;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.seriesBalance dl > div {
-  position: relative;
-  display: grid;
-  min-width: 0;
-  min-height: 58px;
-  overflow: hidden;
-  border-right: 1px solid rgb(36 37 31 / 18%);
-  padding: 10px 12px 12px;
-  gap: 4px;
-}
-
-.seriesBalance dl > div:last-child {
-  border-right: 0;
-}
-
-.seriesBalance dt {
-  color: #716e65;
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.seriesBalance dd {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin: 0;
-  gap: 5px;
-}
-
-.seriesBalance dd strong {
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
-}
-
-.seriesBalance dd span {
-  color: #716e65;
-  font-size: 8px;
-  font-variant-numeric: tabular-nums;
-}
-
-.seriesBalance dl i {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: #e9522c;
-  transform-origin: left center;
-  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.seriesBalanceWarnings {
-  display: grid;
-  margin: 0;
-  border-top: 1px solid rgb(36 37 31 / 18%);
-  padding: 9px 18px 10px 31px;
-  color: #7f3a25;
-  font-size: 9px;
-  line-height: 1.5;
-  gap: 2px;
-}
-
-.seriesBalanceReady {
-  margin: 0;
-  border-top: 1px solid rgb(36 37 31 / 18%);
-  padding: 9px 18px;
-  color: #39735c;
-  font-size: 9px;
-  font-weight: 750;
-}
-
-.seriesHeroSlot {
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #24251f;
-  padding: 10px 18px;
-  gap: 10px;
-}
-
-.seriesHeroSlot > div {
-  display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  gap: 10px;
-}
-
-.seriesHeroSlot strong {
-  font-size: 12px;
-}
-
-.seriesHeroSlot small {
-  color: #32735b;
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.seriesPlanToolbar {
-  display: flex;
-  min-height: 46px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgb(36 37 31 / 24%);
-  padding: 8px 18px;
-  gap: 14px;
-}
-
-.seriesPlanToolbar > label,
-.seriesSlotSelect {
-  display: inline-flex;
-  align-items: center;
-  grid-auto-flow: column;
-  gap: 8px;
-}
-
-.seriesPlan :is(.seriesPlanToolbar, .seriesSlotSelect) input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-  margin: 0;
-  padding: 0;
-  accent-color: #e9522c;
-}
-
-.seriesPlanToolbar > button {
-  min-height: 30px;
-  padding: 0 12px;
-}
-
-.seriesSlotList {
-  display: grid;
-  padding: 14px 18px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.seriesSlotList > article {
-  display: grid;
-  min-width: 0;
-  border: 1px solid #24251f;
-  background: #fffdf7;
-}
-
-.seriesSlotList > article[data-status="completed"] {
-  border-color: #32735b;
-  background: #edf4ee;
-}
-
-.seriesSlotList > article[data-status="failed"] {
-  border-color: #9c3a25;
-}
-
-.seriesSlotList > article > header {
-  display: grid;
-  min-height: 70px;
-  align-items: start;
-  border-bottom: 1px solid rgb(36 37 31 / 24%);
-  padding: 8px 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
-}
-
-.seriesSlotList > article > header > div:not(.seriesSlotActions) {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.seriesSlotList > article > header strong {
-  overflow: hidden;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.seriesSlotList > article > header small {
-  color: #716e65;
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.seriesSlotActions {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.seriesSlotActions button {
-  min-height: 25px;
-  border-right: 0;
-}
-
-.seriesSlotActions button:last-child {
-  border-right: 1px solid rgb(36 37 31 / 48%);
-  color: #8a3524;
-}
-
-.seriesSlotFields {
-  display: grid;
-  padding: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px;
-}
-
-.seriesSlotDirection {
-  grid-column: 1 / -1;
-}
-
-.seriesSlotDirection textarea {
-  resize: vertical;
-  line-height: 1.45;
-}
-
-.seriesSlotList > article > button {
-  min-height: 34px;
-  border: 0;
-  border-top: 1px solid #24251f;
-  background: transparent;
-  color: #24251f;
-  cursor: pointer;
   font-size: 9px;
   font-weight: 800;
 }
 
-.seriesSlotList > article > button:hover:not(:disabled) {
-  background: #24251f;
-  color: #fffdf7;
-}
-
-.seriesSlotList > article > button:disabled {
+.lookGenerator button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
-}
-
-.seriesPlan > footer {
-  display: grid;
-  position: sticky;
-  z-index: 1;
-  bottom: 0;
-  border-top: 1px solid #24251f;
-  background: #f8f5ec;
-  grid-template-columns: minmax(160px, 1.4fr) 0.8fr 1.1fr;
-}
-
-.seriesPlan > footer > div {
-  display: grid;
-  padding: 10px 14px;
-  align-content: center;
-  gap: 2px;
-}
-
-.seriesPlan > footer > div strong {
-  font-size: 9px;
-}
-
-.seriesPlan > footer > div span {
-  font-size: 8px;
-}
-
-.seriesPlan > footer button {
-  min-height: 46px;
-  border: 0;
-  border-right: 1px solid #24251f;
-  background: #ece8de;
-  color: #24251f;
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.seriesPlan > footer button:last-child {
-  border-right: 0;
-  background: #e9522c;
-  color: #fffdf7;
-}
-
-.seriesPlan > footer button:disabled {
-  cursor: not-allowed;
-  opacity: 0.56;
 }
 
 .lookLab,
@@ -1819,8 +1366,7 @@
 
 .lookLab > header span,
 .consistencyOverview > header span,
-.axisSelector legend span,
-.lookDirection > span {
+.axisSelector legend span {
   color: #716e65;
   font-size: 8px;
   font-weight: 800;
@@ -1912,53 +1458,6 @@
   opacity: 0.72;
 }
 
-.lookDirection {
-  display: grid;
-  border-bottom: 1px solid #24251f;
-  padding: 16px 18px;
-  gap: 7px;
-}
-
-.lookDirection textarea {
-  width: 100%;
-  resize: vertical;
-  border: 1px solid rgb(36 37 31 / 58%);
-  border-radius: 0;
-  padding: 10px;
-  outline: 0;
-  background: #fffdf7;
-  color: #24251f;
-  font: inherit;
-  font-size: 10px;
-  line-height: 1.55;
-}
-
-.lookDirection textarea:focus {
-  border-color: #e9522c;
-  box-shadow: inset 3px 0 0 #e9522c;
-}
-
-.generateLookButton {
-  min-height: 48px;
-  border: 0;
-  border-bottom: 1px solid #24251f;
-  background: #e9522c;
-  color: #fffdf7;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.generateLookButton:hover:not(:disabled) {
-  background: #24251f;
-}
-
-.generateLookButton:disabled {
-  cursor: wait;
-  opacity: 0.68;
-}
-
 .lookError {
   border-bottom: 1px solid #9c3a25;
   margin: 0;
@@ -1980,10 +1479,6 @@
   min-width: 0;
   border: 1px solid #24251f;
   background: #fffdf7;
-}
-
-.lookGrid article[data-drift="true"] {
-  border: 2px solid #a43d28;
 }
 
 .lookGrid figure {
@@ -2008,78 +1503,12 @@
   display: flex;
   min-height: 34px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 0 9px;
   background: rgb(28 29 25 / 88%);
   color: #fffdf7;
-}
-
-.lookGrid figcaption strong {
-  font-size: 9px;
-  letter-spacing: 0.08em;
-}
-
-.lookGrid figcaption span {
-  color: #dcd5c7;
-  font-size: 8px;
-}
-
-.lookGrid article > div:not(.driftNotice) {
-  display: flex;
-  min-height: 46px;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid #24251f;
-  padding: 0 10px;
-}
-
-.lookGrid article > div > span {
-  color: #716e65;
-  font-size: 8px;
-}
-
-.lookGrid article > div > strong {
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.duplicateNotice {
-  border-top: 1px solid #24251f;
-  margin: 0;
-  padding: 8px 10px;
-  background: #ecd09e;
-  color: #563a19;
   font-size: 9px;
   font-weight: 800;
-}
-
-.driftNotice {
-  display: grid;
-  border-top: 1px solid #a43d28;
-  padding: 9px 10px 10px;
-  background: #f1d9cf;
-  gap: 7px;
-}
-
-.driftNotice strong,
-.driftNotice span {
-  color: #872d1d;
-  font-size: 9px;
-}
-
-.driftNotice button {
-  min-height: 32px;
-  border: 1px solid #872d1d;
-  background: transparent;
-  color: #872d1d;
-  cursor: pointer;
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.driftNotice button:hover {
-  background: #872d1d;
-  color: #fffdf7;
 }
 
 .lookPending {
@@ -2842,7 +2271,7 @@
   }
 
   .collectionHero strong {
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .axisSelector > div {
@@ -2853,73 +2282,21 @@
     grid-template-columns: 1fr;
   }
 
-  .sourceGarmentEditor > div,
-  .seriesSlotList,
-  .seriesSlotFields {
+  .sourceGarmentEditor > div {
     grid-template-columns: 1fr;
   }
 
-  .seriesSlotDirection {
-    grid-column: 1;
+  .sourceGarmentEditor {
+    grid-template-columns: 118px minmax(0, 1fr);
   }
 
-  .seriesPlan > header {
-    align-items: start;
-  }
-
-  .seriesBrief,
-  .seriesBalance > header,
-  .seriesHeroSlot,
-  .seriesPlanToolbar {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
-
-  .seriesBalance dl {
-    overflow-x: auto;
-    grid-template-columns: repeat(5, minmax(58px, 1fr));
-    overscroll-behavior-x: contain;
-  }
-
-  .seriesBalance dl > div {
-    padding-right: 8px;
-    padding-left: 8px;
-  }
-
-  .seriesBalanceWarnings {
-    padding-right: 12px;
-    padding-left: 25px;
-  }
-
-  .seriesHeroSlot > div {
-    grid-template-columns: 58px minmax(0, 1fr);
-  }
-
-  .seriesPlanToolbar {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .seriesPlanToolbar > button {
-    width: 100%;
-  }
-
-  .seriesSlotList {
+  .lookGenerator {
     padding: 12px;
+    grid-template-columns: 1fr;
   }
 
-  .seriesSlotList > article > header {
-    min-height: 74px;
-  }
-
-  .seriesPlan > footer {
-    grid-template-columns: 1fr 1.2fr;
-  }
-
-  .seriesPlan > footer > div {
-    border-bottom: 1px solid rgb(36 37 31 / 22%);
-    grid-column: 1 / -1;
+  .lookGenerator button {
+    width: 100%;
   }
 
   .lookLab > header,

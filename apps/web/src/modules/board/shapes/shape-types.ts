@@ -1,8 +1,5 @@
-import {
-  BOARD_ELEMENT_ROLES,
-  type BoardElementRole,
-} from "@fashion/shared";
-import type { TLShape } from "tldraw";
+import { BOARD_ELEMENT_ROLES, type BoardElementRole } from "@fashion/shared";
+import type { TLFrameShape, TLShape, TLShapeId } from "tldraw";
 import type { MaterialAppearance, Mount } from "./material-appearance";
 import type { SwatchColor } from "./swatch-colors";
 
@@ -17,12 +14,42 @@ export type BoardRole = BoardElementRole;
 export type RoleInferenceState = "none" | "pending" | "ready" | "failed";
 export type RoleSource = "default" | "inferred" | "manual";
 
+type ImageOriginProps = Readonly<{
+  assetId?: string | undefined;
+  fileId?: string | undefined;
+  generationCandidateId?: string | undefined;
+  generationTaskId?: string | undefined;
+}>;
+
+export function isPlatformGeneratedImage(props: ImageOriginProps): boolean {
+  return Boolean(
+    props.generationCandidateId ||
+      props.generationTaskId ||
+      (props.assetId && !props.fileId),
+  );
+}
+
+export function normalizeImageRole(
+  role: string,
+  props: ImageOriginProps,
+): BoardRole {
+  const normalized = normalizeBoardRole(role);
+  return normalized === "garment_ref" && !isPlatformGeneratedImage(props)
+    ? "reference_garment"
+    : normalized;
+}
+
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
     [IMAGE_SHAPE_TYPE]: {
       appearance?: MaterialAppearance;
       assetId?: string;
       fileId?: string;
+      generationCandidateId?: string;
+      generationError?: string;
+      generationPrompt?: string;
+      generationStatus?: string;
+      generationTaskId?: string;
       h: number;
       mounts?: readonly Mount[];
       role: string;
@@ -64,9 +91,8 @@ declare module "tldraw" {
     };
     [FABRIC_SHAPE_TYPE]: {
       appearance?: MaterialAppearance;
-      fabricCategory: string;
       fabricId: string;
-      fabricName: string;
+      fabricTags: readonly string[];
       h: number;
       mounts?: readonly Mount[];
       role: string;
@@ -81,7 +107,66 @@ export type NoteShape = TLShape<typeof NOTE_SHAPE_TYPE>;
 export type SwatchShape = TLShape<typeof SWATCH_SHAPE_TYPE>;
 export type FrameShape = TLShape<typeof FRAME_SHAPE_TYPE>;
 export type FabricShape = TLShape<typeof FABRIC_SHAPE_TYPE>;
-export type BoardShape = ImageShape | NoteShape | SwatchShape | FrameShape | FabricShape;
+export type BoardShape =
+  ImageShape | NoteShape | SwatchShape | FrameShape | FabricShape;
+
+interface FinalizedSketchImageInput {
+  readonly fileId: string;
+  readonly fingerprint: string;
+  readonly imageId: TLShapeId;
+  readonly previewUrl: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * Converts the temporary, editable sketch paper into the single image record
+ * that is persisted on the board and consumed by generation.
+ */
+export function createFinalizedSketchImageRecord(
+  frame: TLFrameShape,
+  input: FinalizedSketchImageInput,
+): ImageShape {
+  const storedTitle = frame.meta.sketchTitle;
+  const title =
+    typeof storedTitle === "string" && storedTitle.trim()
+      ? storedTitle
+      : frame.props.name || "廓形草图";
+
+  return {
+    ...frame,
+    id: input.imageId,
+    meta: {
+      ...frame.meta,
+      fashionSketch: true,
+      fashionSketchImage: true,
+      role: "silhouette_ref",
+      roleSource: "manual",
+      sketchDirty: false,
+      sketchFileId: input.fileId,
+      sketchFingerprint: input.fingerprint,
+      sketchPendingFileId: "",
+      sketchPendingFingerprint: "",
+      sketchPendingPreviewUrl: "",
+      sketchPreviewUrl: input.previewUrl,
+      sketchSourceFrameId: frame.id,
+      sketchStatus: "ready",
+      sketchUpdatedAt: input.updatedAt,
+    },
+    props: {
+      fileId: input.fileId,
+      h: frame.props.h,
+      role: "silhouette_ref",
+      roleInferenceState: "ready",
+      roleLabel: "fashion_sketch",
+      roleSource: "manual",
+      title,
+      uploadStatus: "ready",
+      url: input.previewUrl,
+      w: frame.props.w,
+    },
+    type: IMAGE_SHAPE_TYPE,
+  };
+}
 
 export function isBoardShape(shape: TLShape): shape is BoardShape {
   return (

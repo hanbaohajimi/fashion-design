@@ -6,38 +6,20 @@ import {
   updateFabricSchema,
 } from "./fabric.dto";
 
-const validAttributes = {
-  composition: { cotton: 60, polyester: 40 },
-  drape: "moderate",
-  stretch: "slight",
-  weave: "plain",
-  weight: 180,
-};
-
 describe("fabric DTO", () => {
-  it("接受总和为 100% 的成分配比", () => {
+  it("创建时只接受标签并自动去重", () => {
     expect(
-      createFabricSchema.parse({
-        attributes: validAttributes,
-        category: "blend",
-        name: "60支混纺府绸",
-        subCategory: "poplin",
-      }),
-    ).toMatchObject({ attributes: validAttributes });
+      createFabricSchema.parse({ tags: ["轻薄", "垂坠", "轻薄"] }),
+    ).toEqual({
+      tags: ["轻薄", "垂坠"],
+    });
   });
 
-  it("拒绝总和不为 100% 的成分配比", () => {
-    const result = createFabricSchema.safeParse({
-      attributes: {
-        ...validAttributes,
-        composition: { cotton: 60, polyester: 39 },
-      },
-      category: "blend",
-      name: "错误配比",
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toContain("100");
+  it("拒绝空标签或超过限制的标签", () => {
+    expect(createFabricSchema.safeParse({ tags: [] }).success).toBe(false);
+    expect(
+      createFabricSchema.safeParse({ tags: ["x".repeat(31)] }).success,
+    ).toBe(false);
   });
 
   it("解析列表分页与 all 范围", () => {
@@ -48,7 +30,10 @@ describe("fabric DTO", () => {
     });
   });
 
-  it("拒绝没有任何修改字段的 PATCH", () => {
+  it("PATCH 必须提供有效标签", () => {
     expect(updateFabricSchema.safeParse({}).success).toBe(false);
+    expect(updateFabricSchema.parse({ tags: ["哑光"] })).toEqual({
+      tags: ["哑光"],
+    });
   });
 });

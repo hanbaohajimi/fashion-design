@@ -3,14 +3,12 @@ import styles from "./projects.module.css";
 interface EmptyStateProps {
   readonly archived: boolean;
   readonly onClearSearch: () => void;
-  readonly onCreate: () => void;
   readonly searching: boolean;
 }
 
 export function EmptyState({
   archived,
   onClearSearch,
-  onCreate,
   searching,
 }: EmptyStateProps) {
   if (searching) {
@@ -41,17 +39,5 @@ export function EmptyState({
     );
   }
 
-  return (
-    <section className={styles.emptyState} data-testid="project-empty-state">
-      <span className={styles.emptyIndex}>01</span>
-      <p className={styles.emptyKicker}>YOUR FIRST COLLECTION</p>
-      <h2>从一个名字开始。</h2>
-      <p>
-        创建第一份设计项目，把灵感、款式与后续创作资产收拢在同一处。
-      </p>
-      <button className={styles.primaryButton} onClick={onCreate} type="button">
-        创建首个项目
-      </button>
-    </section>
-  );
+  return null;
 }

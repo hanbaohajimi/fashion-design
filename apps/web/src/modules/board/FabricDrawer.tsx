@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useEditor } from "tldraw";
 
 import { useFabrics } from "../fabrics/fabric-api";
@@ -19,16 +19,8 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
   const editor = useEditor();
   const [scope, setScope] = useState<FabricScope>("preset");
   const [search, setSearch] = useState("");
-  const [gridHeight, setGridHeight] = useState(480);
   const deferredSearch = useDeferredValue(search);
   const fabrics = useFabrics({ scope, search: deferredSearch });
-
-  useEffect(() => {
-    const measure = () => setGridHeight(Math.max(260, window.innerHeight - 254));
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
 
   const addToBoard = (fabric: Fabric): void => {
     addFabricToBoard(editor, fabricToDragPayload(fabric));
@@ -39,15 +31,32 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
     <aside aria-label="面料抽屉" className={styles.fabricDrawer}>
       <header>
         <div>
-          <span>FABRIC / 8.2</span>
           <h2>面料档案</h2>
         </div>
-        <button aria-label="关闭面料抽屉" onClick={onClose} type="button">×</button>
+        <button aria-label="关闭面料抽屉" onClick={onClose} type="button">
+          ×
+        </button>
       </header>
 
-      <div className={styles.fabricScopeTabs} role="group" aria-label="面料来源">
-        <button aria-pressed={scope === "preset"} onClick={() => setScope("preset")} type="button">预置</button>
-        <button aria-pressed={scope === "user"} onClick={() => setScope("user")} type="button">我的</button>
+      <div
+        className={styles.fabricScopeTabs}
+        role="group"
+        aria-label="面料来源"
+      >
+        <button
+          aria-pressed={scope === "preset"}
+          onClick={() => setScope("preset")}
+          type="button"
+        >
+          预置
+        </button>
+        <button
+          aria-pressed={scope === "user"}
+          onClick={() => setScope("user")}
+          type="button"
+        >
+          我的
+        </button>
       </div>
 
       <FabricUploadPanel
@@ -78,7 +87,9 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
       ) : fabrics.error ? (
         <div className={styles.fabricDrawerState}>
           <p>{fabrics.error.message}</p>
-          <button onClick={fabrics.refresh} type="button">重试</button>
+          <button onClick={fabrics.refresh} type="button">
+            重试
+          </button>
         </div>
       ) : fabrics.items.length === 0 ? (
         <div className={styles.fabricDrawerState}>这里还没有面料</div>
@@ -86,8 +97,9 @@ export function FabricDrawer({ onClose }: FabricDrawerProps) {
         <FabricVirtualGrid
           compact
           fabrics={fabrics.items}
-          height={gridHeight}
+          height="100%"
           onAdd={addToBoard}
+          onChanged={fabrics.refresh}
           onNearEnd={fabrics.loadMore}
         />
       )}

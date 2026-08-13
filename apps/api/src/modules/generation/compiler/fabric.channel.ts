@@ -1,9 +1,6 @@
-import {
-  FabricScope,
-  FileStatus,
-  type PrismaClient,
-} from "@fashion/db";
+import { FabricScope, FileStatus, type PrismaClient } from "@fashion/db";
 
+import { S3FileStorage } from "../../files/storage.service";
 import type {
   CompileResult,
   CompilerBoardElement,
@@ -11,25 +8,9 @@ import type {
   FabricGenerationInput,
   FabricReference,
 } from "./compiler.types";
-import { S3FileStorage } from "../../files/storage.service";
 
 const DEFAULT_FABRIC_WEIGHT = 0.7;
 const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
-const WEAVES = new Set(["plain", "twill", "knit"]);
-const TEXTURES = new Set(["smooth", "textured"]);
-const DRAPES = new Set(["stiff", "moderate", "fluid"]);
-const SHEENS = new Set(["matte", "subtle", "glossy"]);
-const STRETCHES = new Set(["none", "slight", "high"]);
-const OPACITIES = new Set(["opaque", "semi", "sheer"]);
-const SEASONS = new Set(["spring", "summer", "autumn", "winter"]);
-const USE_CASES = new Set([
-  "shirt",
-  "dress",
-  "outerwear",
-  "pants",
-  "skirt",
-  "suit",
-]);
 
 type FabricChannelDatabase = Pick<PrismaClient, "fabric">;
 
@@ -54,13 +35,7 @@ export class FabricChannel implements CompilerChannel {
       const props = contentOf(element.record);
       const fabricId = cleanIdentifier(props.fabricId);
       if (!fabricId) return [];
-      return [
-        {
-          element,
-          fabricId,
-          weight: referenceWeight(props.weight),
-        },
-      ];
+      return [{ element, fabricId, weight: referenceWeight(props.weight) }];
     });
     if (fabricElements.length === 0) {
       return { prompt: "", refImages: [] };
@@ -77,7 +52,6 @@ export class FabricChannel implements CompilerChannel {
         status: { in: ["active", "archived"] },
       },
       select: {
-        attributes: true,
         id: true,
         mainFile: {
           select: {
@@ -86,9 +60,7 @@ export class FabricChannel implements CompilerChannel {
             thumbnail1024Key: true,
           },
         },
-        name: true,
-        ownerId: true,
-        scope: true,
+        tags: true,
       },
     });
     const fabricById = new Map(fabrics.map((fabric) => [fabric.id, fabric]));
@@ -99,18 +71,15 @@ export class FabricChannel implements CompilerChannel {
     for (const item of fabricElements) {
       const fabric = fabricById.get(item.fabricId);
       if (!fabric) continue;
-      const attributes = objectValue(fabric.attributes);
-      const prompt = compileFabricPrompt(attributes);
-      if (prompt) prompts.push(prompt);
-
-      const lineage: FabricGenerationInput = {
-        attributes: fabric.attributes,
+      const tags = cleanTags(fabric.tags);
+      if (tags.length > 0) prompts.push(`fabric tags: ${tags.join(", ")}`);
+      fabricInputs.push({
         boardElementId: item.element.id,
         fabricId: fabric.id,
         role: "fabric_texture",
+        tags,
         weight: item.weight,
-      };
-      fabricInputs.push(lineage);
+      });
 
       if (fabric.mainFile.status === FileStatus.READY) {
         const objectKey =
@@ -122,7 +91,7 @@ export class FabricChannel implements CompilerChannel {
             objectKey,
             REFERENCE_URL_TTL_SECONDS,
           ),
-          labels: fabricLabels(attributes),
+          labels: tags,
           role: "fabric_texture",
           weight: item.weight,
         });
@@ -165,6 +134,13 @@ function cleanIdentifier(value: unknown): string | null {
   return cleaned && cleaned.length <= 128 ? cleaned : null;
 }
 
+function cleanTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].slice(
+    0,
+    12,
+  );
+}
+
 function referenceWeight(value: unknown): number {
   return typeof value === "number" &&
     Number.isFinite(value) &&
@@ -172,126 +148,4 @@ function referenceWeight(value: unknown): number {
     value <= 1
     ? value
     : DEFAULT_FABRIC_WEIGHT;
-}
-
-function enumAttribute(value: unknown, allowed: ReadonlySet<string>) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLocaleLowerCase();
-  return allowed.has(normalized) ? normalized : null;
-}
-
-function numberAttribute(value: unknown, max: number): number | null {
-  return typeof value === "number" &&
-    Number.isFinite(value) &&
-    value > 0 &&
-    value <= max
-    ? value
-    : null;
-}
-
-function enumArrayAttribute(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-): string[] {
-  if (!Array.isArray(value)) return [];
-  return [
-    ...new Set(
-      value.flatMap((item) => {
-        const normalized = enumAttribute(item, allowed);
-        return normalized ? [normalized] : [];
-      }),
-    ),
-  ];
-}
-
-function compositionEntries(
-  value: unknown,
-): readonly (readonly [string, number])[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => {
-      const candidate = objectValue(item);
-      const name = cleanCompositionName(candidate.name ?? candidate.fiber);
-      const percentage = candidate.percentage ?? candidate.percent;
-      return name && validPercentage(percentage)
-        ? ([[name, percentage]] as readonly (readonly [string, number])[])
-        : [];
-    });
-  }
-  return Object.entries(objectValue(value)).flatMap(([name, percentage]) => {
-    const cleanedName = cleanCompositionName(name);
-    return cleanedName && validPercentage(percentage)
-      ? ([[cleanedName, percentage]] as readonly (readonly [string, number])[])
-      : [];
-  });
-}
-
-function cleanCompositionName(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const cleaned = value
-    .replace(/[^\p{L}\p{N}._ -]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 48);
-  return cleaned || null;
-}
-
-function validPercentage(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= 0 &&
-    value <= 100
-  );
-}
-
-function formatPercentage(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/u, "").replace(/\.$/u, "");
-}
-
-function fabricLabels(attributes: Record<string, unknown>): string[] {
-  const composition = compositionEntries(attributes.composition).map(
-    ([fiber, percentage]) => `${fiber} ${formatPercentage(percentage)}%`,
-  );
-  return [
-    ...composition,
-    enumAttribute(attributes.weave, WEAVES),
-    enumAttribute(attributes.texture, TEXTURES),
-    enumAttribute(attributes.drape, DRAPES),
-    enumAttribute(attributes.sheen, SHEENS),
-    enumAttribute(attributes.stretch, STRETCHES),
-    enumAttribute(attributes.opacity, OPACITIES),
-    ...enumArrayAttribute(attributes.seasonSuggestion, SEASONS),
-    ...enumArrayAttribute(attributes.useCases, USE_CASES),
-  ].filter((value): value is string => Boolean(value));
-}
-
-function compileFabricPrompt(attributes: Record<string, unknown>): string {
-  const composition = compositionEntries(attributes.composition)
-    .map(([fiber, percentage]) => `${fiber} ${formatPercentage(percentage)}%`)
-    .join(", ");
-  const weave = enumAttribute(attributes.weave, WEAVES);
-  const texture = enumAttribute(attributes.texture, TEXTURES);
-  const drape = enumAttribute(attributes.drape, DRAPES);
-  const sheen = enumAttribute(attributes.sheen, SHEENS);
-  const stretch = enumAttribute(attributes.stretch, STRETCHES);
-  const opacity = enumAttribute(attributes.opacity, OPACITIES);
-  const weight = numberAttribute(attributes.weight ?? attributes.gsm, 2_000);
-  const width = numberAttribute(attributes.width, 1_000);
-  const seasons = enumArrayAttribute(attributes.seasonSuggestion, SEASONS);
-  const useCases = enumArrayAttribute(attributes.useCases, USE_CASES);
-  return [
-    composition ? `fabric material: ${composition}` : null,
-    weave ? `weave type: ${weave}` : null,
-    texture ? `fabric texture: ${texture}` : null,
-    drape ? `drape: ${drape}` : null,
-    sheen ? `sheen: ${sheen}` : null,
-    weight ? `weight: ${weight} GSM` : null,
-    stretch ? `stretch: ${stretch}` : null,
-    opacity ? `opacity: ${opacity}` : null,
-    width ? `fabric width: ${width} cm` : null,
-    seasons.length ? `recommended seasons: ${seasons.join(", ")}` : null,
-    useCases.length ? `use cases: ${useCases.join(", ")}` : null,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(", ");
 }

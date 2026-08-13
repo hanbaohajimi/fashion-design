@@ -390,6 +390,7 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
       name: uploadCount === 1 ? "click-fabric" : "drop-fabric",
       scope: "user",
       subCategory: null,
+      tags: [uploadCount === 1 ? "click-fabric" : "drop-fabric"],
       updatedAt: "2026-08-03T00:00:00.000Z",
     };
     userFabrics.unshift(created);
@@ -400,6 +401,9 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
   await page.getByRole("button", { name: "打开面料库" }).click();
   const drawer = page.getByRole("complementary", { name: "面料抽屉" });
   await expect(drawer).toBeVisible();
+  await expect
+    .poll(() => drawer.evaluate((target) => getComputedStyle(target).boxShadow))
+    .toBe("none");
 
   const fileChooserPromise = page.waitForEvent("filechooser");
   await drawer.getByRole("button", { name: /添加面料/u }).click();
@@ -409,13 +413,22 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
     mimeType: "image/png",
     name: "click-fabric.png",
   });
+  await drawer.getByRole("textbox", { name: "标签" }).fill("click-fabric");
   await drawer.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(1);
   await expect(drawer.getByRole("button", { name: "我的" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await expect(drawer.getByText("click-fabric", { exact: true })).toBeVisible();
+  const clickFabricCard = drawer.getByRole("article", {
+    name: "click-fabric，拖拽到白板",
+  });
+  await expect(clickFabricCard.getByText("#click-fabric")).toBeVisible();
+  await expect
+    .poll(() =>
+      clickFabricCard.evaluate((target) => getComputedStyle(target).boxShadow),
+    )
+    .toBe("none");
 
   const uploadPanel = drawer.getByRole("region", { name: "上传面料" });
   await uploadPanel.evaluate((target) => {
@@ -440,21 +453,23 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
       }),
     );
   });
+  await drawer.getByRole("textbox", { name: "标签" }).fill("drop-fabric");
   await drawer.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(2);
-  await expect(drawer.getByText("drop-fabric", { exact: true })).toBeVisible();
+  await expect(
+    drawer
+      .getByRole("article", { name: "drop-fabric，拖拽到白板" })
+      .getByText("#drop-fabric"),
+  ).toBeVisible();
 
-  await drawer
-    .getByText("click-fabric", { exact: true })
-    .locator("xpath=ancestor::article")
-    .getByRole("button", { name: "添加到白板" })
-    .click();
+  await clickFabricCard.getByRole("button", { name: "添加到白板" }).click();
   await expect(drawer).toHaveCount(0);
   await expect(page.locator('img[alt="click-fabric"]')).toHaveCount(1);
 });
 
-test("框选约束后生成候选并采纳为带 assetId 的白板图片", async ({ page }) => {
+test("框选约束后生成结果自动落为带 assetId 的白板图片", async ({ page }) => {
   let persistedAssetId: string | undefined;
+  let persistedRole: string | undefined;
   let persistedSnapshot: unknown = null;
   let generationIdempotencyKey: string | undefined;
   let generationRequestCount = 0;
@@ -597,11 +612,19 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
       const payload = route.request().postDataJSON() as {
         readonly snapshot?: unknown;
         readonly patches?: readonly {
-          readonly record?: { readonly props?: { readonly assetId?: string } };
+          readonly record?: {
+            readonly props?: {
+              readonly assetId?: string;
+              readonly role?: string;
+            };
+          };
         }[];
       };
       persistedAssetId = payload.patches
         ?.map((patch) => patch.record?.props?.assetId)
+        .find(Boolean);
+      persistedRole = payload.patches
+        ?.map((patch) => patch.record?.props?.role)
         .find(Boolean);
       persistedSnapshot = payload.snapshot ?? null;
       await route.fulfill({
@@ -686,12 +709,23 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     page.getByRole("region", { name: "白板三步上手" }),
   ).toContainText("上传参考");
   const toolRail = page.getByRole("complementary", { name: "工具条" });
-  await expect(
-    toolRail.getByRole("button", { name: "自由绘制工具" }),
-  ).toBeVisible();
+  const sketchButton = toolRail.getByRole("button", {
+    name: "新建廓形草图",
+  });
+  await expect(sketchButton).toBeVisible();
   await expect(
     toolRail.getByRole("button", { name: "橡皮擦工具" }),
+  ).toHaveCount(0);
+  await sketchButton.click();
+  const sketchToolRail = page.getByRole("complementary", {
+    name: "草绘工具条",
+  });
+  await expect(
+    sketchToolRail.getByRole("button", { name: "局部橡皮" }),
   ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await sketchToolRail.getByRole("button", { name: "退出" }).click();
+  await expect(toolRail).toBeVisible();
   await expect(toolRail.getByRole("button", { name: "箭头工具" })).toHaveCount(
     0,
   );
@@ -702,14 +736,9 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     0,
   );
   await expect(
-    toolRail.getByRole("button", { name: "红色图钉固定工具" }),
+    toolRail.getByRole("button", { name: "固定素材" }),
   ).toBeVisible();
   await expect(page.locator(".tlui-main-toolbar")).toHaveCount(0);
-
-  const drawTool = toolRail.getByRole("button", { name: "自由绘制工具" });
-  await drawTool.click();
-  await expect(drawTool).toHaveAttribute("aria-pressed", "true");
-  await toolRail.getByRole("button", { name: "选择工具" }).click();
   const inspirationNoteButton = toolRail.getByRole("button", {
     name: "添加灵感便签",
   });
@@ -757,8 +786,11 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   ).toHaveCount(0);
   await expect(
     agentPanel.getByRole("region", { name: "生成候选" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "采纳" }).click();
+  ).toHaveCount(0);
+  await expect(agentPanel).toContainText("成图已放到画布");
+  await expect(
+    agentPanel.locator('img[src="https://assets.example/generated-look.png"]'),
+  ).toHaveCount(0);
 
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
@@ -766,6 +798,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
   await expect
     .poll(() => persistedAssetId, { timeout: 5_000 })
     .toBe("asset-e2e-1");
+  await expect.poll(() => persistedRole).toBe("garment_ref");
   await expect.poll(() => candidateDisposition).toBe("adopted");
 
   await page.getByRole("button", { name: "打开历史" }).click();
@@ -775,7 +808,7 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     generationHistory.locator(
       'img[src="https://assets.example/generated-look.png"]',
     ),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   await generationHistory.getByRole("button", { name: "返回对话" }).click();
 
   await page.getByRole("button", { name: "导出", exact: true }).click();
@@ -799,5 +832,5 @@ test("框选约束后生成候选并采纳为带 assetId 的白板图片", async
     restoredHistory.locator(
       'img[src="https://assets.example/generated-look.png"]',
     ),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
 });

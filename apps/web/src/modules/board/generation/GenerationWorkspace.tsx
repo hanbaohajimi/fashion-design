@@ -393,6 +393,9 @@ export function GenerationWorkspace({
           },
           ...current,
         ]);
+        if ((input.taskType ?? "t2i") === "inpaint") {
+          setNotice("局部重绘任务已创建，正在画布中生成");
+        }
         return { ok: true, taskId };
       } catch (cause) {
         const message =

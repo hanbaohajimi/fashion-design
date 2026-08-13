@@ -20,7 +20,11 @@ import {
   createNativeFileContentHandler,
   createNativeFileDropController,
 } from "./fabric-drag";
-import { IMAGE_SHAPE_TYPE, type ImageShape } from "./shapes";
+import {
+  IMAGE_SHAPE_TYPE,
+  normalizeImageRole,
+  type ImageShape,
+} from "./shapes";
 import {
   clearAllUploadPreviews,
   clearUploadPreview,
@@ -77,7 +81,7 @@ export function BoardFileDrop() {
         type: IMAGE_SHAPE_TYPE,
         props: {
           ...shape.props,
-          role: result.role,
+          role: normalizeImageRole(result.role, shape.props),
           roleConfidence: result.confidence ?? undefined,
           roleInferenceState: result.state,
           roleLabel: result.label ?? undefined,
@@ -204,6 +208,18 @@ export function BoardFileDrop() {
   );
 
   useEffect(() => {
+    const legacyUploadedGarments = editor
+      .getCurrentPageShapes()
+      .filter(
+        (shape): shape is ImageShape =>
+          shape.type === IMAGE_SHAPE_TYPE &&
+          Boolean(shape.props.fileId) &&
+          shape.props.role === "garment_ref",
+      );
+    for (const shape of legacyUploadedGarments) {
+      updateImage(shape.id, { role: "reference_garment" });
+    }
+
     const pending = editor
       .getCurrentPageShapes()
       .filter(

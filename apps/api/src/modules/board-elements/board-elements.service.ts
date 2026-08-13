@@ -5,13 +5,17 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 
-import type { SetElementRolesInput } from "./board-elements.schemas";
+import type {
+  BindSketchReferenceInput,
+  SetElementRolesInput,
+} from "./board-elements.schemas";
 import type { VlmInferenceJobs } from "./vlm-inference-queue.service";
 
 export const BOARD_ELEMENTS_DB = Symbol("BOARD_ELEMENTS_DB");
@@ -153,6 +157,75 @@ export class BoardElementsService {
         message: "画布元素不存在",
       });
     }
+    return this.toRoleResponse(element);
+  }
+
+  async bindSketchReference(
+    userId: string,
+    projectId: string,
+    shapeId: string,
+    input: BindSketchReferenceInput,
+  ) {
+    await this.assertProjectOwnership(userId, projectId);
+    await this.assertFileOwnership(userId, input.fileId);
+    const meta = input.record.meta;
+    const sketchMeta =
+      meta && !Array.isArray(meta) && typeof meta === "object"
+        ? (meta as Record<string, unknown>)
+        : null;
+    const props = input.record.props;
+    const sketchProps =
+      props && !Array.isArray(props) && typeof props === "object"
+        ? (props as Record<string, unknown>)
+        : null;
+    if (
+      input.record.id !== shapeId ||
+      input.record.typeName !== "shape" ||
+      input.record.type !== "fashion-image" ||
+      sketchMeta?.fashionSketch !== true ||
+      sketchMeta.fashionSketchImage !== true ||
+      sketchMeta.sketchStatus !== "ready" ||
+      sketchMeta.sketchDirty !== false ||
+      sketchMeta.sketchFingerprint !== input.fingerprint ||
+      sketchProps?.fileId !== input.fileId ||
+      sketchProps.role !== "silhouette_ref" ||
+      sketchProps.roleSource !== "manual" ||
+      sketchProps.roleInferenceState !== "ready" ||
+      sketchProps.roleLabel !== "fashion_sketch" ||
+      typeof sketchProps.url !== "string" ||
+      sketchProps.url.length === 0
+    ) {
+      throw new BadRequestException({
+        code: "SKETCH_RECORD_MISMATCH",
+        message: "草图记录与画布元素或渲染内容不匹配",
+      });
+    }
+    const record = input.record as Prisma.InputJsonObject;
+    const element = await this.database.boardElement.upsert({
+      where: { projectId_shapeId: { projectId, shapeId } },
+      create: {
+        fileAssetId: input.fileId,
+        projectId,
+        record,
+        role: "silhouette_ref",
+        roleInferenceState: RoleInferenceState.READY,
+        roleLabel: "fashion_sketch",
+        roleSource: RoleSource.MANUAL,
+        shapeId,
+        shapeType: "fashion-image",
+      },
+      update: {
+        deletedAt: null,
+        fileAssetId: input.fileId,
+        record,
+        role: "silhouette_ref",
+        roleConfidence: null,
+        roleInferenceState: RoleInferenceState.READY,
+        roleLabel: "fashion_sketch",
+        roleSource: RoleSource.MANUAL,
+        shapeType: "fashion-image",
+      },
+    });
     return this.toRoleResponse(element);
   }
 

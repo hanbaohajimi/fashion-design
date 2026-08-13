@@ -49,20 +49,20 @@ function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-function parseAttributesJson(body: unknown): unknown {
+function parseFabricBody(body: unknown): unknown {
   if (!body || typeof body !== "object") {
     return body;
   }
   const value = body as Record<string, unknown>;
-  if (typeof value.attributes !== "string") {
+  if (typeof value.tags !== "string") {
     return value;
   }
   try {
-    return { ...value, attributes: JSON.parse(value.attributes) as unknown };
+    return { ...value, tags: JSON.parse(value.tags) as unknown };
   } catch {
     throw new BadRequestException({
-      code: "ATTRIBUTES_JSON_INVALID",
-      message: "attributes 必须是有效的 JSON",
+      code: "TAGS_JSON_INVALID",
+      message: "tags 必须是有效的 JSON",
     });
   }
 }
@@ -134,7 +134,7 @@ export class FabricsController {
     }
     return this.fabricsService.create(
       user.userId,
-      parseOrThrow(createFabricSchema, parseAttributesJson(body)),
+      parseOrThrow(createFabricSchema, parseFabricBody(body)),
       mainImage,
     );
   }
@@ -149,7 +149,7 @@ export class FabricsController {
     return this.fabricsService.update(
       user.userId,
       parseOrThrow(fabricIdSchema, fabricId),
-      parseOrThrow(updateFabricSchema, parseAttributesJson(body)),
+      parseOrThrow(updateFabricSchema, parseFabricBody(body)),
     );
   }
 

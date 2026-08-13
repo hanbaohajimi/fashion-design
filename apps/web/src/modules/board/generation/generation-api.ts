@@ -186,6 +186,8 @@ interface SignedMaskUpload {
   };
 }
 
+const MASK_UPLOAD_TIMEOUT_MS = 20_000;
+
 async function checksumSha256Base64(blob: Blob): Promise<string> {
   if (!globalThis.crypto?.subtle) {
     throw new GenerationApiError(
@@ -231,11 +233,25 @@ export async function uploadTemporaryMask(
       "MASK_CHECKSUM_MISMATCH",
     );
   }
-  const uploaded = await fetch(signed.upload.url, {
-    method: signed.upload.method,
-    body: blob,
-    headers: signed.upload.headers,
-  });
+  let uploaded: Response;
+  try {
+    uploaded = await fetch(signed.upload.url, {
+      method: signed.upload.method,
+      body: blob,
+      headers: signed.upload.headers,
+      signal: AbortSignal.timeout(MASK_UPLOAD_TIMEOUT_MS),
+    });
+  } catch (cause) {
+    const timedOut =
+      cause instanceof DOMException &&
+      (cause.name === "AbortError" || cause.name === "TimeoutError");
+    throw new GenerationApiError(
+      timedOut
+        ? "掩码上传超时，请检查网络后重试"
+        : "掩码上传被浏览器阻止，请检查网络或对象存储跨域配置后重试",
+      timedOut ? "MASK_UPLOAD_TIMEOUT" : "MASK_UPLOAD_NETWORK_FAILED",
+    );
+  }
   if (!uploaded.ok) {
     throw new GenerationApiError("掩码上传失败，请重试", "MASK_UPLOAD_FAILED");
   }

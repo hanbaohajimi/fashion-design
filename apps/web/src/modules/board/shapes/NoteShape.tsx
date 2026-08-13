@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { type CSSProperties, useLayoutEffect, useRef } from "react";
 import {
   BaseBoxShapeUtil,
   HTMLContainer,
@@ -10,7 +10,7 @@ import {
 
 import { RoleBadge } from "./RoleBadge";
 import { NOTE_SHAPE_TYPE, type NoteShape, normalizeBoardRole } from "./shape-types";
-import { computeAnnotationScale, MaterialShell } from "./MaterialShell";
+import { MaterialShell } from "./MaterialShell";
 import { generateMaterialAppearance, resolveMaterialAppearance } from "./material-appearance";
 import styles from "./shapes.module.css";
 
@@ -86,13 +86,28 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
 
   const zoom = useValue("zoom", () => editor.getZoomLevel(), [editor]);
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
-  const noteScale = computeAnnotationScale(
-    shape.props.w,
-    shape.props.h,
-    NOTE_REFERENCE_WIDTH,
-    NOTE_REFERENCE_HEIGHT,
-  );
+  const noteScale =
+    shape.props.w > 0 ? shape.props.w / NOTE_REFERENCE_WIDTH : 1;
   const sourceUrl = safeSourceUrl(shape.meta.source);
+  const textEditorRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useLayoutEffect(() => {
+    const editorElement = textEditorRef.current;
+    if (!editorElement) return;
+
+    const overflowHeight = Math.ceil(
+      editorElement.scrollHeight - editorElement.clientHeight,
+    );
+    if (overflowHeight <= 1) return;
+
+    editor.updateShape({
+      id: shape.id,
+      type: NOTE_SHAPE_TYPE,
+      props: {
+        h: shape.props.h + overflowHeight + 1,
+      },
+    });
+  }, [editor, noteScale, shape.id, shape.props.h, shape.props.text, sourceUrl]);
 
   const handleRemoveMount = (mountId: string): void => {
     const nextMounts = (shape.props.mounts ?? []).filter((m) => m.id !== mountId);
@@ -131,6 +146,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
+        ref={textEditorRef}
         spellCheck={false}
         value={shape.props.text}
       />

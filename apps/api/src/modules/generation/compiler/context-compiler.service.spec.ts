@@ -1,4 +1,4 @@
-import { FabricScope, FileStatus } from "@fashion/db";
+import { FileStatus } from "@fashion/db";
 import { HttpStatus, Logger } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -203,7 +203,7 @@ describe("ContextCompilerService", () => {
     expect(result.positivePrompt).toContain("pattern: botanical pattern");
   });
 
-  it("结构化面料元素使用 FabricChannel 注入属性且不重复调用 VLM", async () => {
+  it("结构化面料元素使用 FabricChannel 注入标签且不重复调用 VLM", async () => {
     database.project.findUnique.mockResolvedValue({
       boardElements: [
         {
@@ -218,29 +218,20 @@ describe("ContextCompilerService", () => {
     });
     database.fabric.findMany.mockResolvedValue([
       {
-        attributes: {
-          composition: { cotton: 60, polyester: 40 },
-          drape: "moderate",
-          sheen: "matte",
-          texture: "smooth",
-          weave: "plain",
-        },
         id: "fabric-1",
         mainFile: {
           objectKey: "users/user-1/fabric.webp",
           status: FileStatus.READY,
           thumbnail1024Key: "users/user-1/fabric-1024.webp",
         },
-        name: "Cotton Blend",
-        ownerId: "user-1",
-        scope: FabricScope.USER,
+        tags: ["cotton blend", "plain", "matte"],
       },
     ]);
 
     const result = await service.compile("user-1", "project-1", "dress");
 
     expect(result.positivePrompt).toContain(
-      "fabric material: cotton 60%, polyester 40%, weave type: plain, fabric texture: smooth, drape: moderate, sheen: matte",
+      "fabric tags: cotton blend, plain, matte",
     );
     expect(result.fabricReferences[0]).toMatchObject({
       fabricId: "fabric-1",
@@ -251,6 +242,7 @@ describe("ContextCompilerService", () => {
       expect.objectContaining({
         boardElementId: "fabric-element-1",
         fabricId: "fabric-1",
+        tags: ["cotton blend", "plain", "matte"],
       }),
     ]);
     expect(model.analyzeImage).not.toHaveBeenCalled();
@@ -409,6 +401,115 @@ describe("ContextCompilerService", () => {
     });
   });
 
+  it("把草图 frame 绑定的派生文件编译为廓形边缘参考", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("shape:fashion-sketch", "silhouette_ref", {}),
+          fileAsset: {
+            objectKey: "users/user-1/sketch/source.png",
+            ownerId: "user-1",
+            status: "READY",
+            thumbnail1024Key: "users/user-1/sketch/edge-1024.png",
+          },
+          shapeType: "frame",
+        },
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile("user-1", "project-1", "短款夹克");
+
+    expect(result.silhouetteReferences).toEqual([
+      {
+        edgeImageUrl:
+          "https://signed.example/users/user-1/sketch/edge-1024.png",
+        elementId: "shape:fashion-sketch",
+      },
+    ]);
+  });
+
+  it("把完成后的整张草图图片作为唯一廓形参考进行生成与修改", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("shape:fashion-sketch-image", "silhouette_ref", {
+            fileId: "file-sketch",
+            role: "silhouette_ref",
+            roleLabel: "fashion_sketch",
+          }),
+          fileAsset: {
+            objectKey: "users/user-1/sketch/source.png",
+            ownerId: "user-1",
+            status: "READY",
+            thumbnail1024Key: "users/user-1/sketch/whole-sketch-1024.png",
+          },
+          record: {
+            meta: {
+              fashionSketch: true,
+              fashionSketchImage: true,
+              sketchDirty: false,
+              sketchStatus: "ready",
+            },
+            props: {
+              fileId: "file-sketch",
+              role: "silhouette_ref",
+              roleLabel: "fashion_sketch",
+            },
+          },
+          roleLabel: "fashion_sketch",
+          shapeType: "fashion-image",
+        },
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile("user-1", "project-1", "修改衣领");
+
+    expect(result.silhouetteReferences).toEqual([
+      {
+        edgeImageUrl:
+          "https://signed.example/users/user-1/sketch/whole-sketch-1024.png",
+        elementId: "shape:fashion-sketch-image",
+      },
+    ]);
+    expect(result.styleReferences).toEqual([]);
+  });
+
+  it("草图修改后会暂停使用过期的 AI 廓形引用", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        {
+          ...element("shape:fashion-sketch", "silhouette_ref", {}),
+          fileAsset: {
+            objectKey: "users/user-1/sketch/source.png",
+            ownerId: "user-1",
+            status: "READY",
+            thumbnail1024Key: "users/user-1/sketch/edge-1024.png",
+          },
+          record: {
+            meta: {
+              fashionSketch: true,
+              sketchDirty: true,
+              sketchStatus: "draft",
+            },
+            props: {},
+          },
+          roleLabel: "fashion_sketch",
+          shapeType: "frame",
+        },
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile("user-1", "project-1", "短款夹克");
+
+    expect(result.silhouetteReferences).toEqual([]);
+  });
+
   it("无 style_ref 不注入默认风格，空白板走纯文生图", async () => {
     const result = await service.compile(
       "user-1",
@@ -494,6 +595,7 @@ describe("ContextCompilerService", () => {
             where: {
               deletedAt: null,
               shapeId: { in: ["shape-1", "shape-2"] },
+              shapeType: { not: "fashion-connector" },
             },
           }),
         }),

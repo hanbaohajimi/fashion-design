@@ -33,6 +33,39 @@ const SILHOUETTE_REFERENCE_STRENGTH = 0.55;
 const FABRIC_REFERENCE_STRENGTH = 0.7;
 const DETAIL_REFERENCE_STRENGTH = 0.65;
 const PALETTE_REFERENCE_STRENGTH = 0.6;
+const PRESENTATION_POLICY_VERSION = 1;
+const GARMENT_ONLY_POSITIVE_CONSTRAINT =
+  "Presentation constraint, highest priority: create a garment-only design or product image. " +
+  "Show the garment without any human wearer. Use an isolated garment, flat lay, hanger, " +
+  "dress form, ghost mannequin, or technical fashion illustration as appropriate. " +
+  "Do not use on-model, try-on, portrait, runway-model, or lifestyle-model presentation.";
+const GARMENT_ONLY_NEGATIVE_TERMS = [
+  "human",
+  "person",
+  "people",
+  "fashion model",
+  "wearer",
+  "model wearing garment",
+  "try-on",
+  "on-body clothing",
+  "portrait",
+  "face",
+  "head",
+  "hands",
+  "arms",
+  "legs",
+  "visible skin",
+  "runway model",
+  "lifestyle fashion photography",
+] as const;
+
+type PresentationMode = "garment_only" | "on_model";
+
+interface PresentationPolicy {
+  readonly matchedSignals: readonly string[];
+  readonly mode: PresentationMode;
+  readonly version: typeof PRESENTATION_POLICY_VERSION;
+}
 
 type GenerationDatabase = Pick<PrismaClient, "designAsset" | "generationTask">;
 
@@ -97,8 +130,15 @@ export class GenerationService {
     userId: string,
     request: GenerationCreateRequest,
     idempotencyKey: string = randomUUID(),
+    rawUserIntent: string = request.prompt,
   ): Promise<{ taskId: string }> {
-    return this.createTask(userId, request, idempotencyKey);
+    return this.createTask(
+      userId,
+      request,
+      idempotencyKey,
+      undefined,
+      rawUserIntent,
+    );
   }
 
   async createForCollection(
@@ -107,7 +147,13 @@ export class GenerationService {
     context: CollectionGenerationContext,
     idempotencyKey: string = randomUUID(),
   ): Promise<{ taskId: string }> {
-    return this.createTask(userId, request, idempotencyKey, context);
+    return this.createTask(
+      userId,
+      request,
+      idempotencyKey,
+      context,
+      request.prompt,
+    );
   }
 
   private async createTask(
@@ -115,11 +161,27 @@ export class GenerationService {
     request: GenerationCreateRequest,
     idempotencyKey: string,
     context?: CollectionGenerationContext,
+    rawUserIntent: string = request.prompt,
   ): Promise<{ taskId: string }> {
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
-    const requestFingerprint = generationRequestFingerprint(request, context);
+    const compiledPrompt = await this.compiler.compile(
+      userId,
+      request.projectId,
+      request.prompt,
+      request.shapeIds,
+    );
+    const presentationPolicy = resolvePresentationPolicy(
+      [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
+        .filter(Boolean)
+        .join("\n"),
+    );
+    const requestFingerprint = generationRequestFingerprint(
+      request,
+      context,
+      presentationPolicy,
+    );
     const existing = await this.database.generationTask.findUnique({
       where: { id: taskId },
       select: {
@@ -141,13 +203,6 @@ export class GenerationService {
       userId,
       request.projectId,
       request.parentAssetId,
-    );
-
-    const compiledPrompt = await this.compiler.compile(
-      userId,
-      request.projectId,
-      request.prompt,
-      request.shapeIds,
     );
     const providerRequest = { ...request };
     delete providerRequest.parentAssetId;
@@ -254,19 +309,26 @@ export class GenerationService {
         }
       }
     }
+    const providerPrompts = applyPresentationPolicy(
+      compiledPrompt.positivePrompt,
+      request.negativePrompt,
+      compiledPrompt.negativePrompt,
+      presentationPolicy,
+    );
     const input: AiGenerationRequest = {
       ...providerRequest,
-      negativePrompt: compiledPrompt.negativePrompt.slice(0, 3_000),
+      negativePrompt: providerPrompts.negativePrompt,
       prompt: context
         ? collectionProviderPrompt(
-            compiledPrompt.positivePrompt,
+            providerPrompts.positivePrompt,
             request.prompt,
           )
-        : compiledPrompt.positivePrompt.slice(0, 4_000),
+        : providerPrompts.positivePrompt,
     };
     const persistedCompiledPrompt = {
       ...compiledPrompt,
       ...(context ? { collectionContext: context } : {}),
+      presentationPolicy,
       request,
       requestFingerprint,
     };
@@ -318,12 +380,11 @@ export class GenerationService {
               ? {
                   generationInputs: {
                     create: generationInputs.map((generationInput) => ({
-                      attributesSnapshot:
-                        generationInput.attributes as Prisma.InputJsonValue,
                       boardElementId: generationInput.boardElementId,
                       fabricId: generationInput.fabricId,
                       inputType: "fabric",
                       role: generationInput.role,
+                      tagsSnapshot: [...generationInput.tags],
                       weight: generationInput.weight,
                     })),
                   },
@@ -697,10 +758,136 @@ function compiledPromptFingerprint(
 function generationRequestFingerprint(
   request: GenerationCreateRequest,
   context: CollectionGenerationContext | undefined,
+  presentationPolicy: PresentationPolicy,
 ): string {
   return createHash("sha256")
-    .update(stableJson({ context: context ?? null, request }))
+    .update(
+      stableJson({
+        context: context ?? null,
+        presentationPolicy: {
+          mode: presentationPolicy.mode,
+          version: presentationPolicy.version,
+        },
+        request,
+      }),
+    )
     .digest("hex");
+}
+
+const ON_MODEL_DENIAL_SIGNALS = [
+  {
+    id: "zh_explicit_denial",
+    pattern:
+      /(?:不要|无需|不需要|禁止|避免|去掉|移除|排除|不能|别).{0,10}(?:模特|真人|人物|试穿|上身|穿着展示)/u,
+  },
+  {
+    id: "en_explicit_denial",
+    pattern:
+      /\b(?:no|without|exclude|avoid|remove)\s+(?:a\s+|any\s+)?(?:human|person|people|model|wearer|try[-\s]?on)\b/iu,
+  },
+] as const;
+
+const ON_MODEL_ALLOW_SIGNALS = [
+  {
+    id: "zh_model_try_on",
+    pattern: /(?:模特|真人|人物).{0,8}(?:试穿|上身|穿|展示)/u,
+  },
+  {
+    id: "zh_explicit_model_subject",
+    pattern: /(?:生成|使用|添加|保留|换成|改成).{0,6}(?:模特|真人|人物)/u,
+  },
+  {
+    id: "zh_try_on_result",
+    pattern: /(?:试穿|上身)(?:效果|展示|图|照|图片)/u,
+  },
+  {
+    id: "zh_worn_on_person",
+    pattern: /(?:穿在|穿到).{0,8}(?:模特|真人|人物|我|人).{0,3}身上/u,
+  },
+  {
+    id: "zh_virtual_try_on",
+    pattern: /(?:虚拟试衣|虚拟试穿|AI试衣|AI试穿)/iu,
+  },
+  {
+    id: "zh_runway_model",
+    pattern: /(?:T台|走秀|秀场).{0,6}(?:模特|试穿|穿着)/iu,
+  },
+  {
+    id: "en_on_model",
+    pattern:
+      /\b(?:on[-\s]?model|model\s+(?:wearing|wears)|worn\s+by\s+(?:a\s+)?model|human\s+wearing|virtual\s+try[-\s]?on|fashion\s+model|runway\s+model)\b/iu,
+  },
+] as const;
+
+function resolvePresentationPolicy(userIntent: string): PresentationPolicy {
+  const normalized = userIntent.normalize("NFKC").toLowerCase();
+  const denial = ON_MODEL_DENIAL_SIGNALS.find(({ pattern }) =>
+    pattern.test(normalized),
+  );
+  if (denial) {
+    return {
+      matchedSignals: [denial.id],
+      mode: "garment_only",
+      version: PRESENTATION_POLICY_VERSION,
+    };
+  }
+
+  const allow = ON_MODEL_ALLOW_SIGNALS.find(({ pattern }) =>
+    pattern.test(normalized),
+  );
+  return allow
+    ? {
+        matchedSignals: [allow.id],
+        mode: "on_model",
+        version: PRESENTATION_POLICY_VERSION,
+      }
+    : {
+        matchedSignals: [],
+        mode: "garment_only",
+        version: PRESENTATION_POLICY_VERSION,
+      };
+}
+
+function applyPresentationPolicy(
+  positivePrompt: string,
+  requestNegativePrompt: string | undefined,
+  compiledNegativePrompt: string,
+  policy: PresentationPolicy,
+): { readonly negativePrompt: string; readonly positivePrompt: string } {
+  const garmentOnly = policy.mode === "garment_only";
+  return {
+    negativePrompt: joinUniquePromptSections(
+      [
+        garmentOnly ? GARMENT_ONLY_NEGATIVE_TERMS.join(", ") : null,
+        requestNegativePrompt,
+        compiledNegativePrompt,
+      ],
+      ", ",
+      3_000,
+    ),
+    positivePrompt: joinUniquePromptSections(
+      [garmentOnly ? GARMENT_ONLY_POSITIVE_CONSTRAINT : null, positivePrompt],
+      "\n\n",
+      4_000,
+    ),
+  };
+}
+
+function joinUniquePromptSections(
+  values: readonly (string | null | undefined)[],
+  separator: string,
+  limit: number,
+): string {
+  const seen = new Set<string>();
+  const sections = values.flatMap((value) => {
+    const cleaned = value?.trim();
+    if (!cleaned) return [];
+    const key = cleaned.toLocaleLowerCase("en-US");
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [cleaned];
+  });
+  return sections.join(separator).slice(0, limit);
 }
 
 function collectionProviderPrompt(

@@ -17,6 +17,13 @@ export function readActiveBoardId(
   return value || null;
 }
 
+export function activeBoardPath(
+  storage: BrowserStorage | undefined = defaultStorage(),
+): string {
+  const boardId = readActiveBoardId(storage);
+  return boardId ? `/${encodeURIComponent(boardId)}` : "/";
+}
+
 export function writeActiveBoardId(
   boardId: string,
   storage: BrowserStorage | undefined = defaultStorage(),

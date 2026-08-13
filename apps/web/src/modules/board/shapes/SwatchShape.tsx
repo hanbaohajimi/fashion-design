@@ -10,6 +10,7 @@ import {
   useEffect,
   useState,
   type CSSProperties,
+  type FormEvent,
   type MouseEvent,
   type PointerEvent,
 } from "react";
@@ -130,6 +131,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
+  const [draftColors, setDraftColors] = useState<Record<string, string>>({});
 
   /**
    * Writes the colour list back, mirroring entry 0 onto the scalar `color` /
@@ -154,7 +156,17 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   // The picker is a controlled input, so each change writes straight through and
   // the chip repaints from the shape prop. Dragging through the spectrum can
   // leave several history entries, which undo collapses acceptably.
-  const handleColorChange = (id: string, raw: string): void => {
+  const updateColorDraft = (id: string, raw: string): void => {
+    // Keep the native picker controlled by local React state while it is open.
+    // Writing only to the external tldraw store can briefly re-render the input
+    // with its previous value while the Windows picker is editing the HEX field.
+    setDraftColors((current) =>
+      current[id] === raw ? current : { ...current, [id]: raw },
+    );
+  };
+
+  const handleColorInput = (id: string, raw: string): void => {
+    updateColorDraft(id, raw);
     const normalized = normalizeSwatchHex(raw);
     if (!normalized) {
       return;
@@ -164,6 +176,17 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
         entry.id === id ? { ...entry, color: normalized } : entry,
       ),
     );
+  };
+
+  const handleColorBlur = (id: string): void => {
+    setDraftColors((current) => {
+      if (!(id in current)) {
+        return current;
+      }
+      return Object.fromEntries(
+        Object.entries(current).filter(([entryId]) => entryId !== id),
+      );
+    });
   };
 
   const handleAdd = (): void => {
@@ -238,12 +261,16 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                 <input
                   aria-label={`${entry.label} 颜色`}
                   className={styles.swatchColorInput}
+                  onBlur={() => handleColorBlur(entry.id)}
                   onChange={(event) =>
-                    handleColorChange(entry.id, event.target.value)
+                    updateColorDraft(entry.id, event.currentTarget.value)
+                  }
+                  onInput={(event: FormEvent<HTMLInputElement>) =>
+                    handleColorInput(entry.id, event.currentTarget.value)
                   }
                   onPointerDown={swallow}
                   type="color"
-                  value={entry.color}
+                  value={draftColors[entry.id] ?? entry.color}
                 />
                 {hoveredId === entry.id && colors.length > 1 && (
                   <button

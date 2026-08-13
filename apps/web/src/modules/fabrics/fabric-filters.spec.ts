@@ -1,172 +1,72 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildFabricUploadFormData,
-  validateFabricUpload,
-} from "./fabric-api";
-import { filterFabrics } from "./fabric-filters";
+import { buildFabricUploadFormData, validateFabricUpload } from "./fabric-api";
+import { canManageFabric, filterFabricsByTag } from "./fabric-filters";
 import type { Fabric } from "./fabric-types";
 
-function fabric(
-  id: string,
-  overrides: Partial<Fabric> = {},
-): Fabric {
+function fabric(id: string, tags: readonly string[]): Fabric {
   return {
-    attributes: {
-      composition: { cotton: 100 },
-      seasonSuggestion: ["spring", "summer"],
-      weave: "plain",
-      weight: 120,
-    },
-    category: "cotton",
-    createdAt: "2026-08-02T00:00:00.000Z",
+    canManage: true,
+    createdAt: "2026-08-02T08:00:00.000Z",
     id,
     mainFileId: `file-${id}`,
     mainImageUrl: `/api/fabrics/${id}/image`,
-    name: "纯棉府绸",
-    scope: "preset",
-    subCategory: "poplin",
-    updatedAt: "2026-08-02T00:00:00.000Z",
-    ...overrides,
+    scope: "user",
+    tags,
+    updatedAt: "2026-08-02T08:00:00.000Z",
   };
 }
 
-describe("filterFabrics", () => {
-  const records = [
-    fabric("cotton"),
-    fabric("silk", {
-      attributes: {
-        composition: { silk: 92, spandex: 8 },
-        seasonSuggestion: ["summer"],
-        weight: 88,
-      },
-      category: "silk",
-      name: "弹力真丝",
-    }),
-    fabric("wool", {
-      attributes: {
-        composition: { wool: 100 },
-        seasonSuggestion: ["autumn", "winter"],
-        weight: 260,
-      },
-      category: "wool",
-      name: "重磅羊毛呢",
-    }),
-  ];
+function imageFile(): File {
+  return new File(["image"], "fabric.png", { type: "image/png" });
+}
 
-  it("按成分、克重和季节组合筛选", () => {
-    expect(
-      filterFabrics(records, {
-        composition: "silk",
-        season: "summer",
-        weight: "light",
-      }).map((item) => item.id),
-    ).toEqual(["silk"]);
+describe("filterFabricsByTag", () => {
+  it("按标签进行不区分大小写的包含匹配", () => {
+    const fabrics = [
+      fabric("1", ["轻薄", "Summer"]),
+      fabric("2", ["厚重", "Winter"]),
+    ];
+
+    expect(filterFabricsByTag(fabrics, "sum")).toEqual([fabrics[0]]);
+    expect(filterFabricsByTag(fabrics, "轻")).toEqual([fabrics[0]]);
   });
+});
 
-  it("把缺失克重视为未归类而不是零克重", () => {
-    const unknownWeight = fabric("unknown", {
-      attributes: { composition: { cotton: 100 }, weave: "plain" },
-    });
+describe("canManageFabric", () => {
+  it("只向用户自己的面料显示管理与删除入口", () => {
+    const userFabric = fabric("user-fabric", ["轻薄"]);
+    const presetFabric: Fabric = {
+      ...userFabric,
+      canManage: false,
+      scope: "preset",
+    };
+    const adminPreset: Fabric = { ...presetFabric, canManage: true };
 
-    expect(
-      filterFabrics([unknownWeight], {
-        composition: "all",
-        season: "all",
-        weight: "light",
-      }),
-    ).toEqual([]);
-  });
-
-  it("规范英文筛选值可以匹配用户录入的中文成分键", () => {
-    const blend = fabric("blend", {
-      attributes: {
-        composition: { 棉: 60, 聚酯纤维: 40 },
-        weight: 180,
-      },
-      category: "blend",
-    });
-
-    expect(
-      filterFabrics([blend], {
-        composition: "polyester",
-        season: "all",
-        weight: "medium",
-      }).map((item) => item.id),
-    ).toEqual(["blend"]);
+    expect(canManageFabric(userFabric)).toBe(true);
+    expect(canManageFabric(presetFabric)).toBe(false);
+    expect(canManageFabric(adminPreset)).toBe(true);
   });
 });
 
 describe("fabric upload", () => {
-  const image = new File([new Uint8Array([137, 80, 78, 71])], "linen.png", {
-    type: "image/png",
-  });
-
-  it("将图片和面料属性编码为后端要求的 multipart 字段", () => {
+  it("只提交图片和去重后的标签", () => {
     const formData = buildFabricUploadFormData({
-      category: "blend",
-      compositionName: "亚麻混纺",
-      file: image,
-      name: "天然亚麻",
-      weight: 180,
-      weave: "plain",
+      file: imageFile(),
+      tags: [" 轻薄 ", "垂坠", "轻薄"],
     });
 
-    expect(formData.get("mainImage")).toBe(image);
-    expect(formData.get("name")).toBe("天然亚麻");
-    expect(formData.get("category")).toBe("blend");
-    expect(JSON.parse(String(formData.get("attributes")))).toEqual({
-      composition: { 亚麻混纺: 100 },
-      weight: 180,
-      weave: "plain",
-    });
+    expect(formData.get("mainImage")).toBeInstanceOf(File);
+    expect(formData.get("tags")).toBe('["轻薄","垂坠"]');
+    expect([...formData.keys()].sort()).toEqual(["mainImage", "tags"]);
   });
 
-  it("混纺按多种纤维占比建模且总和必须为 100", () => {
-    const input = {
-      category: "blend" as const,
-      composition: { 棉: 60, 聚酯纤维: 35, 氨纶: 5 },
-      compositionName: "棉",
-      file: image,
-      name: "弹力棉混纺",
-      weight: 210,
-      weave: "twill" as const,
-    };
-
-    expect(validateFabricUpload(input)).toBeNull();
-    const formData = buildFabricUploadFormData(input);
-    expect(JSON.parse(String(formData.get("attributes")))).toMatchObject({
-      composition: { 棉: 60, 聚酯纤维: 35, 氨纶: 5 },
-    });
-    expect(
-      validateFabricUpload({
-        ...input,
-        composition: { 棉: 60, 聚酯纤维: 30 },
-      }),
-    ).toBe("成分占比总和必须等于 100%");
-  });
-
-  it("在请求前拒绝缺失图片和无效文件类型", () => {
-    expect(
-      validateFabricUpload({
-        category: "blend",
-        compositionName: "混合纤维",
-        file: null,
-        name: "测试面料",
-        weight: 180,
-        weave: "plain",
-      }),
-    ).toBe("请选择一张面料图片");
-
-    expect(
-      validateFabricUpload({
-        category: "blend",
-        compositionName: "混合纤维",
-        file: new File(["text"], "notes.txt", { type: "text/plain" }),
-        name: "测试面料",
-        weight: 180,
-        weave: "plain",
-      }),
-    ).toBe("仅支持 JPG、PNG、WebP 或 HEIC 图片");
+  it("要求图片和至少一个标签", () => {
+    expect(validateFabricUpload({ file: null, tags: ["轻薄"] })).toContain(
+      "图片",
+    );
+    expect(validateFabricUpload({ file: imageFile(), tags: [] })).toContain(
+      "标签",
+    );
   });
 });

@@ -791,13 +791,15 @@
   right: auto;
   bottom: 78px;
   left: 14px;
+  display: flex;
   width: 300px;
+  min-height: 0;
   overflow: hidden;
+  flex-direction: column;
   border: 1.5px solid #181915;
   border-radius: 0;
   padding: 16px 18px 0;
   background: #f7f3e9;
-  box-shadow: 10px 10px 0 #181915;
   color: #181915;
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
   pointer-events: auto;
@@ -807,13 +809,6 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-}
-
-.fabricDrawer > header span {
-  color: #e9522c;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
 }
 
 .fabricDrawer > header h2 {
@@ -1005,7 +1000,6 @@
     bottom: 66px;
     left: 8px;
     width: min(300px, calc(100vw - 16px));
-    box-shadow: 6px 6px 0 #181915;
   }
 }
 

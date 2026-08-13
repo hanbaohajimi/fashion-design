@@ -1,10 +1,6 @@
 import useSWRInfinite from "swr/infinite";
 
-import type {
-  Fabric,
-  FabricListPage,
-  FabricListQuery,
-} from "./fabric-types";
+import type { Fabric, FabricListPage, FabricListQuery } from "./fabric-types";
 
 const PAGE_SIZE = 48;
 const MAX_FABRIC_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -16,27 +12,17 @@ const FABRIC_IMAGE_TYPES = new Set([
   "image/heif",
 ]);
 
-export type FabricUploadCategory =
-  | "cotton"
-  | "silk"
-  | "wool"
-  | "synthetic"
-  | "blend";
-export type FabricUploadWeave =
-  | "plain"
-  | "twill"
-  | "satin"
-  | "knit"
-  | "jacquard";
-
 export interface FabricUploadInput {
-  readonly category: FabricUploadCategory;
-  readonly composition?: Readonly<Record<string, number>>;
-  readonly compositionName: string;
   readonly file: File | null;
-  readonly name: string;
-  readonly weight: number;
-  readonly weave: FabricUploadWeave;
+  readonly tags: readonly string[];
+}
+
+export function normalizeFabricTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
+}
+
+export function parseFabricTags(value: string): string[] {
+  return normalizeFabricTags(value.split(/[,，\n#]+/u));
 }
 
 export function validateFabricUpload(input: FabricUploadInput): string | null {
@@ -47,34 +33,14 @@ export function validateFabricUpload(input: FabricUploadInput): string | null {
   if (input.file.size <= 0 || input.file.size > MAX_FABRIC_IMAGE_BYTES) {
     return "图片不能为空或超过 50MB";
   }
-  if (!input.name.trim()) return "请填写面料名称";
-  if (!input.compositionName.trim()) return "请填写主要成分";
-  const composition = normalizedComposition(input);
-  if (Object.keys(composition).length === 0) return "请填写主要成分";
-  if (
-    Object.values(composition).some(
-      (percentage) =>
-        !Number.isFinite(percentage) || percentage <= 0 || percentage > 100,
-    )
-  ) {
-    return "成分占比必须大于 0 且不超过 100%";
-  }
-  const total = Object.values(composition).reduce(
-    (sum, percentage) => sum + percentage,
-    0,
-  );
-  if (Math.abs(total - 100) > 0.000_001) {
-    return "成分占比总和必须等于 100%";
-  }
-  if (!Number.isFinite(input.weight) || input.weight <= 0 || input.weight > 2_000) {
-    return "克重必须在 0–2000 GSM 之间";
-  }
+  const tags = normalizeFabricTags(input.tags);
+  if (tags.length === 0) return "请至少添加一个标签";
+  if (tags.length > 12) return "标签不能超过 12 个";
+  if (tags.some((tag) => tag.length > 30)) return "单个标签不能超过 30 个字";
   return null;
 }
 
-export function buildFabricUploadFormData(
-  input: FabricUploadInput,
-): FormData {
+export function buildFabricUploadFormData(input: FabricUploadInput): FormData {
   const error = validateFabricUpload(input);
   if (error) throw new Error(error);
   const file = input.file;
@@ -82,33 +48,8 @@ export function buildFabricUploadFormData(
 
   const formData = new FormData();
   formData.set("mainImage", file);
-  formData.set("name", input.name.trim());
-  formData.set("category", input.category);
-  formData.set(
-    "attributes",
-    JSON.stringify({
-      composition: normalizedComposition(input),
-      weight: input.weight,
-      weave: input.weave,
-    }),
-  );
+  formData.set("tags", JSON.stringify(normalizeFabricTags(input.tags)));
   return formData;
-}
-
-function normalizedComposition(
-  input: FabricUploadInput,
-): Record<string, number> {
-  if (!input.composition) {
-    return input.compositionName.trim()
-      ? { [input.compositionName.trim()]: 100 }
-      : {};
-  }
-  return Object.fromEntries(
-    Object.entries(input.composition).flatMap(([name, percentage]) => {
-      const normalizedName = name.trim();
-      return normalizedName ? [[normalizedName, percentage]] : [];
-    }),
-  );
 }
 
 export async function fetchFabric(fabricId: string): Promise<Fabric> {
@@ -124,10 +65,7 @@ export async function fetchFabric(fabricId: string): Promise<Fabric> {
 export async function updateFabric(
   fabricId: string,
   input: {
-    readonly attributes?: Fabric["attributes"];
-    readonly category?: FabricUploadCategory;
-    readonly name?: string;
-    readonly subCategory?: string | null;
+    readonly tags: readonly string[];
   },
 ): Promise<Fabric> {
   const response = await fetch(`/api/fabrics/${encodeURIComponent(fabricId)}`, {
@@ -173,7 +111,9 @@ export async function createFabric(input: FabricUploadInput): Promise<Fabric> {
     method: "POST",
   });
   if (!response.ok) {
-    throw new Error(await readFabricError(response, "面料上传失败，请稍后重试"));
+    throw new Error(
+      await readFabricError(response, "面料上传失败，请稍后重试"),
+    );
   }
   return (await response.json()) as Fabric;
 }
@@ -195,21 +135,6 @@ export function useFabrics(query: FabricListQuery) {
         page: String(pageIndex + 1),
         scope: query.scope ?? "all",
       });
-      if (query.category && query.category !== "all") {
-        params.set("category", query.category);
-      }
-      if (query.composition && query.composition !== "all") {
-        params.set("composition", query.composition);
-      }
-      if (query.season && query.season !== "all") {
-        params.set("season", query.season);
-      }
-      if (query.minWeight !== undefined) {
-        params.set("minWeight", String(query.minWeight));
-      }
-      if (query.maxWeight !== undefined) {
-        params.set("maxWeight", String(query.maxWeight));
-      }
       if (query.search?.trim()) params.set("search", query.search.trim());
       return `/api/fabrics?${params.toString()}`;
     },

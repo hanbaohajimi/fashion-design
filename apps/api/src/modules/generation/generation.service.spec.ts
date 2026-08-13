@@ -149,11 +149,17 @@ describe("GenerationService", () => {
     expect(database.generationTask.create).toHaveBeenCalledWith({
       data: {
         id: expect.any(String),
-        input: {
+        input: expect.objectContaining({
           ...request,
-          negativePrompt: "watermark",
-        },
+          negativePrompt: expect.stringContaining("fashion model"),
+          prompt: expect.stringContaining("garment-only"),
+        }),
         compiledPrompt: expect.objectContaining({
+          presentationPolicy: {
+            matchedSignals: [],
+            mode: "garment_only",
+            version: 1,
+          },
           positivePrompt: "fashion editorial",
         }),
         status: GenerationTaskStatus.QUEUED,
@@ -166,18 +172,135 @@ describe("GenerationService", () => {
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledOnce();
   });
 
-  it("在生成任务同一事务中记录 fabric_id 与属性快照血缘", async () => {
+  it("用户未明确要求试穿时默认注入无人物展示硬约束", async () => {
+    await service.create("user-1", {
+      ...request,
+      negativePrompt: "blurry",
+      prompt: "设计一件黑色廓形夹克",
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.prompt).toContain("garment-only");
+    expect(createData.input.prompt).toContain("without any human wearer");
+    expect(createData.input.negativePrompt).toContain("fashion model");
+    expect(createData.input.negativePrompt).toContain("blurry");
+    expect(createData.input.negativePrompt).toContain("watermark");
+    expect(createData.compiledPrompt.presentationPolicy).toEqual({
+      matchedSignals: [],
+      mode: "garment_only",
+      version: 1,
+    });
+  });
+
+  it("用户明确要求模特试穿时不注入默认禁令", async () => {
+    compiler.compile.mockResolvedValueOnce({
+      enhancement: "keywords",
+      mode: "text_only",
+      negativePrompt: "watermark",
+      positivePrompt: "a fashion model wearing a black jacket",
+      version: 1,
+    });
+
+    await service.create("user-1", {
+      ...request,
+      prompt: "让模特试穿这件黑色夹克",
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.prompt).toBe(
+      "a fashion model wearing a black jacket",
+    );
+    expect(createData.input.negativePrompt).toBe("watermark");
+    expect(createData.compiledPrompt.presentationPolicy).toEqual({
+      matchedSignals: ["zh_model_try_on"],
+      mode: "on_model",
+      version: 1,
+    });
+  });
+
+  it("画布备注明确要求模特试穿时不注入默认禁令", async () => {
+    const note =
+      "全身正面平视视角，一位身材纤细、气场干练的短发亚裔女模特，" +
+      "身穿短款雕塑感通勤夹克。模特双臂自然下垂，双手轻插裤袋。";
+    compiler.compile.mockResolvedValueOnce({
+      enhancement: "keywords",
+      mode: "board_guided",
+      negativePrompt: "watermark",
+      notes: [note],
+      positivePrompt: `design notes: ${note}`,
+      version: 1,
+    });
+
+    await service.create(
+      "user-1",
+      { ...request, prompt: "生成一件短款通勤夹克" },
+      "note-model-intent",
+      "根据画布备注生成",
+    );
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.prompt).toContain("短发亚裔女模特");
+    expect(createData.input.prompt).not.toContain("without any human wearer");
+    expect(createData.input.negativePrompt).not.toContain("fashion model");
+    expect(createData.compiledPrompt.presentationPolicy).toEqual({
+      matchedSignals: ["zh_model_try_on"],
+      mode: "on_model",
+      version: 1,
+    });
+  });
+
+  it("否定表达优先于试穿关键词", async () => {
+    await service.create("user-1", {
+      ...request,
+      prompt: "不要模特试穿，只展示服装单品",
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.prompt).toContain("garment-only");
+    expect(createData.compiledPrompt.presentationPolicy).toEqual({
+      matchedSignals: ["zh_explicit_denial"],
+      mode: "garment_only",
+      version: 1,
+    });
+  });
+
+  it("Agent 路径以原始用户消息判定，不信任模型改写后的试穿提示词", async () => {
+    compiler.compile.mockResolvedValueOnce({
+      enhancement: "llm",
+      mode: "text_only",
+      negativePrompt: "watermark",
+      positivePrompt: "a fashion model wearing an editorial red dress",
+      version: 1,
+    });
+
+    await service.create(
+      "user-1",
+      { ...request, prompt: "a fashion model wearing an editorial red dress" },
+      "agent-raw-intent",
+      "设计一条红色连衣裙",
+    );
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.prompt).toContain("garment-only");
+    expect(createData.compiledPrompt.presentationPolicy.mode).toBe(
+      "garment_only",
+    );
+  });
+
+  it("在生成任务同一事务中记录 fabric_id 与标签快照血缘", async () => {
     compiler.compile.mockResolvedValue({
       enhancement: "keywords",
       fabricInputs: [
         {
-          attributes: {
-            composition: { cotton: 60, polyester: 40 },
-            weave: "plain",
-          },
           boardElementId: "board-element-1",
           fabricId: "fabric-1",
           role: "fabric_texture",
+          tags: ["cotton blend", "plain"],
           weight: 0.7,
         },
       ],
@@ -195,14 +318,11 @@ describe("GenerationService", () => {
           generationInputs: {
             create: [
               {
-                attributesSnapshot: {
-                  composition: { cotton: 60, polyester: 40 },
-                  weave: "plain",
-                },
                 boardElementId: "board-element-1",
                 fabricId: "fabric-1",
                 inputType: "fabric",
                 role: "fabric_texture",
+                tagsSnapshot: ["cotton blend", "plain"],
                 weight: 0.7,
               },
             ],

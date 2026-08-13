@@ -8,8 +8,7 @@
   align-items: center;
   border: 1px solid currentColor;
   border-radius: calc(6px * var(--role-badge-scale));
-  padding:
-    calc(4px * var(--role-badge-scale))
+  padding: calc(4px * var(--role-badge-scale))
     calc(10px * var(--role-badge-scale));
   background: rgb(248 245 236 / 95%);
   box-shadow: 0 2px 8px rgb(24 25 21 / 8%);
@@ -24,6 +23,44 @@
 }
 
 .roleBadge:focus-visible {
+  outline: 2px solid #181915;
+  outline-offset: 2px;
+}
+
+.roleBadgeActions {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: calc(6px * var(--annotation-scale, 1));
+}
+
+.inpaintTrigger {
+  appearance: none;
+  display: inline-flex;
+  width: max-content;
+  min-height: calc(24px * var(--annotation-scale, 1));
+  align-items: center;
+  border: 1px solid #181915;
+  border-radius: calc(6px * var(--annotation-scale, 1));
+  padding: calc(4px * var(--annotation-scale, 1))
+    calc(10px * var(--annotation-scale, 1));
+  background: #181915;
+  box-shadow: 0 2px 8px rgb(24 25 21 / 14%);
+  color: #fffdf7;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: calc(10px * var(--annotation-scale, 1));
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.inpaintTrigger:hover {
+  border-color: #a6321d;
+  background: #a6321d;
+}
+
+.inpaintTrigger:focus-visible {
   outline: 2px solid #181915;
   outline-offset: 2px;
 }
@@ -211,6 +248,153 @@
   letter-spacing: 0.16em;
 }
 
+.generationPlaceholder {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 22% 18%, rgb(255 255 255 / 68%), transparent 34%),
+    radial-gradient(circle at 78% 74%, rgb(126 112 96 / 24%), transparent 42%),
+    #dcd6ca;
+  color: #24231f;
+  isolation: isolate;
+}
+
+.generationPlaceholder::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
+  content: "";
+  mix-blend-mode: soft-light;
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.generationPlaceholder[data-status="failed"],
+.generationPlaceholder[data-status="moderation_failed"] {
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0 18px,
+      rgb(163 59 46 / 8%) 18px 19px
+    ),
+    #e8ded7;
+}
+
+.generationPlaceholder[data-status="canceled"] {
+  background: #ddd9d0;
+  color: #6f6b62;
+}
+
+.generationFlow,
+.generationFlow i {
+  position: absolute;
+  inset: -20%;
+}
+
+.generationFlow {
+  z-index: 1;
+  filter: blur(18px) saturate(0.72);
+  transform: translateZ(0);
+}
+
+.generationFlow i {
+  display: block;
+  border-radius: 42% 58% 63% 37% / 55% 38% 62% 45%;
+  will-change: transform, opacity;
+}
+
+.generationFlow i:nth-child(1) {
+  background: radial-gradient(
+    ellipse at center,
+    rgb(255 252 244 / 88%) 0 18%,
+    rgb(194 184 168 / 52%) 48%,
+    transparent 72%
+  );
+  animation: generation-flow-a 6.8s ease-in-out infinite alternate;
+}
+
+.generationFlow i:nth-child(2) {
+  background: radial-gradient(
+    ellipse at center,
+    rgb(93 84 75 / 38%) 0 16%,
+    rgb(145 132 116 / 22%) 48%,
+    transparent 70%
+  );
+  opacity: 0.78;
+  animation: generation-flow-b 8.2s ease-in-out -2.4s infinite alternate;
+}
+
+.generationFlow i:nth-child(3) {
+  background: conic-gradient(
+    from 130deg at 50% 50%,
+    transparent 0 18%,
+    rgb(255 255 255 / 34%) 28%,
+    transparent 42% 68%,
+    rgb(101 91 80 / 18%) 78%,
+    transparent 90%
+  );
+  opacity: 0.82;
+  animation: generation-flow-c 10s linear infinite;
+}
+
+.generationFailure {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  padding: 24px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.generationFailure strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.generationFailure small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #8f3328;
+  font-size: 9px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@keyframes generation-flow-a {
+  0% {
+    opacity: 0.72;
+    transform: translate3d(-14%, -10%, 0) rotate(-10deg) scale(0.9, 1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(12%, 8%, 0) rotate(16deg) scale(1.16, 0.92);
+  }
+}
+
+@keyframes generation-flow-b {
+  0% {
+    transform: translate3d(16%, -8%, 0) rotate(18deg) scale(1.12, 0.84);
+  }
+  100% {
+    transform: translate3d(-12%, 14%, 0) rotate(-22deg) scale(0.88, 1.18);
+  }
+}
+
+@keyframes generation-flow-c {
+  from {
+    transform: rotate(0deg) scale(1.14);
+  }
+  to {
+    transform: rotate(360deg) scale(1.14);
+  }
+}
+
 .uploadStatus {
   position: absolute;
   z-index: 3;
@@ -229,6 +413,12 @@
   color: white;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .generationFlow i {
+    animation: none;
+  }
+}
+
 .noteShape {
   --note-content-scale: var(--note-scale, 1);
 
@@ -238,7 +428,9 @@
   border: 1px solid rgb(24 25 21 / 65%);
   border-radius: calc(6px * var(--note-content-scale));
   background: linear-gradient(135deg, #f8f5ec 0%, #f2ede0 100%);
-  box-shadow: 0 4px 16px rgb(24 25 21 / 10%), 0 8px 32px rgb(24 25 21 / 8%);
+  box-shadow:
+    0 4px 16px rgb(24 25 21 / 10%),
+    0 8px 32px rgb(24 25 21 / 8%);
 }
 
 .noteShape::after {
@@ -266,7 +458,7 @@
   letter-spacing: -0.01em;
   line-height: 1.55;
   outline: none;
-  overflow: auto;
+  overflow: hidden;
   pointer-events: auto;
   resize: none;
 }
@@ -295,7 +487,9 @@
   border: 1px solid rgb(24 25 21 / 75%);
   border-radius: calc(6px * var(--swatch-content-scale));
   background: linear-gradient(135deg, #e8dcc8 0%, #ddd1ba 100%);
-  box-shadow: 0 4px 16px rgb(24 25 21 / 10%), 0 8px 32px rgb(24 25 21 / 8%);
+  box-shadow:
+    0 4px 16px rgb(24 25 21 / 10%),
+    0 8px 32px rgb(24 25 21 / 8%);
   overflow: hidden;
 }
 
@@ -305,8 +499,7 @@
   width: 100%;
   height: 100%;
   flex-direction: column;
-  padding:
-    calc(18px * var(--swatch-content-scale))
+  padding: calc(18px * var(--swatch-content-scale))
     calc(20px * var(--swatch-content-scale))
     calc(14px * var(--swatch-content-scale));
   gap: calc(12px * var(--swatch-content-scale));

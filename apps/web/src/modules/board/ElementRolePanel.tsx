@@ -17,9 +17,11 @@ import {
   BOARD_ROLES,
   FABRIC_SHAPE_TYPE,
   IMAGE_SHAPE_TYPE,
+  isPlatformGeneratedImage,
   isRoleAssignableShape,
   NOTE_SHAPE_TYPE,
   normalizeBoardRole,
+  normalizeImageRole,
   SWATCH_SHAPE_TYPE,
   type ImageShape,
 } from "./shapes";
@@ -66,14 +68,23 @@ export function ElementRolePanel({
     },
     [editor, shapeId],
   );
-  const roles = new Set(
-    selected.map((shape) => normalizeBoardRole(shape.props.role)),
-  );
-  const activeRole = roles.size === 1 ? [...roles][0] : null;
   const selectedImage =
     selected.length === 1 && selected[0]?.type === IMAGE_SHAPE_TYPE
       ? (selected[0] as ImageShape)
       : null;
+  const roles = new Set(
+    selected.map((shape) =>
+      shape.type === IMAGE_SHAPE_TYPE
+        ? normalizeImageRole(shape.props.role, shape.props)
+        : normalizeBoardRole(shape.props.role),
+    ),
+  );
+  const activeRole = roles.size === 1 ? [...roles][0] : null;
+  const availableRoles = BOARD_ROLES.filter(
+    (role) =>
+      role !== "garment_ref" ||
+      Boolean(selectedImage && isPlatformGeneratedImage(selectedImage.props)),
+  );
 
   const flush = useCallback(async (): Promise<void> => {
     const pending = queue.current;
@@ -103,7 +114,7 @@ export function ElementRolePanel({
   );
 
   const setRole = (role: BoardElementRole): void => {
-    if (selected.length === 0) {
+    if (selected.length === 0 || !availableRoles.includes(role)) {
       return;
     }
     editor.run(() => {
@@ -194,13 +205,14 @@ export function ElementRolePanel({
     let nextIndex: number | null = null;
 
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % BOARD_ROLES.length;
+      nextIndex = (currentIndex + 1) % availableRoles.length;
     } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex - 1 + BOARD_ROLES.length) % BOARD_ROLES.length;
+      nextIndex =
+        (currentIndex - 1 + availableRoles.length) % availableRoles.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
-      nextIndex = BOARD_ROLES.length - 1;
+      nextIndex = availableRoles.length - 1;
     }
 
     if (nextIndex === null) {
@@ -209,7 +221,7 @@ export function ElementRolePanel({
 
     event.preventDefault();
     event.stopPropagation();
-    const nextRole = BOARD_ROLES[nextIndex];
+    const nextRole = availableRoles[nextIndex];
     if (!nextRole) {
       return;
     }
@@ -247,7 +259,7 @@ export function ElementRolePanel({
       ) : (
         <>
           <div className={styles.roleOptions} role="radiogroup">
-            {BOARD_ROLES.map((role, index) => (
+            {availableRoles.map((role, index) => (
               <button
                 aria-checked={activeRole === role}
                 data-role={role}

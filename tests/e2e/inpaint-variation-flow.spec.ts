@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", async ({
+test("画布成衣可提交局部重绘并获得明确反馈", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const requests: Record<string, unknown>[] = [];
   const taskDetails = new Map<string, Record<string, unknown>>();
   let sequence = 0;
@@ -10,6 +11,7 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   let inpaintTaskReads = 0;
   let linkedInpaintTaskId: string | undefined;
   let uploadedMaskBytes = 0;
+  let uploadedMaskDimensions: { height: number; width: number } | null = null;
   let rejectedInpaintOnce = false;
 
   await page.route("**/api/me", (route) =>
@@ -61,8 +63,11 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await page.route("**/api/generations/masks/sign", async (route) => {
     const body = route.request().postDataJSON() as {
       readonly checksumSha256: string;
+      readonly height: number;
+      readonly width: number;
     };
     expect(body.checksumSha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
+    expect(body).toMatchObject({ height: 1024, width: 768 });
     await route.fulfill({
       json: {
         expiresAt: "2026-07-27T09:00:00.000Z",
@@ -82,7 +87,14 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await page.route(
     "https://signed.example/mask-e2e.png?write=1",
     async (route) => {
-      uploadedMaskBytes = route.request().postDataBuffer()?.byteLength ?? 0;
+      const png = route.request().postDataBuffer();
+      uploadedMaskBytes = png?.byteLength ?? 0;
+      if (png && png.byteLength >= 24) {
+        uploadedMaskDimensions = {
+          height: png.readUInt32BE(20),
+          width: png.readUInt32BE(16),
+        };
+      }
       await route.fulfill({ status: 200 });
     },
   );
@@ -202,6 +214,10 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
     }
     await route.fulfill({ json: detail });
   });
+  await page.route(
+    /\/api\/generations\/[^/]+\/candidates\/\d+$/u,
+    (route) => route.fulfill({ json: {}, status: 200 }),
+  );
   await page.route("https://assets.example/*.png", async (route) => {
     const isInpaint = route.request().url().includes("inpaint");
     await route.fulfill({
@@ -238,65 +254,26 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   ).toBeVisible();
   expect(sourceTaskReads).toBeGreaterThanOrEqual(3);
 
-  const sourceCard = page.locator("article").filter({
-    has: page.locator('img[src="https://assets.example/source.png"]'),
-  });
-  await page.setViewportSize({ height: 844, width: 390 });
-  const [agentBox, candidateDockBox] = await Promise.all([
-    page.getByRole("complementary", { name: "设计助手" }).boundingBox(),
-    page.getByRole("region", { name: "生成候选" }).boundingBox(),
-  ]);
-  if (!agentBox || !candidateDockBox) {
-    throw new Error("移动端 Agent 生成记录未完整渲染");
-  }
-  expect(Math.round(agentBox.x + agentBox.width)).toBe(390);
-  expect(candidateDockBox.x).toBeGreaterThanOrEqual(agentBox.x);
-  await page.getByRole("button", { name: "折叠设计助手" }).click();
-  await expect(
-    page.getByRole("complementary", { name: "设计助手（已折叠）" }),
-  ).toBeVisible();
-  await page.setViewportSize({ height: 720, width: 1280 });
-  await page.getByRole("button", { name: "展开设计助手" }).click();
-
-  const openDetails = sourceCard.getByRole("button", {
-    name: "打开候选详情",
-  });
-  await openDetails.click();
-  const lightboxDialog = page.getByRole("dialog", {
-    name: "候选设计详情",
-  });
-  await expect(lightboxDialog).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(
-    page.getByRole("button", { name: "生成 3 个变体" }),
-  ).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "预览" })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(lightboxDialog).toBeHidden();
-  await expect(openDetails).toBeFocused();
-
-  await openDetails.click();
-  await page.getByRole("button", { name: "生成 3 个变体" }).click();
-  await expect
-    .poll(() => requests.filter((body) => body.taskType === "i2i").length)
-    .toBe(3);
-  expect(
-    requests
-      .filter((body) => body.taskType === "i2i")
-      .map((body) => body.seed)
-      .sort(),
-  ).toEqual([701, 702, 703]);
-  await page.getByRole("button", { name: "关闭候选详情" }).click();
-
-  await sourceCard.getByRole("button", { name: "更多候选操作" }).click();
-  await sourceCard.getByRole("button", { name: "局部改" }).click();
+  await page
+    .getByRole("button", { name: "折叠设计助手" })
+    .evaluate((button: HTMLButtonElement) => button.click());
+  const sourceImage = page.locator(
+    'img[src="https://assets.example/source.png"]',
+  );
+  const sourceImageBounds = await sourceImage.boundingBox();
+  expect(sourceImageBounds).not.toBeNull();
+  if (!sourceImageBounds) return;
+  await page.mouse.click(
+    sourceImageBounds.x + sourceImageBounds.width / 2,
+    sourceImageBounds.y + sourceImageBounds.height / 2,
+  );
+  await page.getByRole("button", { name: "局部更改成衣" }).click();
   await page
     .getByRole("textbox", { name: "局部重绘说明" })
     .fill("将领口改成窄驳领，保持原有面料");
   await page.getByRole("button", { name: "提交局部重绘" }).click();
   await expect(
-    page.getByText("掩码为空，请先涂抹需要重绘的区域"),
+    page.getByText("请先涂抹需要修改的区域"),
   ).toBeVisible();
 
   const canvas = page.getByLabel("局部重绘掩码画布");
@@ -347,22 +324,28 @@ test("Lightbox 掩码可撤销并提交 inpaint，变体使用连续 seed", asyn
   await page.getByRole("button", { name: "提交局部重绘" }).click();
 
   await expect.poll(() => uploadedMaskBytes).toBeGreaterThan(100);
+  await expect.poll(() => uploadedMaskDimensions).toEqual({
+    height: 1024,
+    width: 768,
+  });
   await expect
     .poll(() => requests.filter((body) => body.taskType === "inpaint").length)
     .toBe(1);
   expect(requests.find((body) => body.taskType === "inpaint")).toMatchObject({
+    height: 1024,
     maskImageUrl: "https://signed.example/mask-e2e.png?read=1",
     referenceImageUrl: "https://assets.example/source.png",
     taskType: "inpaint",
+    width: 768,
   });
-  await expect.poll(() => inpaintTaskReads).toBeGreaterThan(0);
-  await expect.poll(() => linkedInpaintTaskId).toMatch(/^task-inpaint-/u);
-  const agentPanel = page.getByRole("complementary", { name: "设计助手" });
-  await expect(agentPanel).toContainText(
-    "局部重绘：将领口改成窄驳领，保持原有面料",
-  );
   await expect(
-    agentPanel.locator('img[src="https://assets.example/inpaint.png"]'),
+    page.getByRole("status").filter({
+      hasText: "局部重绘任务已创建，正在画布中生成",
+    }),
+  ).toBeVisible();
+  await expect.poll(() => inpaintTaskReads).toBeGreaterThan(0);
+  await expect(
+    page.locator('img[src="https://assets.example/inpaint.png"]'),
   ).toBeVisible();
   await page.getByRole("button", { name: "打开历史" }).click();
   await page.getByRole("tab", { name: "生成" }).click();

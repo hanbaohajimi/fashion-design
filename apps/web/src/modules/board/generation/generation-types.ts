@@ -6,6 +6,13 @@ export type GenerationStatus =
   | "moderation_failed"
   | "canceled";
 
+export function shouldCreateGenerationPlaceholder(
+  status: GenerationStatus,
+  hasExistingShape: boolean,
+): boolean {
+  return hasExistingShape || status === "queued" || status === "running";
+}
+
 export interface GenerationCandidate {
   readonly assetId: string;
   readonly disposition?: "adopted" | "dismissed";

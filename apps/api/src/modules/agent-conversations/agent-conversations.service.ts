@@ -22,6 +22,7 @@ import { z } from "zod";
 import { AMUX_CLAUDE_CLIENT, type AmuxClaudeJsonClient } from "../ai/ai.tokens";
 import { S3FileStorage } from "../files/storage.service";
 import { GenerationService } from "../generation/generation.service";
+import { RETIRED_BOARD_SHAPE_TYPE } from "../boards/boards.schemas";
 import type {
   AttachGenerationTaskInput,
   CreateAgentConversationInput,
@@ -36,7 +37,15 @@ export const AGENT_CONVERSATIONS_DB = Symbol("AGENT_CONVERSATIONS_DB");
 const DEFAULT_TITLE = "新的设计对话";
 const HISTORY_LIMIT = 20;
 const AGENT_IMAGE_LIMIT = 16;
+const AGENT_IMAGE_MAX_BYTES = 7 * 1024 * 1024;
+const AGENT_IMAGE_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
 const IDEMPOTENCY_REPLAY_ATTEMPTS = 3;
+const CLAUDE_IMAGE_MIME_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 const FIXED_GENERATION_PARAMETERS = {
   background: "opaque" as const,
   cfg: 3.5,
@@ -60,9 +69,8 @@ type AgentDatabase = Pick<
 
 interface AgentCanvasElementContext {
   readonly color?: string;
-  readonly fabricAttributes?: unknown;
   readonly fabricId?: string;
-  readonly fabricName?: string;
+  readonly fabricTags?: readonly string[];
   readonly label?: string;
   readonly role: string;
   readonly roleLabel?: string;
@@ -310,7 +318,10 @@ export class AgentConversationsService {
       });
     }
     const replay = await this.findTurn(conversationId, input.clientRequestId);
-    if (replay && replay.assistantMessage.status !== AgentMessageStatus.FAILED) {
+    if (
+      replay &&
+      replay.assistantMessage.status !== AgentMessageStatus.FAILED
+    ) {
       return toTurnResponse(replay);
     }
 
@@ -361,7 +372,8 @@ export class AgentConversationsService {
         instructions: agentInstructions,
         jsonSchema: agentDecisionJsonSchema,
         maxTokens: 1_200,
-        parse: (value) => agentDecisionSchema.parse(normalizeAgentDecision(value)),
+        parse: (value) =>
+          agentDecisionSchema.parse(normalizeAgentDecision(value)),
         prompt: buildAgentPrompt(input.content, history, context),
         schemaName: "fashion_agent_decision",
       });
@@ -382,6 +394,7 @@ export class AgentConversationsService {
             width: outputSize.width,
           },
           `agent:${conversationId}:${input.clientRequestId}`,
+          input.content,
         );
         taskId = result.taskId;
       }
@@ -531,7 +544,12 @@ export class AgentConversationsService {
     const requestedFileIds = [...new Set(input.fileAssetIds)];
     const elements = shapeIds.length
       ? await this.database.boardElement.findMany({
-          where: { deletedAt: null, projectId, shapeId: { in: shapeIds } },
+          where: {
+            deletedAt: null,
+            projectId,
+            shapeId: { in: shapeIds },
+            shapeType: { not: RETIRED_BOARD_SHAPE_TYPE },
+          },
           select: {
             fileAssetId: true,
             record: true,
@@ -555,6 +573,7 @@ export class AgentConversationsService {
           deletedAt: null,
           fileAssetId: { in: requestedFileIds },
           projectId,
+          shapeType: { not: RETIRED_BOARD_SHAPE_TYPE },
         },
         select: { fileAssetId: true },
       });
@@ -603,7 +622,7 @@ export class AgentConversationsService {
     const fabrics = fabricIds.length
       ? await this.database.fabric.findMany({
           where: { id: { in: [...new Set(fabricIds)] }, ownerId: userId },
-          select: { attributes: true, id: true, name: true },
+          select: { id: true, tags: true },
         })
       : [];
     const fabricById = new Map(fabrics.map((fabric) => [fabric.id, fabric]));
@@ -619,7 +638,7 @@ export class AgentConversationsService {
       const text = cleanContextText(props.text, 1_000);
       const color = cleanContextText(props.color, 32);
       const label = cleanContextText(props.label, 120);
-      const fallbackFabricName = cleanContextText(props.fabricName, 160);
+      const fallbackFabricTags = cleanContextTags(props.fabricTags);
       return [
         {
           role: element.role,
@@ -631,12 +650,9 @@ export class AgentConversationsService {
           ...(label ? { label } : {}),
           ...(fabricId ? { fabricId } : {}),
           ...(fabric
-            ? {
-                fabricAttributes: fabric.attributes,
-                fabricName: fabric.name,
-              }
-            : fallbackFabricName
-              ? { fabricName: fallbackFabricName }
+            ? { fabricTags: fabric.tags }
+            : fallbackFabricTags.length > 0
+              ? { fabricTags: fallbackFabricTags }
               : {}),
         },
       ];
@@ -658,7 +674,14 @@ export class AgentConversationsService {
         status: FileStatus.READY,
       },
       take: AGENT_IMAGE_LIMIT,
-      select: { height: true, id: true, objectKey: true, width: true },
+      select: {
+        height: true,
+        id: true,
+        mimeType: true,
+        objectKey: true,
+        thumbnail1024Key: true,
+        width: true,
+      },
     });
     const fileById = new Map(files.map((file) => [file.id, file] as const));
     const orderedFiles = fileAssetIds.flatMap((id) => {
@@ -672,12 +695,41 @@ export class AgentConversationsService {
         typeof file.height === "number" &&
         file.height > 0,
     );
-    const images = await Promise.all(
-      orderedFiles.map(async (file) => ({
-        detail: "auto" as const,
-        url: await this.storage.createDownloadUrl(file.objectKey, 60 * 60),
-      })),
+    const loadedImages = await Promise.all(
+      orderedFiles.map(async (file) => {
+        const useThumbnail = Boolean(file.thumbnail1024Key);
+        const objectKey = file.thumbnail1024Key ?? file.objectKey;
+        const mimeType = useThumbnail ? "image/webp" : file.mimeType;
+        if (!CLAUDE_IMAGE_MIME_TYPES.has(mimeType)) {
+          throw new Error(`Agent 不支持参考图片格式：${mimeType}`);
+        }
+        const bytes = await this.storage.readPrefix(
+          objectKey,
+          AGENT_IMAGE_MAX_BYTES + 1,
+        );
+        if (bytes.byteLength === 0) {
+          throw new Error("Agent 参考图片为空");
+        }
+        if (bytes.byteLength > AGENT_IMAGE_MAX_BYTES) {
+          throw new Error("Agent 单张参考图片超过 7MB，请压缩后重试");
+        }
+        return {
+          byteLength: bytes.byteLength,
+          image: {
+            detail: "auto" as const,
+            url: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+          },
+        };
+      }),
     );
+    const totalBytes = loadedImages.reduce(
+      (total, image) => total + image.byteLength,
+      0,
+    );
+    if (totalBytes > AGENT_IMAGE_TOTAL_MAX_BYTES) {
+      throw new Error("Agent 参考图片总大小超过 20MB，请减少选中图片后重试");
+    }
+    const images = loadedImages.map((loaded) => loaded.image);
     return {
       images,
       primaryDimensions: primary
@@ -752,6 +804,7 @@ const agentInstructions = [
   "回复使用简体中文，简洁说明理解和下一步，不承诺未执行的操作。",
   "canvasContext.elements 是从当前项目读取并校验过的权威事实；必须使用其中的便签、色值、标签和面料参数，禁止补造缺失属性。",
   "生成提示词应具体描述服装品类、廓形、材质、色彩、细节、视角和光线。",
+  "除非 currentUserMessage 明确要求模特试穿、真人上身或等价表达，否则生成提示词必须使用服装单品展示、平铺、人台、衣架或服装效果图，不得自行加入真人、人物、模特、试穿、T台或生活方式摄影。",
 ].join("\n");
 
 function buildAgentPrompt(
@@ -790,6 +843,18 @@ function cleanContextText(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
   const cleaned = value.replace(/[\u0000-\u001f\u007f]/gu, " ").trim();
   return cleaned ? cleaned.slice(0, maxLength) : null;
+}
+
+function cleanContextTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.flatMap((tag) => {
+        const cleaned = cleanContextText(tag, 30);
+        return cleaned ? [cleaned] : [];
+      }),
+    ),
+  ].slice(0, 12);
 }
 
 function conversationTitle(content: string): string {

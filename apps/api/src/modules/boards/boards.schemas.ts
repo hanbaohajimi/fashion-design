@@ -3,6 +3,51 @@ import { z } from "zod";
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const shapeIdSchema = z.string().min(1).max(200);
 
+export const RETIRED_BOARD_SHAPE_TYPE = "fashion-connector";
+
+export function isRetiredBoardShapeType(
+  value: unknown,
+): value is typeof RETIRED_BOARD_SHAPE_TYPE {
+  return value === RETIRED_BOARD_SHAPE_TYPE;
+}
+
+export function isRetiredBoardShapeRecord(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.typeName === "shape" && isRetiredBoardShapeType(record.type)
+  );
+}
+
+export function stripRetiredBoardShapes(snapshot: unknown): unknown {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return snapshot;
+  }
+  const root = snapshot as Record<string, unknown>;
+  const document = root.document;
+  if (!document || typeof document !== "object" || Array.isArray(document)) {
+    return snapshot;
+  }
+  const documentRecord = document as Record<string, unknown>;
+  const store = documentRecord.store;
+  if (!store || typeof store !== "object" || Array.isArray(store)) {
+    return snapshot;
+  }
+  const storeRecord = store as Record<string, unknown>;
+  const entries = Object.entries(storeRecord);
+  const retainedEntries = entries.filter(
+    ([, record]) => !isRetiredBoardShapeRecord(record),
+  );
+  if (retainedEntries.length === entries.length) return snapshot;
+  return {
+    ...root,
+    document: {
+      ...documentRecord,
+      store: Object.fromEntries(retainedEntries),
+    },
+  };
+}
+
 const upsertPatchSchema = z.object({
   deleted: z.literal(false).optional(),
   record: jsonObjectSchema,
