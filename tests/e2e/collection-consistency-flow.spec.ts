@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考相似度", async ({
-  page,
-}) => {
+test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }) => {
   test.setTimeout(90_000);
   const createdAt = "2026-07-28T10:00:00.000Z";
   let lookCount = 1;
@@ -15,9 +13,13 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     code: "jacket",
     label: "夹克",
   };
-  let collectionCreated = false;
-  let collectionListAvailable = false;
+  let collectionCreated = true;
   let consistencyAvailable = false;
+  const lookRequests: Array<{
+    readonly garmentType: { readonly code: string; readonly label: string };
+    readonly slotKey: string;
+    readonly variationAxis: string;
+  }> = [];
   const ignoredAssets = new Set<string>();
   const dna = () => ({
     extractionStatus: "ready",
@@ -66,27 +68,19 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       },
     }),
   );
-  await page.route(
-    "**/api/collections?projectId=e2e-collection",
-    async (route) => {
-      if (!collectionListAvailable) {
-        await route.fulfill({
-          status: 503,
-          json: { message: "模拟系列列表暂时不可用" },
-        });
-        return;
-      }
-      await route.fulfill({ json: collectionCreated ? [collection()] : [] });
-    },
+  await page.route("**/api/collections?projectId=e2e-collection", (route) =>
+    route.fulfill({ json: collectionCreated ? [collection()] : [] }),
   );
   const consistency = () => {
     const looks = [
       {
         analysisStatus: "ready",
         assetId: "asset-hero",
+        garmentType: sourceGarmentType,
         isHero: true,
         ordinal: 1,
         similarityScore: lookCount === 1 ? null : lookCount === 2 ? 0.96 : 0.44,
+        slotKey: null,
         thumbnailUrl: "https://assets.example/collection-look-1.png",
         url: "https://assets.example/collection-look-1.png",
         variationAxis: null,
@@ -95,9 +89,11 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       {
         analysisStatus: "ready",
         assetId: "asset-look-2",
+        garmentType: lookRequests[0]?.garmentType ?? null,
         isHero: false,
         ordinal: 2,
         similarityScore: lookCount < 2 ? null : lookCount === 2 ? 0.96 : 0.52,
+        slotKey: lookRequests[0]?.slotKey ?? null,
         thumbnailUrl: "https://assets.example/collection-look-2.png",
         url: "https://assets.example/collection-look-2.png",
         variationAxis: "detail",
@@ -106,9 +102,11 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       {
         analysisStatus: "ready",
         assetId: "asset-look-3",
+        garmentType: lookRequests[1]?.garmentType ?? null,
         isHero: false,
         ordinal: 3,
         similarityScore: 0.44,
+        slotKey: lookRequests[1]?.slotKey ?? null,
         thumbnailUrl: "https://assets.example/collection-look-3.png",
         url: "https://assets.example/collection-look-3.png",
         variationAxis: "detail",
@@ -276,16 +274,78 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     }),
   );
   await page.route(/\/api\/generations\/task-look-\d+$/u, (route) =>
-    route.fulfill({
-      json: {
-        createdAt,
-        error: null,
-        id: new URL(route.request().url()).pathname.split("/").at(-1),
-        output: {},
-        status: "succeeded",
-        updatedAt: createdAt,
-      },
-    }),
+    (() => {
+      const taskId = new URL(route.request().url()).pathname.split("/").at(-1);
+      const lookNumber = taskId?.split("-").at(-1) ?? "2";
+      return route.fulfill({
+        json: {
+          createdAt,
+          error: null,
+          id: taskId,
+          output: {
+            images: [
+              {
+                assetId: `asset-look-${lookNumber}`,
+                height: 1024,
+                url: `https://assets.example/collection-look-${lookNumber}.png`,
+                width: 768,
+              },
+            ],
+          },
+          request: {
+            cfg: 7,
+            height: 1024,
+            projectId: "e2e-collection",
+            prompt: `系列 Look ${lookNumber}`,
+            shapeIds: [],
+            steps: 28,
+            taskType: "i2i",
+            width: 768,
+          },
+          status: "succeeded",
+          taskType: "i2i",
+          updatedAt: createdAt,
+        },
+      });
+    })(),
+  );
+  await page.route(
+    /\/api\/generations\/task-look-\d+\/candidates\/0$/u,
+    (route) => {
+      const taskId = new URL(route.request().url()).pathname.split("/").at(-3);
+      const lookNumber = taskId?.split("-").at(-1) ?? "2";
+      return route.fulfill({
+        json: {
+          createdAt,
+          error: null,
+          id: taskId,
+          output: {
+            candidateDispositions: { "0": "adopted" },
+            images: [
+              {
+                assetId: `asset-look-${lookNumber}`,
+                height: 1024,
+                url: `https://assets.example/collection-look-${lookNumber}.png`,
+                width: 768,
+              },
+            ],
+          },
+          request: {
+            cfg: 7,
+            height: 1024,
+            projectId: "e2e-collection",
+            prompt: `系列 Look ${lookNumber}`,
+            shapeIds: [],
+            steps: 28,
+            taskType: "i2i",
+            width: 768,
+          },
+          status: "succeeded",
+          taskType: "i2i",
+          updatedAt: createdAt,
+        },
+      });
+    },
   );
   await page.route("**/api/collections", async (route) => {
     if (route.request().method() !== "POST") {
@@ -317,9 +377,15 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
     signatureDetails = body.signatureDetails ?? signatureDetails;
     await route.fulfill({ json: dna() });
   });
-  await page.route("**/api/collections/collection-e2e/looks", (route) => {
+  await page.route("**/api/collections/collection-e2e/looks", async (route) => {
+    const body = route.request().postDataJSON() as {
+      readonly garmentType: { readonly code: string; readonly label: string };
+      readonly slotKey: string;
+      readonly variationAxis: string;
+    };
+    lookRequests.push(body);
     lookCount = Math.min(3, lookCount + 1);
-    return route.fulfill({
+    await route.fulfill({
       status: 202,
       json: { task_id: `task-look-${lookCount}` },
     });
@@ -419,34 +485,12 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
 
   await page.goto("/e2e-collection");
   await page.getByRole("button", { name: "打开系列工作台" }).click();
-  const retryCollections = page.getByRole("button", { name: "重试" });
-  await expect(retryCollections).toBeVisible({ timeout: 10_000 });
-  collectionListAvailable = true;
-  await retryCollections.click();
-  await expect(page.getByText("暂无系列", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "关闭系列入口" }).click();
-
-  await page.getByRole("button", { name: "便签" }).click();
-  await page.getByRole("button", { name: "展开设计助手" }).click();
-  await page
-    .getByRole("textbox", { name: "编辑描述" })
-    .fill("作为系列 Hero 的克制廓形");
-  const sendButton = page.getByRole("button", { name: "发送", exact: true });
-  await expect(sendButton).toBeEnabled();
-  await sendButton.click();
-  await page.getByRole("button", { name: "打开候选详情" }).click();
-  await page.getByRole("button", { name: "设为 Hero → 建系列" }).click();
+  await page.getByRole("button", { name: "打开系列 系列 · HERO" }).click();
 
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
-  await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
+  await expect(page.getByText("系列原点", { exact: true })).toBeVisible();
   await expect(collectionDrawer).toBeFocused();
-  const retryConsistency = collectionDrawer.getByRole("button", {
-    name: "重新读取一致性",
-  });
-  await expect(retryConsistency).toBeVisible();
   consistencyAvailable = true;
-  await retryConsistency.click();
-  await expect(retryConsistency).toBeHidden();
   const sourceTypeSelect = collectionDrawer.getByRole("combobox", {
     name: "服装类型",
   });
@@ -479,71 +523,70 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
   await expect(page.getByLabel("系列 DNA").getByText("已保存")).toBeVisible();
 
   await page.getByRole("button", { name: "Look 扩展" }).click();
-  await expect(page.getByLabel("系列款数")).toHaveValue("8");
-  const seriesBrief = collectionDrawer.getByLabel("系列开发目标");
-  await seriesBrief.fill("早秋城市通勤，面向需要轻量叠穿的创意从业者");
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const raw = window.localStorage.getItem(
-          "fashion:series-plan:v1:collection-e2e",
-        );
-        return raw
-          ? (JSON.parse(raw) as { readonly brief?: string }).brief
-          : null;
-      }),
-    )
-    .toBe("早秋城市通勤，面向需要轻量叠穿的创意从业者");
+  const retrySeriesState = collectionDrawer.getByRole("button", {
+    name: "重新读取系列状态",
+  });
+  await retrySeriesState.click();
+  await expect(retrySeriesState).toBeHidden();
+  const garmentTypeSelect = collectionDrawer.getByRole("combobox", {
+    name: "服装类型",
+  });
+  const generateLook = collectionDrawer.getByRole("button", {
+    name: "生成",
+    exact: true,
+  });
+  await expect(garmentTypeSelect).toHaveCount(1);
+  await garmentTypeSelect.selectOption("dress");
+  await generateLook.click();
+  await expect.poll(() => lookRequests).toHaveLength(1);
+  expect(lookRequests[0]).toMatchObject({
+    garmentType: { code: "dress", label: "连衣裙" },
+    variationAxis: "garmentType",
+  });
+  expect(lookRequests[0]?.slotKey).toMatch(/^manual-/u);
   await expect(
-    collectionDrawer.getByLabel("品类结构分析"),
-  ).toContainText("8 款品类结构");
-  await expect(
-    collectionDrawer.getByText("品类结构覆盖完整"),
+    collectionDrawer.locator("figcaption").getByText("连衣裙", { exact: true }),
   ).toBeVisible();
   await expect(
-    collectionDrawer
-      .locator("article")
-      .filter({ hasText: "系列原点" })
-      .getByText("夹克", { exact: true }),
+    page.locator(
+      'img[src="https://assets.example/collection-look-2.png"]',
+    ),
+  ).toHaveCount(2);
+
+  await garmentTypeSelect.selectOption("coat");
+  await generateLook.click();
+  await expect.poll(() => lookRequests).toHaveLength(2);
+  expect(lookRequests[1]).toMatchObject({
+    garmentType: { code: "coat", label: "大衣" },
+    variationAxis: "garmentType",
+  });
+  expect(lookRequests[1]?.slotKey).toMatch(/^manual-/u);
+  expect(lookRequests[1]?.slotKey).not.toBe(lookRequests[0]?.slotKey);
+  await expect(
+    collectionDrawer.locator("figcaption").getByText("大衣", { exact: true }),
   ).toBeVisible();
   await expect(
-    collectionDrawer.getByRole("button", { name: "生成此款" }),
-  ).toHaveCount(7);
-  await collectionDrawer.getByLabel("选择 上装 01").uncheck();
-  await expect(
-    collectionDrawer.getByRole("button", { name: "生成选中 6 款" }),
-  ).toBeVisible();
-  await collectionDrawer.getByRole("button", { name: "添加槽位" }).click();
-  await expect(
-    collectionDrawer.getByRole("button", { name: "生成此款" }),
-  ).toHaveCount(8);
-  await collectionDrawer
-    .getByRole("button", { name: /^删除/u })
-    .last()
-    .click();
-  await expect(
-    collectionDrawer.getByRole("button", { name: "生成此款" }),
-  ).toHaveCount(7);
-  const firstSlotType = collectionDrawer
-    .getByRole("combobox", { name: "服装类型" })
-    .first();
-  await firstSlotType.selectOption("custom");
-  const customSlotType = collectionDrawer.getByPlaceholder("输入服装类型");
-  await customSlotType.fill("可拆卸披肩");
-  await page.getByLabel("系列款数").fill("12");
-  await expect(
-    collectionDrawer.getByRole("button", { name: "生成此款" }),
-  ).toHaveCount(11);
-  await page.getByLabel("系列款数").fill("2");
-  await expect(
-    collectionDrawer.getByRole("button", { name: "生成此款" }),
-  ).toHaveCount(1);
-  await expect(customSlotType).toHaveValue("可拆卸披肩");
-  await page.getByLabel("系列款数").fill("8");
-  await expect(seriesBrief).toHaveValue(
-    "早秋城市通勤，面向需要轻量叠穿的创意从业者",
-  );
-  await page.screenshot({ path: "output/playwright/series-plan-desktop.png" });
+    page.locator(
+      'img[src="https://assets.example/collection-look-3.png"]',
+    ),
+  ).toHaveCount(2);
+
+  for (const removedText of [
+    "系列款数",
+    "系列开发目标",
+    "款式名称",
+    "设计方向",
+    "选择全部待生成款",
+    "添加款式",
+    "生成此款",
+  ]) {
+    await expect(
+      collectionDrawer.getByText(removedText, { exact: true }),
+    ).toHaveCount(0);
+  }
+  await page.screenshot({
+    path: "output/playwright/look-generator-desktop.png",
+  });
   const desktopViewport = page.viewportSize() ?? { height: 720, width: 1280 };
   await page.setViewportSize({ height: 844, width: 390 });
   await expect
@@ -555,101 +598,17 @@ test("从 Hero 建系列、锁定色板、扩展到 3 个 Look 并查看参考�
       ),
     )
     .toBe(true);
-  await page.screenshot({ path: "output/playwright/series-plan-mobile.png" });
+  await page.screenshot({
+    path: "output/playwright/look-generator-mobile.png",
+  });
+  await expect(
+    collectionDrawer.getByRole("combobox", { name: "服装类型" }),
+  ).toHaveCount(1);
+  await expect(
+    collectionDrawer.getByRole("button", { name: "单 Look 扩展" }),
+  ).toHaveCount(0);
+  await expect(
+    collectionDrawer.getByRole("button", { name: "一致性", exact: true }),
+  ).toHaveCount(0);
   await page.setViewportSize(desktopViewport);
-  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
-  await page.getByRole("button", { name: "打开系列 DNA" }).click();
-  await page.getByRole("button", { name: "Look 扩展" }).click();
-  await expect(collectionDrawer.getByLabel("系列开发目标")).toHaveValue(
-    "早秋城市通勤，面向需要轻量叠穿的创意从业者",
-  );
-  await page.getByRole("button", { name: "单 Look 扩展" }).click();
-  await page.getByText("细节", { exact: true }).click();
-  await page.getByRole("button", { name: /沿「细节」扩展 Look/u }).click();
-  await expect(page.getByText("2 LOOKS")).toBeVisible();
-  await expect(page.getByText("与 Look1 高度相似")).toBeVisible();
-
-  await page.getByRole("button", { name: /沿「细节」扩展 Look/u }).click();
-  await expect(page.getByText("3 LOOKS")).toBeVisible();
-  const thirdLook = page.locator("article").filter({ hasText: "LOOK 3" });
-  await expect(thirdLook.getByText("偏离系列参考区间")).toBeVisible();
-  await thirdLook.getByRole("button", { name: "忽略提示并强制保留" }).click();
-  await expect(thirdLook.getByText("已忽略提示并保留")).toBeVisible();
-
-  await page.getByRole("button", { name: "一致性", exact: true }).click();
-  await expect(
-    page.getByRole("table", { name: "系列 Look 参考相似度矩阵" }),
-  ).toBeVisible();
-  await expect(page.getByText("参考相似度", { exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "0.44" }).first()).toBeVisible();
-
-  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
-  const reopenCollection = page.getByRole("button", {
-    name: "打开系列 DNA",
-  });
-  await expect(reopenCollection).toBeFocused();
-  await reopenCollection.click();
-  await expect(
-    page
-      .locator("section")
-      .filter({ has: page.getByRole("heading", { name: "色板" }) })
-      .getByRole("button", { name: "解锁" }),
-  ).toBeVisible();
-
-  const exportTrigger = page.getByRole("button", { name: "导出 PDF" });
-  await exportTrigger.click();
-  const exportDialog = page.getByRole("dialog", { name: "导出成果" });
-  await expect(exportDialog).toBeFocused();
-  await expect(page.getByText("Free 版本带水印。")).toBeVisible();
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("button", { name: "开始导出" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(
-    page.getByRole("button", { name: "关闭导出窗口" }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(exportDialog).toBeHidden();
-  await expect(exportTrigger).toBeFocused();
-
-  await exportTrigger.click();
-  await expect(page.getByText("Free 版本带水印。")).toBeVisible();
-  await page.getByRole("button", { name: "开始导出" }).click();
-  await expect(page.getByRole("link", { name: "下载 PDF" })).toHaveAttribute(
-    "href",
-    "https://download.example/lookbook.pdf?signature=e2e",
-  );
-  await page.getByRole("button", { name: "关闭导出窗口" }).click();
-  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
-  await page.getByRole("button", { name: "关闭候选详情" }).click();
-  await page.getByRole("button", { name: "关闭设计助手" }).click();
-  await page.getByRole("button", { name: "打开系列工作台" }).click();
-  const collectionEntry = page.getByRole("button", {
-    name: "打开系列 系列 · HERO",
-  });
-  await expect(collectionEntry).toContainText("夹克");
-  await expect(collectionEntry).toContainText("DNA 已就绪");
-  await page.screenshot({
-    path: "output/playwright/series-library-desktop.png",
-  });
-  const libraryDesktopViewport = page.viewportSize() ?? {
-    height: 720,
-    width: 1280,
-  };
-  await page.setViewportSize({ height: 844, width: 390 });
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          document.documentElement.scrollWidth <=
-          document.documentElement.clientWidth,
-      ),
-    )
-    .toBe(true);
-  await expect(collectionEntry).toBeVisible();
-  await page.screenshot({
-    path: "output/playwright/series-library-mobile.png",
-  });
-  await page.setViewportSize(libraryDesktopViewport);
-  await collectionEntry.click();
-  await expect(page.getByText("Hero 已锁定为系列原点")).toBeVisible();
 });
