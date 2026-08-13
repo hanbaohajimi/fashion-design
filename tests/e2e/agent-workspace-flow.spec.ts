@@ -273,7 +273,7 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
   const inspector = page.locator('[data-label-design-panel="true"]');
   await expect(inspector).toHaveCount(0);
-  await page.getByRole("button", { name: "编辑标签：备注" }).click();
+  await page.getByRole("button", { name: "编辑标签：灵感" }).click();
   await expect(inspector).toBeVisible();
   await expect(inspector.getByRole("radio", { name: "成衣" })).toBeVisible();
   await expect(inspector.getByRole("radio", { name: "参考衣" })).toBeVisible();

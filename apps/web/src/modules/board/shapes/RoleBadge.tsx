@@ -14,7 +14,7 @@ const ROLE_LABELS: Readonly<Record<string, string>> = {
   detail_ref: "细节",
   fabric_ref: "面料",
   garment_ref: "成衣",
-  note: "备注",
+  note: "灵感",
   palette: "色卡",
   reference_garment: "参考衣",
   silhouette_ref: "廓形",

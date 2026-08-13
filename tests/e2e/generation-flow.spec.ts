@@ -748,15 +748,12 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
   await expect(page.getByTestId("style.panel")).toHaveCount(0);
   const labelDesignPanel = page.locator('[data-label-design-panel="true"]');
   await expect(labelDesignPanel).toHaveCount(0);
-  await page.getByRole("button", { name: "编辑标签：备注" }).click();
+  await page.getByRole("button", { name: "编辑标签：灵感" }).click();
   await expect(labelDesignPanel).toBeVisible();
   const styleRole = page.getByRole("radio", { name: /风格参考/u });
-  const garmentRole = page.getByRole("radio", { name: /成衣/u });
+  const noteRole = page.getByRole("radio", { name: /灵感/u });
+  await expect(noteRole).toHaveAttribute("aria-checked", "true");
   await styleRole.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(garmentRole).toBeFocused();
-  await expect(garmentRole).toHaveAttribute("aria-checked", "true");
-  const noteRole = page.getByRole("radio", { name: /备注/u });
   await page.keyboard.press("End");
   await expect(noteRole).toBeFocused();
   await expect(noteRole).toHaveAttribute("aria-checked", "true");

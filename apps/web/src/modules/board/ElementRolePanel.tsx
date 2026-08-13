@@ -32,7 +32,7 @@ const ROLE_LABELS: Readonly<Record<BoardElementRole, string>> = {
   detail_ref: "细节参考",
   fabric_ref: "面料参考",
   garment_ref: "成衣",
-  note: "备注",
+  note: "灵感",
   palette: "色彩方案",
   reference_garment: "参考衣",
   silhouette_ref: "廓形参考",
@@ -283,14 +283,14 @@ export function ElementRolePanel({
           </div>
           {selectedImage && activeRole === "note" ? (
             <label className={styles.roleNoteEditor}>
-              <span>备注标签</span>
+              <span>灵感名称</span>
               <input
-                aria-label="当前图片备注标签"
+                aria-label="当前图片灵感名称"
                 autoFocus
                 maxLength={32}
                 onChange={(event) => setImageNote(event.currentTarget.value)}
                 onKeyDown={(event) => event.stopPropagation()}
-                placeholder="输入当前图片的备注"
+                placeholder="输入当前图片的灵感名称"
                 value={selectedImage.props.roleLabel ?? ""}
               />
               <small>仅修改当前图片，不影响其他元素</small>
