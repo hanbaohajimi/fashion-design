@@ -9,8 +9,23 @@ import "./globals.css";
 import "tldraw/tldraw.css";
 
 export const metadata: Metadata = {
-  title: "Atelier 设计工作室",
+  applicationName: "Atelier 设计工作室",
+  category: "design",
   description: "专业服装设计师的创作工作台",
+  formatDetection: {
+    address: false,
+    email: false,
+    telephone: false,
+  },
+  referrer: "strict-origin-when-cross-origin",
+  robots: {
+    follow: false,
+    index: false,
+  },
+  title: {
+    default: "Atelier 设计工作室",
+    template: "%s · Atelier",
+  },
 };
 
 interface RootLayoutProps {

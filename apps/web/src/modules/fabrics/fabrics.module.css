@@ -1,5 +1,5 @@
 .libraryPage {
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 0 clamp(1rem, 4vw, 4rem) 64px;
   overflow: hidden;
   background:
@@ -88,6 +88,35 @@
   background: var(--surface-paper, #ece9e0);
   color: var(--text-muted, #65655d);
   font-size: 10px;
+}
+
+.searchClear {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted, #65655d);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  place-items: center;
+}
+
+.searchClear:hover {
+  background: var(--surface-paper, #ece9e0);
+  color: var(--accent-primary, #e9522c);
+}
+
+.searchClear:focus-visible,
+.libraryHeader a:focus-visible,
+.libraryState button:focus-visible {
+  outline: 3px solid var(--accent-primary, #e9522c);
+  outline-offset: 3px;
 }
 
 .libraryIntro {
@@ -270,6 +299,12 @@
 .fabricCard:active {
   cursor: grabbing;
   transform: translate(0, 0);
+}
+
+.fabricCard:focus-within {
+  border-color: var(--accent-primary, #e9522c);
+  outline: 3px solid rgb(233 82 44 / 22%);
+  outline-offset: 3px;
 }
 
 .cardVisual {

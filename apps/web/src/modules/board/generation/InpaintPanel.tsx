@@ -8,9 +8,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { useEditor } from "tldraw";
+import { useEditor, useValue } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
+import {
+  SWATCH_SHAPE_TYPE,
+  normalizeBoardRole,
+  type SwatchShape,
+} from "../shapes/shape-types";
+import { getSwatchColors, normalizeSwatchHex } from "../shapes/swatch-colors";
 import { uploadTemporaryMask } from "./generation-api";
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import {
@@ -21,6 +27,7 @@ import {
 import {
   DEFAULT_GENERATION_PARAMETERS,
   type GenerationCandidate,
+  type GenerationPaletteColor,
 } from "./generation-types";
 import styles from "./generation.module.css";
 
@@ -33,6 +40,11 @@ interface ImageDimensions {
 
 interface LoadedImageDimensions extends ImageDimensions {
   readonly url: string;
+}
+
+interface AvailablePalette {
+  readonly colors: readonly GenerationPaletteColor[];
+  readonly id: string;
 }
 
 const MAX_MASK_DIMENSION = 2048;
@@ -89,18 +101,42 @@ export function InpaintPanel({
   const projectId = useContext(BoardProjectContext);
   const generation = useGenerationWorkspace();
   const mask = useRef<MaskCanvasHandle>(null);
+  const availablePalettes = useValue(
+    "局部编辑可用色卡",
+    () =>
+      editor.getCurrentPageShapes().flatMap((shape): AvailablePalette[] => {
+        if (shape.type !== SWATCH_SHAPE_TYPE) return [];
+        const swatch = shape as SwatchShape;
+        if (normalizeBoardRole(swatch.props.role) !== "palette") return [];
+        const colors = getSwatchColors(swatch.props).flatMap(
+          (entry): GenerationPaletteColor[] => {
+            const hex = normalizeSwatchHex(entry.color);
+            if (!hex) return [];
+            const name = entry.label.trim().slice(0, 48) || hex.toUpperCase();
+            return [{ hex: hex.toUpperCase(), name }];
+          },
+        );
+        return colors.length ? [{ colors, id: swatch.id }] : [];
+      }),
+    [editor],
+  );
   const [maskState, setMaskState] = useState<MaskCanvasState>({
     coverage: 0,
     strokeCount: 0,
   });
   const [brushRatio, setBrushRatio] = useState(0.06);
   const [prompt, setPrompt] = useState("");
+  const [usePalette, setUsePalette] = useState(false);
+  const [selectedPaletteId, setSelectedPaletteId] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [submissionStage, setSubmissionStage] =
     useState<SubmissionStage>("idle");
   const [loadedImageDimensions, setLoadedImageDimensions] =
     useState<LoadedImageDimensions | null>(null);
   const maskHelpId = useId();
+  const paletteHeadingId = useId();
   useEffect(() => {
     let disposed = false;
     void loadImageDimensions(candidate.url)
@@ -121,11 +157,14 @@ export function InpaintPanel({
   }, [candidate.url]);
 
   const imageDimensions =
-    loadedImageDimensions?.url === candidate.url
-      ? loadedImageDimensions
-      : null;
+    loadedImageDimensions?.url === candidate.url ? loadedImageDimensions : null;
   const width = imageDimensions?.width ?? 1;
   const height = imageDimensions?.height ?? 1;
+  const paletteEnabled = usePalette && availablePalettes.length > 0;
+  const selectedPalette = paletteEnabled
+    ? (availablePalettes.find((palette) => palette.id === selectedPaletteId) ??
+      availablePalettes[0])
+    : undefined;
   const onMaskChange = useCallback((state: MaskCanvasState) => {
     setMaskState(state);
     setError(null);
@@ -142,6 +181,10 @@ export function InpaintPanel({
     }
     if (prompt.trim().length < 3) {
       setError("请描述局部区域需要如何修改");
+      return;
+    }
+    if (paletteEnabled && !selectedPalette) {
+      setError("请选择本次局部重绘使用的色卡");
       return;
     }
     setSubmissionStage("exporting");
@@ -164,6 +207,9 @@ export function InpaintPanel({
           ...(candidate.seed !== undefined ? { seed: candidate.seed } : {}),
         },
         maskImageUrl,
+        ...(paletteEnabled && selectedPalette
+          ? { palette: selectedPalette.colors }
+          : {}),
         parentAssetId: candidate.assetId,
         projectId,
         prompt: prompt.trim(),
@@ -195,9 +241,9 @@ export function InpaintPanel({
           : "提交局部重绘";
 
   return (
-    <div className={styles.inpaintLayout}>
+    <div aria-busy={submitting} className={styles.inpaintLayout}>
       <figure className={styles.maskStage}>
-        <div className={styles.maskMedia}>
+        <div className={styles.maskMedia} data-busy={submitting}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img alt="局部重绘原图" src={candidate.url} />
           {imageDimensions ? (
@@ -224,16 +270,93 @@ export function InpaintPanel({
           <span>修改说明</span>
           <textarea
             aria-label="局部重绘说明"
+            disabled={submitting}
             maxLength={1000}
-            onChange={(event) => setPrompt(event.target.value)}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+              setError(null);
+            }}
             placeholder="例如：将领口改为窄驳领，保持面料与光线"
             value={prompt}
           />
         </label>
+        <section
+          aria-labelledby={paletteHeadingId}
+          className={styles.inpaintPalette}
+        >
+          <label className={styles.paletteToggle}>
+            <span>
+              <strong id={paletteHeadingId}>使用色卡</strong>
+              <small>可选 · 只约束涂抹区域的颜色</small>
+            </span>
+            <input
+              checked={paletteEnabled}
+              disabled={availablePalettes.length === 0 || submitting}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked;
+                setUsePalette(enabled);
+                setSelectedPaletteId(
+                  enabled ? (availablePalettes[0]?.id ?? null) : null,
+                );
+                setError(null);
+              }}
+              role="switch"
+              type="checkbox"
+            />
+          </label>
+          {availablePalettes.length === 0 ? (
+            <p>画布中暂无色卡，可关闭窗口后通过“添加色卡”创建。</p>
+          ) : paletteEnabled ? (
+            <div
+              aria-label="选择本次局部重绘色卡"
+              className={styles.paletteChoices}
+              role="radiogroup"
+            >
+              {availablePalettes.map((palette, index) => {
+                const selected = palette.id === selectedPaletteId;
+                const paletteLabel = palette.colors
+                  .map((color) => `${color.name} ${color.hex}`)
+                  .join("、");
+                return (
+                  <label className={styles.paletteChoice} key={palette.id}>
+                    <input
+                      aria-label={`色卡 ${String(index + 1).padStart(2, "0")}：${paletteLabel}`}
+                      checked={selected}
+                      disabled={submitting}
+                      name={`inpaint-palette-${paletteHeadingId}`}
+                      onChange={() => {
+                        setSelectedPaletteId(palette.id);
+                        setError(null);
+                      }}
+                      type="radio"
+                      value={palette.id}
+                    />
+                    <span aria-hidden="true" className={styles.palettePreview}>
+                      {palette.colors.map((color) => (
+                        <i
+                          key={`${palette.id}-${color.hex}-${color.name}`}
+                          style={{ backgroundColor: color.hex }}
+                        />
+                      ))}
+                    </span>
+                    <span className={styles.paletteMeta}>
+                      <strong>色卡 {String(index + 1).padStart(2, "0")}</strong>
+                      <small>{paletteLabel}</small>
+                    </span>
+                    <b aria-hidden="true">{selected ? "使用中" : "选择"}</b>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p>保持原图配色，不上传色卡信息。</p>
+          )}
+        </section>
         <label>
           <span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span>
           <input
             aria-label="掩码画笔尺寸"
+            disabled={submitting}
             max={0.16}
             min={0.02}
             onChange={(event) => setBrushRatio(Number(event.target.value))}
@@ -244,20 +367,21 @@ export function InpaintPanel({
         </label>
         <div className={styles.maskActions}>
           <button
+            disabled={submitting}
             onClick={() => mask.current?.addCenterRegion()}
             type="button"
           >
             标记中央区域
           </button>
           <button
-            disabled={maskState.strokeCount === 0}
+            disabled={submitting || maskState.strokeCount === 0}
             onClick={() => mask.current?.undo()}
             type="button"
           >
             撤销一笔
           </button>
           <button
-            disabled={maskState.strokeCount === 0}
+            disabled={submitting || maskState.strokeCount === 0}
             onClick={() => mask.current?.clear()}
             type="button"
           >

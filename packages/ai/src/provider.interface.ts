@@ -19,6 +19,14 @@ const referenceImageSchema = z.object({
   weight: z.number().min(0).max(1),
 });
 
+const paletteColorSchema = z.object({
+  hex: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/u)
+    .transform((value) => value.toUpperCase()),
+  name: z.string().trim().min(1).max(48),
+});
+
 const commonRequestSchema = z.object({
   background: z.enum(["auto", "opaque"]).optional(),
   prompt: z.string().trim().min(1).max(4_000),
@@ -52,6 +60,7 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
     taskType: z.literal("inpaint"),
     referenceImageUrl: z.url(),
     maskImageUrl: z.url(),
+    palette: z.array(paletteColorSchema).min(1).max(12).optional(),
     strength: z.number().min(0).max(1),
   }),
 ]);

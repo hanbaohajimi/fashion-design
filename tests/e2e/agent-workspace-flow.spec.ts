@@ -10,7 +10,8 @@ test("长备注自动扩展便签且不出现内部滚动", async ({ page }) => 
   await mockWorkspace(page, {
     conversations,
     messages: new Map([["conversation-note", []]]),
-    onCreateConversation: () => conversation("conversation-new", "新的设计对话"),
+    onCreateConversation: () =>
+      conversation("conversation-new", "新的设计对话"),
     onSend: async () => {
       throw new Error("本用例不应发送 Agent 消息");
     },
@@ -175,9 +176,7 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   expect(desktopAgentBox?.x).toBeGreaterThan(1500);
   expect(desktopDockBox?.y).toBeGreaterThan(970);
 
-  await page
-    .getByRole("button", { name: "AGENT 工作区验收项目" })
-    .click();
+  await page.getByRole("button", { name: "AGENT 工作区验收项目" }).click();
   const projectNavigation = page.getByRole("navigation", { name: "项目导航" });
   await expect(
     projectNavigation.getByRole("link", { name: "返回项目库" }),
@@ -186,10 +185,10 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
 
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
   const context = page.getByLabel("已附加内容");
-  await expect(context).toContainText("备注");
+  await expect(context).toContainText("灵感");
   await expect(context.locator("img")).toHaveCount(0);
   const attachmentChip = context.getByRole("button", {
-    name: "备注，设计备注",
+    name: "灵感，设计备注",
   });
   expect(
     await context.evaluate((element) => getComputedStyle(element).flexWrap),
@@ -205,19 +204,19 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await attachmentChip.hover();
   const attachmentPreview = page.getByRole("tooltip");
   await expect(attachmentPreview).toBeVisible();
-  await expect(attachmentPreview).toContainText("备注");
+  await expect(attachmentPreview).toContainText("灵感");
   await attachmentPreview.hover();
   await page.waitForTimeout(150);
   await expect(attachmentPreview).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(attachmentPreview).toHaveCount(0);
-  await context.getByRole("button", { name: "移除 备注" }).click();
+  await context.getByRole("button", { name: "移除 灵感" }).click();
   await expect(context).toHaveCount(0);
 
   await toolDock.getByRole("button", { name: "添加灵感便签" }).click();
-  await expect(page.getByLabel("已附加内容")).toContainText("备注");
+  await expect(page.getByLabel("已附加内容")).toContainText("灵感");
   await page.mouse.click(620, 260);
-  await expect(page.getByLabel("已附加内容")).toContainText("备注");
+  await expect(page.getByLabel("已附加内容")).toContainText("灵感");
 
   await page.getByRole("button", { name: "新建会话" }).click();
   await expect(agent.locator("header strong").first()).toHaveText(
@@ -275,7 +274,9 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   await expect(inspector).toHaveCount(0);
   await page.getByRole("button", { name: "编辑标签：灵感" }).click();
   await expect(inspector).toBeVisible();
-  await expect(inspector.getByRole("radio", { name: "成衣" })).toBeVisible();
+  await expect(
+    inspector.getByRole("radio", { name: "风格参考" }),
+  ).toBeVisible();
   await expect(inspector.getByRole("radio", { name: "参考衣" })).toBeVisible();
 
   for (const viewport of [

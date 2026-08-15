@@ -25,8 +25,9 @@ export function ExportModal({
   readonly onClose: () => void;
   readonly source: ExportSource;
 }) {
-  const [capabilities, setCapabilities] =
-    useState<ExportCapabilities | null>(null);
+  const [capabilities, setCapabilities] = useState<ExportCapabilities | null>(
+    null,
+  );
   const [format, setFormat] = useState<ExportFormat>(
     source.type === "collection" ? "pdf" : "png",
   );
@@ -95,10 +96,7 @@ export function ExportModal({
   }, [job, pollAttempt]);
 
   useEffect(() => {
-    if (
-      job?.status !== "succeeded" ||
-      capturedJobs.current.has(job.id)
-    ) {
+    if (job?.status !== "succeeded" || capturedJobs.current.has(job.id)) {
       return;
     }
     capturedJobs.current.add(job.id);
@@ -211,7 +209,7 @@ export function ExportModal({
             {!capabilities && !error ? (
               <div className={styles.exportLoading} role="status">
                 <i />
-                <span>正在读取套餐与导出规格…</span>
+                <span>正在读取导出规格…</span>
               </div>
             ) : capabilities ? (
               <>
@@ -249,30 +247,20 @@ export function ExportModal({
                       </button>
                       <button
                         aria-pressed={quality === "high"}
-                        disabled={
-                          Boolean(job) || !capabilities.highResolutionAllowed
-                        }
+                        disabled={Boolean(job)}
                         onClick={() => setQuality("high")}
                         type="button"
                       >
                         原图高清
                       </button>
                     </div>
-                    {!capabilities.highResolutionAllowed ? (
-                      <p className={styles.exportUpgrade}>
-                        Free 最高长边 {capabilities.freeMaxEdge}px
-                        且带水印；升级 Pro 解锁原图高清无水印。
-                      </p>
-                    ) : (
-                      <p className={styles.exportNote}>
-                        Pro 原图高清导出不加水印。
-                      </p>
-                    )}
+                    <p className={styles.exportNote}>
+                      标准导出适合常规分享；原图高清保留源图尺寸，均不加水印。
+                    </p>
                   </section>
                 ) : (
                   <p className={styles.exportNote}>
-                    PDF 将包含系列名、DNA 色板与全部 Look 网格。
-                    {capabilities.watermark ? " Free 版本带水印。" : ""}
+                    PDF 将包含系列名、DNA 色板与全部 Look 网格，不加水印。
                   </p>
                 )}
 
@@ -289,10 +277,7 @@ export function ExportModal({
                 <strong>导出暂时未完成</strong>
                 <p>{error}</p>
                 {!capabilities ? (
-                  <button
-                    onClick={() => void loadCapabilities()}
-                    type="button"
-                  >
+                  <button onClick={() => void loadCapabilities()} type="button">
                     重新读取
                   </button>
                 ) : null}
@@ -303,7 +288,9 @@ export function ExportModal({
 
             <div className={styles.exportActions}>
               {canDownload ? (
-                <a href={job.downloadUrl ?? undefined}>下载 {format.toUpperCase()}</a>
+                <a href={job.downloadUrl ?? undefined}>
+                  下载 {format.toUpperCase()}
+                </a>
               ) : job?.retryAllowed ? (
                 <button
                   onClick={() => {
@@ -345,14 +332,18 @@ function ExportProgress({ job }: { readonly job: ExportJob }) {
     succeeded: "文件已就绪",
   }[job.status];
   return (
-    <div className={styles.exportProgress} data-status={job.status} role="status">
+    <div
+      className={styles.exportProgress}
+      data-status={job.status}
+      role="status"
+    >
       <i />
       <div>
         <span>{status}</span>
         <strong>
           {job.status === "succeeded" && job.sizeBytes
             ? formatBytes(job.sizeBytes)
-            : job.error?.message ?? "安全处理原图与版式"}
+            : (job.error?.message ?? "安全处理原图与版式")}
         </strong>
         {job.expiresAt ? (
           <small>

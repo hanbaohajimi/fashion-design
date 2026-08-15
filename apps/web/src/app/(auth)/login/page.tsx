@@ -64,26 +64,13 @@ export default function LoginPage() {
 
   return (
     <main className={styles.page}>
-      <section className={styles.brandPanel} aria-label="平台介绍">
-        <div>
-          <div className={styles.brandMark}>A</div>
-          <p className={styles.brandText}>Atelier Design Studio</p>
-        </div>
-        <h1 className={styles.headline}>
-          从一根线，
-          <em>绘制系列。</em>
-        </h1>
-        <p className={styles.caption}>
-          专业服装设计师的创作工作台。整合趋势分析、面料管理、设计工具于一体。
-        </p>
-      </section>
-
-      <section className={styles.formPanel}>
+      <section className={styles.formPanel} aria-labelledby="auth-title">
         <div className={styles.formHeader}>
-          <p className={styles.step}>Secure entry · 01</p>
-          <h2 className={styles.formTitle}>回到设计台</h2>
+          <h1 className={styles.formTitle} id="auth-title">
+            登录或注册
+          </h1>
           <p className={styles.intro}>
-            输入工作邮箱。我们会发送一条一次性安全链接，无需记住密码。
+            输入邮箱，我们会向你发送一次性登录链接。首次使用的邮箱将自动完成注册。
           </p>
         </div>
 

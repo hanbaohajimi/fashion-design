@@ -315,15 +315,23 @@ export class GenerationService {
       compiledPrompt.negativePrompt,
       presentationPolicy,
     );
+    const requestedPalette =
+      request.taskType === "inpaint" ? request.palette : undefined;
     const input: AiGenerationRequest = {
       ...providerRequest,
       negativePrompt: providerPrompts.negativePrompt,
       prompt: context
         ? collectionProviderPrompt(
-            providerPrompts.positivePrompt,
+            applyLocalEditPalette(
+              providerPrompts.positivePrompt,
+              requestedPalette,
+            ),
             request.prompt,
           )
-        : providerPrompts.positivePrompt,
+        : applyLocalEditPalette(
+            providerPrompts.positivePrompt,
+            requestedPalette,
+          ),
     };
     const persistedCompiledPrompt = {
       ...compiledPrompt,
@@ -871,6 +879,22 @@ function applyPresentationPolicy(
       4_000,
     ),
   };
+}
+
+function applyLocalEditPalette(
+  positivePrompt: string,
+  palette:
+    readonly { readonly hex: string; readonly name: string }[] | undefined,
+): string {
+  if (!palette?.length) return positivePrompt;
+  const colors = palette
+    .map((color) => `${color.name} ${color.hex}`)
+    .join(", ");
+  const directive =
+    "Local-edit color constraint, high priority: apply only these palette " +
+    `colors inside the masked area: ${colors}. Preserve all colors outside ` +
+    "the masked area.";
+  return joinUniquePromptSections([directive, positivePrompt], "\n\n", 4_000);
 }
 
 function joinUniquePromptSections(

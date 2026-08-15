@@ -1,15 +1,10 @@
 import {
-  AccountPlan,
   ExportFormat,
   ExportQuality,
   ExportStatus,
   type PrismaClient,
 } from "@fashion/db";
-import {
-  EXPORT_RETENTION_MS,
-  FREE_EXPORT_MAX_EDGE,
-  STANDARD_EXPORT_MAX_EDGE,
-} from "@fashion/shared";
+import { EXPORT_RETENTION_MS, STANDARD_EXPORT_MAX_EDGE } from "@fashion/shared";
 import {
   ForbiddenException,
   Inject,
@@ -42,7 +37,7 @@ export class ExportsService {
   async capabilities(userId: string) {
     const user = await this.database.user.findUnique({
       where: { id: userId },
-      select: { plan: true },
+      select: { id: true },
     });
     if (!user) {
       throw new NotFoundException({
@@ -50,20 +45,15 @@ export class ExportsService {
         message: "用户不存在",
       });
     }
-    const isPro = user.plan === AccountPlan.PRO;
     return {
       downloadLinkHours: EXPORT_RETENTION_MS / 3_600_000,
-      freeMaxEdge: FREE_EXPORT_MAX_EDGE,
-      highResolutionAllowed: isPro,
-      plan: isPro ? ("pro" as const) : ("free" as const),
-      watermark: !isPro,
     };
   }
 
   async create(userId: string, input: CreateExportInput) {
     const user = await this.database.user.findUnique({
       where: { id: userId },
-      select: { plan: true },
+      select: { id: true },
     });
     if (!user) {
       throw new NotFoundException({
@@ -71,14 +61,6 @@ export class ExportsService {
         message: "用户不存在",
       });
     }
-    if (input.quality === "high" && user.plan !== AccountPlan.PRO) {
-      throw new ForbiddenException({
-        code: "EXPORT_PLAN_UPGRADE_REQUIRED",
-        message: "高清无水印导出需要升级 Pro 套餐",
-        upgradeRequired: true,
-      });
-    }
-
     const source =
       input.sourceType === "asset"
         ? await this.ownedAsset(userId, input.assetId)
@@ -86,13 +68,8 @@ export class ExportsService {
     const format = toFormat(input.format);
     const quality =
       input.quality === "high" ? ExportQuality.HIGH : ExportQuality.STANDARD;
-    const watermark = user.plan === AccountPlan.FREE;
     const maxEdge =
-      user.plan === AccountPlan.FREE
-        ? FREE_EXPORT_MAX_EDGE
-        : quality === ExportQuality.STANDARD
-          ? STANDARD_EXPORT_MAX_EDGE
-          : null;
+      quality === ExportQuality.STANDARD ? STANDARD_EXPORT_MAX_EDGE : null;
     const exportJob = await this.database.exportJob.create({
       data: {
         ...(input.sourceType === "asset"
@@ -103,7 +80,7 @@ export class ExportsService {
         projectId: source.projectId,
         quality,
         userId,
-        watermark,
+        watermark: false,
       },
     });
 
@@ -244,7 +221,6 @@ export class ExportsService {
     readonly quality: ExportQuality;
     readonly sizeBytes: number | null;
     readonly status: ExportStatus;
-    readonly watermark: boolean;
   }) {
     return {
       completedAt: exportJob.completedAt,
@@ -261,7 +237,6 @@ export class ExportsService {
       quality: exportJob.quality.toLowerCase(),
       sizeBytes: exportJob.sizeBytes,
       status: exportJob.status.toLowerCase(),
-      watermark: exportJob.watermark,
     };
   }
 }

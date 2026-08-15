@@ -137,6 +137,69 @@ describe("generation HTTP contract", () => {
     expect(generationService.create).not.toHaveBeenCalled();
   });
 
+  it("局部重绘接收色卡颜色并规范化 HEX", async () => {
+    await request(app.getHttpServer())
+      .post("/generations")
+      .set("Cookie", "fashion_access_token=valid-token")
+      .set("Idempotency-Key", "generation-inpaint-palette")
+      .send({
+        cfg: 3.5,
+        height: 512,
+        maskImageUrl: "https://signed.test/mask.png",
+        palette: [{ hex: "#c8ab84", name: " OAT " }],
+        prompt: "将领口改成窄驳领",
+        referenceImageUrl: "https://signed.test/source.png",
+        steps: 20,
+        strength: 0.82,
+        taskType: "inpaint",
+        width: 512,
+      })
+      .expect(202);
+
+    expect(generationService.create).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        palette: [{ hex: "#C8AB84", name: "OAT" }],
+        taskType: "inpaint",
+      }),
+      "generation-inpaint-palette",
+    );
+  });
+
+  it("局部重绘拒绝空色卡、非法颜色、空名称和超限颜色", async () => {
+    const invalidPalettes = [
+      [],
+      [{ hex: "#12ZZ33", name: "INVALID" }],
+      [{ hex: "#123456", name: "   " }],
+      Array.from({ length: 13 }, (_, index) => ({
+        hex: "#123456",
+        name: `COLOR ${index + 1}`,
+      })),
+    ];
+
+    for (const [index, palette] of invalidPalettes.entries()) {
+      await request(app.getHttpServer())
+        .post("/generations")
+        .set("Cookie", "fashion_access_token=valid-token")
+        .set("Idempotency-Key", `invalid-inpaint-palette-${index}`)
+        .send({
+          cfg: 3.5,
+          height: 512,
+          maskImageUrl: "https://signed.test/mask.png",
+          palette,
+          prompt: "将领口改成窄驳领",
+          referenceImageUrl: "https://signed.test/source.png",
+          steps: 20,
+          strength: 0.82,
+          taskType: "inpaint",
+          width: 512,
+        })
+        .expect(400);
+    }
+
+    expect(generationService.create).not.toHaveBeenCalled();
+  });
+
   it("mask 签名要求规范的 32 字节 base64 SHA-256", async () => {
     for (const checksumSha256 of [
       "not-base64",

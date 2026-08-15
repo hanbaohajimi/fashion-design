@@ -59,22 +59,16 @@ export function MaterialShell({
 
   const [hoveredMountId, setHoveredMountId] = useState<string | null>(null);
 
-  // 诊断：记录 hover 事件
-  const handleMountEnter = (mountId: string) => {
-    console.log('🎯 Mount hover ENTER:', mountId);
+  const handleMountEnter = (mountId: string): void => {
     setHoveredMountId(mountId);
   };
 
-  const handleMountLeave = () => {
-    console.log('🎯 Mount hover LEAVE');
+  const handleMountLeave = (): void => {
     setHoveredMountId(null);
   };
 
-  const handleDeleteClick = (mountId: string, event: React.PointerEvent) => {
-    console.log('🗑️ Delete button clicked:', mountId, event);
-    if (onRemoveMount) {
-      onRemoveMount(mountId);
-    }
+  const removeMount = (mountId: string): void => {
+    onRemoveMount?.(mountId);
   };
 
   const clipPathId = `material-edge-${seed}`;
@@ -419,9 +413,27 @@ export function MaterialShell({
                 // scale keeps the fastener, hit target and delete affordance
                 // proportional to the resized module.
                 <g
+                  aria-label={
+                    onRemoveMount ? `删除${mount.type}固定件` : undefined
+                  }
+                  className={onRemoveMount ? styles.mountInteractive : undefined}
                   key={mount.id}
+                  onBlur={handleMountLeave}
+                  onFocus={() => handleMountEnter(mount.id)}
+                  onKeyDown={(event) => {
+                    if (
+                      onRemoveMount &&
+                      (event.key === "Enter" || event.key === " ")
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      removeMount(mount.id);
+                    }
+                  }}
                   onPointerEnter={() => handleMountEnter(mount.id)}
                   onPointerLeave={handleMountLeave}
+                  role={onRemoveMount ? "button" : undefined}
+                  tabIndex={onRemoveMount ? 0 : undefined}
                   transform={`translate(${mx}, ${my})`}
                 >
                   <g className={styles.mountGroupAnimated}>
@@ -446,32 +458,37 @@ export function MaterialShell({
                       {isHovered && onRemoveMount && (
                         <g
                           onPointerDown={(e) => {
-                            console.log('🔴 Delete button pointerdown');
                             e.stopPropagation();
                             e.preventDefault();
                           }}
                           onPointerUp={(e) => {
-                            console.log('🟢 Delete button pointerup');
                             e.stopPropagation();
                             e.preventDefault();
-                            handleDeleteClick(mount.id, e);
+                            removeMount(mount.id);
                           }}
                           onClick={(e) => {
-                            console.log('🔵 Delete button click');
                             e.stopPropagation();
                             e.preventDefault();
                           }}
                           style={{ cursor: "pointer", pointerEvents: "all" }}
                         >
-                          <circle cx={10} cy={-10} r={8} fill="#ef4444" stroke="white" strokeWidth="1.2" />
+                          <circle
+                            cx={10}
+                            cy={-10}
+                            fill="#b2381f"
+                            r={8}
+                            stroke="white"
+                            strokeWidth="1.2"
+                          />
                           <text
-                            x={10} y={-10}
-                            textAnchor="middle"
                             dominantBaseline="central"
                             fill="white"
                             fontSize="10"
                             fontWeight="bold"
                             style={{ pointerEvents: "none", userSelect: "none" }}
+                            textAnchor="middle"
+                            x={10}
+                            y={-10}
                           >
                             ✕
                           </text>

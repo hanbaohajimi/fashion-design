@@ -12,6 +12,12 @@ test-results/
 generated/
 tmp/
 
+# Local document/a11y rendering artifacts (source scripts stay tracked)
+.codex-work/a11y-*.json
+.codex-work/render-*/
+__pycache__/
+*.py[cod]
+
 .env
 .env.local
 .env.*.local

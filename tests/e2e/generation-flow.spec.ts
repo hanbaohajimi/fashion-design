@@ -31,6 +31,34 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
 
   await page.goto("/");
   await expect(page.getByText("logout@example.com")).toBeVisible();
+
+  const workspaceNavigation = page.getByRole("navigation", {
+    name: "工作区导航",
+  });
+  await expect(
+    workspaceNavigation.getByRole("link", { name: "项目库" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    workspaceNavigation.getByRole("link", { name: "趋势档案" }),
+  ).toHaveAttribute("href", "/trends");
+  await expect(
+    workspaceNavigation.getByRole("link", { name: "面料库" }),
+  ).toHaveAttribute("href", "/fabrics");
+
+  await expect(
+    page.getByRole("heading", { name: "从第一个系列开始" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "创建第一个项目" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "给新系列一个名字" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const projectSearch = page.getByRole("searchbox", { name: "搜索项目" });
+  await page.keyboard.press("Control+K");
+  await expect(projectSearch).toBeFocused();
+  await page.keyboard.press("Escape");
+
   await page.getByRole("button", { name: "退出登录" }).click();
 
   await expect.poll(() => logoutRequestCount).toBe(1);
@@ -70,6 +98,45 @@ test("登录邮件发送后可更换邮箱并重发到已确认地址", async ({
   await expect
     .poll(() => recipients)
     .toEqual(["first@example.com", "second@example.com", "second@example.com"]);
+});
+
+test("面料档案支持快捷搜索并可快速清空关键词", async ({ page }) => {
+  const requestedSearches: string[] = [];
+
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      json: {
+        credits: { limit: 100, remaining: 88, used: 12 },
+        user: {
+          authId: "auth-fabric-search",
+          avatar: null,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          deletedAt: null,
+          email: "fabric-search@example.com",
+          id: "user-fabric-search",
+          name: "Fabric Search",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/fabrics?*", (route) => {
+    requestedSearches.push(
+      new URL(route.request().url()).searchParams.get("search") ?? "",
+    );
+    return route.fulfill({
+      json: { items: [], limit: 48, page: 1, total: 0, totalPages: 1 },
+    });
+  });
+
+  await page.goto("/fabrics");
+  const search = page.getByRole("searchbox", { name: "搜索面料" });
+  await page.keyboard.press("Control+K");
+  await expect(search).toBeFocused();
+  await search.fill("  亚麻  ");
+  await expect.poll(() => requestedSearches).toContain("亚麻");
+  await expect(page.getByText("没有匹配“亚麻”的面料。")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveValue("");
 });
 
 test("新建项目成功后立即进入对应白板", async ({ page }) => {
@@ -382,6 +449,7 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
         weight: 180,
         weave: "plain",
       },
+      canManage: true,
       category: "blend",
       createdAt: "2026-08-03T00:00:00.000Z",
       id: `fabric-upload-${uploadCount}`,
@@ -429,6 +497,21 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
       clickFabricCard.evaluate((target) => getComputedStyle(target).boxShadow),
     )
     .toBe("none");
+
+  const manageFabricButton = clickFabricCard.getByRole("button", {
+    name: "管理 / 删除",
+  });
+  await manageFabricButton.click();
+  const fabricDialog = page.getByRole("dialog", { name: "管理或删除面料" });
+  const closeFabricDialog = fabricDialog.getByRole("button", { name: "关闭" });
+  await expect(closeFabricDialog).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    fabricDialog.getByRole("button", { name: "删除" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(fabricDialog).toHaveCount(0);
+  await expect(manageFabricButton).toBeFocused();
 
   const uploadPanel = drawer.getByRole("region", { name: "上传面料" });
   await uploadPanel.evaluate((target) => {
@@ -726,9 +809,10 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
   page.once("dialog", (dialog) => dialog.accept());
   await sketchToolRail.getByRole("button", { name: "退出" }).click();
   await expect(toolRail).toBeVisible();
-  await expect(toolRail.getByRole("button", { name: "箭头工具" })).toHaveCount(
-    0,
-  );
+  const arrowTool = toolRail.getByRole("button", { name: "箭头工具" });
+  await expect(arrowTool).toBeVisible();
+  await page.keyboard.press("Shift+L");
+  await expect(arrowTool).toHaveAttribute("aria-pressed", "true");
   await expect(toolRail.getByRole("button", { name: "矩形工具" })).toHaveCount(
     0,
   );
@@ -782,12 +866,12 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
     page.getByRole("complementary", { name: "生成任务托盘" }),
   ).toHaveCount(0);
   await expect(
-    agentPanel.getByRole("region", { name: "生成候选" }),
-  ).toHaveCount(0);
+    agentPanel.getByRole("region", { name: "本轮生成候选" }),
+  ).toBeVisible();
   await expect(agentPanel).toContainText("成图已放到画布");
   await expect(
     agentPanel.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
 
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
@@ -805,14 +889,14 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
     generationHistory.locator(
       'img[src="https://assets.example/generated-look.png"]',
     ),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
   await generationHistory.getByRole("button", { name: "返回对话" }).click();
 
   await page.getByRole("button", { name: "导出", exact: true }).click();
   const exportOptions = page.getByRole("region", { name: "导出选项" });
-  await expect(exportOptions).toContainText("已定位到最近生成的设计资产");
+  await expect(exportOptions).toContainText("将画布中的全部 2 个元素导出");
   await expect(
-    exportOptions.getByRole("button", { name: "打开导出设置" }),
+    exportOptions.getByRole("button", { name: "下载整个画布" }),
   ).toBeEnabled();
 
   await page.reload();

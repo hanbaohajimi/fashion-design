@@ -1,18 +1,10 @@
 export type ExportFormat = "jpg" | "pdf" | "png";
 export type ExportQuality = "high" | "standard";
 export type ExportStatus =
-  | "expired"
-  | "failed"
-  | "queued"
-  | "running"
-  | "succeeded";
+  "expired" | "failed" | "queued" | "running" | "succeeded";
 
 export interface ExportCapabilities {
   readonly downloadLinkHours: number;
-  readonly freeMaxEdge: number;
-  readonly highResolutionAllowed: boolean;
-  readonly plan: "free" | "pro";
-  readonly watermark: boolean;
 }
 
 export interface ExportJob {
@@ -33,7 +25,6 @@ export interface ExportJob {
   readonly retryAllowed?: boolean;
   readonly sizeBytes: number | null;
   readonly status: ExportStatus;
-  readonly watermark: boolean;
 }
 
 export type ExportSource =

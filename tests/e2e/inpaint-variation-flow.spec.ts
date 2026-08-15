@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("画布成衣可提交局部重绘并获得明确反馈", async ({
-  page,
-}) => {
+test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) => {
   test.setTimeout(60_000);
   const requests: Record<string, unknown>[] = [];
   const taskDetails = new Map<string, Record<string, unknown>>();
@@ -13,6 +11,7 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
   let uploadedMaskBytes = 0;
   let uploadedMaskDimensions: { height: number; width: number } | null = null;
   let rejectedInpaintOnce = false;
+  let rejectedInpaintRequest: Record<string, unknown> | undefined;
 
   await page.route("**/api/me", (route) =>
     route.fulfill({
@@ -101,17 +100,93 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
   await page.route("**/api/generations?*", (route) =>
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
-  await page.route("**/api/projects/e2e-inpaint/agent-conversations*", (route) =>
-    route.fulfill({ json: { items: [{ archivedAt: null, createdAt: "2026-07-27T08:00:00.000Z", id: "conversation-inpaint", messageCount: 0, projectId: "e2e-inpaint", title: "新的设计对话", updatedAt: "2026-07-27T08:00:00.000Z" }], nextCursor: null } }),
+  await page.route(
+    "**/api/projects/e2e-inpaint/agent-conversations*",
+    (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              archivedAt: null,
+              createdAt: "2026-07-27T08:00:00.000Z",
+              id: "conversation-inpaint",
+              messageCount: 0,
+              projectId: "e2e-inpaint",
+              title: "新的设计对话",
+              updatedAt: "2026-07-27T08:00:00.000Z",
+            },
+          ],
+          nextCursor: null,
+        },
+      }),
   );
-  await page.route("**/api/agent-conversations/conversation-inpaint/messages*", async (route) => {
-    if (route.request().method() !== "POST") return route.fulfill({ json: { items: [], nextCursor: null } });
-    const body = route.request().postDataJSON() as { readonly clientRequestId: string; readonly content: string; readonly shapeIds: readonly string[] };
-    const userMessage = { clientRequestId: body.clientRequestId, content: body.content, context: { fileAssetIds: [], shapeIds: body.shapeIds }, createdAt: "2026-07-27T08:00:00.000Z", error: null, generationTaskId: null, id: "user-inpaint", replyToId: null, role: "user", status: "completed", updatedAt: "2026-07-27T08:00:00.000Z" };
-    const assistantMessage = { ...userMessage, clientRequestId: null, content: "已生成基础方案。", generationTaskId: "task-source", id: "assistant-inpaint", replyToId: userMessage.id, role: "assistant" };
-    taskDetails.set("task-source", { createdAt: "2026-07-27T08:00:00.000Z", error: null, id: "task-source", output: { images: [{ assetId: "asset-source", height: 1024, url: "https://assets.example/source.png", width: 768 }], seed: 700 }, request: { cfg: 3.5, height: 1024, projectId: "e2e-inpaint", prompt: body.content, shapeIds: body.shapeIds, steps: 28, taskType: "t2i", width: 768 }, status: "succeeded", taskType: "t2i", updatedAt: "2026-07-27T08:00:00.000Z" });
-    return route.fulfill({ json: { assistantMessage, taskId: "task-source", userMessage }, status: 201 });
-  });
+  await page.route(
+    "**/api/agent-conversations/conversation-inpaint/messages*",
+    async (route) => {
+      if (route.request().method() !== "POST")
+        return route.fulfill({ json: { items: [], nextCursor: null } });
+      const body = route.request().postDataJSON() as {
+        readonly clientRequestId: string;
+        readonly content: string;
+        readonly shapeIds: readonly string[];
+      };
+      const userMessage = {
+        clientRequestId: body.clientRequestId,
+        content: body.content,
+        context: { fileAssetIds: [], shapeIds: body.shapeIds },
+        createdAt: "2026-07-27T08:00:00.000Z",
+        error: null,
+        generationTaskId: null,
+        id: "user-inpaint",
+        replyToId: null,
+        role: "user",
+        status: "completed",
+        updatedAt: "2026-07-27T08:00:00.000Z",
+      };
+      const assistantMessage = {
+        ...userMessage,
+        clientRequestId: null,
+        content: "已生成基础方案。",
+        generationTaskId: "task-source",
+        id: "assistant-inpaint",
+        replyToId: userMessage.id,
+        role: "assistant",
+      };
+      taskDetails.set("task-source", {
+        createdAt: "2026-07-27T08:00:00.000Z",
+        error: null,
+        id: "task-source",
+        output: {
+          images: [
+            {
+              assetId: "asset-source",
+              height: 1024,
+              url: "https://assets.example/source.png",
+              width: 768,
+            },
+          ],
+          seed: 700,
+        },
+        request: {
+          cfg: 3.5,
+          height: 1024,
+          projectId: "e2e-inpaint",
+          prompt: body.content,
+          shapeIds: body.shapeIds,
+          steps: 28,
+          taskType: "t2i",
+          width: 768,
+        },
+        status: "succeeded",
+        taskType: "t2i",
+        updatedAt: "2026-07-27T08:00:00.000Z",
+      });
+      return route.fulfill({
+        json: { assistantMessage, taskId: "task-source", userMessage },
+        status: 201,
+      });
+    },
+  );
   await page.route(
     "**/api/agent-conversations/conversation-inpaint/generation-tasks/*",
     async (route) => {
@@ -144,6 +219,7 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
     const taskType = String(body.taskType);
     if (taskType === "inpaint" && !rejectedInpaintOnce) {
       rejectedInpaintOnce = true;
+      rejectedInpaintRequest = body;
       await route.fulfill({
         status: 503,
         json: { message: "模拟局部重绘创建失败" },
@@ -214,9 +290,8 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
     }
     await route.fulfill({ json: detail });
   });
-  await page.route(
-    /\/api\/generations\/[^/]+\/candidates\/\d+$/u,
-    (route) => route.fulfill({ json: {}, status: 200 }),
+  await page.route(/\/api\/generations\/[^/]+\/candidates\/\d+$/u, (route) =>
+    route.fulfill({ json: {}, status: 200 }),
   );
   await page.route("https://assets.example/*.png", async (route) => {
     const isInpaint = route.request().url().includes("inpaint");
@@ -243,21 +318,25 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
   await uploadTray.getByRole("button", { name: "移除“设计说明.txt”" }).click();
   await expect(uploadTray).toBeHidden();
 
+  await page.getByRole("button", { name: "添加色卡" }).click();
   await page.getByRole("button", { name: "便签" }).click();
   await page.getByRole("button", { name: "展开设计助手" }).click();
-  await page.getByRole("textbox", { name: "编辑描述" }).fill("结构清晰的短款外套");
+  await page
+    .getByRole("textbox", { name: "编辑描述" })
+    .fill("结构清晰的短款外套");
   const sendButton = page.getByRole("button", { name: "发送", exact: true });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
+  const boardCanvas = page.getByTestId("canvas");
   await expect(
-    page.locator('img[src="https://assets.example/source.png"]'),
+    boardCanvas.locator('img[src="https://assets.example/source.png"]'),
   ).toBeVisible();
   expect(sourceTaskReads).toBeGreaterThanOrEqual(3);
 
   await page
     .getByRole("button", { name: "折叠设计助手" })
     .evaluate((button: HTMLButtonElement) => button.click());
-  const sourceImage = page.locator(
+  const sourceImage = boardCanvas.locator(
     'img[src="https://assets.example/source.png"]',
   );
   const sourceImageBounds = await sourceImage.boundingBox();
@@ -271,10 +350,11 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
   await page
     .getByRole("textbox", { name: "局部重绘说明" })
     .fill("将领口改成窄驳领，保持原有面料");
+  const usePalette = page.getByRole("switch", { name: "使用色卡" });
+  await expect(usePalette).toBeEnabled();
+  await expect(usePalette).not.toBeChecked();
   await page.getByRole("button", { name: "提交局部重绘" }).click();
-  await expect(
-    page.getByText("请先涂抹需要修改的区域"),
-  ).toBeVisible();
+  await expect(page.getByText("请先涂抹需要修改的区域")).toBeVisible();
 
   const canvas = page.getByLabel("局部重绘掩码画布");
   const addCenterRegion = page.getByRole("button", {
@@ -321,19 +401,27 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
     "模拟局部重绘创建失败",
   );
   await expect(candidateDialog).toBeVisible();
+  expect(rejectedInpaintRequest).toBeDefined();
+  expect(rejectedInpaintRequest).not.toHaveProperty("palette");
+  await usePalette.check();
+  const paletteOption = page.getByRole("radio", { name: /色卡 01/u });
+  await expect(paletteOption).toBeChecked();
   await page.getByRole("button", { name: "提交局部重绘" }).click();
 
   await expect.poll(() => uploadedMaskBytes).toBeGreaterThan(100);
-  await expect.poll(() => uploadedMaskDimensions).toEqual({
-    height: 1024,
-    width: 768,
-  });
+  await expect
+    .poll(() => uploadedMaskDimensions)
+    .toEqual({
+      height: 1024,
+      width: 768,
+    });
   await expect
     .poll(() => requests.filter((body) => body.taskType === "inpaint").length)
     .toBe(1);
   expect(requests.find((body) => body.taskType === "inpaint")).toMatchObject({
     height: 1024,
     maskImageUrl: "https://signed.example/mask-e2e.png?read=1",
+    palette: [{ hex: "#C8AB84", name: "OAT" }],
     referenceImageUrl: "https://assets.example/source.png",
     taskType: "inpaint",
     width: 768,
@@ -345,11 +433,12 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({
   ).toBeVisible();
   await expect.poll(() => inpaintTaskReads).toBeGreaterThan(0);
   await expect(
-    page.locator('img[src="https://assets.example/inpaint.png"]'),
+    boardCanvas.locator('img[src="https://assets.example/inpaint.png"]'),
   ).toBeVisible();
   await page.getByRole("button", { name: "打开历史" }).click();
   await page.getByRole("tab", { name: "生成" }).click();
+  const generationHistory = page.getByRole("region", { name: "历史记录" });
   await expect(
-    page.locator('img[src="https://assets.example/inpaint.png"]'),
+    generationHistory.locator('img[src="https://assets.example/inpaint.png"]'),
   ).toBeVisible();
 });

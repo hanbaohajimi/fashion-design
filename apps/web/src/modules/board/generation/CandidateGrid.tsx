@@ -50,11 +50,10 @@ export function CandidateGrid({
     ? (generation.tasks.find((task) => task.id === taskId)?.candidates ?? [])
     : generation.tasks.flatMap((task) => task.candidates);
   const compact = variant === "conversation";
-  const visibleSourceCandidates = candidates.filter(
-    (candidate) =>
-      variant === "history"
-        ? candidate.disposition !== "dismissed"
-        : candidate.disposition === undefined,
+  const visibleSourceCandidates = candidates.filter((candidate) =>
+    variant === "history" || variant === "conversation"
+      ? candidate.disposition !== "dismissed"
+      : candidate.disposition === undefined,
   );
   const visibleCandidates =
     compact && !expanded
@@ -65,6 +64,18 @@ export function CandidateGrid({
   if (visibleSourceCandidates.length === 0) return null;
 
   const adopt = (candidate: GenerationCandidate): void => {
+    const existingShape = editor.getCurrentPageShapes().find((shape) => {
+      if (shape.type !== IMAGE_SHAPE_TYPE) return false;
+      const props = shape.props as Readonly<Record<string, unknown>>;
+      return (
+        props.generationCandidateId === candidate.id ||
+        props.assetId === candidate.assetId
+      );
+    });
+    if (existingShape) {
+      editor.select(existingShape.id);
+      return;
+    }
     const selection = editor.getSelectionPageBounds();
     const viewport = editor.getViewportPageBounds();
     const width = Math.min(candidate.width ?? 360, 480);
@@ -180,27 +191,31 @@ export function CandidateGrid({
                 </button>
                 {openMenuCandidateId === candidate.id ? (
                   <div>
-                  <button
-                    disabled={rerunningCandidateId !== null}
-                    onClick={() => void rerun(candidate)}
-                    type="button"
-                  >
-                    {rerunningCandidateId === candidate.id
-                      ? "创建中…"
-                      : "再来一版"}
-                  </button>
-                  <button
-                    onClick={() => setLightbox({ candidate, mode: "inpaint" })}
-                    type="button"
-                  >
-                    局部改
-                  </button>
-                  <button
-                    onClick={() => void generation.dismissCandidate(candidate.id)}
-                    type="button"
-                  >
-                    丢弃
-                  </button>
+                    <button
+                      disabled={rerunningCandidateId !== null}
+                      onClick={() => void rerun(candidate)}
+                      type="button"
+                    >
+                      {rerunningCandidateId === candidate.id
+                        ? "创建中…"
+                        : "再来一版"}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLightbox({ candidate, mode: "inpaint" })
+                      }
+                      type="button"
+                    >
+                      局部改
+                    </button>
+                    <button
+                      onClick={() =>
+                        void generation.dismissCandidate(candidate.id)
+                      }
+                      type="button"
+                    >
+                      丢弃
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -208,7 +223,8 @@ export function CandidateGrid({
           </article>
         ))}
       </div>
-      {compact && visibleSourceCandidates.length > CONVERSATION_PREVIEW_COUNT ? (
+      {compact &&
+      visibleSourceCandidates.length > CONVERSATION_PREVIEW_COUNT ? (
         <button
           aria-expanded={expanded}
           className={styles.candidateExpand}

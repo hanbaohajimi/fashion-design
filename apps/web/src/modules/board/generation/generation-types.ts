@@ -26,6 +26,11 @@ export interface GenerationCandidate {
   readonly width?: number;
 }
 
+export interface GenerationPaletteColor {
+  readonly hex: string;
+  readonly name: string;
+}
+
 export interface GenerationTaskDetail {
   readonly createdAt: string;
   readonly error: { readonly code: string; readonly message: string } | null;
@@ -50,6 +55,7 @@ export interface PersistedGenerationRequest {
   readonly negativePrompt?: string;
   readonly outputCompression?: number;
   readonly outputFormat?: "jpeg" | "png" | "webp";
+  readonly palette?: readonly GenerationPaletteColor[];
   readonly parentAssetId?: string;
   readonly projectId?: string;
   readonly prompt: string;
@@ -106,6 +112,7 @@ export interface GenerationStartRequest {
   readonly projectId: string;
   readonly prompt: string;
   readonly maskImageUrl?: string;
+  readonly palette?: readonly GenerationPaletteColor[];
   readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];

@@ -1,10 +1,4 @@
-import {
-  AccountPlan,
-  ExportFormat,
-  ExportQuality,
-  ExportStatus,
-} from "@fashion/db";
-import { ForbiddenException } from "@nestjs/common";
+import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExportsService } from "./exports.service";
@@ -56,16 +50,19 @@ describe("ExportsService", () => {
     publicUrl: vi.fn(),
     readPrefix: vi.fn(),
   };
-  const service = new ExportsService(
-    database as never,
-    jobs,
-    storage,
-  );
+  const service = new ExportsService(database as never, jobs, storage);
 
   beforeEach(() => {
     vi.clearAllMocks();
-    database.user.findUnique.mockResolvedValue({ plan: AccountPlan.FREE });
+    database.user.findUnique.mockResolvedValue({ id: "user-a" });
     database.designAsset.findUnique.mockResolvedValue({
+      projectId: "project-a",
+      project: {
+        deletedAt: null,
+        workspace: { ownerId: "user-a" },
+      },
+    });
+    database.collection.findUnique.mockResolvedValue({
       projectId: "project-a",
       project: {
         deletedAt: null,
@@ -82,7 +79,13 @@ describe("ExportsService", () => {
     );
   });
 
-  it("Free 单图导出强制长边上限与水印并进入异步队列", async () => {
+  it("导出能力不再包含套餐或水印限制", async () => {
+    await expect(service.capabilities("user-a")).resolves.toEqual({
+      downloadLinkHours: 24,
+    });
+  });
+
+  it("标准单图统一使用标准尺寸且不加水印", async () => {
     const result = await service.create("user-a", {
       assetId: "asset-a",
       format: "png",
@@ -92,35 +95,21 @@ describe("ExportsService", () => {
 
     expect(result).toMatchObject({
       format: "png",
-      maxEdge: 1_600,
+      maxEdge: 2_048,
       status: "queued",
-      watermark: true,
     });
+    expect(result).not.toHaveProperty("watermark");
     expect(database.exportJob.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         designAssetId: "asset-a",
-        maxEdge: 1_600,
-        watermark: true,
+        maxEdge: 2_048,
+        watermark: false,
       }),
     });
     expect(jobs.enqueue).toHaveBeenCalledWith("export-a");
   });
 
-  it("Free 请求原图高清时返回升级提示", async () => {
-    await expect(
-      service.create("user-a", {
-        assetId: "asset-a",
-        format: "jpg",
-        quality: "high",
-        sourceType: "asset",
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(database.exportJob.create).not.toHaveBeenCalled();
-  });
-
-  it("Pro 原图高清不限制长边且不加水印", async () => {
-    database.user.findUnique.mockResolvedValue({ plan: AccountPlan.PRO });
-
+  it("所有用户均可导出原图高清且不加水印", async () => {
     const result = await service.create("user-a", {
       assetId: "asset-a",
       format: "jpg",
@@ -132,7 +121,27 @@ describe("ExportsService", () => {
       format: "jpg",
       maxEdge: null,
       quality: "high",
-      watermark: false,
+    });
+    expect(database.exportJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ maxEdge: null, watermark: false }),
+    });
+  });
+
+  it("系列 PDF 统一不加水印", async () => {
+    const result = await service.create("user-a", {
+      collectionId: "collection-a",
+      format: "pdf",
+      quality: "standard",
+      sourceType: "collection",
+    });
+
+    expect(result).toMatchObject({ format: "pdf", maxEdge: 2_048 });
+    expect(result).not.toHaveProperty("watermark");
+    expect(database.exportJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        collectionId: "collection-a",
+        watermark: false,
+      }),
     });
   });
 

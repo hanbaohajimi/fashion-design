@@ -21,6 +21,11 @@ for (const entry of entries) {
   const files = await readdir(folder);
   const pdfs = files.filter((file) => file.toLowerCase().endsWith(".pdf"));
   const selectedPdf =
+    pdfs.find((file) => file.includes("面料视觉版-v8")) ??
+    pdfs.find((file) => file.includes("面料视觉版-v7")) ??
+    pdfs.find((file) => file.includes("最终指定服装版-v6")) ??
+    pdfs.find((file) => file.includes("最终指定服装版-v5")) ??
+    pdfs.find((file) => file.includes("指定服装版-v4")) ??
     pdfs.find((file) => file.includes("严格图片名称版-v3")) ??
     pdfs.find((file) => file.includes("图片名称版-v2")) ??
     pdfs.find((file) => file.includes("图片名称版")) ??

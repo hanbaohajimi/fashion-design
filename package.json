@@ -11,7 +11,7 @@
     "build:packages": "turbo run build --filter=./packages/*",
     "dev": "pnpm build:packages && turbo run dev",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck --concurrency=1",
     "test": "node --env-file=.env.example --env-file-if-exists=.env ./node_modules/turbo/bin/turbo run test",
     "test:e2e": "playwright test",
     "check": "pnpm audit:prod && pnpm lint && pnpm typecheck && pnpm db:validate && pnpm test && pnpm db:test && pnpm build",

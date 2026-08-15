@@ -2,6 +2,8 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
+  ArrowShapeArrowheadEndStyle,
+  ArrowShapeArrowheadStartStyle,
   createShapeId,
   DefaultColorStyle,
   DefaultDashStyle,
@@ -433,9 +435,53 @@ export function ToolRail({
     if (created) editor.select(created);
   };
 
-  const setTool = (toolId: string): void => {
-    editor.setCurrentTool(toolId === "eraser" ? SKETCH_ERASER_TOOL_ID : toolId);
-  };
+  const setTool = useCallback(
+    (toolId: string): void => {
+      if (toolId === "arrow") {
+        editor.setStyleForNextShapes(DefaultDashStyle, "solid");
+        editor.setStyleForNextShapes(ArrowShapeArrowheadStartStyle, "none");
+        editor.setStyleForNextShapes(ArrowShapeArrowheadEndStyle, "arrow");
+      }
+      editor.setCurrentTool(
+        toolId === "eraser" ? SKETCH_ERASER_TOOL_ID : toolId,
+      );
+    },
+    [editor],
+  );
+
+  useEffect(() => {
+    const handleArrowShortcut = (event: KeyboardEvent): void => {
+      if (
+        activeSketchId ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.isComposing ||
+        event.metaKey ||
+        event.repeat ||
+        !event.shiftKey ||
+        event.code !== "KeyL"
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+        )
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setTool("arrow");
+    };
+
+    window.addEventListener("keydown", handleArrowShortcut, true);
+    return () => window.removeEventListener("keydown", handleArrowShortcut, true);
+  }, [activeSketchId, setTool]);
 
   const enterSketch = (shapeId: TLShapeId): void => {
     const shape = editor.getShape<TLFrameShape>(shapeId);
@@ -1203,6 +1249,33 @@ export function ToolRail({
                     stroke="currentColor"
                     strokeWidth="1.4"
                     strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+
+              {/* 箭头 — Figma 风格的单向实线箭头 */}
+              <button
+                aria-label="箭头工具"
+                aria-pressed={currentToolId === "arrow"}
+                className={styles.toolButton}
+                data-tool="arrow"
+                onClick={() => setTool("arrow")}
+                title="箭头 (Shift+L)"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  width="20"
+                >
+                  <path
+                    d="M3.5 16.5 16 4m-6.5 0H16v6.5"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
                   />
                 </svg>
               </button>

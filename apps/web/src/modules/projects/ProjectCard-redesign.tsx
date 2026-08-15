@@ -166,6 +166,14 @@ export function ProjectCard({
           {renaming ? (
             <form
               className={styles.renameForm}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setName(project.name);
+                  setRenameError(null);
+                  setRenaming(false);
+                }
+              }}
               onSubmit={(event) => {
                 event.preventDefault();
                 void submitRename();
@@ -175,6 +183,10 @@ export function ProjectCard({
                 项目名称
               </label>
               <input
+                aria-describedby={
+                  renameError ? `rename-error-${project.id}` : undefined
+                }
+                aria-invalid={Boolean(renameError)}
                 autoFocus
                 id={`rename-${project.id}`}
                 maxLength={80}
@@ -183,7 +195,21 @@ export function ProjectCard({
                 value={name}
               />
               <button type="submit">保存</button>
-              {renameError ? <small role="alert">{renameError}</small> : null}
+              <button
+                onClick={() => {
+                  setName(project.name);
+                  setRenameError(null);
+                  setRenaming(false);
+                }}
+                type="button"
+              >
+                取消
+              </button>
+              {renameError ? (
+                <small id={`rename-error-${project.id}`} role="alert">
+                  {renameError}
+                </small>
+              ) : null}
             </form>
           ) : (
             <h2>
@@ -193,10 +219,15 @@ export function ProjectCard({
 
           {!project.optimistic && !renaming ? (
             <details className={styles.cardMenu}>
-              <summary aria-label={`${project.name} 项目操作`}>•••</summary>
+              <summary aria-label={`${project.name} 项目操作`}>
+                <span aria-hidden="true">•••</span>
+              </summary>
               <div className={styles.menuPanel}>
                 <button
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
                     setName(project.name);
                     setRenameError(null);
                     setRenaming(true);
@@ -208,17 +239,25 @@ export function ProjectCard({
                 <button
                   aria-busy={duplicating}
                   disabled={duplicating}
-                  onClick={() => void onDuplicate(project)}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    void onDuplicate(project);
+                  }}
                   type="button"
                 >
                   {duplicating ? "复制中…" : "创建副本"}
                 </button>
                 <button
-                  onClick={() =>
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
                     void (project.archived
                       ? onRestore(project)
-                      : onArchive(project))
-                  }
+                      : onArchive(project));
+                  }}
                   type="button"
                 >
                   {project.archived ? "恢复项目" : "归档"}
@@ -242,31 +281,35 @@ export function ProjectCard({
         </div>
 
         {/* 时尚元数据标签 - C级修复 */}
-        {project.metadata && (
+        {project.metadata &&
+        (project.metadata.season ||
+          project.metadata.style ||
+          project.metadata.materialType ||
+          (project.metadata.fabricCount ?? 0) > 0) ? (
           <div className={styles.cardTags}>
             {project.metadata.season && (
-              <span className={styles.tagSeason}>
+              <span className={`${styles.tag} ${styles.tagSeason}`}>
                 {project.metadata.season}
               </span>
             )}
             {project.metadata.style && (
-              <span className={styles.tagStyle}>
+              <span className={`${styles.tag} ${styles.tagStyle}`}>
                 {getStyleLabel(project.metadata.style)}
               </span>
             )}
             {project.metadata.materialType && (
-              <span className={styles.tagMaterial}>
+              <span className={`${styles.tag} ${styles.tagMaterial}`}>
                 {getMaterialLabel(project.metadata.materialType)}
               </span>
             )}
             {project.metadata.fabricCount &&
               project.metadata.fabricCount > 0 && (
-                <span className={styles.tagMaterial}>
+                <span className={`${styles.tag} ${styles.tagMaterial}`}>
                   {project.metadata.fabricCount} 款面料
                 </span>
               )}
           </div>
-        )}
+        ) : null}
 
         <div className={styles.cardMeta}>
           <span>{formatDate(project.updatedAt)}</span>

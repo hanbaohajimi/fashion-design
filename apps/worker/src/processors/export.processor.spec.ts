@@ -1,8 +1,4 @@
-import {
-  ExportFormat,
-  ExportQuality,
-  ExportStatus,
-} from "@fashion/db";
+import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,7 +66,7 @@ describe("export processor", () => {
     database.exportJob.update.mockResolvedValue(exportRecord());
   });
 
-  it("Free PNG 在 worker 限制分辨率并叠加水印", async () => {
+  it("旧任务即使记录了 watermark=true 也输出无水印 PNG", async () => {
     database.exportJob.findUnique.mockResolvedValue(exportRecord());
     const processExport = createExportProcessor({
       database: database as never,
@@ -92,7 +88,7 @@ describe("export processor", () => {
       })
       .stats();
     expect(metadata).toMatchObject({ format: "png", width: 1_600 });
-    expect(corner.channels[0]?.min).toBeLessThan(80);
+    expect(corner.channels.every((channel) => channel.min > 160)).toBe(true);
     expect(storage.putTemporary).toHaveBeenCalledWith(
       "temporary/exports/user-a/export-a.png",
       expect.any(Buffer),
@@ -100,7 +96,7 @@ describe("export processor", () => {
     );
   });
 
-  it("Pro JPG 保持原图长边且不叠加水印", async () => {
+  it("高清 JPG 保持原图长边且不叠加水印", async () => {
     database.exportJob.findUnique.mockResolvedValue(
       exportRecord({
         format: ExportFormat.JPG,

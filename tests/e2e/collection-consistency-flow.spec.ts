@@ -412,10 +412,6 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     route.fulfill({
       json: {
         downloadLinkHours: 24,
-        freeMaxEdge: 1600,
-        highResolutionAllowed: false,
-        plan: "free",
-        watermark: true,
       },
     }),
   );
@@ -436,7 +432,6 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
         retryAllowed: false,
         sizeBytes: 524288,
         status: "succeeded",
-        watermark: true,
       },
     }),
   );
@@ -456,7 +451,6 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
         quality: "standard",
         sizeBytes: null,
         status: "queued",
-        watermark: true,
       },
     }),
   );
@@ -490,6 +484,17 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(page.getByText("系列原点", { exact: true })).toBeVisible();
   await expect(collectionDrawer).toBeFocused();
+  await collectionDrawer.getByRole("button", { name: "导出 PDF" }).click();
+  const exportDialog = page.getByRole("dialog", { name: "导出成果" });
+  await expect(exportDialog).toBeVisible();
+  await expect(
+    exportDialog.getByText(
+      "PDF 将包含系列名、DNA 色板与全部 Look 网格，不加水印。",
+    ),
+  ).toBeVisible();
+  await expect(exportDialog.getByText(/Free|Pro|付费|套餐/u)).toHaveCount(0);
+  await exportDialog.getByRole("button", { name: "关闭导出窗口" }).click();
+  await expect(exportDialog).toBeHidden();
   consistencyAvailable = true;
   const sourceTypeSelect = collectionDrawer.getByRole("combobox", {
     name: "服装类型",
@@ -548,9 +553,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     collectionDrawer.locator("figcaption").getByText("连衣裙", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(
-      'img[src="https://assets.example/collection-look-2.png"]',
-    ),
+    page.locator('img[src="https://assets.example/collection-look-2.png"]'),
   ).toHaveCount(2);
 
   await garmentTypeSelect.selectOption("coat");
@@ -566,9 +569,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     collectionDrawer.locator("figcaption").getByText("大衣", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(
-      'img[src="https://assets.example/collection-look-3.png"]',
-    ),
+    page.locator('img[src="https://assets.example/collection-look-3.png"]'),
   ).toHaveCount(2);
 
   for (const removedText of [

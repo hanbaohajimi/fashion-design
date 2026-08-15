@@ -1,5 +1,6 @@
 import type {
   DesignAssetVersion,
+  GenerationPaletteColor,
   GenerationParameters,
   GenerationTaskDetail,
   GenerationTaskList,
@@ -9,6 +10,7 @@ interface CreateGenerationInput extends GenerationParameters {
   readonly projectId: string;
   readonly prompt: string;
   readonly maskImageUrl?: string;
+  readonly palette?: readonly GenerationPaletteColor[];
   readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];

@@ -254,8 +254,49 @@ export function FabricCard({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editTagText, setEditTagText] = useState(fabric.tags.join("、"));
+  const dialogRef = useRef<HTMLElement>(null);
+  const dialogCloseRef = useRef<HTMLButtonElement>(null);
   const label = fabric.tags.join("、") || "面料";
   const manageable = canManageFabric(fabric);
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      return;
+    }
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const focusFrame = window.requestAnimationFrame(() => {
+      dialogCloseRef.current?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
+  }, [dialogOpen]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const handleDialogKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && !saving) {
+        event.preventDefault();
+        event.stopPropagation();
+        setDialogOpen(false);
+        return;
+      }
+      if (event.key === "Tab" && dialogRef.current) {
+        trapFocus(event, dialogRef.current);
+      }
+    };
+
+    document.addEventListener("keydown", handleDialogKeyDown, true);
+    return () =>
+      document.removeEventListener("keydown", handleDialogKeyDown, true);
+  }, [dialogOpen, saving]);
 
   const openManager = (): void => {
     setActionError(null);
@@ -357,14 +398,20 @@ export function FabricCard({
             <div
               className={styles.fabricDialogBackdrop}
               onMouseDown={(event) => {
-                if (event.currentTarget === event.target) setDialogOpen(false);
+                if (event.currentTarget === event.target && !saving) {
+                  setDialogOpen(false);
+                }
               }}
               role="presentation"
             >
               <section
+                aria-busy={saving}
                 aria-label="管理或删除面料"
+                aria-modal="true"
                 className={styles.fabricDialog}
+                ref={dialogRef}
                 role="dialog"
+                tabIndex={-1}
               >
                 <header>
                   <div>
@@ -373,7 +420,9 @@ export function FabricCard({
                   </div>
                   <button
                     aria-label="关闭"
+                    disabled={saving}
                     onClick={() => setDialogOpen(false)}
+                    ref={dialogCloseRef}
                     type="button"
                   >
                     ×
@@ -474,4 +523,42 @@ export function FabricCard({
         : null}
     </article>
   );
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function trapFocus(event: KeyboardEvent, container: HTMLElement): void {
+  const focusable = Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      element.getAttribute("aria-hidden") !== "true" && element.tabIndex >= 0,
+  );
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+  if (document.activeElement === container) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  } else if (!container.contains(document.activeElement)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
 }

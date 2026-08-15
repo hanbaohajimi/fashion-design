@@ -193,6 +193,37 @@ describe("GenerationService", () => {
     });
   });
 
+  it("局部重绘把所选色卡持久化并约束在蒙版区域", async () => {
+    await service.create("user-1", {
+      cfg: 3.5,
+      height: 1024,
+      maskImageUrl: "https://signed.test/mask.png",
+      palette: [
+        { hex: "#C8AB84", name: "OAT" },
+        { hex: "#39443E", name: "INK" },
+      ],
+      prompt: "将领口改成窄驳领",
+      referenceImageUrl: "https://signed.test/source.png",
+      steps: 28,
+      strength: 0.82,
+      taskType: "inpaint",
+      width: 768,
+    });
+
+    const createData =
+      database.generationTask.create.mock.calls.at(0)?.[0].data;
+    expect(createData.input.palette).toEqual([
+      { hex: "#C8AB84", name: "OAT" },
+      { hex: "#39443E", name: "INK" },
+    ]);
+    expect(createData.input.prompt).toContain("OAT #C8AB84");
+    expect(createData.input.prompt).toContain("INK #39443E");
+    expect(createData.input.prompt).toContain("inside the masked area");
+    expect(createData.input.prompt).toContain(
+      "Preserve all colors outside the masked area",
+    );
+  });
+
   it("用户明确要求模特试穿时不注入默认禁令", async () => {
     compiler.compile.mockResolvedValueOnce({
       enhancement: "keywords",

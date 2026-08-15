@@ -150,6 +150,7 @@ function startRequestFrom(
     shapeIds: request.shapeIds ?? [],
     taskType: request.taskType,
     ...(request.maskImageUrl ? { maskImageUrl: request.maskImageUrl } : {}),
+    ...(request.palette ? { palette: request.palette } : {}),
     ...(request.parentAssetId ? { parentAssetId: request.parentAssetId } : {}),
     ...(request.referenceImageUrl
       ? { referenceImageUrl: request.referenceImageUrl }
@@ -359,6 +360,7 @@ export function GenerationWorkspace({
           projectId: input.projectId,
           prompt: input.prompt,
           ...(input.maskImageUrl ? { maskImageUrl: input.maskImageUrl } : {}),
+          ...(input.palette ? { palette: input.palette } : {}),
           ...(input.parentAssetId
             ? { parentAssetId: input.parentAssetId }
             : {}),

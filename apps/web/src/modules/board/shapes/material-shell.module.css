@@ -203,6 +203,11 @@
   pointer-events: auto;
 }
 
+.mountInteractive:focus-visible {
+  outline: none;
+  filter: drop-shadow(0 0 4px rgb(233 82 44 / 90%));
+}
+
 /* ─── Pinned state: suppress hover-lift ──────────────────────────────────── */
 .materialShell[data-pinned="true"]:hover .substrateLayer,
 .materialShell[data-pinned="true"]:hover .contentLayer,

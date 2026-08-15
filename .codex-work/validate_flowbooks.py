@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -9,11 +10,12 @@ from docx.oxml.ns import qn
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCS = sorted((ROOT / "doc").glob("演示视频*_拍摄流程书.docx"))
+DOC_PATTERN = os.environ.get("FLOWBOOK_DOC_PATTERN", "演示视频*_拍摄流程书.docx")
+DOCS = sorted((ROOT / "doc").glob(DOC_PATTERN))
 REQUIRED = {
-    "01": ["面料参考", "局部重绘", "版本时间线", "系列 DNA", "一致性", "面料库严格只有图片和名称", "PROJECT MATERIAL NOTE / F-01"],
-    "02": ["完成并引用", "安全橡皮", "廓形参考", "版本时间线", "V2", "面料库严格只有图片和名称", "PROJECT MATERIAL NOTE / F-02"],
-    "03": ["趋势分析", "避用", "最多 16 张", "系列计划", "相似度矩阵", "面料库回流结束时只有图片和名称", "PROJECT MATERIAL NOTE / F-03"],
+    "01": ["冬季长款双面羊毛大衣", "枪驳领", "局部重绘", "版本时间线", "系列 DNA", "一致性", "面料库严格只有图片和名称", "图片为唯一材质参考"],
+    "02": ["夏季连衣裙", "方领", "完成并引用", "安全橡皮", "廓形参考", "版本时间线", "V2", "面料库严格只有图片和名称", "图片为材质参考"],
+    "03": ["雪纺衫", "飘带领", "趋势分析", "避用", "最多 16 张", "系列计划", "相似度矩阵", "面料库回流结束时只有图片和名称", "图片为材质参考"],
 }
 
 FORBIDDEN_FABRIC_LIBRARY_CLAIMS = (
@@ -24,7 +26,33 @@ FORBIDDEN_FABRIC_LIBRARY_CLAIMS = (
     "确认档案中的棉 68%",
     "门幅/弹力/透明度编辑",
     "FABRIC SPEC",
+    "PROJECT MATERIAL NOTE",
+    "普通白板",
+    "项目材料约束",
+    "GSM",
+    "门幅",
+    "羊毛90%",
+    "羊毛 90%",
+    "羊绒10%",
+    "羊绒 10%",
+    "棉72%",
+    "棉 72%",
+    "真丝28%",
+    "真丝 28%",
+    "真丝100%",
+    "真丝 100%",
+    "项目材料",
+    "普通便签",
+    "普通项目",
+    "项目备注",
+    "材料备注",
 )
+
+FORBIDDEN_OLD_GARMENTS = {
+    "01": ("短款雕塑感通勤夹克", "深海斜纹通勤系列"),
+    "02": ("模块风衣裙", "风衣裙", "直筒长袖"),
+    "03": ("Urban Shelter", "宽肩短外套", "城市防护外套", "战术背心"),
+}
 
 
 def table_width_audit(doc: Document) -> list[str]:
@@ -58,6 +86,9 @@ def validate(path: Path) -> dict[str, object]:
     for phrase in FORBIDDEN_FABRIC_LIBRARY_CLAIMS:
         if phrase in full_text:
             errors.append(f"outdated fabric-library claim: {phrase}")
+    for phrase in FORBIDDEN_OLD_GARMENTS[number]:
+        if phrase in full_text:
+            errors.append(f"outdated garment theme: {phrase}")
     for placeholder in ("TODO", "TBD", "[[", ":codex-", "待补充"):
         if placeholder in full_text:
             errors.append(f"placeholder token: {placeholder}")

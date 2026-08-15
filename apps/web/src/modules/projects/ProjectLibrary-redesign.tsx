@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthProvider";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -67,6 +67,34 @@ export function ProjectLibrary() {
     [projectsQuery.data],
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
+
+  useEffect(() => {
+    const handleSearchShortcut = (event: KeyboardEvent): void => {
+      const searchInput = searchInputRef.current;
+
+      if (!searchInput) {
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+        return;
+      }
+
+      if (event.key === "Escape" && document.activeElement === searchInput) {
+        if (search) {
+          setSearch("");
+        } else {
+          searchInput.blur();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, [search]);
 
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
@@ -232,6 +260,17 @@ export function ProjectLibrary() {
         >
           <strong>ATELIER / STUDIO</strong>
         </Link>
+        <nav aria-label="工作区导航" className={styles.navigation}>
+          <Link aria-current="page" className={styles.navLinkActive} href="/">
+            项目库
+          </Link>
+          <Link className={styles.navLink} href="/trends">
+            趋势档案
+          </Link>
+          <Link className={styles.navLink} href="/fabrics">
+            面料库
+          </Link>
+        </nav>
         <div className={styles.account}>
           <span>{session.user.email}</span>
           <span className={styles.avatar} aria-hidden="true">
@@ -285,6 +324,7 @@ export function ProjectLibrary() {
           <span className={styles.srOnly}>搜索项目</span>
           <span aria-hidden="true">⌕</span>
           <input
+            aria-keyshortcuts="Control+K Meta+K"
             maxLength={80}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="搜索项目名称"
@@ -292,8 +332,11 @@ export function ProjectLibrary() {
             type="search"
             value={search}
           />
+          <kbd aria-hidden="true" className={styles.searchShortcut}>
+            ⌘/Ctrl K
+          </kbd>
         </label>
-        <span className={styles.projectCount}>
+        <span aria-live="polite" className={styles.projectCount} role="status">
           {String(total).padStart(2, "0")}{" "}
           {projectStatus === "archived" ? "ARCHIVED" : "PROJECTS"}
         </span>
@@ -366,6 +409,7 @@ export function ProjectLibrary() {
             setSearch("");
             searchInputRef.current?.focus();
           }}
+          onCreate={() => setCreateOpen(true)}
           searching={Boolean(deferredSearch)}
         />
       )}

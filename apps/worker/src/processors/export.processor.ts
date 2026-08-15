@@ -208,7 +208,6 @@ async function renderImage(
     readonly format: ExportFormat;
     readonly id: string;
     readonly maxEdge: number | null;
-    readonly watermark: boolean;
   },
   download: (url: string) => Promise<Buffer>,
 ) {
@@ -225,10 +224,7 @@ async function renderImage(
       withoutEnlargement: true,
     });
   }
-  let prepared: Buffer = await pipeline.toBuffer();
-  if (exportJob.watermark) {
-    prepared = await applyWatermark(prepared);
-  }
+  const prepared = await pipeline.toBuffer();
 
   const format = exportJob.format;
   const body =
@@ -245,32 +241,6 @@ async function renderImage(
   };
 }
 
-async function applyWatermark(source: Buffer): Promise<Buffer> {
-  const metadata = await sharp(source).metadata();
-  const imageWidth = metadata.width ?? 1_600;
-  const imageHeight = metadata.height ?? 1_200;
-  const overlayWidth = Math.min(
-    imageWidth,
-    Math.max(80, Math.min(520, Math.round(imageWidth * 0.44))),
-  );
-  const overlayHeight = Math.min(
-    imageHeight,
-    Math.max(18, Math.round(overlayWidth * 0.13)),
-  );
-  const fontSize = Math.max(7, Math.round(overlayHeight * 0.34));
-  const svg = Buffer.from(`
-    <svg width="${overlayWidth}" height="${overlayHeight}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100%" height="100%" rx="4" fill="rgba(10,10,10,0.68)"/>
-      <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle"
-        fill="#ffffff" font-family="Arial, sans-serif" font-size="${fontSize}"
-        font-weight="700" letter-spacing="1.4">FASHION DESIGN · FREE</text>
-    </svg>
-  `);
-  return sharp(source)
-    .composite([{ input: svg, gravity: "southeast" }])
-    .toBuffer();
-}
-
 async function renderLookbook(
   exportJob: {
     readonly collection: {
@@ -283,7 +253,6 @@ async function renderLookbook(
       readonly name: string;
     } | null;
     readonly id: string;
-    readonly watermark: boolean;
   },
   download: (url: string) => Promise<Buffer>,
 ) {
@@ -319,7 +288,6 @@ async function renderLookbook(
       ordinal: look.ordinal,
     })),
     palette: parsePalette(collection.dna?.palette),
-    watermark: exportJob.watermark,
   });
   return {
     body,
@@ -336,7 +304,6 @@ async function createLookbookPdf(input: {
     readonly ordinal: number;
   }[];
   readonly palette: readonly PaletteColor[];
-  readonly watermark: boolean;
 }): Promise<Buffer> {
   const document = new PDFDocument({
     autoFirstPage: false,
@@ -377,7 +344,6 @@ async function createLookbookPdf(input: {
     .fillColor("#66645f")
     .fontSize(9)
     .text("DNA / COLOR PALETTE", 42, 276, { characterSpacing: 1.4 });
-  if (input.watermark) drawPdfWatermark(document, bodyFont);
 
   const looksPerPage = 4;
   for (let start = 0; start < input.looks.length; start += looksPerPage) {
@@ -430,7 +396,6 @@ async function createLookbookPdf(input: {
           });
       }
     });
-    if (input.watermark) drawPdfWatermark(document, bodyFont);
   }
 
   const range = document.bufferedPageRange();
@@ -440,7 +405,7 @@ async function createLookbookPdf(input: {
       .fillColor("#77736c")
       .fontSize(8)
       .text(
-        `${PLATFORM_NAME}  ·  ${String(page + 1).padStart(2, "0")} / ${String(range.count).padStart(2, "0")}`,
+        `${String(page + 1).padStart(2, "0")} / ${String(range.count).padStart(2, "0")}`,
         42,
         540,
         { align: "right", height: 12, lineBreak: false, width: 758 },
@@ -449,26 +414,6 @@ async function createLookbookPdf(input: {
   }
   document.end();
   return finished;
-}
-
-function drawPdfWatermark(
-  document: PDFKit.PDFDocument,
-  bodyFont: string,
-): void {
-  document.save();
-  document
-    .fillOpacity(0.11)
-    .fillColor("#111111")
-    .font("Helvetica-Bold")
-    .fontSize(40)
-    .text("FREE EXPORT", 205, 284, {
-      align: "center",
-      characterSpacing: 5,
-      lineBreak: false,
-      width: 432,
-    });
-  document.restore();
-  document.font(bodyFont);
 }
 
 function drawPalette(

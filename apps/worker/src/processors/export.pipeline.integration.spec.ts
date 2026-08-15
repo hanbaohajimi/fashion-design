@@ -11,10 +11,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  cleanupExport,
-  createExportProcessor,
-} from "./export.processor";
+import { cleanupExport, createExportProcessor } from "./export.processor";
 import { S3ThumbnailStorage } from "../storage";
 
 describe("真实对象存储导出流水线", () => {
@@ -130,7 +127,7 @@ describe("真实对象存储导出流水线", () => {
         format: ExportFormat.PNG,
         maxEdge: 1_600,
         quality: ExportQuality.STANDARD,
-        watermark: true,
+        watermark: false,
       },
       {
         designAssetId: assetId,
@@ -144,7 +141,7 @@ describe("真实对象存储导出流水线", () => {
         format: ExportFormat.PDF,
         maxEdge: 1_600,
         quality: ExportQuality.STANDARD,
-        watermark: true,
+        watermark: false,
       },
     ] as const;
     const created = await Promise.all(
