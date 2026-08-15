@@ -58,7 +58,7 @@
   border: 1px solid var(--border-primary, #2d2d28);
   border-radius: var(--radius-pill, 999px);
   outline: none;
-  padding: 0 72px 0 20px;
+  padding: 0 52px 0 20px;
   background: var(--surface-card, #f8f5ec);
   color: var(--text-primary, #181915);
   font: inherit;
@@ -76,18 +76,6 @@
 
 .searchWrap input:hover:not(:focus) {
   border-color: var(--border-hover, #3d3d35);
-}
-
-.searchWrap kbd {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  border: 1px solid var(--border-primary, #2d2d28);
-  border-radius: var(--radius-pill, 999px);
-  padding: 4px 9px;
-  background: var(--surface-paper, #ece9e0);
-  color: var(--text-muted, #65655d);
-  font-size: 10px;
 }
 
 .searchClear {

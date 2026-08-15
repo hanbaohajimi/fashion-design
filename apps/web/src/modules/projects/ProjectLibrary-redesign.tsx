@@ -332,9 +332,6 @@ export function ProjectLibrary() {
             type="search"
             value={search}
           />
-          <kbd aria-hidden="true" className={styles.searchShortcut}>
-            ⌘/Ctrl K
-          </kbd>
         </label>
         <span aria-live="polite" className={styles.projectCount} role="status">
           {String(total).padStart(2, "0")}{" "}

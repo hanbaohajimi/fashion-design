@@ -75,9 +75,7 @@ export default function FabricsPage() {
             >
               ×
             </button>
-          ) : (
-            <kbd aria-hidden="true">⌘/Ctrl K</kbd>
-          )}
+          ) : null}
         </div>
       </header>
 
