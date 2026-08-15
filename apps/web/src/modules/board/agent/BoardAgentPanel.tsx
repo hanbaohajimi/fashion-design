@@ -909,7 +909,6 @@ export function BoardAgentPanel({
                     <CandidateGrid
                       onTaskCreated={attachInpaintTask}
                       showHeader={false}
-                      variant="history"
                     />
                   </div>
                 ) : null}
@@ -1061,12 +1060,6 @@ export function BoardAgentPanel({
                             <small>选中画布图片，可继续让设计助手修改</small>
                           </div>
                         )}
-                        <CandidateGrid
-                          onTaskCreated={attachInpaintTask}
-                          showHeader={false}
-                          taskId={task.id}
-                          variant="conversation"
-                        />
                       </div>
                     ) : null}
                     {message.status === "failed" && repliedUser ? (

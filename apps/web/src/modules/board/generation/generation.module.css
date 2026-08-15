@@ -52,14 +52,6 @@
   pointer-events: all;
 }
 
-.candidateDock[data-variant="conversation"] {
-  overflow: hidden;
-  border: 1px solid rgb(36 37 31 / 18%);
-  border-radius: 6px;
-  background: #f3f0e9;
-  box-shadow: none;
-}
-
 .candidateDock > header {
   display: flex;
   height: 43px;
@@ -101,11 +93,6 @@
   gap: 9px;
 }
 
-.candidateDock[data-variant="conversation"] .candidateGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
 .candidateCard {
   position: relative;
   display: grid;
@@ -119,11 +106,6 @@
   animation: candidate-enter 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.candidateDock[data-variant="conversation"] .candidateCard {
-  min-height: 174px;
-  grid-template-rows: minmax(116px, 1fr) auto;
-}
-
 .candidateImageButton {
   min-height: 190px;
   overflow: hidden;
@@ -131,11 +113,6 @@
   padding: 0;
   background: transparent;
   cursor: zoom-in;
-}
-
-.candidateDock[data-variant="conversation"] .candidateImageButton,
-.candidateDock[data-variant="conversation"] .candidateImageButton > img {
-  min-height: 116px;
 }
 
 .candidateImageButton > img {
@@ -153,7 +130,7 @@
 .candidateActions {
   display: grid;
   border-top: 1px solid #24251f;
-  grid-template-columns: 1fr 38px;
+  grid-template-columns: 1fr;
 }
 
 .candidateActions button {
@@ -181,12 +158,6 @@
   color: #fffdf7;
 }
 
-.candidateDock[data-variant="conversation"] .candidateActions > button {
-  min-height: 30px;
-  border-bottom: 1px solid rgb(36 37 31 / 18%);
-  font-size: 8px;
-}
-
 .candidateMenu {
   position: relative;
 }
@@ -196,7 +167,6 @@
   min-height: 35px;
   width: 100%;
   border: 0;
-  border-left: 1px solid rgb(36 37 31 / 23%);
   background: #f8f5ec;
   color: #24251f;
   cursor: pointer;
@@ -259,24 +229,6 @@
 
 .candidateMenu > div button:hover {
   background: #f1eee7;
-}
-
-.candidateExpand {
-  width: 100%;
-  min-height: 34px;
-  border: 0;
-  border-top: 1px solid rgb(36 37 31 / 18%);
-  background: transparent;
-  color: #6a675f;
-  cursor: pointer;
-  font: inherit;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.candidateExpand:hover {
-  background: #24251f;
-  color: #fffdf7;
 }
 
 .localEdit {

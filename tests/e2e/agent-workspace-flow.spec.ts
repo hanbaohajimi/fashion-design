@@ -138,37 +138,35 @@ test("白板悬浮工作区与 Chat Agent 在桌面和窄屏保持完整交互",
   const linkedReply = agent.locator("article").filter({
     hasText: "已完成本轮风衣候选，请直接在这里筛选方案。",
   });
-  const linkedCandidates = linkedReply.getByRole("region", {
-    name: "本轮生成候选",
-  });
-  await expect(linkedCandidates).toBeVisible();
   await expect(
-    linkedCandidates.getByRole("img", { name: "候选设计" }),
-  ).toHaveCount(2);
-  await linkedCandidates
-    .getByRole("button", { name: "查看全部 3 个候选" })
-    .click();
-  await expect(
-    linkedCandidates.getByRole("img", { name: "候选设计" }),
-  ).toHaveCount(3);
-  await expect(agent.getByText("全部候选", { exact: true })).toHaveCount(0);
+    linkedReply.getByRole("region", { name: "本轮生成候选" }),
+  ).toHaveCount(0);
+  await expect(linkedReply).toContainText("成图已放到画布");
+  await expect(linkedReply.getByRole("img", { name: "候选设计" })).toHaveCount(
+    0,
+  );
   await page.getByRole("button", { name: "打开历史" }).click();
-  await expect(page.getByRole("region", { name: "历史记录" })).toBeVisible();
+  const generationHistory = page.getByRole("region", { name: "历史记录" });
+  await expect(generationHistory).toBeVisible();
   await page.getByRole("tab", { name: "生成" }).click();
+  const historyCandidates = generationHistory.getByRole("region", {
+    name: "生成候选",
+  });
   await expect(
-    page
-      .getByRole("region", { name: "历史记录" })
-      .getByRole("img", { name: "候选设计" }),
+    historyCandidates.getByRole("img", { name: "候选设计" }),
   ).toHaveCount(3);
-  await page.getByRole("button", { name: "返回对话" }).click();
-  await linkedCandidates
+  await expect(
+    historyCandidates.getByRole("button", { name: "采纳" }),
+  ).toHaveCount(0);
+  await historyCandidates
     .getByRole("button", { name: "更多候选操作" })
     .first()
     .click();
-  await linkedCandidates.getByRole("button", { name: "丢弃" }).first().click();
+  await historyCandidates.getByRole("button", { name: "丢弃" }).first().click();
   await expect(
-    linkedCandidates.getByRole("img", { name: "候选设计" }),
+    historyCandidates.getByRole("img", { name: "候选设计" }),
   ).toHaveCount(2);
+  await page.getByRole("button", { name: "返回对话" }).click();
 
   const desktopAgentBox = await agent.boundingBox();
   const desktopDockBox = await toolDock.boundingBox();

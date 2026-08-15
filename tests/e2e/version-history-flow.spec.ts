@@ -266,7 +266,14 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   const sendButton = page.getByRole("button", { name: "发送", exact: true });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
-  await page.getByRole("button", { name: "打开候选详情" }).click();
+  const agentPanel = page.getByRole("complementary", { name: "设计助手" });
+  await expect(
+    agentPanel.getByRole("region", { name: "本轮生成候选" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "打开历史" }).click();
+  const generationHistory = page.getByRole("region", { name: "历史记录" });
+  await generationHistory.getByRole("tab", { name: "生成" }).click();
+  await generationHistory.getByRole("button", { name: "打开候选详情" }).click();
   await page.getByRole("button", { name: "版本", exact: true }).click();
 
   await expect(

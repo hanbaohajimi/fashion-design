@@ -867,11 +867,11 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
   ).toHaveCount(0);
   await expect(
     agentPanel.getByRole("region", { name: "本轮生成候选" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(agentPanel).toContainText("成图已放到画布");
   await expect(
     agentPanel.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
 
   await expect(
     page.locator('img[src="https://assets.example/generated-look.png"]'),
@@ -890,6 +890,9 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
       'img[src="https://assets.example/generated-look.png"]',
     ),
   ).toHaveCount(1);
+  await expect(
+    generationHistory.getByRole("button", { name: "采纳" }),
+  ).toHaveCount(0);
   await generationHistory.getByRole("button", { name: "返回对话" }).click();
 
   await page.getByRole("button", { name: "导出", exact: true }).click();

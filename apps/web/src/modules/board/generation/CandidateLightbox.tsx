@@ -22,7 +22,6 @@ export function CandidateLightbox({
   candidate,
   initialMode,
   onTaskCreated,
-  onAdopt,
   onClose,
   onDiscard,
 }: {
@@ -32,7 +31,6 @@ export function CandidateLightbox({
     taskId: string,
     prompt: string,
   ) => Promise<void> | void;
-  readonly onAdopt?: (candidate: GenerationCandidate) => void;
   readonly onClose: () => void;
   readonly onDiscard?: () => void;
 }) {
@@ -205,11 +203,6 @@ export function CandidateLightbox({
                 >
                   导出
                 </button>
-                {onAdopt ? (
-                  <button onClick={() => onAdopt(activeCandidate)} type="button">
-                    采纳
-                  </button>
-                ) : null}
                 {onDiscard ? (
                   <button onClick={onDiscard} type="button">
                     丢弃
