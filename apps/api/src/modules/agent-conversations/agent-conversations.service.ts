@@ -40,6 +40,10 @@ const AGENT_IMAGE_LIMIT = 16;
 const AGENT_IMAGE_MAX_BYTES = 7 * 1024 * 1024;
 const AGENT_IMAGE_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
 const IDEMPOTENCY_REPLAY_ATTEMPTS = 3;
+const AGENT_REQUEST_FAILED_CONTENT =
+  "我暂时无法完成这次请求。你可以检查上下文后重试。";
+const AGENT_REQUEST_TIMEOUT_CONTENT =
+  "设计助手处理时间超过 10 分钟，本次请求已停止。请重试；若仍失败，请减少上下文图片。";
 const CLAUDE_IMAGE_MIME_TYPES = new Set([
   "image/gif",
   "image/jpeg",
@@ -52,6 +56,21 @@ const FIXED_GENERATION_PARAMETERS = {
   outputFormat: "png" as const,
   quality: "high" as const,
 };
+
+function describeAgentRequestFailure(error: unknown) {
+  const errorMessage = error instanceof Error ? error.message : "Agent 请求失败";
+  const isTimeout =
+    (error instanceof Error && error.name === "TimeoutError") ||
+    /\b(?:timeout|timed\s+out)\b/iu.test(errorMessage);
+
+  return {
+    content: isTimeout
+      ? AGENT_REQUEST_TIMEOUT_CONTENT
+      : AGENT_REQUEST_FAILED_CONTENT,
+    errorCode: isTimeout ? "AGENT_REQUEST_TIMEOUT" : "AGENT_REQUEST_FAILED",
+    errorMessage,
+  };
+}
 
 type AgentDatabase = Pick<
   PrismaClient,
@@ -413,14 +432,13 @@ export class AgentConversationsService {
         userMessage: toMessage(turn.userMessage),
       };
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Agent 请求失败";
+      const failure = describeAgentRequestFailure(error);
       const assistantMessage = await this.database.agentMessage.update({
         where: { id: turn.assistantMessage.id },
         data: {
-          content: "我暂时无法完成这次请求。你可以检查上下文后重试。",
-          errorCode: "AGENT_REQUEST_FAILED",
-          errorMessage: errorMessage.slice(0, 1_000),
+          content: failure.content,
+          errorCode: failure.errorCode,
+          errorMessage: failure.errorMessage.slice(0, 1_000),
           status: AgentMessageStatus.FAILED,
         },
       });

@@ -6,14 +6,27 @@ import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { useFabrics } from "../../modules/fabrics/fabric-api";
 import { FabricVirtualGrid } from "../../modules/fabrics/FabricVirtualGrid";
 import { FabricUploadPanel } from "../../modules/fabrics/FabricCard";
+import type { FabricScope } from "../../modules/fabrics/fabric-types";
 import styles from "../../modules/fabrics/fabrics.module.css";
+
+type FabricScopeFilter = "all" | FabricScope;
+
+const FABRIC_SCOPE_OPTIONS: readonly {
+  readonly label: string;
+  readonly value: FabricScopeFilter;
+}[] = [
+  { label: "全部", value: "all" },
+  { label: "系统内置", value: "preset" },
+  { label: "用户上传", value: "user" },
+];
 
 export default function FabricsPage() {
   const [search, setSearch] = useState("");
+  const [scope, setScope] = useState<FabricScopeFilter>("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const fabrics = useFabrics({
-    scope: "all",
+    scope,
     search: deferredSearch,
   });
 
@@ -46,11 +59,18 @@ export default function FabricsPage() {
   }, [search]);
 
   return (
-    <main className={styles.libraryPage}>
+    <main className={styles.libraryPage} id="main-content">
       <header className={styles.libraryHeader}>
-        <div>
-          <Link href="/">← 项目库</Link>
-          <span>FABRIC ARCHIVE / 8.2</span>
+        <div className={styles.libraryIdentity}>
+          <Link aria-label="返回项目库" href="/">
+            <span aria-hidden="true">←</span>
+            项目库
+          </Link>
+          <span aria-hidden="true" className={styles.headerDivider} />
+          <div>
+            <h1>面料库</h1>
+            <span>{fabrics.isLoading ? "加载中" : `${fabrics.total} 项面料`}</span>
+          </div>
         </div>
         <div className={styles.searchWrap}>
           <label htmlFor="fabric-search">搜索面料</label>
@@ -79,39 +99,35 @@ export default function FabricsPage() {
         </div>
       </header>
 
-      <section className={styles.libraryIntro}>
-        <div>
-          <span>DIGITAL TEXTILE INDEX</span>
-          <h1>
-            面料不是素材，
-            <br />
-            是设计的第一层结构。
-          </h1>
-        </div>
-        <p>用图片保留面料的视觉质感，用标签建立轻量、直接的选材索引。</p>
-      </section>
-
       <FabricUploadPanel onUploaded={() => fabrics.refresh()} />
 
       <div className={styles.libraryBody}>
         <section className={styles.archivePanel} aria-label="面料列表">
-          <div aria-live="polite" className={styles.resultMeta} role="status">
-            <p>
-              <strong>
-                {fabrics.items.length.toString().padStart(2, "0")}
-              </strong>{" "}
-              项可用面料
+          <div className={styles.resultMeta}>
+            <nav aria-label="面料分类" className={styles.scopeTabs}>
+              {FABRIC_SCOPE_OPTIONS.map((option) => (
+                <button
+                  aria-pressed={scope === option.value}
+                  key={option.value}
+                  onClick={() => setScope(option.value)}
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </nav>
+            <p aria-live="polite" role="status">
+              {deferredSearch
+                ? `“${deferredSearch}”找到 ${fabrics.total} 项`
+                : "拖拽面料图片可添加到白板"}
             </p>
-            <span>{fabrics.total} 条记录 · 拖拽卡片至白板</span>
           </div>
           {fabrics.isLoading ? (
             <div className={styles.libraryState}>
-              <span>LOADING TEXTURES</span>
               <p>正在读取面料档案…</p>
             </div>
           ) : fabrics.error ? (
             <div className={styles.libraryState} data-error>
-              <span>ARCHIVE OFFLINE</span>
               <p>{fabrics.error.message}</p>
               <button onClick={fabrics.refresh} type="button">
                 重新加载
@@ -119,7 +135,6 @@ export default function FabricsPage() {
             </div>
           ) : fabrics.items.length === 0 ? (
             <div className={styles.libraryState}>
-              <span>NO MATCH</span>
               <p>
                 {deferredSearch
                   ? `没有匹配“${deferredSearch}”的面料。`
@@ -146,7 +161,7 @@ export default function FabricsPage() {
             />
           )}
           {fabrics.isLoadingMore ? (
-            <p className={styles.loadingMore}>正在展开下一柜档案…</p>
+            <p className={styles.loadingMore}>正在加载更多…</p>
           ) : null}
         </section>
       </div>

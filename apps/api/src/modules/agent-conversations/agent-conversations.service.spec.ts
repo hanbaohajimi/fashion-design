@@ -428,6 +428,44 @@ describe("AgentConversationsService", () => {
     expect(harness.generation.create).not.toHaveBeenCalled();
   });
 
+  it("stores a timeout-specific assistant message when the model request times out", async () => {
+    const harness = createHarness();
+    harness.model.generateJson.mockRejectedValue(
+      new DOMException(
+        "The operation was aborted due to timeout",
+        "TimeoutError",
+      ),
+    );
+    harness.database.agentMessage.update.mockResolvedValue(
+      messageFixture(AgentMessageRole.ASSISTANT, {
+        content:
+          "设计助手处理时间超过 10 分钟，本次请求已停止。请重试；若仍失败，请减少上下文图片。",
+        errorCode: "AGENT_REQUEST_TIMEOUT",
+        errorMessage: "The operation was aborted due to timeout",
+        status: AgentMessageStatus.FAILED,
+      }),
+    );
+
+    const result = await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-timeout",
+      content: "生成一件风衣",
+      fileAssetIds: [],
+      shapeIds: [],
+    });
+
+    expect(result.assistantMessage.status).toBe("failed");
+    expect(result.assistantMessage.content).toContain("超过 10 分钟");
+    expect(result.assistantMessage.error?.code).toBe("AGENT_REQUEST_TIMEOUT");
+    expect(harness.database.agentMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          errorCode: "AGENT_REQUEST_TIMEOUT",
+        }),
+      }),
+    );
+    expect(harness.generation.create).not.toHaveBeenCalled();
+  });
+
   it("retries a failed turn with the same request id without creating duplicate messages", async () => {
     const harness = createHarness();
     const originalUser = messageFixture(AgentMessageRole.USER, {

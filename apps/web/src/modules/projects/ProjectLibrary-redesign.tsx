@@ -24,6 +24,7 @@ import {
 } from "./use-projects";
 import {
   clearActiveBoardId,
+  PROJECT_LIBRARY_TRENDS_PATH,
   readActiveBoardId,
   writeActiveBoardId,
 } from "../trends/active-board";
@@ -264,7 +265,7 @@ export function ProjectLibrary() {
           <Link aria-current="page" className={styles.navLinkActive} href="/">
             项目库
           </Link>
-          <Link className={styles.navLink} href="/trends">
+          <Link className={styles.navLink} href={PROJECT_LIBRARY_TRENDS_PATH}>
             趋势档案
           </Link>
           <Link className={styles.navLink} href="/fabrics">

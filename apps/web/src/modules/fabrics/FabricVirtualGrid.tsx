@@ -38,7 +38,6 @@ function FabricCell({
         key={fabric.id}
         onAdd={onAdd}
         onChanged={onChanged}
-        variant={(rowIndex + columnIndex) % 3 === 0 ? "tall" : "short"}
       />
     </div>
   );
@@ -98,7 +97,7 @@ export function FabricVirtualGrid({
         }}
         overscanCount={2}
         rowCount={rowCount}
-        rowHeight={compact ? 278 : 372}
+        rowHeight={compact ? 262 : 318}
         style={{ height, width }}
       />
     </div>

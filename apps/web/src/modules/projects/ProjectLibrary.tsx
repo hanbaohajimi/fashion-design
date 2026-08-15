@@ -17,7 +17,10 @@ import {
   useProjects,
   useUpdateProject,
 } from "./use-projects";
-import { writeActiveBoardId } from "../trends/active-board";
+import {
+  PROJECT_LIBRARY_TRENDS_PATH,
+  writeActiveBoardId,
+} from "../trends/active-board";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "操作失败，请稍后重试";
@@ -220,7 +223,7 @@ export function ProjectLibrary() {
           <strong>ATELIER / STUDIO</strong>
         </Link>
         <nav className={styles.navigation}>
-          <Link className={styles.navLink} href="/trends">
+          <Link className={styles.navLink} href={PROJECT_LIBRARY_TRENDS_PATH}>
             趋势档案
           </Link>
         </nav>

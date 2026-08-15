@@ -40,6 +40,7 @@ import {
   type SketchPencilColor,
   type SketchPencilSize,
 } from "./tools/MountTool";
+import { boardTrendsPath } from "../trends/active-board";
 import styles from "./tool-rail.module.css";
 
 const SKETCH_PAPER_WIDTH = 640;
@@ -1474,7 +1475,9 @@ export function ToolRail({
               {/* 趋势分析 — 导航 */}
               <button
                 className={styles.navButton}
-                onClick={() => window.open("/trends", "_blank", "noopener")}
+                onClick={() =>
+                  window.open(boardTrendsPath(projectId), "_blank", "noopener")
+                }
                 title="趋势分析"
                 type="button"
                 aria-label="打开趋势分析"

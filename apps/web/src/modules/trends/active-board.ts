@@ -1,4 +1,10 @@
 export const ACTIVE_BOARD_STORAGE_KEY = "fashion.active-board-id";
+export const PROJECT_LIBRARY_TRENDS_PATH = "/trends?from=projects";
+
+export interface TrendReturnTarget {
+  readonly href: string;
+  readonly label: "← 返回画布" | "← 返回项目库";
+}
 
 export interface BrowserStorage {
   getItem(key: string): string | null;
@@ -22,6 +28,31 @@ export function activeBoardPath(
 ): string {
   const boardId = readActiveBoardId(storage);
   return boardId ? `/${encodeURIComponent(boardId)}` : "/";
+}
+
+export function boardTrendsPath(boardId: string): string {
+  const value = boardId.trim();
+  return value
+    ? `/trends?from=board&boardId=${encodeURIComponent(value)}`
+    : PROJECT_LIBRARY_TRENDS_PATH;
+}
+
+export function resolveTrendReturnTarget(
+  source: string | undefined,
+  boardId: string | undefined,
+): TrendReturnTarget {
+  const value = boardId?.trim();
+  if (source === "board" && value) {
+    return {
+      href: `/${encodeURIComponent(value)}`,
+      label: "← 返回画布",
+    };
+  }
+
+  return {
+    href: "/",
+    label: "← 返回项目库",
+  };
 }
 
 export function writeActiveBoardId(

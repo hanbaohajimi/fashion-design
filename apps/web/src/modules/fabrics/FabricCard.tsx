@@ -129,6 +129,7 @@ export function FabricUploadPanel({
       className={styles.fabricUploadPanel}
       data-compact={compact}
       data-dragging={dragging}
+      data-has-file={Boolean(file)}
       data-native-file-drop-owner="fabric-library"
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return;
@@ -171,9 +172,12 @@ export function FabricUploadPanel({
           onClick={() => fileInput.current?.click()}
           type="button"
         >
-          <strong>＋ 添加面料图片</strong>
+          <strong>
+            <span aria-hidden="true">＋</span>
+            添加面料
+          </strong>
           <span>
-            {dragging ? "松开以上传图片" : "点击选择，或将本地图片拖到这里"}
+            {dragging ? "松开以上传" : "选择图片或拖放到这里"}
           </span>
         </button>
       ) : (
@@ -238,7 +242,6 @@ interface FabricCardProps {
   readonly fabric: Fabric;
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
   readonly onChanged?: (() => void) | undefined;
-  readonly variant?: "short" | "tall";
 }
 
 export function FabricCard({
@@ -246,7 +249,6 @@ export function FabricCard({
   fabric,
   onAdd,
   onChanged,
-  variant = "short",
 }: FabricCardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -258,6 +260,7 @@ export function FabricCard({
   const dialogCloseRef = useRef<HTMLButtonElement>(null);
   const label = fabric.tags.join("、") || "面料";
   const manageable = canManageFabric(fabric);
+  const scopeLabel = fabric.scope === "preset" ? "系统内置" : "用户上传";
 
   useEffect(() => {
     if (!dialogOpen) {
@@ -358,7 +361,6 @@ export function FabricCard({
       aria-label={`${label}，拖拽到白板`}
       className={styles.fabricCard}
       data-compact={compact}
-      data-variant={variant}
       draggable
       onDragStart={beginDrag}
     >
@@ -366,29 +368,31 @@ export function FabricCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img alt={label} draggable={false} src={fabric.mainImageUrl} />
         <span className={styles.dragHint}>拖至白板</span>
+        {manageable ? (
+          <button
+            aria-label={`管理面料：${label}`}
+            className={styles.fabricManageButton}
+            onClick={openManager}
+            type="button"
+          >
+            管理
+          </button>
+        ) : null}
       </div>
       <div className={styles.cardBody}>
-        <div aria-label="面料标签" className={styles.fabricTags}>
-          {fabric.tags.map((tag) => (
-            <span key={tag}>#{tag}</span>
-          ))}
+        <div className={styles.fabricTags}>
+          <span className={styles.categoryPill} data-scope={fabric.scope}>
+            {scopeLabel}
+          </span>
+          <p aria-label={`面料标签：${label}`} title={label}>
+            {fabric.tags.map((tag) => `#${tag}`).join("  ")}
+          </p>
         </div>
-        {onAdd || manageable ? (
+        {onAdd ? (
           <div className={styles.fabricCardActions}>
-            {onAdd ? (
-              <button onClick={() => onAdd(fabric)} type="button">
-                添加到白板
-              </button>
-            ) : null}
-            {manageable ? (
-              <button
-                className={styles.fabricManageButton}
-                onClick={openManager}
-                type="button"
-              >
-                管理 / 删除
-              </button>
-            ) : null}
+            <button onClick={() => onAdd(fabric)} type="button">
+              添加到白板
+            </button>
           </div>
         ) : null}
       </div>
@@ -414,10 +418,7 @@ export function FabricCard({
                 tabIndex={-1}
               >
                 <header>
-                  <div>
-                    <span>FABRIC SETTINGS</span>
-                    <h2>管理面料</h2>
-                  </div>
+                  <h2>管理面料</h2>
                   <button
                     aria-label="关闭"
                     disabled={saving}

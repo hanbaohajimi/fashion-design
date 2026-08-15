@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeBoardPath,
+  boardTrendsPath,
   clearActiveBoardId,
+  PROJECT_LIBRARY_TRENDS_PATH,
   readActiveBoardId,
+  resolveTrendReturnTarget,
   writeActiveBoardId,
   type BrowserStorage,
 } from "./active-board";
@@ -35,5 +38,32 @@ describe("active board persistence", () => {
     expect(activeBoardPath(storage)).toBe("/");
     writeActiveBoardId("project/a", storage);
     expect(activeBoardPath(storage)).toBe("/project%2Fa");
+  });
+
+  it("为项目库和当前画布生成带来源的趋势入口", () => {
+    expect(PROJECT_LIBRARY_TRENDS_PATH).toBe("/trends?from=projects");
+    expect(boardTrendsPath("project/a")).toBe(
+      "/trends?from=board&boardId=project%2Fa",
+    );
+    expect(boardTrendsPath("   ")).toBe(PROJECT_LIBRARY_TRENDS_PATH);
+  });
+
+  it("仅在明确从画布进入且项目有效时返回该画布", () => {
+    expect(resolveTrendReturnTarget("board", "project/a")).toEqual({
+      href: "/project%2Fa",
+      label: "← 返回画布",
+    });
+    expect(resolveTrendReturnTarget("projects", "project/a")).toEqual({
+      href: "/",
+      label: "← 返回项目库",
+    });
+    expect(resolveTrendReturnTarget("board", "   ")).toEqual({
+      href: "/",
+      label: "← 返回项目库",
+    });
+    expect(resolveTrendReturnTarget(undefined, undefined)).toEqual({
+      href: "/",
+      label: "← 返回项目库",
+    });
   });
 });

@@ -1,42 +1,72 @@
 .libraryPage {
   min-height: 100dvh;
-  padding: 0 clamp(1rem, 4vw, 4rem) 64px;
-  overflow: hidden;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 79px,
-      #d4cfc0 79px,
-      #d4cfc0 80px
-    ),
-    var(--surface-paper, #ece9e0);
+  padding: 0 clamp(1.25rem, 3.5vw, 3.5rem) 4rem;
+  overflow-x: hidden;
+  background: var(--surface-paper, #ece9e0);
   color: var(--text-primary, #181915);
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
 }
 
 .libraryHeader {
+  position: sticky;
+  z-index: 20;
+  top: 0;
   display: flex;
-  min-height: 82px;
+  min-height: 76px;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-primary, #2d2d28);
+  border-bottom: 1px solid var(--border-light, #d9d4c8);
+  background: color-mix(in srgb, var(--surface-paper, #ece9e0) 92%, transparent);
+  backdrop-filter: blur(14px);
   gap: 24px;
 }
 
-.libraryHeader > div:first-child {
+.libraryIdentity {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
 }
 
-.libraryHeader a,
-.libraryHeader span {
+.libraryIdentity > a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  color: var(--text-muted, #65655d);
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+  text-decoration: none;
+  transition: color var(--transition-fast, 120ms);
+}
+
+.libraryIdentity > a:hover {
+  color: var(--text-primary, #181915);
+}
+
+.headerDivider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-light, #d9d4c8);
+}
+
+.libraryIdentity > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.libraryIdentity h1 {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 23px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+
+.libraryIdentity > div > span {
   color: var(--text-muted, #65655d);
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-decoration: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .searchWrap {
@@ -55,7 +85,7 @@
 .searchWrap input {
   width: 100%;
   height: 44px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-light, #d9d4c8);
   border-radius: var(--radius-pill, 999px);
   outline: none;
   padding: 0 52px 0 20px;
@@ -70,12 +100,17 @@
 
 .searchWrap input:focus {
   border-color: var(--accent-primary, #e9522c);
-  background: var(--surface-paper, #ece9e0);
+  background: #fffef9;
   box-shadow: 0 0 0 3px rgb(233 82 44 / 15%);
 }
 
 .searchWrap input:hover:not(:focus) {
   border-color: var(--border-hover, #3d3d35);
+}
+
+.searchWrap input::-webkit-search-cancel-button {
+  display: none;
+  appearance: none;
 }
 
 .searchClear {
@@ -102,44 +137,11 @@
 
 .searchClear:focus-visible,
 .libraryHeader a:focus-visible,
-.libraryState button:focus-visible {
+.libraryState button:focus-visible,
+.fabricManageButton:focus-visible,
+.fabricUploadTrigger:focus-visible {
   outline: 3px solid var(--accent-primary, #e9522c);
   outline-offset: 3px;
-}
-
-.libraryIntro {
-  display: grid;
-  padding: 52px 0 58px;
-  align-items: end;
-  grid-template-columns: 1.7fr 0.8fr;
-  gap: 6vw;
-}
-
-.libraryIntro span,
-.filterRailTitle span,
-.libraryState span {
-  color: var(--accent-primary, #e9522c);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-}
-
-.libraryIntro h1 {
-  max-width: 820px;
-  margin: 15px 0 0;
-  font-family: Georgia, "Songti SC", serif;
-  font-size: clamp(2.5rem, 5vw, 5.4rem);
-  font-weight: 400;
-  letter-spacing: -0.045em;
-  line-height: 0.98;
-}
-
-.libraryIntro p {
-  max-width: 390px;
-  margin: 0;
-  color: var(--text-secondary, #4a4a42);
-  font-size: clamp(0.86rem, 1vw, 1rem);
-  line-height: 1.8;
 }
 
 .libraryBody {
@@ -223,11 +225,53 @@
 
 .resultMeta {
   display: flex;
-  min-height: 58px;
-  align-items: flex-end;
+  min-height: 46px;
+  align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-primary, #2d2d28);
-  padding: 12px 6px 12px 0;
+  padding: 0 8px;
+}
+
+.scopeTabs {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 9px;
+  background: #e4dfd3;
+  gap: 2px;
+}
+
+.scopeTabs button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 13px;
+  background: transparent;
+  color: var(--text-muted, #65655d);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background-color var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.scopeTabs button:hover {
+  color: var(--text-primary, #181915);
+}
+
+.scopeTabs button:active {
+  transform: scale(0.98);
+}
+
+.scopeTabs button[aria-pressed="true"] {
+  background: #fffef9;
+  box-shadow: 0 1px 4px rgb(24 25 21 / 10%);
+  color: var(--text-primary, #181915);
+}
+
+.scopeTabs button:focus-visible {
+  outline: 3px solid var(--accent-primary, #e9522c);
+  outline-offset: 2px;
 }
 
 .resultMeta p,
@@ -235,15 +279,6 @@
   margin: 0;
   color: var(--text-muted, #65655d);
   font-size: 11px;
-  letter-spacing: 0.08em;
-}
-
-.resultMeta strong {
-  margin-right: 8px;
-  color: var(--text-primary, #181915);
-  font-family: Georgia, serif;
-  font-size: 24px;
-  font-weight: 400;
 }
 
 .virtualGridHost {
@@ -264,13 +299,13 @@
 }
 
 .virtualCell {
-  padding: 8px;
+  padding: 8px 9px;
 }
 
 .fabricCard {
   overflow: hidden;
-  border: 1px solid var(--border-primary, #2d2d28);
-  border-radius: var(--radius-xl, 16px);
+  border: 1px solid transparent;
+  border-radius: 12px;
   background: var(--surface-card, #f8f5ec);
   color: var(--text-primary, #181915);
   cursor: grab;
@@ -280,8 +315,8 @@
 }
 
 .fabricCard:hover {
-  border-color: var(--accent-primary, #e9522c);
-  transform: translate(-2px, -2px);
+  border-color: var(--border-light, #d9d4c8);
+  transform: translateY(-3px);
 }
 
 .fabricCard:active {
@@ -297,13 +332,9 @@
 
 .cardVisual {
   position: relative;
-  height: 236px;
+  height: 232px;
   overflow: hidden;
-  background: #e0ddd0;
-}
-
-.fabricCard[data-variant="short"] .cardVisual {
-  height: 210px;
+  background: #d9d4c8;
 }
 
 .cardVisual img {
@@ -320,16 +351,16 @@
 .dragHint {
   position: absolute;
   z-index: 1;
-  border-radius: var(--radius-pill, 999px);
-  background: var(--text-primary, #181915);
-  color: var(--surface-paper, #ece9e0);
+  border-radius: 7px;
+  background: rgb(24 25 21 / 84%);
+  color: #fffef9;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
 }
 
 .dragHint {
-  right: 12px;
+  left: 12px;
   bottom: 12px;
   padding: 7px 10px;
   opacity: 0;
@@ -343,10 +374,9 @@
 }
 
 .cardBody {
-  padding: 16px 17px 18px;
+  padding: 12px 13px 14px;
 }
 
-.fabricTags,
 .fabricDialogTags {
   display: flex;
   flex-wrap: wrap;
@@ -354,22 +384,60 @@
 }
 
 .fabricTags {
-  min-height: 54px;
-  align-content: flex-start;
+  display: grid;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
 }
 
-.fabricTags span,
 .fabricDialogTags span {
   display: inline-flex;
   min-height: 25px;
   align-items: center;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 0;
   border-radius: var(--radius-pill, 999px);
   padding: 4px 9px;
-  background: var(--surface-paper, #ece9e0);
+  background: #e9e5da;
   color: var(--text-primary, #181915);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
+}
+
+.fabricManageButton {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  min-height: 32px;
+  border: 1px solid rgb(255 254 249 / 64%);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: rgb(255 254 249 / 90%);
+  box-shadow: 0 6px 20px rgb(24 25 21 / 12%);
+  color: var(--text-primary, #181915);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition:
+    background-color var(--transition-fast, 120ms),
+    color var(--transition-fast, 120ms),
+    opacity var(--transition-fast, 120ms),
+    transform var(--transition-fast, 120ms);
+}
+
+.fabricCard:hover .fabricManageButton,
+.fabricManageButton:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.fabricManageButton:hover {
+  background: var(--text-primary, #181915);
+  color: #fffef9;
 }
 
 .categoryPill {
@@ -378,12 +446,27 @@
   align-items: center;
   border-radius: var(--radius-pill, 999px);
   padding: 3px 9px;
-  background: var(--surface-paper, #ece9e0);
+  background: #dfdbd0;
+  color: var(--text-secondary, #4a4a42);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.categoryPill[data-scope="user"] {
+  background: rgb(233 82 44 / 11%);
+  color: var(--accent-secondary, #d1421f);
+}
+
+.fabricTags p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--text-muted, #65655d);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cardBody h3 {
@@ -568,60 +651,71 @@
 }
 
 .fabricUploadPanel {
-  margin: 0 0 34px;
-  border: 1px solid var(--border-primary, #2d2d28);
-  background: var(--surface-card, #f8f5ec);
-  box-shadow: 8px 8px 0 var(--border-primary, #2d2d28);
+  margin: 18px 8px 0;
+  overflow: hidden;
+  border: 1px dashed var(--border-primary, #2d2d28);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-card, #f8f5ec) 72%, transparent);
+  transition:
+    background-color var(--transition-base, 200ms),
+    border-color var(--transition-base, 200ms);
 }
 
 .fabricUploadPanel[data-dragging="true"] {
   border-color: var(--accent-primary, #e9522c);
-  box-shadow: 8px 8px 0 var(--accent-primary, #e9522c);
+  background: rgb(233 82 44 / 8%);
 }
 
 .fabricUploadTrigger {
-  display: grid;
+  display: flex;
   width: 100%;
-  min-height: 112px;
+  min-height: 58px;
   border: 0;
-  padding: 22px;
+  padding: 0 18px;
+  align-items: center;
+  justify-content: space-between;
   background: transparent;
   color: var(--text-primary, #181915);
   cursor: pointer;
-  place-content: center;
-  text-align: center;
-  gap: 8px;
+  text-align: left;
+  gap: 16px;
 }
 
 .fabricUploadTrigger strong {
-  font-family: Georgia, "Songti SC", serif;
-  font-size: 26px;
-  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 9px;
 }
 
-.fabricUploadTrigger span {
+.fabricUploadTrigger strong span {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.fabricUploadTrigger > span {
   color: var(--text-muted, #65655d);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 11px;
 }
 
 .fabricUploadPanel[data-dragging="true"] .fabricUploadTrigger {
-  background: rgb(233 82 44 / 8%);
   color: var(--accent-primary, #e9522c);
 }
 
 .fabricUploadForm {
   display: grid;
-  padding: 18px;
+  border-top: 1px solid var(--border-light, #d9d4c8);
+  padding: 16px;
   align-items: start;
-  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .fabricUploadPreview {
   position: relative;
-  height: 176px;
+  height: 142px;
   overflow: hidden;
   border: 1px solid var(--border-primary, #2d2d28);
   background: #e0ddd0;
@@ -647,7 +741,6 @@
 
 .fabricUploadFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -710,12 +803,19 @@
   color: var(--text-primary, #181915);
   cursor: pointer;
   font-weight: 800;
+  transition:
+    background-color var(--transition-fast, 120ms),
+    transform var(--transition-fast, 120ms);
 }
 
 .fabricUploadActions button[type="submit"] {
   border-color: var(--accent-primary, #e9522c);
   background: var(--accent-primary, #e9522c);
   color: #fffef9;
+}
+
+.fabricUploadActions button:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
 .fabricUploadActions button:disabled {
@@ -741,18 +841,26 @@
 
 .fabricUploadPanel[data-compact="true"] {
   margin: 12px 0 0;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .fabricUploadPanel[data-compact="true"] .fabricUploadTrigger {
   min-height: 66px;
   padding: 10px;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
 }
 
 .fabricUploadPanel[data-compact="true"] .fabricUploadTrigger strong {
   font-family: inherit;
   font-size: 13px;
   font-weight: 800;
+}
+
+.fabricUploadPanel[data-compact="true"] .fabricUploadTrigger > span {
+  font-size: 9px;
 }
 
 .fabricUploadPanel[data-compact="true"] .fabricUploadForm {
@@ -821,7 +929,7 @@
 }
 
 .fabricDialog > header h2 {
-  margin: 5px 0 0;
+  margin: 0;
   font-size: 22px;
 }
 
@@ -977,8 +1085,12 @@
     width: 100%;
   }
 
-  .libraryIntro {
-    padding: 38px 0;
+  .fabricUploadForm {
+    grid-template-columns: 1fr;
+  }
+
+  .fabricUploadPreview {
+    height: 164px;
   }
 
   .filterRail {
@@ -986,6 +1098,32 @@
   }
 
   .resultMeta span {
+    display: none;
+  }
+
+  .resultMeta {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-block: 8px;
+    gap: 8px;
+  }
+
+  .scopeTabs {
+    width: 100%;
+  }
+
+  .scopeTabs button {
+    flex: 1;
+  }
+}
+
+@media (hover: none) {
+  .fabricManageButton {
+    opacity: 1;
+    transform: none;
+  }
+
+  .dragHint {
     display: none;
   }
 }
