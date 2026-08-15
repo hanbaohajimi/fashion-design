@@ -204,7 +204,6 @@ export function InpaintPanel({
           ...DEFAULT_GENERATION_PARAMETERS,
           height: generationDimension(height),
           width: generationDimension(width),
-          ...(candidate.seed !== undefined ? { seed: candidate.seed } : {}),
         },
         maskImageUrl,
         ...(paletteEnabled && selectedPalette
@@ -215,7 +214,6 @@ export function InpaintPanel({
         prompt: prompt.trim(),
         referenceImageUrl: candidate.url,
         shapeIds: editor.getSelectedShapeIds(),
-        strength: 0.82,
         taskType: "inpaint",
       });
       if (result.ok) {

@@ -8,9 +8,6 @@ const t2iRequest: AiGenerationRequest = {
   prompt: "editorial fashion portrait",
   width: 1_024,
   height: 1_024,
-  steps: 28,
-  cfg: 3.5,
-  seed: 7,
 };
 
 describe("MockAdapter", () => {
@@ -41,16 +38,10 @@ describe("MockAdapter", () => {
       prompt: "change material to silk",
       width: 1_536,
       height: 1_024,
-      steps: 40,
-      cfg: 3.5,
       referenceImageUrl: "https://cdn.test/reference.png",
-      strength: 0.72,
     };
 
-    const job = await adapter.submit(
-      request,
-      new AbortController().signal,
-    );
+    const job = await adapter.submit(request, new AbortController().signal);
 
     expect(adapter.submittedRequests).toEqual([request]);
     expect(job.taskType).toBe("i2i");

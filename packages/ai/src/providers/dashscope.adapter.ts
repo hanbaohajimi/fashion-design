@@ -271,9 +271,6 @@ export class DashScopeAdapter implements AiProvider {
       input: { messages: [{ role: "user", content }] },
       parameters: {
         n: 1,
-        ...(request.seed !== undefined
-          ? { seed: request.seed % 2_147_483_648 }
-          : {}),
         size: this.config.imageSize,
         thinking_mode: !request.referenceImageUrl,
         watermark: false,
@@ -434,8 +431,8 @@ export class DashScopeAdapter implements AiProvider {
 
 function promptFor(request: AiGenerationRequest): string {
   const sections = [request.prompt];
-  if (request.referenceImageUrl && request.strength !== undefined) {
-    sections.push(referenceGuidance(request.taskType, request.strength));
+  if (request.referenceImageUrl) {
+    sections.push(referenceGuidance(request.taskType));
   }
   if (request.negativePrompt) {
     sections.push(`请避免出现：${request.negativePrompt}`);
@@ -443,19 +440,10 @@ function promptFor(request: AiGenerationRequest): string {
   return sections.join("\n\n");
 }
 
-function referenceGuidance(
-  taskType: AiGenerationRequest["taskType"],
-  strength: number,
-): string {
-  const variation =
-    strength <= 0.33
-      ? "仅做细微变化，尽量保持源图构图和主体身份。"
-      : strength <= 0.66
-        ? "在保持源图关键元素的同时，必须产生清晰可见的设计变化。"
-        : "允许较大幅度的视觉变化，但必须保留提示词要求的源图元素。";
+function referenceGuidance(taskType: AiGenerationRequest["taskType"]): string {
   return taskType === "inpaint"
-    ? `只修改蒙版区域。${variation}`
-    : `将上传图片作为高保真视觉参考。${variation}`;
+    ? "只修改蒙版区域，并保持蒙版外内容不变。"
+    : "将上传图片作为高保真视觉参考。";
 }
 
 function safeBodyText(body: unknown): string {

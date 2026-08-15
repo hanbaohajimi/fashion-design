@@ -60,10 +60,7 @@ export const createCollectionLookSchema = z
   .object({
     parameters: z
       .object({
-        cfg: z.number().min(0).max(30).optional(),
         height: z.number().int().min(256).max(2_048).multipleOf(8).optional(),
-        seed: z.number().int().min(0).max(4_294_967_295).optional(),
-        steps: z.number().int().min(1).max(100).optional(),
         width: z.number().int().min(256).max(2_048).multipleOf(8).optional(),
       })
       .strict()

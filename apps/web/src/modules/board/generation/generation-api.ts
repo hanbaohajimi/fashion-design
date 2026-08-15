@@ -14,7 +14,6 @@ interface CreateGenerationInput extends GenerationParameters {
   readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
-  readonly strength?: number;
   readonly taskType: "t2i" | "i2i" | "inpaint";
 }
 
@@ -227,9 +226,7 @@ export async function uploadTemporaryMask(
     throw await apiError(response, "临时掩码签名失败");
   }
   const signed = (await response.json()) as SignedMaskUpload;
-  if (
-    signed.upload.headers["x-amz-checksum-sha256"] !== checksumSha256
-  ) {
+  if (signed.upload.headers["x-amz-checksum-sha256"] !== checksumSha256) {
     throw new GenerationApiError(
       "掩码签名摘要不匹配，请重试",
       "MASK_CHECKSUM_MISMATCH",

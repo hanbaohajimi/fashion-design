@@ -681,7 +681,7 @@ async function persistDesignAssets(
         parentAssetId: lineage.parentAssetId,
         projectId: lineage.projectId,
         rootAssetId: parent?.rootAssetId ?? assetId,
-        seed: result.seed === undefined ? null : BigInt(result.seed),
+        seed: null,
         thumbnailUrl:
           "thumbnailUrl" in materialized &&
           typeof materialized.thumbnailUrl === "string"

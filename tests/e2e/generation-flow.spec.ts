@@ -562,12 +562,10 @@ test("框选约束后生成结果自动落为带 assetId 的白板图片", async
     taskType: "t2i",
     status: "succeeded",
     request: {
-      cfg: 3.5,
       height: 1024,
       projectId: "e2e-project",
       prompt: "保留便签约束的利落廓形外套",
       shapeIds: [],
-      steps: 28,
       taskType: "t2i",
       width: 1024,
     },

@@ -27,9 +27,6 @@ const t2iRequest: AiGenerationRequest = {
   negativePrompt: "水印，错误文字",
   width: 1_024,
   height: 1_024,
-  steps: 28,
-  cfg: 3.5,
-  seed: 42,
 };
 
 describe("DashScopeAdapter", () => {
@@ -70,7 +67,6 @@ describe("DashScopeAdapter", () => {
         },
         parameters: {
           n: 1,
-          seed: 42,
           size: "2K",
           thinking_mode: true,
           watermark: false,
@@ -105,10 +101,7 @@ describe("DashScopeAdapter", () => {
         prompt: "保留廓形并调整面料",
         width: 1_024,
         height: 1_024,
-        steps: 28,
-        cfg: 3.5,
         referenceImageUrl: "http://localhost:9000/private.png?signature=1",
-        strength: 0.72,
       },
       new AbortController().signal,
     );
@@ -122,8 +115,7 @@ describe("DashScopeAdapter", () => {
               { image: "data:image/png;base64,AQID" },
               {
                 text:
-                  "保留廓形并调整面料\n\n" +
-                  "将上传图片作为高保真视觉参考。允许较大幅度的视觉变化，但必须保留提示词要求的源图元素。",
+                  "保留廓形并调整面料\n\n" + "将上传图片作为高保真视觉参考。",
               },
             ],
           },

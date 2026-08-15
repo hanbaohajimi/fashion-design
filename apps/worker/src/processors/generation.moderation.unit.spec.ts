@@ -1,7 +1,4 @@
-import {
-  ContentModerationStatus,
-  GenerationTaskStatus,
-} from "@fashion/db";
+import { ContentModerationStatus, GenerationTaskStatus } from "@fashion/db";
 import type { GenerationJobData } from "@fashion/shared";
 import type { Job } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
@@ -36,10 +33,8 @@ describe("generation moderation state transition", () => {
       errorMessage: null,
       id: "task-a",
       input: {
-        cfg: 3.5,
         height: 512,
         prompt: "fashion editorial",
-        steps: 20,
         taskType: "t2i",
         width: 512,
       },
@@ -144,10 +139,8 @@ describe("generation moderation state transition", () => {
       errorMessage: null,
       id: "task-review",
       input: {
-        cfg: 3.5,
         height: 512,
         prompt: "fashion editorial",
-        steps: 20,
         taskType: "t2i",
         width: 512,
       },

@@ -146,7 +146,6 @@ export class AmuxAdapter implements AiProvider {
         cost: this.calculateCost(request, usesEdit),
         completedResult: {
           images,
-          ...(request.seed === undefined ? {} : { seed: request.seed }),
         },
       };
     } catch (error) {
@@ -164,9 +163,6 @@ export class AmuxAdapter implements AiProvider {
     return {
       job: jobWithoutCompletedResult(job),
       images: job.completedResult?.images ?? [],
-      ...(job.completedResult?.seed !== undefined
-        ? { seed: job.completedResult.seed }
-        : {}),
       cost: job.cost,
     };
   }
@@ -409,12 +405,8 @@ function promptFor(
   includeReferenceGuidance = true,
 ): string {
   const sections = [request.prompt];
-  if (
-    includeReferenceGuidance &&
-    request.referenceImageUrl &&
-    request.strength !== undefined
-  ) {
-    sections.push(referenceGuidance(request.taskType, request.strength));
+  if (includeReferenceGuidance && request.referenceImageUrl) {
+    sections.push(referenceGuidance(request.taskType));
   }
   const referenceInstructions = (
     "referenceImages" in request ? (request.referenceImages ?? []) : []
@@ -461,10 +453,7 @@ function orderedReferenceImages(request: AiGenerationRequest): Array<{
     order,
     role: "style_ref" as const,
     url,
-    weight:
-      "strength" in request && request.strength !== undefined
-        ? request.strength
-        : 0.5,
+    weight: 1,
   }));
 }
 
@@ -490,19 +479,18 @@ function referenceRoleGuidance(
   }
 }
 
-function referenceGuidance(
-  taskType: AiGenerationRequest["taskType"],
-  strength: number,
-): string {
-  const variation =
-    strength <= 0.33
-      ? "Make only subtle changes and preserve the source composition and identity closely."
-      : strength <= 0.66
-        ? "Balance source-image fidelity with clearly visible design changes."
-        : "Allow substantial visual changes while retaining the source elements required by the prompt.";
-  return taskType === "inpaint"
-    ? `Modify only the masked area. ${variation}`
-    : `Use the uploaded image as a high-fidelity visual reference. ${variation}`;
+function referenceGuidance(taskType: AiGenerationRequest["taskType"]): string {
+  if (taskType === "inpaint") {
+    return (
+      "Edit only the masked area and change only what the request explicitly asks for. " +
+      "Keep everything outside the masked area unchanged, including subject identity, " +
+      "garment silhouette, composition, camera angle, lighting, texture, and color."
+    );
+  }
+  return (
+    "Use the uploaded image as a high-fidelity visual reference. Preserve its " +
+    "identity and composition except where the request explicitly asks for changes."
+  );
 }
 
 const GPT_IMAGE_2_DIMENSION_MULTIPLE = 16;

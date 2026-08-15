@@ -21,7 +21,6 @@ export interface GenerationCandidate {
   readonly taskId: string;
   readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly url: string;
-  readonly seed?: number;
   readonly sourceUrl?: string;
   readonly width?: number;
 }
@@ -49,7 +48,6 @@ export interface GenerationTaskList {
 
 export interface PersistedGenerationRequest {
   readonly background?: "auto" | "opaque";
-  readonly cfg: number;
   readonly height: number;
   readonly maskImageUrl?: string;
   readonly negativePrompt?: string;
@@ -61,10 +59,7 @@ export interface PersistedGenerationRequest {
   readonly prompt: string;
   readonly quality?: "auto" | "high" | "low" | "medium";
   readonly referenceImageUrl?: string;
-  readonly seed?: number;
   readonly shapeIds?: readonly string[];
-  readonly steps: number;
-  readonly strength?: number;
   readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly width: number;
 }
@@ -79,31 +74,25 @@ export interface GenerationTaskItem {
   readonly request: GenerationStartRequest;
   readonly status: GenerationStatus;
   readonly referenceImageUrl?: string;
-  readonly seed?: number;
   readonly taskType: "t2i" | "i2i" | "inpaint";
   readonly updatedAt: string;
 }
 
 export interface GenerationParameters {
   readonly background?: "auto" | "opaque";
-  readonly cfg: number;
   readonly height: number;
   readonly outputCompression?: number;
   readonly outputFormat?: "jpeg" | "png" | "webp";
   readonly quality?: "auto" | "high" | "low" | "medium";
-  readonly seed?: number;
-  readonly steps: number;
   readonly width: number;
 }
 
 export const DEFAULT_GENERATION_PARAMETERS: GenerationParameters = {
   background: "opaque",
-  cfg: 3.5,
   height: 1024,
   outputCompression: 90,
   outputFormat: "png",
   quality: "high",
-  steps: 28,
   width: 1024,
 };
 
@@ -116,7 +105,6 @@ export interface GenerationStartRequest {
   readonly parentAssetId?: string;
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
-  readonly strength?: number;
   readonly taskType?: "t2i" | "i2i" | "inpaint";
 }
 

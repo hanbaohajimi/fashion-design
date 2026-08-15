@@ -59,7 +59,7 @@ const GARMENT_ONLY_NEGATIVE_TERMS = [
   "lifestyle fashion photography",
 ] as const;
 
-type PresentationMode = "garment_only" | "on_model";
+type PresentationMode = "garment_only" | "on_model" | "preserve_source";
 
 interface PresentationPolicy {
   readonly matchedSignals: readonly string[];
@@ -176,6 +176,7 @@ export class GenerationService {
       [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
         .filter(Boolean)
         .join("\n"),
+      request.taskType,
     );
     const requestFingerprint = generationRequestFingerprint(
       request,
@@ -305,33 +306,36 @@ export class GenerationService {
         const primaryReference = sorted[0];
         if (primaryReference) {
           providerRequest.referenceImageUrl = primaryReference.url;
-          providerRequest.strength = primaryReference.weight;
         }
       }
     }
-    const providerPrompts = applyPresentationPolicy(
-      compiledPrompt.positivePrompt,
-      request.negativePrompt,
-      compiledPrompt.negativePrompt,
-      presentationPolicy,
-    );
     const requestedPalette =
       request.taskType === "inpaint" ? request.palette : undefined;
+    const providerPrompts =
+      request.taskType === "inpaint"
+        ? {
+            negativePrompt: request.negativePrompt?.trim() ?? "",
+            positivePrompt: applyLocalEditPalette(
+              `Local-edit request, highest priority: ${request.prompt.trim()}`,
+              requestedPalette,
+            ),
+          }
+        : applyPresentationPolicy(
+            compiledPrompt.positivePrompt,
+            request.negativePrompt,
+            compiledPrompt.negativePrompt,
+            presentationPolicy,
+          );
     const input: AiGenerationRequest = {
       ...providerRequest,
       negativePrompt: providerPrompts.negativePrompt,
-      prompt: context
-        ? collectionProviderPrompt(
-            applyLocalEditPalette(
+      prompt:
+        context && request.taskType !== "inpaint"
+          ? collectionProviderPrompt(
               providerPrompts.positivePrompt,
-              requestedPalette,
-            ),
-            request.prompt,
-          )
-        : applyLocalEditPalette(
-            providerPrompts.positivePrompt,
-            requestedPalette,
-          ),
+              request.prompt,
+            )
+          : providerPrompts.positivePrompt,
     };
     const persistedCompiledPrompt = {
       ...compiledPrompt,
@@ -827,7 +831,17 @@ const ON_MODEL_ALLOW_SIGNALS = [
   },
 ] as const;
 
-function resolvePresentationPolicy(userIntent: string): PresentationPolicy {
+function resolvePresentationPolicy(
+  userIntent: string,
+  taskType: GenerationCreateRequest["taskType"],
+): PresentationPolicy {
+  if (taskType === "inpaint") {
+    return {
+      matchedSignals: ["inpaint_source_preservation"],
+      mode: "preserve_source",
+      version: PRESENTATION_POLICY_VERSION,
+    };
+  }
   const normalized = userIntent.normalize("NFKC").toLowerCase();
   const denial = ON_MODEL_DENIAL_SIGNALS.find(({ pattern }) =>
     pattern.test(normalized),

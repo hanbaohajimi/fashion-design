@@ -48,11 +48,9 @@ const CLAUDE_IMAGE_MIME_TYPES = new Set([
 ]);
 const FIXED_GENERATION_PARAMETERS = {
   background: "opaque" as const,
-  cfg: 3.5,
   outputCompression: 90,
   outputFormat: "png" as const,
   quality: "high" as const,
-  steps: 28,
 };
 
 type AgentDatabase = Pick<

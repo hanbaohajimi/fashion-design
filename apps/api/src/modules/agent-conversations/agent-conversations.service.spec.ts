@@ -282,7 +282,6 @@ describe("AgentConversationsService", () => {
         "user-a",
         {
           background: "opaque",
-          cfg: 3.5,
           height,
           negativePrompt: "watermark",
           outputCompression: 90,
@@ -291,7 +290,6 @@ describe("AgentConversationsService", () => {
           prompt: "structured trench coat editorial",
           quality: "high",
           shapeIds: files.map((_, index) => `shape-${index}`),
-          steps: 28,
           taskType: "t2i",
           width,
         },

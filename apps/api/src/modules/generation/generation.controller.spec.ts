@@ -109,8 +109,6 @@ describe("generation HTTP contract", () => {
         prompt: "fashion editorial",
         width: 512,
         height: 512,
-        steps: 20,
-        cfg: 3.5,
       })
       .expect(202);
 
@@ -143,14 +141,11 @@ describe("generation HTTP contract", () => {
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "generation-inpaint-palette")
       .send({
-        cfg: 3.5,
         height: 512,
         maskImageUrl: "https://signed.test/mask.png",
         palette: [{ hex: "#c8ab84", name: " OAT " }],
         prompt: "将领口改成窄驳领",
         referenceImageUrl: "https://signed.test/source.png",
-        steps: 20,
-        strength: 0.82,
         taskType: "inpaint",
         width: 512,
       })
@@ -183,14 +178,11 @@ describe("generation HTTP contract", () => {
         .set("Cookie", "fashion_access_token=valid-token")
         .set("Idempotency-Key", `invalid-inpaint-palette-${index}`)
         .send({
-          cfg: 3.5,
           height: 512,
           maskImageUrl: "https://signed.test/mask.png",
           palette,
           prompt: "将领口改成窄驳领",
           referenceImageUrl: "https://signed.test/source.png",
-          steps: 20,
-          strength: 0.82,
           taskType: "inpaint",
           width: 512,
         })
@@ -257,11 +249,9 @@ describe("generation HTTP contract", () => {
         {
           id: "task-2",
           request: {
-            cfg: 3.5,
             height: 512,
             prompt: "fashion editorial",
             projectId: "project-1",
-            steps: 20,
             taskType: "t2i",
             width: 512,
           },

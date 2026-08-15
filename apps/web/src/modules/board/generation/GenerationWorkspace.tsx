@@ -81,7 +81,6 @@ function candidatesFrom(
   const output = task.output as {
     readonly candidateDispositions?: unknown;
     readonly images?: unknown;
-    readonly seed?: unknown;
   };
   const images = output.images;
   if (!Array.isArray(images)) return [];
@@ -111,7 +110,6 @@ function candidatesFrom(
         taskId: task.id,
         taskType: source.taskType,
         url: candidate.url,
-        ...(typeof output.seed === "number" ? { seed: output.seed } : {}),
         ...(source.referenceImageUrl
           ? { sourceUrl: source.referenceImageUrl }
           : {}),
@@ -134,16 +132,13 @@ function startRequestFrom(
   return {
     parameters: {
       ...(request.background ? { background: request.background } : {}),
-      cfg: request.cfg,
       height: request.height,
       ...(request.outputCompression !== undefined
         ? { outputCompression: request.outputCompression }
         : {}),
       ...(request.outputFormat ? { outputFormat: request.outputFormat } : {}),
       ...(request.quality ? { quality: request.quality } : {}),
-      steps: request.steps,
       width: request.width,
-      ...(request.seed !== undefined ? { seed: request.seed } : {}),
     },
     projectId,
     prompt: request.prompt,
@@ -155,7 +150,6 @@ function startRequestFrom(
     ...(request.referenceImageUrl
       ? { referenceImageUrl: request.referenceImageUrl }
       : {}),
-    ...(request.strength !== undefined ? { strength: request.strength } : {}),
   };
 }
 
@@ -184,9 +178,6 @@ function taskItemFrom(
     updatedAt: detail.updatedAt,
     ...(request.referenceImageUrl
       ? { referenceImageUrl: request.referenceImageUrl }
-      : {}),
-    ...(request.parameters.seed !== undefined
-      ? { seed: request.parameters.seed }
       : {}),
   };
   return { ...source, candidates: candidatesFrom(detail, source) };
@@ -241,9 +232,7 @@ export function GenerationWorkspace({
       cursor = response.nextCursor;
     }
     setTasks((current) => {
-      const merged = new Map(
-        restored.map((task) => [task.id, task] as const),
-      );
+      const merged = new Map(restored.map((task) => [task.id, task] as const));
       for (const task of current) {
         if (task.request.projectId !== projectId) continue;
         const restoredTask = merged.get(task.id);
@@ -293,7 +282,8 @@ export function GenerationWorkspace({
             const restoredTask = merged.get(task.id);
             if (
               !restoredTask ||
-              (task.candidates.length > 0 && restoredTask.candidates.length === 0)
+              (task.candidates.length > 0 &&
+                restoredTask.candidates.length === 0)
             ) {
               merged.set(task.id, task);
             }
@@ -367,9 +357,12 @@ export function GenerationWorkspace({
           shapeIds: input.shapeIds,
           taskType: input.taskType ?? "t2i",
           ...(input.referenceImageUrl
-            ? { referenceImageUrl: absoluteGenerationUrl(input.referenceImageUrl) }
+            ? {
+                referenceImageUrl: absoluteGenerationUrl(
+                  input.referenceImageUrl,
+                ),
+              }
             : {}),
-          ...(input.strength !== undefined ? { strength: input.strength } : {}),
         });
         const now = new Date().toISOString();
         captureAnalytics("generation_submitted", {
@@ -535,39 +528,42 @@ export function GenerationWorkspace({
     [],
   );
 
-  const dismissCandidate = useCallback(async (
-    candidateId: string,
-    disposition: "adopted" | "dismissed" = "dismissed",
-  ): Promise<void> => {
-    const separator = candidateId.lastIndexOf(":");
-    const taskId = candidateId.slice(0, separator);
-    const index = Number(candidateId.slice(separator + 1));
-    if (separator <= 0 || !Number.isInteger(index) || index < 0) {
-      setNotice("候选标识不合法，无法保存状态");
-      return;
-    }
-    setTasks((current) =>
-      current.map((task) => ({
-        ...task,
-        candidates: task.candidates.map((candidate) =>
-          candidate.id === candidateId
-            ? { ...candidate, disposition }
-            : candidate,
-        ),
-      })),
-    );
-    try {
-      await setGenerationCandidateDisposition(taskId, index, disposition);
-    } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : "候选状态保存失败");
-      try {
-        const detail = await fetchGenerationTask(taskId);
-        updateTask(detail);
-      } catch {
-        setNotice("候选状态保存失败，任务状态重新读取也失败");
+  const dismissCandidate = useCallback(
+    async (
+      candidateId: string,
+      disposition: "adopted" | "dismissed" = "dismissed",
+    ): Promise<void> => {
+      const separator = candidateId.lastIndexOf(":");
+      const taskId = candidateId.slice(0, separator);
+      const index = Number(candidateId.slice(separator + 1));
+      if (separator <= 0 || !Number.isInteger(index) || index < 0) {
+        setNotice("候选标识不合法，无法保存状态");
+        return;
       }
-    }
-  }, [updateTask]);
+      setTasks((current) =>
+        current.map((task) => ({
+          ...task,
+          candidates: task.candidates.map((candidate) =>
+            candidate.id === candidateId
+              ? { ...candidate, disposition }
+              : candidate,
+          ),
+        })),
+      );
+      try {
+        await setGenerationCandidateDisposition(taskId, index, disposition);
+      } catch (cause) {
+        setNotice(cause instanceof Error ? cause.message : "候选状态保存失败");
+        try {
+          const detail = await fetchGenerationTask(taskId);
+          updateTask(detail);
+        } catch {
+          setNotice("候选状态保存失败，任务状态重新读取也失败");
+        }
+      }
+    },
+    [updateTask],
+  );
 
   const value = useMemo<GenerationWorkspaceValue>(
     () => ({

@@ -14,11 +14,25 @@ const request: AiGenerationRequest = {
   prompt: "minimal fashion editorial",
   width: 1_024,
   height: 1_024,
-  steps: 28,
-  cfg: 3.5,
 };
 
 describe("AiService", () => {
+  it("拒绝 GPT Image 2 不支持的扩散模型采样参数", async () => {
+    const mock = new MockAdapter();
+    const service = createService([mock], { primaryProvider: "mock" });
+
+    await expect(
+      service.submit({
+        ...request,
+        cfg: 3.5,
+        seed: 7,
+        steps: 28,
+        strength: 0.5,
+      } as unknown as AiGenerationRequest),
+    ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(mock.submittedRequests).toHaveLength(0);
+  });
+
   it("Provider 5xx 额外重试 2 次并指数退避", async () => {
     const submit = vi
       .fn<AiProvider["submit"]>()
@@ -180,8 +194,7 @@ describe("AiService", () => {
       service.submit({
         ...request,
         taskType: "i2i",
-        strength: 0.7,
-      } as AiGenerationRequest),
+      } as unknown as AiGenerationRequest),
     ).rejects.toMatchObject({ code: "INVALID_REQUEST" });
     expect(mock.submittedRequests).toHaveLength(0);
   });

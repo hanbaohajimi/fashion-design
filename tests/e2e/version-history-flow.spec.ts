@@ -166,12 +166,10 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
         error: null,
         id: "task-history",
         request: {
-          cfg: 3.5,
           height: 1024,
           projectId: "e2e-history",
           prompt: "带明确肩线的短款夹克",
           shapeIds: [],
-          steps: 28,
           taskType: "t2i",
           width: 768,
         },

@@ -27,19 +27,18 @@ const paletteColorSchema = z.object({
   name: z.string().trim().min(1).max(48),
 });
 
-const commonRequestSchema = z.object({
-  background: z.enum(["auto", "opaque"]).optional(),
-  prompt: z.string().trim().min(1).max(4_000),
-  negativePrompt: z.string().trim().max(3_000).optional(),
-  width: z.number().int().min(256).max(2_048).multipleOf(8),
-  height: z.number().int().min(256).max(2_048).multipleOf(8),
-  steps: z.number().int().min(1).max(100),
-  cfg: z.number().min(0).max(30),
-  outputCompression: z.number().int().min(0).max(100).optional(),
-  outputFormat: z.enum(["jpeg", "png", "webp"]).optional(),
-  quality: z.enum(["auto", "low", "medium", "high"]).optional(),
-  seed: z.number().int().min(0).max(4_294_967_295).optional(),
-});
+const commonRequestSchema = z
+  .object({
+    background: z.enum(["auto", "opaque"]).optional(),
+    prompt: z.string().trim().min(1).max(4_000),
+    negativePrompt: z.string().trim().max(3_000).optional(),
+    width: z.number().int().min(256).max(2_048).multipleOf(8),
+    height: z.number().int().min(256).max(2_048).multipleOf(8),
+    outputCompression: z.number().int().min(0).max(100).optional(),
+    outputFormat: z.enum(["jpeg", "png", "webp"]).optional(),
+    quality: z.enum(["auto", "low", "medium", "high"]).optional(),
+  })
+  .strict();
 
 export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
@@ -47,21 +46,18 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
     referenceImageUrl: z.url().optional(),
     referenceImageUrls: z.array(z.url()).max(16).optional(),
     referenceImages: z.array(referenceImageSchema).max(16).optional(),
-    strength: z.number().min(0).max(1).optional(),
   }),
   commonRequestSchema.extend({
     taskType: z.literal("i2i"),
     referenceImageUrl: z.url(),
     referenceImageUrls: z.array(z.url()).max(16).optional(),
     referenceImages: z.array(referenceImageSchema).max(16).optional(),
-    strength: z.number().min(0).max(1),
   }),
   commonRequestSchema.extend({
     taskType: z.literal("inpaint"),
     referenceImageUrl: z.url(),
     maskImageUrl: z.url(),
     palette: z.array(paletteColorSchema).min(1).max(12).optional(),
-    strength: z.number().min(0).max(1),
   }),
 ]);
 
@@ -79,7 +75,6 @@ export interface AiGenerationCost {
 
 export interface AiProviderCompletedResult {
   images: AiGeneratedImage[];
-  seed?: number | undefined;
 }
 
 export interface AiProviderJob {
@@ -112,7 +107,6 @@ export interface AiGeneratedImage {
 export interface AiProviderResult {
   job: AiProviderJob;
   images: AiGeneratedImage[];
-  seed?: number;
   cost: AiGenerationCost;
 }
 
@@ -161,7 +155,6 @@ export const aiProviderJobSchema = z.object({
   completedResult: z
     .object({
       images: z.array(aiGeneratedImageSchema).min(1),
-      seed: z.number().int().optional(),
     })
     .optional(),
 });

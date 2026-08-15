@@ -12,7 +12,7 @@ import type { TrendDigestJobData } from "../queues/trend.queue";
 import type { ThumbnailStorage } from "../storage";
 
 const SEARCH_TIMEOUT_MS = 15_000;
-const CLAUDE_TIMEOUT_MS = 30_000;
+const CLAUDE_TIMEOUT_MS = 10 * 60 * 1_000;
 const IMAGE_TIMEOUT_MS = 15_000;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 40_000_000;

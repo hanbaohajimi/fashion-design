@@ -422,18 +422,14 @@ export class CollectionsService {
     return this.generation.createForCollection(
       userId,
       {
-        cfg: parameters?.cfg ?? 7,
         height: parameters?.height ?? 1_024,
         parentAssetId: collection.heroAsset.id,
         projectId: collection.projectId,
         prompt: collectionPrompt(collection, dna, input),
         referenceImageUrl: await this.providerUrl(collection.heroAsset.url),
         shapeIds: [],
-        steps: parameters?.steps ?? 28,
-        strength: variationStrength(input.variationAxis),
         taskType: "i2i",
         width: parameters?.width ?? 768,
-        ...(parameters?.seed === undefined ? {} : { seed: parameters.seed }),
       },
       {
         collectionId,
@@ -831,19 +827,6 @@ function parseGarmentType(
     code && label ? { code, label } : null,
   );
   return parsed.success ? parsed.data : null;
-}
-
-function variationStrength(
-  axis: CreateCollectionLookInput["variationAxis"],
-): number {
-  return {
-    color: 0.36,
-    detail: 0.2,
-    fabric: 0.42,
-    garmentType: 0.52,
-    silhouette: 0.58,
-    styling: 0.48,
-  }[axis];
 }
 
 function collectionPrompt(

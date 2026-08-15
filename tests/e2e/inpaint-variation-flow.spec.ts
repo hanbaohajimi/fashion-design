@@ -165,15 +165,12 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) 
               width: 768,
             },
           ],
-          seed: 700,
         },
         request: {
-          cfg: 3.5,
           height: 1024,
           projectId: "e2e-inpaint",
           prompt: body.content,
           shapeIds: body.shapeIds,
-          steps: 28,
           taskType: "t2i",
           width: 768,
         },
@@ -245,7 +242,6 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) 
       id,
       output: {
         images: [{ height: 1024, url: imageUrl, width: 768 }],
-        seed: typeof body.seed === "number" ? body.seed : 700,
       },
       status: "succeeded",
       updatedAt: timestamp,

@@ -282,7 +282,6 @@ describe("CollectionsService", () => {
         parentAssetId: "hero-1",
         projectId: "project-1",
         referenceImageUrl: "https://cdn.test/hero.png",
-        strength: 0.2,
         taskType: "i2i",
         prompt: expect.stringMatching(
           /必须保持的锁定 DNA：色板=.*深石墨 #1D232A/,
@@ -313,7 +312,6 @@ describe("CollectionsService", () => {
 
     const request = generation.createForCollection.mock.calls[0]?.[1];
     expect(request).toBeDefined();
-    expect(request?.strength).toBe(0.42);
     expect(request?.prompt).toContain(
       "必须替换面料材质、织法、表面肌理或垂坠表现",
     );
@@ -355,7 +353,6 @@ describe("CollectionsService", () => {
     );
 
     const request = generation.createForCollection.mock.calls[0]?.[1];
-    expect(request?.strength).toBe(0.52);
     expect(request?.prompt).toContain("核心款来源类型：夹克");
     expect(request?.prompt).toContain("当前扩展款类型：连衣裙");
     expect(request?.prompt).toContain(

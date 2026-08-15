@@ -245,7 +245,6 @@ export function CandidateLightbox({
                 assetId: asset.id,
                 url: asset.url,
                 ...(asset.height === null ? {} : { height: asset.height }),
-                ...(asset.seed === null ? {} : { seed: asset.seed }),
                 ...(asset.width === null ? {} : { width: asset.width }),
               }));
             }}

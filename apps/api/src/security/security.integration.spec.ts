@@ -3,14 +3,7 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import request from "supertest";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../app.module";
 import { AuthService } from "../modules/auth/auth.service";
@@ -70,10 +63,8 @@ describe("security hardening integration", () => {
         .set("Cookie", "fashion_access_token=valid-token")
         .set("Idempotency-Key", `security-generation-${attempt}`)
         .send({
-          cfg: 3.5,
           height: 512,
           prompt: `fashion editorial ${attempt}`,
-          steps: 20,
           taskType: "t2i",
           width: 512,
         })
@@ -85,10 +76,8 @@ describe("security hardening integration", () => {
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "security-generation-21")
       .send({
-        cfg: 3.5,
         height: 512,
         prompt: "fashion editorial 21",
-        steps: 20,
         taskType: "t2i",
         width: 512,
       })

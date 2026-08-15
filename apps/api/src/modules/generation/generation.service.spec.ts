@@ -11,8 +11,6 @@ const request = {
   prompt: "fashion editorial",
   width: 1024,
   height: 1024,
-  steps: 28,
-  cfg: 3.5,
 };
 
 function taskRecord(overrides: Record<string, unknown> = {}) {
@@ -195,7 +193,6 @@ describe("GenerationService", () => {
 
   it("局部重绘把所选色卡持久化并约束在蒙版区域", async () => {
     await service.create("user-1", {
-      cfg: 3.5,
       height: 1024,
       maskImageUrl: "https://signed.test/mask.png",
       palette: [
@@ -204,8 +201,6 @@ describe("GenerationService", () => {
       ],
       prompt: "将领口改成窄驳领",
       referenceImageUrl: "https://signed.test/source.png",
-      steps: 28,
-      strength: 0.82,
       taskType: "inpaint",
       width: 768,
     });
@@ -218,10 +213,19 @@ describe("GenerationService", () => {
     ]);
     expect(createData.input.prompt).toContain("OAT #C8AB84");
     expect(createData.input.prompt).toContain("INK #39443E");
+    expect(createData.input.prompt).toContain("将领口改成窄驳领");
     expect(createData.input.prompt).toContain("inside the masked area");
     expect(createData.input.prompt).toContain(
       "Preserve all colors outside the masked area",
     );
+    expect(createData.input.prompt).not.toContain("fashion editorial");
+    expect(createData.input.prompt).not.toContain("garment-only");
+    expect(createData.input.negativePrompt).not.toContain("fashion model");
+    expect(createData.compiledPrompt.presentationPolicy).toEqual({
+      matchedSignals: ["inpaint_source_preservation"],
+      mode: "preserve_source",
+      version: 1,
+    });
   });
 
   it("用户明确要求模特试穿时不注入默认禁令", async () => {
@@ -504,7 +508,6 @@ describe("GenerationService", () => {
       database.generationTask.create.mock.calls.at(0)?.[0].data;
     expect(createData.input).toMatchObject({
       referenceImageUrl: "https://signed.test/style.png",
-      strength: 0.72,
       taskType: "t2i",
     });
     expect(createData.compiledPrompt).toMatchObject({
@@ -547,7 +550,6 @@ describe("GenerationService", () => {
       database.generationTask.create.mock.calls.at(0)?.[0].data;
     expect(createData.input).toMatchObject({
       referenceImageUrl: "https://signed.test/trend.png",
-      strength: 0.5,
       taskType: "t2i",
     });
   });
@@ -592,7 +594,6 @@ describe("GenerationService", () => {
           weight: 0.7,
         },
       ],
-      strength: 0.7,
       taskType: "t2i",
     });
   });
@@ -1066,7 +1067,7 @@ describe("GenerationService", () => {
     expect(database.generationTask.findMany).not.toHaveBeenCalled();
   });
 
-  it("老任务从 input、项目、父资产及 compiledPrompt 尽力恢复 request", async () => {
+  it("恢复老任务 request 时剔除 GPT Image 2 不支持的旧参数", async () => {
     database.generationTask.findFirst.mockResolvedValue(
       taskRecord({
         compiledPrompt: {
@@ -1087,13 +1088,11 @@ describe("GenerationService", () => {
 
     await expect(service.get("user-1", "task-1")).resolves.toMatchObject({
       request: {
-        cfg: 3.5,
         height: 1024,
         negativePrompt: "watermark",
         parentAssetId: "asset-parent",
         projectId: "project-1",
         prompt: "legacy compiled prompt",
-        steps: 28,
         taskType: "t2i",
         width: 1024,
       },

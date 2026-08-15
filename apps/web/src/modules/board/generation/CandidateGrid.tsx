@@ -62,7 +62,6 @@ export function CandidateGrid({
         shapeIds: editor.getSelectedShapeIds(),
         taskType: "i2i",
         referenceImageUrl: candidate.url,
-        strength: 0.5,
       });
     } finally {
       setRerunningCandidateId(null);

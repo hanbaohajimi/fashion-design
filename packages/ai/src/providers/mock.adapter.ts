@@ -100,7 +100,6 @@ export class MockAdapter implements AiProvider {
             `https://example.test/generated/${job.providerJobId}.png`,
         },
       ],
-      seed: 42,
       cost: job.cost,
     };
   }

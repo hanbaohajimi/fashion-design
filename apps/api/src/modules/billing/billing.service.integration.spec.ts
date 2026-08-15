@@ -20,9 +20,7 @@ describe("BillingService PostgreSQL concurrency", () => {
 
     try {
       await Promise.all(
-        Array.from({ length: 10 }, () =>
-          service.incrementCount(user.id),
-        ),
+        Array.from({ length: 10 }, () => service.incrementCount(user.id)),
       );
       const stored = await prisma.user.findUniqueOrThrow({
         where: { id: user.id },
@@ -53,10 +51,8 @@ describe("BillingService PostgreSQL concurrency", () => {
                 data: {
                   id: `quota-${user.id}-${index}`,
                   input: {
-                    cfg: 3.5,
                     height: 512,
                     prompt: "quota concurrency",
-                    steps: 20,
                     taskType: "t2i",
                     width: 512,
                   },

@@ -27,11 +27,8 @@ const t2iRequest: AiGenerationRequest = {
   width: 1_536,
   height: 1_024,
   background: "opaque",
-  steps: 28,
-  cfg: 3.5,
   outputFormat: "png",
   quality: "high",
-  seed: 9,
 };
 
 describe("AmuxAdapter", () => {
@@ -137,11 +134,8 @@ describe("AmuxAdapter", () => {
         prompt: "replace collar with a narrow lapel",
         width: 1_024,
         height: 1_024,
-        steps: 28,
-        cfg: 3.5,
         referenceImageUrl: "https://assets.test/source.png",
         maskImageUrl: "https://assets.test/mask.png",
-        strength: 0.82,
       },
       new AbortController().signal,
     );
@@ -161,7 +155,7 @@ describe("AmuxAdapter", () => {
     expect(form?.get("model")).toBe("gpt-image-2");
     expect(form?.get("prompt")).toBe(
       "replace collar with a narrow lapel\n\n" +
-        "Modify only the masked area. Allow substantial visual changes while retaining the source elements required by the prompt.",
+        "Edit only the masked area and change only what the request explicitly asks for. Keep everything outside the masked area unchanged, including subject identity, garment silhouette, composition, camera angle, lighting, texture, and color.",
     );
     expect(form?.get("image")).toBeInstanceOf(Blob);
     expect(form?.get("mask")).toBeInstanceOf(Blob);
@@ -184,7 +178,6 @@ describe("AmuxAdapter", () => {
       {
         ...t2iRequest,
         referenceImageUrl: "https://assets.test/style.webp",
-        strength: 0.72,
       },
       new AbortController().signal,
     );
@@ -207,7 +200,6 @@ describe("AmuxAdapter", () => {
         {
           ...t2iRequest,
           referenceImageUrl: "https://assets.test/style.webp",
-          strength: 0.72,
         },
         new AbortController().signal,
       ),
@@ -245,7 +237,6 @@ describe("AmuxAdapter", () => {
             weight: 0.72,
           },
         ],
-        strength: 0.72,
       },
       new AbortController().signal,
     );
@@ -293,11 +284,8 @@ describe("AmuxAdapter", () => {
           prompt: "replace collar",
           width: 1_024,
           height: 1_024,
-          steps: 28,
-          cfg: 3.5,
           referenceImageUrl: "https://assets.test/source.png",
           maskImageUrl: "https://assets.test/mask.png",
-          strength: 0.72,
         },
         new AbortController().signal,
       ),

@@ -26,8 +26,6 @@ const request = {
   prompt: "fashion editorial",
   width: 512,
   height: 512,
-  steps: 20,
-  cfg: 3.5,
 };
 
 const providerJob: AiProviderJob = {
@@ -48,7 +46,6 @@ const providerJob: AiProviderJob = {
 const providerResult: AiProviderResult = {
   job: providerJob,
   images: [{ url: "https://cdn.test/generated.png" }],
-  seed: 42,
   cost: providerJob.cost,
 };
 
@@ -1653,7 +1650,6 @@ async function createTask(
     ? {
         ...request,
         referenceImageUrl: "https://cdn.test/parent.png",
-        strength: 0.5,
         taskType: "i2i" as const,
       }
     : request;
