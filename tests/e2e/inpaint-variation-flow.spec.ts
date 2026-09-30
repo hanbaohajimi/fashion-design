@@ -12,6 +12,10 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) 
   let uploadedMaskDimensions: { height: number; width: number } | null = null;
   let rejectedInpaintOnce = false;
   let rejectedInpaintRequest: Record<string, unknown> | undefined;
+  const candidateDispositionRequests: Array<{
+    disposition: string;
+    taskId: string;
+  }> = [];
 
   await page.route("**/api/me", (route) =>
     route.fulfill({
@@ -286,8 +290,19 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) 
     }
     await route.fulfill({ json: detail });
   });
-  await page.route(/\/api\/generations\/[^/]+\/candidates\/\d+$/u, (route) =>
-    route.fulfill({ json: {}, status: 200 }),
+  await page.route(
+    /\/api\/generations\/[^/]+\/candidates\/\d+$/u,
+    async (route) => {
+      const taskId = new URL(route.request().url()).pathname.split("/").at(-3);
+      const body = route.request().postDataJSON() as {
+        readonly disposition: string;
+      };
+      candidateDispositionRequests.push({
+        disposition: body.disposition,
+        taskId: taskId ?? "",
+      });
+      await route.fulfill({ json: {}, status: 200 });
+    },
   );
   await page.route("https://assets.example/*.png", async (route) => {
     const isInpaint = route.request().url().includes("inpaint");
@@ -437,4 +452,39 @@ test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) 
   await expect(
     generationHistory.locator('img[src="https://assets.example/inpaint.png"]'),
   ).toBeVisible();
+
+  const inpaintImage = boardCanvas.locator(
+    'img[src="https://assets.example/inpaint.png"]',
+  );
+  const inpaintImageBounds = await inpaintImage.boundingBox();
+  expect(inpaintImageBounds).not.toBeNull();
+  if (!inpaintImageBounds) return;
+  await page.mouse.click(
+    inpaintImageBounds.x + inpaintImageBounds.width / 2,
+    inpaintImageBounds.y + inpaintImageBounds.height / 2,
+  );
+  await page.keyboard.press("Delete");
+  await expect(inpaintImage).toHaveCount(0);
+  await expect
+    .poll(() =>
+      candidateDispositionRequests.some(
+        (request) =>
+          request.taskId.startsWith("task-inpaint-") &&
+          request.disposition === "dismissed",
+      ),
+    )
+    .toBe(true);
+
+  await page.getByRole("button", { name: "展开设计助手" }).click();
+  await page.getByRole("button", { name: "打开历史" }).click();
+  await page.getByRole("tab", { name: "生成" }).click();
+  const sourceCandidate = generationHistory
+    .locator('img[src="https://assets.example/source.png"]')
+    .locator("xpath=ancestor::article");
+  await sourceCandidate.getByRole("button", { name: "更多候选操作" }).click();
+  await sourceCandidate.getByRole("button", { name: "再来一版" }).click();
+  await expect
+    .poll(() => requests.filter((body) => body.taskType === "i2i").length)
+    .toBe(1);
+  await expect(inpaintImage).toHaveCount(0);
 });

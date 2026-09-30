@@ -19,7 +19,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { GenerationLimitExceededException } from "../billing/billing.errors";
 import { BillingService } from "../billing/billing.service";
 import { S3FileStorage } from "../files/storage.service";
-import { ContextCompilerService } from "./compiler/context-compiler.service";
+import {
+  ContextCompilerService,
+  type ContextCompilerOptions,
+} from "./compiler/context-compiler.service";
 import {
   generationCreateRequestSchema,
   type GenerationCreateRequest,
@@ -141,6 +144,22 @@ export class GenerationService {
     );
   }
 
+  async createFromAgent(
+    userId: string,
+    request: GenerationCreateRequest,
+    idempotencyKey: string,
+    rawUserIntent: string,
+  ): Promise<{ taskId: string }> {
+    return this.createTask(
+      userId,
+      request,
+      idempotencyKey,
+      undefined,
+      rawUserIntent,
+      { modelCalls: "skip" },
+    );
+  }
+
   async createForCollection(
     userId: string,
     request: GenerationCreateRequest,
@@ -162,16 +181,25 @@ export class GenerationService {
     idempotencyKey: string,
     context?: CollectionGenerationContext,
     rawUserIntent: string = request.prompt,
+    compilerOptions: ContextCompilerOptions = {},
   ): Promise<{ taskId: string }> {
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
-    const compiledPrompt = await this.compiler.compile(
-      userId,
-      request.projectId,
-      request.prompt,
-      request.shapeIds,
-    );
+    const compiledPrompt = compilerOptions.modelCalls
+      ? await this.compiler.compile(
+          userId,
+          request.projectId,
+          request.prompt,
+          request.shapeIds,
+          compilerOptions,
+        )
+      : await this.compiler.compile(
+          userId,
+          request.projectId,
+          request.prompt,
+          request.shapeIds,
+        );
     const presentationPolicy = resolvePresentationPolicy(
       [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
         .filter(Boolean)

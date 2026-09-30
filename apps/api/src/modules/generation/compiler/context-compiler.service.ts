@@ -53,6 +53,11 @@ const COMMON_NEGATIVE_TERMS = [
 ] as const;
 const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
 const MAX_PALETTE_COLORS_PER_ELEMENT = 12;
+const EXACT_HEX_COLOR = /^#[\dA-F]{6}$/u;
+
+export interface ContextCompilerOptions {
+  readonly modelCalls?: "allow" | "skip";
+}
 
 function propsOf(record: Prisma.JsonValue | null): Record<string, unknown> {
   if (!record || Array.isArray(record) || typeof record !== "object") return {};
@@ -118,6 +123,28 @@ function unique(values: readonly (string | null)[]): string[] {
   ];
 }
 
+function applyExactPaletteConstraint(
+  prompt: string,
+  colors: readonly string[],
+): string {
+  if (colors.length === 0) return prompt;
+  return [
+    prompt,
+    "Exact garment color constraint, highest priority: use exactly " +
+      `${colors.join(", ")} wherever the selected palette applies. ` +
+      "Hexadecimal values are authoritative; do not reinterpret them from " +
+      "palette names or replace them with any other color.",
+  ].join("\n\n");
+}
+
+function preservesExactPalette(
+  prompt: string,
+  colors: readonly string[],
+): boolean {
+  const normalized = prompt.toUpperCase();
+  return colors.every((color) => normalized.includes(color));
+}
+
 @Injectable()
 export class ContextCompilerService {
   private readonly logger = new Logger(ContextCompilerService.name);
@@ -134,7 +161,9 @@ export class ContextCompilerService {
     projectId: string | undefined,
     userRequest: string,
     shapeIds?: readonly string[],
+    options: ContextCompilerOptions = {},
   ): Promise<CompiledGenInput> {
+    const allowModelCalls = options.modelCalls !== "skip";
     const elements = projectId
       ? await this.loadOwnedElements(userId, projectId, shapeIds)
       : [];
@@ -216,6 +245,7 @@ export class ContextCompilerService {
       "fabric",
       userId,
       projectId,
+      allowModelCalls,
     );
     const fabricReferences: readonly (FabricReference | ImageReference)[] = [
       ...structuredFabric.refImages,
@@ -226,6 +256,7 @@ export class ContextCompilerService {
       "detail",
       userId,
       projectId,
+      allowModelCalls,
     );
     const paletteReferences = await this.compileSemanticReferences(
       elements.filter(
@@ -236,11 +267,15 @@ export class ContextCompilerService {
       "palette",
       userId,
       projectId,
+      allowModelCalls,
     );
     const palette = unique([
       ...swatchPalette,
       ...paletteReferences.flatMap((reference) => [...reference.labels]),
     ]);
+    const exactPaletteColors = swatchPalette.filter((color) =>
+      EXACT_HEX_COLOR.test(color),
+    );
     const patternReferences = fabricReferences.filter((reference) =>
       reference.labels.some((label) =>
         /pattern|print|motif|纹样|图案/i.test(label),
@@ -251,6 +286,7 @@ export class ContextCompilerService {
       "avoid",
       userId,
       projectId,
+      allowModelCalls,
     );
     const avoidLabels = unique(
       avoidReferences.flatMap((reference) => [...reference.labels]),
@@ -291,26 +327,39 @@ export class ContextCompilerService {
     let positivePrompt = keywordPositive;
     let negativePrompt = keywordNegative;
     let enhancement: "llm" | "keywords" = "keywords";
-    try {
-      const enhanced = await this.model.enhancePrompt({
-        avoidTerms: avoidLabels,
-        detailTerms,
-        fabricTerms,
-        keywordNegative,
-        keywordPositive,
-        notes,
-        palette,
-        patternTerms,
-        userRequest: cleanText(userRequest, 4000) ?? "",
-      });
-      positivePrompt = enhanced.positivePrompt;
-      negativePrompt = enhanced.negativePrompt;
-      enhancement = "llm";
-    } catch (error) {
-      this.logger.warn(
-        `提示词增强失败，已回退为关键词编译；reason=${safeModelFailureReason(error)}`,
-      );
+    if (allowModelCalls) {
+      try {
+        const enhanced = await this.model.enhancePrompt({
+          avoidTerms: avoidLabels,
+          detailTerms,
+          fabricTerms,
+          keywordNegative,
+          keywordPositive,
+          notes,
+          palette,
+          patternTerms,
+          userRequest: cleanText(userRequest, 4000) ?? "",
+        });
+        if (preservesExactPalette(enhanced.positivePrompt, exactPaletteColors)) {
+          positivePrompt = enhanced.positivePrompt;
+          negativePrompt = enhanced.negativePrompt;
+          enhancement = "llm";
+        } else {
+          this.logger.warn(
+            "提示词增强未保留精确色卡 HEX，已回退为关键词编译",
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `提示词增强失败，已回退为关键词编译；reason=${safeModelFailureReason(error)}`,
+        );
+      }
     }
+
+    positivePrompt = applyExactPaletteConstraint(
+      positivePrompt,
+      exactPaletteColors,
+    );
 
     return {
       avoidLabels,
@@ -404,12 +453,13 @@ export class ContextCompilerService {
     channel: SemanticImageChannel,
     userId: string,
     projectId: string | undefined,
+    allowModelCalls: boolean,
   ): Promise<ImageReference[]> {
     return Promise.all(
       elements.slice(0, 20).map(async (element) => {
         const reference = await this.referenceFrom(element, userId, projectId);
         if (!reference) return null;
-        if (reference.labels.length) return reference;
+        if (reference.labels.length || !allowModelCalls) return reference;
         try {
           const labels = unique([
             ...(await this.model.analyzeImage({

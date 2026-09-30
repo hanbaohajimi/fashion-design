@@ -42,9 +42,7 @@ export function EmptyState({
   }
 
   return (
-    <section className={styles.emptyState}>
-      <span className={styles.emptyIndex}>01</span>
-      <p className={styles.emptyKicker}>NEW COLLECTION / READY</p>
+    <section className={`${styles.emptyState} ${styles.emptyStateStart}`}>
       <h2>从第一个系列开始</h2>
       <p>创建一个项目，把灵感、面料、草图与生成方案整理在同一张设计白板上。</p>
       <button

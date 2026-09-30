@@ -5,6 +5,57 @@ const NOW = "2026-08-05T06:00:00.000Z";
 
 test.setTimeout(60_000);
 
+test("pending 助手消息会自动同步为终态", async ({ page }) => {
+  const conversationId = "conversation-pending";
+  const conversations = [conversation(conversationId, "自动同步测试")];
+  const userMessage = message({
+    clientRequestId: "request-pending",
+    content: "请生成",
+    id: "user-pending",
+    role: "user",
+  });
+  const pendingMessage = message({
+    content: "正在理解你的设计需求…",
+    id: "assistant-pending",
+    replyToId: userMessage.id,
+    role: "assistant",
+    status: "pending",
+  });
+  const messages = new Map<string, unknown[]>([
+    [conversationId, [userMessage, pendingMessage]],
+  ]);
+  await mockWorkspace(page, {
+    conversations,
+    messages,
+    onCreateConversation: () =>
+      conversation("conversation-new", "新的设计对话"),
+    onSend: async () => {
+      throw new Error("本用例不应发送 Agent 消息");
+    },
+  });
+
+  await page.setViewportSize({ height: 1080, width: 1920 });
+  await page.goto(`/${PROJECT_ID}`);
+  const agent = page.getByRole("complementary", { name: "设计助手" });
+  await expect(agent.getByText("理解需求", { exact: true })).toBeVisible();
+
+  messages.set(conversationId, [
+    userMessage,
+    message({
+      content: "已创建生成任务。",
+      generationTaskId: "task-pending",
+      id: "assistant-pending",
+      replyToId: userMessage.id,
+      role: "assistant",
+    }),
+  ]);
+
+  await expect(agent.getByText("已创建生成任务。")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(agent.getByText("理解需求", { exact: true })).toHaveCount(0);
+});
+
 test("长备注自动扩展便签且不出现内部滚动", async ({ page }) => {
   const conversations = [conversation("conversation-note", "便签测试")];
   await mockWorkspace(page, {
@@ -467,6 +518,7 @@ function message(input: {
   readonly generationTaskId?: string | null;
   readonly replyToId?: string | null;
   readonly role: "assistant" | "user";
+  readonly status?: "completed" | "failed" | "pending";
 }) {
   return {
     clientRequestId: input.clientRequestId ?? null,
@@ -478,7 +530,7 @@ function message(input: {
     id: input.id,
     replyToId: input.replyToId ?? null,
     role: input.role,
-    status: "completed",
+    status: input.status ?? "completed",
     updatedAt: NOW,
   };
 }

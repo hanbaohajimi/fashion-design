@@ -217,6 +217,29 @@ function GenerationCanvasBridge() {
   const { dismissCandidate, tasks } = useGenerationWorkspace();
   const focusedTasks = useRef(new Set<string>());
 
+  useEffect(
+    () =>
+      editor.store.listen(
+        (entry) => {
+          for (const record of Object.values(entry.changes.removed)) {
+            if (
+              record.typeName !== "shape" ||
+              record.type !== IMAGE_SHAPE_TYPE
+            ) {
+              continue;
+            }
+            const candidateId = (record as ImageShape).props
+              .generationCandidateId;
+            if (candidateId) {
+              void dismissCandidate(candidateId);
+            }
+          }
+        },
+        { scope: "document", source: "user" },
+      ),
+    [dismissCandidate, editor],
+  );
+
   useEffect(() => {
     const imageShapes = editor
       .getCurrentPageShapes()

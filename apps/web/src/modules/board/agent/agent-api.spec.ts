@@ -1,10 +1,13 @@
+import type { AgentMessageView } from "@fashion/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   attachGenerationTaskToConversation,
   getProjectConversationRequest,
+  hasPendingAgentMessage,
   listAgentConversations,
   listAgentMessages,
+  reconcileAgentTurnMessages,
   sendAgentMessage,
   updateAgentConversation,
   validateAgentMessage,
@@ -14,7 +17,67 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function agentMessage(
+  id: string,
+  role: AgentMessageView["role"],
+): AgentMessageView {
+  return {
+    clientRequestId: role === "user" ? "request-123" : null,
+    content: id,
+    context: null,
+    createdAt: "2026-08-18T00:00:00.000Z",
+    error: null,
+    generationTaskId: null,
+    id,
+    replyToId: role === "assistant" ? "user-real" : null,
+    role,
+    status: "completed",
+    updatedAt: "2026-08-18T00:00:00.000Z",
+  };
+}
+
 describe("agent-api", () => {
+  it("轮询已写入真实消息时不会在发送完成后重复追加", () => {
+    const older = agentMessage("older", "user");
+    const userMessage = agentMessage("user-real", "user");
+    const assistantMessage = agentMessage("assistant-real", "assistant");
+
+    const reconciled = reconcileAgentTurnMessages(
+      [
+        older,
+        userMessage,
+        assistantMessage,
+        userMessage,
+        assistantMessage,
+      ],
+      ["optimistic-user-request-123", "optimistic-assistant-request-123"],
+      { userMessage, assistantMessage },
+    );
+
+    expect(reconciled.map((message) => message.id)).toEqual([
+      "older",
+      "user-real",
+      "assistant-real",
+    ]);
+    expect(reconciled[1]).toBe(userMessage);
+    expect(reconciled[2]).toBe(assistantMessage);
+  });
+
+  it("只在消息列表仍有 pending 助手消息时继续同步", () => {
+    expect(
+      hasPendingAgentMessage([
+        { role: "assistant", status: "pending" },
+        { role: "user", status: "completed" },
+      ]),
+    ).toBe(true);
+    expect(
+      hasPendingAgentMessage([
+        { role: "assistant", status: "completed" },
+        { role: "assistant", status: "failed" },
+      ]),
+    ).toBe(false);
+  });
+
   it("首会话请求仅在同一项目内复用", () => {
     const create = vi.fn((projectId: string) =>
       Promise.resolve({ id: `conversation-${projectId}`, projectId }),

@@ -27,8 +27,10 @@ import {
   attachGenerationTaskToConversation,
   createAgentConversation,
   getProjectConversationRequest,
+  hasPendingAgentMessage,
   listAgentConversations,
   listAgentMessages,
+  reconcileAgentTurnMessages,
   sendAgentMessage,
   updateAgentConversation,
   MAX_AGENT_CONTEXT_ITEMS,
@@ -58,6 +60,7 @@ const STATUS_LABELS: Readonly<Record<string, string>> = {
   running: "正在创作",
   succeeded: "创作完成",
 };
+const PENDING_MESSAGE_SYNC_MS = 5_000;
 
 export function BoardAgentPanel({
   boardStatus,
@@ -241,6 +244,19 @@ export function BoardAgentPanel({
     activeConversationId,
     messageRevision,
     projectId,
+  ]);
+
+  const hasPendingMessage = hasPendingAgentMessage(messages);
+  useEffect(() => {
+    if (!activeConversationBelongsToProject || !hasPendingMessage) return;
+    const timer = window.setTimeout(() => {
+      setMessageRevision((current) => current + 1);
+    }, PENDING_MESSAGE_SYNC_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    activeConversationBelongsToProject,
+    hasPendingMessage,
+    messageRevision,
   ]);
 
   useEffect(() => {
@@ -561,23 +577,13 @@ export function BoardAgentPanel({
           activeConversationIdRef.current === targetConversationId
         ) {
           setMessages((current) =>
-            retry
-              ? current.map((message) => {
-                  if (message.id === retry.userMessageId)
-                    return result.userMessage;
-                  if (message.id === retry.assistantMessageId)
-                    return result.assistantMessage;
-                  return message;
-                })
-              : [
-                  ...current.filter(
-                    (message) =>
-                      message.id !== optimisticUser.id &&
-                      message.id !== optimisticAssistant.id,
-                  ),
-                  result.userMessage,
-                  result.assistantMessage,
-                ],
+            reconcileAgentTurnMessages(
+              current,
+              retry
+                ? [retry.userMessageId, retry.assistantMessageId]
+                : [optimisticUser.id, optimisticAssistant.id],
+              result,
+            ),
           );
         }
         if (result.taskId && projectIdRef.current === targetProjectId) {

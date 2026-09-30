@@ -170,6 +170,23 @@ describe("GenerationService", () => {
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledOnce();
   });
 
+  it("Agent 已生成结构化提示词时要求编译器跳过重复模型调用", async () => {
+    await service.createFromAgent(
+      "user-1",
+      { ...request, projectId: "project-1", shapeIds: ["shape-1"] },
+      "agent-request-1",
+      "请生成",
+    );
+
+    expect(compiler.compile).toHaveBeenCalledWith(
+      "user-1",
+      "project-1",
+      "fashion editorial",
+      ["shape-1"],
+      { modelCalls: "skip" },
+    );
+  });
+
   it("用户未明确要求试穿时默认注入无人物展示硬约束", async () => {
     await service.create("user-1", {
       ...request,

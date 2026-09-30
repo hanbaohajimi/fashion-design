@@ -31,6 +31,51 @@ export function getProjectConversationRequest<T>(
 export const MAX_AGENT_MESSAGE_LENGTH = 4_000;
 export const MAX_AGENT_CONTEXT_ITEMS = 100;
 
+export function hasPendingAgentMessage(
+  messages: readonly Pick<AgentMessageView, "role" | "status">[],
+): boolean {
+  return messages.some(
+    (message) => message.role === "assistant" && message.status === "pending",
+  );
+}
+
+export function reconcileAgentTurnMessages(
+  current: readonly AgentMessageView[],
+  replacedMessageIds: readonly string[],
+  turn: Pick<AgentTurnResponse, "assistantMessage" | "userMessage">,
+): readonly AgentMessageView[] {
+  const incoming = new Map(
+    [turn.userMessage, turn.assistantMessage].map((message) => [
+      message.id,
+      message,
+    ]),
+  );
+  const replaced = new Set(replacedMessageIds);
+  const seen = new Set<string>();
+  const reconciled: AgentMessageView[] = [];
+
+  for (const message of current) {
+    if (seen.has(message.id)) continue;
+    const replacement = incoming.get(message.id);
+    if (replacement) {
+      reconciled.push(replacement);
+      seen.add(message.id);
+      continue;
+    }
+    if (replaced.has(message.id)) continue;
+    reconciled.push(message);
+    seen.add(message.id);
+  }
+
+  for (const message of [turn.userMessage, turn.assistantMessage]) {
+    if (seen.has(message.id)) continue;
+    reconciled.push(message);
+    seen.add(message.id);
+  }
+
+  return reconciled;
+}
+
 export function validateAgentMessage(
   content: string,
   contextItemCount: number,

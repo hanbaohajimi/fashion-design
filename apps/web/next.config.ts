@@ -11,10 +11,14 @@ if (existsSync(rootEnvPath)) {
 }
 
 const apiOrigin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:3001";
+const proxyTimeoutMs = 720_000;
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   devIndicators: false,
+  experimental: {
+    proxyTimeout: proxyTimeoutMs,
+  },
   reactStrictMode: true,
   transpilePackages: ["@fashion/shared"],
   async rewrites() {

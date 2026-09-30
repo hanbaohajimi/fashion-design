@@ -76,8 +76,12 @@ function createHarness() {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     boardElement: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    designAsset: {
       findMany: vi.fn().mockResolvedValue([]),
     },
     fabric: {
@@ -99,7 +103,7 @@ function createHarness() {
     },
   };
   const model = { generateJson: vi.fn() };
-  const generation = { create: vi.fn() };
+  const generation = { create: vi.fn(), createFromAgent: vi.fn() };
   const storage = {
     readPrefix: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3])),
   };
@@ -118,6 +122,28 @@ function createHarness() {
 }
 
 describe("AgentConversationsService", () => {
+  it("读取消息时把超时遗留的 pending 助手消息回收为可重试失败态", async () => {
+    const harness = createHarness();
+
+    await harness.service.messages("user-a", "conversation-a", {
+      limit: 50,
+    });
+
+    expect(harness.database.agentMessage.updateMany).toHaveBeenCalledWith({
+      data: {
+        content: expect.stringContaining("处理超时"),
+        errorCode: "AGENT_REQUEST_INTERRUPTED",
+        errorMessage: expect.stringContaining("pending"),
+        status: AgentMessageStatus.FAILED,
+      },
+      where: {
+        conversationId: "conversation-a",
+        status: AgentMessageStatus.PENDING,
+        updatedAt: { lt: expect.any(Date) },
+      },
+    });
+  });
+
   it("persists a normal assistant reply without creating a generation task", async () => {
     const harness = createHarness();
     harness.model.generateJson.mockResolvedValue({
@@ -246,7 +272,7 @@ describe("AgentConversationsService", () => {
         },
         message: "我会按选中的廓形参考生成一版风衣。",
       });
-      harness.generation.create.mockResolvedValue({ taskId: "task-a" });
+      harness.generation.createFromAgent.mockResolvedValue({ taskId: "task-a" });
       harness.database.agentMessage.update.mockResolvedValue(
         messageFixture(AgentMessageRole.ASSISTANT, {
           content: "我会按选中的廓形参考生成一版风衣。",
@@ -278,7 +304,7 @@ describe("AgentConversationsService", () => {
           expect.any(Number),
         );
       });
-      expect(harness.generation.create).toHaveBeenCalledWith(
+      expect(harness.generation.createFromAgent).toHaveBeenCalledWith(
         "user-a",
         {
           background: "opaque",
@@ -298,6 +324,78 @@ describe("AgentConversationsService", () => {
       );
     },
   );
+
+  it("把当前选中的生成资产图片传给 Agent，并关联到对应画布元素", async () => {
+    const harness = createHarness();
+    harness.database.boardElement.findMany.mockResolvedValue([
+      {
+        fileAssetId: null,
+        record: { props: { assetId: "asset-pink" } },
+        role: "garment_ref",
+        roleLabel: null,
+        shapeId: "shape-pink",
+        shapeType: "fashion-image",
+      },
+    ]);
+    harness.database.designAsset.findMany.mockResolvedValue([
+      {
+        height: 1200,
+        id: "asset-pink",
+        thumbnailUrl: "s3://generated/pink/thumbnail-1024.webp",
+        url: "s3://generated/pink/source",
+        width: 900,
+      },
+    ]);
+    harness.model.generateJson.mockResolvedValue({
+      action: "reply",
+      generation: null,
+      message: "已按当前选中的粉色成衣理解。",
+    });
+    harness.database.agentMessage.update.mockResolvedValue(
+      messageFixture(AgentMessageRole.ASSISTANT, {
+        content: "已按当前选中的粉色成衣理解。",
+        status: AgentMessageStatus.COMPLETED,
+      }),
+    );
+
+    await harness.service.send("user-a", "conversation-a", {
+      clientRequestId: "request-generated-image",
+      content: "请生成模特试穿图",
+      fileAssetIds: [],
+      shapeIds: ["shape-pink"],
+    });
+
+    expect(harness.database.designAsset.findMany).toHaveBeenCalledWith({
+      where: {
+        archivedAt: null,
+        id: { in: ["asset-pink"] },
+        projectId: "project-a",
+        project: { workspace: { ownerId: "user-a" } },
+      },
+      select: {
+        height: true,
+        id: true,
+        thumbnailUrl: true,
+        url: true,
+        width: true,
+      },
+    });
+    expect(harness.storage.readPrefix).toHaveBeenCalledWith(
+      "generated/pink/thumbnail-1024.webp",
+      expect.any(Number),
+    );
+    expect(harness.model.generateJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        images: [
+          {
+            detail: "auto",
+            url: "data:image/webp;base64,AQID",
+          },
+        ],
+        prompt: expect.stringContaining('"imageIndex":0'),
+      }),
+    );
+  });
 
   it("把便签、色值和面料标签作为权威事实传给 Agent", async () => {
     const harness = createHarness();

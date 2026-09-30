@@ -44,6 +44,9 @@ const AGENT_REQUEST_FAILED_CONTENT =
   "我暂时无法完成这次请求。你可以检查上下文后重试。";
 const AGENT_REQUEST_TIMEOUT_CONTENT =
   "设计助手处理时间超过 10 分钟，本次请求已停止。请重试；若仍失败，请减少上下文图片。";
+const AGENT_STALE_PENDING_MS = 10 * 60 * 1_000;
+const AGENT_INTERRUPTED_CONTENT =
+  "设计助手处理超时，任务已停止。请重试；若仍失败，请减少上下文图片。";
 const CLAUDE_IMAGE_MIME_TYPES = new Set([
   "image/gif",
   "image/jpeg",
@@ -58,7 +61,8 @@ const FIXED_GENERATION_PARAMETERS = {
 };
 
 function describeAgentRequestFailure(error: unknown) {
-  const errorMessage = error instanceof Error ? error.message : "Agent 请求失败";
+  const errorMessage =
+    error instanceof Error ? error.message : "Agent 请求失败";
   const isTimeout =
     (error instanceof Error && error.name === "TimeoutError") ||
     /\b(?:timeout|timed\s+out)\b/iu.test(errorMessage);
@@ -78,6 +82,7 @@ type AgentDatabase = Pick<
   | "agentConversation"
   | "agentMessage"
   | "boardElement"
+  | "designAsset"
   | "fabric"
   | "fileAsset"
   | "generationTask"
@@ -88,6 +93,7 @@ interface AgentCanvasElementContext {
   readonly color?: string;
   readonly fabricId?: string;
   readonly fabricTags?: readonly string[];
+  readonly imageIndex?: number;
   readonly label?: string;
   readonly role: string;
   readonly roleLabel?: string;
@@ -97,6 +103,7 @@ interface AgentCanvasElementContext {
 }
 
 interface ValidatedAgentContext extends AgentMessageContext {
+  readonly designAssetIds: readonly string[];
   readonly elements: readonly AgentCanvasElementContext[];
 }
 
@@ -245,6 +252,19 @@ export class AgentConversationsService {
     input: ListAgentMessagesInput,
   ) {
     await this.assertConversationOwnership(userId, conversationId);
+    await this.database.agentMessage.updateMany({
+      where: {
+        conversationId,
+        status: AgentMessageStatus.PENDING,
+        updatedAt: { lt: new Date(Date.now() - AGENT_STALE_PENDING_MS) },
+      },
+      data: {
+        content: AGENT_INTERRUPTED_CONTENT,
+        errorCode: "AGENT_REQUEST_INTERRUPTED",
+        errorMessage: "Agent request remained pending past the recovery deadline",
+        status: AgentMessageStatus.FAILED,
+      },
+    });
     const messages = await this.database.agentMessage.findMany({
       where: { conversationId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -382,7 +402,12 @@ export class AgentConversationsService {
     try {
       const [history, imageContext] = await Promise.all([
         this.loadHistory(conversationId, turn.userMessage.id),
-        this.loadContextImages(userId, context.fileAssetIds),
+        this.loadContextImages(
+          userId,
+          conversation.projectId,
+          context.fileAssetIds,
+          context.designAssetIds,
+        ),
       ]);
       const decision = await this.model.generateJson({
         images: imageContext.images,
@@ -398,7 +423,7 @@ export class AgentConversationsService {
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
         const outputSize = generationSizeFrom(imageContext.primaryDimensions);
-        const result = await this.generation.create(
+        const result = await this.generation.createFromAgent(
           userId,
           {
             ...FIXED_GENERATION_PARAMETERS,
@@ -618,6 +643,25 @@ export class AgentConversationsService {
         }),
       ]),
     ];
+    const designAssetIds = [
+      ...new Set(
+        shapeIds.flatMap((shapeId) => {
+          const element = elementByShapeId.get(shapeId);
+          if (!element || element.fileAssetId) return [];
+          const assetId = cleanContextText(
+            propsOf(element.record).assetId,
+            128,
+          );
+          return assetId ? [assetId] : [];
+        }),
+      ),
+    ];
+    if (fileAssetIds.length + designAssetIds.length > AGENT_IMAGE_LIMIT) {
+      throw new BadRequestException({
+        code: "AGENT_IMAGE_LIMIT_EXCEEDED",
+        message: `图片上下文不能超过 ${AGENT_IMAGE_LIMIT} 项`,
+      });
+    }
     if (fileAssetIds.length > 0) {
       const owned = await this.database.fileAsset.count({
         where: { id: { in: fileAssetIds }, ownerId: userId },
@@ -642,6 +686,14 @@ export class AgentConversationsService {
         })
       : [];
     const fabricById = new Map(fabrics.map((fabric) => [fabric.id, fabric]));
+    const fileImageIndex = new Map(
+      fileAssetIds.map((id, index) => [id, index] as const),
+    );
+    const designAssetImageIndex = new Map(
+      designAssetIds.map(
+        (id, index) => [id, fileAssetIds.length + index] as const,
+      ),
+    );
     const elementContexts = shapeIds.flatMap((shapeId) => {
       const element = elementByShapeId.get(shapeId);
       if (!element) return [];
@@ -654,6 +706,12 @@ export class AgentConversationsService {
       const text = cleanContextText(props.text, 1_000);
       const color = cleanContextText(props.color, 32);
       const label = cleanContextText(props.label, 120);
+      const assetId = cleanContextText(props.assetId, 128);
+      const imageIndex = element.fileAssetId
+        ? fileImageIndex.get(element.fileAssetId)
+        : assetId
+          ? designAssetImageIndex.get(assetId)
+          : undefined;
       const fallbackFabricTags = cleanContextTags(props.fabricTags);
       return [
         {
@@ -665,6 +723,7 @@ export class AgentConversationsService {
           ...(color ? { color } : {}),
           ...(label ? { label } : {}),
           ...(fabricId ? { fabricId } : {}),
+          ...(imageIndex === undefined ? {} : { imageIndex }),
           ...(fabric
             ? { fabricTags: fabric.tags }
             : fallbackFabricTags.length > 0
@@ -673,61 +732,116 @@ export class AgentConversationsService {
         },
       ];
     });
-    return { elements: elementContexts, fileAssetIds, shapeIds };
+    return {
+      designAssetIds,
+      elements: elementContexts,
+      fileAssetIds,
+      shapeIds,
+    };
   }
 
   private async loadContextImages(
     userId: string,
+    projectId: string,
     fileAssetIds: readonly string[],
+    designAssetIds: readonly string[],
   ) {
-    if (fileAssetIds.length === 0) {
+    if (fileAssetIds.length === 0 && designAssetIds.length === 0) {
       return { images: [], primaryDimensions: null };
     }
-    const files = await this.database.fileAsset.findMany({
-      where: {
-        id: { in: [...fileAssetIds] },
-        ownerId: userId,
-        status: FileStatus.READY,
-      },
-      take: AGENT_IMAGE_LIMIT,
-      select: {
-        height: true,
-        id: true,
-        mimeType: true,
-        objectKey: true,
-        thumbnail1024Key: true,
-        width: true,
-      },
-    });
+    const [files, designAssets] = await Promise.all([
+      fileAssetIds.length
+        ? this.database.fileAsset.findMany({
+            where: {
+              id: { in: [...fileAssetIds] },
+              ownerId: userId,
+              status: FileStatus.READY,
+            },
+            select: {
+              height: true,
+              id: true,
+              mimeType: true,
+              objectKey: true,
+              thumbnail1024Key: true,
+              width: true,
+            },
+          })
+        : Promise.resolve([]),
+      designAssetIds.length
+        ? this.database.designAsset.findMany({
+            where: {
+              archivedAt: null,
+              id: { in: [...designAssetIds] },
+              projectId,
+              project: { workspace: { ownerId: userId } },
+            },
+            select: {
+              height: true,
+              id: true,
+              thumbnailUrl: true,
+              url: true,
+              width: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
     const fileById = new Map(files.map((file) => [file.id, file] as const));
     const orderedFiles = fileAssetIds.flatMap((id) => {
       const file = fileById.get(id);
       return file ? [file] : [];
     });
-    const primary = orderedFiles.find(
-      (file) =>
-        typeof file.width === "number" &&
-        file.width > 0 &&
-        typeof file.height === "number" &&
-        file.height > 0,
+    const designAssetById = new Map(
+      designAssets.map((asset) => [asset.id, asset] as const),
     );
+    const orderedDesignAssets = designAssetIds.flatMap((id) => {
+      const asset = designAssetById.get(id);
+      return asset ? [asset] : [];
+    });
+    if (
+      orderedFiles.length !== fileAssetIds.length ||
+      orderedDesignAssets.length !== designAssetIds.length
+    ) {
+      throw new Error("部分选中图片尚未就绪或不可访问，请重新加载画布后重试");
+    }
+    const dimensions = [...orderedFiles, ...orderedDesignAssets];
+    const primary = dimensions.find(hasPositiveDimensions);
     const loadedImages = await Promise.all(
-      orderedFiles.map(async (file) => {
-        const useThumbnail = Boolean(file.thumbnail1024Key);
-        const objectKey = file.thumbnail1024Key ?? file.objectKey;
-        const mimeType = useThumbnail ? "image/webp" : file.mimeType;
-        if (!CLAUDE_IMAGE_MIME_TYPES.has(mimeType)) {
-          throw new Error(`Agent 不支持参考图片格式：${mimeType}`);
+      [
+        ...orderedFiles.map((file) => ({
+          mimeType: file.thumbnail1024Key ? "image/webp" : file.mimeType,
+          objectKey: file.thumbnail1024Key ?? file.objectKey,
+          remoteUrl: null,
+        })),
+        ...orderedDesignAssets.map((asset) => {
+          const stored = asset.thumbnailUrl ?? asset.url;
+          const objectKey = objectKeyFrom(stored);
+          return {
+            mimeType: asset.thumbnailUrl ? "image/webp" : null,
+            objectKey,
+            remoteUrl: objectKey ? null : safeRemoteImageUrl(stored),
+          };
+        }),
+      ].map(async (source) => {
+        if (source.remoteUrl) {
+          return {
+            byteLength: 0,
+            image: { detail: "auto" as const, url: source.remoteUrl },
+          };
+        }
+        if (!source.objectKey) {
+          throw new Error("选中的生成图片地址无效，请重新生成后重试");
         }
         const bytes = await this.storage.readPrefix(
-          objectKey,
+          source.objectKey,
           AGENT_IMAGE_MAX_BYTES + 1,
         );
-        if (bytes.byteLength === 0) {
-          throw new Error("Agent 参考图片为空");
-        }
+        if (bytes.byteLength === 0) throw new Error("Agent 参考图片为空");
         if (bytes.byteLength > AGENT_IMAGE_MAX_BYTES) {
           throw new Error("Agent 单张参考图片超过 7MB，请压缩后重试");
+        }
+        const mimeType = source.mimeType ?? detectImageMimeType(bytes);
+        if (!mimeType || !CLAUDE_IMAGE_MIME_TYPES.has(mimeType)) {
+          throw new Error(`Agent 不支持参考图片格式：${mimeType ?? "unknown"}`);
         }
         return {
           byteLength: bytes.byteLength,
@@ -819,6 +933,7 @@ const agentInstructions = [
   "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 只包含 prompt 与 negativePrompt，禁止输出尺寸、质量、格式、背景、采样步数或 CFG。",
   "回复使用简体中文，简洁说明理解和下一步，不承诺未执行的操作。",
   "canvasContext.elements 是从当前项目读取并校验过的权威事实；必须使用其中的便签、色值、标签和面料参数，禁止补造缺失属性。",
+  "本轮附带图片按 images 数组顺序编号；canvasContext.elements[*].imageIndex 指向当前所选元素的图片。当前所选图片优先于 recentConversation 中的旧方案描述，禁止沿用与当前图片冲突的旧颜色、款式或材质。",
   "生成提示词应具体描述服装品类、廓形、材质、色彩、细节、视角和光线。",
   "除非 currentUserMessage 明确要求模特试穿、真人上身或等价表达，否则生成提示词必须使用服装单品展示、平铺、人台、衣架或服装效果图，不得自行加入真人、人物、模特、试穿、T台或生活方式摄影。",
 ].join("\n");
@@ -829,10 +944,65 @@ function buildAgentPrompt(
   context: ValidatedAgentContext,
 ): string {
   return JSON.stringify({
-    canvasContext: context,
+    canvasContext: {
+      elements: context.elements,
+      fileAssetIds: context.fileAssetIds,
+      shapeIds: context.shapeIds,
+    },
     currentUserMessage: content,
     recentConversation: history,
   });
+}
+
+function hasPositiveDimensions(value: {
+  readonly height: number | null;
+  readonly width: number | null;
+}): boolean {
+  return (
+    typeof value.width === "number" &&
+    value.width > 0 &&
+    typeof value.height === "number" &&
+    value.height > 0
+  );
+}
+
+function objectKeyFrom(value: string): string | null {
+  return value.startsWith("s3://") ? value.slice("s3://".length) : null;
+}
+
+function safeRemoteImageUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function detectImageMimeType(bytes: Uint8Array): string | null {
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  )
+    return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return "image/jpeg";
+  }
+  const ascii = (start: number, end: number): string =>
+    String.fromCharCode(...bytes.slice(start, end));
+  if (bytes.length >= 6 && /GIF8[79]a/u.test(ascii(0, 6))) return "image/gif";
+  if (bytes.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP")
+    return "image/webp";
+  return null;
 }
 
 function generationSizeFrom(

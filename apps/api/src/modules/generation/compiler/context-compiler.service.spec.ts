@@ -68,7 +68,37 @@ describe("ContextCompilerService", () => {
     );
   });
 
-  it("调色板通道把色卡名称和近似色词写入正向 prompt", async () => {
+  it("Agent 已整理提示词时保留视觉引用但不重复调用模型", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        element("fabric-agent", "fabric_ref", {
+          url: "https://cdn.example/fabric-agent.webp",
+        }),
+        element("detail-agent", "detail_ref", {
+          url: "https://cdn.example/detail-agent.webp",
+        }),
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+
+    const result = await service.compile(
+      "user-1",
+      "project-1",
+      "structured agent prompt",
+      ["fabric-agent", "detail-agent"],
+      { modelCalls: "skip" },
+    );
+
+    expect(model.analyzeImage).not.toHaveBeenCalled();
+    expect(model.enhancePrompt).not.toHaveBeenCalled();
+    expect(result.positivePrompt).toContain("structured agent prompt");
+    expect(result.fabricReferences).toHaveLength(1);
+    expect(result.detailReferences).toHaveLength(1);
+    expect(result.enhancement).toBe("keywords");
+  });
+
+  it("调色板通道把精确 HEX 写入正向 prompt", async () => {
     database.project.findUnique.mockResolvedValue({
       boardElements: [
         element("palette-1", "palette", {
@@ -87,11 +117,46 @@ describe("ContextCompilerService", () => {
       "tailored evening dress",
     );
 
-    expect(result.palette).toEqual([
-      "crimson red",
-      expect.stringContaining("navy"),
-    ]);
-    expect(result.positivePrompt).toContain("palette: crimson red");
+    expect(result.palette).toEqual(["#C02030", "#081B4B"]);
+    expect(result.positivePrompt).toContain("palette: #C02030, #081B4B");
+    expect(result.positivePrompt).toContain(
+      "Exact garment color constraint, highest priority",
+    );
+    expect(result.enhancement).toBe("keywords");
+  });
+
+  it("色卡标签与色值冲突时以 HEX 为准并拒绝增强结果覆盖颜色", async () => {
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [
+        element("palette-stale-label", "palette", {
+          color: "#84c3c8",
+          colors: [
+            { color: "#84c3c8", id: "stale-oat", label: "OAT" },
+          ],
+          label: "OAT",
+        }),
+      ],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+    vi.mocked(model.enhancePrompt).mockResolvedValue({
+      negativePrompt: "",
+      positivePrompt: "OAT warm creamy off-white chiffon blouse",
+    });
+
+    const result = await service.compile(
+      "user-1",
+      "project-1",
+      "Change the whole garment to #84c3c8",
+      ["palette-stale-label"],
+    );
+
+    expect(result.palette).toEqual(["#84C3C8"]);
+    expect(result.positivePrompt).toContain("#84C3C8");
+    expect(result.positivePrompt).toContain(
+      "Hexadecimal values are authoritative",
+    );
+    expect(result.positivePrompt).not.toContain("OAT warm creamy off-white");
     expect(result.enhancement).toBe("keywords");
   });
 
@@ -119,8 +184,10 @@ describe("ContextCompilerService", () => {
       ["palette-multi"],
     );
 
-    expect(result.palette).toEqual(["OAT", "SLATE", "INK"]);
-    expect(result.positivePrompt).toContain("palette: OAT, SLATE, INK");
+    expect(result.palette).toEqual(["#C8AB84", "#708090", "#1C1C1C"]);
+    expect(result.positivePrompt).toContain(
+      "palette: #C8AB84, #708090, #1C1C1C",
+    );
   });
 
   it("图片色卡与图片备注都进入编译上下文且保留视觉参考", async () => {
@@ -605,8 +672,9 @@ describe("ContextCompilerService", () => {
 });
 
 describe("compilePaletteColor", () => {
-  it("只在调色板映射中把 hex 转为受控颜色词", () => {
-    expect(compilePaletteColor("#FF0000", null)).toContain("red");
+  it("优先规范化精确 HEX，仅在色值无效时回退到标签", () => {
+    expect(compilePaletteColor("#ff0000", "旧标签")).toBe("#FF0000");
+    expect(compilePaletteColor("not-a-color", "酒红")).toBe("酒红");
     expect(compilePaletteColor("not-a-color", null)).toBeNull();
   });
 });

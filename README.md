@@ -24,6 +24,19 @@ packages/
 
 ## 本地启动
 
+Windows 可直接双击仓库根目录的 `start-platform.cmd`。脚本会检查 Node.js、pnpm 与
+Docker，必要时启动 Docker Desktop、创建 `.env`、安装依赖，并依次启动基础设施、
+Supabase、数据库迁移、Web、API 与 Worker；页面就绪后会自动打开浏览器。
+
+也可以在终端中使用可选参数启动：
+
+```powershell
+.\start-platform.cmd -NoBrowser
+.\start-platform.cmd -SkipInstall
+```
+
+手动启动流程如下：
+
 ```bash
 cp .env.example .env
 pnpm install

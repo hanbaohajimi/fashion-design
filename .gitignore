@@ -4,6 +4,8 @@ node_modules/
 dist/
 coverage/
 output/playwright/
+.codex-ppt-build/
+output/
 .playwright-cli/
 .playwright-mcp/
 .vs/
@@ -19,9 +21,18 @@ __pycache__/
 *.py[cod]
 
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
+
+# Local credentials and private keys
+.npmrc
+.pypirc
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
 
 *.log
 *.tsbuildinfo

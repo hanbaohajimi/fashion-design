@@ -780,6 +780,51 @@
   margin: 0 0 1rem;
 }
 
+/* The first-project state keeps only the decision-making content: one title,
+   one sentence and one action. */
+.emptyStateStart {
+  max-width: 52rem;
+  padding-left: 0;
+}
+
+.emptyStateStart::before {
+  display: none;
+}
+
+.emptyStateStart h2 {
+  max-width: 48rem;
+  font-size: clamp(2.8rem, 6vw, 5rem);
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.emptyStateStart p {
+  max-width: 36rem;
+  margin: 1.25rem 0 2rem;
+  text-wrap: pretty;
+}
+
+.emptyStateStart .secondaryButton {
+  min-height: auto;
+  border: 0;
+  border-bottom: 1px solid currentcolor;
+  border-radius: 0;
+  padding: 0.25rem 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.emptyStateStart .secondaryButton:hover {
+  background: transparent;
+  color: var(--signal);
+  box-shadow: none;
+  transform: none;
+}
+
+.emptyStateStart .secondaryButton:active {
+  transform: translateY(1px);
+}
+
 /* Continuation sits on the left margin with a rule running out to the edge,
    like a "continued" mark in a printed index — not a centred web button. */
 .loadMore {
