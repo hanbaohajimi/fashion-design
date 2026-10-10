@@ -1,6 +1,10 @@
 "use client";
 
-import type { AgentRunStepView, AgentRunView } from "@fashion/shared";
+import type {
+  AgentPlanStepSpec,
+  AgentRunStepView,
+  AgentRunView,
+} from "@fashion/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
@@ -17,9 +21,12 @@ import {
   listAgentRuns,
   MAX_AGENT_MESSAGE_LENGTH,
   updateAgentRunStep,
+  updateAgentRunPlan,
   validateAgentMessage,
 } from "./agent-api";
 import styles from "./board-agent-panel.module.css";
+import { AgentPlanEditor } from "./AgentPlanEditor";
+import { attemptStatusLabel } from "./agent-plan-graph";
 
 const RUN_LABELS: Record<AgentRunView["status"], string> = {
   planning: "正在规划",
@@ -62,6 +69,8 @@ export function AgentWorkflowPanel({
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [graphDirty, setGraphDirty] = useState(false);
   const [planningRequested, setPlanningRequested] = useState(false);
   const [dirtyStepIds, setDirtyStepIds] = useState<ReadonlySet<string>>(
     new Set(),
@@ -152,7 +161,7 @@ export function AgentWorkflowPanel({
   });
   const control = useMutation({
     mutationFn: (input: {
-      readonly action: "execute" | "review" | "pause" | "cancel";
+      readonly action: "execute" | "review" | "reject" | "pause" | "cancel";
       readonly assetId?: string;
       readonly reason?: string;
     }) => {
@@ -182,8 +191,19 @@ export function AgentWorkflowPanel({
     onSuccess: storeRun,
     onError: refreshAfterFailure,
   });
+  const editPlan = useMutation({
+    mutationFn: (input: {
+      readonly steps: readonly AgentPlanStepSpec[];
+      readonly revision: number;
+    }) => {
+      if (!run) throw new Error("请先读取设计计划");
+      return updateAgentRunPlan(run.id, input);
+    },
+    onSuccess: storeRun,
+    onError: refreshAfterFailure,
+  });
   const submitControl = (input: {
-    readonly action: "execute" | "review" | "pause" | "cancel";
+    readonly action: "execute" | "review" | "reject" | "pause" | "cancel";
     readonly assetId?: string;
     readonly reason?: string;
   }): void => {
@@ -210,7 +230,11 @@ export function AgentWorkflowPanel({
     }
   }, [onTaskCreated, run]);
 
-  const busy = control.isPending || edit.isPending || create.isPending;
+  const busy =
+    control.isPending ||
+    edit.isPending ||
+    editPlan.isPending ||
+    create.isPending;
   const terminal = run?.status === "completed" || run?.status === "canceled";
   const hasDirtySteps =
     run?.steps.some((step) => dirtyStepIds.has(step.id)) ?? false;
@@ -226,7 +250,7 @@ export function AgentWorkflowPanel({
     run &&
     !run.steps.some((step) => step.status === "running") &&
     ["ready", "paused", "failed"].includes(run.status);
-  const error = create.error ?? control.error ?? edit.error;
+  const error = create.error ?? control.error ?? edit.error ?? editPlan.error;
 
   return (
     <section className={styles.workflowPanel} aria-label="设计工作流">
@@ -338,6 +362,16 @@ export function AgentWorkflowPanel({
                 </button>
               </div>
               <p className={styles.workflowIntent}>{run.intent}</p>
+              <button
+                type="button"
+                disabled={busy || hasDirtySteps}
+                onClick={() => {
+                  editPlan.reset();
+                  setGraphOpen(true);
+                }}
+              >
+                打开节点图工作区
+              </button>
               {detail.isError ? (
                 <p className={styles.error} role="alert">
                   {errorText(detail.error, "状态同步失败，请刷新重试")}
@@ -360,7 +394,7 @@ export function AgentWorkflowPanel({
                           : null
                     }
                     editable={
-                      step.status === "pending" &&
+                      (step.canEditInputs ?? step.status === "pending") &&
                       ["ready", "paused", "failed"].includes(run.status)
                     }
                     busy={busy || run.status === "running"}
@@ -375,6 +409,9 @@ export function AgentWorkflowPanel({
                     onReview={(assetId, reason) =>
                       submitControl({ action: "review", assetId, reason })
                     }
+                    onReject={(reason) =>
+                      submitControl({ action: "reject", reason })
+                    }
                   />
                 ))}
               </ol>
@@ -384,7 +421,9 @@ export function AgentWorkflowPanel({
                     <button
                       className={styles.workflowPrimary}
                       type="button"
-                      disabled={busy || detail.isError || hasDirtySteps}
+                      disabled={
+                        busy || detail.isError || hasDirtySteps || graphDirty
+                      }
                       onClick={() => submitControl({ action: "execute" })}
                     >
                       {nextStep?.status === "failed"
@@ -437,6 +476,17 @@ export function AgentWorkflowPanel({
           {notice}
         </p>
       ) : null}
+      {run && graphOpen ? (
+        <AgentPlanEditor
+          run={run}
+          busy={busy}
+          onDirtyChange={setGraphDirty}
+          onClose={() => setGraphOpen(false)}
+          onSave={async (steps, revision) =>
+            editPlan.mutateAsync({ steps, revision })
+          }
+        />
+      ) : null}
     </section>
   );
 }
@@ -450,6 +500,7 @@ function WorkflowNode({
   onSave,
   onReview,
   onDirtyChange,
+  onReject,
 }: {
   readonly step: AgentRunStepView;
   readonly number: number;
@@ -459,6 +510,7 @@ function WorkflowNode({
   readonly onSave: (prompt: string, negativePrompt: string) => Promise<void>;
   readonly onReview: (assetId: string, reason: string) => void;
   readonly onDirtyChange: (stepId: string, dirty: boolean) => void;
+  readonly onReject: (reason: string) => void;
 }) {
   const [draft, setDraft] = useState<{
     prompt: string;
@@ -468,10 +520,21 @@ function WorkflowNode({
   const negativePrompt = editable
     ? (draft?.negativePrompt ?? step.negativePrompt)
     : step.negativePrompt;
-  const [selectedAssetId, setSelectedAssetId] = useState(
-    step.selectedAssetId ?? "",
-  );
-  const [reason, setReason] = useState("");
+  const reviewKey = JSON.stringify([
+    step.generationTaskId,
+    step.candidates.map((candidate) => candidate.assetId),
+  ]);
+  const [selection, setSelection] = useState({
+    key: reviewKey,
+    assetId: step.selectedAssetId ?? "",
+    reason: "",
+  });
+  const selectedAssetId =
+    selection.key === reviewKey &&
+    step.candidates.some((candidate) => candidate.assetId === selection.assetId)
+      ? selection.assetId
+      : "";
+  const reason = selection.key === reviewKey ? selection.reason : "";
   const dirty = editable && draft !== null;
   useEffect(() => {
     onDirtyChange(step.id, dirty);
@@ -568,7 +631,13 @@ function WorkflowNode({
                     name={`result-${step.id}`}
                     value={candidate.assetId}
                     checked={selectedAssetId === candidate.assetId}
-                    onChange={() => setSelectedAssetId(candidate.assetId)}
+                    onChange={() =>
+                      setSelection({
+                        key: reviewKey,
+                        assetId: candidate.assetId,
+                        reason,
+                      })
+                    }
                     aria-label={`选择节点 ${number} 的结果 ${index + 1}`}
                   />
                 ) : null}
@@ -588,13 +657,19 @@ function WorkflowNode({
           {step.status === "waiting_review" ? (
             <>
               <label htmlFor={`review-reason-${step.id}`}>
-                采用理由（可选）
+                选择或调整理由（否决时必填）
               </label>
               <textarea
                 id={`review-reason-${step.id}`}
                 value={reason}
                 maxLength={1_000}
-                onChange={(event) => setReason(event.target.value)}
+                onChange={(event) =>
+                  setSelection({
+                    key: reviewKey,
+                    assetId: selectedAssetId,
+                    reason: event.target.value,
+                  })
+                }
                 placeholder="例如：保留廓形，下一步强化织物表现"
               />
               <button
@@ -605,10 +680,43 @@ function WorkflowNode({
               >
                 采用结果并完成节点
               </button>
+              <button
+                type="button"
+                disabled={busy || !reason.trim()}
+                onClick={() => onReject(reason.trim())}
+              >
+                结果不满意，重新调整
+              </button>
+              <p>
+                重新调整需要填写原因。当前候选会记为否决，下一次生成由你主动执行。
+              </p>
               <p>确认后可继续下一节点。成图已经放到白板。</p>
             </>
           ) : null}
         </fieldset>
+      ) : null}
+      {step.attempts?.length ? (
+        <details className={styles.workflowPrompt}>
+          <summary>查看每次尝试与反馈</summary>
+          {step.attempts.map((attempt) => (
+            <section key={attempt.id}>
+              <strong>
+                尝试 {attempt.ordinal} · {attemptStatusLabel(attempt.status)}
+              </strong>
+              <p>
+                {attempt.status === "rejected" ? "调整原因：" : ""}
+                {attempt.error}
+              </p>
+              <pre>{attempt.prompt}</pre>
+              <p>
+                {!attempt.candidates.length &&
+                ["succeeded", "rejected"].includes(attempt.status)
+                  ? "此轮产物已归档或暂不可访问"
+                  : `${attempt.candidates.length} 个候选，历史产物可在节点图中查看设计路径。`}
+              </p>
+            </section>
+          ))}
+        </details>
       ) : null}
     </li>
   );

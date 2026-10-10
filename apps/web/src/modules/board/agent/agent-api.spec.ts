@@ -16,6 +16,7 @@ import {
   sendAgentMessage,
   updateAgentConversation,
   updateAgentRunStep,
+  updateAgentRunPlan,
   validateAgentMessage,
 } from "./agent-api";
 
@@ -43,6 +44,26 @@ function agentMessage(
 }
 
 describe("agent-api", () => {
+  it("保存完整节点规格和固定revision，拒绝候选只发送调整原因", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ id: "run-a" })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await updateAgentRunPlan("run-a", { revision: 7, steps: [] });
+    await controlAgentRun("run-a", "reject", {
+      revision: 8,
+      reason: "织物反光过强",
+    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/agent-runs/run-a/plan");
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)),
+    ).toEqual({ revision: 7, steps: [] });
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body)),
+    ).toEqual({ revision: 8, reason: "织物反光过强" });
+  });
   it("读取持久化计划与状态时使用会话或计划作用域，禁用缓存", async () => {
     const fetchMock = vi
       .fn()
@@ -108,13 +129,11 @@ describe("agent-api", () => {
   it("revision冲突保留409状态并提示刷新", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ message: "REVISION_CONFLICT" }), {
-            status: 409,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: "REVISION_CONFLICT" }), {
+          status: 409,
+        }),
+      ),
     );
     await expect(
       controlAgentRun("run-a", "execute", { revision: 1 }),

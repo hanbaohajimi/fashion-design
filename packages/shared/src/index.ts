@@ -198,6 +198,19 @@ export interface AgentRunCandidate {
   readonly height: number | null;
 }
 
+export interface AgentRunAttemptView {
+  readonly id: string;
+  readonly ordinal: number;
+  readonly status: string;
+  readonly generationTaskId: string | null;
+  readonly prompt: string;
+  readonly negativePrompt: string;
+  readonly parentAssetId: string | null;
+  readonly candidates: readonly AgentRunCandidate[];
+  readonly error: string | null;
+  readonly createdAt: string;
+}
+
 export interface AgentRunStepView extends AgentPlanStepSpec {
   readonly id: string;
   readonly ordinal: number;
@@ -206,6 +219,8 @@ export interface AgentRunStepView extends AgentPlanStepSpec {
   readonly selectedAssetId: string | null;
   readonly candidates: readonly AgentRunCandidate[];
   readonly error: string | null;
+  readonly attempts?: readonly AgentRunAttemptView[];
+  readonly canEditInputs?: boolean;
 }
 
 export interface AgentRunView {
@@ -219,6 +234,7 @@ export interface AgentRunView {
   readonly updatedAt: string;
   readonly error: string | null;
   readonly steps: readonly AgentRunStepView[];
+  readonly sourceAssets?: readonly AgentRunCandidate[];
 }
 
 export interface AgentMessageContext {

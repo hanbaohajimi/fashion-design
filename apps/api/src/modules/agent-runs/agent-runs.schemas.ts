@@ -55,6 +55,15 @@ export const agentPlanSchema = z
 export const agentRunRevisionSchema = z
   .object({ revision: z.number().int().nonnegative() })
   .strict();
+export const updateAgentRunPlanSchema = z
+  .object({ revision: z.number().int().nonnegative(), steps: agentPlanSchema })
+  .strict();
+export const rejectAgentRunSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    reason: z.string().trim().min(1).max(1000),
+  })
+  .strict();
 export const updateAgentRunStepSchema = z
   .object({
     revision: z.number().int().nonnegative(),
@@ -73,3 +82,5 @@ export const reviewAgentRunSchema = z
   .strict();
 export type UpdateAgentRunStepInput = z.infer<typeof updateAgentRunStepSchema>;
 export type ReviewAgentRunInput = z.infer<typeof reviewAgentRunSchema>;
+export type UpdateAgentRunPlanInput = z.infer<typeof updateAgentRunPlanSchema>;
+export type RejectAgentRunInput = z.infer<typeof rejectAgentRunSchema>;

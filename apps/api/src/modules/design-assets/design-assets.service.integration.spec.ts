@@ -22,6 +22,116 @@ describe("DesignAssetsService lineage integration", () => {
     await prisma.$disconnect();
   });
 
+  it("已否决产物仍保留原执行快照和会话关联，即使节点已开始下一次尝试", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const conversation = await prisma.agentConversation.create({
+        data: {
+          projectId: fixture.projectId,
+          createdById: fixture.userId,
+          title: "可回溯的节点重试",
+        },
+      });
+      const task = await prisma.generationTask.create({
+        data: {
+          userId: fixture.userId,
+          projectId: fixture.projectId,
+          status: GenerationTaskStatus.SUCCEEDED,
+          taskType: "t2i",
+          input: { prompt: "初次设计" },
+          designStep: {
+            create: {
+              projectId: fixture.projectId,
+              actor: "agent",
+              tool: "t2i",
+              intent: "初次设计",
+              inputSnapshot: {
+                version: 1,
+                sources: [],
+                constraints: {
+                  palette: [],
+                  notes: ["原始衣领要求"],
+                  avoidLabels: [],
+                  fabricTerms: [],
+                },
+                parameters: { prompt: "初次设计" },
+              },
+            },
+          },
+        },
+      });
+      const run = await prisma.agentRun.create({
+        data: {
+          userId: fixture.userId,
+          projectId: fixture.projectId,
+          conversationId: conversation.id,
+          clientRequestId: crypto.randomUUID(),
+          intent: "调整衣领",
+          contextSnapshot: {},
+          status: "running",
+          steps: {
+            create: {
+              key: "draft",
+              ordinal: 0,
+              tool: "generate_design",
+              title: "衣领方案",
+              instruction: "调整衣领",
+              prompt: "重新设计更窄的衣领",
+              negativePrompt: "",
+              status: "running",
+              attempt: 2,
+              attempts: {
+                create: {
+                  ordinal: 1,
+                  executionKey: crypto.randomUUID(),
+                  requestSnapshot: { prompt: "初次设计" },
+                  status: "rejected",
+                  error: "衣领过宽",
+                  leaseToken: crypto.randomUUID(),
+                  leaseExpiresAt: new Date(),
+                  generationTaskId: task.id,
+                },
+              },
+            },
+          },
+        },
+      });
+      const asset = await prisma.designAsset.create({
+        data: {
+          projectId: fixture.projectId,
+          rootAssetId: crypto.randomUUID(),
+          generationTaskId: task.id,
+          operation: DesignAssetOperation.GENERATED,
+          url: "s3://generated/old-attempt.png",
+          decisions: {
+            create: {
+              userId: fixture.userId,
+              kind: "rejected",
+              reason: "衣领过宽",
+              clientRequestId: `${run.id}:attempt-1:reject`,
+            },
+          },
+        },
+      });
+      const path = await service.path(fixture.userId, asset.id);
+      expect(path.steps.at(-1)).toMatchObject({
+        conversationId: conversation.id,
+        parameters: { prompt: "初次设计" },
+        constraints: { notes: ["原始衣领要求"] },
+        outputs: [
+          { id: asset.id, url: `/api/design-assets/${asset.id}/content` },
+        ],
+      });
+      expect(path.decisions).toEqual([
+        expect.objectContaining({ kind: "rejected", reason: "衣领过宽" }),
+      ]);
+      expect(JSON.stringify(path)).not.toContain("重新设计更窄的衣领");
+      expect(JSON.stringify(path)).not.toContain("s3://");
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
   it("Agent 编辑任务与步骤一起写入，白板修改和请求重放不覆盖原快照", async () => {
     const fixture = await createImportFixture();
     try {

@@ -93,6 +93,134 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AgentWorkflowPanel", () => {
+  it("否决后保留原因与原prompt，只在主动执行时跟踪新的生成任务", async () => {
+    const candidate = {
+      assetId: "old-asset",
+      url: "/old.png",
+      thumbnailUrl: null,
+      width: 768,
+      height: 1024,
+    };
+    const review = run({
+      status: "waiting_review",
+      revision: 2,
+      steps: [
+        step("step-first", 0, {
+          status: "waiting_review",
+          generationTaskId: "old-task",
+          candidates: [candidate],
+          canEditInputs: false,
+        }),
+        step("step-second", 1),
+      ],
+    });
+    const rejected = run({
+      revision: 3,
+      steps: [
+        step("step-first", 0, {
+          canEditInputs: true,
+          attempts: [
+            {
+              id: "attempt-old",
+              ordinal: 1,
+              status: "rejected",
+              generationTaskId: "old-task",
+              prompt: "original attempt prompt",
+              negativePrompt: "logos",
+              parentAssetId: null,
+              candidates: [candidate],
+              error: "袖型需要收窄",
+              createdAt: review.createdAt,
+            },
+          ],
+        }),
+        step("step-second", 1),
+      ],
+    });
+    mocks.listAgentRuns.mockResolvedValue({ items: [review] });
+    mocks.fetchAgentRun.mockResolvedValue(review);
+    mocks.controlAgentRun.mockResolvedValueOnce(rejected);
+    renderPanel();
+    const reject = await screen.findByRole("button", {
+      name: "结果不满意，重新调整",
+    });
+    expect((reject as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("radio", { name: "选择节点 1 的结果 1" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "选择或调整理由（否决时必填）" }),
+      { target: { value: "袖型需要收窄" } },
+    );
+    fireEvent.click(reject);
+    await screen.findByRole("button", { name: "执行下一节点" });
+    expect(mocks.controlAgentRun).toHaveBeenCalledWith("run-a", "reject", {
+      revision: 2,
+      reason: "袖型需要收窄",
+    });
+    expect(mocks.controlAgentRun).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("调整原因：袖型需要收窄")).toBeTruthy();
+    expect(screen.getByText("original attempt prompt")).toBeTruthy();
+    mocks.controlAgentRun.mockResolvedValueOnce(
+      run({
+        status: "waiting_review",
+        revision: 4,
+        steps: [
+          step("step-first", 0, {
+            status: "waiting_review",
+            generationTaskId: "new-task",
+            candidates: [{ ...candidate, assetId: "new-asset" }],
+            canEditInputs: false,
+          }),
+          step("step-second", 1),
+        ],
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "执行下一节点" }));
+    await waitFor(() =>
+      expect(mocks.onTaskCreated).toHaveBeenCalledWith("new-task"),
+    );
+    expect(mocks.onTaskCreated).toHaveBeenCalledWith("old-task");
+    const adopt = screen.getByRole("button", {
+      name: "采用结果并完成节点",
+    }) as HTMLButtonElement;
+    expect(adopt.disabled).toBe(true);
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "选择或调整理由（否决时必填）",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("");
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "结果不满意，重新调整",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.click(adopt);
+    expect(mocks.controlAgentRun).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("radio", { name: "选择节点 1 的结果 1" }));
+    expect(adopt.disabled).toBe(false);
+    mocks.controlAgentRun.mockResolvedValueOnce(
+      run({
+        revision: 5,
+        steps: [
+          step("step-first", 0, {
+            status: "succeeded",
+            selectedAssetId: "new-asset",
+          }),
+          step("step-second", 1),
+        ],
+      }),
+    );
+    fireEvent.click(adopt);
+    await waitFor(() =>
+      expect(mocks.controlAgentRun).toHaveBeenCalledWith("run-a", "review", {
+        revision: 4,
+        assetId: "new-asset",
+      }),
+    );
+  });
   it("规划请求仍在等待时同步planning记录，取消后晚到结果保持canceled", async () => {
     const planning = run({ status: "planning", steps: [] });
     const canceled = run({ status: "canceled", revision: 2, steps: [] });
@@ -280,7 +408,7 @@ describe("AgentWorkflowPanel", () => {
     expect(confirm.disabled).toBe(true);
     fireEvent.click(screen.getByRole("radio", { name: "选择节点 1 的结果 2" }));
     fireEvent.change(
-      screen.getByRole("textbox", { name: "采用理由（可选）" }),
+      screen.getByRole("textbox", { name: "选择或调整理由（否决时必填）" }),
       { target: { value: "织物更自然" } },
     );
     fireEvent.click(confirm);

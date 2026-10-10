@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { AgentRunView } from "@fashion/shared";
+import type { AgentPlanStepSpec, AgentRunView } from "@fashion/shared";
 
 const PROJECT_ID = "e2e-agent-workspace";
 const NOW = "2026-08-05T06:00:00.000Z";
@@ -121,9 +121,29 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
       prompt?: string;
       negativePrompt?: string;
       assetId?: string;
+      reason?: string;
+      steps?: AgentPlanStepSpec[];
     };
     expect(body.revision).toBe(plan.revision);
-    if (route.request().method() === "PATCH") {
+    if (endpoint === "plan" && body.steps) {
+      const original = plan.steps;
+      plan = {
+        ...plan,
+        revision: plan.revision + 1,
+        steps: body.steps.map((spec, ordinal) => ({
+          ...(original.find((step) => step.key === spec.key) ?? {
+            id: `node-${spec.key}`,
+            status: "pending" as const,
+            generationTaskId: null,
+            selectedAssetId: null,
+            candidates: [],
+            error: null,
+          }),
+          ...spec,
+          ordinal,
+        })),
+      };
+    } else if (route.request().method() === "PATCH") {
       savedPrompt = body.prompt ?? "";
       plan = {
         ...plan,
@@ -141,6 +161,10 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
     } else if (endpoint === "execute") {
       executeCount += 1;
       const next = plan.steps.find((step) => step.status === "pending");
+      const currentCandidates = candidates.map((candidate, index) => ({
+        ...candidate,
+        assetId: `workflow-asset-${executeCount}-${index + 1}`,
+      }));
       plan = {
         ...plan,
         status: "waiting_review",
@@ -150,8 +174,50 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
             ? {
                 ...step,
                 status: "waiting_review",
-                generationTaskId: "workflow-task",
-                candidates,
+                generationTaskId: `workflow-task-${executeCount}`,
+                candidates: currentCandidates,
+                canEditInputs: false,
+                attempts: [
+                  ...(step.attempts ?? []),
+                  {
+                    id: `attempt-${executeCount}`,
+                    ordinal: executeCount,
+                    status: "waiting_review",
+                    generationTaskId: `workflow-task-${executeCount}`,
+                    prompt: step.prompt,
+                    negativePrompt: step.negativePrompt,
+                    parentAssetId: null,
+                    candidates: currentCandidates,
+                    error: null,
+                    createdAt: NOW,
+                  },
+                ],
+              }
+            : step,
+        ),
+      };
+    } else if (endpoint === "reject") {
+      plan = {
+        ...plan,
+        status: "ready",
+        revision: plan.revision + 1,
+        steps: plan.steps.map((step) =>
+          step.status === "waiting_review"
+            ? {
+                ...step,
+                status: "pending",
+                canEditInputs: true,
+                generationTaskId: null,
+                candidates: [],
+                attempts: step.attempts?.map((attempt) =>
+                  attempt.status === "waiting_review"
+                    ? {
+                        ...attempt,
+                        status: "rejected",
+                        error: body.reason ?? "",
+                      }
+                    : attempt,
+                ),
               }
             : step,
         ),
@@ -178,13 +244,17 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
   await page.route("**/api/agent-runs/workflow-a", (route) =>
     route.fulfill({ json: plan }),
   );
-  await page.route("**/api/generations/workflow-task", (route) =>
+  await page.route("**/api/generations/workflow-task-*", (route) =>
     route.fulfill({
       json: {
-        ...generationTask("workflow-task"),
+        ...generationTask(
+          new URL(route.request().url()).pathname.split("/").at(-1) ??
+            "workflow-task",
+        ),
         output: {
-          images: candidates.map((candidate) => ({
+          images: candidates.map((candidate, index) => ({
             ...candidate,
+            assetId: `workflow-asset-${executeCount}-${index + 1}`,
             width: 3,
             height: 4,
           })),
@@ -220,12 +290,83 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
     agent.getByRole("button", { name: "执行下一节点" }),
   ).toBeEnabled();
   expect(savedPrompt).toContain("structured waist");
+  await agent.getByRole("button", { name: "打开节点图工作区" }).click();
+  const graph = page.getByRole("dialog", { name: "编辑设计节点图" });
+  await graph.getByRole("button", { name: "添加节点" }).click();
+  await graph.getByRole("textbox", { name: "节点标题" }).fill("细节探索");
+  await graph
+    .getByRole("textbox", { name: "节点提示词" })
+    .fill("coat pocket details");
+  await graph
+    .getByRole("button", { name: "连接「建立通勤风衣廓形」的输出" })
+    .click();
+  await graph.getByRole("button", { name: "连接「细节探索」的输入" }).click();
+  await expect(graph.getByRole("combobox", { name: "输入来源" })).toHaveValue(
+    "step:silhouette",
+  );
+  await graph.getByRole("button", { name: "上移节点" }).click();
+  await graph.getByRole("button", { name: "下移节点" }).click();
+  await graph
+    .locator('[class*="nodeBody"]')
+    .filter({ hasText: "建立通勤风衣廓形" })
+    .click();
+  await graph.getByRole("button", { name: "删除节点" }).click();
+  await expect(graph.getByRole("alert")).toContainText("先重新连接");
+  await graph
+    .locator('[class*="nodeBody"]')
+    .filter({ hasText: "细节探索" })
+    .click();
+  await graph.getByRole("button", { name: "保存节点图" }).click();
+  await expect(
+    graph.getByRole("button", { name: "保存节点图" }),
+  ).toBeDisabled();
+  await page.screenshot({ path: "output/playwright/agent-graph-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    graph.getByRole("navigation", { name: "移动端节点列表" }),
+  ).toBeVisible();
+  await graph
+    .getByRole("navigation", { name: "移动端节点列表" })
+    .getByRole("button", { name: /细节探索/ })
+    .click();
+  await expect(graph.getByRole("combobox", { name: "输入来源" })).toHaveValue(
+    "step:silhouette",
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: "output/playwright/agent-graph-mobile.png" });
+  await graph.getByRole("button", { name: "关闭节点编辑器" }).click();
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await agent.getByRole("button", { name: "执行下一节点" }).dblclick();
   await expect(
     agent.getByText("等待你选择结果", { exact: true }),
   ).toBeVisible();
   expect(executeCount).toBe(1);
   await agent.getByText("查看执行提示词").first().click();
+  await agent
+    .getByRole("textbox", { name: "选择或调整理由（否决时必填）" })
+    .fill("面料反光过强，需要哑光表现");
+  await agent.getByRole("button", { name: "结果不满意，重新调整" }).click();
+  await expect(
+    agent.getByRole("button", { name: "执行下一节点" }),
+  ).toBeVisible();
+  expect(executeCount).toBe(1);
+  await agent.getByText("查看每次尝试与反馈").first().click();
+  await expect(
+    agent.getByText("调整原因：面料反光过强，需要哑光表现"),
+  ).toBeVisible();
+  await agent.getByText("查看或修改节点提示词").first().click();
+  await agent
+    .getByRole("textbox", { name: "节点提示词" })
+    .first()
+    .fill("loose trench coat with matte fabric");
+  await agent.getByRole("button", { name: "保存节点提示词" }).first().click();
+  await agent.getByRole("button", { name: "执行下一节点" }).click();
+  await expect(
+    agent.getByText("等待你选择结果", { exact: true }),
+  ).toBeVisible();
+  expect(executeCount).toBe(2);
   await agent.getByRole("radio", { name: "选择节点 1 的结果 2" }).check();
   await page.screenshot({
     path: "output/playwright/agent-workflow-desktop.png",
@@ -242,8 +383,8 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
   await expect(
     agent.getByRole("button", { name: "执行下一节点" }),
   ).toBeVisible();
-  expect(reviewedAssetId).toBe("workflow-asset-2");
-  expect(executeCount).toBe(1);
+  expect(reviewedAssetId).toBe("workflow-asset-2-2");
+  expect(executeCount).toBe(2);
   await page.reload();
   await expect(agent.locator("header strong").first()).toHaveText("风衣设计");
   await expect(agent.getByRole("tab", { name: "设计工作流" })).toHaveAttribute(
@@ -256,7 +397,7 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
   await expect(
     agent.getByRole("button", { name: "执行下一节点" }),
   ).toBeVisible();
-  expect(executeCount).toBe(1);
+  expect(executeCount).toBe(2);
   await agent.getByRole("button", { name: "暂停计划" }).click();
   await expect(
     agent.getByRole("button", { name: "继续执行下一节点" }),

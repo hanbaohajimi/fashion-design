@@ -1,0 +1,444 @@
+.scrim {
+  position: fixed;
+  z-index: 5000;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  background: rgb(37 35 29 / 36%);
+  place-items: center;
+}
+.editor {
+  display: flex;
+  flex-direction: column;
+  width: min(1440px, 100%);
+  max-height: calc(100dvh - 40px);
+  border: 1px solid #d8d1c5;
+  border-radius: 12px;
+  background: #fbfaf6;
+  color: #34352e;
+  box-shadow: 0 22px 70px rgb(37 35 29 / 24%);
+  overflow: hidden;
+}
+.editor :where(button, input, textarea, select) {
+  font: inherit;
+  font-size: 12px;
+}
+.editor button {
+  min-height: 34px;
+  border: 1px solid #d8d1c5;
+  border-radius: 6px;
+  padding: 6px 11px;
+  background: #fffefa;
+  color: #565044;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.editor button:hover:not(:disabled) {
+  background: #f0ebe1;
+}
+.editor button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.editor :where(button, input, textarea, select):focus-visible {
+  outline: 2px solid #b94d31;
+  outline-offset: 2px;
+}
+.editor :disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #e3ddd2;
+  padding: 20px 24px;
+  gap: 20px;
+}
+.header span {
+  color: #a14e36;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+.header h2 {
+  margin: 6px 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+.header p {
+  max-width: 90ch;
+  margin: 0;
+  color: #8b8070;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e3ddd2;
+  gap: 16px;
+}
+.toolbar p {
+  margin: 0;
+  color: #8b8070;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.toolbar button {
+  flex: 0 0 auto;
+}
+.notice {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 24px;
+  background: #f3e8dd;
+  color: #9a4c34;
+  font-size: 12px;
+}
+.content {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: min(650px, calc(100dvh - 270px));
+  grid-template-columns: minmax(0, 1fr) 352px;
+}
+.canvas {
+  overflow: auto;
+  min-width: 0;
+  background-color: #f5f2eb;
+  background-image: radial-gradient(#d2c8b8 0.6px, transparent 0.6px);
+  background-size: 18px 18px;
+  overscroll-behavior: contain;
+}
+.graphSurface {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+.edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.edges > path {
+  fill: none;
+  stroke: #ac9a81;
+  stroke-width: 1.6;
+}
+.edges marker path {
+  fill: #ac9a81;
+}
+.graphNode {
+  position: absolute;
+  width: 224px;
+  min-height: 152px;
+  border: 1px solid #d7cbbc;
+  border-radius: 9px;
+  background: #fffefa;
+  box-shadow: 0 3px 9px rgb(82 65 39 / 6%);
+}
+.graphNode[data-selected="true"] {
+  border-color: #a65338;
+  box-shadow: 0 0 0 1px #a65338;
+}
+.graphNode[data-locked="true"] {
+  background: #efeee8;
+}
+.editor .nodeBody {
+  display: grid;
+  width: 100%;
+  min-height: 152px;
+  border: 0;
+  padding: 14px 15px;
+  background: transparent;
+  text-align: left;
+  align-content: start;
+  gap: 8px;
+}
+.nodeBody > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.nodeBody b {
+  color: #9a8367;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+.nodeBody small {
+  color: #9d8e7a;
+  font-size: 9px;
+  font-weight: 400;
+}
+.nodeBody strong {
+  color: #36382f;
+  font-size: 13px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.nodeBody p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: #837868;
+  font-size: 10px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.editor .inputPort,
+.editor .outputPort {
+  position: absolute;
+  z-index: 1;
+  top: 67px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  border: 2px solid #9c876a;
+  border-radius: 50%;
+  padding: 0;
+  background: #fffefa;
+}
+.editor .inputPort {
+  left: -10px;
+}
+.editor .outputPort {
+  right: -10px;
+}
+.editor .outputPort[aria-pressed="true"] {
+  border-color: #a65338;
+  background: #a65338;
+}
+.properties {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid #e3ddd2;
+  padding: 20px;
+  gap: 8px;
+  overscroll-behavior: contain;
+}
+.properties header {
+  margin-bottom: 8px;
+}
+.properties header > span {
+  color: #a14e36;
+  font-size: 9px;
+  font-weight: 700;
+}
+.properties h3 {
+  margin: 5px 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.properties p {
+  margin: 0;
+  color: #897e6e;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.properties > label {
+  margin-top: 5px;
+  color: #776b59;
+  font-size: 10px;
+  font-weight: 650;
+}
+.properties :where(input, textarea, select) {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d9cebd;
+  border-radius: 6px;
+  padding: 9px;
+  background: #fffefa;
+  color: #4b463c;
+}
+.properties textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.65;
+}
+.nodeActions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  gap: 6px;
+}
+.editor .danger {
+  color: #9d442d;
+}
+.history {
+  border-top: 1px solid #ded5c8;
+  margin-top: 15px;
+  padding-top: 10px;
+}
+.history h4 {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+.history details {
+  border-bottom: 1px solid #e3ddd2;
+  padding: 8px 0;
+}
+.history summary {
+  color: #806c53;
+  cursor: pointer;
+  font-size: 11px;
+}
+.history pre {
+  padding: 10px;
+  background: #f1eee6;
+  color: #706555;
+  font-size: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.history details > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 8px;
+  gap: 6px;
+}
+.history button {
+  display: grid;
+  padding: 4px;
+  font-size: 10px;
+  gap: 5px;
+}
+.history img {
+  width: 100%;
+  height: 95px;
+  object-fit: contain;
+  background: #f0ede4;
+}
+.footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  border-top: 1px solid #e3ddd2;
+  padding: 12px 24px;
+  gap: 8px;
+}
+.footer > div:first-child {
+  min-width: 180px;
+  flex: 1 1 auto;
+}
+.footer p {
+  margin: 0;
+  color: #927c61;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.footer p[role="alert"] {
+  color: #9d442d;
+}
+.editor .primary {
+  border-color: #34352e;
+  background: #34352e;
+  color: #fffefa;
+}
+.editor .primary:hover:not(:disabled) {
+  background: #525347;
+}
+.closeConfirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9d442d;
+  font-size: 11px;
+}
+.mobileList {
+  display: none;
+}
+@media (max-width: 767px) {
+  .scrim {
+    padding: 8px;
+  }
+  .editor {
+    max-height: calc(100dvh - 16px);
+    width: 100%;
+  }
+  .header {
+    padding: 16px;
+    gap: 10px;
+  }
+  .header h2 {
+    font-size: 18px;
+  }
+  .header p {
+    max-height: 54px;
+    overflow-y: auto;
+  }
+  .toolbar,
+  .notice {
+    padding: 10px 16px;
+    gap: 8px;
+  }
+  .content {
+    display: block;
+    height: min(650px, calc(100dvh - 280px));
+    overflow-y: auto;
+  }
+  .canvas {
+    display: none;
+  }
+  .mobileList {
+    display: grid;
+    gap: 5px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e3ddd2;
+  }
+  .mobileList button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    text-align: left;
+  }
+  .mobileList button[aria-pressed="true"] {
+    border-color: #a65338;
+    background: #f1e6d9;
+  }
+  .mobileList b {
+    color: #a18462;
+    font-family: var(--font-mono, monospace);
+    font-size: 10px;
+  }
+  .mobileList span {
+    display: grid;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    gap: 4px;
+  }
+  .mobileList small {
+    color: #8b7f6c;
+    font-size: 9px;
+  }
+  .properties {
+    overflow: visible;
+    border: 0;
+    padding: 16px;
+  }
+  .footer {
+    padding: 10px 16px;
+  }
+  .footer > div:first-child {
+    flex-basis: 100%;
+  }
+  .closeConfirm {
+    flex-wrap: wrap;
+  }
+}

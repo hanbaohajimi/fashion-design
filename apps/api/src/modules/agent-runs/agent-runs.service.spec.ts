@@ -65,6 +65,8 @@ const compiled = {
 
 function matches(row: Row, where: Row, steps: Row[] = []): boolean {
   return Object.entries(where).every(([key, value]) => {
+    if (key === "OR")
+      return (value as Row[]).some((query) => matches(row, query, steps));
     if (key === "project") return true;
     if (key === "step")
       return steps.some(
@@ -128,6 +130,7 @@ function harness(initialSpecs = specs) {
     updatedAt: now,
   }));
   const attempts: Row[] = [];
+  let nextStepId = steps.length;
   const tasks: Row[] = [];
   const assets: Row[] = [
     {
@@ -204,7 +207,7 @@ function harness(initialSpecs = specs) {
       createMany: vi.fn(async ({ data }: { data: Row[] }) => {
         for (const row of data)
           steps.push({
-            id: `step-${steps.length}`,
+            id: `step-${nextStepId++}`,
             attempt: 0,
             generationTaskId: null,
             selectedAssetId: null,
@@ -224,6 +227,11 @@ function harness(initialSpecs = specs) {
         const found = steps.filter((row) => matches(row, where));
         found.forEach((row) => apply(row, data));
         return { count: found.length };
+      }),
+      deleteMany: vi.fn(async ({ where }: { where: Row }) => {
+        const deleted = steps.filter((row) => matches(row, where));
+        for (const row of deleted) steps.splice(steps.indexOf(row), 1);
+        return { count: deleted.length };
       }),
     },
     agentRunStepAttempt: {
@@ -367,6 +375,300 @@ describe("Agent plan schema", () => {
 });
 
 describe("AgentRunsService", () => {
+  it("adds, removes and reorders only unexecuted nodes while preserving IDs for retained keys", async () => {
+    const base = required(specs[0]);
+    const other = { ...base, key: "other", title: "平行参考方案" };
+    const edit = required(specs[1]);
+    const h = harness([base, other, edit]);
+    const ids = new Map(h.steps.map((step) => [step.key, step.id]));
+    const swapped = await h.service.updatePlan("user-a", "run-a", {
+      revision: 1,
+      steps: [base, edit, other],
+    });
+    expect(swapped.steps.map((step) => step.key)).toEqual([
+      "base",
+      "sleeve",
+      "other",
+    ]);
+    for (const step of swapped.steps) expect(step.id).toBe(ids.get(step.key));
+    const added = {
+      ...base,
+      key: "new",
+      tool: "edit_design" as const,
+      sourceStepKey: "sleeve",
+    };
+    const changed = await h.service.updatePlan("user-a", "run-a", {
+      revision: swapped.revision,
+      steps: [base, edit, added],
+    });
+    expect(changed.steps.map((step) => step.ordinal)).toEqual([0, 1, 2]);
+    expect(changed.steps.map((step) => step.key)).toEqual([
+      "base",
+      "sleeve",
+      "new",
+    ]);
+    expect(changed.steps[1]?.id).toBe(ids.get("sleeve"));
+    expect(h.steps.some((step) => step.key === "other")).toBe(false);
+  });
+
+  it("locks every admitted node's structure and ordinal even after rejecting its results", async () => {
+    const h = harness();
+    const running = await h.service.execute("user-a", "run-a", 1);
+    h.finish(
+      required(required(running.steps[0]).generationTaskId),
+      "rejected-base",
+    );
+    const waiting = await h.service.get("user-a", "run-a");
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: waiting.revision,
+      reason: "袖型不符合",
+    });
+    const base = required(specs[0]);
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: rejected.revision,
+        steps: [{ ...base, title: "覆盖历史标题" }, required(specs[1])],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: rejected.revision,
+        steps: [{ ...base, key: "insert-before" }, ...specs],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: rejected.revision,
+        steps: [{ ...base, key: "replacement" }],
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.attempts).toHaveLength(1);
+    expect(rejected.steps[0]?.canEditInputs).toBe(true);
+  });
+
+  it("rejects invalid graphs, unselected sources and cross-project sources without writes", async () => {
+    const h = harness();
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: 1,
+        steps: [required(specs[1]), required(specs[0])],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: 1,
+        steps: [
+          {
+            ...required(specs[1]),
+            sourceAssetId: "forged",
+            sourceStepKey: null,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    required(h.assets[0]).projectId = "other-project";
+    await expect(
+      h.service.updatePlan("user-a", "run-a", {
+        revision: 1,
+        steps: [
+          {
+            ...required(specs[1]),
+            sourceAssetId: "source-a",
+            sourceStepKey: null,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(h.runs[0]?.revision).toBe(1);
+    expect(h.database.agentRunStep.deleteMany).not.toHaveBeenCalled();
+    await expect(
+      h.service.updatePlan("intruder", "run-a", { revision: 1, steps: specs }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("completes a plan when its remaining unexecuted suffix is deleted", async () => {
+    const h = harness();
+    const running = await h.service.execute("user-a", "run-a", 1);
+    h.finish(
+      required(required(running.steps[0]).generationTaskId),
+      "final-base",
+    );
+    const waiting = await h.service.get("user-a", "run-a");
+    const selected = await h.service.review("user-a", "run-a", {
+      revision: waiting.revision,
+      assetId: "final-base",
+      reason: "基础方案已足够",
+    });
+    const completed = await h.service.updatePlan("user-a", "run-a", {
+      revision: selected.revision,
+      steps: [required(specs[0])],
+    });
+    expect(completed.status).toBe("completed");
+    expect(completed.steps).toHaveLength(1);
+    expect(completed.steps[0]?.selectedAssetId).toBe("final-base");
+    expect(h.attempts).toHaveLength(1);
+  });
+
+  it("rejects all actual candidates, keeps original facts and makes a new attempt after prompt editing", async () => {
+    const h = harness();
+    const running = await h.service.execute("user-a", "run-a", 1);
+    const oldTaskId = required(required(running.steps[0]).generationTaskId);
+    h.finish(oldTaskId, "reject-a");
+    h.finish(oldTaskId, "reject-b");
+    const waiting = await h.service.get("user-a", "run-a");
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: waiting.revision,
+      reason: "  色彩过亮  ",
+    });
+    expect(rejected.status).toBe("ready");
+    expect(rejected.steps[0]).toMatchObject({
+      status: "pending",
+      generationTaskId: null,
+      canEditInputs: true,
+    });
+    expect(rejected.steps[0]?.attempts?.[0]).toMatchObject({
+      status: "rejected",
+      error: "色彩过亮",
+      generationTaskId: oldTaskId,
+      prompt: "loose coat",
+    });
+    expect(rejected.steps[0]?.attempts?.[0]?.candidates).toHaveLength(2);
+    expect(h.decisions).toEqual([
+      expect.objectContaining({
+        assetId: "reject-a",
+        kind: "rejected",
+        reason: "色彩过亮",
+      }),
+      expect.objectContaining({
+        assetId: "reject-b",
+        kind: "rejected",
+        reason: "色彩过亮",
+      }),
+    ]);
+    const refreshed = await h.service.get("user-a", "run-a");
+    expect(refreshed.revision).toBe(rejected.revision);
+    expect(refreshed.status).toBe("ready");
+    expect(refreshed.steps[0]?.status).toBe("pending");
+    await expect(
+      h.service.reject("user-a", "run-a", {
+        revision: rejected.revision,
+        reason: "重复否决",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    const edited = await h.service.updateStep(
+      "user-a",
+      "run-a",
+      required(rejected.steps[0]).id,
+      {
+        revision: rejected.revision,
+        prompt: "muted gray coat",
+        negativePrompt: "bright color",
+      },
+    );
+    const retry = await h.service.execute("user-a", "run-a", edited.revision);
+    expect(h.attempts).toHaveLength(2);
+    expect(h.tasks).toHaveLength(2);
+    expect(h.attempts[0]?.requestSnapshot).toMatchObject({
+      prompt: "loose coat",
+    });
+    expect(h.attempts[0]?.compiledSnapshot).toEqual(compiled);
+    expect(h.attempts[0]?.generationTaskId).toBe(oldTaskId);
+    expect(retry.steps[0]?.attempts?.[1]).toMatchObject({
+      ordinal: 2,
+      prompt: "muted gray coat",
+      negativePrompt: "bright color",
+    });
+    expect(h.attempts[0]?.executionKey).not.toBe(h.attempts[1]?.executionKey);
+    expect(retry.steps[0]?.canEditInputs).toBe(false);
+  });
+
+  it("does not let a late rejected attempt callback replace the current attempt", async () => {
+    const h = harness();
+    const response = deferred<{ taskId: string }>();
+    const submitted = deferred<undefined>();
+    h.generation.createFromAgent.mockImplementationOnce(
+      async (userId, request, key) => {
+        const result = h.submit(userId, request, key);
+        submitted.resolve(undefined);
+        return response.promise.then(() => result);
+      },
+    );
+    const oldExecution = h.service.execute("user-a", "run-a", 1);
+    await submitted.promise;
+    const oldTaskId = String(required(h.tasks[0]).id);
+    h.finish(oldTaskId, "late-rejected");
+    const waiting = await h.service.get("user-a", "run-a");
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: waiting.revision,
+      reason: "重新设计",
+    });
+    const current = await h.service.execute(
+      "user-a",
+      "run-a",
+      rejected.revision,
+    );
+    response.resolve({ taskId: oldTaskId });
+    const late = await oldExecution;
+    expect(late.status).toBe("running");
+    expect(late.steps[0]?.generationTaskId).toBe(
+      current.steps[0]?.generationTaskId,
+    );
+    expect(late.steps[0]?.generationTaskId).not.toBe(oldTaskId);
+    expect(late.steps[0]?.attempts?.[0]?.status).toBe("rejected");
+  });
+
+  it("hides signed URLs and compiled internals while preserving user rejection reasons", async () => {
+    const h = harness();
+    const running = await h.service.execute("user-a", "run-a", 1);
+    const secret = "PRIVATE_SIGNED_SECRET";
+    const attempt = required(h.attempts[0]);
+    attempt.compiledSnapshot = {
+      ...compiled,
+      leaseToken: secret,
+      styleReferences: [
+        { imageUrl: `https://private.test/source?signature=${secret}` },
+      ],
+    };
+    attempt.requestSnapshot = {
+      ...(attempt.requestSnapshot as Row),
+      referenceImageUrl: `https://private.test/source?signature=${secret}`,
+    };
+    attempt.error = `provider failed at https://private.test/source?signature=${secret}; token=${secret}`;
+    required(h.runs[0]).error = attempt.error;
+    required(h.steps[0]).error = attempt.error;
+    const safe = await h.service.get("user-a", "run-a");
+    expect(JSON.stringify(safe)).not.toContain(secret);
+    expect(JSON.stringify(safe)).not.toContain("compiledSnapshot");
+    expect(JSON.stringify(safe)).not.toContain("leaseToken");
+    expect(safe.sourceAssets?.[0]?.url).toBe(
+      "/api/design-assets/source-a/content",
+    );
+    h.finish(
+      required(required(running.steps[0]).generationTaskId),
+      "with-public-reason",
+    );
+    const waiting = await h.service.get("user-a", "run-a");
+    const reason =
+      "参考 https://example.test/design，标记 token=contrast 为配色说明";
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: waiting.revision,
+      reason,
+    });
+    expect(rejected.steps[0]?.attempts?.[0]?.error).toBe(reason);
+    expect(h.decisions[0]?.reason).toBe(reason);
+  });
+
+  it("requires a nonempty rejection reason and checks ownership", async () => {
+    const h = harness();
+    await expect(
+      h.service.reject("user-a", "run-a", { revision: 1, reason: " " }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      h.service.reject("intruder", "run-a", { revision: 1, reason: "不符合" }),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(h.decisions).toHaveLength(0);
+  });
+
   it("executes one node, waits for selection and binds the chosen asset into the next edit", async () => {
     const h = harness();
     const first = await h.service.execute("user-a", "run-a", 1);

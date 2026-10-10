@@ -18,6 +18,8 @@ import { agentIdSchema } from "../agent-conversations/agent-conversations.schema
 import {
   agentRunRevisionSchema,
   reviewAgentRunSchema,
+  rejectAgentRunSchema,
+  updateAgentRunPlanSchema,
   updateAgentRunStepSchema,
 } from "./agent-runs.schemas";
 import { AgentRunsService } from "./agent-runs.service";
@@ -76,6 +78,32 @@ export class AgentRunsController {
       user.userId,
       parse(agentIdSchema, id),
       parse(agentRunRevisionSchema, body).revision,
+    );
+  }
+
+  @Patch(":id/plan")
+  updatePlan(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    return this.runs.updatePlan(
+      user.userId,
+      parse(agentIdSchema, id),
+      parse(updateAgentRunPlanSchema, body),
+    );
+  }
+
+  @Post(":id/reject")
+  reject(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    return this.runs.reject(
+      user.userId,
+      parse(agentIdSchema, id),
+      parse(rejectAgentRunSchema, body),
     );
   }
 

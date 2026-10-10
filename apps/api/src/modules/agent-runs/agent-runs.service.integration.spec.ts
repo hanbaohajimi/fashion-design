@@ -45,7 +45,7 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-async function fixture() {
+async function fixture(specs: AgentPlanStepSpec[] = plan) {
   const user = await prisma.user.create({
     data: {
       email: `agent-run-${crypto.randomUUID()}@example.test`,
@@ -98,7 +98,7 @@ async function fixture() {
       elements: [{ text: "保留落肩袖" }],
     },
   });
-  const run = await service.completePlan(user.id, reserved.run.id, plan);
+  const run = await service.completePlan(user.id, reserved.run.id, specs);
   const finish = async (taskId: string, ids: string[]) =>
     prisma.$transaction(async (tx) => {
       for (const id of ids)
@@ -137,6 +137,293 @@ async function fixture() {
 describe("AgentRunsService PostgreSQL integration", () => {
   afterAll(async () => {
     await prisma.$disconnect();
+  });
+
+  it("swaps pending ordinals under the real unique index and preserves retained IDs across add/remove", async () => {
+    const base = required(plan[0]);
+    const edit = required(plan[1]);
+    const alternate = { ...base, key: "alternate", title: "另一基础方向" };
+    const h = await fixture([base, alternate, edit]);
+    try {
+      const ids = new Map(h.run.steps.map((step) => [step.key, step.id]));
+      const swapped = await h.service.updatePlan(h.userId, h.run.id, {
+        revision: h.run.revision,
+        steps: [base, edit, alternate],
+      });
+      expect(swapped.steps.map((step) => step.key)).toEqual([
+        "base",
+        "sleeve",
+        "alternate",
+      ]);
+      expect(swapped.steps.map((step) => step.ordinal)).toEqual([0, 1, 2]);
+      for (const step of swapped.steps) expect(step.id).toBe(ids.get(step.key));
+      const detail = {
+        ...edit,
+        key: "detail",
+        title: "细节变化",
+        sourceStepKey: "sleeve",
+      };
+      const changed = await h.service.updatePlan(h.userId, h.run.id, {
+        revision: swapped.revision,
+        steps: [base, edit, detail],
+      });
+      expect(changed.steps[1]?.id).toBe(ids.get("sleeve"));
+      await expect(
+        prisma.agentRunStep.count({
+          where: { runId: h.run.id, key: "alternate" },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.agentRunStep.findMany({
+          where: { runId: h.run.id },
+          orderBy: { ordinal: "asc" },
+          select: { key: true, ordinal: true },
+        }),
+      ).resolves.toEqual([
+        { key: "base", ordinal: 0 },
+        { key: "sleeve", ordinal: 1 },
+        { key: "detail", ordinal: 2 },
+      ]);
+      await expect(
+        prisma.agentRunStepAttempt.count({
+          where: { step: { runId: h.run.id } },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("lets only one concurrent graph update or execution claim the same revision", async () => {
+    const h = await fixture();
+    try {
+      const changedPlan = [
+        { ...required(plan[0]), prompt: "changed before execution" },
+        required(plan[1]),
+      ];
+      const results = await Promise.allSettled([
+        h.service.updatePlan(h.userId, h.run.id, {
+          revision: h.run.revision,
+          steps: changedPlan,
+        }),
+        h.service.execute(h.userId, h.run.id, h.run.revision),
+      ]);
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.find((result) => result.status === "rejected"),
+      ).toMatchObject({ status: "rejected", reason: { status: 409 } });
+      const tasks = await prisma.generationTask.count({
+        where: { userId: h.userId },
+      });
+      const attempts = await prisma.agentRunStepAttempt.count({
+        where: { step: { runId: h.run.id } },
+      });
+      expect(tasks).toBeLessThanOrEqual(1);
+      expect(attempts).toBe(tasks);
+      const current = await h.service.get(h.userId, h.run.id);
+      if (current.status === "running")
+        expect(current.steps[0]?.attempts?.[0]?.prompt).toBe("loose coat");
+      else expect(current.steps[0]?.prompt).toBe("changed before execution");
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("serializes review against rejection and writes only the winning design decision", async () => {
+    const h = await fixture();
+    try {
+      const running = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const candidateIds = [crypto.randomUUID(), crypto.randomUUID()];
+      await h.finish(
+        required(required(running.steps[0]).generationTaskId),
+        candidateIds,
+      );
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const results = await Promise.allSettled([
+        h.service.review(h.userId, h.run.id, {
+          revision: waiting.revision,
+          assetId: required(candidateIds[0]),
+          reason: "选定当前方向",
+        }),
+        h.service.reject(h.userId, h.run.id, {
+          revision: waiting.revision,
+          reason: "整体方向不合适",
+        }),
+      ]);
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.find((result) => result.status === "rejected"),
+      ).toMatchObject({ status: "rejected", reason: { status: 409 } });
+      const decisions = await prisma.designAssetDecision.findMany({
+        where: { userId: h.userId },
+      });
+      const kinds = new Set(decisions.map((decision) => decision.kind));
+      expect(kinds.size).toBe(1);
+      if (kinds.has("selected")) expect(decisions).toHaveLength(1);
+      else {
+        expect(kinds.has("rejected")).toBe(true);
+        expect(decisions).toHaveLength(2);
+      }
+      const current = await h.service.get(h.userId, h.run.id);
+      expect(current.status).toBe("ready");
+      expect(current.steps[0]?.status).toBe(
+        kinds.has("selected") ? "succeeded" : "pending",
+      );
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("retries a rejected result with a new task and retains the old request, compiler snapshot and reason", async () => {
+    const h = await fixture();
+    try {
+      const running = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const oldTaskId = required(required(running.steps[0]).generationTaskId);
+      await h.finish(oldTaskId, [crypto.randomUUID(), crypto.randomUUID()]);
+      const firstAttempt = await prisma.agentRunStepAttempt.findFirstOrThrow({
+        where: { stepId: required(running.steps[0]).id },
+      });
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const rejected = await h.service.reject(h.userId, h.run.id, {
+        revision: waiting.revision,
+        reason: "配色太强烈，重新做低饱和方案",
+      });
+      expect(rejected.steps[0]?.candidates).toHaveLength(0);
+      expect(rejected.steps[0]?.attempts?.[0]?.candidates).toHaveLength(2);
+      const refreshed = await h.service.get(h.userId, h.run.id);
+      expect(refreshed.revision).toBe(rejected.revision);
+      expect(refreshed.steps[0]?.status).toBe("pending");
+      const revised = await h.service.updateStep(
+        h.userId,
+        h.run.id,
+        required(rejected.steps[0]).id,
+        {
+          revision: rejected.revision,
+          prompt: "muted gray loose coat",
+          negativePrompt: "bright saturated color",
+        },
+      );
+      await expect(
+        h.service.updatePlan(h.userId, h.run.id, {
+          revision: revised.revision,
+          steps: [
+            {
+              ...required(plan[0]),
+              prompt: "muted gray loose coat",
+              negativePrompt: "bright saturated color",
+              title: "覆盖已执行结构",
+            },
+            required(plan[1]),
+          ],
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      const retried = await h.service.execute(
+        h.userId,
+        h.run.id,
+        revised.revision,
+      );
+      expect(retried.steps[0]?.generationTaskId).not.toBe(oldTaskId);
+      const history = await prisma.agentRunStepAttempt.findMany({
+        where: { stepId: required(running.steps[0]).id },
+        orderBy: { ordinal: "asc" },
+      });
+      expect(history).toHaveLength(2);
+      expect(history[0]).toMatchObject({
+        id: firstAttempt.id,
+        status: "rejected",
+        generationTaskId: oldTaskId,
+        requestSnapshot: firstAttempt.requestSnapshot,
+        compiledSnapshot: firstAttempt.compiledSnapshot,
+        error: "配色太强烈，重新做低饱和方案",
+      });
+      expect(history[1]?.requestSnapshot).toMatchObject({
+        prompt: "muted gray loose coat",
+        negativePrompt: "bright saturated color",
+      });
+      await expect(
+        prisma.generationTask.findUniqueOrThrow({ where: { id: oldTaskId } }),
+      ).resolves.toMatchObject({ status: GenerationTaskStatus.SUCCEEDED });
+      await expect(
+        prisma.designAssetDecision.count({
+          where: { userId: h.userId, kind: "rejected" },
+        }),
+      ).resolves.toBe(2);
+      await expect(
+        prisma.generationTask.count({ where: { userId: h.userId } }),
+      ).resolves.toBe(2);
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("rolls back every rejection write if recording a later candidate fails", async () => {
+    const h = await fixture();
+    try {
+      const running = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const candidateIds = [crypto.randomUUID(), crypto.randomUUID()];
+      await h.finish(
+        required(required(running.steps[0]).generationTaskId),
+        candidateIds,
+      );
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const attemptId = required(required(waiting.steps[0]).attempts?.[0]).id;
+      const ordered = await prisma.designAsset.findMany({
+        where: {
+          generationTaskId: required(
+            required(waiting.steps[0]).generationTaskId,
+          ),
+          projectId: h.projectId,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+      const later = required(ordered[1]);
+      await prisma.designAssetDecision.create({
+        data: {
+          assetId: later.id,
+          userId: h.userId,
+          kind: "rejected",
+          reason: "预置冲突用于检查回滚",
+          clientRequestId: `agent-attempt:${attemptId}:reject`,
+        },
+      });
+      await expect(
+        h.service.reject(h.userId, h.run.id, {
+          revision: waiting.revision,
+          reason: "所有候选重新设计",
+        }),
+      ).rejects.toMatchObject({ code: "P2002" });
+      const unchanged = await h.service.get(h.userId, h.run.id);
+      expect(unchanged.status).toBe("waiting_review");
+      expect(unchanged.revision).toBe(waiting.revision);
+      expect(unchanged.steps[0]?.status).toBe("waiting_review");
+      expect(unchanged.steps[0]?.attempts?.[0]?.status).toBe("succeeded");
+      await expect(
+        prisma.designAssetDecision.count({ where: { userId: h.userId } }),
+      ).resolves.toBe(1);
+      await expect(
+        prisma.designAssetDecision.count({
+          where: { assetId: required(ordered[0]).id, userId: h.userId },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await h.cleanup();
+    }
   });
 
   it("serializes concurrent execution with revision CAS and passes the second selected candidate to the edit node", async () => {

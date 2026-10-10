@@ -1,4 +1,5 @@
 import { GenerationTaskStatus, Prisma, type PrismaClient } from "@fashion/db";
+import { AGENT_PLAN_MAX_STEPS, type AgentRunCandidate } from "@fashion/shared";
 import type {
   AgentPlanStepSpec,
   AgentRunView,
@@ -23,6 +24,8 @@ import {
   agentPlanSchema,
   type ReviewAgentRunInput,
   type UpdateAgentRunStepInput,
+  type UpdateAgentRunPlanInput,
+  type RejectAgentRunInput,
 } from "./agent-runs.schemas";
 
 export const AGENT_RUNS_DB = Symbol("AGENT_RUNS_DB");
@@ -253,7 +256,7 @@ export class AgentRunsService {
       });
     // An admitted attempt freezes its inputs, even if queuing failed. A failed terminal task may be replaced with a new attempt.
     const latest = step.attempts[0];
-    if (latest) {
+    if (latest && latest.status !== "rejected") {
       const task = await this.taskFor(run, latest);
       if (
         !task ||
@@ -284,6 +287,98 @@ export class AgentRunsService {
     return this.toView(await this.ownedRun(userId, runId));
   }
 
+  async updatePlan(
+    userId: string,
+    runId: string,
+    input: UpdateAgentRunPlanInput,
+  ): Promise<AgentRunView> {
+    const run = await this.ownedRun(userId, runId);
+    this.assertRevision(run, input.revision);
+    if (!new Set(["ready", "paused", "failed"]).has(run.status))
+      throw new ConflictException({
+        code: "AGENT_RUN_PLAN_IMMUTABLE",
+        message: "请等待当前执行或结果选择完成后再编辑计划",
+      });
+    const parsed = agentPlanSchema.safeParse(input.steps);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: "INVALID_AGENT_PLAN",
+        message: parsed.error.issues[0]?.message ?? "设计计划无效",
+      });
+    const immutableKeys = new Set<string>();
+    for (const step of run.steps) {
+      if (canEditStructure(step)) continue;
+      immutableKeys.add(step.key);
+      const nextIndex = parsed.data.findIndex((next) => next.key === step.key);
+      const next = parsed.data[nextIndex];
+      if (
+        nextIndex !== step.ordinal ||
+        !next ||
+        stableJson(next) !== stableJson(stepSpec(step))
+      )
+        throw new ConflictException({
+          code: "AGENT_RUN_STEP_IMMUTABLE",
+          message: "已执行节点的内容和位置必须保留，可编辑后续未执行节点",
+        });
+    }
+    const selectedAssets = new Set(sourceAssetIds(run));
+    if (
+      parsed.data.some(
+        (step) => step.sourceAssetId && !selectedAssets.has(step.sourceAssetId),
+      )
+    )
+      throw new BadRequestException({
+        code: "INVALID_AGENT_EDIT_SOURCE",
+        message: "计划仅可编辑本次选中的设计资产",
+      });
+    await Promise.all(
+      parsed.data.flatMap((step) =>
+        step.sourceAssetId && !immutableKeys.has(step.key)
+          ? [this.ownedSource(userId, run.projectId, step.sourceAssetId)]
+          : [],
+      ),
+    );
+    const nextKeys = parsed.data.map((step) => step.key);
+    const currentByKey = new Map(run.steps.map((step) => [step.key, step]));
+    const complete = parsed.data.every(
+      (step) => currentByKey.get(step.key)?.status === "succeeded",
+    );
+    await this.database.$transaction(async (transaction) => {
+      await this.claimRevision(transaction, run, input.revision, {
+        ...(complete ? { status: "completed", error: null } : {}),
+      });
+      await transaction.agentRunStep.deleteMany({
+        where: {
+          runId,
+          key: { notIn: nextKeys },
+          attempt: 0,
+          status: "pending",
+        },
+      });
+      // Move editable rows out of the final ordinal range before swapping them under the unique index.
+      for (const step of run.steps)
+        if (canEditStructure(step) && nextKeys.includes(step.key))
+          await transaction.agentRunStep.update({
+            where: { id: step.id },
+            data: { ordinal: step.ordinal + AGENT_PLAN_MAX_STEPS },
+          });
+      const additions: Prisma.AgentRunStepCreateManyInput[] = [];
+      for (const [ordinal, spec] of parsed.data.entries()) {
+        const current = currentByKey.get(spec.key);
+        if (current) {
+          if (canEditStructure(current))
+            await transaction.agentRunStep.update({
+              where: { id: current.id },
+              data: { ...spec, ordinal },
+            });
+        } else additions.push({ ...spec, ordinal, runId, status: "pending" });
+      }
+      if (additions.length)
+        await transaction.agentRunStep.createMany({ data: additions });
+    });
+    return this.toView(await this.ownedRun(userId, runId));
+  }
+
   async execute(
     userId: string,
     runId: string,
@@ -303,6 +398,7 @@ export class AgentRunsService {
         message: "没有可执行节点",
       });
     let previous = step.attempts[0];
+    if (previous?.status === "rejected") previous = undefined;
     const previousTask = previous ? await this.taskFor(run, previous) : null;
     if (previousTask?.status === GenerationTaskStatus.SUCCEEDED)
       return this.get(userId, runId);
@@ -529,6 +625,78 @@ export class AgentRunsService {
           kind: "selected",
           reason: input.reason,
           clientRequestId: `agent-run:${run.id}:${step.id}`,
+        },
+      });
+    });
+    return this.toView(await this.ownedRun(userId, runId));
+  }
+
+  async reject(
+    userId: string,
+    runId: string,
+    input: RejectAgentRunInput,
+  ): Promise<AgentRunView> {
+    const reason = input.reason.trim();
+    if (!reason || reason.length > 1000)
+      throw new BadRequestException({
+        code: "INVALID_AGENT_RUN_REJECTION",
+        message: "请填写 1 到 1000 字的否决理由",
+      });
+    const run = await this.ownedRun(userId, runId);
+    this.assertRevision(run, input.revision);
+    const step = run.steps.find((item) => item.status === "waiting_review");
+    const attempt = step?.attempts[0];
+    if (
+      run.status !== "waiting_review" ||
+      !step ||
+      !attempt ||
+      !step.generationTaskId ||
+      attempt.generationTaskId !== step.generationTaskId
+    )
+      throw new ConflictException({
+        code: "AGENT_RUN_NOT_REVIEWABLE",
+        message: "当前没有等待否决的结果",
+      });
+    await this.database.$transaction(async (transaction) => {
+      await this.claimRevision(transaction, run, input.revision, {
+        status: "ready",
+        error: null,
+      });
+      const assets = await transaction.designAsset.findMany({
+        where: {
+          generationTaskId: step.generationTaskId,
+          projectId: run.projectId,
+          archivedAt: null,
+        },
+        select: { id: true },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+      if (!assets.length)
+        throw new ConflictException({
+          code: "AGENT_RUN_RESULTS_UNAVAILABLE",
+          message: "当前结果已不可访问，请刷新后重试",
+        });
+      for (const asset of assets)
+        await transaction.designAssetDecision.create({
+          data: {
+            assetId: asset.id,
+            userId,
+            kind: "rejected",
+            reason,
+            clientRequestId: `agent-attempt:${attempt.id}:reject`,
+          },
+        });
+      await transaction.agentRunStepAttempt.update({
+        where: { id: attempt.id },
+        data: { status: "rejected", error: reason },
+      });
+      await transaction.agentRunStep.update({
+        where: { id: step.id },
+        data: {
+          status: "pending",
+          generationTaskId: null,
+          selectedAssetId: null,
+          error: null,
         },
       });
     });
@@ -934,18 +1102,54 @@ export class AgentRunsService {
   }
 
   private async toView(run: RunRecord): Promise<AgentRunView> {
-    const steps: AgentRunStepView[] = [];
-    for (const step of run.steps) {
-      const assets = step.generationTaskId
+    const taskIds = [
+      ...new Set(
+        run.steps.flatMap((step) =>
+          [
+            step.generationTaskId,
+            ...step.attempts.map((attempt) => attempt.generationTaskId),
+          ].filter((id): id is string => !!id),
+        ),
+      ),
+    ];
+    const sourceIds = sourceAssetIds(run);
+    const allAssets =
+      taskIds.length || sourceIds.length
         ? await this.database.designAsset.findMany({
             where: {
-              generationTaskId: step.generationTaskId,
               projectId: run.projectId,
               archivedAt: null,
+              OR: [
+                { generationTaskId: { in: taskIds } },
+                { id: { in: sourceIds } },
+              ],
             },
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           })
         : [];
+    const steps: AgentRunStepView[] = [];
+    for (const step of run.steps) {
+      const assets = step.generationTaskId
+        ? allAssets.filter(
+            (asset) => asset.generationTaskId === step.generationTaskId,
+          )
+        : [];
+      const latest = step.attempts[0];
+      const latestTask =
+        latest && latest.status !== "rejected"
+          ? await this.taskFor(run, latest)
+          : null;
+      const canEditInputs =
+        new Set(["ready", "paused", "failed"]).has(run.status) &&
+        new Set(["pending", "failed"]).has(step.status) &&
+        (!latest ||
+          latest.status === "rejected" ||
+          (!!latestTask &&
+            new Set<GenerationTaskStatus>([
+              GenerationTaskStatus.FAILED,
+              GenerationTaskStatus.MODERATION_FAILED,
+              GenerationTaskStatus.CANCELED,
+            ]).has(latestTask.status)));
       steps.push({
         id: step.id,
         key: step.key,
@@ -960,16 +1164,42 @@ export class AgentRunsService {
         status: step.status as AgentRunStepView["status"],
         generationTaskId: step.generationTaskId,
         selectedAssetId: step.selectedAssetId,
-        error: step.error,
-        candidates: assets.map((asset) => ({
-          assetId: asset.id,
-          url: `/api/design-assets/${encodeURIComponent(asset.id)}/content`,
-          thumbnailUrl: asset.thumbnailUrl
-            ? `/api/design-assets/${encodeURIComponent(asset.id)}/thumbnail`
-            : null,
-          width: asset.width,
-          height: asset.height,
-        })),
+        error: publicError(step.error),
+        candidates: assets.map(candidateView),
+        canEditInputs,
+        attempts: [...step.attempts]
+          .sort((a, b) => a.ordinal - b.ordinal)
+          .map((attempt) => {
+            const request = objectOf(attempt.requestSnapshot);
+            return {
+              id: attempt.id,
+              ordinal: attempt.ordinal,
+              status: attempt.status,
+              generationTaskId: attempt.generationTaskId,
+              prompt: typeof request.prompt === "string" ? request.prompt : "",
+              negativePrompt:
+                typeof request.negativePrompt === "string"
+                  ? request.negativePrompt
+                  : "",
+              parentAssetId:
+                typeof request.parentAssetId === "string"
+                  ? request.parentAssetId
+                  : null,
+              candidates: attempt.generationTaskId
+                ? allAssets
+                    .filter(
+                      (asset) =>
+                        asset.generationTaskId === attempt.generationTaskId,
+                    )
+                    .map(candidateView)
+                : [],
+              error:
+                attempt.status === "rejected"
+                  ? attempt.error
+                  : publicError(attempt.error),
+              createdAt: attempt.createdAt.toISOString(),
+            };
+          }),
       });
     }
     return {
@@ -981,13 +1211,78 @@ export class AgentRunsService {
       revision: run.revision,
       createdAt: run.createdAt.toISOString(),
       updatedAt: run.updatedAt.toISOString(),
-      error: run.error,
+      error: publicError(run.error),
       steps,
+      sourceAssets: allAssets
+        .filter((asset) => sourceIds.includes(asset.id))
+        .map(candidateView),
     };
   }
 }
 
 class SupersededAttemptError extends Error {}
+
+function canEditStructure(step: StepRecord): boolean {
+  return (
+    step.status === "pending" &&
+    step.attempt === 0 &&
+    step.attempts.length === 0
+  );
+}
+
+function stepSpec(step: StepRecord): AgentPlanStepSpec {
+  return {
+    key: step.key,
+    tool: step.tool as AgentPlanStepSpec["tool"],
+    title: step.title,
+    instruction: step.instruction,
+    prompt: step.prompt,
+    negativePrompt: step.negativePrompt,
+    sourceAssetId: step.sourceAssetId,
+    sourceStepKey: step.sourceStepKey,
+  };
+}
+
+function sourceAssetIds(run: RunRecord): string[] {
+  const context = objectOf(run.contextSnapshot);
+  return Array.isArray(context.designAssetIds)
+    ? [
+        ...new Set(
+          context.designAssetIds.filter(
+            (id): id is string => typeof id === "string",
+          ),
+        ),
+      ]
+    : [];
+}
+
+function candidateView(asset: {
+  id: string;
+  thumbnailUrl: string | null;
+  width: number | null;
+  height: number | null;
+}): AgentRunCandidate {
+  return {
+    assetId: asset.id,
+    url: `/api/design-assets/${encodeURIComponent(asset.id)}/content`,
+    thumbnailUrl: asset.thumbnailUrl
+      ? `/api/design-assets/${encodeURIComponent(asset.id)}/thumbnail`
+      : null,
+    width: asset.width,
+    height: asset.height,
+  };
+}
+
+function publicError(value: string | null): string | null {
+  return (
+    value
+      ?.replace(/\b(?:https?:\/\/|s3:\/\/|data:)[^\s"'<>]+/giu, "[链接已省略]")
+      .replace(
+        /\b(api[_-]?key|authorization|token|signature|credential|password)\s*[:=]\s*[^\s,;]+/giu,
+        "$1=[已隐藏]",
+      ) ?? null
+  );
+}
 
 function objectOf(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)

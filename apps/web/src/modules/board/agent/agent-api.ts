@@ -2,6 +2,7 @@ import type {
   AgentConversationSummary,
   AgentMessageView,
   AgentRunView,
+  AgentPlanStepSpec,
 } from "@fashion/shared";
 
 interface CursorPage<T> {
@@ -271,7 +272,7 @@ export async function updateAgentRunStep(
 
 export async function controlAgentRun(
   runId: string,
-  action: "execute" | "review" | "pause" | "cancel",
+  action: "execute" | "review" | "reject" | "pause" | "cancel",
   input: {
     readonly revision: number;
     readonly assetId?: string;
@@ -282,6 +283,20 @@ export async function controlAgentRun(
     `/api/agent-runs/${encodeURIComponent(runId)}/${action}`,
     { method: "POST", body: JSON.stringify(input) },
     "工作流操作失败",
+  );
+}
+
+export async function updateAgentRunPlan(
+  runId: string,
+  input: {
+    readonly revision: number;
+    readonly steps: readonly AgentPlanStepSpec[];
+  },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}/plan`,
+    { method: "PATCH", body: JSON.stringify(input) },
+    "节点图保存失败",
   );
 }
 
