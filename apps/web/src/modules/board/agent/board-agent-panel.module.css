@@ -1131,6 +1131,402 @@
   outline-offset: 2px;
 }
 
+.agentModes {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  padding: 7px 14px;
+  gap: 4px;
+  background: #f3f1eb;
+}
+
+.agentModes button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #77736a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agentModes button[aria-selected="true"] {
+  background: #fffefa;
+  color: #292a26;
+  box-shadow: 0 1px 3px rgb(34 34 31 / 8%);
+}
+
+.workflowPanel {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 18px 28px;
+  scrollbar-color: rgb(34 34 31 / 18%) transparent;
+  scrollbar-width: thin;
+}
+
+.workflowPanel p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.workflowIntro > div {
+  display: grid;
+  gap: 7px;
+}
+
+.workflowIntro > div > span {
+  color: #a34c35;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+}
+
+.workflowIntro strong {
+  color: #30312b;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.workflowIntro p {
+  margin-top: 8px;
+  color: #7c786e;
+}
+
+.workflowSkeleton {
+  display: grid;
+  padding-top: 25px;
+  gap: 12px;
+  color: #77736a;
+  font-size: 11px;
+}
+
+.workflowSkeleton i {
+  height: 86px;
+  border-left: 2px solid #ded7c9;
+  border-radius: 4px;
+  background: #efede6;
+}
+
+.workflowSelector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin-top: 22px;
+  gap: 7px;
+}
+
+.workflowSelector > label {
+  grid-column: 1 / -1;
+}
+
+.workflowPanel :where(button, select, textarea) {
+  font: inherit;
+  font-size: 11px;
+}
+
+.workflowPanel :where(select, textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgb(34 34 31 / 16%);
+  border-radius: 6px;
+  padding: 8px 9px;
+  background: #fffefa;
+  color: #3c3c36;
+}
+
+.workflowPanel select {
+  min-width: 0;
+  min-height: 34px;
+}
+
+.workflowPanel textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.workflowPanel textarea:focus-visible {
+  outline: 2px solid #b94d31;
+  outline-offset: 2px;
+}
+
+.workflowPanel textarea[readonly] {
+  border-color: rgb(34 34 31 / 8%);
+  background: #f2efe8;
+}
+
+.workflowPanel :where(label, legend) {
+  color: #6a665e;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.workflowPanel button {
+  min-height: 32px;
+  border: 1px solid rgb(34 34 31 / 16%);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fffefa;
+  color: #49473f;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.workflowPanel button:hover:not(:disabled) {
+  background: #ece8df;
+}
+
+.workflowPanel button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.workflowPanel :where(button, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.workflowComposer {
+  display: grid;
+  margin: 22px 0;
+  gap: 9px;
+}
+
+.workflowComposer p,
+.workflowResults > p,
+.workflowTaskNotice {
+  color: #817b70;
+  font-size: 10px;
+}
+
+.workflowPanel .workflowPrimary {
+  border-color: #292a26;
+  background: #292a26;
+  color: #fffdf7;
+}
+
+.workflowPanel .workflowPrimary:hover:not(:disabled) {
+  background: #44443b;
+}
+
+.workflowStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  gap: 8px;
+}
+
+.workflowStatus > span {
+  border-left: 2px solid #b94d31;
+  padding-left: 8px;
+  color: #6c4434;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.workflowStatus > button {
+  min-height: 28px;
+  border: 0;
+  padding: 3px 5px;
+  background: transparent;
+  color: #8a8276;
+  font-size: 10px;
+}
+
+.workflowPanel .workflowIntent {
+  margin-top: 12px;
+  color: #605b51;
+}
+
+.workflowNodes {
+  display: grid;
+  margin: 18px 0 0;
+  padding: 0;
+  gap: 24px;
+  list-style: none;
+}
+
+.workflowNode {
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgb(34 34 31 / 13%);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgb(255 254 250 / 78%);
+}
+
+.workflowNode + .workflowNode::before {
+  position: absolute;
+  top: -25px;
+  left: 27px;
+  height: 23px;
+  border-left: 1px solid #c8bdad;
+  content: "";
+}
+
+.workflowNode[data-status="waiting_review"] {
+  border-color: rgb(185 77 49 / 40%);
+}
+
+.workflowNode[data-status="succeeded"] {
+  border-color: rgb(79 118 90 / 28%);
+}
+
+.workflowNodeMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.workflowNodeMeta > span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ded5c8;
+  border-radius: 5px;
+  background: #f1ece3;
+  color: #7a6c58;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  place-items: center;
+}
+
+.workflowNodeMeta small {
+  color: #8b8174;
+  font-size: 9px;
+}
+
+.workflowNode[data-status="succeeded"] .workflowNodeMeta small {
+  color: #4f765a;
+}
+
+.workflowNode h3 {
+  margin: 0 0 5px;
+  color: #34352e;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.workflowNode > p {
+  color: #7c7569;
+}
+
+.workflowSource {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  gap: 5px 10px;
+}
+
+.workflowSource span {
+  color: #938678;
+  font-size: 9px;
+}
+
+.workflowPrompt {
+  display: grid;
+  border-top: 1px solid rgb(34 34 31 / 9%);
+  padding-top: 10px;
+}
+
+.workflowPrompt summary {
+  color: #716454;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.workflowPrompt :where(label, textarea, button) {
+  display: block;
+  margin-top: 8px;
+}
+
+.workflowPrompt textarea {
+  min-height: 90px;
+}
+
+.workflowResults {
+  display: grid;
+  min-width: 0;
+  margin: 14px 0 0;
+  border: 0;
+  border-top: 1px solid rgb(34 34 31 / 9%);
+  padding: 12px 0 0;
+  gap: 9px;
+}
+
+.workflowResults > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 8px;
+}
+
+.workflowResults > div > label {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(34 34 31 / 14%);
+  border-radius: 6px;
+  background: #f2efe8;
+  cursor: pointer;
+}
+
+.workflowResults > div > label[data-selected="true"] {
+  border-color: #a34c35;
+  box-shadow: 0 0 0 1px #a34c35;
+}
+
+.workflowResults img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+}
+
+.workflowResults input {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  accent-color: #a34c35;
+}
+
+.workflowResults > div span {
+  padding: 6px;
+  font-size: 9px;
+  text-align: center;
+}
+
+.workflowControls {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  gap: 7px;
+}
+
+.workflowPanel .workflowCancel {
+  border-color: transparent;
+  background: transparent;
+  color: #9c402d;
+}
+
+.workflowError {
+  display: grid;
+  justify-items: start;
+  margin-top: 22px;
+  gap: 9px;
+  color: #9c402d;
+}
+
 @keyframes agent-spin {
   to {
     transform: rotate(360deg);

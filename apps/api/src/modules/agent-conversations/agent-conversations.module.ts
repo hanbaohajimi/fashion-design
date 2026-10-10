@@ -2,6 +2,7 @@ import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
 import { AiModule } from "../ai/ai.module";
+import { AgentRunsModule } from "../agent-runs/agent-runs.module";
 import { FilesModule } from "../files/files.module";
 import { GenerationModule } from "../generation/generation.module";
 import { SecurityModule } from "../../security/security.module";
@@ -15,7 +16,13 @@ import {
 } from "./agent-conversations.service";
 
 @Module({
-  imports: [AiModule, FilesModule, GenerationModule, SecurityModule],
+  imports: [
+    AiModule,
+    FilesModule,
+    GenerationModule,
+    SecurityModule,
+    AgentRunsModule,
+  ],
   controllers: [
     AgentConversationsController,
     ProjectAgentConversationsController,

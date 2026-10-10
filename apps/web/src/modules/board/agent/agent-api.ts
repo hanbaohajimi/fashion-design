@@ -1,6 +1,7 @@
 import type {
   AgentConversationSummary,
   AgentMessageView,
+  AgentRunView,
 } from "@fashion/shared";
 
 interface CursorPage<T> {
@@ -103,9 +104,12 @@ async function apiError(response: Response, fallback: string): Promise<Error> {
 
 export async function listAgentConversations(
   projectId: string,
+  cursor?: string,
 ): Promise<CursorPage<AgentConversationSummary>> {
+  const query = new URLSearchParams({ limit: "50" });
+  if (cursor) query.set("cursor", cursor);
   const response = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/agent-conversations?limit=50`,
+    `/api/projects/${encodeURIComponent(projectId)}/agent-conversations?${query.toString()}`,
     { cache: "no-store", credentials: "include" },
   );
   if (!response.ok) {
@@ -213,4 +217,104 @@ export async function attachGenerationTaskToConversation(
     throw await apiError(response, "局部重绘任务归档失败");
   }
   return (await response.json()) as AgentMessageView;
+}
+
+export async function listAgentRuns(
+  conversationId: string,
+): Promise<{ readonly items: readonly AgentRunView[] }> {
+  return agentRunRequest(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/plans`,
+    undefined,
+    "设计工作流读取失败",
+  );
+}
+
+export async function createAgentRun(
+  conversationId: string,
+  input: {
+    readonly clientRequestId: string;
+    readonly content: string;
+    readonly fileAssetIds: readonly string[];
+    readonly shapeIds: readonly string[];
+  },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/plans`,
+    { method: "POST", body: JSON.stringify(input) },
+    "设计计划创建失败",
+  );
+}
+
+export async function fetchAgentRun(runId: string): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}`,
+    undefined,
+    "设计工作流同步失败",
+  );
+}
+
+export async function updateAgentRunStep(
+  runId: string,
+  stepId: string,
+  input: {
+    readonly revision: number;
+    readonly prompt: string;
+    readonly negativePrompt: string;
+  },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}`,
+    { method: "PATCH", body: JSON.stringify(input) },
+    "节点修改失败",
+  );
+}
+
+export async function controlAgentRun(
+  runId: string,
+  action: "execute" | "review" | "pause" | "cancel",
+  input: {
+    readonly revision: number;
+    readonly assetId?: string;
+    readonly reason?: string;
+  },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}/${action}`,
+    { method: "POST", body: JSON.stringify(input) },
+    "工作流操作失败",
+  );
+}
+
+export class AgentRunApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "AgentRunApiError";
+  }
+}
+
+async function agentRunRequest<T>(
+  url: string,
+  init: RequestInit | undefined,
+  fallback: string,
+): Promise<T> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    credentials: "include",
+    ...(init
+      ? { ...init, headers: { "Content-Type": "application/json" } }
+      : {}),
+  });
+  if (!response.ok) {
+    const error = await apiError(response, fallback);
+    throw new AgentRunApiError(
+      response.status === 409
+        ? "工作流已在其他页面更新，请刷新状态后继续"
+        : error.message,
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
 }

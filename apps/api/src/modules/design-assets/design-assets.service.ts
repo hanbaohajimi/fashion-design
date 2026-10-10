@@ -232,6 +232,13 @@ export class DesignAssetsService {
               designStep: true,
               generatedAssets: true,
               agentMessage: { select: { conversationId: true } },
+              agentRunAttempt: {
+                select: {
+                  step: {
+                    select: { run: { select: { conversationId: true } } },
+                  },
+                },
+              },
             },
           },
         },
@@ -309,7 +316,9 @@ export class DesignAssetsService {
           this.toView(output),
         ),
         conversationId:
-          asset.generationTask?.agentMessage?.conversationId ?? null,
+          asset.generationTask?.agentMessage?.conversationId ??
+          asset.generationTask?.agentRunAttempt?.step.run.conversationId ??
+          null,
       });
       const dependencies = [
         asset.parentAssetId,

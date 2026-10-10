@@ -18,6 +18,7 @@ import {
 import { createHash, randomUUID } from "node:crypto";
 
 import { GenerationLimitExceededException } from "../billing/billing.errors";
+import type { CompiledGenInput } from "./compiler/compiler.types";
 import { BillingService } from "../billing/billing.service";
 import { S3FileStorage } from "../files/storage.service";
 import {
@@ -150,6 +151,7 @@ export class GenerationService {
     request: GenerationCreateRequest,
     idempotencyKey: string,
     rawUserIntent: string,
+    frozenCompiled?: CompiledGenInput,
   ): Promise<{ taskId: string }> {
     return this.createTask(
       userId,
@@ -158,7 +160,37 @@ export class GenerationService {
       undefined,
       rawUserIntent,
       { modelCalls: "skip" },
+      frozenCompiled,
     );
+  }
+
+  async resumeQueuedTask(userId: string, taskId: string): Promise<void> {
+    const task = await this.database.generationTask.findUnique({
+      where: { id: taskId },
+      select: { id: true, userId: true, status: true },
+    });
+    if (!task)
+      throw new NotFoundException({
+        code: "TASK_NOT_FOUND",
+        message: "生成任务不存在",
+      });
+    if (task.userId !== userId)
+      throw new ForbiddenException({
+        code: "TASK_FORBIDDEN",
+        message: "无权访问生成任务",
+      });
+    if (task.status !== GenerationTaskStatus.QUEUED) return;
+    try {
+      await this.jobs.enqueue(task.id, userId);
+    } catch (error) {
+      throw new ServiceUnavailableException(
+        {
+          code: "QUEUE_UNAVAILABLE",
+          message: "生成队列暂时不可用，请稍后重试",
+        },
+        { cause: error },
+      );
+    }
   }
 
   async createForCollection(
@@ -183,24 +215,27 @@ export class GenerationService {
     context?: CollectionGenerationContext,
     rawUserIntent: string = request.prompt,
     compilerOptions: ContextCompilerOptions = {},
+    frozenCompiled?: CompiledGenInput,
   ): Promise<{ taskId: string }> {
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
-    const compiledPrompt = compilerOptions.modelCalls
-      ? await this.compiler.compile(
-          userId,
-          request.projectId,
-          request.prompt,
-          request.shapeIds,
-          compilerOptions,
-        )
-      : await this.compiler.compile(
-          userId,
-          request.projectId,
-          request.prompt,
-          request.shapeIds,
-        );
+    const compiledPrompt =
+      frozenCompiled ??
+      (compilerOptions.modelCalls
+        ? await this.compiler.compile(
+            userId,
+            request.projectId,
+            request.prompt,
+            request.shapeIds,
+            compilerOptions,
+          )
+        : await this.compiler.compile(
+            userId,
+            request.projectId,
+            request.prompt,
+            request.shapeIds,
+          ));
     const presentationPolicy = resolvePresentationPolicy(
       [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
         .filter(Boolean)

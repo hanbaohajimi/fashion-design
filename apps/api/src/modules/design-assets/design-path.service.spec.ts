@@ -119,6 +119,9 @@ describe("Design asset provenance", () => {
       generationTaskId: "task-a",
       generationTask: {
         id: "task-a",
+        agentRunAttempt: {
+          step: { run: { conversationId: "conversation-plan" } },
+        },
         status: "SUCCEEDED",
         generatedAssets: [],
         designStep: {
@@ -142,6 +145,7 @@ describe("Design asset provenance", () => {
     );
     expect(path.steps.find((step) => step.id === "step-a")).toMatchObject({
       actor: "agent",
+      conversationId: "conversation-plan",
       snapshotAvailable: true,
       sources: snapshot.sources,
       constraints: snapshot.constraints,

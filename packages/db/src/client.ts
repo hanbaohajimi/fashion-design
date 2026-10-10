@@ -24,6 +24,9 @@ import {
   type DesignStep,
   type AgentConversation,
   type AgentMessage,
+  type AgentRun,
+  type AgentRunStep,
+  type AgentRunStepAttempt,
   type Collection,
   type CollectionDna,
   type FileAsset,
@@ -83,6 +86,9 @@ export {
   SimilarityAnalysisStatus,
 };
 export type {
+  AgentRun,
+  AgentRunStep,
+  AgentRunStepAttempt,
   AgentConversation,
   AgentMessage,
   Collection,

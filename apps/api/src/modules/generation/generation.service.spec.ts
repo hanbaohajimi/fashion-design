@@ -170,6 +170,82 @@ describe("GenerationService", () => {
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledOnce();
   });
 
+  it("resumes an admitted queued task without compiling or creating a new task", async () => {
+    database.generationTask.findUnique.mockResolvedValue({
+      id: "task-1",
+      userId: "user-1",
+      status: GenerationTaskStatus.QUEUED,
+    });
+    await service.resumeQueuedTask("user-1", "task-1");
+    expect(jobs.enqueue).toHaveBeenCalledWith("task-1", "user-1");
+    expect(database.generationTask.create).not.toHaveBeenCalled();
+    expect(compiler.compile).not.toHaveBeenCalled();
+    expect(billing.withLockedGenerationQuota).not.toHaveBeenCalled();
+    database.generationTask.findUnique.mockResolvedValue({
+      id: "task-1",
+      userId: "user-1",
+      status: GenerationTaskStatus.SUCCEEDED,
+    });
+    await service.resumeQueuedTask("user-1", "task-1");
+    expect(jobs.enqueue).toHaveBeenCalledOnce();
+    await expect(
+      service.resumeQueuedTask("other-user", "task-1"),
+    ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+  });
+
+  it("uses the frozen Agent input even if the live board changes before replay", async () => {
+    const frozen = {
+      enhancement: "keywords" as const,
+      mode: "board_guided" as const,
+      version: 1 as const,
+      positivePrompt: "frozen coat",
+      negativePrompt: "watermark",
+      palette: ["#112233"],
+      notes: ["保留立领"],
+      avoidLabels: [],
+      paletteReferences: [],
+      styleReferences: [],
+      silhouetteReferences: [],
+      fabricReferences: [],
+      fabricInputs: [],
+      patternReferences: [],
+      detailReferences: [],
+    };
+    compiler.compile.mockRejectedValue(
+      new Error("live board must not be read"),
+    );
+    const input = { ...request, projectId: "project-1", shapeIds: ["shape-1"] };
+    await service.createFromAgent(
+      "user-1",
+      input,
+      "frozen-key",
+      "请生成",
+      frozen,
+    );
+    const persisted =
+      database.generationTask.create.mock.calls[0]?.[0].data.compiledPrompt;
+    database.generationTask.findUnique.mockResolvedValue({
+      id: "task-1",
+      userId: "user-1",
+      status: GenerationTaskStatus.QUEUED,
+      compiledPrompt: persisted,
+    });
+    await service.createFromAgent(
+      "user-1",
+      input,
+      "frozen-key",
+      "请生成",
+      frozen,
+    );
+    expect(compiler.compile).not.toHaveBeenCalled();
+    expect(database.generationTask.create).toHaveBeenCalledOnce();
+    expect(persisted).toMatchObject({
+      positivePrompt: "frozen coat",
+      palette: ["#112233"],
+    });
+    expect(jobs.enqueue).toHaveBeenCalledTimes(2);
+  });
+
   it("Agent 已生成结构化提示词时要求编译器跳过重复模型调用", async () => {
     await service.createFromAgent(
       "user-1",

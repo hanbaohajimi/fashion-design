@@ -155,6 +155,72 @@ export interface HealthResponse {
 export type AgentMessageRole = "user" | "assistant";
 export type AgentMessageStatus = "pending" | "completed" | "failed";
 
+export const AGENT_PLAN_MAX_STEPS = 6;
+export const AGENT_RUN_STATUSES = [
+  "planning",
+  "ready",
+  "running",
+  "waiting_review",
+  "paused",
+  "completed",
+  "failed",
+  "canceled",
+] as const;
+export const AGENT_RUN_STEP_STATUSES = [
+  "pending",
+  "running",
+  "waiting_review",
+  "succeeded",
+  "failed",
+  "canceled",
+] as const;
+export const AGENT_TOOL_NAMES = ["generate_design", "edit_design"] as const;
+export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
+export type AgentRunStepStatus = (typeof AGENT_RUN_STEP_STATUSES)[number];
+export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
+
+export interface AgentPlanStepSpec {
+  readonly key: string;
+  readonly tool: AgentToolName;
+  readonly title: string;
+  readonly instruction: string;
+  readonly prompt: string;
+  readonly negativePrompt: string;
+  readonly sourceAssetId: string | null;
+  readonly sourceStepKey: string | null;
+}
+
+export interface AgentRunCandidate {
+  readonly assetId: string;
+  readonly url: string;
+  readonly thumbnailUrl: string | null;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+export interface AgentRunStepView extends AgentPlanStepSpec {
+  readonly id: string;
+  readonly ordinal: number;
+  readonly status: AgentRunStepStatus;
+  readonly generationTaskId: string | null;
+  readonly selectedAssetId: string | null;
+  readonly candidates: readonly AgentRunCandidate[];
+  readonly error: string | null;
+}
+
+export interface AgentRunView {
+  readonly id: string;
+  readonly projectId: string;
+  readonly conversationId: string;
+  readonly intent: string;
+  readonly status: AgentRunStatus;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly error: string | null;
+  readonly steps: readonly AgentRunStepView[];
+}
+
 export interface AgentMessageContext {
   readonly fileAssetIds: readonly string[];
   readonly shapeIds: readonly string[];

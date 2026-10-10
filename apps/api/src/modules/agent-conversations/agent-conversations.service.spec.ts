@@ -107,21 +107,155 @@ function createHarness() {
   const storage = {
     readPrefix: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3])),
   };
+  const run = { id: "run-a", status: "planning", revision: 0, steps: [] };
+  const runs = {
+    findReservation: vi.fn().mockResolvedValue(null),
+    reserve: vi.fn().mockResolvedValue({ created: true, run }),
+    completePlan: vi.fn().mockResolvedValue({ ...run, status: "ready" }),
+    failPlanning: vi.fn().mockResolvedValue({ ...run, status: "failed" }),
+    list: vi.fn().mockResolvedValue({ items: [] }),
+  };
   return {
     database,
     generation,
     model,
+    runs,
     service: new AgentConversationsService(
       database as never,
       model as never,
       generation as never,
       storage as never,
+      runs as never,
     ),
     storage,
   };
 }
 
 describe("AgentConversationsService", () => {
+  it("reserves a persisted plan before the Planner call and does not generate images", async () => {
+    const harness = createHarness();
+    const steps = [
+      {
+        key: "base",
+        tool: "generate_design",
+        title: "初步设计",
+        instruction: "探索立领风衣",
+        prompt: "stand collar coat",
+        negativePrompt: "",
+        sourceAssetId: null,
+        sourceStepKey: null,
+      },
+    ];
+    harness.model.generateJson.mockImplementation(async (input) => {
+      expect(harness.runs.reserve).toHaveBeenCalledOnce();
+      return input.parse({ steps });
+    });
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计一件风衣",
+        clientRequestId: "plan-key-123",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).resolves.toMatchObject({ status: "ready" });
+    expect(harness.runs.completePlan).toHaveBeenCalledWith(
+      "user-a",
+      "run-a",
+      steps,
+    );
+    expect(harness.model.generateJson).toHaveBeenCalledWith(
+      expect.objectContaining({ schemaName: "fashion_design_plan" }),
+    );
+    expect(harness.generation.createFromAgent).not.toHaveBeenCalled();
+  });
+
+  it("replays an existing plan without another model request", async () => {
+    const harness = createHarness();
+    harness.runs.reserve.mockResolvedValue({
+      created: false,
+      run: { id: "run-a", status: "ready", revision: 1, steps: [] },
+    });
+    await harness.service.createPlan("user-a", "conversation-a", {
+      content: "设计风衣",
+      clientRequestId: "plan-key-123",
+      fileAssetIds: [],
+      shapeIds: [],
+    });
+    expect(harness.model.generateJson).not.toHaveBeenCalled();
+    expect(harness.runs.completePlan).not.toHaveBeenCalled();
+  });
+
+  it("records Planner failure when a tool or dependency is invalid", async () => {
+    const harness = createHarness();
+    harness.model.generateJson.mockImplementation(async (input) =>
+      input.parse({
+        steps: [
+          {
+            key: "edit",
+            tool: "edit_design",
+            title: "调整",
+            instruction: "调整衣领",
+            prompt: "coat",
+            negativePrompt: "",
+            sourceAssetId: null,
+            sourceStepKey: "future",
+          },
+        ],
+      }),
+    );
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "plan-key-123",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).resolves.toMatchObject({ status: "failed" });
+    expect(harness.runs.failPlanning).toHaveBeenCalledOnce();
+    expect(harness.runs.completePlan).not.toHaveBeenCalled();
+    expect(harness.generation.createFromAgent).not.toHaveBeenCalled();
+  });
+
+  it("restores the original plan before checking a board that has since changed", async () => {
+    const harness = createHarness();
+    harness.runs.findReservation.mockResolvedValue({
+      id: "run-a",
+      status: "ready",
+    } as never);
+    harness.database.boardElement.findMany.mockRejectedValue(
+      new Error("the selected shape was deleted"),
+    );
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "plan-key-123",
+        fileAssetIds: [],
+        shapeIds: ["deleted-shape"],
+      }),
+    ).resolves.toMatchObject({ id: "run-a", status: "ready" });
+    expect(harness.database.boardElement.findMany).not.toHaveBeenCalled();
+    expect(harness.runs.reserve).not.toHaveBeenCalled();
+    expect(harness.model.generateJson).not.toHaveBeenCalled();
+  });
+
+  it("does not reserve a plan for an archived conversation", async () => {
+    const harness = createHarness();
+    harness.database.agentConversation.findUnique.mockResolvedValue({
+      ...conversationFixture(),
+      archivedAt: now,
+    } as never);
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "plan-key-123",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(harness.runs.reserve).not.toHaveBeenCalled();
+    expect(harness.model.generateJson).not.toHaveBeenCalled();
+  });
+
   it.each(["asset-a", "foreign-asset"])(
     "binds only a selected asset as an edit source: %s",
     async (sourceAssetId) => {

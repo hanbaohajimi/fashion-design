@@ -43,6 +43,6 @@ import {
     },
     { provide: GENERATION_JOBS, useExisting: BullGenerationJobs },
   ],
-  exports: [GenerationService],
+  exports: [GenerationService, ContextCompilerService],
 })
 export class GenerationModule {}

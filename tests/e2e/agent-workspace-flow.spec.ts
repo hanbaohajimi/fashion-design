@@ -1,9 +1,269 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { AgentRunView } from "@fashion/shared";
 
 const PROJECT_ID = "e2e-agent-workspace";
 const NOW = "2026-08-05T06:00:00.000Z";
 
 test.setTimeout(60_000);
+
+test("设计工作流逐节点执行、选择第二个结果并在刷新后恢复", async ({ page }) => {
+  const conversationId = "conversation-workflow";
+  const recentConversation = conversation(
+    "conversation-recent",
+    "近期设计讨论",
+  );
+  const workflowConversation = conversation(conversationId, "风衣设计");
+  await mockWorkspace(page, {
+    conversations: [recentConversation, workflowConversation],
+    messages: new Map([
+      [conversationId, []],
+      [recentConversation.id, []],
+    ]),
+    onCreateConversation: () =>
+      conversation("conversation-new", "新的设计对话"),
+    onSend: async () => {
+      throw new Error("工作流不应调用聊天生成");
+    },
+  });
+  let plan: AgentRunView | null = null;
+  let executeCount = 0;
+  let reviewedAssetId = "";
+  let savedPrompt = "";
+  await page.route(
+    `**/api/projects/${PROJECT_ID}/agent-conversations*`,
+    (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const cursor = new URL(route.request().url()).searchParams.get("cursor");
+      return route.fulfill({
+        json: plan
+          ? {
+              items: cursor ? [workflowConversation] : [recentConversation],
+              nextCursor: cursor ? null : "older-page",
+            }
+          : {
+              items: [recentConversation, workflowConversation],
+              nextCursor: null,
+            },
+      });
+    },
+  );
+  const imageUrl =
+    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+  const candidates = [1, 2].map((index) => ({
+    assetId: `workflow-asset-${index}`,
+    url: `${imageUrl}#${index}`,
+    thumbnailUrl: null,
+    width: 768,
+    height: 1024,
+  }));
+  await page.route(
+    `**/api/agent-conversations/${conversationId}/plans`,
+    (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({ json: { items: plan ? [plan] : [] } });
+      }
+      const body = route.request().postDataJSON() as { content: string };
+      plan = {
+        id: "workflow-a",
+        projectId: PROJECT_ID,
+        conversationId,
+        intent: body.content,
+        status: "ready",
+        revision: 1,
+        createdAt: NOW,
+        updatedAt: NOW,
+        error: null,
+        steps: [
+          {
+            id: "workflow-step-1",
+            ordinal: 0,
+            key: "silhouette",
+            tool: "generate_design",
+            title: "建立通勤风衣廓形",
+            instruction: "先确认宽松比例与腰线",
+            prompt: "loose trench coat",
+            negativePrompt: "logos",
+            sourceAssetId: null,
+            sourceStepKey: null,
+            status: "pending",
+            generationTaskId: null,
+            selectedAssetId: null,
+            candidates: [],
+            error: null,
+          },
+          {
+            id: "workflow-step-2",
+            ordinal: 1,
+            key: "fabric",
+            tool: "edit_design",
+            title: "细化面料表现",
+            instruction: "基于选定廓形调整织物质感",
+            prompt: "woven texture",
+            negativePrompt: "logos",
+            sourceAssetId: null,
+            sourceStepKey: "silhouette",
+            status: "pending",
+            generationTaskId: null,
+            selectedAssetId: null,
+            candidates: [],
+            error: null,
+          },
+        ],
+      };
+      return route.fulfill({ json: plan, status: 201 });
+    },
+  );
+  await page.route("**/api/agent-runs/workflow-a/**", (route) => {
+    if (!plan) return route.fulfill({ status: 404 });
+    const endpoint = new URL(route.request().url()).pathname.split("/").at(-1);
+    const body = route.request().postDataJSON() as {
+      revision: number;
+      prompt?: string;
+      negativePrompt?: string;
+      assetId?: string;
+    };
+    expect(body.revision).toBe(plan.revision);
+    if (route.request().method() === "PATCH") {
+      savedPrompt = body.prompt ?? "";
+      plan = {
+        ...plan,
+        revision: plan.revision + 1,
+        steps: plan.steps.map((step) =>
+          step.id === endpoint
+            ? {
+                ...step,
+                prompt: savedPrompt,
+                negativePrompt: body.negativePrompt ?? "",
+              }
+            : step,
+        ),
+      };
+    } else if (endpoint === "execute") {
+      executeCount += 1;
+      const next = plan.steps.find((step) => step.status === "pending");
+      plan = {
+        ...plan,
+        status: "waiting_review",
+        revision: plan.revision + 1,
+        steps: plan.steps.map((step) =>
+          step.id === next?.id
+            ? {
+                ...step,
+                status: "waiting_review",
+                generationTaskId: "workflow-task",
+                candidates,
+              }
+            : step,
+        ),
+      };
+    } else if (endpoint === "review") {
+      reviewedAssetId = body.assetId ?? "";
+      plan = {
+        ...plan,
+        status: "ready",
+        revision: plan.revision + 1,
+        steps: plan.steps.map((step) =>
+          step.status === "waiting_review"
+            ? { ...step, status: "succeeded", selectedAssetId: reviewedAssetId }
+            : step,
+        ),
+      };
+    } else if (endpoint === "pause") {
+      plan = { ...plan, status: "paused", revision: plan.revision + 1 };
+    } else if (endpoint === "cancel") {
+      plan = { ...plan, status: "canceled", revision: plan.revision + 1 };
+    }
+    return route.fulfill({ json: plan });
+  });
+  await page.route("**/api/agent-runs/workflow-a", (route) =>
+    route.fulfill({ json: plan }),
+  );
+  await page.route("**/api/generations/workflow-task", (route) =>
+    route.fulfill({
+      json: {
+        ...generationTask("workflow-task"),
+        output: {
+          images: candidates.map((candidate) => ({
+            ...candidate,
+            width: 3,
+            height: 4,
+          })),
+        },
+      },
+    }),
+  );
+
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(`/${PROJECT_ID}`);
+  const agent = page.getByRole("complementary", { name: "设计助手" });
+  await agent.getByRole("button", { name: "打开历史" }).click();
+  await agent.getByRole("button", { name: "风衣设计" }).click();
+  await agent.getByRole("tab", { name: "设计工作流" }).click();
+  await agent
+    .getByRole("textbox", { name: "设计目标" })
+    .fill("设计宽松通勤风衣，确认廓形后细化面料");
+  await agent.getByRole("button", { name: "规划设计步骤" }).click();
+  await expect(
+    agent.getByRole("heading", { name: "建立通勤风衣廓形" }),
+  ).toBeVisible();
+  expect(executeCount).toBe(0);
+  await agent.getByText("查看或修改节点提示词").first().click();
+  await agent
+    .getByRole("textbox", { name: "节点提示词" })
+    .first()
+    .fill("loose trench coat with structured waist");
+  await expect(
+    agent.getByRole("button", { name: "执行下一节点" }),
+  ).toBeDisabled();
+  await agent.getByRole("button", { name: "保存节点提示词" }).first().click();
+  await expect(
+    agent.getByRole("button", { name: "执行下一节点" }),
+  ).toBeEnabled();
+  expect(savedPrompt).toContain("structured waist");
+  await agent.getByRole("button", { name: "执行下一节点" }).dblclick();
+  await expect(
+    agent.getByText("等待你选择结果", { exact: true }),
+  ).toBeVisible();
+  expect(executeCount).toBe(1);
+  await agent.getByText("查看执行提示词").first().click();
+  await agent.getByRole("radio", { name: "选择节点 1 的结果 2" }).check();
+  await page.screenshot({
+    path: "output/playwright/agent-workflow-desktop.png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(agent).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: "output/playwright/agent-workflow-mobile.png",
+  });
+  await agent.getByRole("button", { name: "采用结果并完成节点" }).click();
+  await expect(
+    agent.getByRole("button", { name: "执行下一节点" }),
+  ).toBeVisible();
+  expect(reviewedAssetId).toBe("workflow-asset-2");
+  expect(executeCount).toBe(1);
+  await page.reload();
+  await expect(agent.locator("header strong").first()).toHaveText("风衣设计");
+  await expect(agent.getByRole("tab", { name: "设计工作流" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    agent.getByText("已采用", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    agent.getByRole("button", { name: "执行下一节点" }),
+  ).toBeVisible();
+  expect(executeCount).toBe(1);
+  await agent.getByRole("button", { name: "暂停计划" }).click();
+  await expect(
+    agent.getByRole("button", { name: "继续执行下一节点" }),
+  ).toBeVisible();
+  await agent.getByRole("button", { name: "取消计划" }).click();
+  await expect(agent.getByText("已取消", { exact: true })).toBeVisible();
+});
 
 test("pending 助手消息会自动同步为终态", async ({ page }) => {
   const conversationId = "conversation-pending";

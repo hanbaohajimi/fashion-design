@@ -3,13 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   attachGenerationTaskToConversation,
+  AgentRunApiError,
+  controlAgentRun,
+  createAgentRun,
+  fetchAgentRun,
   getProjectConversationRequest,
   hasPendingAgentMessage,
   listAgentConversations,
   listAgentMessages,
+  listAgentRuns,
   reconcileAgentTurnMessages,
   sendAgentMessage,
   updateAgentConversation,
+  updateAgentRunStep,
   validateAgentMessage,
 } from "./agent-api";
 
@@ -37,19 +43,92 @@ function agentMessage(
 }
 
 describe("agent-api", () => {
+  it("读取持久化计划与状态时使用会话或计划作用域，禁用缓存", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ items: [] })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await listAgentRuns("conversation a");
+    await fetchAgentRun("run/a");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/agent-conversations/conversation%20a/plans",
+      {
+        cache: "no-store",
+        credentials: "include",
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/agent-runs/run%2Fa", {
+      cache: "no-store",
+      credentials: "include",
+    });
+  });
+
+  it("计划创建保留客户端请求ID，节点保存与人工确认都带revision", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ id: "run-a" })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const planInput = {
+      clientRequestId: "request-a",
+      content: "先设计再调整面料",
+      shapeIds: ["shape-a"],
+      fileAssetIds: [],
+    };
+    await createAgentRun("conversation-a", planInput);
+    await updateAgentRunStep("run-a", "step/a", {
+      revision: 2,
+      prompt: "new prompt",
+      negativePrompt: "logos",
+    });
+    await controlAgentRun("run-a", "review", {
+      revision: 3,
+      assetId: "asset-second",
+      reason: "面料自然",
+    });
+    const bodies = fetchMock.mock.calls.map((call) =>
+      JSON.parse(String((call[1] as RequestInit).body)),
+    );
+    expect(bodies).toEqual([
+      planInput,
+      { revision: 2, prompt: "new prompt", negativePrompt: "logos" },
+      { revision: 3, assetId: "asset-second", reason: "面料自然" },
+    ]);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/agent-runs/run-a/steps/step%2Fa",
+    );
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("PATCH");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/agent-runs/run-a/review");
+  });
+
+  it("revision冲突保留409状态并提示刷新", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ message: "REVISION_CONFLICT" }), {
+            status: 409,
+          }),
+        ),
+    );
+    await expect(
+      controlAgentRun("run-a", "execute", { revision: 1 }),
+    ).rejects.toEqual(
+      new AgentRunApiError("工作流已在其他页面更新，请刷新状态后继续", 409),
+    );
+  });
   it("轮询已写入真实消息时不会在发送完成后重复追加", () => {
     const older = agentMessage("older", "user");
     const userMessage = agentMessage("user-real", "user");
     const assistantMessage = agentMessage("assistant-real", "assistant");
 
     const reconciled = reconcileAgentTurnMessages(
-      [
-        older,
-        userMessage,
-        assistantMessage,
-        userMessage,
-        assistantMessage,
-      ],
+      [older, userMessage, assistantMessage, userMessage, assistantMessage],
       ["optimistic-user-request-123", "optimistic-assistant-request-123"],
       { userMessage, assistantMessage },
     );

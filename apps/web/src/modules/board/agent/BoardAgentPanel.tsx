@@ -38,6 +38,7 @@ import {
   validateAgentMessage,
 } from "./agent-api";
 import styles from "./board-agent-panel.module.css";
+import { AgentWorkflowPanel } from "./AgentWorkflowPanel";
 
 interface BoardAgentPanelProps {
   readonly boardStatus: BoardPersistStatus;
@@ -82,6 +83,7 @@ export function BoardAgentPanel({
     "conversations",
   );
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<"chat" | "workflow">("chat");
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
@@ -104,6 +106,26 @@ export function BoardAgentPanel({
   } | null>(null);
   const activeConversationIdRef = useRef(activeConversationId);
   const projectIdRef = useRef(projectId);
+
+  useEffect(() => {
+    let disposed = false;
+    let restored: "chat" | "workflow" = "chat";
+    try {
+      if (
+        localStorage.getItem(`fashion-agent-mode:${projectId}`) === "workflow"
+      ) {
+        restored = "workflow";
+      }
+    } catch {
+      // 私密浏览时仍可使用对话与工作流，模式由本次会话保存。
+    }
+    queueMicrotask(() => {
+      if (!disposed) setMode(restored);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
@@ -155,17 +177,35 @@ export function BoardAgentPanel({
   const activeConversationBelongsToProject =
     activeConversation?.projectId === projectId;
 
-  const refreshConversations = useCallback(async () => {
-    const targetProjectId = projectId;
-    const response = await listAgentConversations(projectId);
-    if (response.items.some((item) => item.projectId !== targetProjectId)) {
-      throw new Error("会话列表包含其他项目的数据，请重新加载");
-    }
-    if (projectIdRef.current === targetProjectId) {
-      setConversations(response.items);
-    }
-    return response.items;
-  }, [projectId]);
+  const refreshConversations = useCallback(
+    async (restoredId?: string | null) => {
+      const targetProjectId = projectId;
+      const response = await listAgentConversations(projectId);
+      const items = [...response.items];
+      const cursors = new Set<string>();
+      let cursor = response.nextCursor;
+      while (
+        restoredId &&
+        !items.some((item) => item.id === restoredId) &&
+        cursor &&
+        !cursors.has(cursor)
+      ) {
+        cursors.add(cursor);
+        const older = await listAgentConversations(projectId, cursor);
+        const known = new Set(items.map((item) => item.id));
+        items.push(...older.items.filter((item) => !known.has(item.id)));
+        cursor = older.nextCursor;
+      }
+      if (items.some((item) => item.projectId !== targetProjectId)) {
+        throw new Error("会话列表包含其他项目的数据，请重新加载");
+      }
+      if (projectIdRef.current === targetProjectId) {
+        setConversations(items);
+      }
+      return items;
+    },
+    [projectId],
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -173,7 +213,15 @@ export function BoardAgentPanel({
       setLoading(true);
       setLoadError(null);
       try {
-        let items = await refreshConversations();
+        let restoredId: string | null = null;
+        try {
+          restoredId = localStorage.getItem(
+            `fashion-agent-conversation:${projectId}`,
+          );
+        } catch {
+          // 未启用浏览器存储时仍从项目会话列表恢复。
+        }
+        let items = await refreshConversations(restoredId);
         if (items.length === 0) {
           const request = getProjectConversationRequest(
             initialConversationRef.current,
@@ -196,8 +244,10 @@ export function BoardAgentPanel({
           if (!disposed) setConversations(items);
         }
         if (!disposed) {
-          setActiveConversationId(items[0]?.id ?? "");
-          if (!items[0]?.id) setLoading(false);
+          const restored = items.find((item) => item.id === restoredId);
+          const nextId = restored?.id ?? items[0]?.id ?? "";
+          setActiveConversationId(nextId);
+          if (!nextId) setLoading(false);
         }
       } catch (cause) {
         if (!disposed) {
@@ -213,6 +263,18 @@ export function BoardAgentPanel({
       disposed = true;
     };
   }, [hydrateRevision, projectId, refreshConversations]);
+
+  useEffect(() => {
+    if (!activeConversationBelongsToProject || !activeConversationId) return;
+    try {
+      localStorage.setItem(
+        `fashion-agent-conversation:${projectId}`,
+        activeConversationId,
+      );
+    } catch {
+      // 会话读取和操作不依赖浏览器存储。
+    }
+  }, [activeConversationBelongsToProject, activeConversationId, projectId]);
 
   useEffect(() => {
     if (!activeConversationId || !activeConversationBelongsToProject) return;
@@ -253,11 +315,7 @@ export function BoardAgentPanel({
       setMessageRevision((current) => current + 1);
     }, PENDING_MESSAGE_SYNC_MS);
     return () => window.clearTimeout(timer);
-  }, [
-    activeConversationBelongsToProject,
-    hasPendingMessage,
-    messageRevision,
-  ]);
+  }, [activeConversationBelongsToProject, hasPendingMessage, messageRevision]);
 
   useEffect(() => {
     if (skipNextAutoScroll.current) {
@@ -829,6 +887,37 @@ export function BoardAgentPanel({
           </section>
         ) : null}
 
+        {!historyOpen ? (
+          <div
+            className={styles.agentModes}
+            role="tablist"
+            aria-label="助手模式"
+          >
+            {(["chat", "workflow"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={mode === item}
+                disabled={sending}
+                onClick={() => {
+                  setMode(item);
+                  try {
+                    localStorage.setItem(
+                      `fashion-agent-mode:${projectId}`,
+                      item,
+                    );
+                  } catch {
+                    // 模式切换不依赖浏览器存储。
+                  }
+                }}
+              >
+                {item === "chat" ? "对话" : "设计工作流"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {historyOpen ? (
           <section className={styles.historyPanel} aria-label="历史记录">
             <header className={styles.historyHeader}>
@@ -921,6 +1010,33 @@ export function BoardAgentPanel({
               </div>
             )}
           </section>
+        ) : mode === "workflow" ? (
+          activeConversationBelongsToProject && activeConversationId ? (
+            <AgentWorkflowPanel
+              key={`${projectId}:${activeConversationId}`}
+              conversationId={activeConversationId}
+              contextReady={contextReady}
+              contextItems={
+                contextItems.length > 0 ? (
+                  <SelectedElementBar
+                    items={contextItems}
+                    onRemove={(id) =>
+                      setDraftShapeIds((current) =>
+                        current.filter((shapeId) => shapeId !== id),
+                      )
+                    }
+                  />
+                ) : null
+              }
+              initialIntent={prompt}
+              shapeIds={contextItems.map((item) => item.id)}
+              onTaskCreated={generation.track}
+            />
+          ) : (
+            <div className={styles.loadingState} role="status">
+              正在恢复项目会话
+            </div>
+          )
         ) : (
           <>
             <div className={styles.timeline} ref={timelineRef}>

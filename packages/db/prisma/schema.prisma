@@ -23,6 +23,7 @@ model User {
   fabrics            Fabric[]
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
+  agentRuns          AgentRun[]
   auditLogs          AuditLog[]
   designDecisions    DesignAssetDecision[]
   ownedWorkspaces    Workspace[]
@@ -148,6 +149,7 @@ model GenerationTask {
   generationInputs     GenerationInput[]
   agentMessage         AgentMessage?
   designStep           DesignStep?
+  agentRunAttempt      AgentRunStepAttempt?
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -373,6 +375,7 @@ model Project {
   agentConversations AgentConversation[]
   exportJobs         ExportJob[]
   designSteps        DesignStep[]
+  agentRuns          AgentRun[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -572,10 +575,83 @@ model AgentConversation {
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
   messages    AgentMessage[]
+  runs        AgentRun[]
 
   @@index([projectId, updatedAt])
   @@index([createdById, updatedAt])
   @@map("agent_conversations")
+}
+
+model AgentRun {
+  id              String            @id @default(cuid(2))
+  projectId       String            @map("project_id")
+  conversationId  String            @map("conversation_id")
+  userId          String            @map("user_id")
+  clientRequestId String            @map("client_request_id")
+  intent          String            @db.Text
+  contextSnapshot Json              @map("context_snapshot")
+  status          String            @default("planning")
+  revision        Int               @default(0)
+  error           String?           @db.Text
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation    AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps           AgentRunStep[]
+
+  @@unique([conversationId, clientRequestId])
+  @@index([projectId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("agent_runs")
+}
+
+model AgentRunStep {
+  id               String                @id @default(cuid(2))
+  runId            String                @map("run_id")
+  key              String
+  ordinal          Int
+  tool             String
+  title            String
+  instruction      String                @db.Text
+  prompt           String                @db.Text
+  negativePrompt   String                @db.Text @map("negative_prompt")
+  sourceAssetId    String?               @map("source_asset_id")
+  sourceStepKey    String?               @map("source_step_key")
+  status           String                @default("pending")
+  attempt          Int                   @default(0)
+  generationTaskId String?               @map("generation_task_id")
+  selectedAssetId  String?               @map("selected_asset_id")
+  error            String?               @db.Text
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  run              AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  attempts         AgentRunStepAttempt[]
+
+  @@unique([runId, key])
+  @@unique([runId, ordinal])
+  @@map("agent_run_steps")
+}
+
+model AgentRunStepAttempt {
+  id               String          @id @default(cuid(2))
+  stepId           String          @map("step_id")
+  ordinal          Int
+  executionKey     String          @unique @map("execution_key")
+  requestSnapshot  Json            @map("request_snapshot")
+  compiledSnapshot Json?           @map("compiled_snapshot")
+  status           String
+  leaseToken       String          @map("lease_token")
+  leaseExpiresAt   DateTime        @map("lease_expires_at")
+  generationTaskId String?         @unique @map("generation_task_id")
+  error            String?         @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  step             AgentRunStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  generationTask   GenerationTask? @relation(fields: [generationTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([stepId, ordinal])
+  @@map("agent_run_step_attempts")
 }
 
 model AgentMessage {

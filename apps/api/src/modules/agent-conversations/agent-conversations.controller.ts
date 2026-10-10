@@ -152,4 +152,35 @@ export class AgentConversationsController {
       parseOrThrow(attachGenerationTaskSchema, body),
     );
   }
+
+  @Get(":id/plans")
+  plans(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") conversationId: string,
+  ) {
+    return this.conversations.plans(
+      user.userId,
+      parseOrThrow(agentIdSchema, conversationId),
+    );
+  }
+
+  @Post(":id/plans")
+  @UseGuards(RateLimitGuard)
+  @RateLimit({
+    keyBy: "user",
+    limit: 60,
+    name: "agent-plan-create",
+    windowSeconds: 60 * 60,
+  })
+  createPlan(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") conversationId: string,
+    @Body() body: unknown,
+  ) {
+    return this.conversations.createPlan(
+      user.userId,
+      parseOrThrow(agentIdSchema, conversationId),
+      parseOrThrow(sendAgentMessageSchema, body),
+    );
+  }
 }
