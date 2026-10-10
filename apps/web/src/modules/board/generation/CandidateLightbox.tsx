@@ -14,6 +14,7 @@ import type { GenerationCandidate } from "./generation-types";
 import { hasToneMismatch } from "./tone-analysis";
 import { VariationControl } from "./VariationControl";
 import { VersionTimeline } from "./VersionTimeline";
+import { DesignPathPanel } from "./DesignPathPanel";
 import styles from "./generation.module.css";
 import { captureAnalytics } from "../../../observability/analytics";
 import { ErrorBoundary } from "../../../observability/ErrorBoundary";
@@ -37,7 +38,9 @@ export function CandidateLightbox({
   const projectId = useContext(BoardProjectContext);
   const queryClient = useQueryClient();
   const [activeCandidate, setActiveCandidate] = useState(candidate);
-  const [mode, setMode] = useState<"history" | "inpaint" | "view">(initialMode);
+  const [mode, setMode] = useState<"history" | "path" | "inpaint" | "view">(
+    initialMode,
+  );
   const [toneWarning, setToneWarning] = useState(false);
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const [collectionOpen, setCollectionOpen] = useState(false);
@@ -169,20 +172,37 @@ export function CandidateLightbox({
                 ? "局部编辑模式"
                 : mode === "history"
                   ? "版本与血缘"
-                  : "候选设计"}
+                  : mode === "path"
+                    ? "设计路径与选择"
+                    : "候选设计"}
             </strong>
           </div>
           <nav aria-label={mode === "inpaint" ? "局部编辑操作" : "候选操作"}>
             {mode !== "inpaint" ? (
               <>
-                <button onClick={() => setMode("view")} type="button">
+                <button
+                  aria-pressed={mode === "view"}
+                  onClick={() => setMode("view")}
+                  type="button"
+                >
                   预览
                 </button>
                 <button onClick={() => setMode("inpaint")} type="button">
                   局部重绘
                 </button>
-                <button onClick={() => setMode("history")} type="button">
+                <button
+                  aria-pressed={mode === "history"}
+                  onClick={() => setMode("history")}
+                  type="button"
+                >
                   版本
+                </button>
+                <button
+                  aria-pressed={mode === "path"}
+                  onClick={() => setMode("path")}
+                  type="button"
+                >
+                  设计路径
                 </button>
                 <button
                   disabled={creatingCollection}
@@ -232,6 +252,11 @@ export function CandidateLightbox({
               await onTaskCreated?.(taskId, prompt);
               onClose();
             }}
+          />
+        ) : mode === "path" ? (
+          <DesignPathPanel
+            key={activeCandidate.assetId}
+            assetId={activeCandidate.assetId}
           />
         ) : mode === "history" ? (
           <VersionTimeline

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { DesignDecisionView } from "@fashion/shared";
 
 test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async ({ page }) => {
   const restores: Array<{
@@ -6,6 +7,7 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
     readonly targetAssetId: string;
   }> = [];
   const createdAt = "2026-07-27T08:00:00.000Z";
+  const decisions: DesignDecisionView[] = [];
   const asset = (
     id: string,
     operation: "generated" | "restore" | "variation",
@@ -255,6 +257,90 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
     }),
   );
 
+  await page.route("**/api/design-assets/asset-current/path", (route) =>
+    route.fulfill({
+      json: {
+        assetId: "asset-current",
+        incomplete: false,
+        decisions,
+        steps: [
+          {
+            id: "step-root",
+            version: 1,
+            actor: "manual",
+            tool: "t2i",
+            intent: "生成短款夹克",
+            sources: [],
+            constraints: {
+              palette: [],
+              notes: [],
+              avoidLabels: [],
+              fabricTerms: [],
+            },
+            parameters: { prompt: "cropped jacket" },
+            createdAt,
+            status: "succeeded",
+            snapshotAvailable: true,
+            outputs: [root],
+            conversationId: null,
+          },
+          {
+            id: "step-current",
+            version: 1,
+            actor: "agent",
+            tool: "i2i",
+            intent: "修改袖口，保留肩线",
+            sources: [
+              {
+                elementId: "root",
+                assetId: root.id,
+                role: "edit_source",
+                title: "短款夹克原方案",
+              },
+              {
+                elementId: "note",
+                role: "note",
+                title: "袖口要求",
+                text: "隐藏式按扣",
+              },
+            ],
+            constraints: {
+              palette: ["#112233"],
+              notes: ["隐藏式按扣"],
+              avoidLabels: [],
+              fabricTerms: ["挺括羊毛"],
+            },
+            parameters: { prompt: "revised cuffs", width: 768, height: 1024 },
+            createdAt,
+            status: "succeeded",
+            snapshotAvailable: true,
+            outputs: [current],
+            conversationId: "conversation-history",
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(
+    "**/api/design-assets/asset-current/decisions",
+    async (route) => {
+      const body = route.request().postDataJSON() as {
+        kind: DesignDecisionView["kind"];
+        reason: string;
+        clientRequestId: string;
+      };
+      const decision: DesignDecisionView = {
+        ...body,
+        id: body.clientRequestId,
+        assetId: "asset-current",
+        createdAt,
+      };
+      if (!decisions.some((item) => item.id === decision.id))
+        decisions.unshift(decision);
+      await route.fulfill({ status: 201, json: decision });
+    },
+  );
+
   await page.goto("/e2e-history");
   await page.getByRole("button", { name: "便签" }).click();
   await page.getByRole("button", { name: "展开设计助手" }).click();
@@ -272,6 +358,39 @@ test("Lightbox 版本时间线可恢复旧版并再次恢复到原版本", async
   const generationHistory = page.getByRole("region", { name: "历史记录" });
   await generationHistory.getByRole("tab", { name: "生成" }).click();
   await generationHistory.getByRole("button", { name: "打开候选详情" }).click();
+  await page.getByRole("button", { name: "设计路径", exact: true }).click();
+  const designPath = page.getByRole("region", {
+    name: "设计路径",
+    exact: true,
+  });
+  await expect(designPath.getByText("#112233")).toBeVisible();
+  await expect(designPath.getByText("挺括羊毛")).toBeVisible();
+  expect(decisions).toHaveLength(0);
+  await designPath
+    .getByRole("textbox", { name: "选择理由（可选）" })
+    .fill("保留肩线，面料表现符合预期");
+  await designPath.getByRole("button", { name: "选定此方案" }).click();
+  await expect(
+    designPath.getByText("最近的理由：保留肩线，面料表现符合预期"),
+  ).toBeVisible();
+  await designPath
+    .getByRole("heading", { name: "从来源到设计结果" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "output/playwright/design-path-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    designPath.getByRole("textbox", { name: "选择理由（可选）" }),
+  ).toBeVisible();
+  await designPath
+    .getByRole("heading", { name: "从来源到设计结果" })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "output/playwright/design-path-mobile.png" });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole("button", { name: "预览", exact: true }).click();
+  await page.getByRole("button", { name: "设计路径", exact: true }).click();
+  await expect(
+    designPath.getByText("最近的理由：保留肩线，面料表现符合预期"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "版本", exact: true }).click();
 
   await expect(

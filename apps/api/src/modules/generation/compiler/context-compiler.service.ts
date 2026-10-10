@@ -1,4 +1,5 @@
 import { FileStatus, type PrismaClient, type Prisma } from "@fashion/db";
+import type { DesignSourceSnapshot } from "@fashion/shared";
 import {
   ForbiddenException,
   Inject,
@@ -36,6 +37,8 @@ type BoardElement = {
     thumbnail1024Key: string | null;
   } | null;
   id: string;
+  shapeId?: string;
+  fileAssetId?: string | null;
   role: string;
   roleLabel: string | null;
   record: Prisma.JsonValue | null;
@@ -217,21 +220,19 @@ export class ContextCompilerService {
     ];
     const silhouetteReferences = (
       await Promise.all(
-        elements
-          .filter(canUseSilhouetteReference)
-          .map(async (element) => {
-            const reference = await this.referenceFrom(
-              element,
-              userId,
-              projectId,
-            );
-            return reference
-              ? {
-                  edgeImageUrl: reference.imageUrl,
-                  elementId: element.id,
-                }
-              : null;
-          }),
+        elements.filter(canUseSilhouetteReference).map(async (element) => {
+          const reference = await this.referenceFrom(
+            element,
+            userId,
+            projectId,
+          );
+          return reference
+            ? {
+                edgeImageUrl: reference.imageUrl,
+                elementId: element.id,
+              }
+            : null;
+        }),
       )
     ).filter((value): value is { edgeImageUrl: string; elementId: string } =>
       Boolean(value),
@@ -340,14 +341,14 @@ export class ContextCompilerService {
           patternTerms,
           userRequest: cleanText(userRequest, 4000) ?? "",
         });
-        if (preservesExactPalette(enhanced.positivePrompt, exactPaletteColors)) {
+        if (
+          preservesExactPalette(enhanced.positivePrompt, exactPaletteColors)
+        ) {
           positivePrompt = enhanced.positivePrompt;
           negativePrompt = enhanced.negativePrompt;
           enhancement = "llm";
         } else {
-          this.logger.warn(
-            "提示词增强未保留精确色卡 HEX，已回退为关键词编译",
-          );
+          this.logger.warn("提示词增强未保留精确色卡 HEX，已回退为关键词编译");
         }
       } catch (error) {
         this.logger.warn(
@@ -362,6 +363,7 @@ export class ContextCompilerService {
     );
 
     return {
+      sources: elements.map(sourceSnapshot),
       avoidLabels,
       detailReferences,
       enhancement,
@@ -406,6 +408,8 @@ export class ContextCompilerService {
               },
             },
             id: true,
+            shapeId: true,
+            fileAssetId: true,
             record: true,
             role: true,
             roleLabel: true,
@@ -519,6 +523,42 @@ export class ContextCompilerService {
   private joinPrompt(parts: readonly (string | null)[]): string {
     return parts.filter((part): part is string => Boolean(part)).join(". ");
   }
+}
+
+function sourceSnapshot(element: BoardElement): DesignSourceSnapshot {
+  const props = propsOf(element.record);
+  const identity = (name: string) => cleanText(props[name], 128);
+  const assetId = identity("assetId");
+  const fabricId = identity("fabricId");
+  const trendItemId = identity("trendItemId");
+  const text = cleanText(props.text, 4_000);
+  const tags = Array.isArray(props.fabricTags)
+    ? props.fabricTags
+        .flatMap((tag) => {
+          const value = cleanText(tag, 120);
+          return value ? [value] : [];
+        })
+        .slice(0, 30)
+    : [];
+  return {
+    elementId: element.id,
+    role: element.role,
+    title:
+      cleanText(props.title) ??
+      cleanText(props.label) ??
+      cleanText(element.roleLabel) ??
+      element.role,
+    ...(element.shapeId ? { shapeId: element.shapeId } : {}),
+    ...(element.fileAssetId ? { fileAssetId: element.fileAssetId } : {}),
+    ...(assetId ? { assetId } : {}),
+    ...(fabricId ? { fabricId } : {}),
+    ...(trendItemId ? { trendItemId } : {}),
+    ...(text ? { text } : {}),
+    ...(element.role === "palette"
+      ? { colors: compilePaletteEntries(props) }
+      : {}),
+    ...(tags.length ? { tags } : {}),
+  };
 }
 
 function safeModelFailureReason(error: unknown): string {

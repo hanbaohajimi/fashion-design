@@ -5,6 +5,7 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import type { AiGenerationRequest } from "@fashion/ai";
+import type { DesignStepSnapshot } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -373,6 +374,51 @@ export class GenerationService {
       requestFingerprint,
     };
     const generationInputs = compiledPrompt.fabricInputs ?? [];
+    const stepSnapshot: DesignStepSnapshot = {
+      version: 1,
+      sources: [
+        ...(compiledPrompt.sources ?? []),
+        ...(request.parentAssetId &&
+        !compiledPrompt.sources?.some(
+          (source) => source.assetId === request.parentAssetId,
+        )
+          ? [
+              {
+                elementId: request.parentAssetId,
+                assetId: request.parentAssetId,
+                role: "edit_source",
+                title: "编辑来源",
+              },
+            ]
+          : []),
+      ],
+      constraints: {
+        palette: compiledPrompt.palette ?? [],
+        notes: compiledPrompt.notes ?? [],
+        avoidLabels: compiledPrompt.avoidLabels ?? [],
+        fabricTerms: [
+          ...new Set(
+            compiledPrompt.fabricReferences?.flatMap((reference) => [
+              ...reference.labels,
+            ]) ?? [],
+          ),
+        ],
+      },
+      parameters: {
+        taskType: request.taskType,
+        prompt: input.prompt,
+        negativePrompt: input.negativePrompt ?? "",
+        width: request.width,
+        height: request.height,
+        ...(request.quality ? { quality: request.quality } : {}),
+        ...(context
+          ? {
+              collectionId: context.collectionId,
+              variationAxis: context.variationAxis,
+            }
+          : {}),
+      },
+    };
 
     const admission = await this.billingService.withLockedGenerationQuota(
       userId,
@@ -403,6 +449,24 @@ export class GenerationService {
               ? { parentAssetId: request.parentAssetId }
               : {}),
             ...(request.projectId ? { projectId: request.projectId } : {}),
+            ...(request.projectId
+              ? {
+                  designStep: {
+                    create: {
+                      projectId: request.projectId,
+                      actor: context
+                        ? "collection"
+                        : compilerOptions.modelCalls === "skip"
+                          ? "agent"
+                          : "manual",
+                      tool: request.taskType,
+                      intent: rawUserIntent,
+                      inputSnapshot:
+                        stepSnapshot as unknown as Prisma.InputJsonValue,
+                    },
+                  },
+                }
+              : {}),
             ...(context
               ? {
                   collectionId: context.collectionId,

@@ -90,6 +90,7 @@ type AgentDatabase = Pick<
 >;
 
 interface AgentCanvasElementContext {
+  readonly assetId?: string;
   readonly color?: string;
   readonly fabricId?: string;
   readonly fabricTags?: readonly string[];
@@ -114,6 +115,7 @@ const agentDecisionSchema = z
       .object({
         negativePrompt: z.string().max(3_000),
         prompt: z.string().trim().min(1).max(4_000),
+        sourceAssetId: z.string().trim().min(1).max(128).nullable().optional(),
       })
       .nullable(),
     message: z.string().trim().min(1).max(2_000),
@@ -135,8 +137,14 @@ const agentDecisionJsonSchema = {
           properties: {
             negativePrompt: { maxLength: 3000, type: "string" },
             prompt: { maxLength: 4000, minLength: 1, type: "string" },
+            sourceAssetId: {
+              anyOf: [
+                { type: "null" },
+                { type: "string", minLength: 1, maxLength: 128 },
+              ],
+            },
           },
-          required: ["negativePrompt", "prompt"],
+          required: ["negativePrompt", "prompt", "sourceAssetId"],
           type: "object",
         },
       ],
@@ -261,7 +269,8 @@ export class AgentConversationsService {
       data: {
         content: AGENT_INTERRUPTED_CONTENT,
         errorCode: "AGENT_REQUEST_INTERRUPTED",
-        errorMessage: "Agent request remained pending past the recovery deadline",
+        errorMessage:
+          "Agent request remained pending past the recovery deadline",
         status: AgentMessageStatus.FAILED,
       },
     });
@@ -422,6 +431,19 @@ export class AgentConversationsService {
 
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
+        const sourceAssetId = decision.generation.sourceAssetId ?? null;
+        const sourceUrl = sourceAssetId
+          ? imageContext.designAssetUrls.get(sourceAssetId)
+          : undefined;
+        if (
+          sourceAssetId &&
+          (!context.designAssetIds.includes(sourceAssetId) || !sourceUrl)
+        ) {
+          throw new BadRequestException({
+            code: "INVALID_AGENT_EDIT_SOURCE",
+            message: "编辑来源必须是当前选中的设计资产",
+          });
+        }
         const outputSize = generationSizeFrom(imageContext.primaryDimensions);
         const result = await this.generation.createFromAgent(
           userId,
@@ -432,7 +454,13 @@ export class AgentConversationsService {
             projectId: conversation.projectId,
             prompt: decision.generation.prompt,
             shapeIds: [...context.shapeIds],
-            taskType: "t2i",
+            ...(sourceAssetId && sourceUrl
+              ? {
+                  taskType: "i2i" as const,
+                  parentAssetId: sourceAssetId,
+                  referenceImageUrl: sourceUrl,
+                }
+              : { taskType: "t2i" as const }),
             width: outputSize.width,
           },
           `agent:${conversationId}:${input.clientRequestId}`,
@@ -722,6 +750,7 @@ export class AgentConversationsService {
           ...(text ? { text } : {}),
           ...(color ? { color } : {}),
           ...(label ? { label } : {}),
+          ...(assetId ? { assetId } : {}),
           ...(fabricId ? { fabricId } : {}),
           ...(imageIndex === undefined ? {} : { imageIndex }),
           ...(fabric
@@ -747,7 +776,11 @@ export class AgentConversationsService {
     designAssetIds: readonly string[],
   ) {
     if (fileAssetIds.length === 0 && designAssetIds.length === 0) {
-      return { images: [], primaryDimensions: null };
+      return {
+        images: [],
+        primaryDimensions: null,
+        designAssetUrls: new Map<string, string>(),
+      };
     }
     const [files, designAssets] = await Promise.all([
       fileAssetIds.length
@@ -862,6 +895,9 @@ export class AgentConversationsService {
     const images = loadedImages.map((loaded) => loaded.image);
     return {
       images,
+      designAssetUrls: new Map(
+        orderedDesignAssets.map((asset) => [asset.id, asset.url]),
+      ),
       primaryDimensions: primary
         ? { height: primary.height as number, width: primary.width as number }
         : null,
@@ -930,7 +966,8 @@ const agentInstructions = [
   "你是服装设计白板中的项目 Agent。",
   "先理解用户是否只需要建议，还是明确希望生成、绘制、制作或修改视觉方案。",
   "选中图片后，用户出现修改、替换、调整、生成、绘制、制作等明确视觉操作意图时选择 generate；咨询、分析、解释和澄清使用 reply。",
-  "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 只包含 prompt 与 negativePrompt，禁止输出尺寸、质量、格式、背景、采样步数或 CFG。",
+  "action 为 reply 时 generation 必须是 JSON null；action 为 generate 时 generation 包含 prompt、negativePrompt、sourceAssetId，禁止输出尺寸、质量、格式、背景、采样步数或 CFG。",
+  "修改或继续迭代选中设计时，将 sourceAssetId 设为 canvasContext.elements 中该设计的 assetId；新建设计或仅借鉴参考时设为 null。多张设计中编辑目标不清楚时先 reply 澄清，禁止编造 assetId。",
   "回复使用简体中文，简洁说明理解和下一步，不承诺未执行的操作。",
   "canvasContext.elements 是从当前项目读取并校验过的权威事实；必须使用其中的便签、色值、标签和面料参数，禁止补造缺失属性。",
   "本轮附带图片按 images 数组顺序编号；canvasContext.elements[*].imageIndex 指向当前所选元素的图片。当前所选图片优先于 recentConversation 中的旧方案描述，禁止沿用与当前图片冲突的旧颜色、款式或材质。",

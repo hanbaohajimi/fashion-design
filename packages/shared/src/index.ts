@@ -1,4 +1,71 @@
 export const PLATFORM_NAME = "AI 服装设计平台";
+export const DESIGN_PATH_MAX_ASSETS = 100;
+export const DESIGN_DECISION_KINDS = [
+  "selected",
+  "rejected",
+  "compare",
+] as const;
+export type DesignDecisionKind = (typeof DESIGN_DECISION_KINDS)[number];
+
+export interface DesignSourceSnapshot {
+  readonly elementId: string;
+  readonly shapeId?: string | undefined;
+  readonly role: string;
+  readonly title: string;
+  readonly assetId?: string | undefined;
+  readonly fileAssetId?: string | undefined;
+  readonly fabricId?: string | undefined;
+  readonly trendItemId?: string | undefined;
+  readonly text?: string | undefined;
+  readonly colors?: readonly string[] | undefined;
+  readonly tags?: readonly string[] | undefined;
+}
+
+export interface DesignStepSnapshot {
+  readonly version: 1;
+  readonly sources: readonly DesignSourceSnapshot[];
+  readonly constraints: {
+    readonly palette: readonly string[];
+    readonly notes: readonly string[];
+    readonly avoidLabels: readonly string[];
+    readonly fabricTerms: readonly string[];
+  };
+  readonly parameters: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface DesignDecisionView {
+  readonly id: string;
+  readonly assetId: string;
+  readonly kind: DesignDecisionKind;
+  readonly reason: string;
+  readonly createdAt: string;
+}
+
+export interface DesignPathAsset {
+  readonly id: string;
+  readonly url: string;
+  readonly thumbnailUrl: string | null;
+  readonly parentAssetId: string | null;
+}
+
+export interface DesignPathStep extends DesignStepSnapshot {
+  readonly id: string;
+  readonly tool: string;
+  readonly actor: string;
+  readonly intent: string;
+  readonly createdAt: string;
+  readonly status: string;
+  readonly snapshotAvailable: boolean;
+  readonly outputs: readonly DesignPathAsset[];
+  readonly conversationId: string | null;
+}
+
+export interface DesignPathView {
+  readonly assetId: string;
+  readonly steps: readonly DesignPathStep[];
+  readonly decisions: readonly DesignDecisionView[];
+  readonly incomplete: boolean;
+}
 export const GENERATION_QUEUE_NAME = "generation";
 export const COLLECTION_SIMILARITY_QUEUE_NAME = "collection-similarity";
 export const THUMBNAIL_QUEUE_NAME = "thumbnail";

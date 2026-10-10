@@ -325,7 +325,7 @@
 }
 
 .lightbox nav button:hover,
-.lightbox nav button:nth-last-child(3) {
+.lightbox nav button[aria-pressed="true"] {
   background: #24251f;
   color: #fffdf7;
 }
@@ -345,6 +345,244 @@
   display: grid;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.designPath {
+  min-height: 0;
+  max-height: calc(100dvh - 200px);
+  overflow: auto;
+  padding: 20px;
+  background: #f7f4eb;
+  color: #24251f;
+}
+
+@media (max-width: 760px) {
+  .lightbox > header {
+    display: block;
+  }
+  .lightbox nav {
+    overflow-x: auto;
+    min-height: 42px;
+    max-width: 100%;
+  }
+  .lightbox nav button {
+    flex: 0 0 auto;
+    min-width: 64px;
+    padding: 10px;
+  }
+  .designPath {
+    padding: 14px;
+  }
+}
+
+.designPath > header {
+  margin-bottom: 20px;
+}
+.designPath > header span {
+  color: #716e65;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.designPath h3 {
+  margin: 5px 0;
+  font-size: 20px;
+}
+.designPath p {
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.pathGraph {
+  display: grid;
+  gap: 24px;
+  overflow-x: auto;
+  padding: 4px 0 16px;
+}
+.pathRow {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(190px, 1.2fr) minmax(
+      150px,
+      1fr
+    );
+  gap: 28px;
+  min-width: 560px;
+  align-items: center;
+}
+.pathSources,
+.pathOutputs {
+  display: grid;
+  gap: 8px;
+}
+.pathSources > span,
+.pathOutputs > span {
+  font-size: 10px;
+  color: #716e65;
+}
+.pathSources button,
+.pathOutputs button,
+.pathOperation {
+  border: 1px solid #c5c2b7;
+  padding: 12px;
+  background: #fffdf7;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pathSources button:disabled {
+  cursor: default;
+  color: #24251f;
+  opacity: 1;
+}
+.pathSources button small,
+.pathSources button strong,
+.pathOperation strong,
+.pathOperation span {
+  display: block;
+}
+.pathSources button small {
+  margin-bottom: 4px;
+  color: #716e65;
+  font-size: 10px;
+}
+.pathSources button strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pathOperation {
+  position: relative;
+  border-color: #716e65;
+}
+.pathOperation::before,
+.pathOperation::after {
+  content: "→";
+  position: absolute;
+  top: 45%;
+  font-size: 18px;
+}
+.pathOperation::before {
+  left: -23px;
+}
+.pathOperation::after {
+  right: -23px;
+}
+.pathOperation[aria-pressed="true"] {
+  background: #e8ecd9;
+  border-color: #3e5637;
+}
+.pathOperation span,
+.pathOperation small {
+  font-size: 10px;
+  color: #56624b;
+}
+.pathOperation strong {
+  font-size: 16px;
+  margin-top: 8px;
+}
+.pathOutputs button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pathOutputs img {
+  width: 64px;
+  height: 72px;
+  object-fit: contain;
+  background: #eeece4;
+}
+.pathNotice {
+  padding: 8px 12px;
+  background: #eee6d4;
+}
+.pathDetails,
+.pathDecision {
+  border-top: 1px solid #c5c2b7;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.pathDetails h4 {
+  margin: 0 0 8px;
+}
+.pathDetails dl > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12px;
+}
+.pathDetails dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pathDetails time {
+  display: block;
+  margin-top: 10px;
+  color: #716e65;
+  font-size: 10px;
+}
+.pathDetails pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.pathDetails summary,
+.pathDecision summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.pathDecision > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+.pathDecision > div:first-child span {
+  font-size: 12px;
+  color: #3e5637;
+}
+.pathDecision label {
+  display: block;
+  margin: 12px 0 6px;
+  font-size: 12px;
+}
+.pathDecision textarea {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #c5c2b7;
+  padding: 10px;
+  background: #fffdf7;
+  color: #24251f;
+  font: inherit;
+  font-size: 12px;
+}
+.pathDecisionActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.pathDecisionActions button,
+.designPath > [role="alert"] button {
+  border: 1px solid #716e65;
+  padding: 8px 12px;
+  background: #fffdf7;
+  color: #24251f;
+  cursor: pointer;
+}
+.pathDecisionActions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.pathDecision li {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.designPath button:focus-visible,
+.designPath textarea:focus-visible {
+  outline: 2px solid #3e5637;
+  outline-offset: 3px;
 }
 
 .lightboxPreview > figure,

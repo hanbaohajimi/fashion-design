@@ -1,4 +1,9 @@
 import type {
+  DesignDecisionKind,
+  DesignDecisionView,
+  DesignPathView,
+} from "@fashion/shared";
+import type {
   DesignAssetVersion,
   GenerationPaletteColor,
   GenerationParameters,
@@ -15,6 +20,39 @@ interface CreateGenerationInput extends GenerationParameters {
   readonly referenceImageUrl?: string;
   readonly shapeIds: readonly string[];
   readonly taskType: "t2i" | "i2i" | "inpaint";
+}
+
+export async function fetchDesignPath(
+  assetId: string,
+): Promise<DesignPathView> {
+  const response = await fetch(
+    `/api/design-assets/${encodeURIComponent(assetId)}/path`,
+    {
+      cache: "no-store",
+      credentials: "include",
+    },
+  );
+  if (!response.ok) throw await apiError(response, "设计路径读取失败");
+  return (await response.json()) as DesignPathView;
+}
+
+export async function recordDesignDecision(
+  assetId: string,
+  kind: DesignDecisionKind,
+  reason: string,
+  clientRequestId: string,
+): Promise<DesignDecisionView> {
+  const response = await fetch(
+    `/api/design-assets/${encodeURIComponent(assetId)}/decisions`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, reason, clientRequestId }),
+    },
+  );
+  if (!response.ok) throw await apiError(response, "设计选择保存失败");
+  return (await response.json()) as DesignDecisionView;
 }
 
 export async function fetchAssetVersions(

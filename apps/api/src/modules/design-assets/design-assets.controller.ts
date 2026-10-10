@@ -16,6 +16,7 @@ import { z } from "zod";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { DesignAssetsService } from "./design-assets.service";
+import { designDecisionSchema } from "./design-path.schemas";
 
 const PRIVATE_NO_STORE = "private, no-store";
 const importFileSchema = z.object({
@@ -70,6 +71,31 @@ export class DesignAssetsController {
       });
     }
     return this.assets.versions(user.userId, assetId, cursor, parsed.data);
+  }
+
+  @Get(":id/path")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  async path(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") assetId: string,
+  ) {
+    return this.assets.path(user.userId, assetId);
+  }
+
+  @Post(":id/decisions")
+  async decide(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") assetId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = designDecisionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: "INVALID_DESIGN_DECISION",
+        message: "设计决策参数不合法",
+      });
+    }
+    return this.assets.decide(user.userId, assetId, parsed.data);
   }
 
   @Get(":id/content")

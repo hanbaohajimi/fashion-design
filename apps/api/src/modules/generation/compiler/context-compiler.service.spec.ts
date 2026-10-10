@@ -98,6 +98,44 @@ describe("ContextCompilerService", () => {
     expect(result.enhancement).toBe("keywords");
   });
 
+  it("保存输入副本，后续白板修改不会改变编译来源，且不保存临时图片 URL", async () => {
+    const note = element("note-snapshot", "note", { text: "保留袖口" });
+    const palette = element("palette-snapshot", "palette", {
+      color: "#112233",
+      label: "原色",
+    });
+    database.project.findUnique.mockResolvedValue({
+      boardElements: [note, palette],
+      deletedAt: null,
+      workspace: { ownerId: "user-1" },
+    });
+    const result = await service.compile(
+      "user-1",
+      "project-1",
+      "coat",
+      undefined,
+      { modelCalls: "skip" },
+    );
+    note.record.props.text = "修改后的便签";
+    palette.record.props.color = "#FFFFFF";
+    expect(result.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          elementId: "note-snapshot",
+          text: "保留袖口",
+        }),
+        expect.objectContaining({
+          elementId: "palette-snapshot",
+          colors: ["#112233"],
+        }),
+      ]),
+    );
+    expect(result.notes).toEqual(["保留袖口"]);
+    expect(JSON.stringify(result.sources)).not.toContain(
+      "https://signed.example",
+    );
+  });
+
   it("调色板通道把精确 HEX 写入正向 prompt", async () => {
     database.project.findUnique.mockResolvedValue({
       boardElements: [
@@ -130,9 +168,7 @@ describe("ContextCompilerService", () => {
       boardElements: [
         element("palette-stale-label", "palette", {
           color: "#84c3c8",
-          colors: [
-            { color: "#84c3c8", id: "stale-oat", label: "OAT" },
-          ],
+          colors: [{ color: "#84c3c8", id: "stale-oat", label: "OAT" }],
           label: "OAT",
         }),
       ],

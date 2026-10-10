@@ -8,22 +8,23 @@ datasource db {
 }
 
 model User {
-  id                 String              @id @default(cuid(2))
-  authId             String?             @unique @map("auth_id")
-  email              String              @unique
+  id                 String                @id @default(cuid(2))
+  authId             String?               @unique @map("auth_id")
+  email              String                @unique
   name               String?
   avatar             String?
-  plan               AccountPlan         @default(FREE)
-  generationCount    Int                 @default(0) @map("generation_count")
-  generationLimit    Int                 @default(100) @map("generation_limit")
-  deletedAt          DateTime?           @map("deleted_at")
-  createdAt          DateTime            @default(now()) @map("created_at")
+  plan               AccountPlan           @default(FREE)
+  generationCount    Int                   @default(0) @map("generation_count")
+  generationLimit    Int                   @default(100) @map("generation_limit")
+  deletedAt          DateTime?             @map("deleted_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
   exportJobs         ExportJob[]
   files              FileAsset[]
   fabrics            Fabric[]
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
   auditLogs          AuditLog[]
+  designDecisions    DesignAssetDecision[]
   ownedWorkspaces    Workspace[]
 
   @@map("users")
@@ -146,6 +147,7 @@ model GenerationTask {
   generatedAssets      DesignAsset[]            @relation("TaskGeneratedAssets")
   generationInputs     GenerationInput[]
   agentMessage         AgentMessage?
+  designStep           DesignStep?
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -220,6 +222,9 @@ model DesignAsset {
   similarityLeft      CollectionLookSimilarity[] @relation("SimilarityLeftAsset")
   similarityRight     CollectionLookSimilarity[] @relation("SimilarityRightAsset")
   exportJobs          ExportJob[]
+
+  designStep DesignStep?           @relation("StepOutputAsset")
+  decisions  DesignAssetDecision[]
 
   @@unique([projectId, sourceFileId])
   @@index([projectId, createdAt])
@@ -367,6 +372,7 @@ model Project {
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
   exportJobs         ExportJob[]
+  designSteps        DesignStep[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -519,6 +525,40 @@ model BoardElement {
   @@index([projectId, deletedAt])
   @@index([fileAssetId])
   @@map("board_elements")
+}
+
+model DesignStep {
+  id               String          @id @default(cuid(2))
+  projectId        String          @map("project_id")
+  generationTaskId String?         @unique @map("generation_task_id")
+  outputAssetId    String?         @unique @map("output_asset_id")
+  tool             String
+  actor            String
+  intent           String          @db.Text
+  inputSnapshot    Json            @map("input_snapshot")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generationTask   GenerationTask? @relation(fields: [generationTaskId], references: [id], onDelete: Cascade)
+  outputAsset      DesignAsset?    @relation("StepOutputAsset", fields: [outputAssetId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("design_steps")
+}
+
+model DesignAssetDecision {
+  id              String      @id @default(cuid(2))
+  assetId         String      @map("asset_id")
+  userId          String      @map("user_id")
+  clientRequestId String      @map("client_request_id")
+  kind            String
+  reason          String      @db.Text
+  createdAt       DateTime    @default(now()) @map("created_at")
+  asset           DesignAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, clientRequestId])
+  @@index([assetId, createdAt])
+  @@map("design_asset_decisions")
 }
 
 model AgentConversation {

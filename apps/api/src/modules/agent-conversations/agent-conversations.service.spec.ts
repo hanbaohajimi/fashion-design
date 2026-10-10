@@ -122,6 +122,71 @@ function createHarness() {
 }
 
 describe("AgentConversationsService", () => {
+  it.each(["asset-a", "foreign-asset"])(
+    "binds only a selected asset as an edit source: %s",
+    async (sourceAssetId) => {
+      const harness = createHarness();
+      harness.database.boardElement.findMany.mockResolvedValue([
+        {
+          fileAssetId: null,
+          role: "garment_ref",
+          roleLabel: null,
+          shapeId: "shape-a",
+          shapeType: "fashion-image",
+          record: { props: { assetId: "asset-a" } },
+        },
+      ]);
+      harness.database.designAsset.findMany.mockResolvedValue([
+        {
+          id: "asset-a",
+          url: "s3://generated/asset-a/image.webp",
+          thumbnailUrl: "s3://generated/asset-a/thumb.webp",
+          width: 1024,
+          height: 1024,
+        },
+      ]);
+      harness.model.generateJson.mockResolvedValue({
+        action: "generate",
+        generation: {
+          prompt: "coat with revised cuffs",
+          negativePrompt: "",
+          sourceAssetId,
+        },
+        message: "修改选中设计的袖口。",
+      });
+      harness.generation.createFromAgent.mockResolvedValue({
+        taskId: "task-a",
+      });
+      harness.database.agentMessage.update.mockResolvedValue(
+        messageFixture(AgentMessageRole.ASSISTANT, {
+          status: AgentMessageStatus.COMPLETED,
+        }),
+      );
+      await harness.service.send("user-a", "conversation-a", {
+        clientRequestId: "edit-request",
+        content: "修改袖口",
+        shapeIds: ["shape-a"],
+        fileAssetIds: [],
+      });
+      if (sourceAssetId === "asset-a") {
+        expect(harness.generation.createFromAgent).toHaveBeenCalledWith(
+          "user-a",
+          expect.objectContaining({
+            taskType: "i2i",
+            parentAssetId: "asset-a",
+          }),
+          expect.any(String),
+          "修改袖口",
+        );
+        expect(harness.model.generateJson.mock.calls[0]?.[0].prompt).toContain(
+          '"assetId":"asset-a"',
+        );
+      } else {
+        expect(harness.generation.createFromAgent).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it("读取消息时把超时遗留的 pending 助手消息回收为可重试失败态", async () => {
     const harness = createHarness();
 
@@ -272,7 +337,9 @@ describe("AgentConversationsService", () => {
         },
         message: "我会按选中的廓形参考生成一版风衣。",
       });
-      harness.generation.createFromAgent.mockResolvedValue({ taskId: "task-a" });
+      harness.generation.createFromAgent.mockResolvedValue({
+        taskId: "task-a",
+      });
       harness.database.agentMessage.update.mockResolvedValue(
         messageFixture(AgentMessageRole.ASSISTANT, {
           content: "我会按选中的廓形参考生成一版风衣。",

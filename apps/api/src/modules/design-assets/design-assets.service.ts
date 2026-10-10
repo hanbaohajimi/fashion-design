@@ -1,28 +1,44 @@
 import {
   DesignAssetOperation,
   FileStatus,
+  Prisma,
   type DesignAsset,
+  type DesignAssetDecision,
   type PrismaClient,
 } from "@fashion/db";
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import {
+  DESIGN_PATH_MAX_ASSETS,
+  type DesignDecisionView,
+  type DesignPathStep,
+  type DesignPathView,
+  type DesignStepSnapshot,
+} from "@fashion/shared";
 import { S3FileStorage } from "../files/storage.service";
+import {
+  designDecisionSchema,
+  designStepSnapshotSchema,
+  type DesignDecisionInput,
+} from "./design-path.schemas";
 
 export const DESIGN_ASSETS_DB = Symbol("DESIGN_ASSETS_DB");
 
 type DesignAssetDatabase = Pick<
   PrismaClient,
-  "designAsset" | "fileAsset" | "project"
+  "designAsset" | "designAssetDecision" | "fileAsset" | "project"
 >;
 
 interface OwnedDesignAsset extends DesignAsset {
   readonly project: {
+    readonly deletedAt: Date | null;
     readonly workspace: {
       readonly ownerId: string;
     };
@@ -119,6 +135,32 @@ export class DesignAssetsService {
             : null,
         url: `s3://${file.objectKey}`,
         width: file.width,
+        designStep: {
+          create: {
+            projectId,
+            actor: "manual",
+            tool: "imported",
+            intent: "导入设计素材",
+            inputSnapshot: {
+              version: 1,
+              sources: [
+                {
+                  elementId: file.id,
+                  fileAssetId: file.id,
+                  role: "import_source",
+                  title: file.originalName,
+                },
+              ],
+              constraints: {
+                palette: [],
+                notes: [],
+                avoidLabels: [],
+                fabricTerms: [],
+              },
+              parameters: {},
+            },
+          },
+        },
       },
     });
     return this.toView(imported);
@@ -169,6 +211,176 @@ export class DesignAssetsService {
     };
   }
 
+  async path(userId: string, assetId: string): Promise<DesignPathView> {
+    const target = await this.ownedAsset(userId, assetId);
+    const pending = [assetId];
+    const visited = new Set<string>();
+    const available = new Set<string>();
+    const steps = new Map<string, DesignPathStep>();
+    let incomplete = false;
+    while (pending.length && visited.size < DESIGN_PATH_MAX_ASSETS) {
+      const id = pending.shift();
+      if (!id) continue;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const asset = await this.database.designAsset.findFirst({
+        where: { id, projectId: target.projectId },
+        include: {
+          designStep: true,
+          generationTask: {
+            include: {
+              designStep: true,
+              generatedAssets: true,
+              agentMessage: { select: { conversationId: true } },
+            },
+          },
+        },
+      });
+      if (!asset) {
+        incomplete = true;
+        continue;
+      }
+      available.add(asset.id);
+      const recorded = asset.designStep ?? asset.generationTask?.designStep;
+      const parsed = designStepSnapshotSchema.safeParse(
+        recorded?.inputSnapshot,
+      );
+      const fallbackSources = [
+        ...(asset.parentAssetId
+          ? [
+              {
+                elementId: asset.parentAssetId,
+                assetId: asset.parentAssetId,
+                role: "edit_source",
+                title: "上一设计版本",
+              },
+            ]
+          : []),
+        ...(asset.restoredFromAssetId
+          ? [
+              {
+                elementId: asset.restoredFromAssetId,
+                assetId: asset.restoredFromAssetId,
+                role: "restore_source",
+                title: "恢复来源",
+              },
+            ]
+          : []),
+        ...(asset.sourceFileId
+          ? [
+              {
+                elementId: asset.sourceFileId,
+                fileAssetId: asset.sourceFileId,
+                role: "import_source",
+                title: "原始上传素材",
+              },
+            ]
+          : []),
+      ];
+      const snapshot: DesignStepSnapshot = parsed.success
+        ? parsed.data
+        : {
+            version: 1,
+            sources: fallbackSources,
+            constraints: {
+              palette: [],
+              notes: [],
+              avoidLabels: [],
+              fabricTerms: [],
+            },
+            parameters: {},
+          };
+      const outputs =
+        asset.generationTask?.generatedAssets.filter(
+          (output) => output.projectId === target.projectId,
+        ) ?? [];
+      for (const output of outputs) available.add(output.id);
+      const stepId = recorded?.id ?? `legacy:${asset.id}`;
+      steps.set(stepId, {
+        ...snapshot,
+        id: stepId,
+        tool: recorded?.tool ?? asset.operation.toLowerCase(),
+        actor: recorded?.actor ?? "legacy",
+        intent: recorded?.intent ?? "历史资产，仅保留已有血缘信息",
+        createdAt: (recorded?.createdAt ?? asset.createdAt).toISOString(),
+        status: asset.generationTask?.status.toLowerCase() ?? "succeeded",
+        snapshotAvailable: parsed.success,
+        outputs: (outputs.length ? outputs : [asset]).map((output) =>
+          this.toView(output),
+        ),
+        conversationId:
+          asset.generationTask?.agentMessage?.conversationId ?? null,
+      });
+      const dependencies = [
+        asset.parentAssetId,
+        asset.restoredFromAssetId,
+        ...snapshot.sources.map((source) => source.assetId),
+      ];
+      for (const dependency of dependencies) {
+        if (dependency && !visited.has(dependency)) pending.push(dependency);
+      }
+    }
+    if (pending.some((id) => !visited.has(id))) incomplete = true;
+    const decisions = await this.database.designAssetDecision.findMany({
+      where: { assetId: { in: [...available] }, userId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+    });
+    const ordered = orderDesignSteps([...steps.values()]);
+    return {
+      assetId,
+      steps: ordered.steps,
+      decisions: decisions.map(decisionView),
+      incomplete: incomplete || ordered.cyclic,
+    };
+  }
+
+  async decide(
+    userId: string,
+    assetId: string,
+    input: DesignDecisionInput,
+  ): Promise<DesignDecisionView> {
+    await this.ownedAsset(userId, assetId);
+    const parsed = designDecisionSchema.parse(input);
+    const decision = await this.database.designAssetDecision
+      .upsert({
+        where: {
+          assetId_clientRequestId: {
+            assetId,
+            clientRequestId: parsed.clientRequestId,
+          },
+        },
+        update: {},
+        create: { ...parsed, assetId, userId },
+      })
+      .catch((error: unknown) => {
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== "P2002"
+        )
+          throw error;
+        return this.database.designAssetDecision.findUniqueOrThrow({
+          where: {
+            assetId_clientRequestId: {
+              assetId,
+              clientRequestId: parsed.clientRequestId,
+            },
+          },
+        });
+      });
+    if (
+      decision.kind !== parsed.kind ||
+      decision.reason !== parsed.reason ||
+      decision.userId !== userId
+    ) {
+      throw new ConflictException({
+        code: "DECISION_REQUEST_REUSED",
+        message: "该请求已用于另一项设计决策，请刷新后重试",
+      });
+    }
+    return decisionView(decision);
+  }
+
   async restore(
     userId: string,
     targetAssetId: string,
@@ -203,6 +415,38 @@ export class DesignAssetsService {
         thumbnailUrl: target.thumbnailUrl,
         url: target.url,
         width: target.width,
+        designStep: {
+          create: {
+            projectId: current.projectId,
+            tool: "restore",
+            actor: "manual",
+            intent: "恢复已有结果为新版本",
+            inputSnapshot: {
+              version: 1,
+              sources: [
+                {
+                  elementId: current.id,
+                  assetId: current.id,
+                  role: "edit_source",
+                  title: "恢复前版本",
+                },
+                {
+                  elementId: target.id,
+                  assetId: target.id,
+                  role: "restore_source",
+                  title: "恢复来源",
+                },
+              ],
+              constraints: {
+                palette: [],
+                notes: [],
+                avoidLabels: [],
+                fabricTerms: [],
+              },
+              parameters: {},
+            },
+          },
+        },
       },
     });
     return this.toView(restored);
@@ -217,12 +461,13 @@ export class DesignAssetsService {
       include: {
         project: {
           select: {
+            deletedAt: true,
             workspace: { select: { ownerId: true } },
           },
         },
       },
     });
-    if (!asset) {
+    if (!asset || asset.project.deletedAt) {
       throw new NotFoundException({
         code: "DESIGN_ASSET_NOT_FOUND",
         message: "设计资产不存在",
@@ -259,6 +504,57 @@ export class DesignAssetsService {
 
 function objectKeyFrom(value: string): string | null {
   return value.startsWith("s3://") ? value.slice("s3://".length) : null;
+}
+
+function orderDesignSteps(steps: DesignPathStep[]): {
+  steps: DesignPathStep[];
+  cyclic: boolean;
+} {
+  const byAsset = new Map(
+    steps.flatMap((step) =>
+      step.outputs.map((output) => [output.id, step] as const),
+    ),
+  );
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const ordered: DesignPathStep[] = [];
+  let cyclic = false;
+  const visit = (step: DesignPathStep) => {
+    if (visited.has(step.id)) return;
+    if (visiting.has(step.id)) {
+      cyclic = true;
+      return;
+    }
+    visiting.add(step.id);
+    const sourceIds = [
+      ...step.sources.map((source) => source.assetId),
+      ...step.outputs.map((output) => output.parentAssetId),
+    ];
+    for (const id of sourceIds) {
+      const source = id ? byAsset.get(id) : undefined;
+      if (source) visit(source);
+    }
+    visiting.delete(step.id);
+    visited.add(step.id);
+    ordered.push(step);
+  };
+  steps
+    .sort(
+      (a, b) =>
+        a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    )
+    .forEach(visit);
+  return { steps: ordered, cyclic };
+}
+
+function decisionView(decision: DesignAssetDecision): DesignDecisionView {
+  return {
+    id: decision.id,
+    assetId: decision.assetId,
+    kind: designDecisionSchema.shape.kind.parse(decision.kind),
+    reason: decision.reason,
+    createdAt: decision.createdAt.toISOString(),
+  };
 }
 
 function displayAssetUrl(

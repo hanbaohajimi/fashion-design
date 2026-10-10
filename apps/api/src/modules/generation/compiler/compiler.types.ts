@@ -1,3 +1,5 @@
+import type { DesignSourceSnapshot } from "@fashion/shared";
+
 export type SemanticImageChannel =
   "fabric" | "pattern" | "detail" | "palette" | "avoid";
 
@@ -50,6 +52,7 @@ export interface SilhouetteReference {
 }
 
 export interface CompiledGenInput {
+  readonly sources?: readonly DesignSourceSnapshot[];
   readonly version: 1;
   readonly mode: "text_only" | "board_guided";
   readonly positivePrompt: string;

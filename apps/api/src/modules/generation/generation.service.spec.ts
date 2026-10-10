@@ -187,6 +187,57 @@ describe("GenerationService", () => {
     );
   });
 
+  it("creates an immutable design step with an Agent task in the same transaction", async () => {
+    const sources = [
+      {
+        elementId: "note-1",
+        role: "note",
+        title: "设计要求",
+        text: "保留立领",
+      },
+    ];
+    compiler.compile.mockResolvedValue({
+      sources,
+      palette: ["#112233"],
+      notes: ["保留立领"],
+      avoidLabels: [],
+      fabricReferences: [],
+      positivePrompt: "compiled coat",
+      negativePrompt: "watermark",
+      version: 1,
+      mode: "board_guided",
+      enhancement: "keywords",
+    });
+    await service.createFromAgent(
+      "user-1",
+      { ...request, projectId: "project-1" },
+      "step-key",
+      "修改袖口",
+    );
+    expect(database.generationTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          designStep: {
+            create: expect.objectContaining({
+              projectId: "project-1",
+              actor: "agent",
+              tool: "t2i",
+              intent: "修改袖口",
+              inputSnapshot: expect.objectContaining({
+                version: 1,
+                sources,
+                constraints: expect.objectContaining({
+                  palette: ["#112233"],
+                  notes: ["保留立领"],
+                }),
+              }),
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
   it("用户未明确要求试穿时默认注入无人物展示硬约束", async () => {
     await service.create("user-1", {
       ...request,

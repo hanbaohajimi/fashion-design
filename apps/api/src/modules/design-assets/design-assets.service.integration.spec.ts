@@ -1,6 +1,14 @@
-import { DesignAssetOperation, FileStatus, prisma } from "@fashion/db";
+import {
+  DesignAssetOperation,
+  FileStatus,
+  GenerationTaskStatus,
+  prisma,
+} from "@fashion/db";
 import { HttpStatus } from "@nestjs/common";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { BillingService } from "../billing/billing.service";
+import { ContextCompilerService } from "../generation/compiler/context-compiler.service";
+import { GenerationService } from "../generation/generation.service";
 
 import { DesignAssetsService } from "./design-assets.service";
 
@@ -12,6 +20,98 @@ const service = new DesignAssetsService(prisma, {
 describe("DesignAssetsService lineage integration", () => {
   afterAll(async () => {
     await prisma.$disconnect();
+  });
+
+  it("Agent 编辑任务与步骤一起写入，白板修改和请求重放不覆盖原快照", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const root = await service.importFile(
+        fixture.userId,
+        fixture.projectId,
+        fixture.fileId,
+      );
+      const note = await prisma.boardElement.create({
+        data: {
+          projectId: fixture.projectId,
+          shapeId: "shape:note",
+          shapeType: "fashion-note",
+          role: "note",
+          record: { props: { text: "保留袖口" } },
+        },
+      });
+      const storage = {
+        createDownloadUrl: async (key: string) => `https://signed.test/${key}`,
+      };
+      const model = { analyzeImage: vi.fn(), enhancePrompt: vi.fn() };
+      const generation = new GenerationService(
+        prisma,
+        { enqueue: vi.fn(), cancel: vi.fn() },
+        new BillingService(prisma),
+        new ContextCompilerService(prisma, model, storage),
+        storage as never,
+      );
+      const request = {
+        taskType: "i2i" as const,
+        parentAssetId: root.id,
+        projectId: fixture.projectId,
+        prompt: "revised coat",
+        referenceImageUrl: "https://cdn.test/placeholder.png",
+        width: 1024,
+        height: 1024,
+        shapeIds: [note.shapeId],
+      };
+      const first = await generation.createFromAgent(
+        fixture.userId,
+        request,
+        "agent-replay",
+        "调整衣领，保留袖口",
+      );
+      await prisma.boardElement.update({
+        where: { id: note.id },
+        data: { record: { props: { text: "新便签内容" } } },
+      });
+      const replay = await generation.createFromAgent(
+        fixture.userId,
+        request,
+        "agent-replay",
+        "调整衣领，保留袖口",
+      );
+      expect(replay.taskId).toBe(first.taskId);
+      expect(model.enhancePrompt).not.toHaveBeenCalled();
+      await expect(
+        prisma.designStep.count({ where: { generationTaskId: first.taskId } }),
+      ).resolves.toBe(1);
+      await prisma.generationTask.update({
+        where: { id: first.taskId },
+        data: { status: GenerationTaskStatus.SUCCEEDED },
+      });
+      const output = await prisma.designAsset.create({
+        data: {
+          projectId: fixture.projectId,
+          parentAssetId: root.id,
+          rootAssetId: root.id,
+          generationTaskId: first.taskId,
+          operation: DesignAssetOperation.VARIATION,
+          url: "https://cdn.test/output.png",
+        },
+      });
+      const path = await service.path(fixture.userId, output.id);
+      expect(path.steps.at(-1)).toMatchObject({
+        actor: "agent",
+        tool: "i2i",
+        intent: "调整衣领，保留袖口",
+        constraints: { notes: ["保留袖口"] },
+        sources: expect.arrayContaining([
+          expect.objectContaining({ elementId: note.id, text: "保留袖口" }),
+          expect.objectContaining({ assetId: root.id, role: "edit_source" }),
+        ]),
+      });
+      expect(JSON.stringify(path.steps.at(-1))).not.toContain(
+        "https://signed.test",
+      );
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
   });
 
   it("分页显示完整血缘，恢复会创建新版本且可再次反向恢复", async () => {
@@ -66,6 +166,23 @@ describe("DesignAssetsService lineage integration", () => {
           where: { id: restoredRoot.id },
         }),
       ).resolves.toMatchObject({ archivedAt: null });
+      const path = await service.path(fixture.userId, restoredCurrent.id);
+      expect(path.steps).toHaveLength(5);
+      expect(path.steps.at(-1)).toMatchObject({
+        tool: "restore",
+        snapshotAvailable: true,
+        sources: expect.arrayContaining([
+          expect.objectContaining({
+            assetId: restoredRoot.id,
+            role: "edit_source",
+          }),
+          expect.objectContaining({
+            assetId: fixture.currentId,
+            role: "restore_source",
+          }),
+        ]),
+      });
+      expect(path.incomplete).toBe(false);
     } finally {
       await prisma.user.delete({ where: { id: fixture.userId } });
     }
@@ -124,6 +241,54 @@ describe("DesignAssetsService lineage integration", () => {
           },
         }),
       ).resolves.toBe(1);
+      const path = await service.path(fixture.userId, first.id);
+      expect(path.steps[0]).toMatchObject({
+        tool: "imported",
+        snapshotAvailable: true,
+        sources: [
+          expect.objectContaining({
+            fileAssetId: fixture.fileId,
+            title: "系列核心.png",
+          }),
+        ],
+      });
+      await expect(
+        prisma.designStep.count({ where: { outputAssetId: first.id } }),
+      ).resolves.toBe(1);
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
+  it("明确选择幂等追加，刷新路径可读到选择历史", async () => {
+    const fixture = await createFixture();
+    try {
+      const input = {
+        kind: "selected" as const,
+        reason: "面料更合适",
+        clientRequestId: crypto.randomUUID(),
+      };
+      const [first, replay] = await Promise.all([
+        service.decide(fixture.userId, fixture.currentId, input),
+        service.decide(fixture.userId, fixture.currentId, input),
+      ]);
+      expect(replay.id).toBe(first.id);
+      await service.decide(fixture.userId, fixture.currentId, {
+        kind: "compare",
+        reason: "继续比较袖型",
+        clientRequestId: crypto.randomUUID(),
+      });
+      const path = await service.path(fixture.userId, fixture.currentId);
+      expect(path.decisions).toHaveLength(2);
+      expect(path.decisions[0]).toMatchObject({
+        kind: "compare",
+        reason: "继续比较袖型",
+      });
+      await expect(
+        prisma.designAsset.findUniqueOrThrow({
+          where: { id: fixture.currentId },
+        }),
+      ).resolves.toMatchObject({ operation: DesignAssetOperation.INPAINT });
     } finally {
       await prisma.user.delete({ where: { id: fixture.userId } });
     }
