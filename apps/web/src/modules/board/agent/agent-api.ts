@@ -3,6 +3,7 @@ import type {
   AgentMessageView,
   AgentRunView,
   AgentPlanStepSpec,
+  AgentDomainActionView,
 } from "@fashion/shared";
 
 interface CursorPage<T> {
@@ -297,6 +298,35 @@ export async function updateAgentRunPlan(
     `/api/agent-runs/${encodeURIComponent(runId)}/plan`,
     { method: "PATCH", body: JSON.stringify(input) },
     "节点图保存失败",
+  );
+}
+
+export async function requestAgentDomainAction(
+  runId: string,
+  input: {
+    readonly revision: number;
+    readonly clientRequestId: string;
+    readonly kind: AgentDomainActionView["kind"];
+    readonly stepId: string;
+    readonly assetId?: string;
+  },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}/agent-actions`,
+    { method: "POST", body: JSON.stringify(input) },
+    "领域 Agent 暂时无法完成分析，请重试",
+  );
+}
+
+export async function applyAgentDomainAction(
+  runId: string,
+  actionId: string,
+  input: { readonly revision: number },
+): Promise<AgentRunView> {
+  return agentRunRequest(
+    `/api/agent-runs/${encodeURIComponent(runId)}/agent-actions/${encodeURIComponent(actionId)}/apply`,
+    { method: "POST", body: JSON.stringify(input) },
+    "修订建议应用失败，请刷新状态后重试",
   );
 }
 

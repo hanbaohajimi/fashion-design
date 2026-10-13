@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   attachGenerationTaskToConversation,
+  applyAgentDomainAction,
   AgentRunApiError,
   controlAgentRun,
   createAgentRun,
@@ -12,6 +13,7 @@ import {
   listAgentConversations,
   listAgentMessages,
   listAgentRuns,
+  requestAgentDomainAction,
   reconcileAgentTurnMessages,
   sendAgentMessage,
   updateAgentConversation,
@@ -44,6 +46,35 @@ function agentMessage(
 }
 
 describe("agent-api", () => {
+  it("领域动作保留请求ID并绑定具体节点与候选；应用建议只带当前revision", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ id: "run-a" })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const input = {
+      revision: 7,
+      clientRequestId: "check-request-a",
+      kind: "evaluate_candidate" as const,
+      stepId: "step/a",
+      assetId: "asset-second",
+    };
+    await requestAgentDomainAction("run/a", input);
+    await applyAgentDomainAction("run/a", "action/a", { revision: 8 });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/agent-runs/run%2Fa/agent-actions",
+    );
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)),
+    ).toEqual(input);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "/api/agent-runs/run%2Fa/agent-actions/action%2Fa/apply",
+    );
+    expect(
+      JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body)),
+    ).toEqual({ revision: 8 });
+  });
   it("保存完整节点规格和固定revision，拒绝候选只发送调整原因", async () => {
     const fetchMock = vi
       .fn()

@@ -19,6 +19,7 @@ import {
   validatePlanDraft,
 } from "./agent-plan-graph";
 import styles from "./agent-plan-editor.module.css";
+import { AgentNodeRationalePanel } from "./AgentIntelligencePanel";
 
 export function AgentPlanEditor({
   run,
@@ -400,6 +401,12 @@ export function AgentPlanEditor({
                         : "当前计划执行中或等待选择，未执行节点暂不可编辑。"}
                   </p>
                 </header>
+                <AgentNodeRationalePanel
+                  rationale={run.intelligence?.rationales.find(
+                    (item) => item.stepKey === selected.key,
+                  )}
+                  intelligence={run.intelligence}
+                />
                 <label htmlFor="graph-node-title">节点标题</label>
                 <input
                   id="graph-node-title"

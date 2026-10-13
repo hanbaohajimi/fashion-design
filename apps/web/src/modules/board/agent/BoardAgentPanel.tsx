@@ -107,6 +107,15 @@ export function BoardAgentPanel({
   const activeConversationIdRef = useRef(activeConversationId);
   const projectIdRef = useRef(projectId);
 
+  function changeMode(nextMode: "chat" | "workflow") {
+    setMode(nextMode);
+    try {
+      localStorage.setItem(`fashion-agent-mode:${projectId}`, nextMode);
+    } catch {
+      // 模式切换不依赖浏览器存储。
+    }
+  }
+
   useEffect(() => {
     let disposed = false;
     let restored: "chat" | "workflow" = "chat";
@@ -900,17 +909,7 @@ export function BoardAgentPanel({
                 role="tab"
                 aria-selected={mode === item}
                 disabled={sending}
-                onClick={() => {
-                  setMode(item);
-                  try {
-                    localStorage.setItem(
-                      `fashion-agent-mode:${projectId}`,
-                      item,
-                    );
-                  } catch {
-                    // 模式切换不依赖浏览器存储。
-                  }
-                }}
+                onClick={() => changeMode(item)}
               >
                 {item === "chat" ? "对话" : "设计工作流"}
               </button>
@@ -1039,6 +1038,17 @@ export function BoardAgentPanel({
           )
         ) : (
           <>
+            <aside
+              className={styles.workflowInvitation}
+              aria-label="设计工作流入口"
+            >
+              <p>
+                需要多轮修改同一设计？设计工作流会记录目标、节点和每次选择，并对候选逐项检查。
+              </p>
+              <button type="button" onClick={() => changeMode("workflow")}>
+                打开设计工作流
+              </button>
+            </aside>
             <div className={styles.timeline} ref={timelineRef}>
               {messageCursor ? (
                 <button

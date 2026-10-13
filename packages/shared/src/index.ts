@@ -223,6 +223,110 @@ export interface AgentRunStepView extends AgentPlanStepSpec {
   readonly canEditInputs?: boolean;
 }
 
+export const FASHION_AGENT_FRAMEWORK_VERSION = "fashion-agents/1" as const;
+export const FASHION_DESIGN_DIMENSIONS = [
+  "silhouette",
+  "structure",
+  "material",
+  "color",
+  "style",
+  "function",
+  "presentation",
+] as const;
+export type FashionDesignDimension = (typeof FASHION_DESIGN_DIMENSIONS)[number];
+
+export interface AgentDesignEvidence {
+  readonly id: string;
+  readonly kind: "intent" | "board" | "decision";
+  readonly label: string;
+  readonly text: string;
+  readonly assetId: string | null;
+}
+
+export interface AgentDesignConstraint {
+  readonly id: string;
+  readonly dimension: FashionDesignDimension;
+  readonly requirement: string;
+  readonly mode: "require" | "preserve" | "change" | "avoid";
+  readonly priority: "must" | "prefer";
+  readonly origin: "explicit" | "interpretation";
+  readonly verification:
+    "visual" | "requires_measurement" | "requires_specification";
+  readonly evidenceIds: readonly string[];
+  readonly sourceQuote: string | null;
+}
+
+export interface AgentDesignBrief {
+  readonly summary: string;
+  readonly garmentType: string | null;
+  readonly constraints: readonly AgentDesignConstraint[];
+  readonly unknowns: readonly string[];
+}
+
+export interface AgentNodeRationale {
+  readonly stepKey: string;
+  readonly goal: string;
+  readonly constraintIds: readonly string[];
+  readonly acceptanceChecks: readonly string[];
+}
+
+export interface AgentPlanAudit {
+  readonly coverage: readonly {
+    readonly constraintId: string;
+    readonly stepKeys: readonly string[];
+    readonly status: "assigned" | "unassigned";
+  }[];
+  readonly warnings: readonly string[];
+}
+
+export interface AgentDesignEvaluation {
+  readonly stepId: string;
+  readonly attemptId: string;
+  readonly assetId: string;
+  readonly summary: string;
+  readonly checks: readonly {
+    readonly constraintId: string;
+    readonly status: "met" | "concern" | "unknown";
+    readonly observation: string;
+  }[];
+  readonly nextActions: readonly string[];
+}
+
+export interface AgentDesignRefinement {
+  readonly stepId: string;
+  readonly attemptId: string;
+  readonly originalPrompt: string;
+  readonly originalNegativePrompt: string;
+  readonly prompt: string;
+  readonly negativePrompt: string;
+  readonly summary: string;
+  readonly changes: readonly string[];
+  readonly preserve: readonly string[];
+}
+
+export interface AgentDomainActionView {
+  readonly id: string;
+  readonly kind: "evaluate_candidate" | "refine_step";
+  readonly stepId: string;
+  readonly assetId: string | null;
+  readonly status:
+    "running" | "completed" | "failed" | "superseded" | "applied";
+  readonly createdAt: string;
+  readonly completedAt: string | null;
+  readonly error: string | null;
+  readonly evaluation: AgentDesignEvaluation | null;
+  readonly refinement: AgentDesignRefinement | null;
+}
+
+export interface AgentDesignIntelligence {
+  readonly version: typeof FASHION_AGENT_FRAMEWORK_VERSION;
+  readonly evidence: readonly AgentDesignEvidence[];
+  readonly brief: AgentDesignBrief;
+  readonly rationales: readonly AgentNodeRationale[];
+  readonly audit: AgentPlanAudit;
+  readonly actions: readonly AgentDomainActionView[];
+}
+
 export interface AgentRunView {
   readonly id: string;
   readonly projectId: string;
@@ -235,6 +339,7 @@ export interface AgentRunView {
   readonly error: string | null;
   readonly steps: readonly AgentRunStepView[];
   readonly sourceAssets?: readonly AgentRunCandidate[];
+  readonly intelligence?: AgentDesignIntelligence;
 }
 
 export interface AgentMessageContext {

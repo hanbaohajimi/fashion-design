@@ -17,6 +17,7 @@ import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 import { agentIdSchema } from "../agent-conversations/agent-conversations.schemas";
 import {
   agentRunRevisionSchema,
+  createAgentDomainActionSchema,
   reviewAgentRunSchema,
   rejectAgentRunSchema,
   updateAgentRunPlanSchema,
@@ -51,6 +52,34 @@ export class AgentRunsController {
   @Header("Cache-Control", "private, no-store")
   get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
     return this.runs.get(user.userId, parse(agentIdSchema, id));
+  }
+
+  @Post(":id/agent-actions")
+  createDomainAction(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    return this.runs.createDomainAction(
+      user.userId,
+      parse(agentIdSchema, id),
+      parse(createAgentDomainActionSchema, body),
+    );
+  }
+
+  @Post(":id/agent-actions/:actionId/apply")
+  applyDomainAction(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Param("actionId") actionId: string,
+    @Body() body: unknown,
+  ) {
+    return this.runs.applyDomainAction(
+      user.userId,
+      parse(agentIdSchema, id),
+      parse(agentIdSchema, actionId),
+      parse(agentRunRevisionSchema, body).revision,
+    );
   }
 
   @Patch(":id/steps/:stepId")

@@ -1,8 +1,15 @@
 import { GenerationTaskStatus, Prisma } from "@fashion/db";
-import type { AgentPlanStepSpec } from "@fashion/shared";
+import {
+  FASHION_AGENT_FRAMEWORK_VERSION,
+  type AgentDesignIntelligence,
+  type AgentPlanStepSpec,
+} from "@fashion/shared";
 import { describe, expect, it, vi } from "vitest";
 import { AgentRunsService } from "./agent-runs.service";
-import { agentPlanSchema } from "./agent-runs.schemas";
+import {
+  agentPlanSchema,
+  createAgentDomainActionSchema,
+} from "./agent-runs.schemas";
 import { agentAttemptTaskId } from "./agent-tool.registry";
 
 type Row = Record<string, unknown>;
@@ -62,6 +69,56 @@ const compiled = {
   notes: [],
   enhancement: "keywords",
 };
+
+function intelligenceFor(plan = specs): AgentDesignIntelligence {
+  return {
+    version: FASHION_AGENT_FRAMEWORK_VERSION,
+    evidence: [
+      {
+        id: "intent",
+        kind: "intent",
+        label: "用户需求",
+        text: "保留落肩袖，设计风衣",
+        assetId: null,
+      },
+    ],
+    brief: {
+      summary: "保留落肩袖的风衣",
+      garmentType: "风衣",
+      unknowns: [],
+      constraints: [
+        {
+          id: "dropped-shoulder",
+          dimension: "silhouette",
+          requirement: "保留落肩袖",
+          mode: "preserve",
+          priority: "must",
+          origin: "explicit",
+          verification: "visual",
+          evidenceIds: ["intent"],
+          sourceQuote: "保留落肩袖",
+        },
+      ],
+    },
+    rationales: plan.map((step) => ({
+      stepKey: step.key,
+      goal: step.instruction,
+      constraintIds: ["dropped-shoulder"],
+      acceptanceChecks: ["检查落肩袖轮廓"],
+    })),
+    audit: {
+      coverage: [
+        {
+          constraintId: "dropped-shoulder",
+          stepKeys: plan.map((step) => step.key),
+          status: "assigned",
+        },
+      ],
+      warnings: [],
+    },
+    actions: [],
+  };
+}
 
 function matches(row: Row, where: Row, steps: Row[] = []): boolean {
   return Object.entries(where).every(([key, value]) => {
@@ -320,10 +377,20 @@ function harness(initialSpecs = specs) {
     resumeQueuedTask: vi.fn().mockResolvedValue(undefined),
   };
   const compiler = { compile: vi.fn().mockResolvedValue(compiled) };
+  const domainModel = { generateJson: vi.fn() };
+  const storage = {
+    readPrefix: vi
+      .fn()
+      .mockResolvedValue(
+        Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      ),
+  };
   const service = new AgentRunsService(
     database as never,
     generation as never,
     compiler as never,
+    domainModel,
+    storage as never,
   );
   const finish = (taskId: string, assetId: string) => {
     required(tasks.find((task) => task.id === taskId)).status =
@@ -345,6 +412,8 @@ function harness(initialSpecs = specs) {
     database,
     generation,
     compiler,
+    domainModel,
+    storage,
     runs,
     steps,
     attempts,
@@ -356,7 +425,452 @@ function harness(initialSpecs = specs) {
   };
 }
 
+async function domainHarness() {
+  const h = harness();
+  const run = required(h.runs[0]);
+  run.contextSnapshot = {
+    ...(run.contextSnapshot as Row),
+    intelligence: intelligenceFor(),
+  };
+  const started = await h.service.execute("user-a", "run-a", 1);
+  const taskId = required(started.steps[0]?.generationTaskId);
+  h.finish(taskId, "candidate-a");
+  h.finish(taskId, "candidate-b");
+  const waiting = await h.service.get("user-a", "run-a");
+  return { ...h, waiting };
+}
+
+const evaluationOutput = {
+  summary: "落肩袖可见",
+  checks: [
+    {
+      constraintId: "dropped-shoulder",
+      status: "met",
+      observation: "肩线低于肩部",
+    },
+  ],
+  nextActions: ["可继续细化袖口"],
+};
+const refinementOutput = {
+  prompt: "coat with dropped shoulders and narrower cuffs",
+  negativePrompt: "tight shoulders",
+  summary: "保留落肩，缩小袖口",
+  changes: ["缩小袖口"],
+  preserve: ["落肩袖"],
+};
+
+describe("Agent domain actions", () => {
+  it("explains a technical failure without loading images, calling the model or inventing design changes", async () => {
+    const h = await domainHarness();
+    const run = required(h.runs[0]);
+    const step = required(h.steps[0]);
+    const attempt = required(h.attempts[0]);
+    const task = required(h.tasks[0]);
+    run.status = "failed";
+    step.status = "failed";
+    attempt.status = "failed";
+    task.status = GenerationTaskStatus.FAILED;
+    task.errorMessage =
+      "quota unavailable https://private.test/task?signature=secret";
+    attempt.error = task.errorMessage;
+    h.storage.readPrefix.mockRejectedValue(new Error("storage unavailable"));
+    const result = await h.service.createDomainAction("user-a", "run-a", {
+      revision: Number(run.revision),
+      clientRequestId: "execution-failure",
+      kind: "refine_step",
+      stepId: "step-0",
+    });
+    expect(result.intelligence?.actions[0]).toMatchObject({
+      status: "completed",
+      refinement: { prompt: "loose coat", negativePrompt: "", changes: [] },
+    });
+    expect(h.storage.readPrefix).not.toHaveBeenCalled();
+    expect(h.domainModel.generateJson).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("private.test");
+    expect(JSON.stringify(result)).not.toContain("signature=secret");
+  });
+
+  it("inlines a trusted local object instead of sending localhost to the model and rejects oversized image data", async () => {
+    const h = await domainHarness();
+    const candidate = required(
+      h.assets.find((asset) => asset.id === "candidate-a"),
+    );
+    candidate.url = "http://localhost:9000/domain-test/candidate.png";
+    candidate.thumbnailUrl = null;
+    vi.stubEnv("ASSET_CDN_ORIGIN", "http://localhost:9000/domain-test");
+    try {
+      h.domainModel.generateJson.mockResolvedValue(evaluationOutput);
+      const first = await h.service.createDomainAction("user-a", "run-a", {
+        revision: h.waiting.revision,
+        clientRequestId: "inline-a",
+        kind: "evaluate_candidate",
+        stepId: "step-0",
+        assetId: "candidate-a",
+      });
+      expect(first.intelligence?.actions[0]?.status).toBe("completed");
+      expect(h.storage.readPrefix).toHaveBeenCalledWith(
+        "candidate.png",
+        7 * 1024 * 1024 + 1,
+      );
+      expect(
+        JSON.stringify(h.domainModel.generateJson.mock.calls[0]?.[0]?.images),
+      ).not.toContain("localhost");
+      h.storage.readPrefix.mockResolvedValueOnce(
+        new Uint8Array(7 * 1024 * 1024 + 1),
+      );
+      const oversized = await h.service.createDomainAction("user-a", "run-a", {
+        revision: first.revision,
+        clientRequestId: "oversized-a",
+        kind: "evaluate_candidate",
+        stepId: "step-0",
+        assetId: "candidate-a",
+      });
+      expect(oversized.intelligence?.actions[1]?.status).toBe("failed");
+      expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+      expect(oversized.status).toBe("waiting_review");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("limits actions while keeping earlier request IDs replayable", async () => {
+    const h = await domainHarness();
+    h.domainModel.generateJson.mockResolvedValue(evaluationOutput);
+    const input = {
+      revision: h.waiting.revision,
+      clientRequestId: "limit-a",
+      kind: "evaluate_candidate" as const,
+      stepId: "step-0",
+      assetId: "candidate-a",
+    };
+    const first = await h.service.createDomainAction("user-a", "run-a", input);
+    const intelligence = (required(h.runs[0]).contextSnapshot as Row)
+      .intelligence as Row;
+    const action = required((intelligence.actions as Row[])[0]);
+    intelligence.actions = Array.from({ length: 48 }, (_, index) => ({
+      ...action,
+      id: `action-${index}`,
+      clientRequestId: index ? `history-${index}` : "limit-a",
+    }));
+    await h.service.createDomainAction("user-a", "run-a", input);
+    await expect(
+      h.service.createDomainAction("user-a", "run-a", {
+        ...input,
+        revision: first.revision,
+        clientRequestId: "over-limit",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+  });
+  it("saves intelligence on planning and removes stale rationales when the editable graph changes", async () => {
+    const h = harness([]);
+    required(h.runs[0]).status = "planning";
+    const ready = await h.service.completePlan(
+      "user-a",
+      "run-a",
+      specs,
+      intelligenceFor(),
+    );
+    expect(ready.intelligence?.brief.constraints[0]?.id).toBe(
+      "dropped-shoulder",
+    );
+    const changed = await h.service.updatePlan("user-a", "run-a", {
+      revision: ready.revision,
+      steps: [{ ...required(specs[0]), prompt: "new coat" }],
+    });
+    expect(changed.intelligence?.rationales).toEqual([]);
+    expect(changed.intelligence?.audit.coverage[0]?.stepKeys).toEqual([]);
+    expect(changed.intelligence?.audit.coverage[0]?.status).toBe("unassigned");
+  });
+
+  it("freezes the execution contract without passing domain metadata to the generation provider on replay", async () => {
+    const h = harness();
+    required(h.runs[0]).contextSnapshot = {
+      ...(required(h.runs[0]).contextSnapshot as Row),
+      intelligence: intelligenceFor(),
+    };
+    const started = await h.service.execute("user-a", "run-a", 1);
+    const snapshot = required(h.attempts[0]).requestSnapshot as Row;
+    expect(snapshot.domainContract).toMatchObject({
+      intelligence: { version: FASHION_AGENT_FRAMEWORK_VERSION },
+      step: { prompt: "loose coat" },
+    });
+    expect(h.generation.createFromAgent.mock.calls[0]?.[1]).not.toHaveProperty(
+      "domainContract",
+    );
+    await h.service.execute("user-a", "run-a", started.revision);
+    expect(h.generation.createFromAgent.mock.calls[1]?.[1]).not.toHaveProperty(
+      "domainContract",
+    );
+    expect(required(h.attempts[0]).requestSnapshot).toEqual(snapshot);
+  });
+
+  it("evaluates an actual candidate once, replays the request and hides all private metadata and image URLs", async () => {
+    const h = await domainHarness();
+    h.domainModel.generateJson.mockResolvedValue({
+      ...evaluationOutput,
+      summary: "result https://private.test/a?signature=secret",
+    });
+    const input = {
+      revision: h.waiting.revision,
+      clientRequestId: "evaluation-a",
+      kind: "evaluate_candidate" as const,
+      stepId: "step-0",
+      assetId: "candidate-b",
+    };
+    const evaluated = await h.service.createDomainAction(
+      "user-a",
+      "run-a",
+      input,
+    );
+    expect(evaluated.status).toBe("waiting_review");
+    expect(evaluated.intelligence?.actions[0]).toMatchObject({
+      status: "completed",
+      evaluation: { assetId: "candidate-b", attemptId: "attempt-0" },
+    });
+    expect(h.storage.readPrefix).toHaveBeenCalled();
+    expect(h.domainModel.generateJson.mock.calls[0]?.[0]).toMatchObject({
+      images: [{ url: expect.stringMatching(/^data:image\/png;base64,/u) }],
+    });
+    const replay = await h.service.createDomainAction("user-a", "run-a", input);
+    expect(replay.revision).toBe(evaluated.revision);
+    expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+    const serialized = JSON.stringify(replay);
+    for (const secret of [
+      "clientRequestId",
+      "leaseToken",
+      "leaseExpiresAt",
+      "requestFingerprint",
+      "domainContract",
+      "data:image",
+      "private.test",
+      "signature=secret",
+    ])
+      expect(serialized).not.toContain(secret);
+    await expect(
+      h.service.createDomainAction("user-a", "run-a", {
+        ...input,
+        assetId: "candidate-a",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      h.service.createDomainAction("user-a", "run-a", {
+        ...input,
+        revision: evaluated.revision,
+        clientRequestId: "foreign-a",
+        assetId: "source-a",
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets human cancellation supersede a running action and ignores its late model result", async () => {
+    const h = await domainHarness();
+    const modelReply = deferred<unknown>();
+    const modelStarted = deferred<undefined>();
+    h.domainModel.generateJson.mockImplementationOnce(() => {
+      modelStarted.resolve(undefined);
+      return modelReply.promise;
+    });
+    const pending = h.service.createDomainAction("user-a", "run-a", {
+      revision: h.waiting.revision,
+      clientRequestId: "late-a",
+      kind: "evaluate_candidate",
+      stepId: "step-0",
+      assetId: "candidate-a",
+    });
+    await modelStarted.promise;
+    const current = await h.service.get("user-a", "run-a");
+    const canceled = await h.service.cancel(
+      "user-a",
+      "run-a",
+      current.revision,
+    );
+    expect(canceled.intelligence?.actions[0]?.status).toBe("superseded");
+    modelReply.resolve(evaluationOutput);
+    const late = await pending;
+    expect(late.status).toBe("canceled");
+    expect(late.intelligence?.actions[0]?.evaluation).toBeNull();
+  });
+
+  it("expires an interrupted lease on GET without a free model retry", async () => {
+    const h = await domainHarness();
+    const reply = deferred<unknown>();
+    const started = deferred<undefined>();
+    h.domainModel.generateJson.mockImplementationOnce(() => {
+      started.resolve(undefined);
+      return reply.promise;
+    });
+    const input = {
+      revision: h.waiting.revision,
+      clientRequestId: "expired-a",
+      kind: "evaluate_candidate" as const,
+      stepId: "step-0",
+      assetId: "candidate-a",
+    };
+    const pending = h.service.createDomainAction("user-a", "run-a", input);
+    await started.promise;
+    const intelligence = (required(h.runs[0]).contextSnapshot as Row)
+      .intelligence as Row;
+    required((intelligence.actions as Row[])[0]).leaseExpiresAt = new Date(
+      Date.now() - 1,
+    ).toISOString();
+    const expired = await h.service.get("user-a", "run-a");
+    expect(expired.intelligence?.actions[0]?.status).toBe("failed");
+    await h.service.createDomainAction("user-a", "run-a", input);
+    expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+    reply.resolve(evaluationOutput);
+    expect((await pending).intelligence?.actions[0]?.status).toBe("failed");
+  });
+
+  it("refines the current editable prompt using old attempt feedback and applies only the proposal", async () => {
+    const h = await domainHarness();
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: h.waiting.revision,
+      reason: "袖口太宽 token=用户设计备注",
+    });
+    const edited = await h.service.updateStep("user-a", "run-a", "step-0", {
+      revision: rejected.revision,
+      prompt: "hand-edited coat",
+      negativePrompt: "no red",
+    });
+    const oldSnapshot = structuredClone(
+      required(h.attempts[0]).requestSnapshot,
+    );
+    h.domainModel.generateJson.mockResolvedValue(refinementOutput);
+    const proposed = await h.service.createDomainAction("user-a", "run-a", {
+      revision: edited.revision,
+      clientRequestId: "refine-a",
+      kind: "refine_step",
+      stepId: "step-0",
+    });
+    const action = required(proposed.intelligence?.actions[0]);
+    expect(action.refinement).toMatchObject({
+      originalPrompt: "hand-edited coat",
+      originalNegativePrompt: "no red",
+      attemptId: "attempt-0",
+    });
+    const modelPrompt = String(
+      h.domainModel.generateJson.mock.calls[0]?.[0]?.prompt,
+    );
+    expect(modelPrompt).toContain("hand-edited coat");
+    expect(modelPrompt).toContain("loose coat");
+    expect(modelPrompt).toContain("token=用户设计备注");
+    const applied = await h.service.applyDomainAction(
+      "user-a",
+      "run-a",
+      action.id,
+      proposed.revision,
+    );
+    expect(applied.steps[0]?.prompt).toBe(refinementOutput.prompt);
+    expect(applied.intelligence?.actions[0]?.status).toBe("applied");
+    expect(required(h.attempts[0]).requestSnapshot).toEqual(oldSnapshot);
+    expect(applied.steps[0]?.attempts?.[0]?.error).toBe(
+      "袖口太宽 token=用户设计备注",
+    );
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(1);
+    await expect(
+      h.service.applyDomainAction(
+        "user-a",
+        "run-a",
+        action.id,
+        applied.revision,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("rolls back action application if the step write fails and rejects proposals after human input changes", async () => {
+    const h = await domainHarness();
+    const rejected = await h.service.reject("user-a", "run-a", {
+      revision: h.waiting.revision,
+      reason: "袖口太宽",
+    });
+    h.domainModel.generateJson.mockResolvedValue(refinementOutput);
+    const proposed = await h.service.createDomainAction("user-a", "run-a", {
+      revision: rejected.revision,
+      clientRequestId: "rollback-a",
+      kind: "refine_step",
+      stepId: "step-0",
+    });
+    const action = required(proposed.intelligence?.actions[0]);
+    h.database.agentRunStep.update.mockRejectedValueOnce(
+      new Error("write failed"),
+    );
+    await expect(
+      h.service.applyDomainAction(
+        "user-a",
+        "run-a",
+        action.id,
+        proposed.revision,
+      ),
+    ).rejects.toThrow("write failed");
+    const unchanged = await h.service.get("user-a", "run-a");
+    expect(unchanged.revision).toBe(proposed.revision);
+    expect(unchanged.intelligence?.actions[0]?.status).toBe("completed");
+    const edited = await h.service.updateStep("user-a", "run-a", "step-0", {
+      revision: unchanged.revision,
+      prompt: "new human prompt",
+      negativePrompt: "",
+    });
+    await expect(
+      h.service.applyDomainAction(
+        "user-a",
+        "run-a",
+        action.id,
+        edited.revision,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("records model failure as an artifact without changing workflow state or exposing its private error", async () => {
+    const h = await domainHarness();
+    h.domainModel.generateJson.mockRejectedValue(
+      new Error(
+        "request https://private.test/image?signature=secret authorization=secret",
+      ),
+    );
+    const input = {
+      revision: h.waiting.revision,
+      clientRequestId: "error-a",
+      kind: "evaluate_candidate" as const,
+      stepId: "step-0",
+      assetId: "candidate-a",
+    };
+    const result = await h.service.createDomainAction("user-a", "run-a", input);
+    expect(result.status).toBe("waiting_review");
+    expect(result.steps[0]?.status).toBe("waiting_review");
+    expect(result.intelligence?.actions[0]?.status).toBe("failed");
+    expect(JSON.stringify(result)).not.toContain("private.test");
+    expect(JSON.stringify(result)).not.toContain("secret");
+    await h.service.createDomainAction("user-a", "run-a", input);
+    expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Agent plan schema", () => {
+  it("requires a concrete asset for evaluation and forbids it on refinement", () => {
+    const base = { revision: 1, clientRequestId: "action-a", stepId: "step-0" };
+    expect(
+      createAgentDomainActionSchema.safeParse({
+        ...base,
+        kind: "evaluate_candidate",
+      }).success,
+    ).toBe(false);
+    expect(
+      createAgentDomainActionSchema.safeParse({
+        ...base,
+        kind: "evaluate_candidate",
+        assetId: "candidate-a",
+      }).success,
+    ).toBe(true);
+    expect(
+      createAgentDomainActionSchema.safeParse({
+        ...base,
+        kind: "refine_step",
+        assetId: "candidate-a",
+      }).success,
+    ).toBe(false);
+  });
   it("rejects duplicate keys, forward references, source-less edits and forbidden tools", () => {
     expect(agentPlanSchema.safeParse(specs).success).toBe(true);
     expect(agentPlanSchema.safeParse([specs[1], specs[0]]).success).toBe(false);

@@ -1,9 +1,14 @@
 import {
   DesignAssetOperation,
   GenerationTaskStatus,
+  Prisma,
   prisma,
 } from "@fashion/db";
-import type { AgentPlanStepSpec } from "@fashion/shared";
+import {
+  FASHION_AGENT_FRAMEWORK_VERSION,
+  type AgentDesignIntelligence,
+  type AgentPlanStepSpec,
+} from "@fashion/shared";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { BillingService } from "../billing/billing.service";
 import { ContextCompilerService } from "../generation/compiler/context-compiler.service";
@@ -45,7 +50,75 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-async function fixture(specs: AgentPlanStepSpec[] = plan) {
+function domainIntelligence(
+  specs: readonly AgentPlanStepSpec[],
+): AgentDesignIntelligence {
+  return {
+    version: FASHION_AGENT_FRAMEWORK_VERSION,
+    evidence: [
+      {
+        id: "note",
+        kind: "board",
+        label: "设计便签",
+        text: "保留落肩袖",
+        assetId: null,
+      },
+    ],
+    brief: {
+      summary: "保留落肩袖的风衣",
+      garmentType: "风衣",
+      constraints: [
+        {
+          id: "shoulder",
+          dimension: "silhouette",
+          requirement: "保留落肩袖",
+          mode: "preserve",
+          priority: "must",
+          origin: "explicit",
+          verification: "visual",
+          evidenceIds: ["note"],
+          sourceQuote: "保留落肩袖",
+        },
+      ],
+      unknowns: [],
+    },
+    rationales: specs.map((step) => ({
+      stepKey: step.key,
+      goal: step.instruction,
+      constraintIds: ["shoulder"],
+      acceptanceChecks: ["检查落肩轮廓"],
+    })),
+    audit: {
+      coverage: [
+        {
+          constraintId: "shoulder",
+          stepKeys: specs.map((step) => step.key),
+          status: "assigned",
+        },
+      ],
+      warnings: [],
+    },
+    actions: [],
+  };
+}
+const reviewResult = {
+  summary: "落肩轮廓符合目标",
+  checks: [
+    { constraintId: "shoulder", status: "met", observation: "肩线下移可见" },
+  ],
+  nextActions: [],
+};
+const revisionResult = {
+  prompt: "dropped shoulder coat with narrow cuffs",
+  negativePrompt: "wide cuffs",
+  summary: "缩小袖口",
+  changes: ["缩小袖口"],
+  preserve: ["落肩袖"],
+};
+async function fixture(
+  specs: AgentPlanStepSpec[] = plan,
+  withIntelligence = false,
+) {
   const user = await prisma.user.create({
     data: {
       email: `agent-run-${crypto.randomUUID()}@example.test`,
@@ -73,6 +146,11 @@ async function fixture(specs: AgentPlanStepSpec[] = plan) {
   });
   const storage = {
     createDownloadUrl: async (key: string) => `https://signed.test/${key}`,
+    readPrefix: vi
+      .fn()
+      .mockResolvedValue(
+        Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      ),
   };
   const model = { analyzeImage: vi.fn(), enhancePrompt: vi.fn() };
   const compiler = new ContextCompilerService(prisma, model, storage);
@@ -87,7 +165,14 @@ async function fixture(specs: AgentPlanStepSpec[] = plan) {
     compiler,
     storage as never,
   );
-  const service = new AgentRunsService(prisma, generation, compiler);
+  const domainModel = { generateJson: vi.fn().mockResolvedValue(reviewResult) };
+  const service = new AgentRunsService(
+    prisma,
+    generation,
+    compiler,
+    domainModel,
+    storage as never,
+  );
   const reserved = await service.reserve(user.id, conversation.id, {
     clientRequestId: crypto.randomUUID(),
     intent: "设计并细化风衣",
@@ -98,7 +183,12 @@ async function fixture(specs: AgentPlanStepSpec[] = plan) {
       elements: [{ text: "保留落肩袖" }],
     },
   });
-  const run = await service.completePlan(user.id, reserved.run.id, specs);
+  const run = await service.completePlan(
+    user.id,
+    reserved.run.id,
+    specs,
+    withIntelligence ? domainIntelligence(specs) : undefined,
+  );
   const finish = async (taskId: string, ids: string[]) =>
     prisma.$transaction(async (tx) => {
       for (const id of ids)
@@ -128,6 +218,9 @@ async function fixture(specs: AgentPlanStepSpec[] = plan) {
     generation,
     jobs,
     model,
+    domainModel,
+    compiler,
+    storage,
     run,
     finish,
     cleanup: () => prisma.user.delete({ where: { id: user.id } }),
@@ -137,6 +230,269 @@ async function fixture(specs: AgentPlanStepSpec[] = plan) {
 describe("AgentRunsService PostgreSQL integration", () => {
   afterAll(async () => {
     await prisma.$disconnect();
+  });
+
+  it("reserves one real JSON action for concurrent idempotent requests and conflicts on a different body", async () => {
+    const h = await fixture(plan, true);
+    try {
+      const executing = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const candidateId = crypto.randomUUID();
+      await h.finish(required(executing.steps[0]?.generationTaskId), [
+        candidateId,
+      ]);
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const stepId = required(waiting.steps[0]).id;
+      const input = {
+        revision: waiting.revision,
+        clientRequestId: "same-evaluation",
+        kind: "evaluate_candidate" as const,
+        stepId,
+        assetId: candidateId,
+      };
+      const results = await Promise.all([
+        h.service.createDomainAction(h.userId, h.run.id, input),
+        h.service.createDomainAction(h.userId, h.run.id, input),
+      ]);
+      expect(
+        results.every((result) => result.status === "waiting_review"),
+      ).toBe(true);
+      expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+      const final = await h.service.get(h.userId, h.run.id);
+      expect(final.intelligence?.actions).toHaveLength(1);
+      expect(final.intelligence?.actions[0]?.status).toBe("completed");
+      await h.service.createDomainAction(h.userId, h.run.id, input);
+      expect(h.domainModel.generateJson).toHaveBeenCalledTimes(1);
+      await expect(
+        h.service.createDomainAction(h.userId, h.run.id, {
+          ...input,
+          assetId: crypto.randomUUID(),
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      const task = await prisma.generationTask.findFirstOrThrow({
+        where: { userId: h.userId },
+      });
+      expect(task.input).not.toHaveProperty("domainContract");
+      expect(JSON.stringify(final)).not.toMatch(
+        /leaseToken|clientRequestId|data:image|signed\.test/u,
+      );
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("uses the same revision CAS for evaluation reservation and human review", async () => {
+    const h = await fixture(plan, true);
+    try {
+      const executing = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const assetId = crypto.randomUUID();
+      await h.finish(required(executing.steps[0]?.generationTaskId), [assetId]);
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const results = await Promise.allSettled([
+        h.service.createDomainAction(h.userId, h.run.id, {
+          revision: waiting.revision,
+          clientRequestId: "race-evaluation",
+          kind: "evaluate_candidate",
+          stepId: required(waiting.steps[0]).id,
+          assetId,
+        }),
+        h.service.review(h.userId, h.run.id, {
+          revision: waiting.revision,
+          assetId,
+          reason: "人工采用",
+        }),
+      ]);
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.find((result) => result.status === "rejected"),
+      ).toMatchObject({ reason: { status: 409 } });
+      const final = await h.service.get(h.userId, h.run.id);
+      expect(final.steps[0]?.status).toBe(
+        final.intelligence?.actions.length ? "waiting_review" : "succeeded",
+      );
+      expect(
+        await prisma.designAssetDecision.count({ where: { userId: h.userId } }),
+      ).toBe(final.intelligence?.actions.length ? 0 : 1);
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("preserves cancellation when a real reserved action returns late", async () => {
+    const h = await fixture(plan, true);
+    const modelStarted = deferred<undefined>();
+    const reply = deferred<unknown>();
+    h.domainModel.generateJson.mockImplementationOnce(() => {
+      modelStarted.resolve(undefined);
+      return reply.promise;
+    });
+    try {
+      const executing = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const assetId = crypto.randomUUID();
+      await h.finish(required(executing.steps[0]?.generationTaskId), [assetId]);
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const pending = h.service.createDomainAction(h.userId, h.run.id, {
+        revision: waiting.revision,
+        clientRequestId: "late-evaluation",
+        kind: "evaluate_candidate",
+        stepId: required(waiting.steps[0]).id,
+        assetId,
+      });
+      await modelStarted.promise;
+      const current = await h.service.get(h.userId, h.run.id);
+      await h.service.cancel(h.userId, h.run.id, current.revision);
+      reply.resolve(reviewResult);
+      const late = await pending;
+      expect(late.status).toBe("canceled");
+      expect(late.intelligence?.actions[0]).toMatchObject({
+        status: "superseded",
+        evaluation: null,
+      });
+      expect(
+        await prisma.designAssetDecision.count({ where: { userId: h.userId } }),
+      ).toBe(0);
+    } finally {
+      reply.resolve(reviewResult);
+      await h.cleanup();
+    }
+  });
+
+  it("applies a refinement atomically, preserves the rejected attempt and competes with human prompt editing", async () => {
+    const h = await fixture(plan, true);
+    try {
+      const executing = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const assetId = crypto.randomUUID();
+      await h.finish(required(executing.steps[0]?.generationTaskId), [assetId]);
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const rejected = await h.service.reject(h.userId, h.run.id, {
+        revision: waiting.revision,
+        reason: "袖口太宽",
+      });
+      const stepId = required(rejected.steps[0]).id;
+      h.domainModel.generateJson.mockResolvedValue(revisionResult);
+      const proposal = await h.service.createDomainAction(h.userId, h.run.id, {
+        revision: rejected.revision,
+        clientRequestId: "refine-atomic",
+        kind: "refine_step",
+        stepId,
+      });
+      const actionId = required(proposal.intelligence?.actions[0]).id;
+      const oldAttempt = await prisma.agentRunStepAttempt.findFirstOrThrow({
+        where: { stepId },
+      });
+      const results = await Promise.allSettled([
+        h.service.applyDomainAction(
+          h.userId,
+          h.run.id,
+          actionId,
+          proposal.revision,
+        ),
+        h.service.updateStep(h.userId, h.run.id, stepId, {
+          revision: proposal.revision,
+          prompt: "human edited coat",
+          negativePrompt: "",
+        }),
+      ]);
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.find((result) => result.status === "rejected"),
+      ).toMatchObject({ reason: { status: 409 } });
+      const final = await h.service.get(h.userId, h.run.id);
+      expect(final.steps[0]?.prompt).toBe(
+        final.intelligence?.actions[0]?.status === "applied"
+          ? revisionResult.prompt
+          : "human edited coat",
+      );
+      const unchanged = await prisma.agentRunStepAttempt.findUniqueOrThrow({
+        where: { id: oldAttempt.id },
+      });
+      expect(unchanged.requestSnapshot).toEqual(oldAttempt.requestSnapshot);
+      expect(unchanged.status).toBe("rejected");
+      expect(
+        await prisma.generationTask.count({ where: { userId: h.userId } }),
+      ).toBe(1);
+      expect(
+        final.intelligence?.rationales.some((item) => item.stepKey === "base"),
+      ).toBe(false);
+    } finally {
+      await h.cleanup();
+    }
+  });
+
+  it("rolls back the real action and prompt writes when the application transaction cannot commit", async () => {
+    const h = await fixture(plan, true);
+    try {
+      const executing = await h.service.execute(
+        h.userId,
+        h.run.id,
+        h.run.revision,
+      );
+      const assetId = crypto.randomUUID();
+      await h.finish(required(executing.steps[0]?.generationTaskId), [assetId]);
+      const waiting = await h.service.get(h.userId, h.run.id);
+      const rejected = await h.service.reject(h.userId, h.run.id, {
+        revision: waiting.revision,
+        reason: "袖口太宽",
+      });
+      const stepId = required(rejected.steps[0]).id;
+      h.domainModel.generateJson.mockResolvedValue(revisionResult);
+      const proposed = await h.service.createDomainAction(h.userId, h.run.id, {
+        revision: rejected.revision,
+        clientRequestId: "commit-failure",
+        kind: "refine_step",
+        stepId,
+      });
+      const originalTransaction = prisma.$transaction.bind(prisma);
+      const transaction = vi
+        .spyOn(prisma, "$transaction")
+        .mockImplementationOnce((async (
+          callback: (client: Prisma.TransactionClient) => Promise<unknown>,
+        ) =>
+          originalTransaction(async (client) => {
+            await callback(client);
+            throw new Error("injected commit failure");
+          })) as never);
+      try {
+        await expect(
+          h.service.applyDomainAction(
+            h.userId,
+            h.run.id,
+            required(proposed.intelligence?.actions[0]).id,
+            proposed.revision,
+          ),
+        ).rejects.toThrow("injected commit failure");
+      } finally {
+        transaction.mockRestore();
+      }
+      const unchanged = await h.service.get(h.userId, h.run.id);
+      expect(unchanged.revision).toBe(proposed.revision);
+      expect(unchanged.steps[0]?.prompt).toBe("loose coat");
+      expect(unchanged.intelligence?.actions[0]?.status).toBe("completed");
+      expect(
+        await prisma.generationTask.count({ where: { userId: h.userId } }),
+      ).toBe(1);
+    } finally {
+      await h.cleanup();
+    }
   });
 
   it("swaps pending ordinals under the real unique index and preserves retained IDs across add/remove", async () => {

@@ -1,6 +1,10 @@
 import { GenerationTaskStatus, Prisma, type PrismaClient } from "@fashion/db";
 import { AGENT_PLAN_MAX_STEPS, type AgentRunCandidate } from "@fashion/shared";
 import type {
+  AgentDesignIntelligence,
+  AgentDesignEvaluation,
+  AgentDesignRefinement,
+  AgentDomainActionView,
   AgentPlanStepSpec,
   AgentRunView,
   AgentRunStepView,
@@ -12,24 +16,40 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
+  ServiceUnavailableException,
 } from "@nestjs/common";
+import type { AmuxClaudeImageInput } from "@fashion/ai";
 import { randomUUID } from "node:crypto";
 
+import { AMUX_CLAUDE_CLIENT, type AmuxClaudeJsonClient } from "../ai/ai.tokens";
+import { S3FileStorage } from "../files/storage.service";
 import { ContextCompilerService } from "../generation/compiler/context-compiler.service";
 import type { CompiledGenInput } from "../generation/compiler/compiler.types";
 import { GenerationService } from "../generation/generation.service";
 import type { GenerationCreateRequest } from "../generation/generation.schemas";
 import { agentAttemptTaskId, AGENT_TOOL_REGISTRY } from "./agent-tool.registry";
 import {
+  FashionAgentFramework,
+  parseIntelligence,
+  auditPlan,
+} from "./fashion-agent-framework";
+import {
   agentPlanSchema,
+  agentPlanStepSchema,
   type ReviewAgentRunInput,
   type UpdateAgentRunStepInput,
   type UpdateAgentRunPlanInput,
   type RejectAgentRunInput,
+  type CreateAgentDomainActionInput,
 } from "./agent-runs.schemas";
 
 export const AGENT_RUNS_DB = Symbol("AGENT_RUNS_DB");
 const ATTEMPT_LEASE_MS = 2 * 60 * 1000;
+const DOMAIN_ACTION_LEASE_MS = 10 * 60 * 1000;
+const DOMAIN_ACTION_LIMIT = 48;
+const DOMAIN_IMAGE_MAX_BYTES = 7 * 1024 * 1024;
+const DOMAIN_IMAGE_TOTAL_MAX_BYTES = 20 * 1024 * 1024;
 const TERMINAL_RUNS = new Set(["completed", "canceled"]);
 type RunsDatabase = Pick<
   PrismaClient,
@@ -51,6 +71,14 @@ const runInclude = {
 type RunRecord = Prisma.AgentRunGetPayload<{ include: typeof runInclude }>;
 type StepRecord = RunRecord["steps"][number];
 type AttemptRecord = StepRecord["attempts"][number];
+interface StoredDomainAction extends AgentDomainActionView {
+  readonly clientRequestId: string;
+  readonly requestFingerprint: string;
+  readonly leaseToken: string;
+  readonly leaseExpiresAt: string;
+  readonly leaseRevision: number;
+  readonly attemptId: string;
+}
 
 export interface ReserveAgentRunInput {
   readonly clientRequestId: string;
@@ -65,6 +93,12 @@ export class AgentRunsService {
     @Inject(GenerationService) private readonly generation: GenerationService,
     @Inject(ContextCompilerService)
     private readonly compiler: ContextCompilerService,
+    @Optional()
+    @Inject(AMUX_CLAUDE_CLIENT)
+    private readonly model?: AmuxClaudeJsonClient,
+    @Optional()
+    @Inject(S3FileStorage)
+    private readonly storage?: S3FileStorage,
   ) {}
 
   async findReservation(
@@ -145,6 +179,7 @@ export class AgentRunsService {
     userId: string,
     runId: string,
     specs: readonly AgentPlanStepSpec[],
+    intelligence?: AgentDesignIntelligence,
   ): Promise<AgentRunView> {
     const run = await this.ownedRun(userId, runId);
     if (run.status !== "planning") return this.toView(run);
@@ -155,6 +190,13 @@ export class AgentRunsService {
         message: parsed.error.issues[0]?.message ?? "设计计划无效",
       });
     const context = objectOf(run.contextSnapshot);
+    const domain =
+      intelligence === undefined ? null : parseIntelligence(intelligence);
+    if (intelligence !== undefined && !domain)
+      throw new BadRequestException({
+        code: "INVALID_AGENT_INTELLIGENCE",
+        message: "设计契约无效",
+      });
     const selectedAssets = new Set(
       Array.isArray(context.designAssetIds) ? context.designAssetIds : [],
     );
@@ -177,7 +219,19 @@ export class AgentRunsService {
     await this.database.$transaction(async (transaction) => {
       const changed = await transaction.agentRun.updateMany({
         where: { id: run.id, revision: run.revision, status: "planning" },
-        data: { status: "ready", revision: { increment: 1 }, error: null },
+        data: {
+          status: "ready",
+          revision: { increment: 1 },
+          error: null,
+          ...(domain
+            ? {
+                contextSnapshot: {
+                  ...context,
+                  intelligence: domain,
+                } as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
       });
       if (!changed.count) return;
       await transaction.agentRunStep.createMany({
@@ -232,6 +286,481 @@ export class AgentRunsService {
     );
   }
 
+  async createDomainAction(
+    userId: string,
+    runId: string,
+    input: CreateAgentDomainActionInput,
+  ): Promise<AgentRunView> {
+    const run = await this.ownedRun(userId, runId);
+    const fingerprint = stableJson({
+      kind: input.kind,
+      stepId: input.stepId,
+      assetId: input.assetId ?? null,
+    });
+    const previous = domainActions(run.contextSnapshot).find(
+      (action) => action.clientRequestId === input.clientRequestId,
+    );
+    if (previous) {
+      if (previous.requestFingerprint !== fingerprint)
+        throw new ConflictException({
+          code: "IDEMPOTENCY_KEY_REUSED",
+          message: "该请求编号已用于不同的领域操作",
+        });
+      return this.get(userId, runId);
+    }
+    this.assertRevision(run, input.revision);
+    const intelligence = publicIntelligence(run.contextSnapshot);
+    if (!intelligence || !this.model)
+      throw new ServiceUnavailableException({
+        code: "AGENT_FRAMEWORK_UNAVAILABLE",
+        message: "当前计划没有领域契约，请创建新的设计计划",
+      });
+    const step = run.steps.find((item) => item.id === input.stepId);
+    if (!step)
+      throw new NotFoundException({
+        code: "AGENT_RUN_STEP_NOT_FOUND",
+        message: "计划节点不存在",
+      });
+    const attempt = step.attempts[0];
+    if (!attempt)
+      throw new ConflictException({
+        code: "AGENT_ACTION_ATTEMPT_UNAVAILABLE",
+        message: "当前节点尚无可评价或修订的执行记录",
+      });
+    let candidate: Awaited<ReturnType<AgentRunsService["ownedSource"]>> | null =
+      null;
+    let reason = "";
+    if (input.kind === "evaluate_candidate") {
+      if (!input.assetId)
+        throw new BadRequestException({
+          code: "INVALID_AGENT_RUN_SELECTION",
+          message: "评价必须指定实际候选资产",
+        });
+      if (
+        run.status !== "waiting_review" ||
+        step.status !== "waiting_review" ||
+        !step.generationTaskId ||
+        step.generationTaskId !== attempt.generationTaskId
+      )
+        throw new ConflictException({
+          code: "AGENT_ACTION_NOT_REVIEWABLE",
+          message: "仅可评价当前等待选择的实际结果",
+        });
+      const asset = await this.database.designAsset.findFirst({
+        where: {
+          id: input.assetId,
+          projectId: run.projectId,
+          generationTaskId: attempt.generationTaskId,
+          archivedAt: null,
+        },
+      });
+      if (!asset)
+        throw new BadRequestException({
+          code: "INVALID_AGENT_RUN_SELECTION",
+          message: "请选择当前节点实际生成且可访问的候选",
+        });
+      candidate = asset;
+    } else {
+      await this.assertEditableStep(run, step);
+      const task = await this.taskFor(run, attempt);
+      if (
+        attempt.status !== "rejected" &&
+        (!task || !terminalTaskFailure(task.status))
+      )
+        throw new ConflictException({
+          code: "AGENT_ACTION_NOT_REFINABLE",
+          message: "请先否决结果或等待当前尝试失败后再修订",
+        });
+      reason = attempt.error ?? task?.errorMessage ?? step.error ?? "";
+      if (attempt.status !== "rejected") reason = publicError(reason) ?? "";
+      if (!reason.trim())
+        throw new ConflictException({
+          code: "AGENT_ACTION_REASON_REQUIRED",
+          message: "当前尝试没有失败或否决原因",
+        });
+    }
+    const actions = domainActions(run.contextSnapshot);
+    if (actions.length >= DOMAIN_ACTION_LIMIT)
+      throw new ConflictException({
+        code: "AGENT_ACTION_LIMIT_REACHED",
+        message: "本计划的领域操作已达到上限，请新建计划",
+      });
+    const action: StoredDomainAction = {
+      id: randomUUID(),
+      kind: input.kind,
+      stepId: step.id,
+      assetId: candidate?.id ?? null,
+      status: "running",
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      error: null,
+      evaluation: null,
+      refinement: null,
+      clientRequestId: input.clientRequestId,
+      requestFingerprint: fingerprint,
+      leaseToken: randomUUID(),
+      leaseExpiresAt: new Date(
+        Date.now() + DOMAIN_ACTION_LEASE_MS,
+      ).toISOString(),
+      leaseRevision: run.revision + 1,
+      attemptId: attempt.id,
+    };
+    try {
+      await this.database.$transaction(async (transaction) => {
+        await this.claimRevision(
+          transaction,
+          run,
+          input.revision,
+          {
+            contextSnapshot: contextWithActions(run.contextSnapshot, [
+              ...actions,
+              action,
+            ]),
+          },
+          action.id,
+        );
+      });
+    } catch (error) {
+      if (!(error instanceof ConflictException)) throw error;
+      const replay = await this.ownedRun(userId, runId);
+      const existing = domainActions(replay.contextSnapshot).find(
+        (item) => item.clientRequestId === input.clientRequestId,
+      );
+      if (!existing) throw error;
+      if (existing.requestFingerprint !== fingerprint)
+        throw new ConflictException({
+          code: "IDEMPOTENCY_KEY_REUSED",
+          message: "该请求编号已用于不同的领域操作",
+        });
+      return this.toView(replay);
+    }
+    try {
+      const request = objectOf(attempt.requestSnapshot);
+      const frozen = objectOf(request.domainContract);
+      const domain = parseIntelligence(frozen.intelligence) ?? intelligence;
+      const frozenStep = agentPlanStepSchema.safeParse(frozen.step);
+      const parentId =
+        typeof request.parentAssetId === "string"
+          ? request.parentAssetId
+          : null;
+      const needsImages =
+        input.kind === "evaluate_candidate" || attempt.status === "rejected";
+      const parent =
+        needsImages && parentId
+          ? await this.ownedSource(userId, run.projectId, parentId)
+          : null;
+      const outputs = !needsImages
+        ? []
+        : candidate
+          ? [candidate]
+          : attempt.generationTaskId
+            ? await this.database.designAsset.findMany({
+                where: {
+                  generationTaskId: attempt.generationTaskId,
+                  projectId: run.projectId,
+                  archivedAt: null,
+                },
+                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                take: 2,
+              })
+            : [];
+      const images = needsImages
+        ? await this.loadDomainImages([...outputs, ...(parent ? [parent] : [])])
+        : [];
+      if (input.kind === "evaluate_candidate" && !images.length)
+        throw new Error("候选图片不可读取，无法进行视觉评价");
+      if (!(await this.domainActionIsActive(userId, runId, action)))
+        return this.get(userId, runId);
+      const framework = new FashionAgentFramework(this.model);
+      const prompt = typeof request.prompt === "string" ? request.prompt : "";
+      const negativePrompt =
+        typeof request.negativePrompt === "string"
+          ? request.negativePrompt
+          : "";
+      if (candidate) {
+        const evaluation = await framework.evaluate({
+          brief: domain.brief,
+          evidence: domain.evidence,
+          step: {
+            ...(frozenStep.success ? frozenStep.data : stepSpec(step)),
+            prompt,
+            negativePrompt,
+          },
+          stepId: step.id,
+          attemptId: attempt.id,
+          assetId: candidate.id,
+          prompt,
+          negativePrompt,
+          images,
+        });
+        return this.finishDomainAction(userId, runId, action, { evaluation });
+      }
+      const evaluations = actions.flatMap((item) =>
+        item.evaluation?.attemptId === attempt.id && item.status === "completed"
+          ? [item.evaluation]
+          : [],
+      );
+      const refinement = await framework.refine({
+        brief: domain.brief,
+        evidence: domain.evidence,
+        stepId: step.id,
+        attemptId: attempt.id,
+        prompt: step.prompt,
+        negativePrompt: step.negativePrompt,
+        previousAttempt: { prompt, negativePrompt },
+        feedbackKind:
+          attempt.status === "rejected"
+            ? "design_rejection"
+            : "execution_failure",
+        reason,
+        evaluations,
+        images,
+      });
+      return this.finishDomainAction(userId, runId, action, { refinement });
+    } catch (error) {
+      return this.finishDomainAction(userId, runId, action, {
+        error: error instanceof Error ? error.message : "领域 Agent 操作失败",
+      });
+    }
+  }
+
+  async applyDomainAction(
+    userId: string,
+    runId: string,
+    actionId: string,
+    revision: number,
+  ): Promise<AgentRunView> {
+    const run = await this.ownedRun(userId, runId);
+    this.assertRevision(run, revision);
+    const action = domainActions(run.contextSnapshot).find(
+      (item) => item.id === actionId,
+    );
+    const refinement = action?.refinement;
+    const step = run.steps.find((item) => item.id === action?.stepId);
+    if (
+      !action ||
+      action.kind !== "refine_step" ||
+      action.status !== "completed" ||
+      !refinement ||
+      !step ||
+      step.attempts[0]?.id !== refinement.attemptId ||
+      action.attemptId !== refinement.attemptId ||
+      step.prompt !== refinement.originalPrompt ||
+      step.negativePrompt !== refinement.originalNegativePrompt
+    )
+      throw new ConflictException({
+        code: "AGENT_REFINEMENT_STALE",
+        message: "该修订草案已不适用于当前输入，请重新生成建议",
+      });
+    await this.assertEditableStep(run, step);
+    const context = this.updatedPlanContext(
+      run,
+      run.steps.map((item) =>
+        item.id === step.id
+          ? {
+              ...stepSpec(item),
+              prompt: refinement.prompt,
+              negativePrompt: refinement.negativePrompt,
+            }
+          : stepSpec(item),
+      ),
+    );
+    const actions = domainActions(context).map((item) =>
+      item.id === action.id ? { ...item, status: "applied" as const } : item,
+    );
+    await this.database.$transaction(async (transaction) => {
+      await this.claimRevision(transaction, run, revision, {
+        contextSnapshot: contextWithActions(context, actions),
+        error: null,
+      });
+      await transaction.agentRunStep.update({
+        where: { id: step.id },
+        data: {
+          prompt: refinement.prompt,
+          negativePrompt: refinement.negativePrompt,
+        },
+      });
+    });
+    return this.toView(await this.ownedRun(userId, runId));
+  }
+
+  private async assertEditableStep(
+    run: RunRecord,
+    step: StepRecord,
+  ): Promise<void> {
+    if (
+      !new Set(["ready", "paused", "failed"]).has(run.status) ||
+      !new Set(["pending", "failed"]).has(step.status)
+    )
+      throw new ConflictException({
+        code: "AGENT_RUN_STEP_IMMUTABLE",
+        message: "当前节点不能修改输入",
+      });
+    const latest = step.attempts[0];
+    if (latest && latest.status !== "rejected") {
+      const task = await this.taskFor(run, latest);
+      if (!task || !terminalTaskFailure(task.status))
+        throw new ConflictException({
+          code: "AGENT_RUN_STEP_IMMUTABLE",
+          message: "当前尝试已冻结输入，请等待结果",
+        });
+    }
+  }
+
+  private async domainActionIsActive(
+    userId: string,
+    runId: string,
+    action: StoredDomainAction,
+  ): Promise<boolean> {
+    const run = await this.ownedRun(userId, runId);
+    const current = domainActions(run.contextSnapshot).find(
+      (item) => item.id === action.id,
+    );
+    return (
+      run.revision === action.leaseRevision &&
+      current?.status === "running" &&
+      current.leaseToken === action.leaseToken &&
+      Date.parse(current.leaseExpiresAt) > Date.now()
+    );
+  }
+
+  private async finishDomainAction(
+    userId: string,
+    runId: string,
+    action: StoredDomainAction,
+    result: {
+      evaluation?: AgentDesignEvaluation;
+      refinement?: AgentDesignRefinement;
+      error?: string;
+    },
+  ): Promise<AgentRunView> {
+    const run = await this.ownedRun(userId, runId);
+    const actions = domainActions(run.contextSnapshot);
+    const current = actions.find((item) => item.id === action.id);
+    if (
+      run.revision !== action.leaseRevision ||
+      current?.status !== "running" ||
+      current.leaseToken !== action.leaseToken ||
+      Date.parse(current.leaseExpiresAt) <= Date.now()
+    )
+      return this.get(userId, runId);
+    const next = actions.map((item) =>
+      item.id === action.id
+        ? {
+            ...item,
+            status: result.error ? ("failed" as const) : ("completed" as const),
+            completedAt: new Date().toISOString(),
+            error: result.error?.slice(0, 1000) ?? null,
+            evaluation: result.evaluation ?? null,
+            refinement: result.refinement ?? null,
+          }
+        : item,
+    );
+    await this.database.$transaction(async (transaction) => {
+      await transaction.agentRun.updateMany({
+        where: {
+          id: run.id,
+          userId,
+          revision: action.leaseRevision,
+          status: run.status,
+        },
+        data: {
+          contextSnapshot: contextWithActions(run.contextSnapshot, next),
+          revision: { increment: 1 },
+        },
+      });
+    });
+    return this.toView(await this.ownedRun(userId, runId));
+  }
+
+  private updatedPlanContext(
+    run: RunRecord,
+    specs: readonly AgentPlanStepSpec[],
+  ): Prisma.InputJsonValue {
+    const intelligence = publicIntelligence(run.contextSnapshot);
+    if (!intelligence) return run.contextSnapshot as Prisma.InputJsonValue;
+    const previous = new Map(
+      run.steps.map((step) => [step.key, stepSpec(step)]),
+    );
+    const unchanged = new Set(
+      specs
+        .filter(
+          (step) => stableJson(step) === stableJson(previous.get(step.key)),
+        )
+        .map((step) => step.key),
+    );
+    const rationales = intelligence.rationales.filter((item) =>
+      unchanged.has(item.stepKey),
+    );
+    const audit = auditPlan({
+      brief: intelligence.brief,
+      evidence: intelligence.evidence,
+      steps: specs,
+      rationales,
+      selectedAssetIds: sourceAssetIds(run),
+    });
+    const context = objectOf(run.contextSnapshot);
+    return {
+      ...context,
+      intelligence: { ...objectOf(context.intelligence), rationales, audit },
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  private executionDomainContract(
+    run: RunRecord,
+    step: StepRecord,
+    request: GenerationCreateRequest,
+  ): Record<string, unknown> {
+    const intelligence = publicIntelligence(run.contextSnapshot);
+    return intelligence
+      ? {
+          domainContract: {
+            intelligence: { ...intelligence, actions: [] },
+            step: stepSpec(step),
+            toolContract: {
+              name: step.tool,
+              ...AGENT_TOOL_REGISTRY[step.tool as AgentPlanStepSpec["tool"]],
+            },
+            parentAssetId: request.parentAssetId ?? null,
+          },
+        }
+      : {};
+  }
+
+  private async loadDomainImages(
+    assets: readonly { url: string; thumbnailUrl: string | null }[],
+  ): Promise<AmuxClaudeImageInput[]> {
+    let totalBytes = 0;
+    const images: AmuxClaudeImageInput[] = [];
+    for (const asset of assets) {
+      const source = asset.thumbnailUrl ?? asset.url;
+      const objectKey = domainObjectKey(source);
+      if (!objectKey) {
+        const remote = trustedDomainImageUrl(source);
+        if (!remote) throw new Error("设计图片地址不可读取，请重新生成后重试");
+        images.push({ url: remote, detail: "auto" });
+        continue;
+      }
+      if (!this.storage) throw new Error("图片存储暂时不可用");
+      const bytes = await this.storage.readPrefix(
+        objectKey,
+        DOMAIN_IMAGE_MAX_BYTES + 1,
+      );
+      if (!bytes.byteLength || bytes.byteLength > DOMAIN_IMAGE_MAX_BYTES)
+        throw new Error("领域 Agent 图片为空或超过 7MB");
+      totalBytes += bytes.byteLength;
+      if (totalBytes > DOMAIN_IMAGE_TOTAL_MAX_BYTES)
+        throw new Error("领域 Agent 图片总大小超过 20MB");
+      const mimeType = domainImageMimeType(bytes);
+      if (!mimeType) throw new Error("领域 Agent 不支持该图片格式");
+      images.push({
+        url: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+        detail: "auto",
+      });
+    }
+    return images;
+  }
+
   async updateStep(
     userId: string,
     runId: string,
@@ -281,6 +810,14 @@ export class AgentRunsService {
     await this.database.$transaction(async (transaction) => {
       await this.claimRevision(transaction, run, input.revision, {
         error: null,
+        contextSnapshot: this.updatedPlanContext(
+          run,
+          run.steps.map((item) =>
+            item.id === stepId
+              ? { ...stepSpec(item), ...data }
+              : stepSpec(item),
+          ),
+        ),
       });
       await transaction.agentRunStep.update({ where: { id: stepId }, data });
     });
@@ -346,6 +883,7 @@ export class AgentRunsService {
     await this.database.$transaction(async (transaction) => {
       await this.claimRevision(transaction, run, input.revision, {
         ...(complete ? { status: "completed", error: null } : {}),
+        contextSnapshot: this.updatedPlanContext(run, parsed.data),
       });
       await transaction.agentRunStep.deleteMany({
         where: {
@@ -422,7 +960,7 @@ export class AgentRunsService {
       ]).has(previousTask.status);
     if (terminalFailure) previous = undefined;
     const request = previous
-      ? (previous.requestSnapshot as unknown as GenerationCreateRequest)
+      ? generationRequestFromSnapshot(previous.requestSnapshot)
       : await this.buildRequest(run, step);
     const ordinal = previous?.ordinal ?? step.attempt + 1;
     const executionKey =
@@ -459,7 +997,10 @@ export class AgentRunsService {
               stepId: step.id,
               ordinal,
               executionKey,
-              requestSnapshot: request as Prisma.InputJsonValue,
+              requestSnapshot: {
+                ...request,
+                ...this.executionDomainContract(run, step, request),
+              } as unknown as Prisma.InputJsonValue,
               status: "running",
               leaseToken,
               leaseExpiresAt,
@@ -852,6 +1393,41 @@ export class AgentRunsService {
   }
 
   private async reconcile(run: RunRecord): Promise<RunRecord> {
+    const actions = domainActions(run.contextSnapshot);
+    const reconciledActions = actions.map((action) => {
+      if (action.status !== "running") return action;
+      if (action.leaseRevision !== run.revision)
+        return {
+          ...action,
+          status: "superseded" as const,
+          completedAt: new Date().toISOString(),
+        };
+      if (Date.parse(action.leaseExpiresAt) > Date.now()) return action;
+      return {
+        ...action,
+        status: "failed" as const,
+        completedAt: new Date().toISOString(),
+        error: "领域 Agent 处理已中断，请使用新的请求编号重试",
+      };
+    });
+    if (stableJson(actions) !== stableJson(reconciledActions)) {
+      await this.database.agentRun.updateMany({
+        where: {
+          id: run.id,
+          userId: run.userId,
+          revision: run.revision,
+          status: run.status,
+        },
+        data: {
+          contextSnapshot: contextWithActions(
+            run.contextSnapshot,
+            reconciledActions,
+          ),
+          revision: { increment: 1 },
+        },
+      });
+      run = await this.ownedRun(run.userId, run.id);
+    }
     if (run.status === "canceled") {
       for (const step of run.steps) {
         const attempt = step.attempts[0];
@@ -1012,10 +1588,28 @@ export class AgentRunsService {
     run: RunRecord,
     revision: number,
     data: Prisma.AgentRunUpdateManyMutationInput,
+    preserveActionId?: string,
   ) {
+    const context = data.contextSnapshot ?? run.contextSnapshot;
+    const actions = domainActions(context);
+    const superseded = actions.map((action) =>
+      action.status === "running" && action.id !== preserveActionId
+        ? {
+            ...action,
+            status: "superseded" as const,
+            completedAt: new Date().toISOString(),
+          }
+        : action,
+    );
     const result = await transaction.agentRun.updateMany({
       where: { id: run.id, userId: run.userId, revision, status: run.status },
-      data: { ...data, revision: { increment: 1 } },
+      data: {
+        ...data,
+        ...(actions.length
+          ? { contextSnapshot: contextWithActions(context, superseded) }
+          : {}),
+        revision: { increment: 1 },
+      },
     });
     if (!result.count)
       throw new ConflictException({
@@ -1202,6 +1796,7 @@ export class AgentRunsService {
           }),
       });
     }
+    const intelligence = publicIntelligence(run.contextSnapshot);
     return {
       id: run.id,
       projectId: run.projectId,
@@ -1216,11 +1811,255 @@ export class AgentRunsService {
       sourceAssets: allAssets
         .filter((asset) => sourceIds.includes(asset.id))
         .map(candidateView),
+      ...(intelligence ? { intelligence } : {}),
     };
   }
 }
 
 class SupersededAttemptError extends Error {}
+
+function terminalTaskFailure(status: GenerationTaskStatus): boolean {
+  return new Set<GenerationTaskStatus>([
+    GenerationTaskStatus.FAILED,
+    GenerationTaskStatus.MODERATION_FAILED,
+    GenerationTaskStatus.CANCELED,
+  ]).has(status);
+}
+
+function domainActions(context: unknown): StoredDomainAction[] {
+  const raw = objectOf(objectOf(context).intelligence).actions;
+  return Array.isArray(raw)
+    ? raw.flatMap((entry) => {
+        const action = objectOf(entry);
+        return typeof action.id === "string" &&
+          typeof action.clientRequestId === "string" &&
+          typeof action.leaseToken === "string" &&
+          typeof action.leaseRevision === "number" &&
+          typeof action.leaseExpiresAt === "string"
+          ? [action as unknown as StoredDomainAction]
+          : [];
+      })
+    : [];
+}
+
+function contextWithActions(
+  context: unknown,
+  actions: readonly StoredDomainAction[],
+): Prisma.InputJsonValue {
+  const source = objectOf(context);
+  return {
+    ...source,
+    intelligence: { ...objectOf(source.intelligence), actions },
+  } as unknown as Prisma.InputJsonValue;
+}
+
+function publicIntelligence(context: unknown): AgentDesignIntelligence | null {
+  const raw = objectOf(objectOf(context).intelligence);
+  if (!raw.version) return null;
+  const array = (value: unknown) =>
+    Array.isArray(value) ? value.map(objectOf) : [];
+  const brief = objectOf(raw.brief);
+  const audit = objectOf(raw.audit);
+  const view = {
+    version: raw.version,
+    evidence: array(raw.evidence).map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      label: item.label,
+      text: item.text,
+      assetId: item.assetId,
+    })),
+    brief: {
+      summary: brief.summary,
+      garmentType: brief.garmentType,
+      unknowns: brief.unknowns,
+      constraints: array(brief.constraints).map((item) => ({
+        id: item.id,
+        dimension: item.dimension,
+        requirement: item.requirement,
+        mode: item.mode,
+        priority: item.priority,
+        origin: item.origin,
+        verification: item.verification,
+        evidenceIds: item.evidenceIds,
+        sourceQuote: item.sourceQuote,
+      })),
+    },
+    rationales: array(raw.rationales).map((item) => ({
+      stepKey: item.stepKey,
+      goal: item.goal,
+      constraintIds: item.constraintIds,
+      acceptanceChecks: item.acceptanceChecks,
+    })),
+    audit: {
+      coverage: array(audit.coverage).map((item) => ({
+        constraintId: item.constraintId,
+        stepKeys: item.stepKeys,
+        status: item.status,
+      })),
+      warnings: audit.warnings,
+    },
+    actions: array(raw.actions).map((item) => {
+      const evaluation = objectOf(item.evaluation);
+      const refinement = objectOf(item.refinement);
+      return {
+        id: item.id,
+        kind: item.kind,
+        stepId: item.stepId,
+        assetId: item.assetId,
+        status: item.status,
+        createdAt: item.createdAt,
+        completedAt: item.completedAt,
+        error: typeof item.error === "string" ? publicError(item.error) : null,
+        evaluation: item.evaluation
+          ? {
+              stepId: evaluation.stepId,
+              attemptId: evaluation.attemptId,
+              assetId: evaluation.assetId,
+              summary: evaluation.summary,
+              checks: array(evaluation.checks).map((check) => ({
+                constraintId: check.constraintId,
+                status: check.status,
+                observation: check.observation,
+              })),
+              nextActions: evaluation.nextActions,
+            }
+          : null,
+        refinement: item.refinement
+          ? {
+              stepId: refinement.stepId,
+              attemptId: refinement.attemptId,
+              originalPrompt: refinement.originalPrompt,
+              originalNegativePrompt: refinement.originalNegativePrompt,
+              prompt: refinement.prompt,
+              negativePrompt: refinement.negativePrompt,
+              summary: refinement.summary,
+              changes: refinement.changes,
+              preserve: refinement.preserve,
+            }
+          : null,
+      };
+    }),
+  };
+  return parseIntelligence(redactDomainContent(view));
+}
+
+function redactDomainContent(value: unknown): unknown {
+  if (typeof value === "string") return publicError(value);
+  if (Array.isArray(value)) return value.map(redactDomainContent);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        redactDomainContent(entry),
+      ]),
+    );
+  return value;
+}
+
+function generationRequestFromSnapshot(
+  value: unknown,
+): GenerationCreateRequest {
+  const source = objectOf(value);
+  const fields = [
+    "taskType",
+    "prompt",
+    "negativePrompt",
+    "width",
+    "height",
+    "quality",
+    "outputFormat",
+    "outputCompression",
+    "background",
+    "projectId",
+    "parentAssetId",
+    "shapeIds",
+    "referenceImageUrl",
+    "referenceImageUrls",
+    "referenceImages",
+    "maskImageUrl",
+    "palette",
+  ];
+  return Object.fromEntries(
+    fields
+      .filter((key) => source[key] !== undefined)
+      .map((key) => [key, source[key]]),
+  ) as GenerationCreateRequest;
+}
+
+function domainObjectKey(value: string): string | null {
+  if (value.startsWith("s3://")) return value.slice(5) || null;
+  try {
+    const parsed = new URL(value);
+    const cdn = process.env.ASSET_CDN_ORIGIN?.trim();
+    if (cdn) {
+      const base = new URL(cdn.endsWith("/") ? cdn : `${cdn}/`);
+      if (
+        parsed.origin === base.origin &&
+        parsed.pathname.startsWith(base.pathname)
+      )
+        return decodeURIComponent(parsed.pathname.slice(base.pathname.length));
+    }
+    const endpoint = process.env.S3_ENDPOINT?.trim();
+    const bucket = process.env.S3_BUCKET?.trim();
+    if (
+      endpoint &&
+      bucket &&
+      parsed.origin === new URL(endpoint).origin &&
+      parsed.pathname.startsWith(`/${bucket}/`)
+    )
+      return decodeURIComponent(parsed.pathname.slice(bucket.length + 2));
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function trustedDomainImageUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local") ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.includes(":") ||
+      /^\d+\.\d+\.\d+\.\d+$/u.test(host)
+    )
+      return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function domainImageMimeType(bytes: Uint8Array): string | null {
+  if (
+    bytes.length >= 8 &&
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every(
+      (byte, index) => bytes[index] === byte,
+    )
+  )
+    return "image/png";
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  )
+    return "image/jpeg";
+  const ascii = (start: number, end: number) =>
+    String.fromCharCode(...bytes.slice(start, end));
+  if (bytes.length >= 6 && /GIF8[79]a/u.test(ascii(0, 6))) return "image/gif";
+  if (bytes.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP")
+    return "image/webp";
+  return null;
+}
 
 function canEditStructure(step: StepRecord): boolean {
   return (

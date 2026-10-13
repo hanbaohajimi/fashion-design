@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { AgentPlanStepSpec, AgentRunView } from "@fashion/shared";
+import type {
+  AgentDesignIntelligence,
+  AgentDomainActionView,
+  AgentPlanStepSpec,
+  AgentRunView,
+} from "@fashion/shared";
 
 const PROJECT_ID = "e2e-agent-workspace";
 const NOW = "2026-08-05T06:00:00.000Z";
@@ -404,6 +409,420 @@ test("设计工作流逐节点执行、选择第二个结果并在刷新后恢�
   ).toBeVisible();
   await agent.getByRole("button", { name: "取消计划" }).click();
   await expect(agent.getByText("已取消", { exact: true })).toBeVisible();
+});
+
+test("领域Agent按真实候选检查，反馈修订先预览后应用且不自动生成", async ({
+  page,
+}) => {
+  const conversationId = "conversation-intelligence";
+  await mockWorkspace(page, {
+    conversations: [conversation(conversationId, "通勤风衣设计")],
+    messages: new Map([[conversationId, []]]),
+    onCreateConversation: () => conversation(conversationId, "通勤风衣设计"),
+    onSend: async () => {
+      throw new Error("领域工作流不应走聊天生成");
+    },
+  });
+  const intelligence: AgentDesignIntelligence = {
+    version: "fashion-agents/1",
+    brief: {
+      summary: "保留宽松通勤风衣的廓形，逐步确认面料与展示方式",
+      garmentType: "风衣",
+      constraints: [
+        {
+          id: "shape",
+          dimension: "silhouette",
+          requirement: "保持宽松廓形",
+          mode: "preserve",
+          priority: "must",
+          origin: "explicit",
+          verification: "visual",
+          evidenceIds: ["intent"],
+          sourceQuote: "保持宽松",
+        },
+        {
+          id: "matte",
+          dimension: "material",
+          requirement: "面料呈现自然哑光质感",
+          mode: "change",
+          priority: "prefer",
+          origin: "interpretation",
+          verification: "visual",
+          evidenceIds: ["intent"],
+          sourceQuote: null,
+        },
+        {
+          id: "water",
+          dimension: "function",
+          requirement: "确认面料防水性能",
+          mode: "require",
+          priority: "must",
+          origin: "explicit",
+          verification: "requires_measurement",
+          evidenceIds: ["intent"],
+          sourceQuote: "防水",
+        },
+      ],
+      unknowns: ["尚未提供面料性能检测资料"],
+    },
+    evidence: [
+      {
+        id: "intent",
+        kind: "intent",
+        label: "设计师本次需求",
+        text: "设计保持宽松的通勤风衣，并确认防水性能",
+        assetId: null,
+      },
+    ],
+    rationales: [
+      {
+        stepKey: "silhouette",
+        goal: "先稳定宽松比例与通勤轮廓",
+        constraintIds: ["shape", "matte"],
+        acceptanceChecks: [
+          "肩部和腰线保留宽松余量",
+          "观察面料表面反光是否自然",
+        ],
+      },
+    ],
+    audit: {
+      coverage: [
+        { constraintId: "shape", stepKeys: ["silhouette"], status: "assigned" },
+        { constraintId: "matte", stepKeys: ["silhouette"], status: "assigned" },
+        { constraintId: "water", stepKeys: [], status: "unassigned" },
+      ],
+      warnings: ["防水性能需要实测，不能单凭生成图确认"],
+    },
+    actions: [],
+  };
+  let plan: AgentRunView = {
+    id: "intelligence-run",
+    projectId: PROJECT_ID,
+    conversationId,
+    intent: "设计宽松通勤风衣，修正面料过度反光",
+    status: "ready",
+    revision: 1,
+    createdAt: NOW,
+    updatedAt: NOW,
+    error: null,
+    intelligence,
+    steps: [
+      {
+        id: "intelligence-step",
+        ordinal: 0,
+        key: "silhouette",
+        tool: "generate_design",
+        title: "稳定通勤风衣廓形",
+        instruction: "保留宽松比例，观察面料表现",
+        prompt: "loose trench coat with natural woven fabric",
+        negativePrompt: "logos",
+        sourceAssetId: null,
+        sourceStepKey: null,
+        status: "pending",
+        generationTaskId: null,
+        selectedAssetId: null,
+        candidates: [],
+        error: null,
+        canEditInputs: true,
+      },
+    ],
+  };
+  let executeCount = 0;
+  let domainCount = 0;
+  let appliedCount = 0;
+  let pendingEvaluation: AgentDomainActionView | null = null;
+  let pollCount = 0;
+  const imageUrl =
+    "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+  const updateActions = (actions: readonly AgentDomainActionView[]) => {
+    plan = { ...plan, intelligence: { ...intelligence, actions } };
+  };
+  await page.route(
+    `**/api/agent-conversations/${conversationId}/plans`,
+    (route) => route.fulfill({ json: { items: [plan] } }),
+  );
+  await page.route("**/api/agent-runs/intelligence-run", (route) => {
+    if (pendingEvaluation && ++pollCount >= 2) {
+      const completed = {
+        ...pendingEvaluation,
+        status: "completed" as const,
+        completedAt: NOW,
+        evaluation: {
+          stepId: "intelligence-step",
+          attemptId: "intelligence-attempt-1",
+          assetId: pendingEvaluation.assetId!,
+          summary: "廓形保持稳定，面料反光与防水性能需进一步确认",
+          checks: [
+            {
+              constraintId: "shape",
+              status: "met" as const,
+              observation: "肩线与腰线保留明显宽松余量",
+            },
+            {
+              constraintId: "matte",
+              status: "concern" as const,
+              observation: "衣身出现较强镜面反光，需要减弱",
+            },
+            {
+              constraintId: "water",
+              status: "unknown" as const,
+              observation: "图像无法验证防水性能",
+            },
+          ],
+          nextActions: ["调整面料表面表现，并查看实物检测资料"],
+        },
+      };
+      plan = { ...plan, revision: plan.revision + 1 };
+      updateActions(
+        (plan.intelligence?.actions ?? []).map((action) =>
+          action.id === completed.id ? completed : action,
+        ),
+      );
+      pendingEvaluation = null;
+    }
+    return route.fulfill({ json: plan });
+  });
+  await page.route("**/api/agent-runs/intelligence-run/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = route.request().postDataJSON() as {
+      revision: number;
+      clientRequestId?: string;
+      kind?: AgentDomainActionView["kind"];
+      stepId?: string;
+      assetId?: string;
+      reason?: string;
+    };
+    expect(body.revision).toBe(plan.revision);
+    const current = plan.steps[0];
+    if (!current) throw new Error("缺少节点");
+    if (path.endsWith("/agent-actions")) {
+      domainCount += 1;
+      expect(body.clientRequestId).toBeTruthy();
+      expect(body.stepId).toBe(current.id);
+      const action: AgentDomainActionView = {
+        id: `domain-${domainCount}`,
+        kind: body.kind!,
+        stepId: current.id,
+        assetId: body.assetId ?? null,
+        status: body.kind === "evaluate_candidate" ? "running" : "completed",
+        createdAt: new Date(Date.parse(NOW) + domainCount * 1000).toISOString(),
+        completedAt: body.kind === "evaluate_candidate" ? null : NOW,
+        error: null,
+        evaluation: null,
+        refinement:
+          body.kind === "refine_step"
+            ? {
+                stepId: current.id,
+                attemptId: current.attempts?.at(-1)?.id ?? "",
+                originalPrompt: current.prompt,
+                originalNegativePrompt: current.negativePrompt,
+                prompt:
+                  "loose trench coat with matte woven fabric and soft diffuse lighting",
+                negativePrompt:
+                  "logos, glossy coating, harsh specular reflection",
+                summary: "针对反光反馈调整表面与光线，维持已确定的廓形",
+                changes: ["面料改为哑光织物", "减弱强反光，使用柔和漫射光"],
+                preserve: ["保留宽松通勤廓形", "保留原肩线与腰线比例"],
+              }
+            : null,
+      };
+      if (action.kind === "evaluate_candidate") {
+        expect(
+          current.candidates.some(
+            (candidate) => candidate.assetId === body.assetId,
+          ),
+        ).toBe(true);
+        pendingEvaluation = action;
+        pollCount = 0;
+      }
+      plan = { ...plan, revision: plan.revision + 1 };
+      updateActions([...(plan.intelligence?.actions ?? []), action]);
+    } else if (path.endsWith("/apply")) {
+      const actionId = path.split("/").at(-2);
+      const action = plan.intelligence?.actions.find(
+        (item) => item.id === actionId,
+      );
+      if (!action?.refinement) throw new Error("缺少修订建议");
+      expect(current.prompt).toBe(action.refinement.originalPrompt);
+      appliedCount += 1;
+      plan = {
+        ...plan,
+        revision: plan.revision + 1,
+        steps: [
+          {
+            ...current,
+            prompt: action.refinement.prompt,
+            negativePrompt: action.refinement.negativePrompt,
+          },
+        ],
+      };
+      updateActions(
+        (plan.intelligence?.actions ?? []).map((item) =>
+          item.id === action.id ? { ...item, status: "applied" } : item,
+        ),
+      );
+    } else if (path.endsWith("/execute")) {
+      executeCount += 1;
+      const candidates = [1, 2].map((index) => ({
+        assetId: `domain-asset-${executeCount}-${index}`,
+        url: imageUrl,
+        thumbnailUrl: null,
+        width: 768,
+        height: 1024,
+      }));
+      const taskId = `domain-task-${executeCount}`;
+      plan = {
+        ...plan,
+        status: "waiting_review",
+        revision: plan.revision + 1,
+        steps: [
+          {
+            ...current,
+            status: "waiting_review",
+            generationTaskId: taskId,
+            canEditInputs: false,
+            candidates,
+            attempts: [
+              ...(current.attempts ?? []),
+              {
+                id: `intelligence-attempt-${executeCount}`,
+                ordinal: executeCount,
+                status: "waiting_review",
+                generationTaskId: taskId,
+                prompt: current.prompt,
+                negativePrompt: current.negativePrompt,
+                parentAssetId: null,
+                candidates,
+                error: null,
+                createdAt: NOW,
+              },
+            ],
+          },
+        ],
+      };
+    } else if (path.endsWith("/reject")) {
+      plan = {
+        ...plan,
+        status: "ready",
+        revision: plan.revision + 1,
+        steps: [
+          {
+            ...current,
+            status: "pending",
+            generationTaskId: null,
+            candidates: [],
+            canEditInputs: true,
+            attempts: current.attempts?.map((attempt) =>
+              attempt.id === current.attempts?.at(-1)?.id
+                ? { ...attempt, status: "rejected", error: body.reason ?? "" }
+                : attempt,
+            ),
+          },
+        ],
+      };
+    } else if (path.endsWith("/review")) {
+      plan = {
+        ...plan,
+        status: "completed",
+        revision: plan.revision + 1,
+        steps: [
+          {
+            ...current,
+            status: "succeeded",
+            selectedAssetId: body.assetId ?? null,
+          },
+        ],
+      };
+    }
+    return route.fulfill({ json: plan });
+  });
+  await page.route("**/api/generations/domain-task-*", (route) =>
+    route.fulfill({
+      json: {
+        ...generationTask(
+          new URL(route.request().url()).pathname.split("/").at(-1) ??
+            "domain-task",
+        ),
+        output: {
+          images:
+            plan.steps[0]?.candidates.map((candidate) => ({
+              ...candidate,
+              width: 3,
+              height: 4,
+            })) ?? [],
+        },
+      },
+    }),
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(`/${PROJECT_ID}`);
+  const agent = page.getByRole("complementary", { name: "设计助手" });
+  await agent.getByRole("tab", { name: "设计工作流" }).click();
+  await agent.getByText("设计简报 · 3 项条件").click();
+  await expect(agent.getByText("你明确提出的要求")).toBeVisible();
+  await expect(agent.getByText("Agent 对需求的解释")).toBeVisible();
+  await expect(agent.getByText("计划尚未绑定的要求")).toBeVisible();
+  await expect(agent.getByText("尚未提供面料性能检测资料")).toBeVisible();
+  await agent.getByText("设计简报 · 3 项条件").click();
+  await agent.getByText("本节点的设计依据").click();
+  await expect(agent.getByText("先稳定宽松比例与通勤轮廓")).toBeVisible();
+  await agent.getByText("本节点的设计依据").click();
+  await agent.getByRole("button", { name: "执行下一节点" }).click();
+  const secondCheck = agent.getByRole("region", { name: "结果 2 的领域检查" });
+  await secondCheck.getByRole("button", { name: "领域 Agent 检查" }).dblclick();
+  await expect(secondCheck.getByText("领域 Agent 分析中")).toBeVisible();
+  expect(domainCount).toBe(1);
+  await agent.getByRole("radio", { name: "选择节点 1 的结果 2" }).check();
+  await expect(
+    agent.getByRole("button", { name: "采用结果并完成节点" }),
+  ).toBeEnabled();
+  await expect(secondCheck.getByText("发现偏离")).toBeVisible();
+  await expect(secondCheck.getByText("图像观察符合")).toBeVisible();
+  await expect(secondCheck.getByText("待确认")).toBeVisible();
+  expect(plan.steps[0]?.selectedAssetId).toBeNull();
+  await agent
+    .getByRole("textbox", { name: "选择或调整理由（否决时必填）" })
+    .fill("面料反光过强，请保持宽松比例，减弱亮面涂层");
+  await agent.getByRole("button", { name: "结果不满意，重新调整" }).click();
+  expect(executeCount).toBe(1);
+  await agent.getByRole("button", { name: "根据反馈提出修订" }).dblclick();
+  const refinement = agent.getByRole("region", { name: "针对反馈的节点修订" });
+  await expect(refinement.getByText("建议提示词")).toBeVisible();
+  await expect(refinement.getByText("保留宽松通勤廓形")).toBeVisible();
+  expect(domainCount).toBe(2);
+  expect(appliedCount).toBe(0);
+  expect(executeCount).toBe(1);
+  await refinement.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "output/playwright/agent-intelligence-desktop.png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await refinement.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: "output/playwright/agent-intelligence-mobile.png",
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await refinement.getByRole("button", { name: "应用修订建议" }).dblclick();
+  await expect(refinement.getByText("建议已应用")).toBeVisible();
+  expect(appliedCount).toBe(1);
+  expect(executeCount).toBe(1);
+  expect(plan.steps[0]?.prompt).toContain("matte woven fabric");
+  await page.reload();
+  await expect(agent.getByText("建议已应用")).toBeVisible();
+  await agent.getByRole("button", { name: "执行下一节点" }).click();
+  expect(executeCount).toBe(2);
+  await expect(
+    agent.getByRole("button", { name: "采用结果并完成节点" }),
+  ).toBeDisabled();
+  await agent.getByRole("radio", { name: "选择节点 1 的结果 2" }).check();
+  await agent.getByRole("button", { name: "采用结果并完成节点" }).click();
+  await expect(
+    agent.getByRole("status").filter({ hasText: "设计计划已完成" }),
+  ).toBeVisible();
+  expect(plan.steps[0]?.selectedAssetId).toBe("domain-asset-2-2");
 });
 
 test("pending 助手消息会自动同步为终态", async ({ page }) => {

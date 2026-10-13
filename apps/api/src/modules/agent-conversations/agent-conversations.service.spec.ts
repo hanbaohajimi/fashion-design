@@ -84,6 +84,9 @@ function createHarness() {
     designAsset: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    designAssetDecision: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     fabric: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -148,7 +151,26 @@ describe("AgentConversationsService", () => {
     ];
     harness.model.generateJson.mockImplementation(async (input) => {
       expect(harness.runs.reserve).toHaveBeenCalledOnce();
-      return input.parse({ steps });
+      return input.parse(
+        input.schemaName === "fashion_design_brief"
+          ? {
+              summary: "探索风衣",
+              garmentType: "风衣",
+              constraints: [],
+              unknowns: ["面料未指定"],
+            }
+          : {
+              steps,
+              rationales: [
+                {
+                  stepKey: "base",
+                  goal: "探索立领风衣",
+                  constraintIds: [],
+                  acceptanceChecks: ["服装单品展示"],
+                },
+              ],
+            },
+      );
     });
     await expect(
       harness.service.createPlan("user-a", "conversation-a", {
@@ -162,11 +184,28 @@ describe("AgentConversationsService", () => {
       "user-a",
       "run-a",
       steps,
+      expect.objectContaining({
+        version: "fashion-agents/1",
+        brief: expect.objectContaining({ garmentType: "风衣" }),
+        evidence: [
+          {
+            id: "goal",
+            kind: "intent",
+            label: "本轮设计目标",
+            text: "设计一件风衣",
+            assetId: null,
+          },
+        ],
+      }),
     );
     expect(harness.model.generateJson).toHaveBeenCalledWith(
       expect.objectContaining({ schemaName: "fashion_design_plan" }),
     );
     expect(harness.generation.createFromAgent).not.toHaveBeenCalled();
+    expect(harness.model.generateJson).toHaveBeenCalledTimes(2);
+    expect(
+      harness.database.designAssetDecision.findMany,
+    ).not.toHaveBeenCalled();
   });
 
   it("replays an existing plan without another model request", async () => {
@@ -185,23 +224,143 @@ describe("AgentConversationsService", () => {
     expect(harness.runs.completePlan).not.toHaveBeenCalled();
   });
 
+  it("limits plan evidence to the selected asset and keeps historical decisions scoped", async () => {
+    const harness = createHarness();
+    harness.database.boardElement.findMany.mockResolvedValue([
+      {
+        fileAssetId: null,
+        role: "garment_ref",
+        roleLabel: null,
+        shapeId: "shape-a",
+        shapeType: "fashion-image",
+        record: { props: { assetId: "asset-a", label: "当前风衣" } },
+      },
+    ]);
+    harness.database.designAsset.findMany.mockResolvedValue([
+      {
+        id: "asset-a",
+        url: "s3://generated/asset-a/image.webp",
+        thumbnailUrl: "s3://generated/asset-a/thumb.webp",
+        width: 1024,
+        height: 1024,
+      },
+    ]);
+    harness.database.designAssetDecision.findMany.mockResolvedValue([
+      {
+        id: "decision-a",
+        assetId: "asset-a",
+        kind: "rejected",
+        reason: "旧版本袖子太宽",
+      },
+    ]);
+    harness.model.generateJson.mockImplementation(async (input) => {
+      if (input.schemaName === "fashion_design_brief") {
+        expect(input.prompt).toContain("旧版本袖子太宽");
+        expect(input.prompt).toContain('"kind":"decision"');
+        expect(input.images).toHaveLength(1);
+        return input.parse({
+          summary: "改进风衣袖宽",
+          garmentType: "风衣",
+          constraints: [],
+          unknowns: [],
+        });
+      }
+      expect(input.images ?? []).toHaveLength(0);
+      return input.parse({
+        steps: [
+          {
+            key: "sleeves",
+            tool: "edit_design",
+            title: "收窄袖子",
+            instruction: "调整袖宽",
+            prompt: "narrower sleeves, preserve collar and color",
+            negativePrompt: "",
+            sourceAssetId: "asset-a",
+            sourceStepKey: null,
+          },
+        ],
+        rationales: [
+          {
+            stepKey: "sleeves",
+            goal: "收窄袖子",
+            constraintIds: [],
+            acceptanceChecks: ["检查袖宽"],
+          },
+        ],
+      });
+    });
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "保持衣领，收窄袖子",
+        clientRequestId: "scoped-plan-123",
+        shapeIds: ["shape-a"],
+        fileAssetIds: [],
+      }),
+    ).resolves.toMatchObject({ status: "ready" });
+    expect(harness.database.designAssetDecision.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: "user-a",
+          assetId: { in: ["asset-a"] },
+          asset: {
+            projectId: "project-a",
+            archivedAt: null,
+            project: { deletedAt: null, workspace: { ownerId: "user-a" } },
+          },
+        },
+        take: 20,
+      }),
+    );
+    expect(harness.runs.completePlan).toHaveBeenCalledWith(
+      "user-a",
+      "run-a",
+      expect.any(Array),
+      expect.objectContaining({
+        evidence: expect.arrayContaining([
+          expect.objectContaining({
+            id: "decision_decision-a",
+            assetId: "asset-a",
+            kind: "decision",
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("records Planner failure when a tool or dependency is invalid", async () => {
     const harness = createHarness();
     harness.model.generateJson.mockImplementation(async (input) =>
-      input.parse({
-        steps: [
-          {
-            key: "edit",
-            tool: "edit_design",
-            title: "调整",
-            instruction: "调整衣领",
-            prompt: "coat",
-            negativePrompt: "",
-            sourceAssetId: null,
-            sourceStepKey: "future",
-          },
-        ],
-      }),
+      input.parse(
+        input.schemaName === "fashion_design_brief"
+          ? {
+              summary: "设计风衣",
+              garmentType: "风衣",
+              constraints: [],
+              unknowns: [],
+            }
+          : {
+              steps: [
+                {
+                  key: "edit",
+                  tool: "edit_design",
+                  title: "调整",
+                  instruction: "调整衣领",
+                  prompt: "coat",
+                  negativePrompt: "",
+                  sourceAssetId: null,
+                  sourceStepKey: "future",
+                },
+              ],
+              rationales: [
+                {
+                  stepKey: "edit",
+                  goal: "调整衣领",
+                  constraintIds: [],
+                  acceptanceChecks: [],
+                },
+              ],
+            },
+      ),
     );
     await expect(
       harness.service.createPlan("user-a", "conversation-a", {

@@ -55,6 +55,23 @@ export const agentPlanSchema = z
 export const agentRunRevisionSchema = z
   .object({ revision: z.number().int().nonnegative() })
   .strict();
+export const createAgentDomainActionSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    clientRequestId: id,
+    kind: z.enum(["evaluate_candidate", "refine_step"]),
+    stepId: id,
+    assetId: id.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.kind === "evaluate_candidate") !== (value.assetId !== undefined))
+      context.addIssue({
+        code: "custom",
+        message: "评价必须指定候选资产，修订操作不能指定候选资产",
+        path: ["assetId"],
+      });
+  });
 export const updateAgentRunPlanSchema = z
   .object({ revision: z.number().int().nonnegative(), steps: agentPlanSchema })
   .strict();
@@ -84,3 +101,6 @@ export type UpdateAgentRunStepInput = z.infer<typeof updateAgentRunStepSchema>;
 export type ReviewAgentRunInput = z.infer<typeof reviewAgentRunSchema>;
 export type UpdateAgentRunPlanInput = z.infer<typeof updateAgentRunPlanSchema>;
 export type RejectAgentRunInput = z.infer<typeof rejectAgentRunSchema>;
+export type CreateAgentDomainActionInput = z.infer<
+  typeof createAgentDomainActionSchema
+>;

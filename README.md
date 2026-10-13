@@ -65,35 +65,33 @@ pnpm dev
 系统不再依赖 fal.ai，也不再需要单独的 OpenAI Key。图片理解与生图使用同一个
 Amux 令牌，但按模型明确分工：
 
-- `special/anthropic` 下的 `claude-opus-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
-- `premium/openai` 下的 `gpt-image-2-official`：只负责实际生成与编辑图片。
+- `anthropic/claude-haiku-5-5`：图片角色识别、提示词增强、系列 DNA、生成结果内容审核。
+- `openai/gpt-image-2.5-sunburst`：实际生成与编辑图片，可通过 `AMUX_IMAGE_MODEL` 覆盖。
 
 首次配置只需要在 `.env` 中填写：
 
 ```env
 AI_PRIMARY_PROVIDER=amux
 AMUX_API_KEY=在这里填写你的令牌
-AMUX_BASE_URL=https://api.amux.ai/v1
-AMUX_CLAUDE_MODEL=claude-opus-5
-AMUX_CLAUDE_TIMEOUT_MS=20000
-AMUX_IMAGE_MODEL=gpt-image-2-official
+AMUX_BASE_URL=https://gateway.amux.ai/v1
+AMUX_CLAUDE_MODEL=anthropic/claude-haiku-5-5
+AMUX_CLAUDE_TIMEOUT_MS=600000
+AMUX_IMAGE_MODEL=openai/gpt-image-2.5-sunburst
 AI_PROVIDER_TIMEOUT_MS=600000
 GENERATION_TIMEOUT_MS=720000
 ```
 
-Amux 令牌需要同时包含 `special/anthropic` 和 `premium/openai` 分组，并且模型列表中
-确实存在上述两个模型。Claude 通过原生 Anthropic `/messages` 接口，并使用强制
+Amux 令牌需要有上述两个模型的调用权限。Claude 通过原生 Anthropic `/messages` 接口，并使用强制
 `tool_choice` 与 `strict input_schema` 返回结构化结果；系统使用 `/images/generations` 生成图片，使用
-`/images/edits` 处理参考图和透明蒙版。`gpt-image-2-official` 按原生格式返回
+`/images/edits` 处理参考图和透明蒙版。`openai/gpt-image-2.5-sunburst` 按原生格式返回
 `b64_json`；Worker 只在内存中短暂接收并立即写入私有 MinIO，不会把 Base64 图片写入
 任务数据库。送审时，系统会把该 Data URL 转换为 Anthropic 原生 `base64` 图片源，
 避免 Amux 静默忽略图片并返回普通文字。
 
-Amux 分组由令牌在平台侧路由，请求体不额外发送渠道字段。Provider 最长等待 10 分钟，
+Amux 在平台侧按模型权限路由，请求体不额外发送渠道字段。Provider 最长等待 10 分钟，
 Worker 总任务最长等待 12 分钟，额外两分钟用于内容审核、对象存储和缩略图处理。
-带参考图的文生图会优先使用 `/images/edits`；若 `premium/openai` 对该请求返回 5xx，
-系统会保留已编译的文字设计要求并降级到 `/images/generations`。真正的图片编辑与局部重绘
-不会降级，以免错误修改整张图片。Provider 内不再叠加重试，队列层仍会重试一次。
+带参考图的文生图、图片编辑与局部重绘使用 `/images/edits`，调用失败时保留错误，
+不会改为无参考图的生成。Provider 内不再叠加重试，队列层仍会重试一次。
 
 当前画布只向用户展示 GPT Image 2 支持的尺寸、质量和输出格式。`CFG`、采样步数与
 原生 `strength` 不会作为 Amux 参数发送；它们继续保留在通用生成契约中，供后续接入
@@ -187,6 +185,27 @@ Agent 修改选中的设计时会绑定来源资产，创建图片编辑任务�
 `20261010010000_agent_runs` 迁移，然后重启 API、Web 与 Worker。
 节点图保存使用 `PATCH /agent-runs/:id/plan`，结果否决使用
 `POST /agent-runs/:id/reject`；本次节点编辑与执行历史更新无需额外数据库迁移。
+
+新计划先由上下文整理 Agent 提取带来源的服装设计简报，再由规划 Agent 生成节点
+及验收项。简报区分明确要求、解释性偏好和未知项；节点显示处理哪些约束，未绑定项
+会提示。历史决策只读取本次选中设计的记录，不能自动变成跨项目偏好。
+
+候选等待审核时可主动发起领域 Agent 检查，对实际图片逐条件给出“符合、存在问题、
+无法判断”。尺寸、真实面料成分等需要测量或规格资料的条件不能仅凭图片判定。
+否决或失败后可请求修订建议，先查看修改与保留项，再应用到已保存的节点提示词，
+最后主动执行新尝试；建议不会自动生成或替用户采用结果。
+
+领域动作使用 `POST /agent-runs/:id/agent-actions`，应用修订使用
+`POST /agent-runs/:id/agent-actions/:actionId/apply`。动作与报告持久化并校验版本，
+人工操作会使正在分析的动作失效，旧报告不能覆盖新输入。本轮无需额外数据库迁移。
+具体职责、论文依据、权限边界和技术壁垒的验证方案见 [Agent 架构设计](./AGENT_ARCHITECTURE.md)。
+
+实际体验路径：进入项目白板右侧“设计助手”，选择“设计工作流”，填写包含“保持什么、
+改变什么”的目标并点击“规划设计步骤”。展开“设计简报”可查看条件、来源和未知项；
+执行一个节点后，在候选旁点击“领域检查”查看逐项观察。若结果不满意，填写否决原因，
+点击“根据反馈提出修订”，查看建议并手动“应用修订建议”，最后再次执行该节点。
+普通“对话”模式继续使用原聊天流程。升级前创建的计划没有领域简报；要体验逐项检查
+和反馈修订，需从“新建计划”开始。浏览器加载新版代码需要重新启动 API 与 Web。
 
 ## 质量检查
 

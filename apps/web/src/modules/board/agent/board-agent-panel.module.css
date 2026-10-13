@@ -395,6 +395,41 @@
   scrollbar-width: thin;
 }
 
+.workflowInvitation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  padding: 9px 16px;
+  background: #efede5;
+}
+
+.workflowInvitation p {
+  max-width: 32ch;
+  margin: 0;
+  color: #635f57;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.workflowInvitation button {
+  flex: 0 0 auto;
+  border: 1px solid rgb(34 34 31 / 18%);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: #fffefa;
+  color: #373831;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+
+.workflowInvitation button:hover {
+  border-color: #a34c35;
+}
+
 .loadOlder {
   display: block;
   margin: 0 auto 20px;
@@ -1174,6 +1209,14 @@
   font-size: 11px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+.workflowLegacyNotice {
+  margin-top: 10px !important;
+  border-left: 2px solid #a34c35;
+  padding: 8px 10px;
+  background: #f4eee8;
+  color: #6b5146;
 }
 
 .workflowIntro > div {

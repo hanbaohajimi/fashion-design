@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  AgentDesignIntelligence,
+  AgentDomainActionView,
   AgentPlanStepSpec,
   AgentRunStepView,
   AgentRunView,
@@ -15,10 +17,12 @@ import {
 } from "react";
 import {
   AgentRunApiError,
+  applyAgentDomainAction,
   controlAgentRun,
   createAgentRun,
   fetchAgentRun,
   listAgentRuns,
+  requestAgentDomainAction,
   MAX_AGENT_MESSAGE_LENGTH,
   updateAgentRunStep,
   updateAgentRunPlan,
@@ -27,6 +31,13 @@ import {
 import styles from "./board-agent-panel.module.css";
 import { AgentPlanEditor } from "./AgentPlanEditor";
 import { attemptStatusLabel } from "./agent-plan-graph";
+import {
+  AgentDesignBriefPanel,
+  AgentNodeRationalePanel,
+  AgentStepRefinement,
+  CandidateAgentCheck,
+  latestAgentDomainAction,
+} from "./AgentIntelligencePanel";
 
 const RUN_LABELS: Record<AgentRunView["status"], string> = {
   planning: "正在规划",
@@ -42,7 +53,7 @@ const STEP_LABELS: Record<AgentRunStepView["status"], string> = {
   pending: "尚未执行",
   running: "正在生成",
   waiting_review: "等待选择",
-  succeeded: "已采用",
+  succeeded: "已完成",
   failed: "执行失败",
   canceled: "已取消",
 };
@@ -72,12 +83,21 @@ export function AgentWorkflowPanel({
   const [graphOpen, setGraphOpen] = useState(false);
   const [graphDirty, setGraphDirty] = useState(false);
   const [planningRequested, setPlanningRequested] = useState(false);
+  const [domainRequested, setDomainRequested] = useState(false);
   const [dirtyStepIds, setDirtyStepIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
   const createRequest = useRef<{ key: string; id: string } | null>(null);
   const trackedTaskIds = useRef(new Set<string>());
   const submittedCommand = useRef<string | null>(null);
+  const submittedDomain = useRef<string | null>(null);
+  const submittedApply = useRef<string | null>(null);
+  const domainRequests = useRef(
+    new Map<
+      string,
+      { id: string; revision: number; baselineActionId: string | null }
+    >(),
+  );
   const listKey = ["agent-runs", conversationId] as const;
   const list = useQuery({
     queryKey: listKey,
@@ -96,7 +116,11 @@ export function AgentWorkflowPanel({
     refetchInterval: (query) => {
       const run = query.state.data;
       return run &&
-        (run.status === "planning" ||
+        (domainRequested ||
+          run.intelligence?.actions.some(
+            (action) => action.status === "running",
+          ) ||
+          run.status === "planning" ||
           run.status === "running" ||
           run.steps.some((step) => step.status === "running"))
         ? 2_000
@@ -115,7 +139,7 @@ export function AgentWorkflowPanel({
     });
   }, []);
 
-  const storeRun = (updated: AgentRunView): void => {
+  const storeRun = (updated: AgentRunView, select = true): void => {
     client.setQueryData(["agent-run", updated.id], updated);
     client.setQueryData<{ readonly items: readonly AgentRunView[] }>(
       listKey,
@@ -126,7 +150,7 @@ export function AgentWorkflowPanel({
         ],
       }),
     );
-    setSelectedRunId(updated.id);
+    if (select) setSelectedRunId(updated.id);
     setNotice(null);
   };
   const refreshAfterFailure = (cause: Error): void => {
@@ -172,7 +196,7 @@ export function AgentWorkflowPanel({
         ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
       });
     },
-    onSuccess: storeRun,
+    onSuccess: (updated) => storeRun(updated),
     onError: refreshAfterFailure,
   });
   const edit = useMutation({
@@ -188,7 +212,7 @@ export function AgentWorkflowPanel({
         negativePrompt: input.negativePrompt.trim(),
       });
     },
-    onSuccess: storeRun,
+    onSuccess: (updated) => storeRun(updated),
     onError: refreshAfterFailure,
   });
   const editPlan = useMutation({
@@ -199,8 +223,44 @@ export function AgentWorkflowPanel({
       if (!run) throw new Error("请先读取设计计划");
       return updateAgentRunPlan(run.id, input);
     },
-    onSuccess: storeRun,
+    onSuccess: (updated) => storeRun(updated),
     onError: refreshAfterFailure,
+  });
+  const domain = useMutation({
+    mutationFn: (input: {
+      readonly key: string;
+      readonly runId: string;
+      readonly request: Parameters<typeof requestAgentDomainAction>[1];
+    }) => {
+      setDomainRequested(true);
+      return requestAgentDomainAction(input.runId, input.request);
+    },
+    onSuccess: (updated, input) => {
+      domainRequests.current.delete(input.key);
+      storeRun(updated, false);
+    },
+    onError: (cause, input) => {
+      submittedDomain.current = null;
+      if (cause instanceof AgentRunApiError && cause.status === 409)
+        domainRequests.current.delete(input.key);
+      refreshAfterFailure(cause);
+    },
+    onSettled: () => setDomainRequested(false),
+  });
+  const apply = useMutation({
+    mutationFn: (input: {
+      readonly runId: string;
+      readonly actionId: string;
+      readonly revision: number;
+    }) =>
+      applyAgentDomainAction(input.runId, input.actionId, {
+        revision: input.revision,
+      }),
+    onSuccess: (updated) => storeRun(updated, false),
+    onError: (cause) => {
+      submittedApply.current = null;
+      refreshAfterFailure(cause);
+    },
   });
   const submitControl = (input: {
     readonly action: "execute" | "review" | "reject" | "pause" | "cancel";
@@ -238,6 +298,84 @@ export function AgentWorkflowPanel({
   const terminal = run?.status === "completed" || run?.status === "canceled";
   const hasDirtySteps =
     run?.steps.some((step) => dirtyStepIds.has(step.id)) ?? false;
+  const actionBusy =
+    domain.isPending ||
+    apply.isPending ||
+    Boolean(
+      run?.intelligence?.actions.some((action) => action.status === "running"),
+    );
+  const submitDomain = (
+    step: AgentRunStepView,
+    kind: AgentDomainActionView["kind"],
+    assetId?: string,
+  ): void => {
+    if (!run?.intelligence || busy || actionBusy) return;
+    if (kind === "refine_step" && (hasDirtySteps || graphDirty)) return;
+    const latest = step.attempts?.at(-1);
+    const key = JSON.stringify([
+      run.id,
+      kind,
+      step.id,
+      assetId ?? null,
+      latest?.id ?? step.generationTaskId,
+      ...(kind === "refine_step" ? [step.prompt, step.negativePrompt] : []),
+    ]);
+    const command = `${run.revision}:${key}`;
+    if (submittedDomain.current === command) return;
+    submittedDomain.current = command;
+    const previous = domainRequests.current.get(key);
+    const latestAction = latestAgentDomainAction(
+      run.intelligence,
+      kind,
+      step.id,
+      assetId,
+    );
+    const request =
+      previous &&
+      !(
+        latestAction?.status === "failed" &&
+        latestAction.id !== previous.baselineActionId
+      )
+        ? previous
+        : {
+            id: crypto.randomUUID(),
+            revision: run.revision,
+            baselineActionId: latestAction?.id ?? null,
+          };
+    domainRequests.current.set(key, request);
+    domain.mutate({
+      key,
+      runId: run.id,
+      request: {
+        revision: request.revision,
+        clientRequestId: request.id,
+        kind,
+        stepId: step.id,
+        ...(assetId ? { assetId } : {}),
+      },
+    });
+  };
+  const submitApply = (step: AgentRunStepView, actionId: string): void => {
+    if (!run || busy || actionBusy || hasDirtySteps || graphDirty) return;
+    const action = run.intelligence?.actions.find(
+      (item) => item.id === actionId,
+    );
+    const refinement = action?.refinement;
+    if (
+      action?.status !== "completed" ||
+      !refinement ||
+      refinement.attemptId !== step.attempts?.at(-1)?.id ||
+      refinement.originalPrompt !== step.prompt ||
+      refinement.originalNegativePrompt !== step.negativePrompt ||
+      (refinement.prompt === refinement.originalPrompt &&
+        refinement.negativePrompt === refinement.originalNegativePrompt)
+    )
+      return;
+    const key = `${run.id}:${run.revision}:${actionId}`;
+    if (submittedApply.current === key) return;
+    submittedApply.current = key;
+    apply.mutate({ runId: run.id, actionId, revision: run.revision });
+  };
   const reviewStep = run?.steps.find(
     (step) => step.status === "waiting_review",
   );
@@ -250,7 +388,13 @@ export function AgentWorkflowPanel({
     run &&
     !run.steps.some((step) => step.status === "running") &&
     ["ready", "paused", "failed"].includes(run.status);
-  const error = create.error ?? control.error ?? edit.error ?? editPlan.error;
+  const error =
+    create.error ??
+    control.error ??
+    edit.error ??
+    editPlan.error ??
+    domain.error ??
+    apply.error;
 
   return (
     <section className={styles.workflowPanel} aria-label="设计工作流">
@@ -362,6 +506,13 @@ export function AgentWorkflowPanel({
                 </button>
               </div>
               <p className={styles.workflowIntent}>{run.intent}</p>
+              {run.intelligence ? (
+                <AgentDesignBriefPanel intelligence={run.intelligence} />
+              ) : run.steps.length > 0 ? (
+                <p className={styles.workflowLegacyNotice}>
+                  此计划创建于设计简报升级前。若要逐项检查候选并根据反馈获得修订建议，请点击上方“新建计划”。
+                </p>
+              ) : null}
               <button
                 type="button"
                 disabled={busy || hasDirtySteps}
@@ -398,6 +549,13 @@ export function AgentWorkflowPanel({
                       ["ready", "paused", "failed"].includes(run.status)
                     }
                     busy={busy || run.status === "running"}
+                    intelligence={run.intelligence}
+                    actionBusy={actionBusy}
+                    allDirty={hasDirtySteps || graphDirty}
+                    onDomain={(kind, assetId) =>
+                      submitDomain(step, kind, assetId)
+                    }
+                    onApply={(actionId) => submitApply(step, actionId)}
                     onDirtyChange={markStepDirty}
                     onSave={async (prompt, negativePrompt) => {
                       await edit.mutateAsync({
@@ -501,6 +659,11 @@ function WorkflowNode({
   onReview,
   onDirtyChange,
   onReject,
+  intelligence,
+  actionBusy,
+  allDirty,
+  onDomain,
+  onApply,
 }: {
   readonly step: AgentRunStepView;
   readonly number: number;
@@ -511,6 +674,14 @@ function WorkflowNode({
   readonly onReview: (assetId: string, reason: string) => void;
   readonly onDirtyChange: (stepId: string, dirty: boolean) => void;
   readonly onReject: (reason: string) => void;
+  readonly intelligence: AgentDesignIntelligence | undefined;
+  readonly actionBusy: boolean;
+  readonly allDirty: boolean;
+  readonly onDomain: (
+    kind: AgentDomainActionView["kind"],
+    assetId?: string,
+  ) => void;
+  readonly onApply: (actionId: string) => void;
 }) {
   const [draft, setDraft] = useState<{
     prompt: string;
@@ -562,7 +733,9 @@ function WorkflowNode({
     <li className={styles.workflowNode} data-status={step.status}>
       <div className={styles.workflowNodeMeta}>
         <span>{String(number).padStart(2, "0")}</span>
-        <small>{STEP_LABELS[step.status]}</small>
+        <small>
+          {step.selectedAssetId ? "已采用" : STEP_LABELS[step.status]}
+        </small>
       </div>
       <h3>{step.title}</h3>
       <p>{step.instruction}</p>
@@ -574,6 +747,12 @@ function WorkflowNode({
           <span>输入 ← 设计目标与参考素材</span>
         )}
       </div>
+      <AgentNodeRationalePanel
+        rationale={intelligence?.rationales.find(
+          (item) => item.stepKey === step.key,
+        )}
+        intelligence={intelligence}
+      />
       <details className={styles.workflowPrompt}>
         <summary>
           {editable ? "查看或修改节点提示词" : "查看执行提示词"}
@@ -654,6 +833,32 @@ function WorkflowNode({
               </label>
             ))}
           </div>
+          {intelligence
+            ? step.candidates
+                .filter(
+                  (candidate) =>
+                    step.status === "waiting_review" ||
+                    intelligence.actions.some(
+                      (action) =>
+                        action.kind === "evaluate_candidate" &&
+                        action.stepId === step.id &&
+                        action.assetId === candidate.assetId,
+                    ),
+                )
+                .map((candidate, index) => (
+                  <CandidateAgentCheck
+                    key={candidate.assetId}
+                    intelligence={intelligence}
+                    step={step}
+                    assetId={candidate.assetId}
+                    number={index + 1}
+                    busy={busy || actionBusy}
+                    onCheck={() =>
+                      onDomain("evaluate_candidate", candidate.assetId)
+                    }
+                  />
+                ))
+            : null}
           {step.status === "waiting_review" ? (
             <>
               <label htmlFor={`review-reason-${step.id}`}>
@@ -694,6 +899,25 @@ function WorkflowNode({
             </>
           ) : null}
         </fieldset>
+      ) : null}
+      {intelligence ? (
+        <AgentStepRefinement
+          intelligence={intelligence}
+          step={step}
+          eligible={
+            editable &&
+            Boolean(
+              step.attempts?.at(-1) &&
+              ["rejected", "failed"].includes(
+                step.attempts.at(-1)?.status ?? "",
+              ),
+            )
+          }
+          busy={busy || actionBusy}
+          dirty={allDirty}
+          onRequest={() => onDomain("refine_step")}
+          onApply={onApply}
+        />
       ) : null}
       {step.attempts?.length ? (
         <details className={styles.workflowPrompt}>
