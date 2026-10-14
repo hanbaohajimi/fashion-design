@@ -21,6 +21,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     readonly variationAxis: string;
   }> = [];
   const ignoredAssets = new Set<string>();
+  const exportRequests: Record<string, unknown>[] = [];
   const dna = () => ({
     extractionStatus: "ready",
     fabrics: ["哑光皮革", "欧根纱"],
@@ -54,6 +55,14 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     sourceGarmentType,
     updatedAt: createdAt,
   });
+  const heroNode = {
+    id: "candidate-hero", kind: "asset", type: "candidate", title: "系列 Hero",
+    payload: { assetId: "asset-hero", imageUrl: "https://assets.example/collection-look-1.png", collectionId: "collection-e2e" },
+    x: 80, y: 100, status: "completed", createdAt, updatedAt: createdAt,
+  };
+  const graph = { projectId: "e2e-collection", revision: 1, layoutRevision: 0, legacyAvailable: false, nodes: [heroNode], edges: [] };
+  await page.route("**/api/projects/e2e-collection/workflow/sync", (route) => route.fulfill({ json: graph }));
+  await page.route("**/api/design-assets/asset-hero/path", (route) => route.fulfill({ json: { steps: [], decisions: [], incomplete: false } }));
   await page.route("**/api/projects/e2e-collection", (route) =>
     route.fulfill({
       json: {
@@ -416,7 +425,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
         createdAt,
         downloadUrl: "https://download.example/lookbook.pdf?signature=e2e",
         error: null,
-        expiresAt: "2026-07-29T10:00:00.000Z",
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         fileName: "series-lookbook.pdf",
         format: "pdf",
         id: "export-pdf-e2e",
@@ -429,8 +438,9 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
       },
     }),
   );
-  await page.route("**/api/exports", (route) =>
-    route.fulfill({
+  await page.route("**/api/exports", (route) => {
+    exportRequests.push(route.request().postDataJSON() as Record<string, unknown>);
+    return route.fulfill({
       status: 202,
       json: {
         completedAt: null,
@@ -446,8 +456,8 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
         sizeBytes: null,
         status: "queued",
       },
-    }),
-  );
+    });
+  });
   await page.route("https://assets.example/collection-look-*.png", (route) => {
     const lookNumber =
       route
@@ -472,8 +482,9 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   });
 
   await page.goto("/e2e-collection");
-  await page.getByRole("button", { name: "打开系列工作台" }).click();
-  await page.getByRole("button", { name: "打开系列 系列 · HERO" }).click();
+  await page.locator('[data-type="candidate"]').click();
+  await page.getByRole("tab", { name: "节点详情" }).click();
+  await page.getByRole("button", { name: "打开关联系列" }).click();
 
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(page.getByText("系列原点", { exact: true })).toBeVisible();
@@ -487,6 +498,10 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     ),
   ).toBeVisible();
   await expect(exportDialog.getByText(/Free|Pro|付费|套餐/u)).toHaveCount(0);
+  await exportDialog.getByRole("button", { name: "开始导出" }).click();
+  await expect(exportDialog.getByRole("link", { name: "下载 PDF" })).toHaveAttribute("href", "https://download.example/lookbook.pdf?signature=e2e");
+  expect(exportRequests).toHaveLength(1);
+  expect(exportRequests[0]).toMatchObject({ collectionId: "collection-e2e", format: "pdf" });
   await exportDialog.getByRole("button", { name: "关闭导出窗口" }).click();
   await expect(exportDialog).toBeHidden();
   consistencyAvailable = true;
@@ -547,8 +562,8 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     collectionDrawer.locator("figcaption").getByText("连衣裙", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('img[src="https://assets.example/collection-look-2.png"]'),
-  ).toHaveCount(2);
+    collectionDrawer.locator('img[src="https://assets.example/collection-look-2.png"]'),
+  ).toBeVisible();
 
   await garmentTypeSelect.selectOption("coat");
   await generateLook.click();
@@ -563,8 +578,8 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     collectionDrawer.locator("figcaption").getByText("大衣", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('img[src="https://assets.example/collection-look-3.png"]'),
-  ).toHaveCount(2);
+    collectionDrawer.locator('img[src="https://assets.example/collection-look-3.png"]'),
+  ).toBeVisible();
 
   for (const removedText of [
     "系列款数",

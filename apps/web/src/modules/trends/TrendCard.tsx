@@ -7,6 +7,7 @@ import styles from "./trends.module.css";
 interface TrendCardProps {
   readonly disabled?: boolean;
   readonly importing: boolean;
+  readonly importLabel?: string;
   readonly onImport: (trend: TrendItem) => void;
   readonly trend: TrendItem;
 }
@@ -62,6 +63,7 @@ function publishedDate(value: string): string {
 export function TrendCard({
   disabled = false,
   importing,
+  importLabel = "存入白板",
   onImport,
   trend,
 }: TrendCardProps) {
@@ -81,8 +83,13 @@ export function TrendCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img alt="" loading="lazy" src={trend.coverImageUrl} />
         ) : (
-          <div aria-label="暂无代表图" className={styles.visualFallback} role="img">
-            <span>NO VISUAL</span><i />
+          <div
+            aria-label="暂无代表图"
+            className={styles.visualFallback}
+            role="img"
+          >
+            <span>NO VISUAL</span>
+            <i />
           </div>
         )}
         <span className={styles.platformBadge}>{platform}</span>
@@ -98,7 +105,9 @@ export function TrendCard({
           <a href={trend.sourceUrl} rel="noreferrer" target="_blank">
             <span aria-hidden="true">▧</span> 查看原文 - {platform}
           </a>
-          <time dateTime={trend.publishedAt}>{publishedDate(trend.publishedAt)}</time>
+          <time dateTime={trend.publishedAt}>
+            {publishedDate(trend.publishedAt)}
+          </time>
         </div>
 
         <section aria-label="AI整理摘要" className={styles.aiSummary}>
@@ -128,7 +137,7 @@ export function TrendCard({
           onClick={() => onImport(trend)}
           type="button"
         >
-          {importing ? "正在存入…" : "存入白板"}
+          {importing ? "正在存入…" : importLabel}
           <span aria-hidden="true">↗</span>
         </button>
       </div>

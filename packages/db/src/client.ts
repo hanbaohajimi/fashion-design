@@ -39,6 +39,12 @@ import {
   type TrendItem,
   type User,
   type Workspace,
+  type WorkflowGraph,
+  type WorkflowNode,
+  type WorkflowEdge,
+  type WorkflowMutation,
+  type WorkflowProposal,
+  type WorkflowAttempt,
 } from "../generated/prisma/client.js";
 
 const globalForPrisma = globalThis as typeof globalThis & {
@@ -106,4 +112,10 @@ export type {
   TrendItem,
   User,
   Workspace,
+  WorkflowGraph,
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowMutation,
+  WorkflowProposal,
+  WorkflowAttempt,
 };

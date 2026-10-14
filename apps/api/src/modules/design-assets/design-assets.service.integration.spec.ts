@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { BillingService } from "../billing/billing.service";
 import { ContextCompilerService } from "../generation/compiler/context-compiler.service";
 import { GenerationService } from "../generation/generation.service";
+import { WorkflowsService } from "../workflows/workflows.service";
 
 import { DesignAssetsService } from "./design-assets.service";
 
@@ -298,6 +299,22 @@ describe("DesignAssetsService lineage integration", () => {
     }
   });
 
+  it("版本恢复请求重放只创建一个资产，异参复用请求号会冲突", async () => {
+    const fixture = await createFixture();
+    try {
+      const requestId = crypto.randomUUID();
+      const [first, replay] = await Promise.all([
+        service.restore(fixture.userId, fixture.rootId, fixture.currentId, requestId),
+        service.restore(fixture.userId, fixture.rootId, fixture.currentId, requestId),
+      ]);
+      expect(replay.id).toBe(first.id);
+      await expect(service.restore(fixture.userId, fixture.middleId, fixture.currentId, requestId)).rejects.toMatchObject({ status: 409 });
+      expect(await prisma.designAsset.count({ where: { id: first.id } })).toBe(1);
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
   it("用户不能读取其他用户的资产时间线", async () => {
     const fixture = await createFixture();
     const outsider = await prisma.user.create({
@@ -365,6 +382,51 @@ describe("DesignAssetsService lineage integration", () => {
       await expect(
         prisma.designStep.count({ where: { outputAssetId: first.id } }),
       ).resolves.toBe(1);
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
+  it("旧资产作为新图候选引用后仍能读取原始导入路径", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const imported = await service.importFile(fixture.userId, fixture.projectId, fixture.fileId);
+      const workflows = new WorkflowsService(prisma);
+      await workflows.patch(fixture.userId, fixture.projectId, {
+        mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0,
+        operations: [{ type: "add_node", node: {
+          id: crypto.randomUUID(), kind: "asset", type: "candidate", title: "旧候选引用",
+          payload: { assetId: imported.id }, x: 100, y: 100,
+        } }],
+      });
+      const path = await service.path(fixture.userId, imported.id);
+      expect(path.steps.some((step) => step.tool === "imported")).toBe(true);
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
+  it("从旧资产继续设计时不会把缺失的根路径标成完整", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const imported = await service.importFile(fixture.userId, fixture.projectId, fixture.fileId);
+      const restored = await service.restore(fixture.userId, imported.id, imported.id);
+      const workflows = new WorkflowsService(prisma);
+      const sourceNodeId = crypto.randomUUID();
+      const toolNodeId = crypto.randomUUID();
+      const outputNodeId = crypto.randomUUID();
+      await workflows.applySystemMutation(fixture.projectId, {
+        mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0,
+        operations: [
+          { type: "add_node", node: { id: sourceNodeId, kind: "asset", type: "candidate", title: "历史导入资产", payload: { assetId: imported.id }, x: 100, y: 100 } },
+          { type: "add_node", node: { id: toolNodeId, kind: "tool", type: "restore_version", title: "从旧资产继续", payload: { toolKey: "restore_version", toolVersion: "1", params: {} }, x: 440, y: 100, status: "completed" } },
+          { type: "add_node", node: { id: outputNodeId, kind: "asset", type: "candidate", title: "恢复结果", payload: { assetId: restored.id }, x: 780, y: 100, status: "completed" } },
+          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId, targetNodeId: toolNodeId, sourcePort: "out", targetPort: "source" } },
+          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: toolNodeId, targetNodeId: outputNodeId, sourcePort: "out", targetPort: "source" } },
+        ],
+      });
+      const path = await service.path(fixture.userId, restored.id);
+      expect(path.steps.some((step) => step.tool === "imported") || path.incomplete).toBe(true);
     } finally {
       await prisma.user.delete({ where: { id: fixture.userId } });
     }

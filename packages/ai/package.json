@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fashion/shared": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

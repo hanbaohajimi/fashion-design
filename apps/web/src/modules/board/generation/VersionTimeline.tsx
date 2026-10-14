@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { fetchAssetVersions, restoreAssetVersion } from "./generation-api";
 import type { DesignAssetVersion } from "./generation-types";
@@ -19,12 +19,17 @@ const OPERATION_LABEL: Record<DesignAssetVersion["operation"], string> = {
 export function VersionTimeline({
   assetId,
   onRestore,
+  onRestoreStart,
+  onRestoreEnd,
 }: {
   readonly assetId: string;
-  readonly onRestore: (asset: DesignAssetVersion) => void;
+  readonly onRestore: (asset: DesignAssetVersion) => Promise<void> | void;
+  readonly onRestoreStart?: () => void;
+  readonly onRestoreEnd?: () => void;
 }) {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  const restoreRequests = useRef(new Map<string, string>());
   const timeline = useInfiniteQuery({
     queryKey: ["design-asset-versions", assetId],
     queryFn: ({ pageParam }) => fetchAssetVersions(assetId, pageParam),
@@ -44,13 +49,24 @@ export function VersionTimeline({
     if (target.id === assetId) return;
     setRestoringId(target.id);
     setRestoreError(null);
+    onRestoreStart?.();
     try {
-      const restored = await restoreAssetVersion(target.id, assetId);
-      onRestore(restored);
+      const requestKey = `${assetId}:${target.id}`;
+      const storageKey = `fashion-restore-request:${requestKey}`;
+      let persistedRequest: string | null = null;
+      try { persistedRequest = sessionStorage.getItem(storageKey); } catch { /* In-memory retry remains available. */ }
+      const requestId = restoreRequests.current.get(requestKey) ?? persistedRequest ?? crypto.randomUUID();
+      restoreRequests.current.set(requestKey, requestId);
+      try { sessionStorage.setItem(storageKey, requestId); } catch { /* In-memory retry remains available. */ }
+      const restored = await restoreAssetVersion(target.id, assetId, requestId);
+      await onRestore(restored);
+      restoreRequests.current.delete(requestKey);
+      try { sessionStorage.removeItem(storageKey); } catch { /* Restore is already committed. */ }
     } catch (cause) {
       setRestoreError(cause instanceof Error ? cause.message : "版本恢复失败");
     } finally {
       setRestoringId(null);
+      onRestoreEnd?.();
     }
   };
 

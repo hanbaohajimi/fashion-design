@@ -22,6 +22,8 @@ import { FilesModule } from "./modules/files/files.module";
 import { GenerationModule } from "./modules/generation/generation.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
 import { TrendsModule } from "./modules/trends/trends.module";
+import { WorkflowsModule } from "./modules/workflows/workflows.module";
+import { WorkflowRuntimeModule } from "./modules/workflow-runtime/workflow-runtime.module";
 import { SecurityModule } from "./security/security.module";
 import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
 
@@ -43,6 +45,8 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     GenerationModule,
     ProjectsModule,
     TrendsModule,
+    WorkflowsModule,
+    WorkflowRuntimeModule,
   ],
   controllers: [HealthController],
   providers: [

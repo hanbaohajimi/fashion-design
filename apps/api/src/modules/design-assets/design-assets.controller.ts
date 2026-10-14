@@ -133,7 +133,7 @@ export class DesignAssetsController {
     @Body() body: unknown,
   ) {
     const parsed = z
-      .object({ currentAssetId: z.string().min(1).max(128) })
+      .object({ currentAssetId: z.string().min(1).max(128), clientRequestId: z.string().trim().min(1).max(128).optional() })
       .safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -145,6 +145,7 @@ export class DesignAssetsController {
       user.userId,
       targetAssetId,
       parsed.data.currentAssetId,
+      parsed.data.clientRequestId,
     );
   }
 }

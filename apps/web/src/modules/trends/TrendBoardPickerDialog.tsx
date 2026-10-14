@@ -30,7 +30,9 @@ export function TrendBoardPickerDialog({
 
   useEffect(() => {
     if (!open) return;
-    const frame = window.requestAnimationFrame(() => dialogRef.current?.focus());
+    const frame = window.requestAnimationFrame(() =>
+      dialogRef.current?.focus(),
+    );
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
@@ -73,14 +75,28 @@ export function TrendBoardPickerDialog({
         tabIndex={-1}
       >
         <div className={styles.dialogHeading}>
-          <div><span>DESTINATION / BOARD</span><h2 id="trend-board-dialog-title">选择存入位置</h2></div>
-          <button aria-label="关闭" disabled={importing} onClick={onClose} type="button">×</button>
+          <div>
+            <span>DESTINATION / BOARD</span>
+            <h2 id="trend-board-dialog-title">选择存入位置</h2>
+          </div>
+          <button
+            aria-label="关闭"
+            disabled={importing}
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
         </div>
-        <p className={styles.dialogIntro}>趋势将以摘要便签、色卡和代表图保存，原文地址会保留在元素数据中。</p>
+        <p className={styles.dialogIntro}>
+          趋势将以引用原档案的参考节点和色卡加入工作流，摘要、代表图与原文地址一并保留。
+        </p>
 
         <div className={styles.boardChoices}>
           {projectsQuery.isLoading ? <p>正在读取项目…</p> : null}
-          {projectsQuery.error ? <p role="alert">项目读取失败，请稍后重试。</p> : null}
+          {projectsQuery.error ? (
+            <p role="alert">项目读取失败，请稍后重试。</p>
+          ) : null}
           {projects.map((project) => (
             <button
               disabled={importing}
@@ -111,7 +127,10 @@ export function TrendBoardPickerDialog({
               placeholder="例：2027 春夏趋势研究"
               value={name}
             />
-            <button disabled={importing || createProject.isPending} type="submit">
+            <button
+              disabled={importing || createProject.isPending}
+              type="submit"
+            >
               {createProject.isPending ? "创建中…" : "创建并存入"}
             </button>
           </div>

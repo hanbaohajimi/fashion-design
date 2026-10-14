@@ -1,13 +1,18 @@
 import Link from "next/link";
 
 import { resolveTrendReturnTarget } from "../../modules/trends/active-board";
+import { TrendArchive } from "../../modules/trends/TrendArchive";
+import { ThemeToggle } from "../../components/ThemeToggle/ThemeToggle";
 import styles from "../../modules/trends/trends.module.css";
 
 const TREND_PLATFORMS = [
   { name: "WGSN", url: "https://www.wgsn.com/en/products/fashion-design" },
   { name: "POP Fashion", url: "https://www.popfashioninfo.com/" },
   { name: "Future Snoops", url: "https://www.futuresnoops.com/" },
-  { name: "Trendstop", url: "https://www.trendstop.com/fashion-trend-forecasting/" },
+  {
+    name: "Trendstop",
+    url: "https://www.trendstop.com/fashion-trend-forecasting/",
+  },
   { name: "Heuritech", url: "https://heuritech.com/" },
   { name: "Vogue Runway", url: "https://www.vogue.com/fashion-shows" },
   { name: "Tagwalk", url: "https://www.tag-walk.com/en/" },
@@ -39,20 +44,27 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
       <div className={styles.editorialFrame}>
         <header className={styles.pageHeader}>
           <span>FASHION RESEARCH INDEX</span>
-          <Link href={returnTarget.href}>{returnTarget.label}</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <ThemeToggle />
+            <Link href={returnTarget.href}>{returnTarget.label}</Link>
+          </div>
         </header>
 
         <section className={styles.hero}>
-          <h1>
-            时尚趋势
-            <br />
-            专业入口
-          </h1>
+          <h1>趋势档案</h1>
           <p>
-            <span>TREND SOURCE INDEX</span>
-            <span>/ 08 EXTERNAL SOURCES</span>
+            <span>TREND RESEARCH ARCHIVE</span>
+            <span>/ 来源、摘要与设计参考</span>
           </p>
         </section>
+
+        <TrendArchive
+          projectId={
+            firstSearchValue(query.from) === "board"
+              ? firstSearchValue(query.boardId)
+              : undefined
+          }
+        />
 
         <section className={styles.sourceLayout}>
           <nav aria-label="时尚趋势平台" className={styles.platformIndex}>

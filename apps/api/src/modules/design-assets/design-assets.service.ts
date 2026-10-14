@@ -14,7 +14,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   DESIGN_PATH_MAX_ASSETS,
   type DesignDecisionView,
@@ -34,7 +34,7 @@ export const DESIGN_ASSETS_DB = Symbol("DESIGN_ASSETS_DB");
 type DesignAssetDatabase = Pick<
   PrismaClient,
   "designAsset" | "designAssetDecision" | "fileAsset" | "project"
->;
+> & Partial<Pick<PrismaClient, "workflowNode" | "workflowEdge" | "workflowAttempt">>;
 
 interface OwnedDesignAsset extends DesignAsset {
   readonly project: {
@@ -213,6 +213,13 @@ export class DesignAssetsService {
 
   async path(userId: string, assetId: string): Promise<DesignPathView> {
     const target = await this.ownedAsset(userId, assetId);
+    const workflowPath = await this.workflowPath(userId, target);
+    if (workflowPath) return workflowPath;
+    return this.legacyPath(userId, target);
+  }
+
+  private async legacyPath(userId: string, target: DesignAsset): Promise<DesignPathView> {
+    const assetId = target.id;
     const pending = [assetId];
     const visited = new Set<string>();
     const available = new Set<string>();
@@ -344,6 +351,96 @@ export class DesignAssetsService {
     };
   }
 
+  private async workflowPath(userId: string, target: DesignAsset): Promise<DesignPathView | null> {
+    if (!this.database.workflowNode || !this.database.workflowEdge) return null;
+    const targetNode = await this.database.workflowNode.findFirst({
+      where: { projectId: target.projectId, kind: "asset", payload: { path: ["assetId"], equals: target.id } },
+    });
+    if (!targetNode) return null;
+    const [nodes, edges] = await Promise.all([
+      this.database.workflowNode.findMany({ where: { projectId: target.projectId }, orderBy: { createdAt: "asc" } }),
+      this.database.workflowEdge.findMany({ where: { projectId: target.projectId } }),
+    ]);
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const reachable = new Set<string>();
+    const pending = [targetNode.id];
+    while (pending.length) {
+      const id = pending.pop();
+      if (!id || reachable.has(id)) continue;
+      reachable.add(id);
+      for (const edge of edges) if (edge.targetNodeId === id) pending.push(edge.sourceNodeId);
+    }
+    const tools = nodes.filter((node) => node.kind === "tool" && reachable.has(node.id));
+    if (!tools.length) return null;
+    const attempts = this.database.workflowAttempt ? await this.database.workflowAttempt.findMany({ where: { projectId: target.projectId, toolNodeId: { in: tools.map((tool) => tool.id) }, status: "completed" }, orderBy: { ordinal: "desc" } }) : [];
+    const outputIds = new Set<string>([target.id]);
+    for (const tool of tools) for (const edge of edges.filter((item) => item.sourceNodeId === tool.id)) {
+      const payload = pathObject(byId.get(edge.targetNodeId)?.payload);
+      if (typeof payload.assetId === "string") outputIds.add(payload.assetId);
+    }
+    const outputs = await this.database.designAsset.findMany({ where: { projectId: target.projectId, id: { in: [...outputIds] } } });
+    const outputById = new Map(outputs.map((asset) => [asset.id, asset]));
+    const steps: DesignPathStep[] = tools.map((tool) => {
+      const payload = pathObject(tool.payload);
+      const attempt = attempts.find((item) => item.toolNodeId === tool.id);
+      const params = { ...pathObject(payload.params), ...pathObject(pathObject(attempt?.requestSnapshot).request) };
+      const inputNodes = edges.filter((edge) => edge.targetNodeId === tool.id).flatMap((edge) => {
+        const node = byId.get(edge.sourceNodeId);
+        return node ? [{ node, port: edge.targetPort }] : [];
+      });
+      const sources = inputNodes.map(({ node, port }) => {
+        const source = pathObject(node.payload);
+        const ref = (key: string): Record<string, string> => typeof source[key] === "string" ? { [key]: source[key] } : {};
+        return {
+          elementId: node.id, role: port, title: node.title,
+          ...ref("assetId"), ...ref("fileAssetId"), ...ref("fabricId"), ...ref("trendItemId"), ...ref("text"),
+          ...(typeof source.color === "string" ? { colors: [source.color] } : {}),
+        };
+      });
+      const parameters: Record<string, string | number | boolean> = {};
+      for (const [key, value] of Object.entries(params))
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+          if (!/url|token|key/iu.test(key)) parameters[key] = value;
+      if (typeof payload.toolVersion === "string") parameters.toolVersion = payload.toolVersion;
+      const toolOutputs = edges.filter((edge) => edge.sourceNodeId === tool.id).flatMap((edge) => {
+        const assetId = pathObject(byId.get(edge.targetNodeId)?.payload).assetId;
+        const asset = typeof assetId === "string" ? outputById.get(assetId) : undefined;
+        return asset ? [this.toView(asset)] : [];
+      });
+      return {
+        version: 1, id: tool.id, tool: tool.type,
+        actor: typeof payload.rationale === "string" ? "agent" : "manual",
+        intent: typeof params.prompt === "string" ? params.prompt : tool.title,
+        createdAt: tool.createdAt.toISOString(), status: tool.status === "completed" ? "succeeded" : tool.status,
+        snapshotAvailable: true, sources, parameters,
+        constraints: {
+          palette: inputNodes.flatMap(({ node }) => { const color = pathObject(node.payload).color; return typeof color === "string" ? [color] : []; }),
+          notes: inputNodes.filter(({ node }) => node.type === "constraint").flatMap(({ node }) => { const note = pathObject(node.payload).text; return typeof note === "string" ? [note] : []; }),
+          avoidLabels: [], fabricTerms: inputNodes.filter(({ node }) => node.type === "fabric").map(({ node }) => node.title),
+        },
+        outputs: toolOutputs, conversationId: null,
+      };
+    });
+    const decisions = await this.database.designAssetDecision.findMany({ where: { assetId: { in: [...outputIds] }, userId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100 });
+    const legacyRootIds = [...new Set(nodes.filter((node) => reachable.has(node.id) && node.kind === "asset" && !edges.some((edge) => edge.targetNodeId === node.id)).flatMap((node) => {
+      const id = pathObject(node.payload).assetId;
+      return typeof id === "string" ? [id] : [];
+    }))];
+    const legacySteps = new Map<string, DesignPathStep>();
+    const allDecisions = new Map(decisions.map((decision) => [decision.id, decisionView(decision)]));
+    let incomplete = legacyRootIds.length > 16;
+    for (const id of legacyRootIds.slice(0, 16)) {
+      const root = await this.database.designAsset.findFirst({ where: { id, projectId: target.projectId } });
+      if (!root) { incomplete = true; continue; }
+      const legacy = await this.legacyPath(userId, root);
+      for (const step of legacy.steps) legacySteps.set(step.id, step);
+      for (const decision of legacy.decisions) allDecisions.set(decision.id, decision);
+      incomplete ||= legacy.incomplete;
+    }
+    const ordered = orderDesignSteps([...legacySteps.values(), ...steps]);
+    return { assetId: target.id, steps: ordered.steps, decisions: [...allDecisions.values()], incomplete: incomplete || ordered.cyclic };
+  }
+
   async decide(
     userId: string,
     assetId: string,
@@ -394,6 +491,7 @@ export class DesignAssetsService {
     userId: string,
     targetAssetId: string,
     currentAssetId: string,
+    clientRequestId?: string,
   ): Promise<DesignAssetView> {
     const [target, current] = await Promise.all([
       this.ownedAsset(userId, targetAssetId),
@@ -409,9 +507,18 @@ export class DesignAssetsService {
       });
     }
 
+    const restoredId = clientRequestId ? `restore_${createHash("sha256").update(`${userId}:${clientRequestId}`).digest("hex").slice(0, 40)}` : randomUUID();
+    const assertRestore = (asset: DesignAsset): void => {
+      if (asset.operation !== DesignAssetOperation.RESTORE || asset.parentAssetId !== current.id || asset.restoredFromAssetId !== target.id || asset.projectId !== current.projectId)
+        throw new ConflictException({ code: "RESTORE_REQUEST_REUSED", message: "该请求编号已用于另一项版本恢复" });
+    };
+    if (clientRequestId) {
+      const replay = await this.database.designAsset.findUnique({ where: { id: restoredId } });
+      if (replay) { assertRestore(replay); return this.toView(replay); }
+    }
     const restored = await this.database.designAsset.create({
       data: {
-        id: randomUUID(),
+        id: restoredId,
         archivedAt: null,
         generationTaskId: null,
         height: target.height,
@@ -457,6 +564,11 @@ export class DesignAssetsService {
           },
         },
       },
+    }).catch(async (error: unknown) => {
+      if (!clientRequestId || !(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+      const replay = await this.database.designAsset.findUniqueOrThrow({ where: { id: restoredId } });
+      assertRestore(replay);
+      return replay;
     });
     return this.toView(restored);
   }
@@ -509,6 +621,10 @@ export class DesignAssetsService {
       width: asset.width,
     };
   }
+}
+
+function pathObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function objectKeyFrom(value: string): string | null {

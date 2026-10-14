@@ -1,0 +1,145 @@
+import { expect, test, type Page } from "@playwright/test";
+import { mkdir, readFile } from "node:fs/promises";
+
+const PROJECT_ID = "e2e-workflow-export";
+const NOW = "2026-10-14T00:00:00.000Z";
+const EXPORT_PATH = "output/playwright/workflow-canvas-export.png";
+
+function exportGraph() {
+  const common = { status: "completed", createdAt: NOW, updatedAt: NOW };
+  return {
+    projectId: PROJECT_ID,
+    revision: 1,
+    layoutRevision: 0,
+    legacyAvailable: false,
+    nodes: [
+      { ...common, id: "brief", kind: "asset", type: "brief", title: "设计目标与需求", x: 40, y: 120, payload: { text: "秋冬通勤风衣，藏蓝色与宽松廓形。" } },
+      { ...common, id: "analysis", kind: "tool", type: "analyze_brief", title: "需求分析与提取", x: 390, y: 120, payload: {} },
+      { ...common, id: "constraint", kind: "asset", type: "constraint", title: "最终设计约束", x: 740, y: 120, payload: { text: "采用挺括面料，保留肩线与宽松轮廓。" } },
+    ],
+    edges: [
+      { id: "brief-analysis", sourceNodeId: "brief", targetNodeId: "analysis", sourcePort: "out", targetPort: "goal" },
+      { id: "analysis-constraint", sourceNodeId: "analysis", targetNodeId: "constraint", sourcePort: "out", targetPort: "source" },
+    ],
+  };
+}
+
+async function mockExportWorkflow(page: Page) {
+  const graph = exportGraph();
+  await page.route("**/api/me", (route) => route.fulfill({ json: {
+    user: { id: "e2e-user", authId: "auth-e2e", email: "export@example.com", name: "Export E2E", avatar: null, createdAt: NOW, deletedAt: null },
+    credits: { limit: 600, remaining: 500, used: 100 },
+  } }));
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) => route.fulfill({ json: {
+    id: PROJECT_ID, name: "导出内容验证", archived: false, createdAt: NOW, updatedAt: NOW,
+    assetCount: 0, coverAssetId: null, coverUrl: null,
+  } }));
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.fulfill({ json: graph }));
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow/sync`, (route) => route.fulfill({ json: { ...graph, proposals: [] } }));
+  return graph;
+}
+
+test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条", async ({ page }) => {
+  test.setTimeout(60_000);
+  const graph = await mockExportWorkflow(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  const canvas = page.getByRole("region", { name: "设计工作流画布" });
+  await expect(canvas.locator('[data-kind="asset"]')).toHaveCount(2);
+  await expect(canvas.locator('[data-kind="tool"]')).toHaveCount(1);
+  await expect(canvas.locator('[data-type="constraint"]')).toBeVisible();
+  await expect(canvas.locator('.tl-shape[data-shape-type="arrow"]')).toHaveCount(2);
+  await page.evaluate(() => document.fonts.ready);
+
+  // Map the actual rendered text boxes into the exported graph coordinates.
+  // Text is checked inside each node, so arrows alone cannot satisfy the test.
+  const textBoxes = await Promise.all(graph.nodes.map(async (node) => {
+    const card = canvas.locator(`[data-type="${node.type}"]`);
+    const cardBox = await card.boundingBox();
+    const titleBox = await card.locator("strong").boundingBox();
+    const summaryBox = await card.locator("p").boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(titleBox).not.toBeNull();
+    expect(summaryBox).not.toBeNull();
+    const zoom = cardBox!.width / 258;
+    return {
+      id: node.id,
+      x: node.x,
+      y: node.y,
+      title: { x: (titleBox!.x - cardBox!.x) / zoom, y: (titleBox!.y - cardBox!.y) / zoom, width: titleBox!.width / zoom, height: titleBox!.height / zoom },
+      summary: { x: (summaryBox!.x - cardBox!.x) / zoom, y: (summaryBox!.y - cardBox!.y) / zoom, width: summaryBox!.width / zoom, height: summaryBox!.height / zoom },
+    };
+  }));
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出 PNG", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(`fashion-workflow-${PROJECT_ID}.png`);
+  expect(await download.failure()).toBeNull();
+  await mkdir("output/playwright", { recursive: true });
+  await download.saveAs(EXPORT_PATH);
+  const png = await readFile(EXPORT_PATH);
+  expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
+  expect(width).toBeGreaterThan(1_500);
+  expect(width).toBeLessThan(5_000);
+  expect(height).toBeGreaterThan(500);
+  expect(height).toBeLessThan(2_000);
+
+  // Decode the file that was downloaded, rather than a screenshot or live DOM.
+  const pixels = await page.evaluate(async ({ dataUrl, textBoxes }) => {
+    const image = new Image();
+    image.src = dataUrl;
+    await image.decode();
+    const bitmap = document.createElement("canvas");
+    bitmap.width = image.naturalWidth;
+    bitmap.height = image.naturalHeight;
+    const context = bitmap.getContext("2d");
+    if (!context) throw new Error("PNG canvas context is unavailable");
+    context.drawImage(image, 0, 0);
+    const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+    let purple = 0;
+    let brown = 0;
+    for (let index = 0; index < data.length; index += 4) {
+      const r = data[index]!;
+      const g = data[index + 1]!;
+      const b = data[index + 2]!;
+      if (Math.abs(r - 130) < 12 && Math.abs(g - 104) < 12 && Math.abs(b - 174) < 12) purple += 1;
+      if (Math.abs(r - 150) < 12 && Math.abs(g - 118) < 12 && Math.abs(b - 98) < 12) brown += 1;
+    }
+    const scale = bitmap.width / (998 - 40 + 128);
+    const countText = (node: typeof textBoxes[number], box: typeof node.title) => {
+      const left = Math.floor((node.x - 40 + 64 + box.x) * scale);
+      const top = Math.floor((node.y - 120 + 64 + box.y) * scale);
+      const right = Math.ceil(left + box.width * scale);
+      const bottom = Math.ceil(top + box.height * scale);
+      let darkPixels = 0;
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) {
+          const index = (y * bitmap.width + x) * 4;
+          const r = data[index]!;
+          const g = data[index + 1]!;
+          const b = data[index + 2]!;
+          if (data[index + 3]! > 200 && r < 130 && g < 130 && b < 130 && Math.max(r, g, b) - Math.min(r, g, b) < 45) darkPixels += 1;
+        }
+      }
+      return darkPixels;
+    };
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      purple,
+      brown,
+      text: textBoxes.map((node) => ({ id: node.id, title: countText(node, node.title), summary: countText(node, node.summary) })),
+    };
+  }, { dataUrl: `data:image/png;base64,${png.toString("base64")}`, textBoxes });
+  expect(pixels.width).toBe(width);
+  expect(pixels.height).toBe(height);
+  expect(pixels.purple, "PNG must contain the tool's purple top border").toBeGreaterThan(1_000);
+  expect(pixels.brown, "PNG must contain both assets' brown top borders").toBeGreaterThan(2_000);
+  for (const text of pixels.text) {
+    expect(text.title, `${text.id} title must be rasterized in the PNG`).toBeGreaterThan(300);
+    expect(text.summary, `${text.id} summary must be rasterized in the PNG`).toBeGreaterThan(300);
+  }
+});

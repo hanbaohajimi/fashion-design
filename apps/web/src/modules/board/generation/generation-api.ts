@@ -80,12 +80,13 @@ export async function fetchAssetVersions(
 export async function restoreAssetVersion(
   targetAssetId: string,
   currentAssetId: string,
+  clientRequestId?: string,
 ): Promise<DesignAssetVersion> {
   const response = await fetch(
     `/api/design-assets/${encodeURIComponent(targetAssetId)}/restore`,
     {
       method: "POST",
-      body: JSON.stringify({ currentAssetId }),
+      body: JSON.stringify({ currentAssetId, clientRequestId }),
       credentials: "include",
       headers: { "Content-Type": "application/json" },
     },

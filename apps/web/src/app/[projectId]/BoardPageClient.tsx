@@ -7,8 +7,8 @@ import { BoardSkeleton } from "../../modules/board/BoardSkeleton";
 import { ErrorBoundary } from "../../observability/ErrorBoundary";
 import { writeActiveBoardId } from "../../modules/trends/active-board";
 
-const BoardCanvas = dynamic(
-  () => import("../../modules/board/BoardCanvas"),
+const WorkflowCanvas = dynamic(
+  () => import("../../modules/board/workflow/WorkflowCanvas"),
   {
     loading: () => <BoardSkeleton />,
     ssr: false,
@@ -26,7 +26,7 @@ export function BoardPageClient({ projectId }: BoardPageClientProps) {
 
   return (
     <ErrorBoundary area="board">
-      <BoardCanvas key={projectId} projectId={projectId} />
+      <WorkflowCanvas key={projectId} projectId={projectId} />
     </ErrorBoundary>
   );
 }

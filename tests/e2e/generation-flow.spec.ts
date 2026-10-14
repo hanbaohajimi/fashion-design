@@ -1,4 +1,95 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+const WORKFLOW_NOW = "2026-10-14T00:00:00.000Z";
+
+interface WorkflowTestNode {
+  id: string;
+  kind: "asset" | "tool";
+  type: string;
+  title: string;
+  payload: Record<string, unknown>;
+  x: number;
+  y: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface WorkflowTestEdge {
+  id: string;
+  sourceNodeId: string;
+  sourcePort: "out";
+  targetNodeId: string;
+  targetPort: string;
+}
+
+interface WorkflowTestGraph {
+  projectId: string;
+  revision: number;
+  layoutRevision: number;
+  legacyAvailable: boolean;
+  nodes: WorkflowTestNode[];
+  edges: WorkflowTestEdge[];
+}
+
+function workflowNode(
+  id: string,
+  kind: WorkflowTestNode["kind"],
+  type: string,
+  title: string,
+  payload: Record<string, unknown>,
+  x: number,
+  y: number,
+  status = "completed",
+): WorkflowTestNode {
+  return { id, kind, type, title, payload, x, y, status, createdAt: WORKFLOW_NOW, updatedAt: WORKFLOW_NOW };
+}
+
+async function mockEditableWorkflow(page: Page, projectId: string, initial?: Partial<WorkflowTestGraph>) {
+  const graph: WorkflowTestGraph = {
+    projectId,
+    revision: 0,
+    layoutRevision: 0,
+    legacyAvailable: false,
+    nodes: [],
+    edges: [],
+    ...initial,
+  };
+  const semanticMutations: Array<Record<string, unknown>> = [];
+  await page.route(`**/api/projects/${projectId}/workflow/sync`, (route) =>
+    route.fulfill({ json: graph }),
+  );
+  await page.route(`**/api/projects/${projectId}/workflow`, (route) => {
+    if (route.request().method() !== "PATCH") return route.fulfill({ json: graph });
+    const body = route.request().postDataJSON() as {
+      mode: "semantic" | "layout";
+      operations?: Array<
+        | { type: "add_node"; node: Omit<WorkflowTestNode, "status" | "createdAt" | "updatedAt"> }
+        | { type: "add_edge"; edge: WorkflowTestEdge }
+      >;
+      positions?: Array<{ nodeId: string; x: number; y: number }>;
+    };
+    if (body.mode === "semantic") {
+      semanticMutations.push(body as Record<string, unknown>);
+      for (const operation of body.operations ?? []) {
+        if (operation.type === "add_node") {
+          graph.nodes.push({ ...operation.node, status: "ready", createdAt: WORKFLOW_NOW, updatedAt: WORKFLOW_NOW });
+        } else {
+          graph.edges.push(operation.edge);
+        }
+      }
+      graph.revision += 1;
+    } else {
+      for (const position of body.positions ?? []) {
+        const node = graph.nodes.find((item) => item.id === position.nodeId);
+        if (node) { node.x = position.x; node.y = position.y; }
+      }
+      graph.layoutRevision += 1;
+    }
+    return route.fulfill({ json: graph });
+  });
+  return { graph, semanticMutations };
+}
 
 test("项目库可以安全退出并返回登录页", async ({ page }) => {
   let logoutRequestCount = 0;
@@ -40,7 +131,7 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
   ).toHaveAttribute("aria-current", "page");
   await expect(
     workspaceNavigation.getByRole("link", { name: "趋势档案" }),
-  ).toHaveAttribute("href", "/trends");
+  ).toHaveAttribute("href", "/trends?from=projects");
   await expect(
     workspaceNavigation.getByRole("link", { name: "面料库" }),
   ).toHaveAttribute("href", "/fabrics");
@@ -139,7 +230,7 @@ test("面料档案支持快捷搜索并可快速清空关键词", async ({ page 
   await expect(search).toHaveValue("");
 });
 
-test("新建项目成功后立即进入对应白板", async ({ page }) => {
+test("新建项目成功后立即进入空白设计工作流", async ({ page }) => {
   const now = "2026-08-05T00:00:00.000Z";
   const project = {
     archived: false,
@@ -176,9 +267,7 @@ test("新建项目成功后立即进入对应白板", async ({ page }) => {
   await page.route("**/api/projects/created-project", (route) =>
     route.fulfill({ json: project }),
   );
-  await page.route("**/api/projects/created-project/board", (route) =>
-    route.fulfill({ json: { elements: [], revision: 0, snapshot: null } }),
-  );
+  await mockEditableWorkflow(page, project.id);
   await page.route("**/api/collections?projectId=created-project", (route) =>
     route.fulfill({ json: [] }),
   );
@@ -216,9 +305,11 @@ test("新建项目成功后立即进入对应白板", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/created-project$/u);
   await expect(page.getByText(project.name)).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "白板三步上手" }),
-  ).toBeVisible();
+  const canvas = page.getByRole("region", { name: "设计工作流画布" });
+  await expect(canvas).toBeVisible();
+  await expect(canvas.getByRole("heading", { name: "从一条设计需求开始" })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "添加设计需求" })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "＋ 添加素材" })).toBeVisible();
 });
 
 test("趋势主题筛选使用接口返回的真实分类", async ({ page }) => {
@@ -290,7 +381,9 @@ test("趋势主题筛选使用接口返回的真实分类", async ({ page }) => 
   await expect(page.getByText("层叠造型", { exact: true })).toHaveCount(0);
 });
 
-test("本地图片拖入白板后关闭投放遮罩并进入自定义上传流程", async ({ page }) => {
+test("本地图片从素材菜单上传后保留来源文件 ID 和名称", async ({ page }) => {
+  let signedUpload: Record<string, unknown> | undefined;
+  let inferredNodeId: string | undefined;
   await page.route("**/api/me", (route) =>
     route.fulfill({
       json: {
@@ -324,65 +417,78 @@ test("本地图片拖入白板后关闭投放遮罩并进入自定义上传流�
   await page.route("**/api/collections?projectId=e2e-drop", (route) =>
     route.fulfill({ json: [] }),
   );
-  await page.route("**/api/projects/e2e-drop/board", (route) =>
+  const workflow = await mockEditableWorkflow(page, "e2e-drop");
+  await page.route("**/api/projects/e2e-drop/workflow/nodes/*/infer-role", (route) => {
+    inferredNodeId = new URL(route.request().url()).pathname.split("/").at(-2);
+    const node = workflow.graph.nodes.find((item) => item.id === inferredNodeId);
+    if (!node) return route.fulfill({ status: 404, json: { message: "参考节点不存在" } });
+    node.payload = {
+      ...node.payload,
+      role: "silhouette_ref",
+      roleLabel: "廓形参考",
+      roleSource: "inferred",
+      roleInferenceState: "ready",
+    };
+    workflow.graph.revision += 1;
+    return route.fulfill({ json: workflow.graph });
+  });
+  await page.route("**/api/files/sign-upload", (route) => {
+    signedUpload = route.request().postDataJSON() as Record<string, unknown>;
+    return route.fulfill({ json: {
+      deduplicated: true,
+      file: {
+        id: "file-reference-1",
+        name: "reference.png",
+        status: "READY",
+        thumbnail1024Url: "/api/files/file-reference-1/thumbnail/1024",
+        thumbnail256Url: null,
+      },
+      upload: null,
+    } });
+  });
+  await page.route("**/api/files/file-reference-1/thumbnail/1024", (route) =>
     route.fulfill({
-      json:
-        route.request().method() === "PATCH"
-          ? {
-              batchId: "e2e-drop-save",
-              revision: 1,
-              savedAt: "2026-08-03T00:00:00.000Z",
-            }
-          : { elements: [], revision: 0, snapshot: null },
-    }),
-  );
-  await page.route("**/api/generations?*", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
-  );
-  await page.route("**/api/files/sign-upload", (route) =>
-    route.fulfill({
-      status: 503,
-      json: { message: "E2E 主动终止实际上传" },
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#718093"/></svg>',
     }),
   );
 
   await page.goto("/e2e-drop");
   await expect(page.getByText("E2E 拖放项目")).toBeVisible();
 
-  const dispatchFileDrag = (eventType: "dragenter" | "drop") =>
-    page.evaluate((type) => {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(
-        new File([new Uint8Array([137, 80, 78, 71])], "reference.png", {
-          type: "image/png",
-        }),
-      );
-      const x = Math.round(window.innerWidth / 2);
-      const y = Math.round(window.innerHeight / 2);
-      const target = document.elementFromPoint(x, y) ?? document.body;
-      target.dispatchEvent(
-        new DragEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          clientX: x,
-          clientY: y,
-          dataTransfer,
-        }),
-      );
-    }, eventType);
+  await page.getByRole("button", { name: "＋ 添加素材" }).click();
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: /上传图片 廓形/u }).click();
+  await (await chooserPromise).setFiles({
+    buffer: Buffer.from([137, 80, 78, 71]),
+    mimeType: "image/png",
+    name: "reference.png",
+  });
 
-  await dispatchFileDrag("dragenter");
-  await expect(page.getByText("DROP / IMAGE", { exact: true })).toBeVisible();
-
-  await dispatchFileDrag("drop");
-  await expect(page.getByText("DROP / IMAGE", { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByRole("complementary", { name: "图片上传状态" }),
-  ).toContainText("reference.png");
-  await expect(page.getByText("reference.png", { exact: true })).toHaveCount(1);
+  await expect.poll(() => signedUpload).toMatchObject({
+    projectId: "e2e-drop",
+    name: "reference.png",
+    mimeType: "image/png",
+    size: 4,
+  });
+  await expect.poll(() => workflow.graph.nodes.filter((node) => node.type === "reference_image")).toHaveLength(1);
+  await expect.poll(() => inferredNodeId).toBe(workflow.graph.nodes[0]?.id);
+  expect(workflow.graph.nodes[0]?.payload).toMatchObject({
+    fileAssetId: "file-reference-1",
+    imageUrl: "/api/files/file-reference-1/thumbnail/1024",
+    sourceName: "reference.png",
+    role: "silhouette_ref",
+    roleSource: "inferred",
+    roleInferenceState: "ready",
+  });
+  await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
+  await expect(page.getByText(/当前标签：廓形参考 · 模型建议/u)).toBeVisible();
+  await page.reload();
+  await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
+  expect(workflow.semanticMutations).toHaveLength(1);
 });
 
-test("面料库支持点击和拖放上传，并可添加到白板", async ({ page }) => {
+test("独立面料库支持点击和拖放上传，并可按原始 ID 引入工作流", async ({ page }) => {
   const userFabrics: Array<Record<string, unknown>> = [];
   let uploadCount = 0;
 
@@ -419,24 +525,10 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
   await page.route("**/api/collections?projectId=e2e-fabric", (route) =>
     route.fulfill({ json: [] }),
   );
-  await page.route("**/api/projects/e2e-fabric/board", (route) =>
-    route.fulfill({
-      json:
-        route.request().method() === "PATCH"
-          ? {
-              batchId: "e2e-fabric-save",
-              revision: 1,
-              savedAt: "2026-08-03T00:00:00.000Z",
-            }
-          : { elements: [], revision: 0, snapshot: null },
-    }),
-  );
-  await page.route("**/api/generations?*", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
-  );
+  const workflow = await mockEditableWorkflow(page, "e2e-fabric");
   await page.route("**/api/fabrics?*", (route) => {
     const scope = new URL(route.request().url()).searchParams.get("scope");
-    const items = scope === "user" ? userFabrics : [];
+    const items = scope === "preset" ? [] : userFabrics;
     return route.fulfill({
       json: { items, limit: 48, page: 1, total: items.length, totalPages: 1 },
     });
@@ -465,41 +557,28 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
     await route.fulfill({ json: created, status: 201 });
   });
 
-  await page.goto("/e2e-fabric");
-  await page.getByRole("button", { name: "打开面料库" }).click();
-  const drawer = page.getByRole("complementary", { name: "面料抽屉" });
-  await expect(drawer).toBeVisible();
-  await expect
-    .poll(() => drawer.evaluate((target) => getComputedStyle(target).boxShadow))
-    .toBe("none");
+  await page.goto("/fabrics");
+  const uploadPanel = page.getByRole("region", { name: "上传面料" });
+  await expect(uploadPanel).toBeVisible();
 
   const fileChooserPromise = page.waitForEvent("filechooser");
-  await drawer.getByRole("button", { name: /添加面料/u }).click();
+  await uploadPanel.getByRole("button", { name: /添加面料/u }).click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
     buffer: Buffer.from([137, 80, 78, 71]),
     mimeType: "image/png",
     name: "click-fabric.png",
   });
-  await drawer.getByRole("textbox", { name: "标签" }).fill("click-fabric");
-  await drawer.getByRole("button", { name: "保存到面料库" }).click();
+  await uploadPanel.getByRole("textbox", { name: "标签" }).fill("click-fabric");
+  await uploadPanel.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(1);
-  await expect(drawer.getByRole("button", { name: "我的" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  const clickFabricCard = drawer.getByRole("article", {
+  const clickFabricCard = page.getByRole("article", {
     name: "click-fabric，拖拽到白板",
   });
   await expect(clickFabricCard.getByText("#click-fabric")).toBeVisible();
-  await expect
-    .poll(() =>
-      clickFabricCard.evaluate((target) => getComputedStyle(target).boxShadow),
-    )
-    .toBe("none");
 
   const manageFabricButton = clickFabricCard.getByRole("button", {
-    name: "管理 / 删除",
+    name: "管理面料：click-fabric",
   });
   await manageFabricButton.click();
   const fabricDialog = page.getByRole("dialog", { name: "管理或删除面料" });
@@ -513,7 +592,6 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
   await expect(fabricDialog).toHaveCount(0);
   await expect(manageFabricButton).toBeFocused();
 
-  const uploadPanel = drawer.getByRole("region", { name: "上传面料" });
   await uploadPanel.evaluate((target) => {
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(
@@ -536,383 +614,204 @@ test("面料库支持点击和拖放上传，并可添加到白板", async ({ pa
       }),
     );
   });
-  await drawer.getByRole("textbox", { name: "标签" }).fill("drop-fabric");
-  await drawer.getByRole("button", { name: "保存到面料库" }).click();
+  await uploadPanel.getByRole("textbox", { name: "标签" }).fill("drop-fabric");
+  await uploadPanel.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(2);
   await expect(
-    drawer
-      .getByRole("article", { name: "drop-fabric，拖拽到白板" })
+    page.getByRole("article", { name: "drop-fabric，拖拽到白板" })
       .getByText("#drop-fabric"),
   ).toBeVisible();
 
-  await clickFabricCard.getByRole("button", { name: "添加到白板" }).click();
-  await expect(drawer).toHaveCount(0);
-  await expect(page.locator('img[alt="click-fabric"]')).toHaveCount(1);
+  await page.goto("/e2e-fabric");
+  await page.getByRole("button", { name: "＋ 添加素材" }).click();
+  await page.getByRole("button", { name: /面料库 引用现有面料记录/u }).click();
+  const library = page.getByRole("region", { name: "选择面料" });
+  await expect(library).toBeVisible();
+  await library.getByRole("button", { name: /click-fabric/u }).click();
+  await expect.poll(() => workflow.graph.nodes.filter((node) => node.type === "fabric")).toHaveLength(1);
+  expect(workflow.graph.nodes[0]?.payload).toMatchObject({
+    fabricId: "fabric-upload-1",
+    imageUrl: "/api/fabrics/fabric-upload-1/image",
+  });
+  await expect(page.locator('[data-type="fabric"]')).toHaveCount(1);
+  await page.reload();
+  await expect(page.locator('[data-type="fabric"]')).toHaveCount(1);
 });
 
-test("框选约束后生成结果自动落为带 assetId 的白板图片", async ({ page }) => {
-  let persistedAssetId: string | undefined;
-  let persistedRole: string | undefined;
-  let persistedSnapshot: unknown = null;
-  let generationIdempotencyKey: string | undefined;
-  let generationRequestCount = 0;
-  let candidateDisposition: string | undefined;
-  const task = {
-    id: "task-e2e-1",
-    taskType: "t2i",
-    status: "succeeded",
-    request: {
-      height: 1024,
-      projectId: "e2e-project",
-      prompt: "保留便签约束的利落廓形外套",
-      shapeIds: [],
-      taskType: "t2i",
-      width: 1024,
+test("约束与参考生成的候选只落图一次，保留来源、尝试与 PNG 导出", async ({ page }) => {
+  const workflow = await mockEditableWorkflow(page, "e2e-project", {
+    revision: 1,
+    nodes: [
+      workflowNode("constraint", "asset", "constraint", "秋冬通勤约束", {
+        text: "利落廓形、藏蓝色、适合通勤",
+      }, 40, 100),
+      workflowNode("reference", "asset", "reference_image", "廓形参考", {
+        fileAssetId: "file-reference-1",
+        imageUrl: "/api/files/file-reference-1/thumbnail/1024",
+        sourceName: "reference.png",
+        role: "silhouette_ref",
+        roleSource: "inferred",
+        roleInferenceState: "ready",
+      }, 40, 420),
+      workflowNode("generate", "tool", "generate_design", "方案生成", {
+        toolKey: "generate_design",
+        toolVersion: "1",
+        params: { prompt: "保留利落廓形外套", count: 1, width: 768, height: 1024 },
+      }, 390, 220, "ready"),
+    ],
+    edges: [
+      { id: "constraint-input", sourceNodeId: "constraint", sourcePort: "out", targetNodeId: "generate", targetPort: "constraint" },
+      { id: "reference-input", sourceNodeId: "reference", sourcePort: "out", targetNodeId: "generate", targetPort: "reference" },
+    ],
+  });
+  let executeRequest: { mutationId?: string } | undefined;
+  let executeCount = 0;
+  let projected = false;
+  let candidateDecision: { assetId?: string; kind?: string; reason?: string; mutationId?: string } | undefined;
+
+  await page.route("**/api/me", (route) => route.fulfill({ json: {
+    credits: { limit: 100, remaining: 9, used: 91 },
+    user: {
+      authId: "auth-e2e",
+      avatar: null,
+      createdAt: WORKFLOW_NOW,
+      deletedAt: null,
+      email: "atelier@example.com",
+      id: "user-e2e",
+      name: "Atelier E2E",
     },
-    output: {
-      images: [
+  } }));
+  await page.route("**/api/projects/e2e-project", (route) => route.fulfill({ json: {
+    archived: false,
+    assetCount: 0,
+    coverAssetId: null,
+    coverUrl: null,
+    createdAt: WORKFLOW_NOW,
+    id: "e2e-project",
+    name: "E2E 生成项目",
+    updatedAt: WORKFLOW_NOW,
+  } }));
+  await page.route("**/api/projects/e2e-project/agent-conversations*", (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
+  await page.route("**/api/files/file-reference-1/thumbnail/1024", (route) => route.fulfill({
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#718093"/></svg>',
+  }));
+  await page.route("**/api/design-assets/asset-e2e-1/thumbnail", (route) => route.fulfill({
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><path d="M100 60h100l40 290H60z" fill="#3e463f"/></svg>',
+  }));
+  await page.route("**/api/design-assets/asset-e2e-1/content", (route) => route.fulfill({
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><path d="M100 60h100l40 290H60z" fill="#3e463f"/></svg>',
+  }));
+  await page.route("**/api/design-assets/asset-e2e-1/path", (route) =>
+    route.fulfill({ json: { steps: [], decisions: [], incomplete: false } }),
+  );
+  await page.route("**/api/projects/e2e-project/workflow/nodes/generate/execute", (route) => {
+    executeCount += 1;
+    executeRequest = route.request().postDataJSON() as { mutationId?: string };
+    const generator = workflow.graph.nodes.find((node) => node.id === "generate");
+    if (generator) generator.status = "running";
+    return route.fulfill({ json: workflow.graph });
+  });
+  await page.route("**/api/projects/e2e-project/workflow/nodes/generate/history", (route) =>
+    route.fulfill({ json: { items: [{
+      id: "attempt-e2e-1",
+      ordinal: 1,
+      status: "completed",
+      generationTaskId: "task-e2e-1",
+      error: null,
+      createdAt: WORKFLOW_NOW,
+      request: {
+        inputNodeIds: ["constraint", "reference"],
+        prompt: "保留利落廓形外套",
+        model: "amux/image-model",
+        referenceInputs: [{ role: "silhouette_ref", weight: 0.7 }],
+      },
+    }] } }),
+  );
+  await page.route("**/api/projects/e2e-project/workflow/nodes/candidate-e2e-1/decisions", (route) => {
+    candidateDecision = route.request().postDataJSON() as typeof candidateDecision;
+    return route.fulfill({ json: workflow.graph });
+  });
+  await page.route("**/api/projects/e2e-project/workflow/sync", (route) => {
+    if (executeCount > 0 && !projected) {
+      projected = true;
+      const generator = workflow.graph.nodes.find((node) => node.id === "generate");
+      if (generator) generator.status = "completed";
+      workflow.graph.nodes.push(workflowNode(
+        "candidate-e2e-1", "asset", "candidate", "候选 A",
         {
           assetId: "asset-e2e-1",
-          url: "https://assets.example/generated-look.png",
-          width: 768,
-          height: 1024,
+          generationTaskId: "task-e2e-1",
+          attemptId: "attempt-e2e-1",
+          imageUrl: "/api/design-assets/asset-e2e-1/content",
         },
-      ],
-    },
-    error: null,
-    createdAt: "2026-07-27T08:00:00.000Z",
-    updatedAt: "2026-07-27T08:00:01.000Z",
-  };
-  const taskWithDisposition = () => ({
-    ...task,
-    output: {
-      ...task.output,
-      candidateDispositions: candidateDisposition
-        ? { "0": candidateDisposition }
-        : {},
-    },
-  });
-
-  await page.route("**/api/me", async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        credits: { limit: 100, remaining: 9, used: 91 },
-        user: {
-          authId: "auth-e2e",
-          avatar: null,
-          createdAt: "2026-07-01T00:00:00.000Z",
-          deletedAt: null,
-          email: "atelier@example.com",
-          id: "user-e2e",
-          name: "Atelier E2E",
-        },
-      }),
-    });
-  });
-  await page.route("**/api/projects/e2e-project", (route) =>
-    route.fulfill({
-      json: {
-        archived: false,
-        assetCount: 0,
-        coverAssetId: null,
-        coverUrl: null,
-        createdAt: "2026-07-27T08:00:00.000Z",
-        id: "e2e-project",
-        name: "E2E 生成项目",
-        updatedAt: "2026-07-27T08:00:00.000Z",
-      },
-    }),
-  );
-  await page.route("**/api/collections?projectId=e2e-project", (route) =>
-    route.fulfill({ json: [] }),
-  );
-  await page.route(
-    "**/api/projects/e2e-project/agent-conversations?limit=50",
-    (route) =>
-      route.fulfill({
-        json: {
-          items: [
-            {
-              archivedAt: null,
-              createdAt: "2026-07-27T08:00:00.000Z",
-              id: "conversation-e2e-project",
-              messageCount: 0,
-              projectId: "e2e-project",
-              title: "新的设计对话",
-              updatedAt: "2026-07-27T08:00:00.000Z",
-            },
-          ],
-          nextCursor: null,
-        },
-      }),
-  );
-  await page.route(
-    "**/api/agent-conversations/conversation-e2e-project/messages?limit=50",
-    (route) => route.fulfill({ json: { items: [], nextCursor: null } }),
-  );
-  await page.route(
-    "**/api/agent-conversations/conversation-e2e-project/messages",
-    async (route) => {
-      if (route.request().method() !== "POST") return route.fallback();
-      const body = route.request().postDataJSON() as {
-        readonly clientRequestId: string;
-        readonly content: string;
-        readonly shapeIds: readonly string[];
-      };
-      const userMessage = {
-        clientRequestId: body.clientRequestId,
-        content: body.content,
-        context: { fileAssetIds: [], shapeIds: body.shapeIds },
-        createdAt: "2026-07-27T08:00:03.000Z",
-        error: null,
-        generationTaskId: null,
-        id: "user-e2e-generation",
-        replyToId: null,
-        role: "user",
-        status: "completed",
-        updatedAt: "2026-07-27T08:00:03.000Z",
-      };
-      const assistantMessage = {
-        ...userMessage,
-        clientRequestId: null,
-        content: "已按选中约束生成候选。",
-        generationTaskId: "task-e2e-1",
-        id: "assistant-e2e-generation",
-        replyToId: userMessage.id,
-        role: "assistant",
-      };
-      await route.fulfill({
-        json: { assistantMessage, taskId: "task-e2e-1", userMessage },
-        status: 201,
+        740, 220,
+      ));
+      workflow.graph.edges.push({
+        id: "generated-output",
+        sourceNodeId: "generate",
+        sourcePort: "out",
+        targetNodeId: "candidate-e2e-1",
+        targetPort: "source",
       });
-    },
-  );
-  await page.route("**/api/projects/e2e-project/board", async (route) => {
-    if (route.request().method() === "PATCH") {
-      const payload = route.request().postDataJSON() as {
-        readonly snapshot?: unknown;
-        readonly patches?: readonly {
-          readonly record?: {
-            readonly props?: {
-              readonly assetId?: string;
-              readonly role?: string;
-            };
-          };
-        }[];
-      };
-      persistedAssetId = payload.patches
-        ?.map((patch) => patch.record?.props?.assetId)
-        .find(Boolean);
-      persistedRole = payload.patches
-        ?.map((patch) => patch.record?.props?.role)
-        .find(Boolean);
-      persistedSnapshot = payload.snapshot ?? null;
-      await route.fulfill({
-        json: {
-          batchId: "e2e-board-save",
-          revision: 1,
-          savedAt: "2026-07-27T08:00:02.000Z",
-        },
-      });
-      return;
+      workflow.graph.revision += 1;
     }
-    await route.fulfill({
-      json: {
-        elements: [],
-        revision: persistedSnapshot ? 1 : 0,
-        snapshot: persistedSnapshot,
-      },
-    });
+    return route.fulfill({ json: workflow.graph });
   });
-  await page.route(
-    "**/api/projects/e2e-project/board-elements/roles",
-    (route) => route.fulfill({ json: { ok: true } }),
-  );
-  await page.route("**/api/generations?*", async (route) => {
-    await route.fulfill({
-      json: {
-        items: generationRequestCount > 0 ? [taskWithDisposition()] : [],
-        nextCursor: null,
-      },
-    });
-  });
-  await page.route(/\/api\/generations$/u, async (route) => {
-    generationRequestCount += 1;
-    generationIdempotencyKey = route.request().headers()["idempotency-key"];
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    await route.fulfill({
-      status: 202,
-      json: { task_id: "task-e2e-1" },
-    });
-  });
-  await page.route("**/api/generations/task-e2e-1/events", async (route) => {
-    await route.fulfill({
-      contentType: "text/event-stream",
-      body:
-        "event: generation\n" +
-        `data: ${JSON.stringify({
-          taskId: task.id,
-          status: task.status,
-          timestamp: task.updatedAt,
-        })}\n\n`,
-    });
-  });
-  await page.route(
-    "**/api/generations/task-e2e-1/candidates/0",
-    async (route) => {
-      candidateDisposition = (
-        route.request().postDataJSON() as { readonly disposition?: string }
-      ).disposition;
-      await route.fulfill({ json: taskWithDisposition() });
-    },
-  );
-  await page.route("**/api/generations/task-e2e-1", async (route) => {
-    await route.fulfill({ json: taskWithDisposition() });
-  });
-  await page.route(
-    "https://assets.example/generated-look.png",
-    async (route) => {
-      await route.fulfill({
-        contentType: "image/svg+xml",
-        body:
-          '<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024">' +
-          '<rect width="768" height="1024" fill="#c9b9a2"/>' +
-          '<path d="M260 210h248l76 620H184z" fill="#3e463f"/>' +
-          "</svg>",
-      });
-    },
-  );
 
   await page.goto("/e2e-project");
-  await expect(page.getByText("E2E 生成项目")).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "白板三步上手" }),
-  ).toContainText("上传参考");
-  const toolRail = page.getByRole("complementary", { name: "工具条" });
-  const sketchButton = toolRail.getByRole("button", {
-    name: "新建廓形草图",
-  });
-  await expect(sketchButton).toBeVisible();
-  await expect(
-    toolRail.getByRole("button", { name: "橡皮擦工具" }),
-  ).toHaveCount(0);
-  await sketchButton.click();
-  const sketchToolRail = page.getByRole("complementary", {
-    name: "草绘工具条",
-  });
-  await expect(
-    sketchToolRail.getByRole("button", { name: "局部橡皮" }),
-  ).toBeVisible();
-  page.once("dialog", (dialog) => dialog.accept());
-  await sketchToolRail.getByRole("button", { name: "退出" }).click();
-  await expect(toolRail).toBeVisible();
-  const arrowTool = toolRail.getByRole("button", { name: "箭头工具" });
-  await expect(arrowTool).toBeVisible();
-  await page.keyboard.press("Shift+L");
-  await expect(arrowTool).toHaveAttribute("aria-pressed", "true");
-  await expect(toolRail.getByRole("button", { name: "矩形工具" })).toHaveCount(
-    0,
-  );
-  await expect(toolRail.getByRole("button", { name: "添加Frame" })).toHaveCount(
-    0,
-  );
-  await expect(
-    toolRail.getByRole("button", { name: "固定素材" }),
-  ).toBeVisible();
-  await expect(page.locator(".tlui-main-toolbar")).toHaveCount(0);
-  const inspirationNoteButton = toolRail.getByRole("button", {
-    name: "添加灵感便签",
-  });
-  await expect(inspirationNoteButton).toBeVisible();
+  const canvas = page.getByRole("region", { name: "设计工作流画布" });
+  await expect(canvas.locator('[data-type="constraint"]')).toHaveCount(1);
+  await expect(canvas.locator('[data-type="reference_image"]')).toHaveCount(1);
+  const generationTool = canvas.locator('[data-type="generate_design"]');
+  await generationTool.click();
+  await expect(page.getByRole("button", { name: "确认并执行" })).toBeEnabled();
+  await page.getByRole("button", { name: "确认并执行" }).click();
 
-  await inspirationNoteButton.click();
-  await expect(page.getByTestId("style.panel")).toHaveCount(0);
-  const labelDesignPanel = page.locator('[data-label-design-panel="true"]');
-  await expect(labelDesignPanel).toHaveCount(0);
-  await page.getByRole("button", { name: "编辑标签：灵感" }).click();
-  await expect(labelDesignPanel).toBeVisible();
-  const styleRole = page.getByRole("radio", { name: /风格参考/u });
-  const noteRole = page.getByRole("radio", { name: /灵感/u });
-  await expect(noteRole).toHaveAttribute("aria-checked", "true");
-  await styleRole.focus();
-  await page.keyboard.press("End");
-  await expect(noteRole).toBeFocused();
-  await expect(noteRole).toHaveAttribute("aria-checked", "true");
-  await page.keyboard.press("Escape");
-  await expect(labelDesignPanel).toHaveCount(0);
-  await page.mouse.move(470, 220);
-  await page.mouse.down();
-  await page.mouse.move(810, 500, { steps: 12 });
-  await page.mouse.up();
-  await expect(labelDesignPanel).toHaveCount(0);
-  await page.getByRole("button", { name: "展开设计助手" }).click();
-  const promptInput = page.getByRole("textbox", { name: "编辑描述" });
-  const generateButton = page.getByRole("button", {
-    name: "发送",
-    exact: true,
+  await expect.poll(() => executeCount).toBe(1);
+  expect(executeRequest?.mutationId).toMatch(/^[0-9a-f-]{36}$/u);
+  await expect(canvas.locator('[data-type="candidate"]')).toHaveCount(1);
+  expect(workflow.graph.nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
+  expect(workflow.graph.nodes.find((node) => node.type === "candidate")?.payload).toMatchObject({
+    assetId: "asset-e2e-1",
+    generationTaskId: "task-e2e-1",
+    attemptId: "attempt-e2e-1",
   });
-  const agentPanel = page.getByRole("complementary", {
-    name: "设计助手",
+  expect(workflow.graph.edges).toContainEqual({
+    id: "generated-output",
+    sourceNodeId: "generate",
+    sourcePort: "out",
+    targetNodeId: "candidate-e2e-1",
+    targetPort: "source",
   });
-  await promptInput.fill("保留便签约束的利落廓形外套");
-  await expect(generateButton).toBeEnabled();
-  await generateButton.click();
-  await expect(agentPanel).toContainText("已按选中约束生成候选。");
 
-  await expect(
-    page.getByRole("complementary", { name: "生成任务托盘" }),
-  ).toHaveCount(0);
-  await expect(
-    agentPanel.getByRole("region", { name: "本轮生成候选" }),
-  ).toHaveCount(0);
-  await expect(agentPanel).toContainText("成图已放到画布");
-  await expect(
-    agentPanel.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).toHaveCount(0);
+  await generationTool.click();
+  await page.getByRole("button", { name: "查看尝试记录" }).click();
+  await expect(page.getByText("来源：秋冬通勤约束、廓形参考")).toBeVisible();
+  await expect(page.getByText("参考角色：silhouette_ref · 权重 0.7")).toBeVisible();
+  await canvas.locator('[data-type="candidate"]').click();
+  await expect(page.getByRole("button", { name: "打开大图、版本与局部重绘" })).toBeVisible();
+  await page.getByPlaceholder("记录选择或否决理由").fill("更符合通勤场景");
+  await page.getByRole("button", { name: "保存决定" }).click();
+  await expect.poll(() => candidateDecision).toMatchObject({
+    assetId: "asset-e2e-1",
+    kind: "selected",
+    reason: "更符合通勤场景",
+  });
+  expect(candidateDecision?.mutationId).toMatch(/^[0-9a-f-]{36}$/u);
 
-  await expect(
-    page.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).not.toHaveCount(0);
-  await expect
-    .poll(() => persistedAssetId, { timeout: 5_000 })
-    .toBe("asset-e2e-1");
-  await expect.poll(() => persistedRole).toBe("garment_ref");
-  await expect.poll(() => candidateDisposition).toBe("adopted");
-
-  await page.getByRole("button", { name: "打开历史" }).click();
-  const generationHistory = page.getByRole("region", { name: "历史记录" });
-  await generationHistory.getByRole("tab", { name: "生成" }).click();
-  await expect(
-    generationHistory.locator(
-      'img[src="https://assets.example/generated-look.png"]',
-    ),
-  ).toHaveCount(1);
-  await expect(
-    generationHistory.getByRole("button", { name: "采纳" }),
-  ).toHaveCount(0);
-  await generationHistory.getByRole("button", { name: "返回对话" }).click();
-
-  await page.getByRole("button", { name: "导出", exact: true }).click();
-  const exportOptions = page.getByRole("region", { name: "导出选项" });
-  await expect(exportOptions).toContainText("将画布中的全部 2 个元素导出");
-  await expect(
-    exportOptions.getByRole("button", { name: "下载整个画布" }),
-  ).toBeEnabled();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出 PNG" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("fashion-workflow-e2e-project.png");
 
   await page.reload();
-  await expect(
-    page.getByRole("complementary", { name: "生成任务托盘" }),
-  ).toHaveCount(0);
-  await expect(
-    page.locator('img[src="https://assets.example/generated-look.png"]'),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "打开历史" }).click();
-  const restoredHistory = page.getByRole("region", { name: "历史记录" });
-  await restoredHistory.getByRole("tab", { name: "生成" }).click();
-  await expect(
-    restoredHistory.locator(
-      'img[src="https://assets.example/generated-look.png"]',
-    ),
-  ).toHaveCount(0);
+  await expect(canvas.locator('[data-type="candidate"]')).toHaveCount(1);
+  await expect(canvas.locator('[data-type="reference_image"]')).toHaveCount(1);
+  expect(workflow.graph.nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
+  expect(executeCount).toBe(1);
 });

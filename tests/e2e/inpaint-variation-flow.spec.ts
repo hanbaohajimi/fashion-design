@@ -1,490 +1,235 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import type { WorkflowGraph, WorkflowNode, WorkflowOperation } from "../../apps/web/src/modules/board/workflow/workflow-api";
 
-test("画布成衣可提交局部重绘并获得明确反馈", async ({ page }) => {
-  test.setTimeout(60_000);
-  const requests: Record<string, unknown>[] = [];
-  const taskDetails = new Map<string, Record<string, unknown>>();
-  let sequence = 0;
-  let sourceTaskReads = 0;
-  let inpaintTaskReads = 0;
-  let linkedInpaintTaskId: string | undefined;
+const PROJECT_ID = "e2e-inpaint";
+const NOW = "2026-10-14T08:00:00.000Z";
+test.setTimeout(60_000);
+
+function node(id: string, type: WorkflowNode["type"], title: string, x: number, y: number, payload: WorkflowNode["payload"]): WorkflowNode {
+  return { id, kind: "asset", type, title, x, y, payload, status: "completed", createdAt: NOW, updatedAt: NOW };
+}
+
+async function mockEditing(page: Page) {
+  let graph: WorkflowGraph = { projectId: PROJECT_ID, revision: 1, layoutRevision: 0, legacyAvailable: false, nodes: [
+    node("source", "candidate", "原始短款外套", 40, 100, { assetId: "asset-source", imageUrl: "/api/design-assets/asset-source/thumbnail", text: "结构清晰的短款外套" }),
+    node("palette", "swatch", "色卡 01", 40, 450, { color: "#C8AB84", text: "OAT" }),
+  ], edges: [] };
   let uploadedMaskBytes = 0;
   let uploadedMaskDimensions: { height: number; width: number } | null = null;
-  let rejectedInpaintOnce = false;
-  let rejectedInpaintRequest: Record<string, unknown> | undefined;
-  const candidateDispositionRequests: Array<{
-    disposition: string;
-    taskId: string;
-  }> = [];
-
-  await page.route("**/api/me", (route) =>
-    route.fulfill({
-      json: {
-        credits: { limit: 100, remaining: 20, used: 80 },
-        user: {
-          authId: "auth-e2e",
-          avatar: null,
-          createdAt: "2026-07-01T00:00:00.000Z",
-          deletedAt: null,
-          email: "atelier@example.com",
-          id: "user-e2e",
-          name: "Atelier E2E",
-        },
-      },
-    }),
-  );
-  await page.route("**/api/projects/e2e-inpaint", (route) =>
-    route.fulfill({
-      json: {
-        archived: false,
-        assetCount: 0,
-        coverAssetId: null,
-        coverUrl: null,
-        createdAt: "2026-07-27T08:00:00.000Z",
-        id: "e2e-inpaint",
-        name: "E2E 局部编辑项目",
-        updatedAt: "2026-07-27T08:00:00.000Z",
-      },
-    }),
-  );
-  await page.route("**/api/collections?projectId=e2e-inpaint", (route) =>
-    route.fulfill({ json: [] }),
-  );
-  await page.route("**/api/projects/e2e-inpaint/board", async (route) => {
-    await route.fulfill(
-      route.request().method() === "PATCH"
-        ? {
-            json: {
-              batchId: "e2e-board-save",
-              revision: 1,
-              savedAt: "2026-07-27T08:00:02.000Z",
-            },
-          }
-        : { json: { elements: [], revision: 0, snapshot: null } },
-    );
-  });
-  await page.route("**/api/generations/masks/sign", async (route) => {
-    const body = route.request().postDataJSON() as {
-      readonly checksumSha256: string;
-      readonly height: number;
-      readonly width: number;
-    };
+  let uploadCount = 0;
+  let failNextExecution = false;
+  let rejectNextPatch = false;
+  let abortCommittedPatch = false;
+  let outputSequence = 0;
+  const patchRequests: Array<{ mutationId: string; operations: WorkflowOperation[] }> = [];
+  const executions: Array<{ toolId: string; parentAssetId: string; params: Record<string, unknown> }> = [];
+  const paths: Array<{ method: string; url: string }> = [];
+  await page.route("**/api/me", (route) => route.fulfill({ json: {
+    credits: { limit: 100, remaining: 20, used: 80 },
+    user: { authId: "auth-e2e", avatar: null, createdAt: NOW, deletedAt: null, email: "atelier@example.com", id: "user-e2e", name: "Atelier E2E" },
+  } }));
+  await page.route("**/api/projects/" + PROJECT_ID, (route) => route.fulfill({ json: { id: PROJECT_ID, name: "E2E 局部编辑项目", archived: false, assetCount: 1, coverAssetId: null, coverUrl: null, createdAt: NOW, updatedAt: NOW } }));
+  await page.route("**/api/design-assets/*/path", (route) => route.fulfill({ json: { steps: [], decisions: [], incomplete: false } }));
+  await page.route(/\/api\/design-assets\/[^/]+\/(?:content|thumbnail)$/u, (route) => route.fulfill({
+    contentType: "image/svg+xml",
+    body: '<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024"><rect width="768" height="1024" fill="#c8b79f"/><path d="M240 180h288l80 680H160z" fill="#39443e"/></svg>',
+  }));
+  await page.route("**/api/generations/masks/sign", (route) => {
+    const body = route.request().postDataJSON() as { checksumSha256: string; height: number; width: number };
     expect(body.checksumSha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
     expect(body).toMatchObject({ height: 1024, width: 768 });
-    await route.fulfill({
-      json: {
-        expiresAt: "2026-07-27T09:00:00.000Z",
-        maskId: "mask-e2e",
-        maskUrl: "https://signed.example/mask-e2e.png?read=1",
-        upload: {
-          headers: {
-            "Content-Type": "image/png",
-            "x-amz-checksum-sha256": body.checksumSha256,
-          },
-          method: "PUT",
-          url: "https://signed.example/mask-e2e.png?write=1",
-        },
-      },
-    });
+    return route.fulfill({ json: { expiresAt: NOW, maskId: "mask-e2e", maskUrl: "https://signed.example/mask-e2e.png?read=1", upload: {
+      headers: { "Content-Type": "image/png", "x-amz-checksum-sha256": body.checksumSha256 }, method: "PUT", url: "https://signed.example/mask-e2e.png?write=1",
+    } } });
   });
-  await page.route(
-    "https://signed.example/mask-e2e.png?write=1",
-    async (route) => {
-      const png = route.request().postDataBuffer();
-      uploadedMaskBytes = png?.byteLength ?? 0;
-      if (png && png.byteLength >= 24) {
-        uploadedMaskDimensions = {
-          height: png.readUInt32BE(20),
-          width: png.readUInt32BE(16),
-        };
-      }
-      await route.fulfill({ status: 200 });
-    },
-  );
-  await page.route("**/api/generations?*", (route) =>
-    route.fulfill({ json: { items: [], nextCursor: null } }),
-  );
-  await page.route(
-    "**/api/projects/e2e-inpaint/agent-conversations*",
-    (route) =>
-      route.fulfill({
-        json: {
-          items: [
-            {
-              archivedAt: null,
-              createdAt: "2026-07-27T08:00:00.000Z",
-              id: "conversation-inpaint",
-              messageCount: 0,
-              projectId: "e2e-inpaint",
-              title: "新的设计对话",
-              updatedAt: "2026-07-27T08:00:00.000Z",
-            },
-          ],
-          nextCursor: null,
-        },
-      }),
-  );
-  await page.route(
-    "**/api/agent-conversations/conversation-inpaint/messages*",
-    async (route) => {
-      if (route.request().method() !== "POST")
-        return route.fulfill({ json: { items: [], nextCursor: null } });
-      const body = route.request().postDataJSON() as {
-        readonly clientRequestId: string;
-        readonly content: string;
-        readonly shapeIds: readonly string[];
-      };
-      const userMessage = {
-        clientRequestId: body.clientRequestId,
-        content: body.content,
-        context: { fileAssetIds: [], shapeIds: body.shapeIds },
-        createdAt: "2026-07-27T08:00:00.000Z",
-        error: null,
-        generationTaskId: null,
-        id: "user-inpaint",
-        replyToId: null,
-        role: "user",
-        status: "completed",
-        updatedAt: "2026-07-27T08:00:00.000Z",
-      };
-      const assistantMessage = {
-        ...userMessage,
-        clientRequestId: null,
-        content: "已生成基础方案。",
-        generationTaskId: "task-source",
-        id: "assistant-inpaint",
-        replyToId: userMessage.id,
-        role: "assistant",
-      };
-      taskDetails.set("task-source", {
-        createdAt: "2026-07-27T08:00:00.000Z",
-        error: null,
-        id: "task-source",
-        output: {
-          images: [
-            {
-              assetId: "asset-source",
-              height: 1024,
-              url: "https://assets.example/source.png",
-              width: 768,
-            },
-          ],
-        },
-        request: {
-          height: 1024,
-          projectId: "e2e-inpaint",
-          prompt: body.content,
-          shapeIds: body.shapeIds,
-          taskType: "t2i",
-          width: 768,
-        },
-        status: "succeeded",
-        taskType: "t2i",
-        updatedAt: "2026-07-27T08:00:00.000Z",
-      });
-      return route.fulfill({
-        json: { assistantMessage, taskId: "task-source", userMessage },
-        status: 201,
-      });
-    },
-  );
-  await page.route(
-    "**/api/agent-conversations/conversation-inpaint/generation-tasks/*",
-    async (route) => {
-      linkedInpaintTaskId = new URL(route.request().url()).pathname
-        .split("/")
-        .at(-1);
-      const body = route.request().postDataJSON() as {
-        readonly content: string;
-      };
-      await route.fulfill({
-        json: {
-          clientRequestId: null,
-          content: body.content,
-          context: { fileAssetIds: [], shapeIds: [] },
-          createdAt: "2026-07-27T08:00:03.000Z",
-          error: null,
-          generationTaskId: linkedInpaintTaskId,
-          id: "assistant-inpaint-result",
-          replyToId: null,
-          role: "assistant",
-          status: "completed",
-          updatedAt: "2026-07-27T08:00:03.000Z",
-        },
-        status: 201,
-      });
-    },
-  );
-  await page.route(/\/api\/generations$/u, async (route) => {
-    const body = route.request().postDataJSON() as Record<string, unknown>;
-    const taskType = String(body.taskType);
-    if (taskType === "inpaint" && !rejectedInpaintOnce) {
-      rejectedInpaintOnce = true;
-      rejectedInpaintRequest = body;
-      await route.fulfill({
-        status: 503,
-        json: { message: "模拟局部重绘创建失败" },
-      });
-      return;
+  await page.route("https://signed.example/mask-e2e.png?write=1", (route) => {
+    const png = route.request().postDataBuffer();
+    uploadCount += 1;
+    uploadedMaskBytes = png?.byteLength ?? 0;
+    if (png && png.byteLength >= 24) uploadedMaskDimensions = { height: png.readUInt32BE(20), width: png.readUInt32BE(16) };
+    return route.fulfill({ status: 200 });
+  });
+  // 编辑应沿工作流工具执行；若旧路径被意外调用，立即阻断真实生成请求。
+  await page.route(/\/api\/generations$/u, (route) => {
+    paths.push({ method: route.request().method(), url: route.request().url() });
+    return route.fulfill({ status: 400, json: { message: "编辑应从工作流执行" } });
+  });
+  await page.route("**/api/projects/" + PROJECT_ID + "/workflow", (route) => {
+    if (route.request().method() !== "PATCH") return route.fulfill({ json: graph });
+    const body = route.request().postDataJSON() as { mode: string; mutationId: string; operations?: WorkflowOperation[] };
+    if (body.mode !== "semantic") return route.fulfill({ json: graph });
+    patchRequests.push({ mutationId: body.mutationId, operations: body.operations ?? [] });
+    if (rejectNextPatch) { rejectNextPatch = false; graph = { ...graph, revision: graph.revision + 1 }; return route.fulfill({ status: 409, json: { message: "模拟图修订冲突" } }); }
+    let nodes = [...graph.nodes];
+    let edges = [...graph.edges];
+    for (const operation of body.operations ?? []) {
+      if (operation.type === "add_node" && !nodes.some((item) => item.id === operation.node.id)) nodes.push({ ...operation.node, status: "ready", createdAt: NOW, updatedAt: NOW });
+      if (operation.type === "add_edge" && !edges.some((item) => item.id === operation.edge.id)) edges.push(operation.edge);
+      if (operation.type === "remove_node") { nodes = nodes.filter((item) => item.id !== operation.nodeId); edges = edges.filter((item) => item.sourceNodeId !== operation.nodeId && item.targetNodeId !== operation.nodeId); }
     }
-    requests.push(body);
-    sequence += 1;
-    const id =
-      taskType === "t2i" ? "task-source" : `task-${taskType}-${sequence}`;
-    const imageUrl =
-      taskType === "t2i"
-        ? "https://assets.example/source.png"
-        : taskType === "inpaint"
-          ? "https://assets.example/inpaint.png"
-          : `https://assets.example/variation-${sequence}.png`;
-    const timestamp = new Date(
-      Date.parse("2026-07-27T08:00:00.000Z") + sequence * 1000,
-    ).toISOString();
-    taskDetails.set(id, {
-      createdAt: timestamp,
-      error: null,
-      id,
-      output: {
-        images: [{ height: 1024, url: imageUrl, width: 768 }],
-      },
-      status: "succeeded",
-      updatedAt: timestamp,
-    });
-    await route.fulfill({ status: 202, json: { task_id: id } });
+    graph = { ...graph, nodes, edges, revision: graph.revision + 1 };
+    if (abortCommittedPatch) { abortCommittedPatch = false; return route.abort("connectionfailed"); }
+    return route.fulfill({ json: graph });
   });
-  await page.route(/\/api\/generations\/[^/]+\/events$/u, async (route) => {
-    const taskId = new URL(route.request().url()).pathname.split("/").at(-2);
-    if (taskId === "task-source") {
-      await route.abort("connectionfailed");
-      return;
+  await page.route("**/api/projects/" + PROJECT_ID + "/workflow/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/sync")) return route.fulfill({ json: graph });
+    if (path.endsWith("/execute")) {
+      const toolId = path.split("/").at(-2) ?? "";
+      const tool = graph.nodes.find((item) => item.id === toolId);
+      const sourceEdge = graph.edges.find((item) => item.targetNodeId === toolId && item.targetPort === "source");
+      const source = graph.nodes.find((item) => item.id === sourceEdge?.sourceNodeId);
+      expect(tool?.type).toBe("edit_design");
+      expect(source?.type).toBe("candidate");
+      const params = tool?.payload.params as Record<string, unknown>;
+      executions.push({ toolId, parentAssetId: String(source?.payload.assetId), params });
+      if (failNextExecution) { failNextExecution = false; return route.fulfill({ status: 503, json: { message: "模拟修改任务创建失败" } }); }
+      outputSequence += 1;
+      const outputId = "edited-" + outputSequence;
+      const output = node(outputId, "candidate", String(params.taskType) === "inpaint" ? "局部重绘结果 " + outputSequence : "变体结果 " + outputSequence, 740, 100 + (outputSequence - 1) * 320, { assetId: "asset-" + outputId, imageUrl: "/api/design-assets/asset-" + outputId + "/thumbnail", parentAssetId: source?.payload.assetId });
+      graph = { ...graph, revision: graph.revision + 1, nodes: [...graph.nodes.map((item) => item.id === toolId ? { ...item, status: "completed" } : item), output], edges: [...graph.edges, { id: "output-" + outputId, sourceNodeId: toolId, targetNodeId: output.id, sourcePort: "out", targetPort: "source" }] };
+      return route.fulfill({ json: graph });
     }
-    const detail = taskId ? taskDetails.get(taskId) : undefined;
-    await route.fulfill({
-      contentType: "text/event-stream",
-      body:
-        "event: generation\n" +
-        `data: ${JSON.stringify({
-          status: "succeeded",
-          taskId,
-          timestamp: detail?.updatedAt,
-        })}\n\n`,
-    });
+    return route.fulfill({ status: 404 });
   });
-  await page.route(/\/api\/generations\/[^/]+$/u, async (route) => {
-    const taskId = new URL(route.request().url()).pathname.split("/").at(-1);
-    const detail = taskDetails.get(taskId ?? "");
-    if (taskId?.startsWith("task-inpaint-")) {
-      inpaintTaskReads += 1;
-    }
-    if (taskId === "task-source" && detail) {
-      sourceTaskReads += 1;
-      const completed = sourceTaskReads >= 3;
-      await route.fulfill({
-        json: {
-          ...detail,
-          output: completed ? detail.output : null,
-          status: completed ? "succeeded" : "running",
-        },
-      });
-      return;
-    }
-    await route.fulfill({ json: detail });
-  });
-  await page.route(
-    /\/api\/generations\/[^/]+\/candidates\/\d+$/u,
-    async (route) => {
-      const taskId = new URL(route.request().url()).pathname.split("/").at(-3);
-      const body = route.request().postDataJSON() as {
-        readonly disposition: string;
-      };
-      candidateDispositionRequests.push({
-        disposition: body.disposition,
-        taskId: taskId ?? "",
-      });
-      await route.fulfill({ json: {}, status: 200 });
-    },
-  );
-  await page.route("https://assets.example/*.png", async (route) => {
-    const isInpaint = route.request().url().includes("inpaint");
-    await route.fulfill({
-      contentType: "image/svg+xml",
-      body:
-        '<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024">' +
-        `<rect width="768" height="1024" fill="${isInpaint ? "#b97962" : "#c8b79f"}"/>` +
-        '<path d="M240 180h288l80 680H160z" fill="#39443e"/>' +
-        "</svg>",
-    });
-  });
+  return { getGraph: () => graph, patchRequests, executions, paths, failExecution: () => { failNextExecution = true; }, rejectPatch: () => { rejectNextPatch = true; }, losePatchAck: () => { abortCommittedPatch = true; }, mask: () => ({ uploadedMaskBytes, uploadedMaskDimensions, uploadCount }) };
+}
 
-  await page.goto("/e2e-inpaint");
-  await page.getByLabel("选择要上传的图片").setInputFiles({
-    buffer: Buffer.from("not-an-image"),
-    mimeType: "text/plain",
-    name: "设计说明.txt",
-  });
-  const uploadTray = page.getByRole("complementary", {
-    name: "图片上传状态",
-  });
-  await expect(uploadTray).toContainText("仅支持 JPG、PNG、WebP 或 HEIC 图片");
-  await uploadTray.getByRole("button", { name: "移除“设计说明.txt”" }).click();
-  await expect(uploadTray).toBeHidden();
+async function openCandidate(page: Page, title = "原始短款外套") {
+  await page.locator('[data-type="candidate"]').filter({ has: page.getByText(title, { exact: true }) }).click();
+  await page.getByRole("tab", { name: "节点详情" }).click();
+  await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
+  return page.getByRole("dialog", { name: "候选资产工作台" });
+}
 
-  await page.getByRole("button", { name: "添加色卡" }).click();
-  await page.getByRole("button", { name: "便签" }).click();
-  await page.getByRole("button", { name: "展开设计助手" }).click();
-  await page
-    .getByRole("textbox", { name: "编辑描述" })
-    .fill("结构清晰的短款外套");
-  const sendButton = page.getByRole("button", { name: "发送", exact: true });
-  await expect(sendButton).toBeEnabled();
-  await sendButton.click();
-  const boardCanvas = page.getByTestId("canvas");
-  await expect(
-    boardCanvas.locator('img[src="https://assets.example/source.png"]'),
-  ).toBeVisible();
-  expect(sourceTaskReads).toBeGreaterThanOrEqual(3);
-
-  await page
-    .getByRole("button", { name: "折叠设计助手" })
-    .evaluate((button: HTMLButtonElement) => button.click());
-  const sourceImage = boardCanvas.locator(
-    'img[src="https://assets.example/source.png"]',
-  );
-  const sourceImageBounds = await sourceImage.boundingBox();
-  expect(sourceImageBounds).not.toBeNull();
-  if (!sourceImageBounds) return;
-  await page.mouse.click(
-    sourceImageBounds.x + sourceImageBounds.width / 2,
-    sourceImageBounds.y + sourceImageBounds.height / 2,
-  );
-  await page.getByRole("button", { name: "局部更改成衣" }).click();
-  await page
-    .getByRole("textbox", { name: "局部重绘说明" })
-    .fill("将领口改成窄驳领，保持原有面料");
-  const usePalette = page.getByRole("switch", { name: "使用色卡" });
-  await expect(usePalette).toBeEnabled();
-  await expect(usePalette).not.toBeChecked();
-  await page.getByRole("button", { name: "提交局部重绘" }).click();
-  await expect(page.getByText("请先涂抹需要修改的区域")).toBeVisible();
-
-  const canvas = page.getByLabel("局部重绘掩码画布");
-  const addCenterRegion = page.getByRole("button", {
-    name: "标记中央区域",
-  });
-  await addCenterRegion.focus();
+test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与父图，色卡按显式选择提交", async ({ page }) => {
+  const mocked = await mockEditing(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/" + PROJECT_ID);
+  await page.locator('input[type="file"]').setInputFiles({ buffer: Buffer.from("not-an-image"), mimeType: "text/plain", name: "设计说明.txt" });
+  await expect(page.getByRole("alert").filter({ hasText: "仅支持 JPG、PNG、WebP 或 HEIC 图片" })).toBeVisible();
+  await page.getByRole("button", { name: "关闭提示" }).click();
+  const workspace = await openCandidate(page);
+  await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
+  await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将领口改成窄驳领，保持原有面料");
+  await expect(workspace.getByRole("combobox")).toHaveValue("");
+  await workspace.getByRole("button", { name: "提交局部重绘" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("请先涂抹需要修改的区域");
+  const canvas = workspace.getByLabel("局部重绘掩码画布");
+  await workspace.getByRole("button", { name: "标记中央区域" }).focus();
   await page.keyboard.press("Enter");
   await expect(canvas).toHaveAttribute("data-stroke-count", "1");
-  await page.getByRole("button", { name: "清空" }).click();
+  await workspace.getByRole("button", { name: "清空", exact: true }).click();
   await expect(canvas).toHaveAttribute("data-stroke-count", "0");
-
   const bounds = await canvas.boundingBox();
   expect(bounds).not.toBeNull();
-  if (!bounds) return;
-  await canvas.click({
-    position: { x: bounds.width * 0.35, y: bounds.height * 0.35 },
-  });
-  await canvas.click({
-    position: { x: bounds.width * 0.55, y: bounds.height * 0.5 },
-  });
+  await canvas.click({ position: { x: (bounds?.width ?? 0) * 0.35, y: (bounds?.height ?? 0) * 0.35 } });
+  await canvas.click({ position: { x: (bounds?.width ?? 0) * 0.55, y: (bounds?.height ?? 0) * 0.5 } });
   await expect(canvas).toHaveAttribute("data-stroke-count", "2");
-  await page.getByRole("button", { name: "撤销一笔" }).click();
+  await workspace.getByRole("button", { name: "撤销一笔" }).click();
   await expect(canvas).toHaveAttribute("data-stroke-count", "1");
-
-  await page.getByLabel("掩码画笔尺寸").fill("0.16");
-  await page.mouse.move(
-    bounds.x + bounds.width * 0.28,
-    bounds.y + bounds.height * 0.3,
-  );
+  await workspace.getByLabel("掩码画笔尺寸").fill("0.16");
+  await page.mouse.move((bounds?.x ?? 0) + (bounds?.width ?? 0) * 0.28, (bounds?.y ?? 0) + (bounds?.height ?? 0) * 0.3);
   await page.mouse.down();
-  await page.mouse.move(
-    bounds.x + bounds.width * 0.7,
-    bounds.y + bounds.height * 0.7,
-    {
-      steps: 18,
-    },
-  );
+  await page.mouse.move((bounds?.x ?? 0) + (bounds?.width ?? 0) * 0.7, (bounds?.y ?? 0) + (bounds?.height ?? 0) * 0.7, { steps: 18 });
   await page.mouse.up();
-  await page.getByRole("button", { name: "提交局部重绘" }).click();
-  const candidateDialog = page.getByRole("dialog", {
-    name: "候选设计详情",
-  });
-  await expect(candidateDialog.getByRole("alert")).toContainText(
-    "模拟局部重绘创建失败",
-  );
-  await expect(candidateDialog).toBeVisible();
-  expect(rejectedInpaintRequest).toBeDefined();
-  expect(rejectedInpaintRequest).not.toHaveProperty("palette");
-  await usePalette.check();
-  const paletteOption = page.getByRole("radio", { name: /色卡 01/u });
-  await expect(paletteOption).toBeChecked();
-  await page.getByRole("button", { name: "提交局部重绘" }).click();
+  mocked.failExecution();
+  await workspace.getByRole("button", { name: "提交局部重绘" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("模拟修改任务创建失败");
+  await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toBeDisabled();
+  expect(mocked.executions[0]?.params).not.toHaveProperty("palette");
+  expect(mocked.executions[0]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", prompt: "将领口改成窄驳领，保持原有面料", maskImageUrl: "https://signed.example/mask-e2e.png?read=1", width: 768, height: 1024 } });
+  await workspace.getByRole("button", { name: "重试执行当前修改节点" }).click();
+  await expect(workspace).toHaveCount(0);
+  expect(mocked.executions).toHaveLength(2);
+  expect(mocked.executions[1]?.toolId).toBe(mocked.executions[0]?.toolId);
+  expect(mocked.patchRequests).toHaveLength(1);
+  expect(mocked.mask().uploadCount).toBe(1);
+  expect(mocked.mask().uploadedMaskBytes).toBeGreaterThan(100);
+  expect(mocked.mask().uploadedMaskDimensions).toEqual({ height: 1024, width: 768 });
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  await openCandidate(page);
+  await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
+  await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将口袋改成贴袋，保持廓形");
+  await workspace.getByRole("combobox").selectOption("palette");
+  await workspace.getByRole("button", { name: "标记中央区域" }).click();
+  await workspace.getByRole("button", { name: "提交局部重绘" }).click();
+  await expect(workspace).toHaveCount(0);
+  expect(mocked.executions[2]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", palette: [{ hex: "#C8AB84", name: "色卡 01" }] } });
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
+  await page.reload();
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
+  await page.locator('[data-type="candidate"]').filter({ has: page.getByText("局部重绘结果 1", { exact: true }) }).click();
+  await page.getByRole("tab", { name: "节点详情" }).click();
+  await page.getByRole("button", { name: "从工作流移除节点" }).click();
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  expect(mocked.getGraph().edges.some((edge) => edge.sourceNodeId === "edited-1" || edge.targetNodeId === "edited-1")).toBe(false);
+  expect(mocked.getGraph().nodes.find((item) => item.id === "source")?.payload.assetId).toBe("asset-source");
+  expect(mocked.paths).toHaveLength(0);
+});
 
-  await expect.poll(() => uploadedMaskBytes).toBeGreaterThan(100);
-  await expect
-    .poll(() => uploadedMaskDimensions)
-    .toEqual({
-      height: 1024,
-      width: 768,
-    });
-  await expect
-    .poll(() => requests.filter((body) => body.taskType === "inpaint").length)
-    .toBe(1);
-  expect(requests.find((body) => body.taskType === "inpaint")).toMatchObject({
-    height: 1024,
-    maskImageUrl: "https://signed.example/mask-e2e.png?read=1",
-    palette: [{ hex: "#C8AB84", name: "OAT" }],
-    referenceImageUrl: "https://assets.example/source.png",
-    taskType: "inpaint",
-    width: 768,
-  });
-  await expect(
-    page.getByRole("status").filter({
-      hasText: "局部重绘任务已创建，正在画布中生成",
-    }),
-  ).toBeVisible();
-  await expect.poll(() => inpaintTaskReads).toBeGreaterThan(0);
-  await expect(
-    boardCanvas.locator('img[src="https://assets.example/inpaint.png"]'),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "打开历史" }).click();
-  await page.getByRole("tab", { name: "生成" }).click();
-  const generationHistory = page.getByRole("region", { name: "历史记录" });
-  await expect(
-    generationHistory.locator('img[src="https://assets.example/inpaint.png"]'),
-  ).toBeVisible();
+test("变体修改方向与保留项需显式确认，图冲突和执行失败重试不复制节点且保留父图", async ({ page }) => {
+  const mocked = await mockEditing(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/" + PROJECT_ID);
+  const workspace = await openCandidate(page);
+  await workspace.getByRole("button", { name: "生成变体", exact: true }).click();
+  expect(mocked.patchRequests).toHaveLength(0);
+  expect(mocked.executions).toHaveLength(0);
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("请描述变体需要如何修改");
+  await workspace.getByRole("textbox", { name: "变体修改说明" }).fill("探索更简洁的领型");
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("请明确需要保留的设计特征");
+  await workspace.getByRole("textbox", { name: "变体保留特征" }).fill("保持宽松廓形、原有面料与配色");
+  mocked.rejectPatch();
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("模拟图修订冲突");
+  expect(mocked.executions).toHaveLength(0);
+  mocked.failExecution();
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace.getByRole("alert")).toContainText("模拟修改任务创建失败");
+  expect(mocked.patchRequests).toHaveLength(2);
+  expect(mocked.patchRequests[1]?.mutationId).not.toBe(mocked.patchRequests[0]?.mutationId);
+  expect(mocked.patchRequests[1]?.operations).toEqual(mocked.patchRequests[0]?.operations);
+  expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
+  await workspace.getByRole("button", { name: "重试执行当前变体节点" }).click();
+  await expect(workspace).toHaveCount(0);
+  expect(mocked.executions).toHaveLength(2);
+  expect(mocked.executions[1]?.toolId).toBe(mocked.executions[0]?.toolId);
+  expect(mocked.executions[1]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "i2i", prompt: "探索更简洁的领型\n保持不变：保持宽松廓形、原有面料与配色", width: 768, height: 1024 } });
+  expect(mocked.executions[1]?.params).not.toHaveProperty("maskImageUrl");
+  expect(mocked.mask().uploadCount).toBe(0);
+  expect(mocked.getGraph().edges.find((item) => item.targetNodeId === mocked.executions[1]?.toolId)?.sourceNodeId).toBe("source");
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  expect(mocked.getGraph().nodes.find((item) => item.id === "source")?.payload.assetId).toBe("asset-source");
+  expect(mocked.paths).toHaveLength(0);
+});
 
-  const inpaintImage = boardCanvas.locator(
-    'img[src="https://assets.example/inpaint.png"]',
-  );
-  const inpaintImageBounds = await inpaintImage.boundingBox();
-  expect(inpaintImageBounds).not.toBeNull();
-  if (!inpaintImageBounds) return;
-  await page.mouse.click(
-    inpaintImageBounds.x + inpaintImageBounds.width / 2,
-    inpaintImageBounds.y + inpaintImageBounds.height / 2,
-  );
-  await page.keyboard.press("Delete");
-  await expect(inpaintImage).toHaveCount(0);
-  await expect
-    .poll(() =>
-      candidateDispositionRequests.some(
-        (request) =>
-          request.taskId.startsWith("task-inpaint-") &&
-          request.disposition === "dismissed",
-      ),
-    )
-    .toBe(true);
-
-  await page.getByRole("button", { name: "展开设计助手" }).click();
-  await page.getByRole("button", { name: "打开历史" }).click();
-  await page.getByRole("tab", { name: "生成" }).click();
-  const sourceCandidate = generationHistory
-    .locator('img[src="https://assets.example/source.png"]')
-    .locator("xpath=ancestor::article");
-  await sourceCandidate.getByRole("button", { name: "更多候选操作" }).click();
-  await sourceCandidate.getByRole("button", { name: "再来一版" }).click();
-  await expect
-    .poll(() => requests.filter((body) => body.taskType === "i2i").length)
-    .toBe(1);
-  await expect(inpaintImage).toHaveCount(0);
+test("变体分支已提交但响应丢失时，重试认领原节点且只执行一次", async ({ page }) => {
+  const mocked = await mockEditing(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/" + PROJECT_ID);
+  const workspace = await openCandidate(page);
+  await workspace.getByRole("button", { name: "生成变体", exact: true }).click();
+  await workspace.getByRole("textbox", { name: "变体修改说明" }).fill("探索不同的领口比例");
+  await workspace.getByRole("textbox", { name: "变体保留特征" }).fill("保留短款衣长与原有面料");
+  mocked.losePatchAck();
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace.getByRole("alert")).toBeVisible();
+  expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
+  expect(mocked.executions).toHaveLength(0);
+  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await expect(workspace).toHaveCount(0);
+  expect(mocked.patchRequests).toHaveLength(1);
+  expect(mocked.executions).toHaveLength(1);
+  const tool = mocked.getGraph().nodes.find((item) => item.type === "edit_design");
+  expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
+  expect(mocked.getGraph().edges.filter((item) => item.sourceNodeId === "source" && item.targetNodeId === tool?.id)).toHaveLength(1);
+  expect(mocked.executions[0]?.parentAssetId).toBe("asset-source");
+  expect(mocked.getGraph().nodes.filter((item) => item.type === "candidate")).toHaveLength(2);
 });

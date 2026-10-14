@@ -24,6 +24,7 @@ model User {
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
   agentRuns          AgentRun[]
+  workflowProposals  WorkflowProposal[]
   auditLogs          AuditLog[]
   designDecisions    DesignAssetDecision[]
   ownedWorkspaces    Workspace[]
@@ -150,6 +151,7 @@ model GenerationTask {
   agentMessage         AgentMessage?
   designStep           DesignStep?
   agentRunAttempt      AgentRunStepAttempt?
+  workflowAttempts     WorkflowAttempt[]
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -376,6 +378,9 @@ model Project {
   exportJobs         ExportJob[]
   designSteps        DesignStep[]
   agentRuns          AgentRun[]
+  workflowGraph      WorkflowGraph?
+  workflowProposals  WorkflowProposal[]
+  workflowAttempts   WorkflowAttempt[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -505,6 +510,113 @@ model BoardSnapshot {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("board_snapshots")
+}
+
+model WorkflowGraph {
+  projectId      String             @id @map("project_id")
+  revision       Int                @default(0)
+  layoutRevision Int                @default(0) @map("layout_revision")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  nodes          WorkflowNode[]
+  edges          WorkflowEdge[]
+  mutations      WorkflowMutation[]
+
+  @@map("workflow_graphs")
+}
+
+model WorkflowNode {
+  id            String            @id
+  projectId     String            @map("project_id")
+  kind          String
+  type          String
+  title         String
+  payload       Json
+  status        String            @default("ready")
+  x             Float
+  y             Float
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  graph         WorkflowGraph     @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+  outgoingEdges WorkflowEdge[]    @relation("WorkflowEdgeSource")
+  incomingEdges WorkflowEdge[]    @relation("WorkflowEdgeTarget")
+  attempts      WorkflowAttempt[]
+
+  @@index([projectId, createdAt])
+  @@map("workflow_nodes")
+}
+
+model WorkflowEdge {
+  id           String        @id
+  projectId    String        @map("project_id")
+  sourceNodeId String        @map("source_node_id")
+  targetNodeId String        @map("target_node_id")
+  sourcePort   String        @map("source_port")
+  targetPort   String        @map("target_port")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  graph        WorkflowGraph @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+  sourceNode   WorkflowNode  @relation("WorkflowEdgeSource", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode   WorkflowNode  @relation("WorkflowEdgeTarget", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sourceNodeId, targetNodeId, targetPort])
+  @@index([projectId, createdAt])
+  @@index([targetNodeId])
+  @@map("workflow_edges")
+}
+
+model WorkflowMutation {
+  id         String        @id @default(cuid(2))
+  projectId  String        @map("project_id")
+  mutationId String        @map("mutation_id")
+  mode       String
+  requestHash String       @map("request_hash")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  graph      WorkflowGraph @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
+
+  @@unique([projectId, mutationId])
+  @@index([projectId, createdAt])
+  @@map("workflow_mutations")
+}
+
+model WorkflowProposal {
+  id           String   @id @default(cuid(2))
+  projectId    String   @map("project_id")
+  userId       String   @map("user_id")
+  baseRevision Int      @map("base_revision")
+  status       String   @default("pending")
+  diff         Json
+  evidence     Json
+  mutationId   String   @map("mutation_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, mutationId])
+  @@index([projectId, createdAt])
+  @@map("workflow_proposals")
+}
+
+model WorkflowAttempt {
+  id               String          @id @default(cuid(2))
+  projectId        String          @map("project_id")
+  toolNodeId       String          @map("tool_node_id")
+  ordinal          Int
+  executionKey     String          @unique @map("execution_key")
+  status           String
+  requestSnapshot  Json            @map("request_snapshot")
+  generationTaskId String?         @map("generation_task_id")
+  error            String?         @db.Text
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  toolNode         WorkflowNode    @relation(fields: [toolNodeId], references: [id], onDelete: Restrict)
+  generationTask   GenerationTask? @relation(fields: [generationTaskId], references: [id], onDelete: SetNull)
+
+  @@unique([toolNodeId, ordinal])
+  @@index([projectId, createdAt])
+  @@map("workflow_attempts")
 }
 
 model BoardElement {
