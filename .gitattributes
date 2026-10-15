@@ -1,0 +1,3 @@
+# Keep pnpm patch hashes identical on Windows and Linux checkouts.
+# Unified-diff context intentionally contains a space on otherwise empty lines.
+patches/*.patch text eol=lf whitespace=-blank-at-eol

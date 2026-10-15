@@ -239,7 +239,7 @@ Agent 修改选中的设计时会绑定来源资产，创建图片编辑任务�
 ## 质量检查
 
 ```bash
-pnpm audit:prod
+pnpm audit:all
 pnpm lint
 pnpm typecheck
 pnpm db:validate
@@ -262,7 +262,16 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-CI 还会执行生产依赖审计和私有文件流水线验证。
+本地 `pnpm check` 与 CI 都会审计生产和开发依赖，发现低危及以上漏洞即失败。
+仅检查生产依赖可运行 `pnpm audit:prod`。CI 还会执行私有文件流水线验证。
+
+Braces 的 `GHSA-vfj7-8cjw-p6xm` 尚无官方修复发布，本仓库通过
+`patches/braces@3.0.3.patch` 限制解析与 AST 遍历深度，并拒绝循环 AST。
+`pnpm audit:all` 必须先通过实际安装包的补丁校验和恶意输入回归测试，再审核
+审计 JSON，接受这一项已修补的包；报告异常、其他漏洞或未修补副本均失败。
+直接 `pnpm audit` 仍会按原版本报告它，不能仅凭版本扫描判断补丁效果。
+`sprintf-js` 的 `CVE-2026-97058` 已被 CNA 正式撤销，对应公告的例外依据为
+[CVE 官方记录](https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/97xxx/CVE-2026-97058.json)。
 
 对象存储需预置 `S3_HEALTHCHECK_OBJECT_KEY` 指向的私有哨兵对象；本地
 `minio-init` 会自动创建它，readiness 只需对象级读取权限，无需

@@ -3,14 +3,66 @@ packages:
   - packages/*
 
 overrides:
-  dompurify@3.4.12: 3.4.13
-  fast-uri@3.1.4: 3.1.5
+  dompurify: 3.4.16
+  fast-uri: 3.1.8
   find-my-way: 9.7.0
   nanoid@3.3.16: 3.3.18
   postcss: 8.5.23
-  sharp: 0.35.3
+  sharp: 0.35.5
   tar: 7.5.22
   valibot: 1.4.2
+  # These upstream packages still pin vulnerable transitive dependencies.
+  "@prisma/config>deepmerge-ts": 8.0.2
+  "prisma>mysql2": 3.24.4
+  "@nestjs/platform-express>multer": 2.4.0
+  # Prisma Studio pins React 19.2 types; its DOM peer must use the same line.
+  "@types/react-dom": 19.2.3
+  ansi-regex@5.0.0: 5.0.1
+  brace-expansion@1.1.16: 1.1.21
+  brace-expansion@5.0.8: 5.0.12
+  js-yaml@4.3.0: 4.3.2
+  qs: 6.16.0
+  proxy-addr: 2.0.8
+  prosemirror-view: 1.42.3
+  # Tiptap's exact peer versions require upgrading the entire family together.
+  "@tiptap/core": 3.30.5
+  "@tiptap/extension-blockquote": 3.30.5
+  "@tiptap/extension-bold": 3.30.5
+  "@tiptap/extension-bubble-menu": 3.30.5
+  "@tiptap/extension-bullet-list": 3.30.5
+  "@tiptap/extension-code-block": 3.30.5
+  "@tiptap/extension-code": 3.30.5
+  "@tiptap/extension-document": 3.30.5
+  "@tiptap/extension-dropcursor": 3.30.5
+  "@tiptap/extension-floating-menu": 3.30.5
+  "@tiptap/extension-gapcursor": 3.30.5
+  "@tiptap/extension-hard-break": 3.30.5
+  "@tiptap/extension-heading": 3.30.5
+  "@tiptap/extension-highlight": 3.30.5
+  "@tiptap/extension-horizontal-rule": 3.30.5
+  "@tiptap/extension-italic": 3.30.5
+  "@tiptap/extension-link": 3.30.5
+  "@tiptap/extension-list-item": 3.30.5
+  "@tiptap/extension-list-keymap": 3.30.5
+  "@tiptap/extension-list": 3.30.5
+  "@tiptap/extension-ordered-list": 3.30.5
+  "@tiptap/extension-paragraph": 3.30.5
+  "@tiptap/extension-strike": 3.30.5
+  "@tiptap/extension-text": 3.30.5
+  "@tiptap/extension-underline": 3.30.5
+  "@tiptap/extensions": 3.30.5
+  "@tiptap/pm": 3.30.5
+  "@tiptap/react": 3.30.5
+  "@tiptap/starter-kit": 3.30.5
+
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch
+
+auditConfig:
+  ignoreGhsas:
+    # CVE-2026-97058 was REJECTED by its CNA on 2026-10-12.
+    # https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2026/97xxx/CVE-2026-97058.json
+    - GHSA-hp3w-g68c-fv3c
 
 allowBuilds:
   "@prisma/engines": true
