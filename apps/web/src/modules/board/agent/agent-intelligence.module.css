@@ -4,9 +4,9 @@
 .refinement {
   min-width: 0;
   margin-top: 12px;
-  border-top: 1px solid rgb(34 34 31 / 12%);
+  border-top: 1px solid var(--color-divider);
   padding-top: 12px;
-  color: #5d574b;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.65;
   overflow-wrap: anywhere;
@@ -14,7 +14,7 @@
 
 .brief > summary,
 .rationale > summary {
-  color: #805c42;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   font-weight: 650;
 }
@@ -23,7 +23,7 @@
   display: -webkit-box;
   margin: 3px 0 0 18px;
   overflow: hidden;
-  color: #756c60;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   font-weight: 400;
   line-height: 1.5;
@@ -46,7 +46,7 @@
 
 .body h4 {
   margin: 0 0 6px;
-  color: #4b453b;
+  color: var(--color-ink);
   font-size: 11px;
   font-weight: 650;
 }
@@ -76,7 +76,7 @@
 }
 
 .constraints > li {
-  border-left: 2px solid #d2c5b3;
+  border-left: 2px solid var(--color-border);
   padding-left: 10px;
 }
 
@@ -84,28 +84,28 @@
 .evidence small,
 .meta {
   display: block;
-  color: #8a7e6f;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .constraints blockquote {
   margin: 5px 0;
   padding-left: 8px;
-  color: #84786a;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .body .caveat,
 .candidate .caveat,
 .refinement .caveat {
-  color: #8a8172;
+  color: var(--color-ink-tertiary);
   font-size: 10px;
 }
 
 .warning {
-  border-left: 2px solid #a34c35;
+  border-left: 2px solid var(--color-error);
   padding-left: 9px;
-  color: #92523e;
+  color: var(--color-error);
 }
 
 .actionHeader {
@@ -118,18 +118,18 @@
 }
 
 .actionHeader strong {
-  color: #60513f;
+  color: var(--color-ink-secondary);
   font-size: 11px;
 }
 
 .candidate button,
 .refinement button {
   min-height: 32px;
-  border: 1px solid #d4c7b6;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 6px 10px;
-  background: #fffefa;
-  color: #6f503a;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -137,7 +137,7 @@
 
 .candidate button:hover:not(:disabled),
 .refinement button:hover:not(:disabled) {
-  background: #f1eade;
+  background: var(--color-surface);
 }
 
 .candidate button:active:not(:disabled),
@@ -155,39 +155,39 @@
 .refinement :where(button, summary):focus-visible,
 .brief summary:focus-visible,
 .rationale summary:focus-visible {
-  outline: 2px solid #a34c35;
+  outline: 2px solid var(--color-error);
   outline-offset: 3px;
 }
 
 .actionStatus {
   margin-bottom: 9px;
-  color: #827665;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .actionStatus[data-status="failed"],
 .actionStatus[data-status="superseded"] {
-  color: #9c4936;
+  color: var(--color-error);
 }
 
 .checks > li {
   display: grid;
-  border-left: 2px solid #c7c0b6;
+  border-left: 2px solid var(--color-border-strong);
   padding-left: 10px;
   gap: 4px;
 }
 
 .checks > li[data-status="concern"] {
-  border-left-color: #a34c35;
+  border-left-color: var(--color-error);
 }
 
 .checks > li[data-status="met"] {
-  border-left-color: #6b7859;
+  border-left-color: var(--color-success);
 }
 
 .checks .checkStatus {
   padding: 0;
-  color: #8a745a;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   text-align: left;
 }
@@ -202,11 +202,11 @@
   max-height: 200px;
   margin: 0;
   overflow: auto;
-  border: 1px solid #e0d6c8;
+  border: 1px solid var(--color-surface);
   border-radius: 5px;
   padding: 9px;
-  background: #f5f1e9;
-  color: #655a4d;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font: inherit;
   font-size: 10px;
   white-space: pre-wrap;
@@ -215,7 +215,7 @@
 
 .refinement button.apply {
   justify-self: start;
-  border-color: #6d523d;
-  background: #6d523d;
-  color: #fffefa;
+  border-color: var(--color-ink-secondary);
+  background: var(--color-ink-secondary);
+  color: var(--color-paper);
 }

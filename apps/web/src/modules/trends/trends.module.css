@@ -1,24 +1,17 @@
 .trendsPage {
-  --trend-bg: var(--atelier-paper, #f1eee5);
-  --trend-ink: var(--atelier-ink, #171714);
-  --trend-muted: rgb(23 23 20 / 50%);
-  --trend-grid: rgb(23 23 20 / 4.5%);
-  --trend-divider: rgb(23 23 20 / 25%);
-  --trend-accent: #d9653e;
-  --trend-motion: 360ms cubic-bezier(0.2, 0.75, 0.2, 1);
   min-height: 100dvh;
   padding: 0 clamp(1.25rem, 3.75vw, 4.5rem) clamp(4.5rem, 8vw, 8rem);
   overflow: hidden;
-  background-color: var(--trend-bg);
+  background-color: var(--color-paper);
   background-image: linear-gradient(
     90deg,
-    var(--trend-grid) 1px,
+    var(--color-divider) 1px,
     transparent 1px
   );
   background-position: center top;
   background-size: clamp(6rem, 8.333vw, 10rem) 100%;
-  color: var(--trend-ink);
-  font-family: var(--type-ui, "PingFang SC", "Microsoft YaHei", sans-serif);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
 .editorialFrame {
@@ -31,7 +24,7 @@
   min-height: 4.75rem;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgb(23 23 20 / 35%);
+  border-bottom: 1px solid var(--color-border-strong);
   gap: 1.5rem;
 }
 
@@ -45,21 +38,21 @@
 }
 
 .pageHeader span {
-  color: var(--trend-accent);
+  color: var(--color-signal);
 }
 
 .pageHeader a {
-  color: var(--trend-muted);
-  transition: color var(--trend-motion);
+  color: var(--color-ink-secondary);
+  transition: color var(--duration-normal) var(--ease-standard);
 }
 
 .pageHeader a:hover {
-  color: var(--trend-ink);
+  color: var(--color-ink);
 }
 
 .pageHeader a:focus-visible,
 .sourceRow:focus-visible {
-  outline: 2px solid var(--trend-accent);
+  outline: 2px solid var(--color-signal);
   outline-offset: 4px;
 }
 
@@ -76,7 +69,7 @@
 
 .hero h1 {
   margin: 0;
-  font-family: var(--type-editorial, Georgia, "Songti SC", serif);
+  font-family: var(--font-serif);
   font-size: clamp(3.5rem, 5vw, 6rem);
   font-weight: 400;
   letter-spacing: -0.04em;
@@ -87,7 +80,7 @@
 .hero p {
   display: grid;
   margin: 0 0 0.35rem;
-  color: var(--trend-muted);
+  color: var(--color-ink-secondary);
   font-size: clamp(0.62rem, 0.56rem + 0.12vw, 0.72rem);
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -98,7 +91,7 @@
 .sourceLayout {
   position: relative;
   display: grid;
-  border-top: 1px solid rgb(23 23 20 / 35%);
+  border-top: 1px solid var(--color-border-strong);
   grid-template-columns: 62% 38%;
 }
 
@@ -156,8 +149,8 @@
 
 .sourceRow:hover,
 .sourceRow:focus-visible {
-  border-bottom-color: rgb(23 23 20 / 50%);
-  background: rgb(23 23 20 / 2.5%);
+  border-bottom-color: var(--color-ink-secondary);
+  background: var(--color-surface);
 }
 
 .sourceRow:hover .sourceIndex,
@@ -208,7 +201,7 @@
 .previewField {
   position: relative;
   min-width: 0;
-  border-left: 1px solid rgb(23 23 20 / 12%);
+  border-left: 1px solid var(--color-divider);
   overflow: hidden;
 }
 
@@ -443,7 +436,7 @@
   box-sizing: border-box;
   padding: 0.65rem 0.85rem;
   border: 1px solid var(--trend-divider);
-  background: rgb(255 255 255 / 40%);
+  background: var(--color-paper);
   color: var(--trend-ink);
   font: inherit;
   font-size: 0.85rem;
@@ -478,14 +471,25 @@
 }
 .trendCard {
   min-width: 0;
-  border: 1px solid rgb(23 23 20 / 14%);
-  background: rgb(255 255 255 / 38%);
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+  animation: card-in 400ms var(--ease-enter, cubic-bezier(0.16,1,0.3,1)) both;
+}
+/* Stagger: each card in the 3-column grid enters slightly after the previous */
+.trendCard:nth-child(3n + 2) { animation-delay: var(--stagger-sm, 60ms); }
+.trendCard:nth-child(3n + 3) { animation-delay: calc(var(--stagger-sm, 60ms) * 2); }
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 .cardVisual {
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 10;
-  background: #e6e2d8;
+  background: var(--color-surface);
 }
 .cardVisual img {
   width: 100%;
@@ -536,7 +540,7 @@
 .aiSummary {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgb(23 23 20 / 10%);
+  border-top: 1px solid var(--color-divider);
 }
 .aiBoundary {
   display: flex;
@@ -559,7 +563,7 @@
 }
 .tagList span {
   padding: 0.25rem 0.4rem;
-  background: rgb(23 23 20 / 4%);
+  background: var(--color-surface);
   font-size: 0.65rem;
   color: var(--trend-muted);
 }
@@ -578,7 +582,7 @@
 .colorStrip span {
   width: 1.4rem;
   height: 1.4rem;
-  border: 1px solid rgb(23 23 20 / 10%);
+  border: 1px solid var(--color-divider);
 }
 .importButton {
   display: flex;
@@ -611,15 +615,15 @@
   line-height: 1.8;
 }
 .archiveNotice {
-  border-left: 2px solid #548269;
-  background: rgb(84 130 105 / 5%);
+  border-left: 2px solid var(--color-success);
+  background: var(--color-success-bg);
 }
 .archiveNotice a {
   color: inherit;
   text-underline-offset: 3px;
 }
 .archiveError {
-  color: #a94335;
+  color: var(--color-error);
   border-left: 2px solid currentColor;
 }
 .loadMore {
@@ -633,7 +637,7 @@
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgb(23 23 20 / 38%);
+  background: rgba(34, 34, 30, 0.38);
 }
 .boardDialog {
   width: min(36rem, 100%);

@@ -7,7 +7,9 @@ import type { AiProvider } from "./provider.interface";
 import { AmuxAdapter, type AmuxAdapterConfig } from "./providers/amux.adapter";
 import { createReferenceImageLoader } from "./reference-image.loader";
 
-const GPT_IMAGE_2_MODEL = "gpt-image-2-official";
+const DEFAULT_IMAGE_MODEL = "openai/gpt-image-2.5-sunburst";
+const DEFAULT_AMUX_BASE_URL = "https://gateway.amux.ai/v1";
+const DEFAULT_TEXT_MODEL = "anthropic/claude-haiku-5-5";
 const TEN_MINUTES_MS = 10 * 60 * 1_000;
 
 function numberFromEnv(value: string | undefined, fallback: number): number {
@@ -32,8 +34,8 @@ function imageQualityFromEnv(
 export function amuxAdapterConfigFromEnv(): AmuxAdapterConfig {
   return {
     apiKey: () => process.env.AMUX_API_KEY?.trim() || undefined,
-    baseUrl: process.env.AMUX_BASE_URL?.trim() || "https://api.amux.ai/v1",
-    imageModel: GPT_IMAGE_2_MODEL,
+    baseUrl: process.env.AMUX_BASE_URL?.trim() || DEFAULT_AMUX_BASE_URL,
+    imageModel: process.env.AMUX_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL,
     quality: imageQualityFromEnv(process.env.AMUX_IMAGE_QUALITY?.trim()),
     imageCostUsd: numberFromEnv(process.env.AMUX_IMAGE_COST_USD, 0),
     editCostUsd: numberFromEnv(process.env.AMUX_EDIT_COST_USD, 0),
@@ -44,8 +46,8 @@ export function amuxAdapterConfigFromEnv(): AmuxAdapterConfig {
 export function amuxClaudeClientConfigFromEnv(): AmuxClaudeClientConfig {
   return {
     apiKey: () => process.env.AMUX_API_KEY?.trim() || undefined,
-    baseUrl: process.env.AMUX_BASE_URL?.trim() || "https://api.amux.ai/v1",
-    model: process.env.AMUX_CLAUDE_MODEL?.trim() || "claude-opus-5",
+    baseUrl: process.env.AMUX_BASE_URL?.trim() || DEFAULT_AMUX_BASE_URL,
+    model: process.env.AMUX_CLAUDE_MODEL?.trim() || DEFAULT_TEXT_MODEL,
     timeoutMs: numberFromEnv(
       process.env.AMUX_CLAUDE_TIMEOUT_MS,
       TEN_MINUTES_MS,

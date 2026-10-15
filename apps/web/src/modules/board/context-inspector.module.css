@@ -26,10 +26,10 @@
   );
   border: var(--border-width-thin) solid var(--border-color-strong);
   border-radius: var(--radius-lg, 12px);
-  background: rgb(247 244 235 / 97%);
+  background: var(--color-paper);
   box-shadow:
-    0 4px 16px rgb(24 25 21 / 12%),
-    0 12px 48px rgb(24 25 21 / 10%);
+    0 4px 16px var(--color-border),
+    0 12px 48px var(--color-divider);
   overflow-y: auto;
 }
 

@@ -1,6 +1,7 @@
 import { FileStatus, Prisma, type PrismaClient } from "@fashion/db";
 import { AmuxClaudeVlmClassifier, type AmuxClaudeImageInput, type AmuxClaudeJsonClient } from "@fashion/ai";
 import type { AgentDesignBrief, AgentDesignEvidence, VlmRoleLabel } from "@fashion/shared";
+import { workflowInputConnectionError } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -349,6 +350,13 @@ export class WorkflowRuntimeService {
     if (node.status === "completed") return graph;
     const sources = incoming(graph, node);
     if (!sources.length) throw new BadRequestException("请连接该工具需要的输入素材");
+    if (graph.edges.filter((edge) => edge.targetNodeId === node.id && edge.targetPort === "source").length > 1)
+      throw new BadRequestException("原图存在多个来源，请整理连接或建立新分支后执行");
+    for (const edge of graph.edges.filter((item) => item.targetNodeId === node.id)) {
+      const source = graph.nodes.find((item) => item.id === edge.sourceNodeId);
+      const reason = source?.kind === "asset" ? workflowInputConnectionError(source.type, node.type, edge, graph.edges.filter((item) => item.id !== edge.id)) : "请选择素材作为工具输入";
+      if (reason) throw new BadRequestException(`来源连接需要整理：${reason}`);
+    }
     if (sources.some((source) => source.status === "pending" || source.status === "running" || source.status === "failed"))
       throw new BadRequestException("输入尚未就绪");
     if (node.type === "analyze_brief" && !graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === "goal"))

@@ -4,7 +4,7 @@
   inset: 0;
   display: grid;
   padding: 20px;
-  background: rgb(37 35 29 / 36%);
+  background: var(--color-border-strong);
   place-items: center;
 }
 .editor {
@@ -12,11 +12,11 @@
   flex-direction: column;
   width: min(1440px, 100%);
   max-height: calc(100dvh - 40px);
-  border: 1px solid #d8d1c5;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #fbfaf6;
-  color: #34352e;
-  box-shadow: 0 22px 70px rgb(37 35 29 / 24%);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow: 0 22px 70px var(--color-border);
   overflow: hidden;
 }
 .editor :where(button, input, textarea, select) {
@@ -25,24 +25,24 @@
 }
 .editor button {
   min-height: 34px;
-  border: 1px solid #d8d1c5;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 6px 11px;
-  background: #fffefa;
-  color: #565044;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   transition:
     background-color 140ms ease,
     transform 140ms ease;
 }
 .editor button:hover:not(:disabled) {
-  background: #f0ebe1;
+  background: var(--color-surface);
 }
 .editor button:active:not(:disabled) {
   transform: scale(0.98);
 }
 .editor :where(button, input, textarea, select):focus-visible {
-  outline: 2px solid #b94d31;
+  outline: 2px solid var(--color-error);
   outline-offset: 2px;
 }
 .editor :disabled {
@@ -54,12 +54,12 @@
   flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid #e3ddd2;
+  border-bottom: 1px solid var(--color-border);
   padding: 20px 24px;
   gap: 20px;
 }
 .header span {
-  color: #a14e36;
+  color: var(--color-error);
   font-size: 9px;
   font-weight: 750;
   letter-spacing: 0.13em;
@@ -72,7 +72,7 @@
 .header p {
   max-width: 90ch;
   margin: 0;
-  color: #8b8070;
+  color: var(--color-ink-tertiary);
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -83,12 +83,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 24px;
-  border-bottom: 1px solid #e3ddd2;
+  border-bottom: 1px solid var(--color-border);
   gap: 16px;
 }
 .toolbar p {
   margin: 0;
-  color: #8b8070;
+  color: var(--color-ink-tertiary);
   font-size: 11px;
   line-height: 1.6;
 }
@@ -102,8 +102,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 24px;
-  background: #f3e8dd;
-  color: #9a4c34;
+  background: var(--color-surface);
+  color: var(--color-error);
   font-size: 12px;
 }
 .content {
@@ -116,8 +116,8 @@
 .canvas {
   overflow: auto;
   min-width: 0;
-  background-color: #f5f2eb;
-  background-image: radial-gradient(#d2c8b8 0.6px, transparent 0.6px);
+  background-color: var(--color-surface);
+  background-image: radial-gradient(var(--color-border) 0.6px, transparent 0.6px);
   background-size: 18px 18px;
   overscroll-behavior: contain;
 }
@@ -133,27 +133,27 @@
 }
 .edges > path {
   fill: none;
-  stroke: #ac9a81;
+  stroke: var(--swatch-linen);
   stroke-width: 1.6;
 }
 .edges marker path {
-  fill: #ac9a81;
+  fill: var(--swatch-linen);
 }
 .graphNode {
   position: absolute;
   width: 224px;
   min-height: 152px;
-  border: 1px solid #d7cbbc;
+  border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: #fffefa;
-  box-shadow: 0 3px 9px rgb(82 65 39 / 6%);
+  background: var(--color-paper);
+  box-shadow: 0 3px 9px var(--color-divider);
 }
 .graphNode[data-selected="true"] {
-  border-color: #a65338;
-  box-shadow: 0 0 0 1px #a65338;
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 1px var(--color-error);
 }
 .graphNode[data-locked="true"] {
-  background: #efeee8;
+  background: var(--color-surface);
 }
 .editor .nodeBody {
   display: grid;
@@ -173,17 +173,17 @@
   gap: 8px;
 }
 .nodeBody b {
-  color: #9a8367;
+  color: var(--swatch-linen);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
 }
 .nodeBody small {
-  color: #9d8e7a;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
   font-weight: 400;
 }
 .nodeBody strong {
-  color: #36382f;
+  color: var(--color-ink);
   font-size: 13px;
   font-weight: 650;
   overflow-wrap: anywhere;
@@ -192,7 +192,7 @@
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
-  color: #837868;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   line-height: 1.55;
   -webkit-box-orient: vertical;
@@ -206,10 +206,10 @@
   width: 18px;
   height: 18px;
   min-height: 18px;
-  border: 2px solid #9c876a;
+  border: 2px solid var(--swatch-linen);
   border-radius: 50%;
   padding: 0;
-  background: #fffefa;
+  background: var(--color-paper);
 }
 .editor .inputPort {
   left: -10px;
@@ -218,15 +218,15 @@
   right: -10px;
 }
 .editor .outputPort[aria-pressed="true"] {
-  border-color: #a65338;
-  background: #a65338;
+  border-color: var(--color-error);
+  background: var(--color-error);
 }
 .properties {
   display: flex;
   min-width: 0;
   flex-direction: column;
   overflow-y: auto;
-  border-left: 1px solid #e3ddd2;
+  border-left: 1px solid var(--color-border);
   padding: 20px;
   gap: 8px;
   overscroll-behavior: contain;
@@ -235,7 +235,7 @@
   margin-bottom: 8px;
 }
 .properties header > span {
-  color: #a14e36;
+  color: var(--color-error);
   font-size: 9px;
   font-weight: 700;
 }
@@ -246,25 +246,25 @@
 }
 .properties p {
   margin: 0;
-  color: #897e6e;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
 .properties > label {
   margin-top: 5px;
-  color: #776b59;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   font-weight: 650;
 }
 .properties :where(input, textarea, select) {
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid #d9cebd;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 9px;
-  background: #fffefa;
-  color: #4b463c;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 .properties textarea {
   min-height: 80px;
@@ -278,10 +278,10 @@
   gap: 6px;
 }
 .editor .danger {
-  color: #9d442d;
+  color: var(--color-error);
 }
 .history {
-  border-top: 1px solid #ded5c8;
+  border-top: 1px solid var(--color-border);
   margin-top: 15px;
   padding-top: 10px;
 }
@@ -290,18 +290,18 @@
   font-size: 12px;
 }
 .history details {
-  border-bottom: 1px solid #e3ddd2;
+  border-bottom: 1px solid var(--color-border);
   padding: 8px 0;
 }
 .history summary {
-  color: #806c53;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
 }
 .history pre {
   padding: 10px;
-  background: #f1eee6;
-  color: #706555;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-size: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -322,14 +322,14 @@
   width: 100%;
   height: 95px;
   object-fit: contain;
-  background: #f0ede4;
+  background: var(--color-surface);
 }
 .footer {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  border-top: 1px solid #e3ddd2;
+  border-top: 1px solid var(--color-border);
   padding: 12px 24px;
   gap: 8px;
 }
@@ -339,26 +339,26 @@
 }
 .footer p {
   margin: 0;
-  color: #927c61;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.6;
 }
 .footer p[role="alert"] {
-  color: #9d442d;
+  color: var(--color-error);
 }
 .editor .primary {
-  border-color: #34352e;
-  background: #34352e;
-  color: #fffefa;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 .editor .primary:hover:not(:disabled) {
-  background: #525347;
+  background: var(--color-ink-secondary);
 }
 .closeConfirm {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #9d442d;
+  color: var(--color-error);
   font-size: 11px;
 }
 .mobileList {
@@ -400,7 +400,7 @@
     display: grid;
     gap: 5px;
     padding: 12px 16px;
-    border-bottom: 1px solid #e3ddd2;
+    border-bottom: 1px solid var(--color-border);
   }
   .mobileList button {
     display: flex;
@@ -409,11 +409,11 @@
     text-align: left;
   }
   .mobileList button[aria-pressed="true"] {
-    border-color: #a65338;
-    background: #f1e6d9;
+    border-color: var(--color-error);
+    background: var(--color-surface);
   }
   .mobileList b {
-    color: #a18462;
+    color: var(--swatch-linen);
     font-family: var(--font-mono, monospace);
     font-size: 10px;
   }
@@ -424,7 +424,7 @@
     gap: 4px;
   }
   .mobileList small {
-    color: #8b7f6c;
+    color: var(--color-ink-secondary);
     font-size: 9px;
   }
   .properties {

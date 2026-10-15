@@ -5,7 +5,9 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: #f7f7f4;
+  /* 画布底色用 --color-surface（比面板的 --color-paper 深），
+     让 agent panel 和 topbar 明确"浮"在画布之上 */
+  background: var(--color-surface);
 }
 
 .boardShell[data-chat-collapsed="true"] {
@@ -31,7 +33,7 @@
 
 .boardShell :global(.tl-background) {
   position: relative;
-  background-color: #f8f8f5;
+  background-color: var(--color-canvas);
   background-image: radial-gradient(
     circle at center,
     rgb(66 62 55 / 18%) 0 0.8px,
@@ -39,7 +41,7 @@
   );
   background-position: 0 0;
   background-size: 16px 16px;
-  box-shadow: inset 0 0 0 1px rgb(67 61 52 / 5%);
+  box-shadow: inset 0 0 0 1px var(--color-divider);
 }
 
 .boardShell :global(.tl-background)::before {
@@ -61,8 +63,8 @@
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 30% 12%, rgb(255 255 255 / 42%), transparent 36%),
-    linear-gradient(135deg, rgb(255 255 255 / 10%), transparent 42%);
+    radial-gradient(circle at 30% 12%, color-mix(in srgb, white 42%, transparent), transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, white 10%, transparent), transparent 42%);
   mix-blend-mode: overlay;
 }
 
@@ -71,15 +73,12 @@
   width: min(calc(100vw - 28px), 920px);
   min-height: 48px;
   align-items: center;
-  border: 1px solid #181915;
-  border-radius: var(--radius-xl, 16px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   margin: 12px auto 0;
-  background: rgb(247 244 235 / 96%);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 4px 16px rgb(24 25 21 / 12%),
-    0 8px 32px rgb(24 25 21 / 8%);
-  color: #181915;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-ink);
   grid-template-columns: 1fr auto;
   pointer-events: all;
 }
@@ -88,33 +87,33 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  padding-left: 8px;
-  gap: 10px;
+  padding-left: var(--space-2);
+  gap: var(--space-2);
 }
 
 .boardIdentity a {
   display: grid;
   width: 31px;
   height: 31px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   place-items: center;
   text-decoration: none;
 }
 
 .boardIdentity strong {
-  font-size: 10px;
+  font-size: var(--text-xs);
   letter-spacing: 0.14em;
 }
 
 .boardIdentity span {
-  color: #66645d;
-  font-size: 10px;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-xs);
 }
 
 .boardIdentity span[data-status="offline"],
 .boardIdentity span[data-status="conflict"],
 .boardIdentity span[data-status="error"] {
-  color: #b2381f;
+  color: var(--color-error);
 }
 
 .boardConflictNotice {
@@ -124,12 +123,12 @@
   bottom: 18px;
   display: grid;
   width: min(390px, calc(100vw - 36px));
-  border: 1px solid #9d2f20;
-  padding: 14px;
-  background: #f7eee5;
-  box-shadow: 8px 8px 0 rgb(157 47 32 / 14%);
-  color: #4b211b;
-  gap: 10px;
+  border: 1px solid var(--color-error);
+  padding: var(--space-4);
+  background: var(--color-error-bg);
+  box-shadow: var(--shadow-card);
+  color: var(--color-error);
+  gap: var(--space-2);
   pointer-events: auto;
 }
 
@@ -139,24 +138,24 @@
 }
 
 .boardConflictNotice strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
   letter-spacing: 0.08em;
 }
 
 .boardConflictNotice span,
 .boardConflictNotice small {
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
 }
 
 .boardConflictNotice small {
-  color: #76534d;
+  color: var(--color-ink-secondary);
 }
 
 .boardConflictNotice button {
   border: 0;
   padding: 10px 12px;
-  background: #9d2f20;
+  background: var(--color-error);
   color: white;
   cursor: pointer;
   font: inherit;
@@ -171,7 +170,7 @@
 
 .quotaPill {
   align-items: center;
-  border-left: 1px solid rgb(24 25 21 / 22%);
+  border-left: 1px solid var(--color-border);
   display: flex;
   font-size: 11px;
   font-weight: 700;
@@ -182,7 +181,7 @@
 .shapeActions button {
   min-width: 58px;
   border: 0;
-  border-left: 1px solid rgb(24 25 21 / 22%);
+  border-left: 1px solid var(--color-border);
   padding: 0 12px;
   background: transparent;
   color: inherit;
@@ -198,8 +197,8 @@
 .shapeActions select {
   background: transparent;
   border: 0;
-  border-left: 1px solid rgb(24 25 21 / 22%);
-  color: #181915;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 11px;
   max-width: 150px;
@@ -208,19 +207,19 @@
 }
 
 .shapeActions button:last-child {
-  border-right: 1px solid rgb(24 25 21 / 22%);
+  border-right: 1px solid var(--color-border);
 }
 
 .shapeActions button:hover,
 .shapeActions select:hover {
-  background: #181915;
+  background: var(--color-ink);
   color: white;
 }
 
 .shapeActions :where(button, select):focus-visible,
 .boardIdentity a:focus-visible,
 .uploadTray button:focus-visible {
-  outline: 3px solid #e9522c;
+  outline: 3px solid var(--color-signal);
   outline-offset: -3px;
 }
 
@@ -243,9 +242,9 @@
 .roleControl select {
   width: min(100%, 150px);
   height: 31px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   border-radius: 0;
-  background: #f7f4eb;
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   font-size: 10px;
@@ -256,7 +255,7 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background-color: #f8f8f5;
+  background-color: var(--color-canvas);
   background-image:
     radial-gradient(
       ellipse at 50% 20%,
@@ -265,24 +264,24 @@
     ),
     repeating-linear-gradient(
       90deg,
-      rgba(82, 64, 42, 0.06) 0 0.8px,
+      var(--color-border) 0 0.8px,
       rgba(255, 255, 255, 0.05) 1px 1.8px,
       transparent 2px 6px
     ),
     repeating-linear-gradient(
       0deg,
-      rgba(75, 58, 39, 0.05) 0 0.8px,
+      var(--color-border) 0 0.8px,
       rgba(255, 255, 255, 0.06) 1px 1.8px,
       transparent 2px 6px
     );
   background-blend-mode: normal, multiply, multiply;
-  box-shadow: inset 0 0 0 1px rgba(74, 54, 31, 0.08);
+  box-shadow: inset 0 0 0 1px var(--color-divider);
 }
 
 .boardSkeleton > div {
   position: absolute;
   animation: skeleton-pulse 1.4s ease-in-out infinite;
-  background: #d2cec3;
+  background: var(--color-border-strong);
 }
 
 .skeletonTopbar {
@@ -319,7 +318,7 @@
   right: 24px;
   bottom: 18px;
   margin: 0;
-  color: #66645d;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   letter-spacing: 0.08em;
 }
@@ -329,12 +328,12 @@
   padding: 2rem;
   align-content: center;
   justify-items: center;
-  color: #181915;
+  color: var(--color-ink);
   text-align: center;
 }
 
 .boardError p {
-  color: #e9522c;
+  color: var(--color-signal);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -342,21 +341,21 @@
 
 .boardError h1 {
   margin: 0.8rem 0;
-  font-family: Georgia, "Songti SC", serif;
+  font-family: var(--font-serif);
   font-size: clamp(2.5rem, 6vw, 5rem);
   font-weight: 400;
 }
 
 .boardError span {
-  color: #68655d;
+  color: var(--color-ink-secondary);
 }
 
 .boardError button {
   min-height: 42px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   margin-top: 2rem;
   padding: 0 20px;
-  background: #181915;
+  background: var(--color-ink);
   color: white;
   cursor: pointer;
 }
@@ -366,16 +365,16 @@
   z-index: 1000;
   inset: 12px calc(var(--board-agent-current-width) + 12px) 12px 12px;
   display: grid;
-  border: 2px dashed #e9522c;
-  background: rgb(247 244 235 / 88%);
-  color: #181915;
+  border: 2px dashed var(--color-signal);
+  background: color-mix(in srgb, var(--color-canvas) 90%, transparent);
+  color: var(--color-ink);
   place-content: center;
   pointer-events: none;
   text-align: center;
 }
 
 .uploadDropZone strong {
-  font-family: Georgia, "Songti SC", serif;
+  font-family: var(--font-serif);
   font-size: clamp(2rem, 7vw, 6rem);
   font-weight: 400;
 }
@@ -388,9 +387,9 @@
 }
 
 .emptyBoardGuide {
-  background: rgb(248 246 239 / 96%);
-  border: 1px solid rgb(24 25 21 / 28%);
-  box-shadow: 14px 14px 0 rgb(24 25 21 / 8%);
+  background: var(--color-paper);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-card);
   left: calc((100vw - var(--board-agent-current-width)) / 2);
   max-width: 430px;
   padding: 24px;
@@ -402,7 +401,7 @@
 }
 
 .emptyBoardGuide > span {
-  color: #765f47;
+  color: var(--color-signal);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -415,7 +414,7 @@
 }
 
 .emptyBoardGuide p {
-  color: #5e6058;
+  color: var(--color-ink-secondary);
   font-size: 13px;
   line-height: 1.7;
   margin: 0;
@@ -431,13 +430,13 @@
 }
 
 .emptyBoardGuide li {
-  border-top: 1px solid rgb(24 25 21 / 22%);
+  border-top: 1px solid var(--color-border);
   font-size: 11px;
   padding-top: 8px;
 }
 
 .emptyBoardGuide button {
-  background: #181915;
+  background: var(--color-ink);
   border: 0;
   color: white;
   cursor: pointer;
@@ -463,15 +462,15 @@
   position: relative;
   display: grid;
   min-height: 58px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   padding: 10px 84px 10px 12px;
-  background: #f7f4eb;
-  box-shadow: 4px 4px 0 rgb(24 25 21 / 12%);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
   gap: 3px;
 }
 
 .uploadTray > div[data-status="failed"] {
-  border-color: #b2381f;
+  border-color: var(--color-error);
 }
 
 .uploadTray span,
@@ -487,7 +486,7 @@
 }
 
 .uploadTray small {
-  color: #66645d;
+  color: var(--color-ink-secondary);
   font-size: 9px;
 }
 
@@ -496,9 +495,9 @@
   top: 12px;
   right: 10px;
   min-height: 32px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   padding: 0 12px;
-  background: #181915;
+  background: var(--color-ink);
   color: white;
   cursor: pointer;
 }
@@ -514,12 +513,12 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: #181915;
+  color: var(--color-ink);
   pointer-events: all;
 }
 
 .rolePanel.rolePanelEmbedded > header {
-  border-bottom: 1px solid rgb(24 25 21 / 10%);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .rolePanel {
@@ -528,13 +527,11 @@
   top: 78px;
   right: 68px;
   width: 276px;
-  border: 1px solid rgb(24 25 21 / 14%);
-  border-radius: 18px;
-  background: #f9f6ef;
-  box-shadow:
-    0 2px 8px rgb(24 25 21 / 8%),
-    0 8px 32px rgb(24 25 21 / 10%);
-  color: #181915;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-card);
+  color: var(--color-ink);
   overflow: hidden;
   pointer-events: all;
 }
@@ -543,12 +540,12 @@
   display: flex;
   min-height: 54px;
   align-items: center;
-  border-bottom: 1px solid rgb(24 25 21 / 12%);
+  border-bottom: 1px solid var(--color-border);
   padding: 12px 14px;
 }
 
 .rolePanel > header strong {
-  font-family: "PingFang SC", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+  font-family: var(--font-sans);
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.06em;
@@ -567,8 +564,8 @@
 .rolePanelEmpty p {
   max-width: 23ch;
   margin: 12px 0 0;
-  color: #6a675e;
-  font-family: Georgia, "Songti SC", serif;
+  color: var(--color-ink-secondary);
+  font-family: var(--font-serif);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -585,17 +582,17 @@
   min-height: 30px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(24 25 21 / 18%);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 0 11px;
-  background: rgb(255 255 255 / 56%);
+  background: var(--color-paper);
   color: inherit;
   cursor: pointer;
   text-align: center;
   transition:
-    background-color 120ms,
-    border-color 120ms,
-    transform 120ms;
+    background-color var(--dur-fast, 120ms),
+    border-color var(--dur-fast, 120ms),
+    transform var(--dur-fast, 120ms);
 }
 
 .roleLabel {
@@ -607,42 +604,42 @@
 }
 
 .roleOptions button:hover {
-  border-color: rgb(24 25 21 / 48%);
-  background: #fff;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
   transform: translateY(-1px);
 }
 
 .roleOptions button[aria-checked="true"] {
-  border-color: #181915;
-  background: #181915;
-  color: #fff;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .roleOptions button[data-role="avoid"] {
-  color: #9d2f20;
+  color: var(--color-error);
 }
 
 .roleOptions button[data-role="avoid"][aria-checked="true"] {
-  border-color: #a52c1f;
-  background: #a52c1f;
-  color: #fff;
+  border-color: var(--color-error);
+  background: var(--color-error);
+  color: var(--color-paper);
 }
 
 .roleOptions button:focus-visible {
-  outline: 2px solid #181915;
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }
 
 .roleNoteEditor {
   display: grid;
-  border-top: 1px solid rgb(24 25 21 / 10%);
+  border-top: 1px solid var(--color-divider);
   padding: 11px 12px 13px;
-  background: rgb(24 25 21 / 3%);
+  background: var(--color-surface);
   gap: 6px;
 }
 
 .roleNoteEditor > span {
-  color: #5f5c54;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -651,28 +648,28 @@
 .roleNoteEditor input {
   width: 100%;
   height: 34px;
-  border: 1px solid rgb(24 25 21 / 28%);
-  border-radius: 7px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
   padding: 0 10px;
-  background: #fff;
-  color: #181915;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
   font-size: 11px;
   outline: none;
 }
 
 .roleNoteEditor input:focus {
-  border-color: #181915;
-  box-shadow: 0 0 0 2px rgb(24 25 21 / 8%);
+  border-color: var(--color-ink);
+  box-shadow: 0 0 0 2px var(--color-border);
 }
 
 .roleNoteEditor > small {
-  color: #77736a;
+  color: var(--color-ink-tertiary);
   font-size: 8px;
 }
 
 .rolePanel[data-role="avoid"] {
-  border-color: rgb(165 44 31 / 25%);
+  border-color: var(--color-error);
 }
 
 .rolePanel > footer {
@@ -680,20 +677,20 @@
   min-height: 47px;
   padding: 9px 12px;
   align-content: center;
-  background: rgb(24 25 21 / 4%);
-  border-top: 1px solid rgb(24 25 21 / 8%);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-divider);
   gap: 3px;
 }
 
 .rolePanel > footer span {
-  color: #5f5c54;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   line-height: 1.35;
 }
 
 .rolePanel > footer span[data-warning="true"],
 .rolePanel > footer small {
-  color: #a52c1f;
+  color: var(--color-error);
 }
 
 .rolePanel > footer small {
@@ -720,7 +717,7 @@
     touch-action: pan-x;
     grid-row: 2;
     grid-column: 1 / -1;
-    border-top: 1px solid #181915;
+    border-top: 1px solid var(--color-ink);
   }
 
   .shapeActions button {
@@ -796,12 +793,12 @@
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
-  border: 1.5px solid #181915;
+  border: 1.5px solid var(--color-ink);
   border-radius: 0;
   padding: 16px 18px 0;
-  background: #f7f3e9;
-  color: #181915;
-  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   pointer-events: auto;
 }
 
@@ -813,20 +810,20 @@
 
 .fabricDrawer > header h2 {
   margin: 4px 0 0;
-  font-family: Georgia, "Songti SC", serif;
+  font-family: var(--font-serif);
   font-size: clamp(1.3rem, 2vw, 1.7rem);
   font-weight: 400;
-  color: #181915;
+  color: var(--color-ink);
 }
 
 .fabricDrawer > header button {
   display: grid;
   width: 31px;
   height: 31px;
-  border: 1.5px solid #181915;
+  border: 1.5px solid var(--color-ink);
   border-radius: 0;
   background: transparent;
-  color: #181915;
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 18px;
   place-items: center;
@@ -836,15 +833,15 @@
 }
 
 .fabricDrawer > header button:hover {
-  background: #181915;
-  color: #f7f3e9;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 /* 分类 tabs — 实线矩形切换，无圆角 */
 .fabricScopeTabs {
   display: grid;
   margin-top: 16px;
-  border: 1.5px solid #181915;
+  border: 1.5px solid var(--color-ink);
   padding: 0;
   background: transparent;
   grid-template-columns: 1fr 1fr;
@@ -856,7 +853,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #66645d;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
@@ -867,17 +864,17 @@
 }
 
 .fabricScopeTabs button:first-child {
-  border-right: 1.5px solid #181915;
+  border-right: 1.5px solid var(--color-ink);
 }
 
 .fabricScopeTabs button:hover:not([aria-pressed="true"]) {
-  background: #ece9e0;
-  color: #181915;
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .fabricScopeTabs button[aria-pressed="true"] {
-  background: #181915;
-  color: #f7f3e9;
+  background: var(--color-ink);
+  color: var(--color-paper);
   font-weight: 800;
 }
 
@@ -898,27 +895,27 @@
 .fabricDrawerSearch input {
   width: 100%;
   height: 38px;
-  border: 1.5px solid #2d2d28;
+  border: 1.5px solid var(--color-border-strong);
   border-radius: 0;
   outline: none;
   padding: 0 14px;
-  background: #f0ece1;
-  color: #181915;
+  background: var(--color-surface);
+  color: var(--color-ink);
   font-size: 13px;
   transition: border-color var(--transition-fast, 120ms);
 }
 
 .fabricDrawerSearch input::placeholder {
-  color: #9e9b93;
+  color: var(--color-ink-tertiary);
 }
 
 .fabricDrawerSearch input:focus {
-  border-color: #e9522c;
-  background: #f7f3e9;
+  border-color: var(--color-signal);
+  background: var(--color-paper);
 }
 
 .fabricDrawerSearch input:hover:not(:focus) {
-  border-color: #181915;
+  border-color: var(--color-ink);
 }
 
 /* 元信息行 */
@@ -926,20 +923,20 @@
   display: flex;
   padding: 10px 2px 6px;
   justify-content: space-between;
-  color: #66645d;
+  color: var(--color-ink-secondary);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  border-bottom: 1px solid #d4cfc0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* 空/加载/错误状态 */
 .fabricDrawerState {
   display: grid;
   min-height: 240px;
-  border: 1.5px dashed #c0bbb0;
+  border: 1.5px dashed var(--color-border-strong);
   border-radius: 0;
-  color: #9e9b93;
+  color: var(--color-ink-tertiary);
   font-size: 12px;
   place-content: center;
   text-align: center;
@@ -948,11 +945,11 @@
 
 .fabricDrawerState button {
   margin-top: 10px;
-  border: 1.5px solid #181915;
+  border: 1.5px solid var(--color-ink);
   border-radius: 0;
   padding: 7px 18px;
   background: transparent;
-  color: #181915;
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
@@ -962,8 +959,8 @@
 }
 
 .fabricDrawerState button:hover {
-  background: #181915;
-  color: #f7f3e9;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 /* 拖拽放置区叠层 */
@@ -972,24 +969,24 @@
   z-index: 1090;
   inset: 70px 16px 16px;
   display: grid;
-  border: 2.5px dashed #e9522c;
+  border: 2.5px dashed var(--color-signal);
   border-radius: 0;
-  background: rgb(247 243 233 / 88%);
-  color: #181915;
+  background: color-mix(in srgb, var(--color-paper) 90%, transparent);
+  color: var(--color-ink);
   pointer-events: none;
   place-content: center;
   text-align: center;
 }
 
 .fabricDropZone strong {
-  color: #e9522c;
+  color: var(--color-signal);
   font-size: 20px;
   letter-spacing: 0.16em;
 }
 
 .fabricDropZone span {
   margin-top: 8px;
-  color: #66645d;
+  color: var(--color-ink-secondary);
   font-size: 12px;
 }
 

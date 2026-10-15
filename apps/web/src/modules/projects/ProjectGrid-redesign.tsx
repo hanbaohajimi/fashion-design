@@ -4,7 +4,7 @@
 
 import { ProjectCard } from "./ProjectCard-redesign";
 import type { Project } from "./project-types";
-import styles from "./projects-redesign.module.css";
+import styles from "./projects.module.css";
 
 interface ProjectGridProps {
   readonly duplicatingProjectIds: ReadonlySet<string>;

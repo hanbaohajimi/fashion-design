@@ -9,19 +9,16 @@
   height: 52px;
   display: flex;
   align-items: center;
-  border: 1px solid rgb(34 34 31 / 15%);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 5px;
-  background: rgb(255 255 253 / 90%);
-  box-shadow:
-    0 9px 30px rgb(72 59 40 / 13%),
-    inset 0 1px 0 #fff;
+  background: var(--color-paper);
+  box-shadow: 0 2px 8px var(--shadow-ui);
   transform: translateX(-50%);
-  backdrop-filter: blur(16px) saturate(120%);
   pointer-events: all;
   transition:
-    left 200ms ease,
-    max-width 200ms ease;
+    left var(--dur-layout, 220ms) var(--ease-state, cubic-bezier(0.4,0,0.2,1)),
+    max-width var(--dur-layout, 220ms) var(--ease-state, cubic-bezier(0.4,0,0.2,1));
 }
 
 .toolScroller {
@@ -115,8 +112,8 @@
     radial-gradient(
       ellipse 46% 62% at 50% 51%,
       transparent 0 62%,
-      rgb(28 27 24 / 8%) 83%,
-      rgb(28 27 24 / 16%) 100%
+      var(--color-divider) 83%,
+      var(--color-border) 100%
     );
   pointer-events: none;
 }
@@ -125,9 +122,9 @@
   background:
     radial-gradient(
       ellipse 46% 62% at 50% 51%,
-      rgb(250 247 239 / 10%) 0 58%,
-      rgb(28 27 24 / 12%) 82%,
-      rgb(28 27 24 / 20%) 100%
+      var(--color-divider) 0 58%,
+      var(--color-border) 82%,
+      var(--color-border-strong) 100%
     );
   cursor: progress;
   pointer-events: all;
@@ -139,10 +136,10 @@
   bottom: 98px;
   left: calc((100vw - var(--board-agent-current-width, 400px)) / 2);
   padding: 9px 14px;
-  border: 1px solid #181915;
-  background: #181915;
-  box-shadow: 5px 5px 0 rgb(24 25 21 / 12%);
-  color: #fffef9;
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
+  box-shadow: 5px 5px 0 var(--color-border);
+  color: var(--color-paper);
   font-size: 10px;
   letter-spacing: 0.05em;
   pointer-events: none;
@@ -150,18 +147,18 @@
 }
 
 .sketchToast[data-status="error"] {
-  border-color: #a84340;
-  background: #a84340;
+  border-color: var(--color-error);
+  background: var(--color-error);
 }
 
 .toolRail.sketchToolRail {
   height: 70px;
   max-width: calc(100vw - var(--board-agent-current-width, 400px) - 28px);
-  border-color: rgb(24 25 21 / 36%);
-  background: rgb(250 247 239 / 96%);
+  border-color: var(--color-border-strong);
+  background: var(--color-paper);
   box-shadow:
-    0 12px 38px rgb(54 44 31 / 18%),
-    inset 0 1px 0 #fff;
+    0 12px 38px var(--color-border),
+    inset 0 1px 0 var(--color-paper);
 }
 
 .sketchControls {
@@ -202,7 +199,7 @@
   border: 0;
   padding: 0;
   background: transparent;
-  color: #181915;
+  color: var(--color-ink);
   cursor: text;
   text-align: left;
 }
@@ -219,7 +216,7 @@
 
 .sketchDocumentTitle span {
   flex: 0 0 auto;
-  color: #7a746a;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -238,7 +235,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #716c63;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   font-weight: 650;
   white-space: nowrap;
@@ -248,19 +245,19 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #a7a197;
+  background: var(--color-ink-disabled);
 }
 
 .sketchSyncState[data-state="ready"] i {
-  background: #4f835b;
+  background: var(--color-success);
 }
 
 .sketchSyncState[data-state="error"] {
-  color: #a84340;
+  color: var(--color-error);
 }
 
 .sketchSyncState[data-state="error"] i {
-  background: #a84340;
+  background: var(--color-error);
 }
 
 .sketchSyncState[data-state="rendering"] i,
@@ -286,11 +283,11 @@
   width: 100%;
   min-width: 0;
   height: 28px;
-  border: 1px solid #938d83;
+  border: 1px solid var(--color-ink-tertiary);
   border-radius: 5px;
   padding: 0 6px;
-  background: #fffef9;
-  color: #181915;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
   font-size: 10px;
   outline: none;
@@ -298,14 +295,14 @@
 
 .sketchRenameControls input:focus {
   border-color: var(--color-accent-terracotta);
-  box-shadow: 0 0 0 2px rgb(184 90 86 / 14%);
+  box-shadow: 0 0 0 2px var(--color-error-bg);
 }
 
 .sketchRenameControls button {
   border: 0;
   padding: 2px;
   background: transparent;
-  color: #68635b;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 8px;
 }
@@ -354,20 +351,20 @@
   flex: 0 0 auto;
   align-content: center;
   padding: 3px 5px 4px;
-  border: 1px solid rgb(24 25 21 / 14%);
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: rgb(255 254 249 / 52%);
+  background: var(--color-surface);
   gap: 1px;
 }
 
 .sketchOptionGroup[data-control="color"] {
   margin-left: 3px;
-  border-color: rgb(184 90 86 / 26%);
-  background: rgb(184 90 86 / 6%);
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .sketchOptionLabel {
-  color: #716c63;
+  color: var(--color-ink-secondary);
   font-size: 8px;
   font-weight: 760;
   letter-spacing: 0.12em;
@@ -376,7 +373,7 @@
 }
 
 .sketchOptionGroup[data-control="color"] .sketchOptionLabel {
-  color: #8d504d;
+  color: var(--color-error);
 }
 
 .sketchSizes,
@@ -403,21 +400,21 @@
 
 .sketchSizes button:hover,
 .sketchColors button:hover {
-  border-color: rgb(24 25 21 / 20%);
-  background: #ece8dd;
+  border-color: var(--color-border);
+  background: var(--color-surface);
 }
 
 .sketchSizes button[aria-pressed="true"],
 .sketchColors button[aria-pressed="true"] {
-  border-color: #181915;
-  background: #fffef9;
+  border-color: var(--color-ink);
+  background: var(--color-paper);
 }
 
 .sketchSizes button span {
   display: block;
   width: 15px;
   border-radius: 50%;
-  background: #181915;
+  background: var(--color-ink);
 }
 
 .sketchSizes button[data-size="s"] span {
@@ -435,28 +432,28 @@
 .sketchColors button::before {
   width: 15px;
   height: 15px;
-  border: 1px solid rgb(24 25 21 / 28%);
+  border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   content: "";
 }
 
 .sketchColors button[data-color="black"]::before {
-  background: #1d1d1a;
+  background: var(--color-ink);
 }
 
 .sketchColors button[data-color="grey"]::before {
-  background: #77736b;
+  background: var(--color-ink-secondary);
 }
 
 .sketchExitButton,
 .sketchFinishButton {
   height: 48px;
   flex: 0 0 auto;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   border-radius: 7px;
   padding: 0 15px;
   background: transparent;
-  color: #181915;
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
@@ -466,12 +463,12 @@
 .sketchFinishButton {
   margin-left: 5px;
   min-width: 98px;
-  background: #181915;
-  color: #fffef9;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .sketchExitButton:hover:not(:disabled) {
-  background: #ece8dd;
+  background: var(--color-surface);
 }
 
 .sketchFinishButton:hover:not(:disabled) {
@@ -501,7 +498,7 @@
 
 .toolButton.pinButton:hover:not(:disabled) {
   border: 0;
-  background: #f5f1ef;
+  background: var(--color-surface);
   color: var(--color-ink-black);
 }
 
@@ -509,7 +506,7 @@
 .toolButton.pinButton[aria-pressed="true"]:hover:not(:disabled),
 .toolButton.pinButton:active:not(:disabled) {
   border: 0;
-  background: #f8e9e7;
+  background: var(--color-error-bg);
   box-shadow: none;
   color: var(--color-ink-black);
   transform: none;
@@ -517,13 +514,13 @@
 
 .toolButton.pinButton:disabled {
   background: transparent;
-  color: #c9c5c1;
+  color: var(--color-border-strong);
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .toolButton.pinButton:focus-visible {
-  outline: 2px solid #5d5a57;
+  outline: 2px solid var(--color-ink-secondary);
   outline-offset: 2px;
 }
 

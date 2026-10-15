@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { resolveTrendReturnTarget } from "../../modules/trends/active-board";
 import { TrendArchive } from "../../modules/trends/TrendArchive";
-import { ThemeToggle } from "../../components/ThemeToggle/ThemeToggle";
 import styles from "../../modules/trends/trends.module.css";
 
 const TREND_PLATFORMS = [
@@ -45,7 +44,6 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
         <header className={styles.pageHeader}>
           <span>FASHION RESEARCH INDEX</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <ThemeToggle />
             <Link href={returnTarget.href}>{returnTarget.label}</Link>
           </div>
         </header>

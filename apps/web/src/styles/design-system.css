@@ -1,247 +1,381 @@
 /**
- * Atelier Design Studio - Complete Design System
+ * 新时尚 AI 设计平台 — 设计系统
  *
- * 专业服装设计工作台设计系统：
- * - WCAG AA对比度标准
- * - 完整的间距/圆角/阴影token系统
- * - Pantone色彩映射
- * - 服装行业语义化颜色
+ * 视觉主张：「样衣间」
+ *   界面是白墙，素材是展品。
+ *   UI 控件的视觉重量必须低于画布上的任何素材。
+ *
+ * 三条纪律：
+ *   1. 墙与纸 —— 画布（墙）略深，面板（纸）最亮，两者必须可辨。
+ *   2. 染料而非霓虹 —— 强调色取自织物染料，不用科技橙。
+ *   3. 中性不冷 —— 灰阶带极轻暖调，为服装色彩判断提供中立底。
  */
 
 :root {
-  /* ========================================
-     COLOR SYSTEM - WCAG AA Compliant
-     ======================================== */
+  color-scheme: light;
 
-  /* === Primary Surfaces - 符合4.5:1对比度 === */
-  --surface-paper: #faf8f3;        /* 主背景 - 柔和纸张白 */
-  --surface-canvas: #f5f2ea;       /* 次级背景 */
-  --surface-card: #ffffff;         /* 卡片背景 */
-  --surface-overlay: #fbf9f5;      /* 浮层背景 */
+  /* ============================================================
+     一、表面层级 —— 墙 / 纸 / 台
+     ============================================================
+     设计工具的铁律：画布与面板必须可辨。
+     画布是"墙"，略深、略暖，让素材从背景中浮起。
+     面板是"纸"，最亮，浮动在墙之上。
+  */
 
-  /* === Text Colors - WCAG AA 标准 === */
-  --text-primary: #1a1916;         /* 主文本 (对比度 13.2:1 on paper) */
-  --text-secondary: #4a4640;       /* 次级文本 (对比度 7.8:1) */
-  --text-tertiary: #6b6560;        /* 三级文本 (对比度 5.2:1) */
-  --text-disabled: #8f8a84;        /* 禁用文本 (对比度 3.5:1 - 仅用于禁用状态) */
+  --color-canvas: #F1EFEA;      /* 墙：画布底，略深于面板 */
+  --color-paper: #FCFBF8;       /* 纸：面板、工具栏、卡片 */
+  --color-surface: #E9E6DF;     /* 台：次级表面、分组背景 */
+  --color-overlay: #DEDAD1;     /* 叠层：悬停、选中底 */
 
-  /* === Accent Colors - 时尚行业色彩 === */
-  --accent-primary: #c84130;       /* 克制的红色 (Jil Sander风格) */
-  --accent-primary-hover: #a83525;
-  --accent-secondary: #d6ad7e;     /* 暖铜色 */
-  --accent-tertiary: #7a9b76;      /* 橄榄绿 */
+  /* ============================================================
+     二、文字层级 —— 墨
+     ============================================================
+     不用纯黑。纯黑在浅色底上过于尖锐，长时间阅读疲劳。
+  */
 
-  /* === Semantic Colors === */
-  --color-error: #b23820;          /* 错误红 (对比度 6.1:1) */
-  --color-error-bg: #fef5f3;
-  --color-error-border: #e89580;
-  --color-success: #5d7c3c;        /* 成功绿 (对比度 5.8:1) */
-  --color-success-bg: #f5f8f2;
-  --color-warning: #c9a838;        /* 警告黄 (对比度 5.5:1) */
-  --color-warning-bg: #fdfbf3;
+  --color-ink: #1F1D1A;           /* 主要文字 —— 深墨 */
+  --color-ink-secondary: #5C574F; /* 次要文字 —— 说明、元数据 */
+  --color-ink-tertiary: #8F8A80;  /* 辅助文字 —— 占位符、标签 */
+  --color-ink-disabled: #BDB8AE;  /* 禁用 */
 
-  /* === Fashion Industry Semantic Colors === */
-  /* 面料类型标签颜色 */
-  --fabric-knit: #e8d5c8;          /* 针织 - 柔软米色 */
-  --fabric-woven: #d4c4ae;         /* 梭织 - 经典卡其 */
-  --fabric-leather: #a89080;       /* 皮革 - 深褐色 */
-  --fabric-technical: #b8c5d0;     /* 科技面料 - 冷灰蓝 */
+  /* ============================================================
+     三、强调色 —— 染料
+     ============================================================
+     取自茜草染（madder）/ 陶土 / 皮革的烧赭色。
+     比科技橙更沉，接近真实织物与材料的颜色。
+  */
 
-  /* 风格标签颜色 */
-  --style-minimalist: #e5e2dc;     /* 极简主义 */
-  --style-avant-garde: #d8d0e0;    /* 先锋 */
-  --style-streetwear: #e0d5c8;     /* 街头 */
-  --style-couture: #f0e8e0;        /* 高定 */
+  --color-signal: #B0452A;
+  --color-signal-hover: #98381F;
+  --color-signal-subtle: rgba(176, 69, 42, 0.08);
+  --color-signal-wash: rgba(176, 69, 42, 0.04);
 
-  /* 廓形标签颜色 */
-  --silhouette-a-line: #dce5d8;
-  --silhouette-cocoon: #e5ddd5;
-  --silhouette-fitted: #e8dfe0;
-  --silhouette-oversized: #d8dfe5;
+  /* ============================================================
+     四、边框与分割线
+     ============================================================
+     线是结构，不是装饰。宁可少用。
+  */
 
-  /* === Pantone 映射色 (常用时尚色) === */
-  --pantone-black-c: #2b2b2b;
-  --pantone-white: #f7f7f7;
-  --pantone-warm-gray-2c: #d9d6d1;
-  --pantone-warm-gray-6c: #b1ada7;
-  --pantone-ikb-blue: #002fa7;     /* IKB蓝 (Yves Klein) */
-  --pantone-red-032c: #ed2939;     /* 时尚红 */
-  --pantone-buttercup: #fcd116;    /* 柠檬黄 */
-  --pantone-greenery: #88b04b;     /* 草木绿 */
+  --color-border: rgba(31, 29, 26, 0.14);
+  --color-border-strong: rgba(31, 29, 26, 0.28);
+  --color-divider: rgba(31, 29, 26, 0.07);
 
-  /* ========================================
-     SPACING SYSTEM - 8pt Grid
-     ======================================== */
+  /* 遮罩层 —— 模态背景、聚焦遮罩，需要足够暗以隔离内容 */
+  --color-scrim: rgba(31, 29, 26, 0.72);
+  --color-scrim-soft: rgba(31, 29, 26, 0.48);
 
-  --space-0: 0;
-  --space-1: 4px;      /* 0.25rem */
-  --space-2: 8px;      /* 0.5rem */
-  --space-3: 12px;     /* 0.75rem */
-  --space-4: 16px;     /* 1rem */
-  --space-5: 20px;     /* 1.25rem */
-  --space-6: 24px;     /* 1.5rem */
-  --space-8: 32px;     /* 2rem */
-  --space-10: 40px;    /* 2.5rem */
-  --space-12: 48px;    /* 3rem */
-  --space-16: 64px;    /* 4rem */
-  --space-20: 80px;    /* 5rem */
-  --space-24: 96px;    /* 6rem */
-  --space-32: 128px;   /* 8rem */
+  /* 画布网格点 —— 必须是耳语，不能是图案。
+     全不透明的墨色会把网格变成噪音，毁掉画布的安静感。 */
+  --color-canvas-dot: rgba(31, 29, 26, 0.16);
 
-  /* ========================================
-     RADIUS SYSTEM
-     ======================================== */
+  /* 反色层 —— 深色按钮、选中态、深色提示条 */
+  --color-inverse: #26241F;
+  --color-inverse-hover: #14120F;
+  --color-on-inverse: #FCFBF8;
 
-  --radius-none: 0;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 24px;
-  --radius-pill: 999px;
-  --radius-circle: 50%;
+  /* ============================================================
+     五、语义状态
+     ============================================================ */
 
-  /* ========================================
-     SHADOW SYSTEM - Layered Elevation
-     ======================================== */
+  --color-success: #4A6B57;
+  --color-success-bg: rgba(74, 107, 87, 0.08);
+  --color-warning: #9C6B3C;
+  --color-warning-bg: rgba(156, 107, 60, 0.08);
+  --color-error: #A33A22;
+  --color-error-bg: rgba(163, 58, 34, 0.08);
 
-  --shadow-xs: 0 1px 2px rgb(26 25 22 / 0.08);
-  --shadow-sm: 0 2px 4px rgb(26 25 22 / 0.1), 0 1px 2px rgb(26 25 22 / 0.06);
-  --shadow-md: 0 4px 8px rgb(26 25 22 / 0.12), 0 2px 4px rgb(26 25 22 / 0.08);
-  --shadow-lg: 0 8px 16px rgb(26 25 22 / 0.14), 0 4px 8px rgb(26 25 22 / 0.1);
-  --shadow-xl: 0 16px 32px rgb(26 25 22 / 0.16), 0 8px 16px rgb(26 25 22 / 0.12);
-  --shadow-2xl: 0 24px 48px rgb(26 25 22 / 0.18), 0 12px 24px rgb(26 25 22 / 0.14);
+  /* ============================================================
+     六、材料色板 —— 品牌签名
+     ============================================================
+     这是本产品区别于通用工具的核心视觉资产。
+     取自真实服装材料的颜色，用于素材角色标识与色卡。
+     每色含：--swatch-*（纯色）、--swatch-*-wash（浅底）。
+  */
 
-  /* Paper texture shadow (editorial style) */
-  --shadow-paper: 6px 6px 0 rgb(26 25 22 / 0.1);
-  --shadow-paper-hover: 10px 10px 0 rgb(26 25 22 / 0.14);
+  /* 羊毛 —— 廓形参考 */
+  --swatch-wool: #8C9199;
+  --swatch-wool-wash: #E4E6E9;
+  /* 亚麻 —— 面料参考 */
+  --swatch-linen: #B09A78;
+  --swatch-linen-wash: #EDE5D8;
+  /* 茜草 —— 风格参考 */
+  --swatch-madder: #A85846;
+  --swatch-madder-wash: #F0DDD6;
+  /* 靛蓝 —— 细节参考 */
+  --swatch-indigo: #55647A;
+  --swatch-indigo-wash: #DDE1E8;
+  /* 姜黄 —— 色卡 */
+  --swatch-turmeric: #C29B3E;
+  --swatch-turmeric-wash: #F2E7CB;
+  /* 鼠尾草 —— 备注 */
+  --swatch-sage: #8A927F;
+  --swatch-sage-wash: #E5E8E0;
+  /* 紫草 —— 二级强调 */
+  --swatch-mauve: #7D6B84;
+  --swatch-mauve-wash: #E6E0E9;
 
-  /* ========================================
-     TYPOGRAPHY SYSTEM - Fluid Scale
-     ======================================== */
+  /* ============================================================
+     七、字体
+     ============================================================
+     无衬线承担界面，衬线承担品牌与编辑标题。
+     中文回退顺序决定实际观感，优先苹方 / 思源。
+  */
 
-  /* Font Families */
-  --font-sans: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-serif: Georgia, "Songti SC", "SimSun", serif;
-  --font-mono: "SF Mono", Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-serif:
+    "Palatino Linotype", Palatino, "Book Antiqua",
+    "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+  --font-sans:
+    "Inter", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans SC", -apple-system, system-ui, sans-serif;
+  --font-mono:
+    "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
-  /* Fluid Font Sizes - 使用clamp()实现响应式 */
-  --font-xs: clamp(0.625rem, 0.5rem + 0.25vw, 0.75rem);      /* 10-12px */
-  --font-sm: clamp(0.75rem, 0.65rem + 0.25vw, 0.875rem);     /* 12-14px */
-  --font-base: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);       /* 14-16px */
-  --font-md: clamp(1rem, 0.9rem + 0.3vw, 1.125rem);          /* 16-18px */
-  --font-lg: clamp(1.125rem, 1rem + 0.5vw, 1.5rem);          /* 18-24px */
-  --font-xl: clamp(1.5rem, 1.25rem + 1vw, 2.25rem);          /* 24-36px */
-  --font-2xl: clamp(2rem, 1.5rem + 2vw, 3.5rem);             /* 32-56px */
-  --font-3xl: clamp(2.5rem, 2rem + 2.5vw, 5rem);             /* 40-80px */
-  --font-4xl: clamp(3rem, 2.5rem + 3vw, 6rem);               /* 48-96px */
+  /* 字号 —— 基于 4px 栅格 */
+  --text-2xs: 9px;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-4xl: 48px;
+  --text-5xl: 64px;
 
-  /* Font Weights */
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-black: 800;
+  /* 字重 */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
 
-  /* Letter Spacing */
-  --tracking-tighter: -0.055em;    /* Display titles */
-  --tracking-tight: -0.025em;      /* Headings */
-  --tracking-normal: 0;
-  --tracking-wide: 0.08em;         /* Labels */
-  --tracking-wider: 0.14em;        /* Small caps */
-  --tracking-widest: 0.22em;       /* All caps */
-
-  /* Line Heights */
-  --leading-none: 1;
-  --leading-tight: 1.2;
-  --leading-snug: 1.4;
+  /* 行高 */
+  --leading-tight: 1.12;
+  --leading-snug: 1.3;
   --leading-normal: 1.5;
   --leading-relaxed: 1.7;
-  --leading-loose: 2;
 
-  /* ========================================
-     BORDER SYSTEM
-     ======================================== */
+  /* 字距 —— 小字号需要正字距才清晰 */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  --tracking-wider: 0.12em;
+  --tracking-widest: 0.18em;
 
-  --border-width-thin: 1px;
-  --border-width-medium: 2px;
-  --border-width-thick: 3px;
-  --border-width-heavy: 4px;
+  /* ============================================================
+     八、间距 —— 8px 栅格
+     ============================================================ */
 
-  --border-color-default: rgb(26 25 22 / 0.15);
-  --border-color-strong: rgb(26 25 22 / 0.3);
-  --border-color-subtle: rgb(26 25 22 / 0.08);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
 
-  /* ========================================
-     TRANSITIONS
-     ======================================== */
+  /* ============================================================
+     九、圆角 —— 克制
+     ============================================================
+     专业工具不需要大圆角。4-10px 足够。
+  */
 
-  --duration-instant: 0ms;
-  --duration-fast: 120ms;
-  --duration-base: 200ms;
-  --duration-slow: 300ms;
-  --duration-slower: 500ms;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-full: 999px;
 
-  --ease-linear: linear;
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
-  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  /* ============================================================
+     十、阴影 —— 分域
+     ============================================================
+     UI 面板：几乎不用阴影（靠边框分层）。
+     画布素材：允许真实层叠阴影（素材有物理厚度）。
+  */
 
-  /* ========================================
-     Z-INDEX SCALE
-     ======================================== */
+  --shadow-none: none;
+  --shadow-hairline: 0 0 0 1px var(--color-border);
+  --shadow-ui: 0 1px 2px rgba(31, 29, 26, 0.05);
+
+  /* 画布素材专用 —— 模拟纸张 / 卡纸的物理厚度 */
+  --shadow-material-1: 0 1px 3px rgba(31, 29, 26, 0.10);
+  --shadow-material-2: 0 3px 10px rgba(31, 29, 26, 0.12);
+  --shadow-material-3: 0 8px 24px rgba(31, 29, 26, 0.16);
+
+  /* 浮层 */
+  --shadow-popup: 0 4px 16px rgba(31, 29, 26, 0.12);
+  --shadow-modal: 0 12px 40px rgba(31, 29, 26, 0.18);
+
+  /* ============================================================
+     十一、动效
+     ============================================================ */
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --duration-instant: 90ms;
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 320ms;
+
+  /* ============================================================
+     十二、层级
+     ============================================================ */
 
   --z-base: 0;
-  --z-dropdown: 100;
-  --z-sticky: 200;
+  --z-sticky: 100;
+  --z-dropdown: 200;
   --z-overlay: 300;
   --z-modal: 400;
   --z-toast: 500;
 
-  /* ========================================
-     OPACITY SCALE
-     ======================================== */
+  /* ============================================================
+     十三、向后兼容映射
+     ============================================================
+     旧变量名继续解析到新值，避免大规模重写。
+  */
 
-  --opacity-disabled: 0.38;
-  --opacity-secondary: 0.64;
-  --opacity-hover: 0.08;
-  --opacity-active: 0.12;
+  /* Atelier 系列 */
+  --atelier-canvas: var(--color-canvas);
+  --atelier-paper: var(--color-paper);
+  --atelier-sheet: var(--color-surface);
+  --atelier-ink: var(--color-ink);
+  --atelier-muted: var(--color-ink-secondary);
+  --atelier-signal: var(--color-signal);
+  --atelier-signal-deep: var(--color-signal-hover);
+  --atelier-rule: var(--color-border);
+  --atelier-grid: var(--color-divider);
 
-  /* ========================================
-     LAYOUT CONSTANTS
-     ======================================== */
+  /* Trend 系列 */
+  --trend-bg: var(--color-paper);
+  --trend-ink: var(--color-ink);
+  --trend-muted: var(--color-ink-secondary);
+  --trend-grid: var(--color-divider);
+  --trend-divider: var(--color-border);
+  --trend-accent: var(--color-signal);
+  --trend-motion: var(--duration-normal) var(--ease-standard);
 
-  --topbar-height: 72px;
-  --sidebar-width: 280px;
-  --content-max-width: 1400px;
-  --card-gap: clamp(1rem, 2vw, 2rem);
+  /* 字体映射 */
+  --type-editorial: var(--font-serif);
+  --type-ui: var(--font-sans);
+
+  /* 动效映射 */
+  --ease-atelier: var(--ease-enter);
+  --dur-quick: var(--duration-fast);
+  --dur-considered: var(--duration-normal);
+
+  /* 组件变量别名 */
+  --color-ink-black: var(--color-ink);
+  --color-accent-terracotta: var(--color-signal);
+  --color-warm-white: var(--color-paper);
+  --color-paper-beige: var(--color-surface);
+  --font-weight-bold: var(--font-bold);
+  --letter-spacing-wide: 0.08em;
+  --spacing-sm: var(--space-2);
+  --transition-fast: var(--duration-fast);
+  --radius-circle: 50%;
+  --z-panel: 100;
+
+  /* 阴影别名（旧代码引用） */
+  --shadow-border: 0 0 0 1px var(--color-border);
+  --shadow-sm: var(--shadow-ui);
+  --shadow-card: var(--shadow-material-1);
+
+  /* ease 别名 */
+  --ease-in-out: var(--ease-enter);
+
+  /* opacity */
+  --opacity-disabled: 0.4;
+
+  /* 缺失的 canvas 底色（用于 body 整体背景，比 canvas 略深） */
+  --color-parchment: var(--color-canvas);
+
+  /* ── fabrics.module.css 使用的旧 token ──────────────────────────────────
+     这些 token 来自之前的设计系统版本，用 fallback 方式保持兼容，
+     同时让面料库直接继承样衣间的颜色。 */
+  --surface-paper:   var(--color-canvas);   /* 面料库页面底色 */
+  --surface-card:    var(--color-paper);    /* 面料卡片背景 */
+  --text-primary:    var(--color-ink);
+  --text-secondary:  var(--color-ink-secondary);
+  --text-muted:      var(--color-ink-tertiary);
+  --border-light:    var(--color-border);
+  --border-hover:    var(--color-border-strong);
+  --border-primary:  var(--color-ink);      /* 强边框（按钮描边等） */
+  --accent-primary:  var(--color-signal);
+  --accent-secondary: var(--color-signal-hover);
+  --transition-base: var(--duration-normal);
+  /* 遮罩层颜色 */
+  --color-scrim:      rgba(31, 29, 26, 0.72);
+  --color-scrim-soft: rgba(31, 29, 26, 0.48);
 }
 
-/* ========================================
-   UTILITY CLASSES
-   ======================================== */
+/* ============================================================
+     全局基线
+     ============================================================ */
 
-/* Screen Reader Only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  margin: -1px;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* 减少动画偏好 */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+::selection {
+  background: var(--color-signal-subtle);
+  color: var(--color-ink);
+}
+
+/* ============================================================
+     滚动条 —— 细、低存在感
+     ============================================================ */
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 2px solid transparent;
+  border-radius: var(--radius-full);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-tertiary);
+  background-clip: content-box;
+}
+
+/* ============================================================
+     焦点可见性 —— 键盘可达
+     ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+     工具类 —— 微标签
+     ============================================================
+     界面上反复出现的全大写小标签，统一在此定义。
+  */
+
+.micro-label {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-bold);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
 }

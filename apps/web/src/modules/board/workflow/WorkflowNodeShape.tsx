@@ -3,10 +3,17 @@ import {
   HTMLContainer,
   type RecordProps,
   T,
+  useEditor,
+  useValue,
+  useSvgExportContext,
   type TLShape,
 } from "tldraw";
 
+import type { WorkflowNode } from "./workflow-api";
+import { displayNodeTitle } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
+import { type CSSProperties, type ReactNode } from "react";
+import { useWorkflowInteractions } from "./WorkflowInteractions";
 
 export const WORKFLOW_NODE_SHAPE_TYPE = "fashion-workflow-node";
 
@@ -31,6 +38,10 @@ declare module "tldraw" {
 
 export type WorkflowNodeShape = TLShape<typeof WORKFLOW_NODE_SHAPE_TYPE>;
 
+/**
+ * 节点形状收到的 title 已由 workflow-graph 的 displayNodeTitle 处理过，
+ * 这里只负责把工具节点标记为 tool（kind），不再重复判断哈希。
+ */
 const labels: Readonly<Record<string, string>> = {
   analyze_brief: "ANALYSIS",
   brief: "TEXT",
@@ -92,6 +103,19 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
     return false;
   }
 
+  override onDoubleClick = (shape: WorkflowNodeShape) => {
+    if (shape.props.status !== "proposed")
+      window.dispatchEvent(
+        new CustomEvent("fashion-workflow:node-details", {
+          detail: shape.props.nodeId,
+        }),
+      );
+    return {
+      id: shape.id,
+      type: WORKFLOW_NODE_SHAPE_TYPE as typeof WORKFLOW_NODE_SHAPE_TYPE,
+    };
+  };
+
   override onTranslate = (shape: WorkflowNodeShape) =>
     shape.props.status === "proposed"
       ? {
@@ -107,18 +131,18 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
   }
 
   override component(shape: WorkflowNodeShape) {
-    const { kind, nodeType, title, summary, imageUrl, status, color } =
-      shape.props;
+    const { kind, nodeType, summary, imageUrl, status, color } = shape.props;
+    const title = displayNodeTitle({
+      title: shape.props.title,
+      type: nodeType as WorkflowNode["type"],
+    });
     return (
-      <HTMLContainer
-        className={styles.node}
-        data-highlighted={shape.props.highlighted ? "true" : "false"}
-        data-kind={kind}
-        data-muted={shape.props.muted ? "true" : "false"}
-        data-status={status}
-        data-type={nodeType}
-      >
-        <span aria-hidden="true" className={styles.inputPort} />
+      <WorkflowNodeFrame shape={shape}>
+        {kind === "tool" && nodeType !== "restore_version" ? (
+          <WorkflowPort shape={shape} side="input" />
+        ) : (
+          <span aria-hidden="true" className={styles.inputPort} />
+        )}
         <header className={styles.nodeHeader}>
           <span className={styles.eyebrow}>
             {kind === "asset" ? "素材" : "工具"} ·{" "}
@@ -129,7 +153,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         {imageUrl ? (
           <div className={styles.imageFrame}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt={title} src={imageUrl} />
+            <img alt={title} draggable={false} src={imageUrl} />
           </div>
         ) : null}
         {nodeType === "swatch" && /^#[0-9A-Fa-f]{6}$/u.test(color) ? (
@@ -140,20 +164,22 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
           />
         ) : null}
         {summary ? <p className={styles.summary}>{summary}</p> : null}
-        {kind === "tool" ? (
+        {kind === "tool" && status !== "ready" && status !== "proposed" ? (
           <span className={styles.toolStatus}>
             <span aria-hidden="true" />
             {status === "running"
               ? "执行中"
               : status === "failed"
                 ? "执行失败"
-                : status === "completed" || status === "succeeded"
-                  ? "已完成"
-                  : "等待执行"}
+                : "已完成"}
           </span>
         ) : null}
-        <span aria-hidden="true" className={styles.outputPort} />
-      </HTMLContainer>
+        {kind === "asset" ? (
+          <WorkflowPort shape={shape} side="output" />
+        ) : (
+          <span aria-hidden="true" className={styles.outputPort} />
+        )}
+      </WorkflowNodeFrame>
     );
   }
 
@@ -162,4 +188,119 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
     path.roundRect(0, 0, shape.props.w, shape.props.h, 12);
     return path;
   }
+}
+
+function WorkflowNodeFrame({
+  shape,
+  children,
+}: {
+  shape: WorkflowNodeShape;
+  children: ReactNode;
+}) {
+  const interaction = useWorkflowInteractions();
+  const editor = useEditor();
+  const exporting = useSvgExportContext();
+  const exportStyle = exporting
+    ? (Object.fromEntries(
+        [
+          "--color-paper",
+          "--color-surface",
+          "--color-border",
+          "--color-border-strong",
+          "--color-divider",
+          "--color-ink",
+          "--color-ink-secondary",
+          "--color-ink-tertiary",
+          "--swatch-indigo",
+          "--swatch-mauve",
+          "--swatch-mauve-wash",
+        ].map((token) => [
+          token,
+          getComputedStyle(editor.getContainer()).getPropertyValue(token),
+        ]),
+      ) as CSSProperties)
+    : undefined;
+  const selected = useValue(
+    "workflow-node-actions",
+    () => editor.getSelectedShapeIds().includes(shape.id),
+    [editor, shape.id],
+  );
+  const side = shape.props.kind === "asset" ? "output" : "input";
+  const hint = interaction?.hint(shape.props.nodeId, side);
+  return (
+    <HTMLContainer
+      className={styles.node}
+      style={exportStyle}
+      data-highlighted={shape.props.highlighted ? "true" : "false"}
+      data-kind={shape.props.kind}
+      data-muted={shape.props.muted && !interaction?.gesture ? "true" : "false"}
+      data-status={shape.props.status}
+      data-type={shape.props.nodeType}
+      data-connectable={hint ? (hint.valid ? "valid" : "invalid") : "none"}
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        interaction?.details(shape.props.nodeId);
+      }}
+    >
+      {children}
+      {selected && !exporting && shape.props.status !== "proposed" ? (
+        <div
+          className={styles.nodeActions}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            onClick={() => interaction?.details(shape.props.nodeId)}
+            type="button"
+          >
+            详情
+          </button>
+        </div>
+      ) : null}
+    </HTMLContainer>
+  );
+}
+
+function WorkflowPort({
+  shape,
+  side,
+}: {
+  shape: WorkflowNodeShape;
+  side: "input" | "output";
+}) {
+  const interaction = useWorkflowInteractions();
+  const exporting = useSvgExportContext();
+  if (exporting) return null;
+  const hint = interaction?.hint(shape.props.nodeId, side);
+  const label =
+    hint?.label ?? (side === "input" ? "连接输入素材" : "连接到工具");
+  return (
+    <button
+      aria-label={`${shape.props.title} · ${label}`}
+      className={`${styles.interactivePort} ${side === "input" ? styles.portInput : styles.portOutput}`}
+      data-workflow-port={side}
+      data-node-id={shape.props.nodeId}
+      data-valid={hint?.valid ? "true" : "false"}
+      disabled={shape.props.status === "proposed"}
+      title={label}
+      type="button"
+      onPointerDown={(event) =>
+        interaction?.portDown(shape.props.nodeId, side, event)
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          interaction?.portClick(shape.props.nodeId, side, true);
+        }
+      }}
+      onPointerUp={(event) => interaction?.portUp(event)}
+      onClick={(event) => {
+        event.stopPropagation();
+        interaction?.portClick(shape.props.nodeId, side);
+      }}
+    >
+      <span aria-hidden="true" />
+      <span className={styles.portLabel}>{label}</span>
+    </button>
+  );
 }

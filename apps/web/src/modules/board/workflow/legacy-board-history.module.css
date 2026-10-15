@@ -5,7 +5,7 @@
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgb(27 31 28 / 55%);
+  background: var(--color-scrim-soft);
   backdrop-filter: blur(6px);
 }
 
@@ -15,11 +15,11 @@
   width: min(1400px, 100%);
   height: min(900px, 100%);
   overflow: hidden;
-  border: 1px solid #deddd4;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
-  background: #f8f8f4;
-  box-shadow: 0 28px 90px rgb(15 29 24 / 22%);
-  color: #25372f;
+  background: var(--color-paper);
+  box-shadow: 0 28px 90px var(--color-border);
+  color: var(--color-success);
 }
 
 .header {
@@ -28,11 +28,11 @@
   justify-content: space-between;
   gap: 24px;
   padding: 20px 24px;
-  border-bottom: 1px solid #e4e4db;
+  border-bottom: 1px solid var(--color-surface);
 }
 
 .eyebrow {
-  color: #75847a;
+  color: var(--color-ink-tertiary);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -47,7 +47,7 @@
 
 .header p {
   margin: 0;
-  color: #6b776e;
+  color: var(--color-success);
   font-size: 13px;
 }
 
@@ -61,10 +61,10 @@
 .importButton {
   min-height: 38px;
   padding: 0 16px;
-  border: 1px solid #cbd3c9;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
-  color: #274c39;
+  background: var(--color-paper);
+  color: var(--color-success);
   cursor: pointer;
   font: inherit;
   font-size: 13px;
@@ -72,7 +72,7 @@
 }
 
 .headerActions button:hover:not(:disabled) {
-  background: #eef4ec;
+  background: var(--color-surface);
 }
 
 .headerActions button:disabled,
@@ -85,7 +85,7 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
-  background: #eceee8;
+  background: var(--color-surface);
 }
 
 .canvas :global(.tl-shape) button,
@@ -103,12 +103,12 @@
   gap: 8px;
   width: 100%;
   height: 100%;
-  color: #68796c;
+  color: var(--color-success);
   font-size: 14px;
 }
 
 .message strong {
-  color: #25372f;
+  color: var(--color-success);
   font-size: 17px;
 }
 
@@ -118,7 +118,7 @@
   gap: 16px;
   min-height: 72px;
   padding: 14px 24px;
-  border-top: 1px solid #e4e4db;
+  border-top: 1px solid var(--color-surface);
 }
 
 .selection {
@@ -126,33 +126,33 @@
   align-items: baseline;
   gap: 10px;
   min-width: 0;
-  color: #6b776e;
+  color: var(--color-success);
   font-size: 13px;
 }
 
 .selection strong {
   overflow: hidden;
-  color: #25372f;
+  color: var(--color-success);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .notice {
   margin-left: auto;
-  color: #4c795c;
+  color: var(--color-success);
   font-size: 12px;
 }
 
 .importButton {
   flex: none;
   margin-left: auto;
-  border-color: #2c6344;
-  background: #2c6344;
-  color: #fff;
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: var(--color-paper);
 }
 
 .importButton:hover:not(:disabled) {
-  background: #245538;
+  background: var(--color-success);
 }
 
 @media (max-width: 720px) {

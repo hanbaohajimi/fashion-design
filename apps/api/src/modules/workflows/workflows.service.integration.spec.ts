@@ -7,6 +7,56 @@ import { workflowSemanticPatchSchema } from "./workflows.schemas";
 const workflows = new WorkflowsService(prisma);
 
 describe("WorkflowsService persistence integration", () => {
+  it("commits an input branch atomically, safely replays it and preserves the running original", async () => {
+    const user = await prisma.user.create({
+      data: { email: `workflow-input-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Input edits", projects: { create: { name: "Branch test" } } } } },
+      include: { ownedWorkspaces: { include: { projects: true } } },
+    });
+    const project = user.ownedWorkspaces[0]?.projects[0];
+    if (!project) throw new Error("test project missing");
+    const a = crypto.randomUUID(), b = crypto.randomUUID(), tool = crypto.randomUUID(), result = crypto.randomUUID();
+    const inputId = crypto.randomUUID(), outputId = crypto.randomUUID();
+    try {
+      await workflows.applySystemMutation(project.id, {
+        mode: "semantic", baseRevision: 0, mutationId: crypto.randomUUID(), operations: [
+          { type: "add_node", node: { id: a, kind: "asset", type: "candidate", title: "母图 A", payload: {}, x: 0, y: 0 } },
+          { type: "add_node", node: { id: b, kind: "asset", type: "candidate", title: "母图 B", payload: {}, x: 0, y: 300 } },
+          { type: "add_node", node: { id: tool, kind: "tool", type: "edit_design", title: "局部修改", status: "running", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "修改袖口", taskType: "inpaint", maskImageUrl: "old-mask", referenceImageUrl: "old-image", parentAssetId: "old-parent" }, error: "old-error" }, x: 400, y: 0 } },
+          { type: "add_node", node: { id: result, kind: "asset", type: "candidate", title: "已有结果", payload: {}, x: 800, y: 0 } },
+          { type: "add_edge", edge: { id: inputId, sourceNodeId: a, targetNodeId: tool, sourcePort: "out", targetPort: "source" } },
+          { type: "add_edge", edge: { id: outputId, sourceNodeId: tool, targetNodeId: result, sourcePort: "out", targetPort: "source" } },
+        ],
+      });
+      const attempt = await prisma.workflowAttempt.create({ data: { projectId: project.id, toolNodeId: tool, ordinal: 1, executionKey: crypto.randomUUID(), status: "running", requestSnapshot: { inputNodeIds: [a] } } });
+      const original = await workflows.get(user.id, project.id);
+      const branchId = crypto.randomUUID();
+      const planned = { targetId: branchId, operations: [
+        { type: "add_node", node: { id: branchId, kind: "tool", type: "edit_design", title: "局部修改 · 分支", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "修改袖口", taskType: "i2i" } }, x: 400, y: 300 } },
+        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: b, targetNodeId: branchId, sourcePort: "out", targetPort: "source" } },
+      ] };
+      const request = workflowSemanticPatchSchema.parse({ mode: "semantic", baseRevision: original.revision, mutationId: crypto.randomUUID(), operations: planned.operations });
+      // Validation must roll back the new node as well as its edges.
+      const invalid = workflowSemanticPatchSchema.parse({ ...request, mutationId: crypto.randomUUID(), operations: [...planned.operations, { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: a, targetNodeId: planned.targetId, sourcePort: "out", targetPort: "source" } }] });
+      await expect(workflows.patch(user.id, project.id, invalid)).rejects.toMatchObject({ status: 400 });
+      expect(await workflows.get(user.id, project.id)).toEqual(original);
+      const saved = await workflows.patch(user.id, project.id, request);
+      expect(saved.nodes.find((item) => item.id === planned.targetId)).toMatchObject({ status: "ready", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "修改袖口", taskType: "i2i" } } });
+      expect(saved.nodes.find((item) => item.id === planned.targetId)?.payload).not.toHaveProperty("error");
+      expect(saved.nodes.find((item) => item.id === planned.targetId)?.payload).not.toHaveProperty("params.maskImageUrl");
+      expect(saved.nodes.find((item) => item.id === tool)).toEqual(original.nodes.find((item) => item.id === tool));
+      expect(saved.edges.filter((item) => item.id === inputId || item.id === outputId)).toEqual(original.edges);
+      expect(await prisma.workflowAttempt.findUnique({ where: { id: attempt.id } })).toEqual(attempt);
+      expect(await prisma.workflowAttempt.count({ where: { toolNodeId: planned.targetId } })).toBe(0);
+      const replay = await workflows.patch(user.id, project.id, request);
+      expect(replay.revision).toBe(saved.revision);
+      expect(replay.nodes).toHaveLength(saved.nodes.length);
+      await expect(workflows.patch(user.id, project.id, { ...request, mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: 409 });
+      expect((await workflows.get(user.id, project.id)).nodes).toHaveLength(saved.nodes.length);
+    } finally {
+      await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } });
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  });
   it("returns one consistent graph revision while another window commits a new node", async () => {
     const user = await prisma.user.create({
       data: {
@@ -351,6 +401,10 @@ describe("WorkflowsService persistence integration", () => {
       });
       expect(created.nodes).toHaveLength(3);
       expect(created.edges).toHaveLength(2);
+      await expect(workflows.patch(user.id, project.id, {
+        mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 1,
+        operations: [{ type: "remove_edge", edgeId: "output" }],
+      })).rejects.toThrow("结果来源由工具执行维护");
 
       const replay = await workflows.patch(user.id, project.id, initial);
       expect(replay.revision).toBe(1);

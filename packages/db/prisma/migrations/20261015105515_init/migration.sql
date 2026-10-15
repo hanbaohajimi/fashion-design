@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "workflow_edges_project_id_source_node_id_target_node_id_target_" RENAME TO "workflow_edges_project_id_source_node_id_target_node_id_tar_key";

@@ -6,7 +6,7 @@
   overflow-y: auto;
   align-items: center;
   padding: 24px;
-  background: rgb(17 20 18 / 86%);
+  background: var(--color-scrim);
 }
 
 .assetDialog,
@@ -14,11 +14,11 @@
   width: min(1160px, 100%);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
-  border: 1px solid #292b26;
+  border: 1px solid var(--color-ink);
   margin: auto;
-  background: #f7f3ea;
-  box-shadow: 12px 12px 0 rgb(0 0 0 / 18%);
-  color: #292b26;
+  background: var(--color-surface);
+  box-shadow: 12px 12px 0 var(--color-border);
+  color: var(--color-ink);
 }
 
 .sketchDialog {
@@ -30,7 +30,7 @@
   min-height: 72px;
   align-items: stretch;
   justify-content: space-between;
-  border-bottom: 1px solid #292b26;
+  border-bottom: 1px solid var(--color-ink);
 }
 
 .header > div {
@@ -42,7 +42,7 @@
 
 .header span,
 .previewAside > span {
-  color: #827e73;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -59,9 +59,9 @@
 .header > button {
   min-width: 80px;
   border: 0;
-  border-left: 1px solid #292b26;
+  border-left: 1px solid var(--color-ink);
   background: transparent;
-  color: #292b26;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -69,22 +69,22 @@
 }
 
 .header > button:hover:not(:disabled) {
-  background: #292b26;
-  color: #f7f3ea;
+  background: var(--color-ink);
+  color: var(--color-surface);
 }
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid #292b26;
+  border-bottom: 1px solid var(--color-ink);
 }
 
 .tabs button {
   min-height: 42px;
   border: 0;
-  border-right: 1px solid #292b26;
+  border-right: 1px solid var(--color-ink);
   padding: 0 22px;
   background: transparent;
-  color: #68665f;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 10px;
@@ -92,8 +92,8 @@
 }
 
 .tabs button[aria-current="page"] {
-  background: #292b26;
-  color: #f7f3ea;
+  background: var(--color-ink);
+  color: var(--color-surface);
 }
 
 .previewLayout {
@@ -106,9 +106,9 @@
   display: grid;
   min-height: 450px;
   overflow: hidden;
-  border-right: 1px solid #292b26;
+  border-right: 1px solid var(--color-ink);
   margin: 0;
-  background: #343630;
+  background: var(--color-ink);
   place-items: center;
 }
 
@@ -139,15 +139,15 @@
 .previewAside p,
 .sketchControls p {
   margin: 0;
-  color: #69665e;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.65;
 }
 
 .previewAside dl {
   display: grid;
-  border-top: 1px solid rgb(41 43 38 / 24%);
-  border-bottom: 1px solid rgb(41 43 38 / 24%);
+  border-top: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
   margin: 0;
 }
 
@@ -159,7 +159,7 @@
 }
 
 .previewAside dl > div + div {
-  border-top: 1px solid rgb(41 43 38 / 14%);
+  border-top: 1px solid var(--color-border);
 }
 
 .previewAside dt,
@@ -169,7 +169,7 @@
 }
 
 .previewAside dt {
-  color: #77746b;
+  color: var(--color-ink-secondary);
 }
 
 .previewAside dd {
@@ -186,10 +186,10 @@
 .primary,
 .notice button {
   min-height: 42px;
-  border: 1px solid #292b26;
+  border: 1px solid var(--color-ink);
   padding: 0 14px;
   background: transparent;
-  color: #292b26;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 10px;
@@ -198,23 +198,23 @@
 
 .actionStack .primary,
 .primary {
-  background: #df5632;
-  color: #fffaf3;
+  background: var(--color-signal);
+  color: var(--color-paper);
 }
 
 .actionStack button:hover:not(:disabled),
 .primary:hover:not(:disabled) {
-  background: #292b26;
-  color: #fffaf3;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .notice,
 .error {
-  border-bottom: 1px solid #a33d29;
+  border-bottom: 1px solid var(--color-error);
   margin: 0;
   padding: 9px 17px;
-  background: #f3ddd2;
-  color: #87311e;
+  background: var(--color-error-bg);
+  color: var(--color-error);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -228,7 +228,7 @@
 
 .previewAside .error,
 .sketchControls .error {
-  border: 1px solid #a33d29;
+  border: 1px solid var(--color-error);
   padding: 8px 10px;
 }
 
@@ -245,9 +245,9 @@
 .sketchCanvasWrap {
   display: grid;
   overflow: hidden;
-  border-right: 1px solid #292b26;
+  border-right: 1px solid var(--color-ink);
   padding: 20px;
-  background: #e8e4d9;
+  background: var(--color-surface);
   place-items: center;
 }
 
@@ -256,9 +256,9 @@
   width: min(100%, 540px);
   height: auto;
   aspect-ratio: 1;
-  border: 1px solid #bbb5a8;
-  background: #fffdf8;
-  box-shadow: 5px 5px 0 rgb(41 43 38 / 8%);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-paper);
+  box-shadow: 5px 5px 0 var(--color-divider);
   cursor: crosshair;
   touch-action: none;
 }
@@ -289,11 +289,11 @@
 
 .sketchControls input:not([type="color"]) {
   min-height: 39px;
-  border: 1px solid #292b26;
+  border: 1px solid var(--color-ink);
   border-radius: 0;
   padding: 0 10px;
-  background: #fffdf8;
-  color: #292b26;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
 }
 
@@ -306,18 +306,18 @@
 .options button {
   min-width: 48px;
   min-height: 36px;
-  border: 1px solid #292b26;
+  border: 1px solid var(--color-ink);
   padding: 0 8px;
   background: transparent;
-  color: #292b26;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 10px;
 }
 
 .options button[aria-pressed="true"]:not(.colorChoice) {
-  background: #292b26;
-  color: #fffdf8;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .options .colorChoice {
@@ -327,7 +327,7 @@
 }
 
 .options .colorChoice[aria-pressed="true"] {
-  outline: 3px solid #df5632;
+  outline: 3px solid var(--color-signal);
   outline-offset: 2px;
 }
 
@@ -344,7 +344,7 @@
 
 .assetDialog :where(button, input, textarea, select):focus-visible,
 .sketchDialog :where(button, input, textarea):focus-visible {
-  outline: 3px solid #df5632;
+  outline: 3px solid var(--color-signal);
   outline-offset: 2px;
 }
 
@@ -354,12 +354,12 @@
   .sketchDialog { max-height: calc(100dvh - 16px); }
   .previewLayout,
   .sketchBody { grid-template-columns: 1fr; }
-  .imageStage { min-height: 42dvh; max-height: 53dvh; border-right: 0; border-bottom: 1px solid #292b26; }
+  .imageStage { min-height: 42dvh; max-height: 53dvh; border-right: 0; border-bottom: 1px solid var(--color-ink); }
   .imageStage img { max-height: 53dvh; }
   .previewAside { padding: 20px; }
   .previewAside h3 { max-width: none; }
   .tabs { overflow-x: auto; }
   .tabs button { flex: 1 0 auto; }
-  .sketchCanvasWrap { border-right: 0; border-bottom: 1px solid #292b26; }
+  .sketchCanvasWrap { border-right: 0; border-bottom: 1px solid var(--color-ink); }
   .sketchControls { padding: 20px; }
 }

@@ -14,7 +14,7 @@ import { CreateProjectDialog } from "./CreateProjectDialog";
 import { EmptyState } from "./EmptyState";
 import { ProjectGrid } from "./ProjectGrid-redesign";
 import type { Project, ProjectStatusFilter } from "./project-types";
-import styles from "./projects-redesign.module.css";
+import styles from "./projects.module.css";
 import {
   useCreateProject,
   useDeleteProject,

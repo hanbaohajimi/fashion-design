@@ -1,29 +1,31 @@
 .roleBadge {
   --role-badge-scale: var(--annotation-scale, 1);
+  --role-color: var(--color-ink);
+  --role-wash: var(--color-surface);
 
   appearance: none;
   display: inline-flex;
   width: max-content;
-  min-height: calc(24px * var(--role-badge-scale));
+  min-height: calc(22px * var(--role-badge-scale));
   align-items: center;
-  border: 1px solid currentColor;
-  border-radius: calc(6px * var(--role-badge-scale));
-  padding: calc(4px * var(--role-badge-scale))
-    calc(10px * var(--role-badge-scale));
-  background: rgb(248 245 236 / 95%);
-  box-shadow: 0 2px 8px rgb(24 25 21 / 8%);
-  color: #181915;
+  gap: calc(6px * var(--role-badge-scale));
+  border: 1px solid var(--role-color);
+  border-radius: calc(3px * var(--role-badge-scale));
+  padding: calc(3px * var(--role-badge-scale))
+    calc(8px * var(--role-badge-scale));
+  background: var(--role-wash);
+  box-shadow: var(--shadow-material-1);
+  color: var(--color-ink);
   cursor: pointer;
   font-family: inherit;
   font-size: calc(10px * var(--role-badge-scale));
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: var(--font-bold);
+  letter-spacing: var(--tracking-wide);
   line-height: 1;
-  text-transform: uppercase;
 }
 
 .roleBadge:focus-visible {
-  outline: 2px solid #181915;
+  outline: 2px solid var(--color-signal);
   outline-offset: 2px;
 }
 
@@ -38,79 +40,76 @@
   appearance: none;
   display: inline-flex;
   width: max-content;
-  min-height: calc(24px * var(--annotation-scale, 1));
+  min-height: calc(22px * var(--annotation-scale, 1));
   align-items: center;
-  border: 1px solid #181915;
-  border-radius: calc(6px * var(--annotation-scale, 1));
-  padding: calc(4px * var(--annotation-scale, 1))
-    calc(10px * var(--annotation-scale, 1));
-  background: #181915;
-  box-shadow: 0 2px 8px rgb(24 25 21 / 14%);
-  color: #fffdf7;
+  border: 1px solid var(--color-ink);
+  border-radius: calc(3px * var(--annotation-scale, 1));
+  padding: calc(3px * var(--annotation-scale, 1))
+    calc(8px * var(--annotation-scale, 1));
+  background: var(--color-ink);
+  box-shadow: var(--shadow-material-1);
+  color: var(--color-paper);
   cursor: pointer;
   font-family: inherit;
   font-size: calc(10px * var(--annotation-scale, 1));
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: var(--font-bold);
+  letter-spacing: var(--tracking-wide);
   line-height: 1;
 }
 
 .inpaintTrigger:hover {
-  border-color: #a6321d;
-  background: #a6321d;
+  background: var(--color-signal);
+  border-color: var(--color-signal);
 }
 
 .inpaintTrigger:focus-visible {
-  outline: 2px solid #181915;
+  outline: 2px solid var(--color-signal);
   outline-offset: 2px;
 }
 
+/* ── 素材角色色板 ──────────────────────────────────────────────────────────
+   取自真实服装材料：羊毛、亚麻、茜草、靛蓝、姜黄、鼠尾草、紫草。
+   平涂底色 + 同色描边，像钉在纸样上的材料标签，不用渐变。 */
+
 .roleBadge[data-role="style_ref"] {
-  border-color: #a8c4b0;
-  background: linear-gradient(135deg, #dbe5df 0%, #cdd9d1 100%);
-  box-shadow: 0 2px 8px rgb(168 196 176 / 18%);
+  --role-color: var(--swatch-madder);
+  --role-wash: var(--swatch-madder-wash);
 }
 
 .roleBadge[data-role="garment_ref"] {
-  border-color: #b87f69;
-  background: linear-gradient(135deg, #ead5cb 0%, #ddc3b7 100%);
-  box-shadow: 0 2px 8px rgb(184 127 105 / 18%);
+  --role-color: var(--swatch-wool);
+  --role-wash: var(--swatch-wool-wash);
 }
 
 .roleBadge[data-role="palette"] {
-  border-color: #d4ae3e;
-  background: linear-gradient(135deg, #f2d978 0%, #e8cc65 100%);
-  box-shadow: 0 2px 8px rgb(212 174 62 / 22%);
+  --role-color: var(--swatch-turmeric);
+  --role-wash: var(--swatch-turmeric-wash);
 }
 
 .roleBadge[data-role="fabric_ref"] {
-  border-color: #b89d7a;
-  background: linear-gradient(135deg, #d8c8af 0%, #ccbb9f 100%);
-  box-shadow: 0 2px 8px rgb(184 157 122 / 20%);
+  --role-color: var(--swatch-linen);
+  --role-wash: var(--swatch-linen-wash);
 }
 
 .roleBadge[data-role="silhouette_ref"] {
-  border-color: #a2abb6;
-  background: linear-gradient(135deg, #cfd5dd 0%, #c2c9d2 100%);
-  box-shadow: 0 2px 8px rgb(162 171 182 / 18%);
+  --role-color: var(--swatch-indigo);
+  --role-wash: var(--swatch-indigo-wash);
 }
 
 .roleBadge[data-role="detail_ref"] {
-  border-color: #b5a3bc;
-  background: linear-gradient(135deg, #d9cedd 0%, #cdc1d2 100%);
-  box-shadow: 0 2px 8px rgb(181 163 188 / 18%);
+  --role-color: var(--swatch-mauve);
+  --role-wash: var(--swatch-mauve-wash);
 }
 
 .roleBadge[data-role="note"] {
-  border-color: #d3cbb8;
-  background: linear-gradient(135deg, #eee9dc 0%, #e4dece 100%);
-  box-shadow: 0 2px 8px rgb(211 203 184 / 16%);
+  --role-color: var(--swatch-sage);
+  --role-wash: var(--swatch-sage-wash);
 }
 
 .roleBadge[data-role="avoid"] {
-  border-color: #a52c1f;
-  background: #a52c1f;
-  color: white;
+  --role-color: var(--color-error);
+  --role-wash: var(--color-error);
+  color: var(--color-paper);
 }
 
 .imageShape,
@@ -121,7 +120,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  color: #181915;
+  color: var(--color-ink);
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
@@ -164,11 +163,11 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: #b8a890;
+  background: var(--swatch-linen);
 }
 
 .fabricSwatchEmpty span {
-  color: rgb(255 255 255 / 0.55);
+  color: var(--color-surface);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.2em;
@@ -190,7 +189,7 @@
 }
 
 .fabricCaption span {
-  color: rgb(100 92 78 / 0.7);
+  color: var(--color-ink-secondary);
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -198,7 +197,7 @@
 }
 
 .fabricCaption strong {
-  color: rgb(40 36 28 / 0.85);
+  color: var(--color-scrim);
   font-family: Georgia, "Songti SC", serif;
   font-size: 11px;
   font-weight: 400;
@@ -213,7 +212,7 @@
 }
 
 .imageShape {
-  background: #d8d3c8;
+  background: var(--color-border);
 }
 
 .imageShape img,
@@ -235,10 +234,10 @@
     linear-gradient(
       135deg,
       transparent 49.7%,
-      rgb(24 25 21 / 22%) 50%,
+      var(--color-border) 50%,
       transparent 50.3%
     ),
-    #d8d3c8;
+    var(--color-border);
   place-items: center;
 }
 
@@ -254,10 +253,10 @@
   inset: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 22% 18%, rgb(255 255 255 / 68%), transparent 34%),
-    radial-gradient(circle at 78% 74%, rgb(126 112 96 / 24%), transparent 42%),
-    #dcd6ca;
-  color: #24231f;
+    radial-gradient(circle at 22% 18%, var(--color-paper), transparent 34%),
+    radial-gradient(circle at 78% 74%, var(--color-border-strong), transparent 42%),
+    var(--color-border);
+  color: var(--color-ink);
   isolation: isolate;
 }
 
@@ -278,14 +277,14 @@
     repeating-linear-gradient(
       -45deg,
       transparent 0 18px,
-      rgb(163 59 46 / 8%) 18px 19px
+      var(--color-error-bg) 18px 19px
     ),
-    #e8ded7;
+    var(--color-surface);
 }
 
 .generationPlaceholder[data-status="canceled"] {
-  background: #ddd9d0;
-  color: #6f6b62;
+  background: var(--color-border);
+  color: var(--color-ink-secondary);
 }
 
 .generationFlow,
@@ -309,8 +308,8 @@
 .generationFlow i:nth-child(1) {
   background: radial-gradient(
     ellipse at center,
-    rgb(255 252 244 / 88%) 0 18%,
-    rgb(194 184 168 / 52%) 48%,
+    var(--color-paper) 0 18%,
+    var(--color-border-strong) 48%,
     transparent 72%
   );
   animation: generation-flow-a 6.8s ease-in-out infinite alternate;
@@ -319,8 +318,8 @@
 .generationFlow i:nth-child(2) {
   background: radial-gradient(
     ellipse at center,
-    rgb(93 84 75 / 38%) 0 16%,
-    rgb(145 132 116 / 22%) 48%,
+    var(--color-border-strong) 0 16%,
+    var(--color-border) 48%,
     transparent 70%
   );
   opacity: 0.78;
@@ -331,9 +330,9 @@
   background: conic-gradient(
     from 130deg at 50% 50%,
     transparent 0 18%,
-    rgb(255 255 255 / 34%) 28%,
+    var(--color-surface) 28%,
     transparent 42% 68%,
-    rgb(101 91 80 / 18%) 78%,
+    var(--color-border) 78%,
     transparent 90%
   );
   opacity: 0.82;
@@ -359,7 +358,7 @@
 .generationFailure small {
   display: -webkit-box;
   overflow: hidden;
-  color: #8f3328;
+  color: var(--color-error);
   font-size: 9px;
   line-height: 1.35;
   -webkit-box-orient: vertical;
@@ -400,16 +399,16 @@
   z-index: 3;
   top: 14px;
   right: 14px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   padding: 5px 8px;
-  background: #f2d978;
+  background: var(--swatch-turmeric);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
 
 .uploadStatus[data-status="failed"] {
-  background: #e9522c;
+  background: var(--color-signal);
   color: white;
 }
 
@@ -425,12 +424,12 @@
   display: flex;
   padding: calc(18px * var(--note-content-scale));
   flex-direction: column;
-  border: 1px solid rgb(24 25 21 / 65%);
+  border: 1px solid var(--color-scrim);
   border-radius: calc(6px * var(--note-content-scale));
-  background: linear-gradient(135deg, #f8f5ec 0%, #f2ede0 100%);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface) 100%);
   box-shadow:
-    0 4px 16px rgb(24 25 21 / 10%),
-    0 8px 32px rgb(24 25 21 / 8%);
+    0 4px 16px var(--color-divider),
+    0 8px 32px var(--color-divider);
 }
 
 .noteShape::after {
@@ -438,7 +437,7 @@
   right: calc(16px * var(--note-content-scale));
   bottom: calc(15px * var(--note-content-scale));
   left: calc(16px * var(--note-content-scale));
-  border-bottom: 1px solid rgb(24 25 21 / 24%);
+  border-bottom: 1px solid var(--color-border);
   content: "";
 }
 
@@ -450,7 +449,7 @@
   border: 0;
   padding: 0;
   background: transparent;
-  color: #2a2621;
+  color: var(--color-ink);
   cursor: text;
   font-family: Georgia, "Songti SC", serif;
   font-size: calc(20px * var(--note-content-scale));
@@ -464,7 +463,7 @@
 }
 
 .noteTextEditor:focus {
-  outline: 1px solid rgb(24 25 21 / 28%);
+  outline: 1px solid var(--color-border-strong);
   outline-offset: calc(4px * var(--note-content-scale));
 }
 
@@ -473,7 +472,7 @@
   z-index: 1;
   align-self: flex-start;
   margin-top: calc(8px * var(--note-content-scale));
-  color: #1f5f53;
+  color: var(--color-success);
   font-size: calc(12px * var(--note-content-scale));
   font-weight: 700;
   pointer-events: auto;
@@ -484,12 +483,12 @@
 .swatchShape {
   --swatch-content-scale: var(--swatch-scale, 1);
 
-  border: 1px solid rgb(24 25 21 / 75%);
+  border: 1px solid var(--color-scrim);
   border-radius: calc(6px * var(--swatch-content-scale));
-  background: linear-gradient(135deg, #e8dcc8 0%, #ddd1ba 100%);
+  background: linear-gradient(135deg, var(--swatch-linen-wash) 0%, var(--swatch-linen-wash) 100%);
   box-shadow:
-    0 4px 16px rgb(24 25 21 / 10%),
-    0 8px 32px rgb(24 25 21 / 8%);
+    0 4px 16px var(--color-divider),
+    0 8px 32px var(--color-divider);
   overflow: hidden;
 }
 
@@ -515,7 +514,7 @@
 }
 
 .swatchHeaderHex {
-  color: #5a5650;
+  color: var(--color-ink-secondary);
   font-size: calc(8px * var(--swatch-content-scale));
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -543,12 +542,12 @@
 .swatchChip {
   position: relative;
   flex: 1;
-  border: 1px solid rgb(24 25 21 / 22%);
+  border: 1px solid var(--color-border);
   border-radius: calc(2px * var(--swatch-content-scale));
   box-shadow:
-    inset 0 1px 3px rgb(255 255 255 / 22%),
-    inset 0 -1px 3px rgb(0 0 0 / 10%),
-    0 1px 2px rgb(24 25 21 / 8%);
+    inset 0 1px 3px var(--color-surface),
+    inset 0 -1px 3px var(--color-border),
+    0 1px 2px var(--color-divider);
   cursor: pointer;
   transition:
     box-shadow var(--transition-fast, 140ms),
@@ -557,14 +556,14 @@
 
 .swatchChip:hover {
   box-shadow:
-    inset 0 1px 3px rgb(255 255 255 / 28%),
-    inset 0 -1px 3px rgb(0 0 0 / 12%),
-    0 2px 8px rgb(24 25 21 / 18%);
+    inset 0 1px 3px var(--color-surface),
+    inset 0 -1px 3px var(--color-border),
+    0 2px 8px var(--color-border);
   transform: translateY(calc(-1px * var(--swatch-content-scale)));
 }
 
 .swatchChip:focus-visible {
-  outline: 2px solid #181915;
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }
 
@@ -582,7 +581,7 @@
 
 .swatchLabel {
   overflow: hidden;
-  color: #5a5650;
+  color: var(--color-ink-secondary);
   font-size: calc(9px * var(--swatch-content-scale));
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -597,10 +596,10 @@
 .swatchLabelInput {
   width: 100%;
   border: none;
-  border-bottom: 1px solid #181915;
+  border-bottom: 1px solid var(--color-ink);
   padding: 0;
   background: transparent;
-  color: #181915;
+  color: var(--color-ink);
   font-family: inherit;
   font-size: calc(9px * var(--swatch-content-scale));
   font-weight: 800;
@@ -619,20 +618,20 @@
   display: grid;
   width: calc(16px * var(--swatch-content-scale));
   height: calc(16px * var(--swatch-content-scale));
-  border: 1px solid #f1eee5;
+  border: 1px solid var(--color-surface);
   border-radius: 50%;
   padding: 0;
-  background: #d94f2b;
-  color: #fff;
+  background: var(--color-signal);
+  color: var(--color-paper);
   font-size: calc(9px * var(--swatch-content-scale));
   line-height: 1;
   cursor: pointer;
   place-items: center;
-  box-shadow: 0 1px 4px rgb(24 25 21 / 30%);
+  box-shadow: 0 1px 4px var(--color-border-strong);
 }
 
 .swatchRemove:hover {
-  background: #b83d1d;
+  background: var(--color-error);
 }
 
 /* ⊕ add-color button — dashed placeholder cell */
@@ -647,11 +646,11 @@
 .swatchAdd {
   display: grid;
   flex: 1;
-  border: 1px dashed rgb(24 25 21 / 38%);
+  border: 1px dashed var(--color-border-strong);
   border-radius: calc(2px * var(--swatch-content-scale));
   padding: 0;
-  background: rgb(24 25 21 / 3%);
-  color: #5a5650;
+  background: var(--color-divider);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   place-items: center;
   transition:
@@ -661,13 +660,13 @@
 }
 
 .swatchAdd:hover {
-  border-color: #181915;
-  background: rgb(24 25 21 / 8%);
-  color: #181915;
+  border-color: var(--color-ink);
+  background: var(--color-divider);
+  color: var(--color-ink);
 }
 
 .swatchAdd:focus-visible {
-  outline: 2px solid #181915;
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }
 
@@ -681,8 +680,8 @@
 }
 
 .frameShape {
-  border: 2px dashed rgb(24 25 21 / 55%);
-  background: rgb(241 238 229 / 15%);
+  border: 2px dashed var(--color-scrim-soft);
+  background: var(--color-divider);
 }
 
 .frameTitle {
@@ -692,9 +691,9 @@
   display: flex;
   min-height: 40px;
   align-items: center;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   padding: 7px 12px;
-  background: #f1eee5;
+  background: var(--color-surface);
   gap: 10px;
 }
 

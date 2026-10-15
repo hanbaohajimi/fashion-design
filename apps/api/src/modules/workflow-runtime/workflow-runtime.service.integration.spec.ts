@@ -8,6 +8,25 @@ import { DesignAssetsService } from "../design-assets/design-assets.service";
 const workflows = new WorkflowsService(prisma);
 
 describe("WorkflowRuntimeService integration", () => {
+  it("reads historical multiple-source inputs but rejects execution before creating an attempt", async () => {
+    const user = await prisma.user.create({ data: { email: `workflow-historical-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Historical inputs", projects: { create: { name: "Historical graph" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
+    const project = user.ownedWorkspaces[0]?.projects[0];
+    if (!project) throw new Error("test project missing");
+    const a = crypto.randomUUID(), b = crypto.randomUUID(), tool = crypto.randomUUID();
+    const runtime = new WorkflowRuntimeService(prisma, workflows, {} as never, {} as never, {} as never, {} as never);
+    try {
+      await workflows.applySystemMutation(project.id, { mode: "semantic", baseRevision: 0, mutationId: crypto.randomUUID(), operations: [
+        { type: "add_node", node: { id: a, kind: "asset", type: "candidate", title: "A", payload: {}, x: 0, y: 0 } },
+        { type: "add_node", node: { id: b, kind: "asset", type: "candidate", title: "B", payload: {}, x: 0, y: 300 } },
+        { type: "add_node", node: { id: tool, kind: "tool", type: "generate_design", title: "旧工具", payload: { toolKey: "generate_design", toolVersion: "1", params: {} }, x: 400, y: 0 } },
+        ...[a, b].map((id) => ({ type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId: id, targetNodeId: tool, sourcePort: "out" as const, targetPort: "source" as const } })),
+      ] });
+      expect((await workflows.get(user.id, project.id)).edges).toHaveLength(2);
+      await expect(runtime.execute(user.id, project.id, tool, { mutationId: crypto.randomUUID() })).rejects.toThrow("整理连接");
+      expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);
+      expect((await workflows.get(user.id, project.id)).nodes.find((node) => node.id === tool)?.status).toBe("ready");
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
   it("uses referenced tools as context and keeps candidate constraints on their own branch", async () => {
     const user = await prisma.user.create({
       data: {

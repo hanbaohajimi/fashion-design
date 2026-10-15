@@ -1,7 +1,7 @@
 .page {
-  --ink: #171713;
-  --paper: #f2eee4;
-  --signal: #e24a2a;
+  --ink: var(--color-ink);
+  --paper: var(--color-surface);
+  --signal: var(--color-signal);
   display: grid;
   min-height: 100dvh;
   background: var(--paper);
@@ -14,12 +14,12 @@
   min-height: 100dvh;
   overflow: hidden;
   padding: clamp(2rem, 5vw, 5rem);
-  background-color: #20211d;
+  background-color: var(--color-ink);
   background-image:
-    linear-gradient(rgb(255 255 255 / 5%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 5%) 1px, transparent 1px);
+    linear-gradient(var(--color-divider) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-divider) 1px, transparent 1px);
   background-size: 32px 32px;
-  color: #f3efe4;
+  color: var(--color-surface);
 }
 
 .brand {
@@ -40,11 +40,11 @@
   font-weight: 400;
   letter-spacing: -0.055em;
   line-height: 0.88;
-  text-shadow: 0 4px 24px rgb(0 0 0 / 40%);
+  text-shadow: 0 4px 24px var(--color-scrim-soft);
 }
 
 .patternPanel h1 em {
-  color: #ef7658;
+  color: var(--color-signal-hover);
   font-style: italic;
 }
 
@@ -57,7 +57,7 @@
   bottom: -15%;
   width: min(70%, 38rem);
   aspect-ratio: 0.78;
-  border: 1px dashed rgb(242 238 228 / 55%);
+  border: 1px dashed var(--color-surface);
   clip-path: polygon(
     30% 0,
     62% 3%,
@@ -83,7 +83,7 @@
   top: 18%;
   left: -12%;
   width: 124%;
-  border-top: 1px solid rgb(226 74 42 / 80%);
+  border-top: 1px solid var(--color-signal);
   rotate: 21deg;
 }
 
@@ -92,7 +92,7 @@
   top: 10%;
   left: 50%;
   height: 82%;
-  border-left: 1px dashed rgb(242 238 228 / 35%);
+  border-left: 1px dashed var(--color-surface);
 }
 
 .formPanel {
@@ -103,7 +103,7 @@
 
 .step {
   margin: 0 0 1.5rem;
-  color: #726d61;
+  color: var(--color-ink-secondary);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -122,7 +122,7 @@
 .intro {
   max-width: 30rem;
   margin: 1.25rem 0 2.75rem;
-  color: #635f55;
+  color: var(--color-ink-secondary);
   line-height: 1.7;
 }
 
@@ -140,7 +140,7 @@
 .form input {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #979083;
+  border-bottom: 1px solid var(--color-ink-tertiary);
   border-radius: 0;
   outline: 0;
   padding: 1rem 0;
@@ -166,7 +166,7 @@
   border: 1px solid var(--ink);
   border-radius: var(--radius-sm, 6px);
   background: var(--ink);
-  box-shadow: 0 4px 16px rgb(23 23 19 / 12%);
+  box-shadow: 0 4px 16px var(--color-border);
   color: white;
   cursor: pointer;
   font: inherit;
@@ -181,7 +181,7 @@
 
 .form button:hover:not(:disabled) {
   background: transparent;
-  box-shadow: 0 6px 20px rgb(23 23 19 / 16%);
+  box-shadow: 0 6px 20px var(--color-border);
   color: var(--ink);
   transform: translateY(-2px);
 }
@@ -198,12 +198,12 @@
 
 .message {
   margin: 1rem 0 0;
-  color: #4d6048;
+  color: var(--color-success);
   line-height: 1.6;
 }
 
 .error {
-  color: #a6321d;
+  color: var(--color-error);
 }
 
 .messageActions {
@@ -218,7 +218,7 @@
   border-bottom: 1px solid currentColor;
   padding: 0.35rem 0;
   background: transparent;
-  color: #4d6048;
+  color: var(--color-success);
   cursor: pointer;
   font: inherit;
   font-size: 0.82rem;

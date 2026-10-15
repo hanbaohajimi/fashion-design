@@ -6,32 +6,49 @@
   right: 0;
   bottom: 0;
   pointer-events: all;
-  color: #22221f;
+  color: var(--color-ink);
 }
 
 .mobileScrim {
   display: none;
 }
 
+/* Panel enter animation: slides in from the right edge */
 .panel {
   display: flex;
   width: var(--agent-panel-width, 400px);
   flex-direction: column;
-  border-left: 1px solid rgb(34 34 31 / 13%);
-  background: rgb(251 250 247 / 96%);
-  box-shadow: -14px 0 42px rgb(72 59 40 / 8%);
-  backdrop-filter: blur(18px) saturate(115%);
+  border-left: 1px solid var(--color-border);
+  background: var(--color-paper);
+  box-shadow: -4px 0 16px var(--shadow-ui);
+  animation: panel-enter var(--dur-enter, 260ms) var(--ease-enter, cubic-bezier(0.16,1,0.3,1)) both;
 }
 
+@keyframes panel-enter {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+
+/* Collapsed rail enter: slides in from right, faster */
 .collapsedRail {
   display: flex;
   width: var(--agent-rail-width, 48px);
   align-items: center;
   flex-direction: column;
-  border-left: 1px solid rgb(34 34 31 / 12%);
+  border-left: 1px solid var(--color-divider);
   padding-top: 12px;
-  background: rgb(251 250 247 / 94%);
-  box-shadow: -8px 0 24px rgb(72 59 40 / 5%);
+  background: var(--color-paper);
+  box-shadow: -2px 0 8px var(--shadow-ui);
+  animation: rail-enter var(--dur-fast, 120ms) var(--ease-enter, cubic-bezier(0.16,1,0.3,1)) both;
+}
+
+@keyframes rail-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
 }
 
 .railButton,
@@ -48,8 +65,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: #272824;
-  color: #fffaf2;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .railButton svg,
@@ -64,7 +81,7 @@
 
 .railLabel {
   margin-top: 18px;
-  color: #747168;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -77,53 +94,57 @@
   height: 7px;
   border-radius: 50%;
   margin-top: 14px;
-  animation: agent-pulse 1.5s ease-in-out infinite;
-  background: #c65b3d;
+  animation: agent-pulse var(--dur-ai-pulse, 900ms) ease-in-out infinite;
+  background: var(--color-signal);
 }
 
 .header {
   display: flex;
-  min-height: 66px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgb(34 34 31 / 10%);
-  padding: 0 14px 0 18px;
-  background: rgb(255 255 255 / 44%);
+  border-bottom: 1px solid var(--color-divider);
+  padding: 0 12px 0 16px;
+  background: var(--color-paper);
 }
 
 .identity {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .identity > svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  color: #b94d31;
+  color: var(--color-signal);
+  opacity: 0.8;
 }
 
 .identity > div {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
 }
 
+/* DESIGN AGENT 字标：极小，仅作标识，不抢对话内容 */
 .identity span {
-  color: #88847a;
+  color: var(--color-ink-tertiary);
   font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .identity strong {
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-ink-secondary);
 }
 
 .headerActions {
@@ -143,8 +164,8 @@
 
 .headerActions button:hover,
 .railButton:hover {
-  background: #e9e6de;
-  color: #22221f;
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .headerActions button:active,
@@ -166,9 +187,9 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  border-bottom: 1px solid rgb(34 34 31 / 9%);
+  border-bottom: 1px solid var(--color-divider);
   padding: 8px 16px;
-  background: #f3f0e9;
+  background: var(--color-surface);
   gap: 8px;
 }
 
@@ -177,11 +198,11 @@
 .loadOlder,
 .loadError button {
   min-height: 30px;
-  border: 1px solid rgb(34 34 31 / 16%);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0 10px;
-  background: #fff;
-  color: #4c4a44;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 9px;
@@ -189,7 +210,7 @@
 }
 
 .conversationActions > button:last-child {
-  color: #9c402d;
+  color: var(--color-error);
 }
 
 .conversationActions form {
@@ -204,7 +225,7 @@
 }
 
 .conversationActions form label > span {
-  color: #817d74;
+  color: var(--color-ink-secondary);
   font-size: 8px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -212,11 +233,11 @@
 
 .conversationActions form input {
   min-height: 34px;
-  border: 1px solid rgb(34 34 31 / 18%);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0 9px;
-  background: #fff;
-  color: #292a26;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
   font-size: 11px;
 }
@@ -238,14 +259,14 @@
   min-height: 0;
   flex: 1 1 auto;
   grid-template-rows: auto auto minmax(0, 1fr);
-  background: #fbfaf7;
+  background: var(--color-paper);
 }
 
 .historyHeader {
   display: flex;
   min-height: 48px;
   align-items: center;
-  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  border-bottom: 1px solid var(--color-divider);
   padding: 0 14px;
   gap: 8px;
 }
@@ -264,7 +285,7 @@
 }
 
 .historyHeader button:hover {
-  background: #ebe8e0;
+  background: var(--color-surface);
 }
 
 .historyHeader svg {
@@ -284,11 +305,11 @@
 
 .historyTabs {
   display: grid;
-  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  border-bottom: 1px solid var(--color-divider);
   padding: 8px 14px;
   grid-template-columns: 1fr 1fr;
   gap: 3px;
-  background: #f3f1eb;
+  background: var(--color-surface);
 }
 
 .historyTabs button {
@@ -296,7 +317,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #77736a;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 10px;
@@ -304,9 +325,9 @@
 }
 
 .historyTabs button[aria-selected="true"] {
-  background: #fff;
-  box-shadow: 0 1px 3px rgb(34 34 31 / 10%);
-  color: #292a26;
+  background: var(--color-paper);
+  box-shadow: 0 1px 3px var(--color-divider);
+  color: var(--color-ink);
 }
 
 .conversationHistory,
@@ -332,7 +353,7 @@
   padding: 0 10px;
   gap: 12px;
   background: transparent;
-  color: #3c3c37;
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -340,7 +361,7 @@
 
 .conversationHistory > button:hover,
 .conversationHistory > button[aria-current="page"] {
-  background: #efede7;
+  background: var(--color-surface);
 }
 
 .conversationHistory span {
@@ -353,13 +374,13 @@
 .conversationHistory time,
 .generationHistory time {
   flex: 0 0 auto;
-  color: #98948a;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
 }
 
 .generationHistory > article {
   padding: 12px 4px;
-  border-bottom: 1px solid rgb(34 34 31 / 9%);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .generationHistory > article > div {
@@ -376,7 +397,7 @@
 .generationHistory > article p,
 .generationHistory > p {
   margin: 6px 0 0;
-  color: #6d6a62;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -391,7 +412,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 22px 18px 30px;
-  scrollbar-color: rgb(34 34 31 / 18%) transparent;
+  scrollbar-color: var(--color-border) transparent;
   scrollbar-width: thin;
 }
 
@@ -401,33 +422,33 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  border-bottom: 1px solid var(--color-divider);
   padding: 9px 16px;
-  background: #efede5;
+  background: var(--color-surface);
 }
 
 .workflowInvitation p {
   max-width: 32ch;
   margin: 0;
-  color: #635f57;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   line-height: 1.5;
 }
 
 .workflowInvitation button {
   flex: 0 0 auto;
-  border: 1px solid rgb(34 34 31 / 18%);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 7px 9px;
-  background: #fffefa;
-  color: #373831;
+  background: var(--color-paper);
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 10px;
 }
 
 .workflowInvitation button:hover {
-  border-color: #a34c35;
+  border-color: var(--color-error);
 }
 
 .loadOlder {
@@ -454,7 +475,7 @@
 .loadError p {
   max-width: 32ch;
   margin: 0;
-  color: #77736b;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   line-height: 1.55;
 }
@@ -464,7 +485,7 @@
 }
 
 .welcome > span {
-  color: #b94d31;
+  color: var(--color-error);
   font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -484,7 +505,7 @@
 .welcome p {
   max-width: 34ch;
   margin: 0;
-  color: #706d65;
+  color: var(--color-ink-secondary);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -497,11 +518,11 @@
 
 .welcome button {
   min-height: 38px;
-  border: 1px solid rgb(34 34 31 / 16%);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 0 12px;
-  background: rgb(255 255 255 / 52%);
-  color: #383833;
+  background: var(--color-surface);
+  color: var(--color-ink);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -512,8 +533,8 @@
 }
 
 .welcome button:hover {
-  border-color: rgb(34 34 31 / 38%);
-  background: #fff;
+  border-color: var(--color-border-strong);
+  background: var(--color-paper);
 }
 
 .message {
@@ -535,8 +556,8 @@
   justify-self: end;
   border-radius: 15px 15px 4px;
   padding: 11px 13px;
-  background: #292a26;
-  color: #fffdf7;
+  background: var(--color-ink);
+  color: var(--color-paper);
   white-space: pre-wrap;
 }
 
@@ -544,7 +565,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #858178;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
   letter-spacing: 0.04em;
 }
@@ -556,7 +577,7 @@
 .messageContent {
   min-width: 0;
   margin: 0;
-  color: #41413c;
+  color: var(--color-ink);
   font-size: 12px;
   line-height: 1.72;
   overflow-wrap: anywhere;
@@ -586,7 +607,7 @@
 .messageContent h5,
 .messageContent h6 {
   margin: 1.15em 0 0.45em;
-  color: #2f302c;
+  color: var(--color-ink);
   font-size: 1em;
   font-weight: 750;
   line-height: 1.45;
@@ -606,32 +627,32 @@
 }
 
 .messageContent blockquote {
-  border-left: 2px solid #c5b9a7;
+  border-left: 2px solid var(--color-border-strong);
   padding-left: 10px;
-  color: #6d685f;
+  color: var(--color-ink-secondary);
 }
 
 .messageContent a {
-  color: #9f432d;
-  text-decoration-color: rgb(159 67 45 / 38%);
+  color: var(--color-error);
+  text-decoration-color: var(--color-error);
   text-underline-offset: 2px;
 }
 
 .messageContent code {
   border-radius: 4px;
   padding: 0.12em 0.32em;
-  background: #ece9e2;
-  color: #7f3928;
+  background: var(--color-surface);
+  color: var(--color-error);
   font-family: var(--font-mono, monospace);
   font-size: 0.92em;
 }
 
 .messageContent pre {
   overflow-x: auto;
-  border: 1px solid rgb(34 34 31 / 10%);
+  border: 1px solid var(--color-divider);
   border-radius: 6px;
   padding: 10px 11px;
-  background: #efede7;
+  background: var(--color-surface);
   line-height: 1.55;
   white-space: pre;
 }
@@ -652,13 +673,13 @@
 
 .messageContent th,
 .messageContent td {
-  border: 1px solid rgb(34 34 31 / 14%);
+  border: 1px solid var(--color-border);
   padding: 5px 7px;
   text-align: left;
 }
 
 .messageContent th {
-  background: #efede7;
+  background: var(--color-surface);
   font-weight: 700;
 }
 
@@ -669,18 +690,18 @@
 
 .messageContent input[type="checkbox"] {
   margin: 0 0.4em 0 0;
-  accent-color: #9f432d;
+  accent-color: var(--color-error);
 }
 
 .message > small {
-  color: #8a867c;
+  color: var(--color-ink-secondary);
   font-size: 9px;
 }
 
 .agentProgress {
   display: flex;
   align-items: center;
-  color: #6e6b63;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   gap: 8px;
 }
@@ -689,10 +710,10 @@
 .loadingState i {
   width: 8px;
   height: 8px;
-  border: 2px solid rgb(185 77 49 / 22%);
-  border-top-color: #b94d31;
+  border: 2px solid var(--color-error-bg);
+  border-top-color: var(--color-error);
   border-radius: 50%;
-  animation: agent-spin 800ms linear infinite;
+  animation: agent-spin var(--dur-ai-spin, 700ms) linear infinite;
 }
 
 .taskCard {
@@ -700,18 +721,18 @@
   min-height: 48px;
   align-items: center;
   justify-content: space-between;
-  border-left: 2px solid #c65b3d;
+  border-left: 2px solid var(--color-signal);
   padding: 8px 10px;
-  background: #f0ede6;
+  background: var(--color-surface);
 }
 
 .taskCard[data-status="succeeded"] {
-  border-left-color: #4f765a;
+  border-left-color: var(--color-success);
 }
 
 .taskCard[data-status="failed"],
 .taskCard[data-status="moderation_failed"] {
-  border-left-color: #a33b2e;
+  border-left-color: var(--color-error);
 }
 
 .taskCard > div {
@@ -725,7 +746,7 @@
 }
 
 .taskCard small {
-  color: #858178;
+  color: var(--color-ink-tertiary);
   font-size: 8px;
 }
 
@@ -733,7 +754,7 @@
 .retryButton {
   border: 0;
   background: transparent;
-  color: #9f432d;
+  color: var(--color-error);
   cursor: pointer;
   font: inherit;
   font-size: 9px;
@@ -749,20 +770,20 @@
   display: grid;
   min-height: 48px;
   align-content: center;
-  border-left: 2px solid #4f765a;
+  border-left: 2px solid var(--color-success);
   padding: 8px 10px;
-  background: #edf0e9;
+  background: var(--color-success-bg);
   gap: 3px;
 }
 
 .taskCanvasReceipt span {
-  color: #2f4835;
+  color: var(--color-success);
   font-size: 10px;
   font-weight: 750;
 }
 
 .taskCanvasReceipt small {
-  color: #777d72;
+  color: var(--color-ink-secondary);
   font-size: 8px;
 }
 
@@ -777,16 +798,16 @@
   min-height: 180px;
   align-items: center;
   justify-content: center;
-  color: #77736b;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   gap: 8px;
 }
 
 .composerDock {
   flex: 0 0 auto;
-  border-top: 1px solid rgb(34 34 31 / 11%);
+  border-top: 1px solid var(--color-divider);
   padding: 12px;
-  background: #f7f5f0;
+  background: var(--color-surface);
 }
 
 .composerSurface {
@@ -794,17 +815,17 @@
   display: flex;
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid rgb(34 34 31 / 17%);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-paper);
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease;
 }
 
 .composerSurface:focus-within {
-  border-color: rgb(34 34 31 / 48%);
-  box-shadow: 0 0 0 3px rgb(34 34 31 / 6%);
+  border-color: var(--color-scrim-soft);
+  box-shadow: 0 0 0 3px var(--color-divider);
 }
 
 .attachmentRow {
@@ -836,11 +857,11 @@
   height: 30px;
   flex: 0 0 auto;
   align-items: center;
-  border: 1px solid rgb(49 48 43 / 16%);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0 4px 0 9px;
-  background: #f8f7f3;
-  color: #45443f;
+  background: var(--color-canvas);
+  color: var(--color-ink);
   transition:
     border-color 140ms ease,
     background-color 140ms ease;
@@ -848,8 +869,8 @@
 
 .attachment:hover,
 .attachment:focus-within {
-  border-color: rgb(95 82 63 / 34%);
-  background: #f2f0ea;
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
 }
 
 .attachmentMarker {
@@ -857,16 +878,16 @@
   height: 5px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #a08b6d;
+  background: var(--swatch-linen);
   opacity: 0.72;
 }
 
 .attachment[data-kind="面料"] .attachmentMarker {
-  background: #7a8c78;
+  background: var(--color-success);
 }
 
 .attachment[data-kind="色卡"] .attachmentMarker {
-  background: #9e6657;
+  background: var(--color-error);
 }
 
 .attachmentTrigger {
@@ -900,7 +921,7 @@
   border-radius: 4px;
   padding: 0;
   background: transparent;
-  color: #918e85;
+  color: var(--color-ink-tertiary);
   cursor: pointer;
   opacity: 0.54;
   place-items: center;
@@ -917,8 +938,8 @@
 }
 
 .attachmentRemove:hover {
-  background: #eee2dc;
-  color: #9f432d;
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .attachmentRemove svg {
@@ -937,11 +958,11 @@
   max-height: calc(100vh - 16px);
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid rgb(35 34 30 / 15%);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fffefa;
-  box-shadow: 0 10px 28px rgb(35 32 27 / 16%);
-  color: #34332f;
+  background: var(--color-paper);
+  box-shadow: 0 10px 28px var(--color-border);
+  color: var(--color-ink);
   pointer-events: auto;
   transition: opacity 90ms ease;
 }
@@ -950,8 +971,8 @@
   position: relative;
   height: min(136px, max(72px, calc(100vh - 86px)));
   overflow: hidden;
-  border-bottom: 1px solid rgb(35 34 30 / 10%);
-  background: #efede6;
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
 }
 
 .previewVisual img {
@@ -982,7 +1003,7 @@
 }
 
 .previewPlaceholder {
-  color: #858177;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   letter-spacing: 0;
 }
@@ -992,7 +1013,7 @@
   align-content: center;
   gap: 10px;
   padding: 18px;
-  background: #f3f1ea;
+  background: var(--color-surface);
   text-align: center;
 }
 
@@ -1002,10 +1023,10 @@
   width: 42px;
   height: 42px;
   margin: 0 auto;
-  border: 1px solid rgb(35 34 30 / 12%);
+  border: 1px solid var(--color-divider);
   border-radius: 6px;
-  background: #e6e2d9;
-  color: #777269;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-size: 15px;
   font-style: normal;
   place-items: center;
@@ -1016,7 +1037,7 @@
   width: min(100%, 152px);
   height: 72px;
   overflow: hidden;
-  border: 1px solid rgb(35 34 30 / 12%);
+  border: 1px solid var(--color-divider);
   border-radius: 6px;
   margin: 0 auto;
 }
@@ -1030,7 +1051,7 @@
 .previewFallback span {
   display: -webkit-box;
   overflow: hidden;
-  color: #666259;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   line-height: 1.45;
   -webkit-box-orient: vertical;
@@ -1054,14 +1075,14 @@
 }
 
 .previewMeta span {
-  color: #817d73;
+  color: var(--color-ink-secondary);
   font-size: 9px;
   line-height: 1.35;
 }
 
 .previewMeta small {
   overflow: hidden;
-  color: #9a968d;
+  color: var(--color-ink-tertiary);
   font-size: 8px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -1086,14 +1107,14 @@
   padding: 12px 48px 10px 12px;
   outline: none;
   background: transparent;
-  color: #2d2d29;
+  color: var(--color-ink);
   font: inherit;
   font-size: 12px;
   line-height: 20px;
 }
 
 .composer textarea::placeholder {
-  color: #aaa69d;
+  color: var(--color-ink-disabled);
 }
 
 .sendButton {
@@ -1106,8 +1127,8 @@
   border: 0;
   border-radius: 50%;
   padding: 0;
-  background: #292a26;
-  color: #fffdf7;
+  background: var(--color-ink);
+  color: var(--color-paper);
   cursor: pointer;
   place-items: center;
   transition:
@@ -1137,10 +1158,10 @@
 .sendButton i {
   width: 13px;
   height: 13px;
-  border: 2px solid rgb(255 255 255 / 35%);
-  border-top-color: #fff;
+  border: 2px solid var(--color-surface);
+  border-top-color: var(--color-paper);
   border-radius: 50%;
-  animation: agent-spin 800ms linear infinite;
+  animation: agent-spin var(--dur-ai-spin, 700ms) linear infinite;
 }
 
 .srOnly {
@@ -1155,14 +1176,14 @@
 
 .error {
   margin: 7px 2px 0;
-  color: #a33b2e;
+  color: var(--color-error);
   font-size: 9px;
   line-height: 1.45;
 }
 
 .panel :where(button, select):focus-visible,
 .collapsedRail button:focus-visible {
-  outline: 2px solid #b94d31;
+  outline: 2px solid var(--color-error);
   outline-offset: 2px;
 }
 
@@ -1170,10 +1191,10 @@
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: 1fr 1fr;
-  border-bottom: 1px solid rgb(34 34 31 / 10%);
+  border-bottom: 1px solid var(--color-divider);
   padding: 7px 14px;
   gap: 4px;
-  background: #f3f1eb;
+  background: var(--color-surface);
 }
 
 .agentModes button {
@@ -1181,7 +1202,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #77736a;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -1189,9 +1210,9 @@
 }
 
 .agentModes button[aria-selected="true"] {
-  background: #fffefa;
-  color: #292a26;
-  box-shadow: 0 1px 3px rgb(34 34 31 / 8%);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow: 0 1px 3px var(--color-divider);
 }
 
 .workflowPanel {
@@ -1200,7 +1221,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px 18px 28px;
-  scrollbar-color: rgb(34 34 31 / 18%) transparent;
+  scrollbar-color: var(--color-border) transparent;
   scrollbar-width: thin;
 }
 
@@ -1213,10 +1234,10 @@
 
 .workflowLegacyNotice {
   margin-top: 10px !important;
-  border-left: 2px solid #a34c35;
+  border-left: 2px solid var(--color-error);
   padding: 8px 10px;
-  background: #f4eee8;
-  color: #6b5146;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
 }
 
 .workflowIntro > div {
@@ -1225,36 +1246,36 @@
 }
 
 .workflowIntro > div > span {
-  color: #a34c35;
+  color: var(--color-error);
   font-size: 8px;
   font-weight: 750;
   letter-spacing: 0.13em;
 }
 
 .workflowIntro strong {
-  color: #30312b;
+  color: var(--color-ink);
   font-size: 17px;
   font-weight: 650;
 }
 
 .workflowIntro p {
   margin-top: 8px;
-  color: #7c786e;
+  color: var(--color-ink-secondary);
 }
 
 .workflowSkeleton {
   display: grid;
   padding-top: 25px;
   gap: 12px;
-  color: #77736a;
+  color: var(--color-ink-secondary);
   font-size: 11px;
 }
 
 .workflowSkeleton i {
   height: 86px;
-  border-left: 2px solid #ded7c9;
+  border-left: 2px solid var(--color-border);
   border-radius: 4px;
-  background: #efede6;
+  background: var(--color-surface);
 }
 
 .workflowSelector {
@@ -1277,11 +1298,11 @@
 .workflowPanel :where(select, textarea) {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgb(34 34 31 / 16%);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 8px 9px;
-  background: #fffefa;
-  color: #3c3c36;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 .workflowPanel select {
@@ -1296,28 +1317,28 @@
 }
 
 .workflowPanel textarea:focus-visible {
-  outline: 2px solid #b94d31;
+  outline: 2px solid var(--color-error);
   outline-offset: 2px;
 }
 
 .workflowPanel textarea[readonly] {
-  border-color: rgb(34 34 31 / 8%);
-  background: #f2efe8;
+  border-color: var(--color-divider);
+  background: var(--color-surface);
 }
 
 .workflowPanel :where(label, legend) {
-  color: #6a665e;
+  color: var(--color-ink-secondary);
   font-size: 10px;
   font-weight: 650;
 }
 
 .workflowPanel button {
   min-height: 32px;
-  border: 1px solid rgb(34 34 31 / 16%);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 6px 10px;
-  background: #fffefa;
-  color: #49473f;
+  background: var(--color-paper);
+  color: var(--color-ink);
   cursor: pointer;
   transition:
     background-color 140ms ease,
@@ -1325,7 +1346,7 @@
 }
 
 .workflowPanel button:hover:not(:disabled) {
-  background: #ece8df;
+  background: var(--color-surface);
 }
 
 .workflowPanel button:active:not(:disabled) {
@@ -1346,18 +1367,18 @@
 .workflowComposer p,
 .workflowResults > p,
 .workflowTaskNotice {
-  color: #817b70;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .workflowPanel .workflowPrimary {
-  border-color: #292a26;
-  background: #292a26;
-  color: #fffdf7;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .workflowPanel .workflowPrimary:hover:not(:disabled) {
-  background: #44443b;
+  background: var(--color-ink);
 }
 
 .workflowStatus {
@@ -1369,9 +1390,9 @@
 }
 
 .workflowStatus > span {
-  border-left: 2px solid #b94d31;
+  border-left: 2px solid var(--color-error);
   padding-left: 8px;
-  color: #6c4434;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   font-weight: 650;
 }
@@ -1381,13 +1402,13 @@
   border: 0;
   padding: 3px 5px;
   background: transparent;
-  color: #8a8276;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .workflowPanel .workflowIntent {
   margin-top: 12px;
-  color: #605b51;
+  color: var(--color-ink-secondary);
 }
 
 .workflowNodes {
@@ -1401,10 +1422,10 @@
 .workflowNode {
   position: relative;
   min-width: 0;
-  border: 1px solid rgb(34 34 31 / 13%);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 14px;
-  background: rgb(255 254 250 / 78%);
+  background: var(--color-paper);
 }
 
 .workflowNode + .workflowNode::before {
@@ -1412,16 +1433,16 @@
   top: -25px;
   left: 27px;
   height: 23px;
-  border-left: 1px solid #c8bdad;
+  border-left: 1px solid var(--color-border-strong);
   content: "";
 }
 
 .workflowNode[data-status="waiting_review"] {
-  border-color: rgb(185 77 49 / 40%);
+  border-color: var(--color-error);
 }
 
 .workflowNode[data-status="succeeded"] {
-  border-color: rgb(79 118 90 / 28%);
+  border-color: var(--color-success);
 }
 
 .workflowNodeMeta {
@@ -1435,34 +1456,34 @@
   display: grid;
   width: 26px;
   height: 26px;
-  border: 1px solid #ded5c8;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  background: #f1ece3;
-  color: #7a6c58;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   place-items: center;
 }
 
 .workflowNodeMeta small {
-  color: #8b8174;
+  color: var(--color-ink-secondary);
   font-size: 9px;
 }
 
 .workflowNode[data-status="succeeded"] .workflowNodeMeta small {
-  color: #4f765a;
+  color: var(--color-success);
 }
 
 .workflowNode h3 {
   margin: 0 0 5px;
-  color: #34352e;
+  color: var(--color-ink);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.45;
 }
 
 .workflowNode > p {
-  color: #7c7569;
+  color: var(--color-ink-secondary);
 }
 
 .workflowSource {
@@ -1473,18 +1494,18 @@
 }
 
 .workflowSource span {
-  color: #938678;
+  color: var(--color-ink-tertiary);
   font-size: 9px;
 }
 
 .workflowPrompt {
   display: grid;
-  border-top: 1px solid rgb(34 34 31 / 9%);
+  border-top: 1px solid var(--color-divider);
   padding-top: 10px;
 }
 
 .workflowPrompt summary {
-  color: #716454;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 10px;
 }
@@ -1503,7 +1524,7 @@
   min-width: 0;
   margin: 14px 0 0;
   border: 0;
-  border-top: 1px solid rgb(34 34 31 / 9%);
+  border-top: 1px solid var(--color-divider);
   padding: 12px 0 0;
   gap: 9px;
 }
@@ -1518,15 +1539,15 @@
   position: relative;
   display: grid;
   overflow: hidden;
-  border: 1px solid rgb(34 34 31 / 14%);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #f2efe8;
+  background: var(--color-surface);
   cursor: pointer;
 }
 
 .workflowResults > div > label[data-selected="true"] {
-  border-color: #a34c35;
-  box-shadow: 0 0 0 1px #a34c35;
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 1px var(--color-error);
 }
 
 .workflowResults img {
@@ -1540,7 +1561,7 @@
   position: absolute;
   top: 6px;
   left: 6px;
-  accent-color: #a34c35;
+  accent-color: var(--color-error);
 }
 
 .workflowResults > div span {
@@ -1559,7 +1580,7 @@
 .workflowPanel .workflowCancel {
   border-color: transparent;
   background: transparent;
-  color: #9c402d;
+  color: var(--color-error);
 }
 
 .workflowError {
@@ -1567,7 +1588,7 @@
   justify-items: start;
   margin-top: 22px;
   gap: 9px;
-  color: #9c402d;
+  color: var(--color-error);
 }
 
 @keyframes agent-spin {
@@ -1594,14 +1615,14 @@
     display: block;
     border: 0;
     padding: 0;
-    background: rgb(28 27 24 / 24%);
+    background: var(--color-border-strong);
     pointer-events: all;
   }
 
   .panel {
     z-index: 1501;
     width: min(420px, calc(100vw - 24px));
-    box-shadow: -18px 0 60px rgb(41 37 31 / 18%);
+    box-shadow: -18px 0 60px var(--color-border);
   }
 }
 

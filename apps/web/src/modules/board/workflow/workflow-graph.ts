@@ -1,3 +1,4 @@
+import { workflowInputPorts } from "@fashion/shared";
 import type {
   WorkflowEdge,
   WorkflowGraph,
@@ -6,6 +7,13 @@ import type {
   WorkflowToolType,
 } from "./workflow-api";
 
+/**
+ * 节点尺寸。
+ *
+ * 尺寸应当由内容决定：图像类节点需要高度给图片，文字类节点的留白
+ * 则纯粹是"统一卡片"的残留——内容只占上半部，下半部是空的。
+ * 因此文字节点收窄到贴合成文本量级，图像节点保留大尺寸。
+ */
 export function nodeSize(node: Pick<WorkflowNode, "type" | "kind">): {
   readonly h: number;
   readonly w: number;
@@ -18,9 +26,11 @@ export function nodeSize(node: Pick<WorkflowNode, "type" | "kind">): {
     return { h: 300, w: 258 };
   }
   if (node.type === "evaluation" || node.type === "constraint") {
-    return { h: 236, w: 258 };
+    return { h: 196, w: 258 };
   }
-  return { h: node.kind === "tool" ? 206 : 210, w: 258 };
+  // 色卡是纯色块，不需要文字节点的高度
+  if (node.type === "swatch") return { h: 148, w: 258 };
+  return { h: node.kind === "tool" ? 186 : 172, w: 258 };
 }
 
 export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
@@ -35,6 +45,59 @@ export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
     case "generate_design":
       return "constraint";
   }
+}
+
+/**
+ * 素材/工具类型的中文名，用于在没有可读标题时兜底。
+ */
+const NODE_TYPE_TITLES: Readonly<Record<string, string>> = {
+  analyze_brief: "解析设计需求",
+  brief: "设计需求",
+  candidate: "设计方案",
+  constraint: "设计约束",
+  edit_design: "局部修改",
+  evaluate_design: "评估设计",
+  evaluation: "评估报告",
+  fabric: "面料参考",
+  generate_design: "生成设计方案",
+  legacy: "历史记录",
+  reference_image: "参考图片",
+  reference_text: "参考文字",
+  restore_version: "恢复历史版本",
+  sketch: "设计草图",
+  swatch: "色卡",
+  trend: "趋势参考",
+};
+
+/** 节点类型的中文名，供界面标签使用。 */
+export function nodeTypeLabel(type: string): string {
+  return NODE_TYPE_TITLES[type] ?? type;
+}
+
+/** 纯哈希 / 十六进制串，以及超长无分隔的紧凑串，都是机器生成的 id。 */
+const HASH_TITLE = /^[0-9a-f]{16,}(?:\.\w{1,5})?$/iu;
+
+/**
+ * 面向设计师的节点标题。
+ *
+ * 上游有时把文件哈希存成 title（如 `4be5c6b871ac036349e494e66d…`）。
+ * 那串字符对设计师没有意义，长度还会挤掉图片本身的位置，
+ * 因此在界面上替换为节点类型的可读名称；原始值仍在节点详情里可查。
+ */
+export function displayNodeTitle(
+  node: Pick<WorkflowNode, "title" | "type">,
+): string {
+  const fallback = NODE_TYPE_TITLES[node.type] ?? node.type;
+  const trimmed = node.title.trim();
+  if (!trimmed) return fallback;
+  if (HASH_TITLE.test(trimmed)) return fallback;
+  if (
+    trimmed.length > 24 &&
+    !/\s/u.test(trimmed) &&
+    !/\p{Script=Han}/u.test(trimmed)
+  )
+    return fallback;
+  return trimmed;
 }
 
 export function nodeSummary(node: WorkflowNode): string {
@@ -151,49 +214,5 @@ export function availableInputPorts(
       ? ["source"]
       : [];
   }
-  const referenceTypes = new Set([
-    "reference_text",
-    "reference_image",
-    "swatch",
-    "sketch",
-    "trend",
-    "fabric",
-    "legacy",
-    "candidate",
-  ]);
-  switch (target.type) {
-    case "analyze_brief":
-      return source.type === "brief" || source.type === "reference_text"
-        ? ["goal"]
-        : referenceTypes.has(source.type)
-          ? ["reference"]
-          : [];
-    case "generate_design":
-      return source.type === "constraint"
-        ? ["constraint"]
-        : source.type === "candidate"
-          ? ["source"]
-          : referenceTypes.has(source.type)
-            ? ["reference"]
-            : [];
-    case "evaluate_design":
-      return source.type === "candidate"
-        ? ["candidate"]
-        : source.type === "constraint"
-          ? ["constraint"]
-          : referenceTypes.has(source.type)
-            ? ["reference"]
-            : [];
-    case "edit_design":
-    case "restore_version":
-      return source.type === "candidate"
-        ? ["source"]
-        : source.type === "constraint"
-          ? ["constraint"]
-          : referenceTypes.has(source.type)
-            ? ["reference"]
-            : [];
-    default:
-      return [];
-  }
+  return workflowInputPorts(source.type, target.type).slice(0, 1);
 }

@@ -1,0 +1,132 @@
+/**
+ * 新时尚 AI 设计平台 — Motion Tokens
+ *
+ * 动效设计语言：Elegant · Precise · Tactile · Restrained · Responsive
+ *
+ * 原则：
+ * - 即时反馈优先于视觉表现（专业操作不应被动画拖慢）
+ * - transform + opacity 优先，避免 layout reflow
+ * - 不同语义的操作使用不同缓动曲线
+ * - 所有模块从此处取值，禁止硬编码时间与曲线
+ */
+
+:root {
+
+  /* ─── Duration Scale ──────────────────────────────────────────────────────
+   *
+   *  instant   按钮 press、checkbox 切换、工具提示显示
+   *  fast      按钮 hover、标签选中、输入框 focus ring
+   *  standard  面板内状态变化、菜单项 hover、候选卡片 hover
+   *  enter     元素进入场景（素材落下、面板展开、模态出现）
+   *  exit      元素离开场景（应比 enter 快 30-40%）
+   *  layout    布局变化（侧边栏展开、画布重排）
+   *
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  --dur-instant:  80ms;
+  --dur-fast:    120ms;
+  --dur-standard: 180ms;
+  --dur-enter:   260ms;
+  --dur-exit:    180ms;
+  --dur-layout:  220ms;
+
+  /* ─── Easing Curves ───────────────────────────────────────────────────────
+   *
+   *  ease-state    状态平稳过渡（hover bg、颜色变化）——近线性，轻盈
+   *  ease-enter    元素进入——先快后慢，落感自然
+   *  ease-exit     元素退出——先慢后快，干净离开
+   *  ease-spring   交互释放——适度弹性，不夸张（拖拽松手、图钉固定）
+   *  ease-snappy   工具栏、按键即时操作——快速响应
+   *
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  --ease-state:   cubic-bezier(0.4, 0, 0.2, 1);       /* Material standard */
+  --ease-enter:   cubic-bezier(0.16, 1, 0.3, 1);      /* 快入慢出，自然落感 */
+  --ease-exit:    cubic-bezier(0.4, 0, 1, 1);          /* 慢入快出，干净离开 */
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);  /* 轻微过冲，触感真实 */
+  --ease-snappy:  cubic-bezier(0.2, 0, 0, 1);          /* 即时响应 */
+
+  /* ─── Composite Transitions（常用组合，直接 apply）────────────────────────
+   *
+   *  示例用法：
+   *    transition: var(--t-state);
+   *    transition: background-color var(--t-state), color var(--t-state);
+   *
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /* 状态切换：按钮 hover/active，颜色变化 */
+  --t-state:   var(--dur-fast) var(--ease-state);
+
+  /* 控件即时反馈：工具按钮 press、checkbox、radio */
+  --t-instant: var(--dur-instant) var(--ease-snappy);
+
+  /* 面板/菜单出现 */
+  --t-enter:   var(--dur-enter) var(--ease-enter);
+
+  /* 面板/菜单消失 */
+  --t-exit:    var(--dur-exit) var(--ease-exit);
+
+  /* 布局变化 */
+  --t-layout:  var(--dur-layout) var(--ease-state);
+
+  /* ─── Material Interaction（素材触感动效）────────────────────────────────
+   *
+   *  画布素材（纸张、图片、面料小样）的拾起与放置。
+   *  比通用控件更慢、更有质感，体现物理重量感。
+   *
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  --dur-material-enter:   280ms;  /* 素材落入画布 */
+  --dur-material-hover:   160ms;  /* 素材悬停拾起感 */
+  --dur-material-pin:     200ms;  /* 图钉固定 */
+
+  --ease-material-drop:  cubic-bezier(0.16, 1, 0.3, 1);  /* 落下，有重量 */
+  --ease-material-pin:   cubic-bezier(0.34, 1.4, 0.64, 1); /* 图钉插入弹性 */
+
+  /* ─── AI Status Animation ────────────────────────────────────────────────
+   *
+   *  AI 任务进行中的脉冲/旋转，需要比装饰动画更快，
+   *  传递"系统正在工作"而非"系统正在等待"的信号。
+   *
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  --dur-ai-pulse:  900ms;   /* 活跃脉冲周期（比默认 1.5s 快，更紧迫） */
+  --dur-ai-spin:   700ms;   /* 旋转周期 */
+
+  /* ─── Stagger（序列动画的错落延迟）──────────────────────────────────────── */
+
+  --stagger-xs:  40ms;   /* 紧密列表项 */
+  --stagger-sm:  60ms;   /* 候选卡片、趋势卡片 */
+  --stagger-md:  80ms;   /* 项目卡片 */
+
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────────────────────────
+ *
+ *  尊重系统无障碍设置。
+ *  保留即时的状态反馈（opacity/color），消除运动（transform/animation）。
+ *  不是"关掉所有动画"，而是"把运动替换为即时切换"。
+ *
+ * ────────────────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant:  0ms;
+    --dur-fast:     0ms;
+    --dur-standard: 0ms;
+    --dur-enter:    0ms;
+    --dur-exit:     0ms;
+    --dur-layout:   0ms;
+
+    --dur-material-enter: 0ms;
+    --dur-material-hover: 0ms;
+    --dur-material-pin:   0ms;
+
+    --dur-ai-pulse: 2000ms;  /* 保留极慢脉冲用于指示状态，不完全关闭 */
+    --dur-ai-spin:  0ms;     /* 旋转关闭 */
+
+    --stagger-xs: 0ms;
+    --stagger-sm: 0ms;
+    --stagger-md: 0ms;
+  }
+}

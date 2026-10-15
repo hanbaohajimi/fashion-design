@@ -9,7 +9,7 @@ import Link from "next/link";
 import { type CSSProperties, useState } from "react";
 
 import type { Project } from "./project-types";
-import styles from "./projects-redesign.module.css";
+import styles from "./projects.module.css";
 
 interface ProjectCardProps {
   readonly duplicating: boolean;

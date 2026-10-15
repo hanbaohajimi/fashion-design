@@ -2,8 +2,8 @@
   min-height: 100dvh;
   padding: 0 clamp(1.25rem, 3.5vw, 3.5rem) 4rem;
   overflow-x: hidden;
-  background: var(--surface-paper, #ece9e0);
-  color: var(--text-primary, #181915);
+  background: var(--surface-paper, var(--color-surface));
+  color: var(--text-primary, var(--color-ink));
   font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", sans-serif);
 }
 
@@ -15,8 +15,8 @@
   min-height: 76px;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-light, #d9d4c8);
-  background: color-mix(in srgb, var(--surface-paper, #ece9e0) 92%, transparent);
+  border-bottom: 1px solid var(--border-light, var(--color-border));
+  background: color-mix(in srgb, var(--surface-paper, var(--color-surface)) 92%, transparent);
   backdrop-filter: blur(14px);
   gap: 24px;
 }
@@ -31,7 +31,7 @@
   display: inline-flex;
   min-height: 36px;
   align-items: center;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 12px;
   font-weight: 700;
   gap: 8px;
@@ -40,13 +40,13 @@
 }
 
 .libraryIdentity > a:hover {
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
 }
 
 .headerDivider {
   width: 1px;
   height: 28px;
-  background: var(--border-light, #d9d4c8);
+  background: var(--border-light, var(--color-border));
 }
 
 .libraryIdentity > div {
@@ -64,7 +64,7 @@
 }
 
 .libraryIdentity > div > span {
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
@@ -85,12 +85,12 @@
 .searchWrap input {
   width: 100%;
   height: 44px;
-  border: 1px solid var(--border-light, #d9d4c8);
+  border: 1px solid var(--border-light, var(--color-border));
   border-radius: var(--radius-pill, 999px);
   outline: none;
   padding: 0 52px 0 20px;
-  background: var(--surface-card, #f8f5ec);
-  color: var(--text-primary, #181915);
+  background: var(--surface-card, var(--color-surface));
+  color: var(--text-primary, var(--color-ink));
   font: inherit;
   transition:
     border-color var(--transition-base, 200ms),
@@ -99,13 +99,13 @@
 }
 
 .searchWrap input:focus {
-  border-color: var(--accent-primary, #e9522c);
-  background: #fffef9;
-  box-shadow: 0 0 0 3px rgb(233 82 44 / 15%);
+  border-color: var(--accent-primary, var(--color-signal));
+  background: var(--color-paper);
+  box-shadow: 0 0 0 3px var(--color-signal-subtle);
 }
 
 .searchWrap input:hover:not(:focus) {
-  border-color: var(--border-hover, #3d3d35);
+  border-color: var(--border-hover, var(--color-ink));
 }
 
 .searchWrap input::-webkit-search-cancel-button {
@@ -123,7 +123,7 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
@@ -131,8 +131,8 @@
 }
 
 .searchClear:hover {
-  background: var(--surface-paper, #ece9e0);
-  color: var(--accent-primary, #e9522c);
+  background: var(--surface-paper, var(--color-surface));
+  color: var(--accent-primary, var(--color-signal));
 }
 
 .searchClear:focus-visible,
@@ -140,7 +140,7 @@
 .libraryState button:focus-visible,
 .fabricManageButton:focus-visible,
 .fabricUploadTrigger:focus-visible {
-  outline: 3px solid var(--accent-primary, #e9522c);
+  outline: 3px solid var(--accent-primary, var(--color-signal));
   outline-offset: 3px;
 }
 
@@ -153,7 +153,7 @@
   top: 24px;
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border-top: 1px solid var(--border-primary, #2d2d28);
+  border-top: 1px solid var(--border-primary, var(--color-ink));
 }
 
 .filterRailTitle {
@@ -167,7 +167,7 @@
 .filterGroup button {
   border: 0;
   background: transparent;
-  color: var(--text-secondary, #4a4a42);
+  color: var(--text-secondary, var(--color-ink-secondary));
   cursor: pointer;
   font: inherit;
 }
@@ -181,13 +181,13 @@
 .filterGroup {
   margin: 0;
   border: 0;
-  border-bottom: 1px solid var(--border-light, #e0ddd0);
+  border-bottom: 1px solid var(--border-light, var(--color-border));
   padding: 20px 0;
 }
 
 .filterGroup legend {
   margin-bottom: 13px;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   font-size: 12px;
   font-weight: 700;
 }
@@ -200,7 +200,7 @@
 
 .filterGroup button {
   min-height: 30px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   border-radius: var(--radius-pill, 999px);
   padding: 5px 10px;
   font-size: 11px;
@@ -213,9 +213,9 @@
 
 .filterGroup button:hover,
 .filterGroup button[aria-pressed="true"] {
-  border-color: var(--accent-primary, #e9522c);
-  background: var(--accent-primary, #e9522c);
-  color: #fffef9;
+  border-color: var(--accent-primary, var(--color-signal));
+  background: var(--accent-primary, var(--color-signal));
+  color: var(--color-paper);
   transform: translateY(-1px);
 }
 
@@ -235,7 +235,7 @@
   display: inline-flex;
   padding: 3px;
   border-radius: 9px;
-  background: #e4dfd3;
+  background: var(--color-border);
   gap: 2px;
 }
 
@@ -245,7 +245,7 @@
   border-radius: 7px;
   padding: 0 13px;
   background: transparent;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
@@ -256,7 +256,7 @@
 }
 
 .scopeTabs button:hover {
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
 }
 
 .scopeTabs button:active {
@@ -264,20 +264,20 @@
 }
 
 .scopeTabs button[aria-pressed="true"] {
-  background: #fffef9;
-  box-shadow: 0 1px 4px rgb(24 25 21 / 10%);
-  color: var(--text-primary, #181915);
+  background: var(--color-paper);
+  box-shadow: 0 1px 4px var(--color-divider);
+  color: var(--text-primary, var(--color-ink));
 }
 
 .scopeTabs button:focus-visible {
-  outline: 3px solid var(--accent-primary, #e9522c);
+  outline: 3px solid var(--accent-primary, var(--color-signal));
   outline-offset: 2px;
 }
 
 .resultMeta p,
 .resultMeta span {
   margin: 0;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 11px;
 }
 
@@ -292,7 +292,7 @@
 .virtualGrid {
   min-height: 0;
   overscroll-behavior-y: auto;
-  scrollbar-color: #2d2d28 transparent;
+  scrollbar-color: var(--color-ink) transparent;
   scrollbar-width: thin;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
@@ -306,8 +306,8 @@
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: var(--surface-card, #f8f5ec);
-  color: var(--text-primary, #181915);
+  background: var(--surface-card, var(--color-surface));
+  color: var(--text-primary, var(--color-ink));
   cursor: grab;
   transition:
     transform var(--transition-base, 200ms),
@@ -315,7 +315,7 @@
 }
 
 .fabricCard:hover {
-  border-color: var(--border-light, #d9d4c8);
+  border-color: var(--border-light, var(--color-border));
   transform: translateY(-3px);
 }
 
@@ -325,8 +325,8 @@
 }
 
 .fabricCard:focus-within {
-  border-color: var(--accent-primary, #e9522c);
-  outline: 3px solid rgb(233 82 44 / 22%);
+  border-color: var(--accent-primary, var(--color-signal));
+  outline: 3px solid var(--color-signal-subtle);
   outline-offset: 3px;
 }
 
@@ -334,7 +334,7 @@
   position: relative;
   height: 232px;
   overflow: hidden;
-  background: #d9d4c8;
+  background: var(--color-border);
 }
 
 .cardVisual img {
@@ -352,8 +352,8 @@
   position: absolute;
   z-index: 1;
   border-radius: 7px;
-  background: rgb(24 25 21 / 84%);
-  color: #fffef9;
+  background: var(--color-scrim);
+  color: var(--color-paper);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -399,8 +399,8 @@
   border: 0;
   border-radius: var(--radius-pill, 999px);
   padding: 4px 9px;
-  background: #e9e5da;
-  color: var(--text-primary, #181915);
+  background: var(--color-border);
+  color: var(--text-primary, var(--color-ink));
   font-size: 10px;
   font-weight: 700;
 }
@@ -411,12 +411,12 @@
   top: 10px;
   right: 10px;
   min-height: 32px;
-  border: 1px solid rgb(255 254 249 / 64%);
+  border: 1px solid var(--color-paper);
   border-radius: 8px;
   padding: 0 11px;
-  background: rgb(255 254 249 / 90%);
-  box-shadow: 0 6px 20px rgb(24 25 21 / 12%);
-  color: var(--text-primary, #181915);
+  background: var(--color-paper);
+  box-shadow: 0 6px 20px var(--color-border);
+  color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
@@ -436,8 +436,8 @@
 }
 
 .fabricManageButton:hover {
-  background: var(--text-primary, #181915);
-  color: #fffef9;
+  background: var(--text-primary, var(--color-ink));
+  color: var(--color-paper);
 }
 
 .categoryPill {
@@ -446,23 +446,23 @@
   align-items: center;
   border-radius: var(--radius-pill, 999px);
   padding: 3px 9px;
-  background: #dfdbd0;
-  color: var(--text-secondary, #4a4a42);
+  background: var(--color-border);
+  color: var(--text-secondary, var(--color-ink-secondary));
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .categoryPill[data-scope="user"] {
-  background: rgb(233 82 44 / 11%);
-  color: var(--accent-secondary, #d1421f);
+  background: var(--color-signal-subtle);
+  color: var(--accent-secondary, var(--color-signal-hover));
 }
 
 .fabricTags p {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 10px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -482,7 +482,7 @@
 .cardBody p {
   overflow: hidden;
   margin: 0;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -505,14 +505,14 @@
 }
 
 .metricRow dt {
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 9px;
   letter-spacing: 0.1em;
 }
 
 .metricRow dd {
   margin: 0;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -527,11 +527,11 @@
   height: 3px;
   flex: 1;
   border-radius: var(--radius-pill, 999px);
-  background: var(--border-light, #e0ddd0);
+  background: var(--border-light, var(--color-border));
 }
 
 .metricGauge b[data-on="true"] {
-  background: var(--accent-primary, #e9522c);
+  background: var(--accent-primary, var(--color-signal));
 }
 
 .cardFacts {
@@ -539,9 +539,9 @@
   margin-top: 14px;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-light, #e0ddd0);
+  border-top: 1px solid var(--border-light, var(--color-border));
   padding-top: 11px;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -553,8 +553,8 @@
   margin-top: 13px;
   border: 0;
   border-radius: var(--radius-pill, 999px);
-  background: var(--accent-primary, #e9522c);
-  color: #fffef9;
+  background: var(--accent-primary, var(--color-signal));
+  color: var(--color-paper);
   cursor: pointer;
   font-weight: 800;
   transition:
@@ -563,7 +563,7 @@
 }
 
 .cardBody button:hover {
-  background: var(--accent-secondary, #d1421f);
+  background: var(--accent-secondary, var(--color-signal-hover));
   transform: translateY(-2px);
 }
 
@@ -578,15 +578,15 @@
 }
 
 .cardBody .fabricManageButton {
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   background: transparent;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
 }
 
 .cardBody .fabricManageButton:hover {
-  border-color: var(--accent-primary, #e9522c);
-  background: rgb(233 82 44 / 10%);
-  color: var(--accent-secondary, #d1421f);
+  border-color: var(--accent-primary, var(--color-signal));
+  background: var(--color-signal-subtle);
+  color: var(--accent-secondary, var(--color-signal-hover));
 }
 
 .fabricCard[data-compact="true"] .cardVisual {
@@ -612,23 +612,23 @@
 .libraryState {
   display: grid;
   min-height: 420px;
-  border: 1px dashed var(--border-primary, #2d2d28);
+  border: 1px dashed var(--border-primary, var(--color-ink));
   border-radius: var(--radius-xl, 16px);
   place-content: center;
   text-align: center;
 }
 
 .libraryState p {
-  color: var(--text-secondary, #4a4a42);
+  color: var(--text-secondary, var(--color-ink-secondary));
 }
 
 .libraryState button {
   justify-self: center;
-  border: 1px solid var(--accent-primary, #e9522c);
+  border: 1px solid var(--accent-primary, var(--color-signal));
   border-radius: var(--radius-pill, 999px);
   padding: 9px 14px;
   background: transparent;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   transition:
     background-color var(--transition-base, 200ms),
@@ -638,14 +638,14 @@
 }
 
 .libraryState button:hover {
-  background: var(--accent-primary, #e9522c);
-  color: #fffef9;
+  background: var(--accent-primary, var(--color-signal));
+  color: var(--color-paper);
   transform: translateY(-2px);
 }
 
 .loadingMore {
   margin: 8px 0 0;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 10px;
   text-align: center;
 }
@@ -653,17 +653,17 @@
 .fabricUploadPanel {
   margin: 18px 8px 0;
   overflow: hidden;
-  border: 1px dashed var(--border-primary, #2d2d28);
+  border: 1px dashed var(--border-primary, var(--color-ink));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--surface-card, #f8f5ec) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-card, var(--color-surface)) 72%, transparent);
   transition:
     background-color var(--transition-base, 200ms),
     border-color var(--transition-base, 200ms);
 }
 
 .fabricUploadPanel[data-dragging="true"] {
-  border-color: var(--accent-primary, #e9522c);
-  background: rgb(233 82 44 / 8%);
+  border-color: var(--accent-primary, var(--color-signal));
+  background: var(--color-signal-subtle);
 }
 
 .fabricUploadTrigger {
@@ -675,7 +675,7 @@
   align-items: center;
   justify-content: space-between;
   background: transparent;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   text-align: left;
   gap: 16px;
@@ -696,17 +696,17 @@
 }
 
 .fabricUploadTrigger > span {
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 11px;
 }
 
 .fabricUploadPanel[data-dragging="true"] .fabricUploadTrigger {
-  color: var(--accent-primary, #e9522c);
+  color: var(--accent-primary, var(--color-signal));
 }
 
 .fabricUploadForm {
   display: grid;
-  border-top: 1px solid var(--border-light, #d9d4c8);
+  border-top: 1px solid var(--border-light, var(--color-border));
   padding: 16px;
   align-items: start;
   grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
@@ -717,8 +717,8 @@
   position: relative;
   height: 142px;
   overflow: hidden;
-  border: 1px solid var(--border-primary, #2d2d28);
-  background: #e0ddd0;
+  border: 1px solid var(--border-primary, var(--color-ink));
+  background: var(--color-border);
 }
 
 .fabricUploadPreview img {
@@ -731,10 +731,10 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
-  border: 1px solid #181915;
+  border: 1px solid var(--color-ink);
   padding: 6px 9px;
-  background: #f8f5ec;
-  color: #181915;
+  background: var(--color-surface);
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 10px;
 }
@@ -756,12 +756,12 @@
 .tagHelp {
   grid-column: 1 / -1;
   margin: 0;
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 10px;
 }
 
 .fabricUploadFields span {
-  color: var(--text-muted, #65655d);
+  color: var(--text-muted, var(--color-ink-secondary));
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.1em;
@@ -771,20 +771,20 @@
 .fabricUploadFields select {
   width: 100%;
   min-height: 36px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   border-radius: 0;
   outline: none;
   padding: 0 10px;
-  background: #fffef9;
-  color: var(--text-primary, #181915);
+  background: var(--color-paper);
+  color: var(--text-primary, var(--color-ink));
   font: inherit;
   font-size: 12px;
 }
 
 .fabricUploadFields input:focus,
 .fabricUploadFields select:focus {
-  border-color: var(--accent-primary, #e9522c);
-  box-shadow: 0 0 0 2px rgb(233 82 44 / 12%);
+  border-color: var(--accent-primary, var(--color-signal));
+  box-shadow: 0 0 0 2px var(--color-signal-subtle);
 }
 
 .fabricUploadActions {
@@ -797,10 +797,10 @@
 
 .fabricUploadActions button {
   min-height: 36px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   padding: 0 14px;
   background: transparent;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   font-weight: 800;
   transition:
@@ -809,9 +809,9 @@
 }
 
 .fabricUploadActions button[type="submit"] {
-  border-color: var(--accent-primary, #e9522c);
-  background: var(--accent-primary, #e9522c);
-  color: #fffef9;
+  border-color: var(--accent-primary, var(--color-signal));
+  background: var(--accent-primary, var(--color-signal));
+  color: var(--color-paper);
 }
 
 .fabricUploadActions button:not(:disabled):hover {
@@ -826,17 +826,17 @@
 .fabricUploadError,
 .fabricUploadSuccess {
   margin: 0;
-  border-top: 1px solid var(--border-light, #e0ddd0);
+  border-top: 1px solid var(--border-light, var(--color-border));
   padding: 10px 14px;
   font-size: 11px;
 }
 
 .fabricUploadError {
-  color: #a52c1f;
+  color: var(--color-error);
 }
 
 .fabricUploadSuccess {
-  color: #276443;
+  color: var(--color-success);
 }
 
 .fabricUploadPanel[data-compact="true"] {
@@ -887,10 +887,10 @@
 
 .fabricDetailButton {
   min-height: 34px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   padding: 0 12px;
   background: transparent;
-  color: var(--text-primary, #181915);
+  color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -901,7 +901,7 @@
   position: fixed;
   z-index: 1200;
   display: grid;
-  background: rgb(24 25 21 / 52%);
+  background: var(--color-scrim-soft);
   inset: 0;
   place-items: center;
 }
@@ -910,16 +910,16 @@
   width: min(680px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: 1px solid var(--border-primary, #2d2d28);
-  background: #fffef9;
-  box-shadow: 0 24px 70px rgb(24 25 21 / 28%);
+  border: 1px solid var(--border-primary, var(--color-ink));
+  background: var(--color-paper);
+  box-shadow: 0 24px 70px var(--color-border-strong);
 }
 
 .fabricDialog > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-light, #e0ddd0);
+  border-bottom: 1px solid var(--border-light, var(--color-border));
   padding: 18px 20px;
 }
 
@@ -945,7 +945,7 @@
 .fabricDialogImage {
   height: min(340px, 42vh);
   overflow: hidden;
-  background: #e0ddd0;
+  background: var(--color-border);
 }
 
 .fabricDialogImage img {
@@ -966,14 +966,14 @@
 
 .fabricDetailList > div {
   min-width: 0;
-  border-right: 1px solid var(--border-light, #e0ddd0);
-  border-bottom: 1px solid var(--border-light, #e0ddd0);
+  border-right: 1px solid var(--border-light, var(--color-border));
+  border-bottom: 1px solid var(--border-light, var(--color-border));
   padding: 14px 20px;
 }
 
 .fabricDetailList dt {
   margin-bottom: 5px;
-  color: var(--text-secondary, #6f7069);
+  color: var(--text-secondary, var(--color-ink-tertiary));
   font-size: 10px;
   font-weight: 900;
 }
@@ -1002,7 +1002,7 @@
 .fabricDialogActions button,
 .fabricEditForm button {
   min-height: 36px;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   padding: 0 14px;
   background: transparent;
   cursor: pointer;
@@ -1034,10 +1034,10 @@
 .fabricEditForm select,
 .fabricEditForm textarea {
   min-width: 0;
-  border: 1px solid var(--border-primary, #2d2d28);
+  border: 1px solid var(--border-primary, var(--color-ink));
   padding: 9px 10px;
-  background: #fffef9;
-  color: var(--text-primary, #181915);
+  background: var(--color-paper);
+  color: var(--text-primary, var(--color-ink));
   font: inherit;
   font-size: 12px;
 }

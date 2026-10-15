@@ -7,9 +7,9 @@ import { config } from "dotenv";
 
 config();
 
-const AMUX_BASE_URL = process.env.AMUX_BASE_URL || "https://api.amux.ai/v1";
+const AMUX_BASE_URL = process.env.AMUX_BASE_URL || "https://gateway.amux.ai/v1";
 const AMUX_API_KEY = process.env.AMUX_API_KEY;
-const IMAGE_MODEL = process.env.AMUX_IMAGE_MODEL || "gpt-image-2";
+const IMAGE_MODEL = process.env.AMUX_IMAGE_MODEL || "openai/gpt-image-2.5-sunburst";
 
 // 三张明显不同特征的测试图片 URL（需要公网可访问）
 const TEST_IMAGE_1 = "https://placehold.co/400x400/red/white?text=RED";

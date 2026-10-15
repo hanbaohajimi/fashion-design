@@ -5,22 +5,26 @@
   min-height: 600px;
   flex-direction: column;
   overflow: hidden;
-  background: #f9f5ed;
-  color: #302b27;
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* 工作流画布用 --color-surface，让顶栏（--color-paper）明确浮起 */
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
+/* 顶栏：一条细带，不是工具栏。
+   品牌、项目名、操作三段分明，但整体高度和对比度都压到最低——
+   视线应该落在画布上，而不是停在这里。 */
 .topbar {
   z-index: 5;
   display: flex;
-  height: 68px;
+  height: 52px;
   flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid #e8dfd4;
-  padding: 0 22px;
-  background: #fffdf9;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 20px;
+  background: var(--color-paper);
 }
 
 .brandGroup,
@@ -28,95 +32,114 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
+/* 品牌符号：与项目库顶栏同一枚小方章，不做色块按钮 */
 .brandIcon {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   flex: none;
   place-items: center;
-  border-radius: 8px;
-  background: #aa664d;
-  color: white;
-  font-size: 18px;
+  border: 1.5px solid var(--color-ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-style: italic;
   line-height: 1;
   text-decoration: none;
 }
 
 .brand {
   overflow: hidden;
-  font-size: 17px;
-  font-weight: 760;
-  letter-spacing: -0.04em;
+  color: var(--color-ink-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-overflow: ellipsis;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .topDivider,
 .menuDivider {
   width: 1px;
-  height: 22px;
+  height: 18px;
   flex: none;
-  background: #e5dcd0;
+  background: var(--color-divider);
 }
 
+/* 项目名是顶栏唯一的实体信息，给它最高对比度 */
 .projectName {
-  max-width: 240px;
+  max-width: 260px;
   overflow: hidden;
-  color: #5e5550;
-  font-size: 13px;
-  font-weight: 650;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 工作流标识：从胶囊降级为静默小字，只作类型区分，不再抢项目名 */
 .workflowBadge {
-  border-radius: 999px;
-  padding: 7px 13px;
-  background: #f0eaf5;
-  color: #775c94;
-  font-size: 12px;
+  flex: none;
+  color: var(--color-ink-tertiary);
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
 .topActions {
-  gap: 17px;
+  gap: 15px;
   white-space: nowrap;
 }
 
+/* 操作项常态几乎隐形：只在悬停时显影，避免与画布内容争夺注意力 */
 .topActions a,
 .topActions button {
   border: 0;
-  padding: 5px 0;
+  padding: 4px 0;
   background: none;
-  color: #5d544c;
+  color: var(--color-ink-tertiary);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 500;
   text-decoration: none;
+  transition: color var(--duration-fast);
 }
 
 .topActions a:hover,
 .topActions button:hover {
-  color: #a7583d;
+  color: var(--color-ink);
 }
 
+.topActions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+/* 保存状态：常态只留一个绿点，文字在悬停时出现 */
 .saved {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: #827a70;
-  font-size: 11px;
+  gap: 6px;
+  color: var(--color-ink-tertiary);
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 
 .saved > span {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #74a47e;
+  background: var(--color-success);
 }
 
 .workspace {
@@ -130,52 +153,51 @@
   position: relative;
   min-width: 0;
   overflow: hidden;
-  background-color: #faf6ee;
-  background-image: radial-gradient(#dccfc1 0.95px, transparent 0.95px);
-  background-size: 23px 23px;
+  background-color: var(--color-canvas);
+  background-image: radial-gradient(rgb(66 62 55 / 11%) 0.7px, transparent 0.7px);
+  background-size: 28px 28px;
 }
 
+/* 画布角落：一个极弱的定位标签。
+   画布是工作区，不是落地页——标语和副标题都不该出现在这里。 */
 .canvasHeading {
   position: absolute;
   z-index: 2;
-  top: 32px;
-  left: 44px;
+  top: 14px;
+  left: 20px;
   display: flex;
-  max-width: calc(100% - 88px);
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   pointer-events: none;
 }
 
 .overline {
-  color: #867c72;
-  font-size: 10px;
-  font-weight: 760;
-  letter-spacing: 0.115em;
-}
-
-.canvasHeading h1 {
-  margin: 9px 0 6px;
-  color: #27221e;
-  font-size: clamp(20px, 2vw, 27px);
+  color: var(--color-ink-disabled);
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: -0.055em;
-  line-height: 1.22;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
+.canvasHeading h1,
 .canvasHeading p {
-  margin: 0;
-  color: #6d635a;
-  font-size: 13px;
-  line-height: 1.5;
+  /* 保留在 DOM 中供辅助技术读取，视觉上不占位 */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .canvas {
   position: absolute;
-  inset: 118px 0 0;
-  background-color: #faf6ee;
-  background-image: radial-gradient(#dccfc1 0.95px, transparent 0.95px);
-  background-size: 23px 23px;
+  inset: 50px 0 0;
+  background-color: var(--color-canvas);
+  background-image: radial-gradient(rgb(66 62 55 / 11%) 0.7px, transparent 0.7px);
+  background-size: 28px 28px;
 }
 
 .canvas :global(.tl-background),
@@ -190,17 +212,17 @@
   top: 50%;
   left: 50%;
   width: min(410px, 80%);
-  border: 1px solid #e0d5c9;
-  border-radius: 15px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   padding: 32px;
-  background: #fffdf8;
-  box-shadow: 0 15px 45px rgb(70 52 39 / 10%);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-card);
   text-align: left;
   transform: translate(-50%, -50%);
 }
 
 .emptyState > span {
-  color: #a56a51;
+  color: var(--color-signal);
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.14em;
@@ -213,7 +235,7 @@
 }
 
 .emptyState p {
-  color: #746a60;
+  color: var(--color-ink-secondary);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -221,10 +243,10 @@
 .emptyState button,
 .entryDialog > button {
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   margin-top: 14px;
   padding: 10px 16px;
-  background: #aa664d;
+  background: var(--color-signal);
   color: white;
   cursor: pointer;
   font-size: 13px;
@@ -238,19 +260,19 @@
   bottom: 72px;
   display: flex;
   overflow: hidden;
-  border: 1px solid #e0d6c9;
-  border-radius: 9px;
-  background: #fffdf9;
-  box-shadow: 0 3px 12px rgb(60 43 31 / 7%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-sm);
 }
 
 .zoomControls button {
   min-width: 34px;
   height: 36px;
   border: 0;
-  border-right: 1px solid #eae1d5;
+  border-right: 1px solid var(--color-divider);
   background: none;
-  color: #645b50;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
@@ -261,7 +283,7 @@
 }
 
 .zoomControls button:hover {
-  background: #f5eee6;
+  background: var(--color-surface);
 }
 
 .bottomMenu {
@@ -273,21 +295,21 @@
   min-height: 54px;
   align-items: center;
   gap: 4px;
-  border: 1px solid #e4dace;
-  border-radius: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 5px 8px;
-  background: #fffdf9;
-  box-shadow: 0 7px 26px rgb(70 52 39 / 10%);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-card);
   transform: translateX(-50%);
   white-space: nowrap;
 }
 
 .bottomMenu > button {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 11px 15px;
   background: transparent;
-  color: #302c28;
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
@@ -295,13 +317,20 @@
 
 .bottomMenu > button:hover,
 .bottomMenu > button[aria-expanded="true"] {
-  background: #f5eee8;
+  background: var(--color-surface);
 }
 
+/* menuHint 只在悬停时出现，常态下不占视觉空间 */
 .menuHint {
-  padding: 0 11px;
-  color: #8d8177;
-  font-size: 11px;
+  padding: 0 8px;
+  color: var(--color-ink-tertiary);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity var(--duration-fast, 140ms);
+}
+
+.bottomMenu:hover .menuHint {
+  opacity: 1;
 }
 
 .addPopover {
@@ -313,11 +342,11 @@
   max-height: min(70vh, 495px);
   flex-direction: column;
   overflow: auto;
-  border: 1px solid #e2d8cc;
-  border-radius: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 8px;
-  background: #fffdf9;
-  box-shadow: 0 15px 42px rgb(60 42 26 / 15%);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-popup);
 }
 
 .addPopover header {
@@ -331,7 +360,7 @@
 .addPopover header button {
   border: 0;
   background: transparent;
-  color: #8a7c6e;
+  color: var(--color-ink-tertiary);
   cursor: pointer;
   font-size: 20px;
 }
@@ -341,16 +370,16 @@
   flex-direction: column;
   gap: 3px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   padding: 10px;
   background: transparent;
-  color: #332c27;
+  color: var(--color-ink);
   cursor: pointer;
   text-align: left;
 }
 
 .addPopover > button:hover {
-  background: #f7f0e8;
+  background: var(--color-surface);
 }
 
 .addPopover > button strong {
@@ -358,7 +387,7 @@
 }
 
 .addPopover > button span {
-  color: #82766b;
+  color: var(--color-ink-secondary);
   font-size: 11px;
 }
 
@@ -369,51 +398,74 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  border-left: 1px solid #e4dace;
-  background: #fffdf9;
-  box-shadow: -3px 0 16px rgb(80 53 34 / 3%);
+  border-left: 1px solid var(--color-border);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-sm);
 }
 
+/* 侧栏头部：不再宣称自己是什么，只留切换。
+   DESIGN COPILOT 与大标题原本占了 90px 高度，却只传达"这里是助手"。 */
 .sidebarHeader {
   flex: none;
-  border-bottom: 1px solid #eee8df;
-  padding: 28px 24px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  padding: 14px 18px 0;
+}
+
+/* 英文小标保留为极弱的存在，供需要时定位 */
+.sidebarHeader .overline {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--color-ink-disabled);
+  font-size: 9px;
+  letter-spacing: 0.16em;
 }
 
 .sidebarHeader h2 {
-  margin: 10px 0 18px;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.05em;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 500;
 }
 
+/* 标签页：下划线式，取消方框底与内嵌高亮块 */
 .sideTabs,
 .guidanceSwitch {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px;
-  border-radius: 9px;
-  padding: 4px;
-  background: #f2ede7;
+  gap: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .sideTabs button,
 .guidanceSwitch button {
+  position: relative;
   border: 0;
-  border-radius: 6px;
-  padding: 9px 4px;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  padding: 0 4px 10px;
   background: none;
-  color: #81766c;
+  color: var(--color-ink-tertiary);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.sideTabs button:hover,
+.guidanceSwitch button:hover {
+  color: var(--color-ink-secondary);
 }
 
 .sideTabs button[aria-selected="true"],
 .guidanceSwitch button[aria-pressed="true"] {
-  background: #fffdf9;
-  box-shadow: 0 1px 4px rgb(70 53 41 / 7%);
-  color: #3e342f;
+  border-bottom-color: var(--color-ink);
+  background: none;
+  box-shadow: none;
+  color: var(--color-ink);
+  font-weight: 700;
 }
 
 .assistantBody {
@@ -425,11 +477,11 @@
 }
 
 .sessionGoal {
-  border-bottom: 1px solid #eee7dd;
+  border-bottom: 1px solid var(--color-divider);
   margin: 12px 0 0;
   padding-bottom: 17px;
-  color: #7b6e63;
-  font-size: 12px;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
 }
 
 .assistantConversation,
@@ -442,42 +494,68 @@
 
 .userExample {
   width: 88%;
-  border-radius: 12px 12px 3px 12px;
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
   margin: 0 0 23px auto;
   padding: 15px;
-  background: #f3eee8;
-  color: #5b5046;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
 
+/* 建议卡片：只有真正存在待处理建议时才成立为卡片。
+   无建议时它退化为一段安静说明，不再用边框和阴影占住半屏。 */
 .suggestionCard {
-  border: 1px solid #e4d9ce;
-  border-radius: 14px;
-  padding: 17px;
-  background: #fffaf3;
-  box-shadow: 0 7px 18px rgb(72 52 32 / 7%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--color-paper);
+}
+
+.suggestionCard[data-empty="true"] {
+  border: 0;
+  border-top: 1px solid var(--color-divider);
+  border-radius: 0;
+  padding: 16px 0;
+  background: transparent;
+}
+
+.suggestionCard[data-empty="true"] .suggestionLabel {
+  color: var(--color-ink-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.suggestionCard[data-empty="true"] p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.suggestionCard[data-empty="true"] small {
+  display: none;
 }
 
 .suggestionLabel {
-  color: #3f322b;
+  color: var(--color-ink);
   font-size: 13px;
   font-weight: 750;
 }
 
 .suggestionCard p {
   margin: 13px 0;
-  color: #554b43;
+  color: var(--color-ink-secondary);
   font-size: 13px;
   line-height: 1.65;
 }
 
 .suggestionCard small {
   display: block;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   padding: 9px 10px;
-  background: #f4eee8;
-  color: #7c6e61;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -490,19 +568,19 @@
 
 .suggestionActions button {
   flex: 1;
-  border: 1px solid #ded4c9;
-  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 9px 7px;
-  background: #fffdf9;
-  color: #726356;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
 }
 
 .suggestionActions button:last-child {
-  border-color: #aa664d;
-  background: #aa664d;
+  border-color: var(--color-signal);
+  background: var(--color-signal);
   color: white;
 }
 
@@ -511,7 +589,7 @@
   margin-top: 17px;
   padding: 0;
   background: transparent;
-  color: #795e8f;
+  color: var(--swatch-mauve);
   cursor: pointer;
   font-size: 12px;
   font-weight: 650;
@@ -526,35 +604,35 @@
 .chatToolbar select {
   min-width: 0;
   flex: 1;
-  border: 1px solid #e2d8cd;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 8px;
-  background: #fffdf9;
-  color: #5c5148;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
   font-size: 12px;
 }
 
 .chatToolbar button {
   flex: none;
-  border: 1px solid #e2d8cd;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 8px;
-  background: #f5eee7;
-  color: #6d5747;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
 }
 
 .chatEmpty {
-  color: #867b70;
+  color: var(--color-ink-tertiary);
   text-align: center;
 }
 
 .chatMessages p {
   border-radius: 10px;
   padding: 11px;
-  color: #534b45;
+  color: var(--color-ink-secondary);
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -562,12 +640,12 @@
 
 .chatMessages p[data-role="user"] {
   margin-left: 13%;
-  background: #f3eee8;
+  background: var(--color-surface);
 }
 
 .chatMessages p[data-role="assistant"] {
   margin-right: 11%;
-  background: #f9f3eb;
+  background: var(--color-paper);
 }
 
 .chatMessagesCompact {
@@ -579,7 +657,7 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  border-top: 1px solid #e8ded2;
+  border-top: 1px solid var(--color-border);
   margin-top: 12px;
   padding: 12px 0;
 }
@@ -588,7 +666,7 @@
 .legacyRuns h4,
 .legacyRuns h5 {
   margin: 0 0 7px;
-  color: #493f39;
+  color: var(--color-ink);
 }
 
 .legacyRuns h3 { font-size: 13px; }
@@ -597,7 +675,7 @@
 
 .legacyRuns p,
 .legacyRuns li {
-  color: #70665f;
+  color: var(--color-ink-secondary);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -610,27 +688,27 @@
 .legacyRunList button {
   display: grid;
   gap: 3px;
-  border: 1px solid #e5dacf;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 8px 10px;
-  background: #fffdf9;
-  color: #4b413a;
+  background: var(--color-paper);
+  color: var(--color-ink);
   cursor: pointer;
   text-align: left;
 }
 
 .legacyRunList button[aria-pressed="true"] {
-  border-color: #a987b9;
-  background: #f7f2f9;
+  border-color: var(--swatch-mauve);
+  background: var(--swatch-mauve-wash);
 }
 
 .legacyRunList span {
-  color: #81756a;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
 .legacyRunDetail {
-  border-top: 1px solid #e8ded2;
+  border-top: 1px solid var(--color-border);
   margin-top: 12px;
   padding-top: 12px;
 }
@@ -644,18 +722,18 @@
 }
 
 .legacyAttempt {
-  border-left: 2px solid #baa6cb;
+  border-left: 2px solid var(--swatch-mauve);
   margin: 7px 0;
   padding-left: 9px;
 }
 
 .composer {
   flex: none;
-  border: 1px solid #e6dcd0;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 10px;
-  background: #fffdf9;
-  box-shadow: 0 5px 18px rgb(55 41 27 / 5%);
+  background: var(--color-paper);
+  box-shadow: 0 5px 18px var(--color-divider);
 }
 
 .composer textarea {
@@ -667,7 +745,7 @@
   outline: none;
   padding: 5px 3px;
   background: transparent;
-  color: #342e28;
+  color: var(--color-ink);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -683,15 +761,15 @@
   border-radius: 7px;
   padding: 8px 12px;
   background: transparent;
-  color: #7b6d60;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
 }
 
 .composerActions button:last-child {
-  background: #35312e;
-  color: white;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .composerActions button:disabled {
@@ -711,8 +789,8 @@
   border: 0;
   border-radius: 5px;
   padding: 4px 7px;
-  background: #edf0f2;
-  color: #62717c;
+  background: var(--swatch-indigo-wash);
+  color: var(--swatch-indigo);
   cursor: pointer;
   font-size: 11px;
 }
@@ -722,7 +800,7 @@
   max-height: 174px;
   flex-direction: column;
   overflow: auto;
-  border-bottom: 1px solid #e9e0d6;
+  border-bottom: 1px solid var(--color-border);
   margin-bottom: 7px;
   padding-bottom: 5px;
 }
@@ -735,18 +813,18 @@
   border-radius: 6px;
   padding: 7px;
   background: transparent;
-  color: #55443b;
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 12px;
   text-align: left;
 }
 
 .mentionChoices button:hover {
-  background: #f5eee7;
+  background: var(--color-surface);
 }
 
 .mentionChoices small {
-  color: #897a6e;
+  color: var(--color-ink-tertiary);
   font-size: 10px;
 }
 
@@ -765,7 +843,7 @@
 
 .detailSummary {
   margin: 0 0 15px;
-  color: #766b61;
+  color: var(--color-ink-secondary);
   font-size: 13px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -777,26 +855,26 @@
   max-height: 275px;
   border-radius: 8px;
   object-fit: contain;
-  background: #eee9e2;
+  background: var(--color-border);
 }
 
 .detailMeta {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  border-top: 1px solid #eee5dc;
+  border-top: 1px solid var(--color-border);
   margin-top: 20px;
   padding-top: 17px;
-  color: #81766b;
+  color: var(--color-ink-secondary);
   font-size: 12px;
 }
 
 .detailMeta strong {
-  color: #4c4038;
+  color: var(--color-ink);
 }
 
 .detailSection {
-  border-top: 1px solid #eee5dc;
+  border-top: 1px solid var(--color-border);
   margin-top: 20px;
   padding-top: 15px;
 }
@@ -808,7 +886,7 @@
 
 .detailSection p,
 .detailSection li {
-  color: #71675d;
+  color: var(--color-ink-secondary);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -826,7 +904,7 @@
 .toolForm label {
   display: grid;
   gap: 5px;
-  color: #786b60;
+  color: var(--color-ink-secondary);
   font-size: 11px;
 }
 
@@ -834,11 +912,11 @@
 .toolForm input {
   min-width: 0;
   width: 100%;
-  border: 1px solid #dfd5c9;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 8px;
-  background: #fffdf8;
-  color: #51483f;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
 }
 
@@ -847,8 +925,8 @@
 }
 
 .toolForm :disabled {
-  background: #f5f0ea;
-  color: #766b62;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
 }
 
 .toolDimensions {
@@ -858,18 +936,18 @@
 }
 
 .toolError {
-  color: #a4513d !important;
+  color: var(--color-signal) !important;
 }
 
 .constraintRow {
-  border-left: 2px solid #baa6cb;
+  border-left: 2px solid var(--swatch-mauve);
   margin: 9px 0;
   padding: 3px 0 4px 10px;
 }
 
 .constraintRow span,
 .constraintRow small {
-  color: #86778f;
+  color: var(--swatch-mauve);
   font-size: 10px;
 }
 
@@ -880,12 +958,12 @@
 .detailSection button,
 .detailSection select {
   width: 100%;
-  border: 1px solid #dfd5c9;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   margin: 3px 0;
   padding: 9px;
-  background: #fffdf8;
-  color: #51483f;
+  background: var(--color-paper);
+  color: var(--color-ink);
   cursor: pointer;
   font-size: 12px;
 }
@@ -893,12 +971,12 @@
 .decisionReason {
   width: 100%;
   resize: vertical;
-  border: 1px solid #dfd5c9;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   margin: 5px 0;
   padding: 9px;
-  background: #fffdf8;
-  color: #51483f;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-size: 12px;
 }
 
@@ -918,12 +996,12 @@
 
 .detailSection button:hover,
 .detailSection select:hover {
-  border-color: #a56853;
+  border-color: var(--color-signal);
 }
 
 .detailSection .dangerButton {
-  border-color: #efddd7;
-  color: #a4513d;
+  border-color: var(--color-error-bg);
+  color: var(--color-signal);
 }
 
 .historyJson {
@@ -931,8 +1009,8 @@
   overflow: auto;
   border-radius: 7px;
   padding: 10px;
-  background: #f5f0ea;
-  color: #5e554d;
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-size: 10px;
   white-space: pre-wrap;
 }
@@ -948,7 +1026,7 @@
 }
 
 .sideEmpty > span {
-  color: #aa9b8e;
+  color: var(--color-ink-tertiary);
   font-size: 42px;
 }
 
@@ -958,7 +1036,7 @@
 }
 
 .sideEmpty p {
-  color: #807469;
+  color: var(--color-ink-secondary);
   font-size: 12px;
 }
 
@@ -968,16 +1046,29 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-top: 1px solid #e8ded2;
+  border-top: 1px solid var(--color-border);
   padding: 12px 18px;
-  background: #f7ebe7;
-  color: #9b4733;
+  background: var(--color-error-bg);
+  color: var(--color-signal-hover);
   font-size: 12px;
 }
 
 .successNotice {
-  background: #eef4ee;
-  color: #54755b;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.canvasNotice {
+  position: absolute;
+  z-index: 7;
+  bottom: 96px;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-paper);
 }
 
 .errorNotice button,
@@ -995,17 +1086,17 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgb(31 25 21 / 45%);
+  background: var(--color-border-strong);
 }
 
 .entryDialog,
 .libraryDialog {
   width: min(460px, 100%);
-  border: 1px solid #e5dacf;
+  border: 1px solid var(--color-border);
   border-radius: 13px;
   padding: 23px;
-  background: #fffdf9;
-  box-shadow: 0 28px 80px rgb(38 24 15 / 18%);
+  background: var(--color-paper);
+  box-shadow: 0 28px 80px var(--color-border-strong);
 }
 
 .entryDialog header,
@@ -1019,7 +1110,7 @@
 .libraryDialog header button {
   border: 0;
   background: none;
-  color: #7e7369;
+  color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 23px;
 }
@@ -1035,7 +1126,7 @@
   flex-direction: column;
   gap: 7px;
   margin: 13px 0;
-  color: #62574e;
+  color: var(--color-ink-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1043,11 +1134,11 @@
 .entryDialog input,
 .entryDialog textarea {
   width: 100%;
-  border: 1px solid #dcd0c4;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
   padding: 10px;
-  background: #fff;
-  color: #372f29;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-size: 13px;
 }
 
@@ -1068,16 +1159,16 @@
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #e5dacf;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0 0 12px;
-  background: #fff;
+  background: var(--color-paper);
   cursor: pointer;
   text-align: left;
 }
 
 .libraryGrid button:hover {
-  border-color: #aa664d;
+  border-color: var(--color-signal);
 }
 
 .libraryGrid img,
@@ -1086,13 +1177,13 @@
   width: 100%;
   height: 125px;
   object-fit: cover;
-  background: #eae2d9;
+  background: var(--color-border);
 }
 
 .libraryPlaceholder {
   display: grid;
   place-items: center;
-  color: #a99584;
+  color: var(--color-ink-tertiary);
   font-size: 35px;
 }
 
@@ -1113,7 +1204,7 @@
 
 .libraryGrid small {
   margin-top: 3px;
-  color: #82766b;
+  color: var(--color-ink-secondary);
   font-size: 10px;
 }
 
@@ -1124,20 +1215,20 @@
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  background: #faf6ee;
-  color: #6a5f56;
+  background: var(--color-canvas);
+  color: var(--color-ink-secondary);
   font-size: 15px;
 }
 
 .loadError h1 {
-  color: #302b27;
+  color: var(--color-ink);
 }
 
 .loadError button {
   border: 0;
   border-radius: 7px;
   padding: 10px 15px;
-  background: #aa664d;
+  background: var(--color-signal);
   color: white;
   cursor: pointer;
 }
@@ -1152,7 +1243,7 @@
 .shell input:focus-visible,
 .shell textarea:focus-visible,
 .shell select:focus-visible {
-  outline: 2px solid #8965b0;
+  outline: 2px solid var(--swatch-mauve);
   outline-offset: 2px;
 }
 
@@ -1196,7 +1287,7 @@
   .topDivider,
   .projectName,
   .workflowBadge,
-  .topActions button:last-child {
+  .topActions button[data-export] {
     display: none;
   }
 
@@ -1237,11 +1328,11 @@
 
   .mobileListToggle {
     display: block;
-    border: 1px solid #dfd2c5;
+    border: 1px solid var(--color-border);
     border-radius: 7px;
     padding: 7px;
-    background: #fffdf9;
-    color: #55463c;
+    background: var(--color-paper);
+    color: var(--color-ink);
     font-size: 11px;
   }
 
@@ -1267,24 +1358,24 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    border: 1px solid #e3d7ca;
+    border: 1px solid var(--color-border);
     border-radius: 9px;
     padding: 11px;
-    background: #fffdf9;
+    background: var(--color-paper);
     text-align: left;
   }
 
   .mobileNodeList small {
-    color: #8a7a6e;
+    color: var(--color-ink-tertiary);
   }
 
   .mobileNodeList strong {
-    color: #342e29;
+    color: var(--color-ink);
   }
 
   .mobileNodeList span {
     overflow: hidden;
-    color: #72675e;
+    color: var(--color-ink-secondary);
     font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1319,7 +1410,7 @@
   .sidebar {
     max-height: 55dvh;
     min-height: 330px;
-    border-top: 1px solid #e5dacd;
+    border-top: 1px solid var(--color-border);
     border-left: 0;
   }
 
@@ -1369,4 +1460,44 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* The assistant stays mounted while the temporary inspector is open. */
+.workspace[data-sidebar-open="false"] { grid-template-columns: minmax(0, 1fr); }
+.sidebar[hidden], .assistantMount[hidden] { display: none; }
+.assistantMount { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.sidebarHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 19px 20px; }
+.sidebarHeader h2 { margin: 0; font-size: 15px; font-weight: 500; }
+.sidebarActions { display: flex; align-items: center; gap: 12px; }
+.sidebarActions button { border: 0; padding: 4px 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
+.sidebarActions button:hover { color: var(--color-ink); }
+.assistantUtility { display: flex; flex: none; align-items: center; justify-content: space-between; color: var(--color-ink-tertiary); font-size: 11px; }
+.assistantMore { position: relative; }
+.assistantMore > summary { cursor: pointer; list-style: none; padding: 4px 0 4px 12px; }
+.assistantMore > summary::-webkit-details-marker { display: none; }
+.assistantMore > div { position: absolute; z-index: 8; top: 28px; right: 0; display: grid; width: 142px; gap: 3px; border: 1px solid var(--color-border); border-radius: 7px; padding: 7px; background: var(--color-paper); box-shadow: 0 6px 22px #0000000d; }
+.assistantMore button { border: 0; border-radius: 3px; padding: 9px 10px; background: transparent; color: var(--color-ink-secondary); font: 12px var(--font-sans); text-align: left; cursor: pointer; }
+.assistantMore button:hover { background: var(--color-surface); color: var(--color-ink); }
+.assistantWelcome { max-width: 23ch; margin: 40px 0 0; color: var(--color-ink-tertiary); font-size: 14px; line-height: 1.9; }
+.workflowMessage { margin-bottom: 24px; color: var(--color-ink-secondary); font-size: 13px; line-height: 1.8; }
+.referenceSelected { max-width: 100%; overflow: hidden; border: 0; margin: 0 0 10px; padding: 0; background: transparent; color: var(--color-ink-secondary); font: 11px/1.6 var(--font-sans); text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.suggestionText[data-expanded="false"] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
+.suggestionEvidence { margin-top: 12px; color: var(--color-ink-tertiary); font-size: 11px; line-height: 1.7; }
+.suggestionEvidence summary, .detailSection > summary, .advancedSettings > summary { cursor: pointer; }
+.suggestionEvidence small { display: block; margin-top: 8px; }
+.suggestionActions button:first-child { background: var(--color-ink); color: var(--color-paper); }
+.suggestionActions button:not(:first-child) { background: transparent; color: var(--color-ink-secondary); }
+.composerActions { justify-content: flex-end; }
+.advancedSettings { margin: 12px 0; color: var(--color-ink-secondary); font-size: 12px; }
+.advancedSettings[open] > summary { margin-bottom: 14px; }
+.detailSection > summary { color: var(--color-ink-secondary); font-size: 12px; }
+.detailSection[open] > summary { margin-bottom: 12px; }
+@media (max-width: 760px) {
+  .sidebar { flex: none; height: 44dvh; min-height: 0; max-height: 44dvh; }
+  .sidebarHeader { padding: 12px 16px; }
+  .sidebarHeader h2 { display: block; }
+  .canvasSection { min-height: 0; }
+  .assistantWelcome { margin: 12px 0; font-size: 12px; max-width: none; }
+  .assistantBody { gap: 10px; }
 }

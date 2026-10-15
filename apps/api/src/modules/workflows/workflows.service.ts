@@ -14,6 +14,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
+import { isWorkflowInputPort, workflowInputConnectionError } from "@fashion/shared";
 
 import {
   workflowAssetTypes,
@@ -69,16 +70,6 @@ const toolOutputType: Record<string, string> = {
   edit_design: "candidate",
   restore_version: "candidate",
 };
-const referenceTypes = new Set([
-  "reference_text",
-  "reference_image",
-  "swatch",
-  "sketch",
-  "trend",
-  "fabric",
-  "legacy",
-  "candidate",
-]);
 
 @Injectable()
 export class WorkflowsService {
@@ -400,7 +391,7 @@ export class WorkflowsService {
       changedNodes,
     );
     if (!system)
-      this.validateUserEdgeMutations(input, storedNodes, storedEdges, nodes);
+      this.validateUserEdgeMutations(input, storedNodes, storedEdges, nodes, edges);
 
     const storedEdgeById = new Map(storedEdges.map((edge) => [edge.id, edge]));
     for (const edge of storedEdges) {
@@ -484,6 +475,7 @@ export class WorkflowsService {
     storedNodes: readonly WorkflowNode[],
     storedEdges: readonly WorkflowEdge[],
     nextNodes: ReadonlyMap<string, GraphNode>,
+    nextEdges: ReadonlyMap<string, WorkflowEdgeInput>,
   ): void {
     const existingNodes = new Map(storedNodes.map((node) => [node.id, node]));
     const existingEdges = new Map(storedEdges.map((edge) => [edge.id, edge]));
@@ -497,11 +489,18 @@ export class WorkflowsService {
       if (operation.type === "add_edge") {
         const source = nextNodes.get(operation.edge.sourceNodeId);
         const target = nextNodes.get(operation.edge.targetNodeId);
+        if (source?.kind === "tool" && (existingNodes.has(source.id) || (target && existingNodes.has(target.id))))
+          throw invalidGraph("结果来源由工具执行维护，不能手动改写");
         if (source?.kind === "tool") assertEditableTool(source.id);
         if (target?.kind === "tool") assertEditableTool(target.id);
+        if (source?.kind === "asset" && target?.kind === "tool") {
+          const reason = workflowInputConnectionError(source.type, target.type, operation.edge, [...nextEdges.values()].filter((edge) => edge.id !== operation.edge.id));
+          if (reason) throw invalidGraph(reason);
+        }
       } else if (operation.type === "remove_edge") {
         const edge = existingEdges.get(operation.edgeId);
         if (edge) {
+          if (existingNodes.get(edge.sourceNodeId)?.kind === "tool") throw invalidGraph("结果来源由工具执行维护，不能手动改写");
           assertEditableTool(edge.sourceNodeId);
           assertEditableTool(edge.targetNodeId);
         }
@@ -755,7 +754,7 @@ function validateGraph(
     if (source.kind === "asset") {
       if (
         target.kind !== "tool" ||
-        !validInputPort(source.type, target.type, edge.targetPort)
+        !isWorkflowInputPort(source.type, target.type, edge.targetPort)
       ) {
         throw invalidGraph("素材类型与工具输入端口不匹配");
       }
@@ -785,26 +784,4 @@ function validateGraph(
     visited.add(nodeId);
   };
   for (const id of nodes.keys()) visit(id);
-}
-
-function validInputPort(
-  assetType: string,
-  toolType: string,
-  targetPort: string,
-): boolean {
-  if (targetPort === "reference") return referenceTypes.has(assetType);
-  if (targetPort === "goal")
-    return assetType === "brief" || assetType === "reference_text";
-  if (targetPort === "constraint")
-    return assetType === "constraint" && toolType !== "analyze_brief";
-  if (targetPort === "candidate")
-    return assetType === "candidate" && toolType === "evaluate_design";
-  if (targetPort === "source")
-    return (
-      assetType === "candidate" &&
-      (toolType === "edit_design" ||
-        toolType === "generate_design" ||
-        toolType === "restore_version")
-    );
-  return false;
 }

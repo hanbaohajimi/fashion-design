@@ -1,0 +1,253 @@
+/*
+ * 新时尚 AI 设计工作台 - 浅色主题设计系统
+ * 专为服装设计师优化的浅色主题
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ==================== 色彩系统 ==================== */
+
+  /* 背景层级 */
+  --surface-base: #FAFAF9;
+  --surface-elevated: #FFFFFF;
+  --surface-overlay: #F5F5F4;
+  --surface-hover: #F0F0EF;
+
+  /* 文字颜色 */
+  --text-primary: #1A1A1A;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --text-disabled: #A3A3A3;
+  --text-inverse: #FAFAFA;
+
+  /* 强调色 - 温暖橙红 */
+  --accent-primary: #E9522C;
+  --accent-hover: #FF6B42;
+  --accent-pressed: #D44520;
+  --accent-muted: rgba(233, 82, 44, 0.12);
+  --accent-subtle: rgba(233, 82, 44, 0.06);
+
+  /* 语义色 */
+  --status-success: #16A34A;
+  --status-success-bg: rgba(22, 163, 74, 0.12);
+  --status-warning: #EA580C;
+  --status-warning-bg: rgba(234, 88, 12, 0.12);
+  --status-error: #DC2626;
+  --status-error-bg: rgba(220, 38, 38, 0.12);
+  --status-info: #0284C7;
+  --status-info-bg: rgba(2, 132, 199, 0.12);
+
+  /* 工作流节点颜色 */
+  --node-brief: #3B82F6;
+  --node-brief-bg: rgba(59, 130, 246, 0.1);
+  --node-reference: #8B5CF6;
+  --node-reference-bg: rgba(139, 92, 246, 0.1);
+  --node-tool: #F59E0B;
+  --node-tool-bg: rgba(245, 158, 11, 0.1);
+  --node-result: #10B981;
+  --node-result-bg: rgba(16, 185, 129, 0.1);
+  --node-constraint: #06B6D4;
+  --node-constraint-bg: rgba(6, 182, 212, 0.1);
+  --node-evaluation: #EC4899;
+  --node-evaluation-bg: rgba(236, 72, 153, 0.1);
+
+  /* 边框和分割线 */
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --border-accent: var(--accent-primary);
+  --divider: rgba(0, 0, 0, 0.06);
+
+  /* 阴影系统 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+               0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+               0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+               0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+
+  /* 发光效果 */
+  --glow-accent: 0 0 20px rgba(233, 82, 44, 0.25);
+  --glow-focus: 0 0 0 3px rgba(233, 82, 44, 0.15);
+
+  /* ==================== 字体系统 ==================== */
+
+  --font-serif: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+
+  /* 字体权重 */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* 字体大小 */
+  --text-display-lg: 48px;
+  --text-display-md: 36px;
+  --text-display-sm: 28px;
+  --text-heading-lg: 24px;
+  --text-heading-md: 20px;
+  --text-heading-sm: 18px;
+  --text-body-lg: 16px;
+  --text-body-md: 14px;
+  --text-body-sm: 13px;
+  --text-label-lg: 14px;
+  --text-label-md: 12px;
+  --text-label-sm: 11px;
+  --text-caption: 12px;
+
+  /* 行高 */
+  --leading-tight: 1.1;
+  --leading-snug: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
+  --leading-loose: 1.8;
+
+  /* ==================== 间距系统 ==================== */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* 组件间距 */
+  --padding-xs: var(--space-2);
+  --padding-sm: var(--space-3);
+  --padding-md: var(--space-4);
+  --padding-lg: var(--space-6);
+  --padding-xl: var(--space-8);
+  --gap-xs: var(--space-2);
+  --gap-sm: var(--space-4);
+  --gap-md: var(--space-6);
+  --gap-lg: var(--space-8);
+  --gap-xl: var(--space-12);
+
+  /* ==================== 圆角系统 ==================== */
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+  --radius-circle: 50%;
+
+  /* ==================== 动效系统 ==================== */
+
+  --ease-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0.0, 1, 1);
+  --ease-sharp: cubic-bezier(0.4, 0.0, 0.6, 1);
+  --ease-in-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --duration-instant: 100ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 400ms;
+  --duration-slower: 600ms;
+
+  --transition-base: all var(--duration-fast) var(--ease-standard);
+  --transition-smooth: all var(--duration-normal) var(--ease-standard);
+  --transition-color: color var(--duration-fast) var(--ease-standard),
+                      background-color var(--duration-fast) var(--ease-standard),
+                      border-color var(--duration-fast) var(--ease-standard);
+  --transition-transform: transform var(--duration-normal) var(--ease-in-out);
+
+  /* ==================== Z-index 层级 ==================== */
+
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+
+  /* ==================== 断点系统 ==================== */
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* ==================== 旧版兼容性映射 ==================== */
+
+  --atelier-canvas: var(--surface-base);
+  --atelier-paper: var(--surface-elevated);
+  --atelier-sheet: var(--surface-overlay);
+  --atelier-bright: var(--text-inverse);
+  --atelier-ink: var(--text-primary);
+  --atelier-muted: var(--text-secondary);
+  --atelier-signal: var(--accent-primary);
+  --atelier-signal-deep: var(--accent-pressed);
+  --atelier-rule: var(--border-subtle);
+  --atelier-grid: var(--divider);
+  --type-editorial: var(--font-serif);
+  --type-ui: var(--font-sans);
+  --ease-atelier: var(--ease-in-out);
+  --dur-quick: var(--duration-fast);
+  --dur-considered: var(--duration-normal);
+}
+
+/* ==================== 全局样式 ==================== */
+
+body {
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-relaxed);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-overlay);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Focus 可见性 */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* 禁用状态 */
+:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
