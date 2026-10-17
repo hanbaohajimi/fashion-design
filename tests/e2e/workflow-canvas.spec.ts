@@ -590,9 +590,12 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
     const shape = page.locator(`[data-type="${imageType}"]`);
     const image = shape.locator("img");
     await expect(image).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
     await expect.poll(() => image.evaluate((element) => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
     await shape.evaluate(async (element) => {
-      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+      const animations: Animation[] = [];
+      for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) animations.push(...ancestor.getAnimations());
+      await Promise.all(animations.filter((animation) => animation.effect?.getTiming().iterations !== Infinity).map((animation) => animation.finished));
     });
     const events = await page.evaluateHandle(() => {
       const events: string[] = [];
@@ -602,6 +605,18 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
         canvas.addEventListener(type, () => events.push(type), true);
       }
       return events;
+    });
+    const pointerEvents = await page.evaluateHandle(() => {
+      const points: Array<{ type: string; x: number; y: number }> = [];
+      for (const type of ["pointerdown", "pointermove", "pointerup"]) {
+        document.addEventListener(type, (event) => {
+          const pointer = event as PointerEvent;
+          const point = { type, x: pointer.clientX, y: pointer.clientY };
+          if (type === "pointermove" && points.at(-1)?.type === type) points[points.length - 1] = point;
+          else points.push(point);
+        }, true);
+      }
+      return points;
     });
     const wire = page.locator('[data-workflow-edge="image-output"] path').first();
     const expectWireAttached = async () => {
@@ -630,22 +645,31 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
       if (!before || !imageBounds) throw new Error("图片素材未显示");
       const initial = { x: draggedNode.x, y: draggedNode.y };
       const zoom = before.width / await shape.evaluate((element) => Number.parseFloat(getComputedStyle(element).width));
-      const x = imageBounds.x + imageBounds.width / 2;
-      const y = imageBounds.y + imageBounds.height / 2;
+      const x = Math.round(imageBounds.x + imageBounds.width / 2);
+      const y = Math.round(imageBounds.y + imageBounds.height / 2);
       const layoutRevision = graph.layoutRevision;
-      await page.mouse.move(x, y);
-      await page.mouse.down();
-      await page.mouse.move(x + dx, y + dy, { steps: 12 });
-      await expectWireAttached();
-      await page.mouse.up();
-      expect(await events.jsonValue()).toEqual([]);
-      await expect.poll(async () => {
+      const expectDraggedToDestination = () => expect.poll(async () => {
         const after = await shape.boundingBox();
         return after ? Math.abs(after.x - before.x - dx) + Math.abs(after.y - before.y - dy) : Infinity;
       }).toBeLessThan(2);
-      await expect.poll(() => graph.layoutRevision).toBeGreaterThan(layoutRevision);
-      expect(draggedNode.x - initial.x).toBeCloseTo(dx / zoom, 0);
-      expect(draggedNode.y - initial.y).toBeCloseTo(dy / zoom, 0);
+      try {
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await expect(shape).toHaveAttribute("data-highlighted", "true");
+        await page.mouse.move(x + dx, y + dy, { steps: 12 });
+        // 连线与节点可能同时停在上一帧，必须先确认移动到终点再松开鼠标。
+        await expectDraggedToDestination();
+        await expectWireAttached();
+        await page.mouse.up();
+        expect(await events.jsonValue()).toEqual([]);
+        await expectDraggedToDestination();
+        await expect.poll(() => graph.layoutRevision).toBeGreaterThan(layoutRevision);
+        expect(draggedNode.x - initial.x).toBeCloseTo(dx / zoom, 0);
+        expect(draggedNode.y - initial.y).toBeCloseTo(dy / zoom, 0);
+      } catch (error) {
+        console.log("drag-coordinate-diagnostic", JSON.stringify({ before, after: await shape.boundingBox(), initial, saved: { x: draggedNode.x, y: draggedNode.y }, zoom, points: await pointerEvents.jsonValue() }));
+        throw error;
+      }
     };
     await dragImage(60, 30);
     await dragImage(-40, 25);
