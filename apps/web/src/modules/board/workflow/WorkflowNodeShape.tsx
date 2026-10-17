@@ -230,8 +230,8 @@ function WorkflowNodeFrame({
   const editor = useEditor();
   const exporting = useSvgExportContext();
   const exportStyle = exporting
-    ? (Object.fromEntries(
-        [
+    ? ({
+        ...Object.fromEntries([
           "--color-paper",
           "--color-surface",
           "--color-border",
@@ -241,13 +241,18 @@ function WorkflowNodeFrame({
           "--color-ink-secondary",
           "--color-ink-tertiary",
           "--swatch-indigo",
+          "--swatch-linen",
           "--swatch-mauve",
           "--swatch-mauve-wash",
         ].map((token) => [
           token,
           getComputedStyle(editor.getContainer()).getPropertyValue(token),
-        ]),
-      ) as CSSProperties)
+        ])),
+        // Export remounts the node; capture its final appearance, not the entry frame.
+        animation: "none",
+        transition: "none",
+        transform: "none",
+      } as CSSProperties)
     : undefined;
   const selected = useValue(
     "workflow-node-actions",

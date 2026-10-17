@@ -211,7 +211,7 @@ test("逐节点执行先保存参数，失败可恢复，选定第二个候选�
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
   await selectNode(page, "风衣候选 2");
   await details.getByText("来源与路径", { exact: true }).click();
-  await expect(details.getByText("来源 · 生成通勤风衣", { exact: true })).toBeVisible();
+  await expect(details.getByText("原图 · 生成通勤风衣", { exact: true })).toBeVisible();
   expect(mocked.getGraph().nodes.find((item) => item.id === "candidate-2")?.payload.decision).toBe("selected");
   expect(mocked.executionRequests).toHaveLength(2);
 });
@@ -257,7 +257,8 @@ test("领域评估按真实候选显示约束检查，反馈提案先预览后�
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-2"]);
   expect(mocked.getGraph().nodes.some((item) => item.type === "edit_design")).toBe(false);
   expect(mocked.executionRequests).toHaveLength(2);
-  await page.getByRole("button", { name: "调整", exact: true }).click();
+  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await page.getByRole("button", { name: "确认跳过", exact: true }).click();
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
   await composer.fill("@风衣候选 2 保留宽松通勤廓形，使用 matte woven fabric");
   await page.getByRole("button", { name: "发送 ↑" }).click();

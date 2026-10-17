@@ -24,11 +24,27 @@ async function mockEditing(page: Page) {
   const patchRequests: Array<{ mutationId: string; operations: WorkflowOperation[] }> = [];
   const executions: Array<{ toolId: string; parentAssetId: string; params: Record<string, unknown> }> = [];
   const paths: Array<{ method: string; url: string }> = [];
+  let conversationCreated = false;
+  const conversation = { id: "editing-conversation", mode: "workflow", projectId: PROJECT_ID, title: "局部编辑会话", archivedAt: null, createdAt: NOW, updatedAt: NOW };
   await page.route("**/api/me", (route) => route.fulfill({ json: {
     credits: { limit: 100, remaining: 20, used: 80 },
     user: { authId: "auth-e2e", avatar: null, createdAt: NOW, deletedAt: null, email: "atelier@example.com", id: "user-e2e", name: "Atelier E2E" },
   } }));
   await page.route("**/api/projects/" + PROJECT_ID, (route) => route.fulfill({ json: { id: PROJECT_ID, name: "E2E 局部编辑项目", archived: false, assetCount: 1, coverAssetId: null, coverUrl: null, createdAt: NOW, updatedAt: NOW } }));
+  await page.route("**/api/projects/" + PROJECT_ID + "/agent-conversations*", (route) => {
+    if (route.request().method() === "POST") {
+      expect(route.request().postDataJSON()).toMatchObject({ mode: "workflow" });
+      conversationCreated = true;
+      return route.fulfill({ status: 201, json: conversation });
+    }
+    return route.fulfill({ json: { items: conversationCreated ? [conversation] : [], nextCursor: null } });
+  });
+  await page.route("**/api/agent-conversations/editing-conversation/messages*", (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
+  await page.route("**/api/agent-conversations/editing-conversation/plan", (route) => route.fulfill({ json: { revision: 1, plan: null } }));
+  await page.route("**/api/agent-conversations/editing-conversation/context", (route) => route.fulfill({ json: {
+    revision: 1, currentObjective: null, focusNodeIds: [], requirements: [], preferences: [], nodes: [],
+    visualCoverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [] },
+  } }));
   await page.route("**/api/design-assets/*/path", (route) => route.fulfill({ json: { steps: [], decisions: [], incomplete: false } }));
   await page.route(/\/api\/design-assets\/[^/]+\/(?:content|thumbnail)$/u, (route) => route.fulfill({
     contentType: "image/svg+xml",
@@ -75,6 +91,7 @@ async function mockEditing(page: Page) {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith("/sync")) return route.fulfill({ json: graph });
     if (path.endsWith("/execute")) {
+      expect(route.request().postDataJSON()).toMatchObject({ conversationId: conversation.id });
       const toolId = path.split("/").at(-2) ?? "";
       const tool = graph.nodes.find((item) => item.id === toolId);
       const sourceEdge = graph.edges.find((item) => item.targetNodeId === toolId && item.targetPort === "source");
@@ -96,8 +113,7 @@ async function mockEditing(page: Page) {
 }
 
 async function openCandidate(page: Page, title = "原始短款外套") {
-  await page.locator('[data-type="candidate"]').filter({ has: page.getByText(title, { exact: true }) }).click();
-  await page.getByRole("tab", { name: "节点详情" }).click();
+  await page.locator('[data-type="candidate"]').filter({ has: page.getByText(title, { exact: true }) }).dblclick();
   await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
   return page.getByRole("dialog", { name: "候选资产工作台" });
 }
@@ -159,8 +175,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
   await page.reload();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
-  await page.locator('[data-type="candidate"]').filter({ has: page.getByText("局部重绘结果 1", { exact: true }) }).click();
-  await page.getByRole("tab", { name: "节点详情" }).click();
+  await page.locator('[data-type="candidate"]').filter({ has: page.getByText("局部重绘结果 1", { exact: true }) }).dblclick();
   await page.getByRole("button", { name: "从工作流移除节点" }).click();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
   await page.reload();

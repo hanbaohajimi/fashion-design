@@ -39,7 +39,7 @@ async function mockExportWorkflow(page: Page) {
   return graph;
 }
 
-test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条", async ({ page }) => {
+test("工作流 PNG 导出真实包含节点文字、工具和素材色条", async ({ page }) => {
   test.setTimeout(60_000);
   const graph = await mockExportWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -48,8 +48,14 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
   await expect(canvas.locator('[data-kind="asset"]')).toHaveCount(2);
   await expect(canvas.locator('[data-kind="tool"]')).toHaveCount(1);
   await expect(canvas.locator('[data-type="constraint"]')).toBeVisible();
-  await expect(canvas.locator('.tl-shape[data-shape-type="arrow"]')).toHaveCount(2);
+  await expect(canvas.locator('[data-workflow-edge]')).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
+  const readBorderColor = (kind: "tool" | "asset") => canvas.locator(`[data-kind="${kind}"]`).first().evaluate((element) => {
+    const channels = getComputedStyle(element).borderTopColor.match(/\d+/gu);
+    if (!channels || channels.length < 3) throw new Error("Node border color is unavailable");
+    return { r: Number(channels[0]), g: Number(channels[1]), b: Number(channels[2]) };
+  });
+  const borderColors = { tool: await readBorderColor("tool"), asset: await readBorderColor("asset") };
 
   // Map the actual rendered text boxes into the exported graph coordinates.
   // Text is checked inside each node, so arrows alone cannot satisfy the test.
@@ -58,16 +64,14 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
     const cardBox = await card.boundingBox();
     const titleBox = await card.locator("strong").boundingBox();
     const summaryBox = await card.locator("p").boundingBox();
-    expect(cardBox).not.toBeNull();
-    expect(titleBox).not.toBeNull();
-    expect(summaryBox).not.toBeNull();
-    const zoom = cardBox!.width / 258;
+    if (!cardBox || !titleBox || !summaryBox) throw new Error(`${node.id} text boxes are unavailable`);
+    const zoom = cardBox.width / 258;
     return {
       id: node.id,
       x: node.x,
       y: node.y,
-      title: { x: (titleBox!.x - cardBox!.x) / zoom, y: (titleBox!.y - cardBox!.y) / zoom, width: titleBox!.width / zoom, height: titleBox!.height / zoom },
-      summary: { x: (summaryBox!.x - cardBox!.x) / zoom, y: (summaryBox!.y - cardBox!.y) / zoom, width: summaryBox!.width / zoom, height: summaryBox!.height / zoom },
+      title: { x: (titleBox.x - cardBox.x) / zoom, y: (titleBox.y - cardBox.y) / zoom, width: titleBox.width / zoom, height: titleBox.height / zoom },
+      summary: { x: (summaryBox.x - cardBox.x) / zoom, y: (summaryBox.y - cardBox.y) / zoom, width: summaryBox.width / zoom, height: summaryBox.height / zoom },
     };
   }));
 
@@ -88,7 +92,7 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
   expect(height).toBeLessThan(2_000);
 
   // Decode the file that was downloaded, rather than a screenshot or live DOM.
-  const pixels = await page.evaluate(async ({ dataUrl, textBoxes }) => {
+  const pixels = await page.evaluate(async ({ dataUrl, textBoxes, borderColors }) => {
     const image = new Image();
     image.src = dataUrl;
     await image.decode();
@@ -99,14 +103,14 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
     if (!context) throw new Error("PNG canvas context is unavailable");
     context.drawImage(image, 0, 0);
     const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height);
-    let purple = 0;
-    let brown = 0;
+    let toolColorPixels = 0;
+    let assetColorPixels = 0;
     for (let index = 0; index < data.length; index += 4) {
-      const r = data[index]!;
-      const g = data[index + 1]!;
-      const b = data[index + 2]!;
-      if (Math.abs(r - 130) < 12 && Math.abs(g - 104) < 12 && Math.abs(b - 174) < 12) purple += 1;
-      if (Math.abs(r - 150) < 12 && Math.abs(g - 118) < 12 && Math.abs(b - 98) < 12) brown += 1;
+      const r = data[index] ?? 255;
+      const g = data[index + 1] ?? 255;
+      const b = data[index + 2] ?? 255;
+      if (Math.abs(r - borderColors.tool.r) < 3 && Math.abs(g - borderColors.tool.g) < 3 && Math.abs(b - borderColors.tool.b) < 3) toolColorPixels += 1;
+      if (Math.abs(r - borderColors.asset.r) < 3 && Math.abs(g - borderColors.asset.g) < 3 && Math.abs(b - borderColors.asset.b) < 3) assetColorPixels += 1;
     }
     const scale = bitmap.width / (998 - 40 + 128);
     const countText = (node: typeof textBoxes[number], box: typeof node.title) => {
@@ -118,10 +122,10 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
       for (let y = top; y < bottom; y += 1) {
         for (let x = left; x < right; x += 1) {
           const index = (y * bitmap.width + x) * 4;
-          const r = data[index]!;
-          const g = data[index + 1]!;
-          const b = data[index + 2]!;
-          if (data[index + 3]! > 200 && r < 130 && g < 130 && b < 130 && Math.max(r, g, b) - Math.min(r, g, b) < 45) darkPixels += 1;
+          const r = data[index] ?? 255;
+          const g = data[index + 1] ?? 255;
+          const b = data[index + 2] ?? 255;
+          if ((data[index + 3] ?? 0) > 200 && r < 130 && g < 130 && b < 130 && Math.max(r, g, b) - Math.min(r, g, b) < 45) darkPixels += 1;
         }
       }
       return darkPixels;
@@ -129,15 +133,15 @@ test("工作流 PNG 导出真实包含节点文字、工具紫条和素材棕条
     return {
       width: bitmap.width,
       height: bitmap.height,
-      purple,
-      brown,
+      toolColorPixels,
+      assetColorPixels,
       text: textBoxes.map((node) => ({ id: node.id, title: countText(node, node.title), summary: countText(node, node.summary) })),
     };
-  }, { dataUrl: `data:image/png;base64,${png.toString("base64")}`, textBoxes });
+  }, { dataUrl: `data:image/png;base64,${png.toString("base64")}`, textBoxes, borderColors });
   expect(pixels.width).toBe(width);
   expect(pixels.height).toBe(height);
-  expect(pixels.purple, "PNG must contain the tool's purple top border").toBeGreaterThan(1_000);
-  expect(pixels.brown, "PNG must contain both assets' brown top borders").toBeGreaterThan(2_000);
+  expect(pixels.toolColorPixels, "PNG must contain the tool's current top border color").toBeGreaterThan(1_000);
+  expect(pixels.assetColorPixels, "PNG must contain both assets' current top border color").toBeGreaterThan(2_000);
   for (const text of pixels.text) {
     expect(text.title, `${text.id} title must be rasterized in the PNG`).toBeGreaterThan(300);
     expect(text.summary, `${text.id} summary must be rasterized in the PNG`).toBeGreaterThan(300);

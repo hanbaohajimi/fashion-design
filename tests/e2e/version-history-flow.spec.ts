@@ -138,10 +138,11 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   } }));
 
   await page.goto(`/${PROJECT_ID}`);
-  await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).click();
+  await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  await details.getByText("来源与路径", { exact: true }).click();
   await expect(details.getByText("挺括羊毛").first()).toBeVisible();
-  await details.getByRole("textbox", { name: "记录选择或否决理由" }).fill("保留肩线，面料表现符合预期");
+  await details.getByPlaceholder("记录选择或否决理由").fill("保留肩线，面料表现符合预期");
   await details.getByRole("button", { name: "保存决定" }).click();
   await expect.poll(() => decisions).toContain("保留肩线，面料表现符合预期");
   await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
@@ -156,7 +157,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBe(firstRequestId);
 
   await page.reload();
-  await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).click();
+  await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
   await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
   workspace = page.getByRole("dialog", { name: "候选资产工作台" });
   await workspace.getByRole("button", { name: "版本历史" }).click();
@@ -168,7 +169,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
 
   await expect(page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" })).toHaveCount(1);
   await page.getByRole("button", { name: "适合画布" }).click();
-  await page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" }).first().click();
+  await page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" }).first().dblclick();
   await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
   workspace = page.getByRole("dialog", { name: "候选资产工作台" });
   await workspace.getByRole("button", { name: "版本历史" }).click();

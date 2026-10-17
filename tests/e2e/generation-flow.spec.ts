@@ -482,6 +482,7 @@ test("本地图片从素材菜单上传后保留来源文件 ID 和名称", asyn
     roleInferenceState: "ready",
   });
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
+  await page.locator('[data-type="reference_image"]').dblclick();
   await expect(page.getByText(/当前标签：廓形参考 · 模型建议/u)).toBeVisible();
   await page.reload();
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
@@ -768,7 +769,7 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   await expect(canvas.locator('[data-type="constraint"]')).toHaveCount(1);
   await expect(canvas.locator('[data-type="reference_image"]')).toHaveCount(1);
   const generationTool = canvas.locator('[data-type="generate_design"]');
-  await generationTool.click();
+  await generationTool.dblclick();
   await expect(page.getByRole("button", { name: "确认并执行" })).toBeEnabled();
   await page.getByRole("button", { name: "确认并执行" }).click();
 
@@ -789,11 +790,12 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
     targetPort: "source",
   });
 
-  await generationTool.click();
-  await page.getByRole("button", { name: "查看尝试记录" }).click();
+  await generationTool.dblclick();
+  await page.getByText("执行记录", { exact: true }).click();
+  await page.getByRole("button", { name: "读取尝试记录" }).click();
   await expect(page.getByText("来源：秋冬通勤约束、廓形参考")).toBeVisible();
   await expect(page.getByText("参考角色：silhouette_ref · 权重 0.7")).toBeVisible();
-  await canvas.locator('[data-type="candidate"]').click();
+  await canvas.locator('[data-type="candidate"]').dblclick();
   await expect(page.getByRole("button", { name: "打开大图、版本与局部重绘" })).toBeVisible();
   await page.getByPlaceholder("记录选择或否决理由").fill("更符合通勤场景");
   await page.getByRole("button", { name: "保存决定" }).click();
