@@ -1,5 +1,30 @@
 name: new-fashion-design
 
+# The original MinIO registry images are no longer available. Build the same
+# releases from official GitHub assets and verify their published SHA-256 hashes.
+x-minio-build: &minio-build
+  context: .
+  dockerfile_inline: |
+    FROM alpine:3.22 AS download
+    ARG TARGETARCH
+    RUN apk add --no-cache ca-certificates curl
+    RUN set -eux; \
+        case "$${TARGETARCH}" in \
+          amd64) minio_sha=53e2a2cb16c5366ea6fbbc479c19ddb4c6a0948273e752f740fb1fbf27bb817c; mc_sha=ac90da87a35641be5a0ac75d49de5161ddb47d629b5ba01261b0ae9e00aea15f ;; \
+          arm64) minio_sha=6c2f3142c94240206123177f4ba1e360daa5d1e0a4962e90757ef4f92c3ab57c; mc_sha=61bb88e7435919834478ddd4d405a6de6d2c227079da5e8ee9655147398819a0 ;; \
+          *) echo "Unsupported MinIO architecture: $${TARGETARCH}" >&2; exit 1 ;; \
+        esac; \
+        curl --fail --location --retry 3 --output /usr/local/bin/minio \
+          "https://github.com/minio/minio/releases/download/RELEASE.2025-04-22T22-12-26Z/minio.linux-$${TARGETARCH}.RELEASE.2025-04-22T22-12-26Z"; \
+        curl --fail --location --retry 3 --output /usr/local/bin/mc \
+          "https://github.com/minio/mc/releases/download/RELEASE.2025-04-16T18-13-26Z/mc.linux-$${TARGETARCH}.RELEASE.2025-04-16T18-13-26Z"; \
+        printf '%s  /usr/local/bin/minio\n%s  /usr/local/bin/mc\n' "$${minio_sha}" "$${mc_sha}" | sha256sum -c -; \
+        chmod +x /usr/local/bin/minio /usr/local/bin/mc
+    FROM alpine:3.22
+    RUN apk add --no-cache ca-certificates
+    COPY --from=download /usr/local/bin/minio /usr/local/bin/mc /usr/local/bin/
+    ENTRYPOINT ["minio"]
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -35,7 +60,7 @@ services:
       - redis_data:/data
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    build: *minio-build
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_API_CORS_ALLOW_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
@@ -53,7 +78,7 @@ services:
       - minio_data:/data
 
   minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    build: *minio-build
     depends_on:
       minio:
         condition: service_healthy
