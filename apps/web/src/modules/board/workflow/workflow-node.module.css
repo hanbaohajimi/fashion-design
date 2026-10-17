@@ -22,8 +22,7 @@
   transition:
     box-shadow var(--duration-fast, 140ms) var(--ease-standard),
     opacity var(--duration-fast, 140ms) var(--ease-standard),
-    border-color var(--duration-fast, 140ms) var(--ease-standard),
-    transform var(--dur-material-hover) var(--ease-state);
+    border-color var(--duration-fast, 140ms) var(--ease-standard);
 
   /* 入场动效：自然落下 */
   animation: nodeEnter var(--dur-material-enter) var(--ease-material-drop) backwards;
@@ -60,8 +59,7 @@
   box-shadow:
     0 0 0 3px var(--swatch-mauve-wash),
     0 2px 8px rgba(31, 29, 26, 0.10);
-  /* 悬停时微微提升，增加深度感 */
-  transform: translateY(-2px);
+  /* 高亮不改变几何位置，保持节点、端口和连线使用同一画布坐标。 */
 }
 
 .node[data-muted="true"] {
