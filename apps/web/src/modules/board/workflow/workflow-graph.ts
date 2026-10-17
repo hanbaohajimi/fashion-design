@@ -41,7 +41,7 @@ export function nodeSize(node: Pick<WorkflowNode, "type" | "kind">): {
     node.type === "reference_image" ||
     node.type === "sketch"
   ) {
-    return { h: 300, w: 258 };
+    return { h: 340, w: 258 };  // 增加高度让图片更完整展示
   }
   if (node.type === "evaluation" || node.type === "constraint") {
     return { h: 196, w: 258 };

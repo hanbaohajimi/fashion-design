@@ -1,7 +1,19 @@
 .edge {
   overflow: visible;
   color: var(--color-ink-tertiary);
+  /* 入场动效 */
+  animation: edgeEnter var(--dur-enter) var(--ease-enter) backwards;
 }
+
+@keyframes edgeEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .edgeLine,
 .edgeDirection {
   fill: none;
@@ -12,6 +24,24 @@
   opacity: 0.58;
   pointer-events: none;
   vector-effect: non-scaling-stroke;
+  transition: stroke-width var(--dur-fast) var(--ease-state),
+              opacity var(--dur-fast) var(--ease-state);
+}
+
+/* 数据流动效果：虚线移动动画 */
+.edge[data-highlighted="true"] .edgeLine::after,
+.edge[data-selected="true"] .edgeLine::after {
+  content: '';
+  animation: flowData 1.2s linear infinite;
+}
+
+@keyframes flowData {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 20;
+  }
 }
 .edgeHit {
   fill: none;
@@ -84,6 +114,19 @@
   box-shadow: 0 4px 18px #0000000a;
   font: 12px/1.5 var(--font-sans);
   pointer-events: auto;
+  /* 入场动效：从底部滑入 */
+  animation: slideUpFade var(--dur-enter) var(--ease-enter) backwards;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 .connectionHint {
   pointer-events: none;

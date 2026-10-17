@@ -303,6 +303,19 @@
   box-shadow: var(--shadow-card);
   transform: translateX(-50%);
   white-space: nowrap;
+  /* 入场：从底部滑入并淡入 */
+  animation: slideUpFromBottom var(--dur-enter) var(--ease-enter) backwards 0.15s;
+}
+
+@keyframes slideUpFromBottom {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .bottomMenu > button {
@@ -314,11 +327,17 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
+  transition: background var(--dur-fast) var(--ease-state),
+              transform var(--dur-instant) var(--ease-snappy);
 }
 
 .bottomMenu > button:hover,
 .bottomMenu > button[aria-expanded="true"] {
   background: var(--color-surface);
+}
+
+.bottomMenu > button:active {
+  transform: scale(0.96);
 }
 
 .addPopover {
@@ -335,6 +354,19 @@
   padding: 8px;
   background: var(--color-paper);
   box-shadow: var(--shadow-popup);
+  /* 弹出菜单：从下方弹出 */
+  animation: popFromBottom var(--dur-enter) var(--ease-spring);
+}
+
+@keyframes popFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .addPopover header {
@@ -364,10 +396,13 @@
   color: var(--color-ink);
   cursor: pointer;
   text-align: left;
+  transition: background var(--dur-fast) var(--ease-state),
+              transform var(--dur-instant) var(--ease-snappy);
 }
 
 .addPopover > button:hover {
   background: var(--color-surface);
+  transform: translateX(2px);
 }
 
 .addPopover > button strong {
@@ -389,35 +424,69 @@
   border-left: 1px solid var(--color-border);
   background: var(--color-paper);
   box-shadow: var(--shadow-sm);
+  /* 侧边栏入场：从右侧滑入 */
+  animation: slideInFromRight var(--dur-layout) var(--ease-enter) backwards;
 }
 
-/* 侧栏头部：不再宣称自己是什么，只留切换。
-   DESIGN COPILOT 与大标题原本占了 90px 高度，却只传达"这里是助手"。 */
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 侧栏头部：移除 overline，让 tab 栏直接成为唯一顶部元素 */
 .sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   flex: none;
+  min-height: 48px;
   border-bottom: 1px solid var(--color-divider);
-  padding: 14px 18px 0;
+  padding: 0 18px;
 }
 
-/* 英文小标保留为极弱的存在，供需要时定位 */
+/* overline（DESIGN COPILOT）移除 */
 .sidebarHeader .overline {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--color-ink-disabled);
-  font-size: 9px;
-  letter-spacing: 0.16em;
+  display: none;
 }
 
 .sidebarHeader h2 {
   margin: 0;
-  color: var(--color-ink);
-  font-size: 15px;
-  font-weight: 500;
+  /* 降低标题视觉重量：从 --color-ink 改为 secondary，字号缩小，weight 减轻 */
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
 }
 
-/* 标签页：下划线式，取消方框底与内嵌高亮块 */
-.sideTabs,
-.guidanceSwitch {
+.sidebarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebarActions button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink-tertiary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: color var(--duration-fast);
+}
+
+.sidebarActions button:hover {
+  color: var(--color-ink);
+}
+
+/* guidanceSwitch 降级为 pill 选择器，不再和 sideTabs 同形 */
+.sideTabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
@@ -427,8 +496,7 @@
   background: transparent;
 }
 
-.sideTabs button,
-.guidanceSwitch button {
+.sideTabs button {
   position: relative;
   border: 0;
   border-bottom: 1.5px solid transparent;
@@ -442,16 +510,43 @@
   transition: color var(--duration-fast), border-color var(--duration-fast);
 }
 
-.sideTabs button:hover,
-.guidanceSwitch button:hover {
+.sideTabs button:hover {
   color: var(--color-ink-secondary);
 }
 
-.sideTabs button[aria-selected="true"],
-.guidanceSwitch button[aria-pressed="true"] {
+.sideTabs button[aria-selected="true"] {
   border-bottom-color: var(--color-ink);
   background: none;
   box-shadow: none;
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.guidanceSwitch {
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  background: var(--color-surface);
+  margin-bottom: 12px;
+}
+
+.guidanceSwitch button {
+  border: 0;
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  background: transparent;
+  color: var(--color-ink-tertiary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 140ms var(--ease-standard), color 140ms var(--ease-standard);
+}
+
+.guidanceSwitch button[aria-pressed="true"] {
+  background: var(--color-paper);
+  box-shadow: var(--shadow-ui);
   color: var(--color-ink);
   font-weight: 700;
 }
@@ -478,6 +573,17 @@
   flex: 1;
   overflow: auto;
   padding: 26px 0;
+}
+
+/* 空状态时收缩对话区域，让输入区域占据更多空间 */
+.assistantConversation[data-empty="true"] {
+  flex: 0 0 auto;
+  padding: 12px 0;
+}
+
+/* 空状态时，对话区域后添加一个弹性空白填充 */
+.assistantBody:has(.assistantConversation[data-empty="true"]) .composer {
+  margin-top: auto;
 }
 
 .userExample {
@@ -612,11 +718,6 @@
   font-weight: 700;
 }
 
-.chatEmpty {
-  color: var(--color-ink-tertiary);
-  text-align: center;
-}
-
 .chatMessages p {
   border-radius: 10px;
   padding: 11px;
@@ -718,16 +819,22 @@
 .composer {
   flex: none;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 10px;
   background: var(--color-paper);
-  box-shadow: 0 5px 18px var(--color-divider);
+  /* 原来的阴影 0 5px 18px 太重，改为极轻 UI 阴影 */
+  box-shadow: var(--shadow-ui);
+}
+
+/* 空状态时输入框占据更多视觉比重 */
+.assistantBody:has(.assistantConversation[data-empty="true"]) .composer textarea {
+  min-height: 140px;
 }
 
 .composer textarea {
   display: block;
   width: 100%;
-  min-height: 68px;
+  min-height: 88px;
   resize: vertical;
   border: 0;
   outline: none;
@@ -1455,7 +1562,20 @@
 .sidebarActions { display: flex; align-items: center; gap: 12px; }
 .sidebarActions button { border: 0; padding: 4px 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
 .sidebarActions button:hover { color: var(--color-ink); }
-.assistantUtility { display: flex; flex: none; align-items: center; justify-content: space-between; color: var(--color-ink-tertiary); font-size: 11px; }
+.assistantUtility {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  border-bottom: 1px solid var(--color-divider);
+  padding-bottom: 8px;
+  color: var(--color-ink-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .designContext { flex: none; margin-top: 12px; border-bottom: 1px solid var(--color-divider); padding-bottom: 10px; font-size: 12px; }
 .designContext > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; color: var(--color-ink-secondary); }
 .designContext > summary > span { flex: none; }
@@ -1482,7 +1602,34 @@
 .assistantMore button { border: 0; border-radius: 3px; padding: 9px 10px; background: transparent; color: var(--color-ink-secondary); font: 12px var(--font-sans); text-align: left; cursor: pointer; }
 .assistantMore button:hover { background: var(--color-surface); color: var(--color-ink); }
 .assistantWelcome { max-width: 23ch; margin: 40px 0 0; color: var(--color-ink-tertiary); font-size: 14px; line-height: 1.9; }
-.workflowMessage { margin-bottom: 24px; color: var(--color-ink-secondary); font-size: 13px; line-height: 1.8; }
+
+/* 空状态优化：简洁提示，不占用过多垂直空间 */
+.chatEmpty {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--color-ink-tertiary);
+  font-size: 13px;
+  text-align: center;
+}
+.workflowMessage {
+  margin-bottom: 24px;
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+  /* 消息入场：淡入 + 轻微上移 */
+  animation: messageEnter var(--dur-standard) var(--ease-enter) backwards;
+}
+
+@keyframes messageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .referenceSelected { max-width: 100%; overflow: hidden; border: 0; margin: 0 0 10px; padding: 0; background: transparent; color: var(--color-ink-secondary); font: 11px/1.6 var(--font-sans); text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .suggestionText[data-expanded="false"] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }

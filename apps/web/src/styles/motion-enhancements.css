@@ -1,0 +1,351 @@
+/**
+ * 新时尚 AI 设计平台 — Motion Enhancements
+ *
+ * 动效增强层：为系统添加细腻的微交互和视觉反馈
+ *
+ * 设计原则：
+ * - Elegant: 优雅而不夸张
+ * - Precise: 精准的时机与缓动
+ * - Tactile: 触感真实
+ * - Performant: 仅使用 transform 和 opacity
+ */
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   微交互：按钮与控件的触感反馈
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 通用按钮按下反馈 */
+button:not(:disabled):active {
+  transform: scale(0.97);
+  transition: transform var(--dur-instant) var(--ease-snappy);
+}
+
+/* 主要操作按钮的额外强调 */
+button[type="submit"]:not(:disabled):active,
+.primary-button:active {
+  transform: scale(0.95);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   悬停微动效
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 卡片悬停提升 */
+[class*="Card"]:hover,
+[class*="card"]:hover,
+.hoverable-card:hover {
+  transform: translateY(-2px);
+  transition: transform var(--dur-material-hover) var(--ease-enter),
+              box-shadow var(--dur-material-hover) var(--ease-enter);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   焦点状态增强
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 输入框焦点时的呼吸效果 */
+input:focus,
+textarea:focus,
+select:focus {
+  animation: focusPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes focusPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   加载与进度状态
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 加载旋转器 */
+.loading-spinner,
+[class*="loading"]:not([class*="loading-"]) {
+  animation: rotate var(--dur-ai-spin) linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 骨架屏脉动 */
+.skeleton,
+[class*="skeleton"] {
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-border) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 200% 100%;
+}
+
+@keyframes skeletonPulse {
+  0%, 100% {
+    background-position: 200% 0;
+  }
+  50% {
+    background-position: -200% 0;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   通知与提示的入场/离场
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Toast 通知入场 */
+[role="alert"],
+[class*="toast"],
+[class*="notification"] {
+  animation: toastEnter var(--dur-enter) var(--ease-spring);
+}
+
+@keyframes toastEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Tooltip 出现 */
+[role="tooltip"],
+[class*="tooltip"] {
+  animation: tooltipFade var(--dur-fast) var(--ease-enter);
+}
+
+@keyframes tooltipFade {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   模态与对话框
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 对话框入场：缩放 + 淡入 */
+[role="dialog"],
+[class*="modal"],
+[class*="dialog"] {
+  animation: dialogEnter var(--dur-enter) var(--ease-spring);
+}
+
+@keyframes dialogEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 遮罩层淡入 */
+[class*="backdrop"],
+[class*="overlay"] {
+  animation: backdropFade var(--dur-standard) ease-out;
+}
+
+@keyframes backdropFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   列表与网格的交错入场
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 列表项交错淡入 */
+[class*="list"] > *,
+[class*="grid"] > * {
+  animation: staggerFadeIn var(--dur-standard) var(--ease-enter) backwards;
+}
+
+/* 为前几个子元素添加递增延迟 */
+[class*="list"] > *:nth-child(1),
+[class*="grid"] > *:nth-child(1) {
+  animation-delay: calc(var(--stagger-sm) * 0);
+}
+
+[class*="list"] > *:nth-child(2),
+[class*="grid"] > *:nth-child(2) {
+  animation-delay: calc(var(--stagger-sm) * 1);
+}
+
+[class*="list"] > *:nth-child(3),
+[class*="grid"] > *:nth-child(3) {
+  animation-delay: calc(var(--stagger-sm) * 2);
+}
+
+[class*="list"] > *:nth-child(4),
+[class*="grid"] > *:nth-child(4) {
+  animation-delay: calc(var(--stagger-sm) * 3);
+}
+
+[class*="list"] > *:nth-child(5),
+[class*="grid"] > *:nth-child(5) {
+  animation-delay: calc(var(--stagger-sm) * 4);
+}
+
+[class*="list"] > *:nth-child(6),
+[class*="grid"] > *:nth-child(6) {
+  animation-delay: calc(var(--stagger-sm) * 5);
+}
+
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   图片加载渐进增强
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 图片加载完成后淡入 */
+img {
+  animation: imageFadeIn var(--dur-standard) var(--ease-enter);
+}
+
+@keyframes imageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   页面切换过渡
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 主内容区域淡入 */
+main,
+[role="main"] {
+  animation: contentEnter var(--dur-layout) var(--ease-enter);
+}
+
+@keyframes contentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   特殊动效：AI 思考状态
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* AI 思考中的波动点 */
+.thinking-dots::after {
+  content: '';
+  display: inline-block;
+  animation: thinkingDots 1.4s steps(4) infinite;
+}
+
+@keyframes thinkingDots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}
+
+/* AI 响应打字效果（可选应用） */
+.typing-effect {
+  overflow: hidden;
+  border-right: 2px solid var(--color-ink);
+  white-space: nowrap;
+  animation: typing 2s steps(40) 1, blink 0.75s step-end infinite;
+}
+
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes blink {
+  from, to {
+    border-color: transparent;
+  }
+  50% {
+    border-color: var(--color-ink);
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Reduced Motion Override
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* 保留必要的状态指示器 */
+  .loading-spinner,
+  [class*="loading"]:not([class*="loading-"]),
+  .toolStatus > span {
+    animation-duration: 2s !important;
+  }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Performance Optimization
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 启用硬件加速 */
+.will-animate,
+[class*="node"],
+[class*="edge"],
+button:not(:disabled) {
+  will-change: transform;
+}
+
+/* 移除 will-change 在动画完成后 */
+.animation-done {
+  will-change: auto;
+}

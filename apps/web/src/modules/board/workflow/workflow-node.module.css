@@ -6,42 +6,62 @@
   height: 100%;
   flex-direction: column;
   overflow: visible;
-  /* 细边框取代粗彩条：左侧 3px 色条 = 类型标识，整体视觉重量大幅降低 */
+
+  /* 顶部 2px 细色线，取代粗彩条：类型标识的内置语法，不是贴上去的装饰 */
   border: 1px solid var(--color-border);
-  border-left: 3px solid var(--swatch-linen);
-  border-radius: 4px;
+  border-top: 2px solid var(--swatch-linen);
+  border-radius: 6px;
   padding: 12px 14px 11px;
   background: var(--color-paper);
-  /* 极轻阴影：只做深度分层，不抢素材注意力 */
-  box-shadow: 0 1px 4px rgba(31, 29, 26, 0.07);
+
+  /* 明确的层次感：节点从画布浮起 */
+  box-shadow: var(--shadow-material-1);
+
   color: var(--color-ink);
   font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   transition:
     box-shadow var(--duration-fast, 140ms) var(--ease-standard),
     opacity var(--duration-fast, 140ms) var(--ease-standard),
-    border-color var(--duration-fast, 140ms) var(--ease-standard);
+    border-color var(--duration-fast, 140ms) var(--ease-standard),
+    transform var(--dur-material-hover) var(--ease-state);
+
+  /* 入场动效：自然落下 */
+  animation: nodeEnter var(--dur-material-enter) var(--ease-material-drop) backwards;
+}
+
+@keyframes nodeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .node[data-kind="tool"] {
-  border-left-color: var(--swatch-mauve);
+  border-top-color: var(--swatch-mauve);
 }
 
 .node[data-type="candidate"],
 .node[data-type="reference_image"],
 .node[data-type="sketch"] {
-  border-left-color: var(--swatch-indigo);
+  border-top-color: var(--swatch-indigo);
 }
 
 .node[data-type="evaluation"] {
-  border-left-color: var(--swatch-madder);
+  border-top-color: var(--swatch-madder);
 }
 
 .node[data-highlighted="true"] {
   border-color: var(--swatch-mauve);
-  border-left-color: var(--swatch-mauve);
+  border-top-color: var(--swatch-mauve);
   box-shadow:
     0 0 0 3px var(--swatch-mauve-wash),
     0 2px 8px rgba(31, 29, 26, 0.10);
+  /* 悬停时微微提升，增加深度感 */
+  transform: translateY(-2px);
 }
 
 .node[data-muted="true"] {
@@ -50,7 +70,7 @@
 
 .node[data-status="proposed"] {
   border: 1px dashed var(--swatch-mauve);
-  border-left: 2px dashed var(--swatch-mauve);
+  border-top: 2px dashed var(--swatch-mauve);
   background: var(--color-paper);
 }
 
@@ -81,9 +101,11 @@
 .nodeHeader strong {
   overflow: hidden;
   color: var(--color-ink);
+  /* 标题用衬线字体，和正文形成清晰层级 */
+  font-family: var(--font-serif);
   font-size: 14px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -101,13 +123,14 @@
   -webkit-line-clamp: 3;
 }
 
-/* 图片帧：无圆角，图片本身就是内容，容器不应抢戏 */
+/* 图片帧：全幅展示，标题绝对定位悬停渐现 */
 .imageFrame {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   border-radius: 0;
-  margin-top: 8px;
+  margin-top: 0;
   background: var(--color-surface);
 }
 
@@ -115,12 +138,12 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* contain 保留完整图片轮廓，不裁切服装细节 */
   object-fit: contain;
   object-position: center;
 }
 
-/* 图片类节点取消额外内边距，给完整图像留出空间。
-   原图与图片区域比例不同时允许留白，避免裁掉服装轮廓或草图细节。 */
+/* 图片类节点：标题叠加在图片底部，悬停渐现 */
 .node[data-type="candidate"],
 .node[data-type="reference_image"],
 .node[data-type="sketch"] {
@@ -130,8 +153,39 @@
 .node[data-type="candidate"] .nodeHeader,
 .node[data-type="reference_image"] .nodeHeader,
 .node[data-type="sketch"] .nodeHeader {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
   border-bottom: 0;
-  padding: 11px 13px 9px;
+  padding: 10px 12px;
+  /* 渐变黑遮底，保证文字可读 */
+  background: linear-gradient(to top, rgba(31, 29, 26, 0.88) 0%, rgba(31, 29, 26, 0.72) 60%, transparent 100%);
+  opacity: 0;
+  transition: opacity var(--duration-normal, 220ms) var(--ease-standard);
+}
+
+.node[data-type="candidate"]:hover .nodeHeader,
+.node[data-type="reference_image"]:hover .nodeHeader,
+.node[data-type="sketch"]:hover .nodeHeader,
+.node[data-type="candidate"][data-highlighted="true"] .nodeHeader,
+.node[data-type="reference_image"][data-highlighted="true"] .nodeHeader,
+.node[data-type="sketch"][data-highlighted="true"] .nodeHeader {
+  opacity: 1;
+}
+
+.node[data-type="candidate"] .nodeHeader strong,
+.node[data-type="reference_image"] .nodeHeader strong,
+.node[data-type="sketch"] .nodeHeader strong {
+  color: var(--color-paper);
+}
+
+.node[data-type="candidate"] .eyebrow,
+.node[data-type="reference_image"] .eyebrow,
+.node[data-type="sketch"] .eyebrow {
+  color: rgba(252, 251, 248, 0.75);
+  opacity: 1;
 }
 
 .node[data-type="candidate"] .imageFrame,
@@ -177,6 +231,19 @@
   height: 5px;
   border-radius: 50%;
   background: currentColor;
+  /* 状态指示器脉冲 */
+  animation: statusPulse var(--dur-ai-pulse) ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
 }
 
 .node[data-status="failed"] .toolStatus {
@@ -184,6 +251,11 @@
   color: var(--color-error);
 }
 
+.node[data-status="failed"] .toolStatus > span {
+  animation: none;
+}
+
+/* 连接端口：常态透明，只在节点悬停或交互时显影 */
 .inputPort,
 .outputPort {
   position: absolute;
@@ -194,6 +266,15 @@
   border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   background: var(--color-paper);
+  opacity: 0;
+  transition: opacity var(--duration-fast, 140ms);
+}
+
+.node:hover .inputPort,
+.node:hover .outputPort,
+.node[data-highlighted="true"] .inputPort,
+.node[data-highlighted="true"] .outputPort {
+  opacity: 1;
 }
 
 .inputPort {
@@ -208,12 +289,12 @@
 .interactivePort { transform: scale(var(--tl-scale, 1)); }
 .portInput { left: -14px; }
 .portOutput { right: -14px; }
-.interactivePort > span:first-child { width: 6px; height: 6px; border: 1px solid var(--color-ink-tertiary); border-radius: 50%; background: var(--color-paper); transition: transform 140ms, border-color 140ms; }
-.interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.4); border-color: var(--swatch-indigo); }
+.interactivePort > span:first-child { width: 6px; height: 6px; border: 1px solid var(--color-ink-tertiary); border-radius: 50%; background: var(--color-paper); transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) var(--ease-state), box-shadow var(--dur-fast) var(--ease-state); }
+.interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.4); border-color: var(--swatch-indigo); box-shadow: 0 0 0 3px var(--swatch-indigo-wash); }
 .interactivePort:focus-visible { outline: 2px solid var(--swatch-indigo); border-radius: 50%; outline-offset: 2px; }
 .interactivePort:disabled { cursor: default; }
-.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: 4px 8px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0; }
-.interactivePort:hover .portLabel, .interactivePort:focus-visible .portLabel, .interactivePort[data-valid="true"] .portLabel { opacity: 1; }
+.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: 4px 8px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
+.interactivePort:hover .portLabel, .interactivePort:focus-visible .portLabel, .interactivePort[data-valid="true"] .portLabel { opacity: 1; transform: translateY(0); }
 .node[data-connectable="valid"] { border-color: var(--swatch-indigo); }
 .node[data-connectable="invalid"] { opacity: .55; }
 .nodeActions { position: absolute; right: 0; bottom: -34px; display: flex; gap: 8px; }
