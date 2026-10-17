@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 const PROJECT_ID = "e2e-workflow-canvas";
@@ -520,6 +520,61 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   expect(mocked.getGraph().nodes.find((item) => item.id === "brief")?.x).toBe(savedPosition?.x);
 });
 
+for (const { imageType, width, height, metadata } of [
+  { imageType: "reference_image", width: 1600, height: 900, metadata: false },
+  { imageType: "sketch", width: 600, height: 900, metadata: true },
+  { imageType: "candidate", width: 1200, height: 1200, metadata: false },
+  { imageType: "reference_image", width: 2400, height: 400, metadata: true },
+  { imageType: "candidate", width: 400, height: 2400, metadata: true },
+] as const) {
+  test(`${imageType} ${width}×${height} 图片完整贴合节点，连线随尺寸同步且刷新后保持`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    const graph = mocked.getGraph();
+    graph.nodes = [
+      node("ratio-image", "asset", imageType, "自适应图片", 40, 120, { imageUrl: "/api/ratio-image", ...(metadata ? { width, height } : {}) }),
+      node("ratio-target", "tool", "evaluate_design", "服装评估", 540, 120),
+    ];
+    graph.edges = [edge("ratio-edge", "ratio-image", "ratio-target", imageType === "candidate" ? "candidate" : "reference")];
+    await page.route("**/api/ratio-image", (route) => route.fulfill({
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#a5b9b0"/><path d="M0 0L${width} ${height}M${width} 0L0 ${height}" stroke="#40544e" stroke-width="8"/></svg>`,
+      contentType: "image/svg+xml",
+    }));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    const image = page.locator(`[data-type="${imageType}"] img`);
+    const expectFittedImage = async () => {
+      await expect.poll(() => image.evaluate((element) => {
+        const img = element as HTMLImageElement;
+        if (!img.complete || !img.naturalWidth) return Infinity;
+        const box = img.getBoundingClientRect();
+        const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+        return Math.max(Math.abs(box.width - img.naturalWidth * scale), Math.abs(box.height - img.naturalHeight * scale));
+      })).toBeLessThan(1);
+      const title = page.locator(`[data-type="${imageType}"] header`);
+      await expect(title).toBeVisible();
+      await expect.poll(() => image.evaluate((element) => {
+        const imageBox = element.getBoundingClientRect();
+        const titleBox = element.closest('[data-image="true"]')?.querySelector("header")?.getBoundingClientRect();
+        return titleBox ? Math.abs(imageBox.bottom - titleBox.top) : Infinity;
+      })).toBeLessThan(1);
+      await expect.poll(() => page.locator('[data-workflow-edge="ratio-edge"] path').first().evaluate((element) => {
+        const origin = (element as SVGPathElement).getScreenCTM();
+        const port = document.querySelector('[data-node-id="ratio-image"][data-workflow-port="output"]')?.getBoundingClientRect();
+        return origin && port ? Math.hypot(origin.e - port.x - port.width / 2, origin.f - port.y - port.height / 2) : Infinity;
+      })).toBeLessThan(2);
+    };
+    await expect(image).toBeVisible();
+    await expectFittedImage();
+    if (width === 1600 || width === 400) {
+      await mkdir("output/playwright", { recursive: true });
+      await page.screenshot({ path: `output/playwright/workflow-image-${width === 1600 ? "landscape" : "portrait"}-fitted.png` });
+    }
+    await page.reload();
+    await expect(image).toBeVisible();
+    await expectFittedImage();
+  });
+}
+
 for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
   test(`${imageType} 图片区域可连续拖动、缩放拖动并在刷新后恢复`, async ({ page }) => {
     const mocked = await mockWorkflow(page);
@@ -536,6 +591,9 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
     const image = shape.locator("img");
     await expect(image).toBeVisible();
     await expect.poll(() => image.evaluate((element) => element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0)).toBe(true);
+    await shape.evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
     const events = await page.evaluateHandle(() => {
       const events: string[] = [];
       const canvas = document.querySelector('.tl-container');
@@ -571,7 +629,7 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
       const imageBounds = await image.boundingBox();
       if (!before || !imageBounds) throw new Error("图片素材未显示");
       const initial = { x: draggedNode.x, y: draggedNode.y };
-      const zoom = before.width / 258;
+      const zoom = before.width / await shape.evaluate((element) => Number.parseFloat(getComputedStyle(element).width));
       const x = imageBounds.x + imageBounds.width / 2;
       const y = imageBounds.y + imageBounds.height / 2;
       const layoutRevision = graph.layoutRevision;
@@ -604,7 +662,7 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
       const imageBounds = await shape.boundingBox();
       const targetBounds = await page.locator('[data-kind="tool"]').boundingBox();
       if (!imageBounds || !targetBounds) return Infinity;
-      const zoom = imageBounds.width / 258;
+      const zoom = imageBounds.width / await shape.evaluate((element) => Number.parseFloat(getComputedStyle(element).width));
       return Math.abs((imageBounds.x - targetBounds.x) / zoom - (saved.x - 440)) + Math.abs((imageBounds.y - targetBounds.y) / zoom - (saved.y - 120));
     }).toBeLessThan(1);
   });
@@ -745,12 +803,39 @@ test("已运行工具改输入建立独立分支，系统结果来源保持只�
 });
 
 test("单击保留对话，详情返回恢复草稿，引用需显式加入", async ({ page }) => {
+  test.setTimeout(60_000);
   const mocked = await mockWorkflow(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const appearance = (control: Locator) => control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, borderColor: style.borderTopColor, borderWidth: Number.parseFloat(style.borderTopWidth) };
+  });
+  const context = page.getByLabel("设计上下文", { exact: true });
+  const summary = context.locator("summary").first();
+  await summary.focus();
+  await summary.press("Enter");
+  await expect(context).toHaveAttribute("open", "");
+  await expect(summary).toBeFocused();
+  expect(await summary.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
+  })).toBe(true);
+  await summary.press("Space");
+  await expect(context).not.toHaveAttribute("open");
   await composer.fill("保留这段输入草稿");
   await page.locator('[data-type="candidate"]').first().click();
   await expect(composer).toBeVisible();
+  await summary.press("Enter");
+  const reference = page.getByRole("button", { name: /引用「候选 A」/ });
+  const referenceStyle = await appearance(reference);
+  const locationStyle = await appearance(context.getByRole("button", { name: "定位 候选 A", exact: true }));
+  expect(referenceStyle.borderWidth).toBeGreaterThan(0);
+  expect(referenceStyle.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(locationStyle.borderWidth).toBe(0);
+  expect(locationStyle.background).toBe("rgba(0, 0, 0, 0)");
+  await summary.press("Space");
   await page.getByRole("button", { name: "节点详情", exact: true }).click();
   await expect(composer).toBeHidden();
   await page.getByRole("button", { name: "返回对话" }).click();
@@ -758,7 +843,24 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual([]);
+  const primaryStyle = await appearance(page.getByRole("button", { name: "加入画布", exact: true }));
+  const secondaryStyle = await appearance(page.getByRole("button", { name: "调整", exact: true }));
+  const quietStyle = await appearance(page.getByRole("button", { name: "跳过", exact: true }));
+  expect(primaryStyle.background).not.toBe(secondaryStyle.background);
+  expect(secondaryStyle.borderWidth).toBeGreaterThan(0);
+  expect(secondaryStyle.borderColor).not.toBe("rgba(0, 0, 0, 0)");
+  expect(quietStyle.background).toBe("rgba(0, 0, 0, 0)");
+  expect(quietStyle.borderColor).toBe("rgba(0, 0, 0, 0)");
+  await mkdir("output/playwright", { recursive: true });
+  await page.screenshot({ path: "output/playwright/workflow-assistant-actions-desktop.png" });
+  await page.getByRole("button", { name: "调整", exact: true }).click();
+  expect((await appearance(page.getByRole("button", { name: "提交调整建议", exact: true }))).background).toBe(primaryStyle.background);
+  expect(await appearance(page.getByRole("button", { name: "取消调整", exact: true }))).toEqual(quietStyle);
+  await page.getByRole("button", { name: "取消调整", exact: true }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
+  expect(await appearance(page.getByRole("button", { name: "返回建议", exact: true }))).toEqual(quietStyle);
+  const rejectStyle = await appearance(page.getByRole("button", { name: "确认跳过", exact: true }));
+  expect(rejectStyle.background !== quietStyle.background || rejectStyle.borderColor !== quietStyle.borderColor).toBe(true);
   await page.getByRole("button", { name: "确认跳过", exact: true }).click();
   await page.getByRole("button", { name: /引用「候选 A」/ }).click();
   await composer.fill("修改领口");
@@ -768,6 +870,21 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(2);
   expect(mocked.proposalRequests[1]?.referencedNodeIds).toEqual(["candidate-a"]);
+  expect(mocked.getExecuteCount()).toBe(0);
+  const longTitle = "秋冬通勤风衣候选方案：保留藏蓝色与宽松廓形，优化袖口细节。".repeat(4);
+  const candidate = mocked.getGraph().nodes.find((item) => item.id === "candidate-a");
+  if (!candidate) throw new Error("候选节点不存在");
+  candidate.title = longTitle;
+  await page.reload();
+  await page.locator('[data-type="candidate"]').first().click();
+  const longReference = page.getByRole("button", { name: `＋ 引用「${longTitle}」`, exact: true });
+  await expect(longReference).toBeVisible();
+  expect(await longReference.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const panel = element.closest("aside")?.getBoundingClientRect();
+    return panel ? bounds.left >= panel.left && bounds.right <= panel.right : false;
+  })).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("拖动输入线的素材端替换原图并清除旧蒙版，取消拖线不保存", async ({ page }) => {
@@ -912,26 +1029,56 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/${PROJECT_ID}`);
+  const initialSend = page.getByRole("button", { name: "发送 ↑", exact: true });
+  await expect(initialSend).toBeDisabled();
+  await expect(initialSend).toBeInViewport({ ratio: 1 });
+  const disabledBackground = await initialSend.evaluate((element) => getComputedStyle(element).backgroundColor);
+  await initialSend.hover();
+  await expect(initialSend).toHaveCSS("background-color", disabledBackground);
   await page.getByRole("button", { name: "节点列表" }).click();
   await expect(page.getByRole("listitem").filter({ has: page.getByText("候选 A", { exact: true }) })).toBeVisible();
   await page.getByRole("button", { name: "＋ 添加工具" }).click();
+  await expect.poll(async () => {
+    const bounds = await page.getByRole("button", { name: /局部修改 候选/ }).boundingBox();
+    return bounds ? bounds.x + bounds.width : Infinity;
+  }).toBeLessThanOrEqual(390);
   const menuBox = await page.getByRole("button", { name: /局部修改 候选/ }).boundingBox();
   expect((menuBox?.x ?? -1) >= 0).toBe(true);
   expect((menuBox?.x ?? 0) + (menuBox?.width ?? Infinity)).toBeLessThanOrEqual(390);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.getByRole("button", { name: "关闭菜单" }).click();
 
-  await page.getByText("更多", { exact: true }).click();
+  const more = page.getByText("更多", { exact: true });
+  const moreMenu = more.locator("..");
+  await more.focus();
+  await more.press("Enter");
+  await expect(moreMenu).toHaveAttribute("open", "");
+  await expect(moreMenu.getByRole("button")).toHaveText(["历史会话", "新建设计对话", "暂停设计协作"]);
+  await expect.poll(() => moreMenu.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
+    const bounds = button.getBoundingClientRect();
+    return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
+  }))).toBe(true);
+  await mkdir("output/playwright", { recursive: true });
+  await page.screenshot({ path: "output/playwright/workflow-assistant-menu-mobile.png" });
   await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "历史会话", exact: true }).click();
   await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-old");
   await expect(page.getByText("历史消息")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toHaveCount(0);
+  await more.click();
+  await expect(moreMenu.getByRole("button")).toHaveText(["历史会话", "新建设计对话", "旧设计运行", "暂停设计协作"]);
+  await more.press("Space");
+  await expect(moreMenu).not.toHaveAttribute("open");
   await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-new");
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect(page.getByText("已收到，继续设计。")).toBeVisible();
+  const sendBox = await page.getByRole("button", { name: "发送 ↑" }).boundingBox();
+  if (!sendBox) throw new Error("发送按钮未显示");
+  expect(sendBox.x).toBeGreaterThanOrEqual(0);
+  expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(390);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   expect(mocked.chatRequests).toHaveLength(0);
   expect(mocked.proposalRequests).toHaveLength(0);
 });

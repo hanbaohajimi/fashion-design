@@ -470,21 +470,6 @@
   gap: 12px;
 }
 
-.sidebarActions button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--color-ink-tertiary);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  transition: color var(--duration-fast);
-}
-
-.sidebarActions button:hover {
-  color: var(--color-ink);
-}
-
 /* guidanceSwitch 降级为 pill 选择器，不再和 sideTabs 同形 */
 .sideTabs {
   display: grid;
@@ -662,20 +647,7 @@
 
 .suggestionActions button {
   flex: 1;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   padding: 9px 7px;
-  background: var(--color-paper);
-  color: var(--color-ink-secondary);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.suggestionActions button:last-child {
-  border-color: var(--color-signal);
-  background: var(--color-signal);
-  color: white;
 }
 
 .chatToggle {
@@ -852,24 +824,7 @@
 }
 
 .composerActions button {
-  border: 0;
-  border-radius: 7px;
   padding: 8px 12px;
-  background: transparent;
-  color: var(--color-ink-secondary);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.composerActions button:last-child {
-  background: var(--color-ink);
-  color: var(--color-paper);
-}
-
-.composerActions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
 }
 
 .mentions {
@@ -914,7 +869,7 @@
   text-align: left;
 }
 
-.mentionChoices button:hover {
+.mentionChoices button:enabled:hover {
   background: var(--color-surface);
 }
 
@@ -1560,8 +1515,6 @@
 .sidebarHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 19px 20px; }
 .sidebarHeader h2 { margin: 0; font-size: 15px; font-weight: 500; }
 .sidebarActions { display: flex; align-items: center; gap: 12px; }
-.sidebarActions button { border: 0; padding: 4px 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
-.sidebarActions button:hover { color: var(--color-ink); }
 .assistantUtility {
   display: flex;
   flex: none;
@@ -1588,19 +1541,23 @@
 .contextContents small { display: block; margin: 4px 0; color: var(--color-ink-tertiary); font-size: 10px; line-height: 1.5; }
 .contextContents ul { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .contextContents li[data-status="inactive"] { opacity: 0.6; }
-.contextContents button, .legacyReadOnly button { border: 1px solid var(--color-border); border-radius: 5px; margin: 4px 5px 0 0; padding: 5px 7px; background: var(--color-paper); color: var(--color-ink-secondary); cursor: pointer; font: 11px var(--font-sans); }
-.contextContents button:disabled { cursor: not-allowed; opacity: 0.45; }
+.contextContents :is(.actionPrimary, .actionSecondary, .actionQuiet, .nodeLink), .legacyReadOnly :is(.actionPrimary, .actionSecondary) { margin: 4px 5px 0 0; }
 .contextContents textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 12px/1.6 var(--font-sans); resize: vertical; }
 .assistantReply { margin: 0 0 12px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
 .messageKind { color: var(--swatch-mauve); font-size: 10px; }
 .legacyReadOnly { border-top: 1px solid var(--color-divider); padding: 10px 0; font-size: 12px; line-height: 1.6; color: var(--color-ink-secondary); }
 .workflowMessage[data-role="user"] .userExample { display: block; }
 .assistantMore { position: relative; }
-.assistantMore > summary { cursor: pointer; list-style: none; padding: 4px 0 4px 12px; }
+.assistantMore > summary { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border); border-radius: 5px; padding: 4px 8px; background: transparent; color: var(--color-ink-secondary); font: 500 11px/1.4 var(--font-sans); cursor: pointer; list-style: none; transition: background-color var(--duration-fast, 140ms), border-color var(--duration-fast, 140ms), color var(--duration-fast, 140ms); }
 .assistantMore > summary::-webkit-details-marker { display: none; }
-.assistantMore > div { position: absolute; z-index: 8; top: 28px; right: 0; display: grid; width: 142px; gap: 3px; border: 1px solid var(--color-border); border-radius: 7px; padding: 7px; background: var(--color-paper); box-shadow: 0 6px 22px #0000000d; }
+.assistantMore[open] > summary { background: var(--color-surface); color: var(--color-ink); }
+.assistantMore > summary:hover { border-color: var(--color-border-strong); color: var(--color-ink); }
+.assistantMore > summary:active { background: var(--color-surface); }
+.assistantMore > div { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; display: grid; width: 142px; gap: 3px; border: 1px solid var(--color-border); border-radius: 7px; padding: 7px; background: var(--color-paper); box-shadow: 0 6px 22px #0000000d; }
 .assistantMore button { border: 0; border-radius: 3px; padding: 9px 10px; background: transparent; color: var(--color-ink-secondary); font: 12px var(--font-sans); text-align: left; cursor: pointer; }
-.assistantMore button:hover { background: var(--color-surface); color: var(--color-ink); }
+.assistantMore button:enabled:hover { background: var(--color-surface); color: var(--color-ink); }
+.assistantMore button:enabled:active { background: var(--color-border); }
+.assistantMore button:disabled { cursor: default; opacity: 0.45; }
 .assistantWelcome { max-width: 23ch; margin: 40px 0 0; color: var(--color-ink-tertiary); font-size: 14px; line-height: 1.9; }
 
 /* 空状态优化：简洁提示，不占用过多垂直空间 */
@@ -1630,14 +1587,11 @@
     transform: translateY(0);
   }
 }
-.referenceSelected { max-width: 100%; overflow: hidden; border: 0; margin: 0 0 10px; padding: 0; background: transparent; color: var(--color-ink-secondary); font: 11px/1.6 var(--font-sans); text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .suggestionText[data-expanded="false"] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
 .suggestionEvidence { margin-top: 12px; color: var(--color-ink-tertiary); font-size: 11px; line-height: 1.7; }
 .suggestionEvidence summary, .detailSection > summary, .advancedSettings > summary { cursor: pointer; }
 .suggestionEvidence small { display: block; margin-top: 8px; }
-.suggestionActions button:first-child { background: var(--color-ink); color: var(--color-paper); }
-.suggestionActions button:not(:first-child) { background: transparent; color: var(--color-ink-secondary); }
 .composerActions { justify-content: flex-end; }
 .advancedSettings { margin: 12px 0; color: var(--color-ink-secondary); font-size: 12px; }
 .advancedSettings[open] > summary { margin-bottom: 14px; }
@@ -1653,6 +1607,236 @@
 .previewValue { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .referenceConfig { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 8px; margin: 12px 0; }
 .referenceConfig strong { grid-column: 1 / -1; font-size: 11px; }
+
+/* 用操作含义表达主次，避免按钮顺序变化后继承错误的强调色。 */
+.actionPrimary,
+.actionSecondary,
+.actionQuiet,
+.nodeLink,
+.historyAction,
+.referenceAction,
+.sidebarNavigation,
+.sidebarCollapse {
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 5px 8px;
+  color: var(--color-ink-secondary);
+  font: 500 11px/1.4 var(--font-sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast, 140ms),
+    border-color var(--duration-fast, 140ms),
+    color var(--duration-fast, 140ms);
+}
+
+.actionPrimary {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: 650;
+}
+
+.actionPrimary:enabled:hover {
+  border-color: var(--swatch-indigo);
+  background: var(--swatch-indigo);
+}
+
+.actionPrimary:enabled:active {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+}
+
+.actionSecondary {
+  border-color: var(--color-border-strong);
+  background: var(--color-paper);
+}
+
+.actionSecondary:enabled:hover {
+  border-color: var(--color-ink-secondary);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.actionSecondary:enabled:active {
+  background: var(--color-border);
+}
+
+.actionQuiet,
+.sidebarCollapse {
+  background: transparent;
+  font-weight: 500;
+}
+
+.actionQuiet:enabled:hover,
+.sidebarCollapse:enabled:hover {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.actionQuiet:enabled:active,
+.sidebarCollapse:enabled:active {
+  background: var(--color-border);
+}
+
+.nodeLink,
+.historyAction,
+.sidebarNavigation {
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--swatch-indigo);
+  text-decoration: none;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeLink:enabled:hover,
+.historyAction:enabled:hover,
+.sidebarNavigation:enabled:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+}
+
+.nodeLink:enabled:active,
+.historyAction:enabled:active,
+.sidebarNavigation:enabled:active {
+  color: var(--swatch-indigo);
+}
+
+.historyAction {
+  margin: 0 0 10px;
+  color: var(--color-ink-secondary);
+}
+
+.workflowMessage > .actionSecondary {
+  margin: 0 0 10px;
+}
+
+.referenceAction {
+  overflow: hidden;
+  border-color: var(--color-border);
+  margin: 0 0 10px;
+  background: var(--color-surface);
+  color: var(--swatch-indigo);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.referenceAction:enabled:hover {
+  border-color: var(--swatch-indigo);
+  background: var(--swatch-indigo-wash);
+}
+
+.referenceAction:enabled:active {
+  background: var(--color-border);
+}
+
+.sidebarNavigation {
+  padding: 3px 6px;
+}
+
+.sidebarCollapse {
+  border: 0;
+  padding: 4px 0;
+}
+
+:is(.actionPrimary, .actionSecondary, .actionQuiet, .nodeLink, .historyAction, .referenceAction, .sidebarNavigation, .sidebarCollapse):disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.designContext > summary,
+.suggestionEvidence > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-radius: 3px;
+  padding: 2px 0;
+  color: var(--color-ink-secondary);
+  list-style: none;
+  transition: color var(--duration-fast, 140ms);
+}
+
+.designContext > summary::-webkit-details-marker,
+.suggestionEvidence > summary::-webkit-details-marker {
+  display: none;
+}
+
+.designContext > summary::after,
+.suggestionEvidence > summary::after,
+.assistantMore > summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: none;
+  align-self: center;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  margin: 0 2px;
+  transform: rotate(-45deg);
+  transition: transform var(--duration-fast, 140ms);
+}
+
+.designContext > summary::after,
+.suggestionEvidence > summary::after {
+  margin-left: auto;
+}
+
+.designContext[open] > summary::after,
+.suggestionEvidence[open] > summary::after,
+.assistantMore[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.designContext > summary > span {
+  font-weight: 600;
+}
+
+.designContext > summary > small {
+  min-width: 0;
+  flex: 1;
+}
+
+.designContext > summary:hover,
+.suggestionEvidence > summary:hover {
+  color: var(--color-ink);
+}
+
+:is(.actionPrimary, .actionSecondary, .actionQuiet, .nodeLink, .historyAction, .referenceAction, .sidebarNavigation, .sidebarCollapse):focus-visible,
+.designContext > summary:focus-visible,
+.suggestionEvidence > summary:focus-visible,
+.assistantMore > summary:focus-visible {
+  outline: 2px solid var(--swatch-indigo);
+  outline-offset: 2px;
+}
+
+.nodeLink:focus-visible,
+.historyAction:focus-visible,
+.sidebarNavigation:focus-visible {
+  text-decoration: underline;
+}
+
+.composer:focus-within {
+  border-color: var(--swatch-indigo);
+  box-shadow: 0 0 0 2px var(--swatch-indigo-wash);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .designContext > summary::after,
+  .suggestionEvidence > summary::after,
+  .assistantMore > summary::after {
+    transition: none;
+  }
+}
+
 @media (max-width: 760px) {
   .sidebar { flex: none; height: 44dvh; min-height: 0; max-height: 44dvh; }
   .sidebarHeader { padding: 12px 16px; }
@@ -1661,4 +1845,5 @@
   .assistantWelcome { margin: 12px 0; font-size: 12px; max-width: none; }
   .assistantBody { gap: 10px; }
   .contextContents { max-height: 16dvh; }
+  .assistantBody:has(.assistantConversation[data-empty="true"]) .composer textarea { min-height: 38px; }
 }

@@ -10,7 +10,7 @@ import {
 } from "tldraw";
 
 import type { WorkflowNode } from "./workflow-api";
-import { displayNodeTitle } from "./workflow-graph";
+import { displayNodeTitle, imageNodeSize } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
@@ -28,6 +28,8 @@ declare module "tldraw" {
       title: string;
       summary: string;
       imageUrl: string;
+      imageWidth: number;
+      imageHeight: number;
       color: string;
       status: string;
       highlighted: boolean;
@@ -67,6 +69,8 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
     h: T.number,
     highlighted: T.boolean,
     imageUrl: T.string,
+    imageWidth: T.number,
+    imageHeight: T.number,
     color: T.string,
     kind: T.literalEnum("asset", "tool"),
     muted: T.boolean,
@@ -83,6 +87,8 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
       h: 212,
       highlighted: false,
       imageUrl: "",
+      imageWidth: 0,
+      imageHeight: 0,
       color: "",
       kind: "asset",
       muted: false,
@@ -152,8 +158,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         </header>
         {imageUrl ? (
           <div className={styles.imageFrame}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt={title} draggable={false} src={imageUrl} />
+            <WorkflowNodeImage key={imageUrl} shape={shape} title={title} />
           </div>
         ) : null}
         {nodeType === "swatch" && /^#[0-9A-Fa-f]{6}$/u.test(color) ? (
@@ -188,6 +193,30 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
     path.roundRect(0, 0, shape.props.w, shape.props.h, 12);
     return path;
   }
+}
+
+function WorkflowNodeImage({ shape, title }: { shape: WorkflowNodeShape; title: string }) {
+  const editor = useEditor();
+  const exporting = useSvgExportContext();
+  return (
+    // Canvas assets use their authenticated image URL directly, including during export.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img alt={title} draggable={false} src={shape.props.imageUrl} onLoad={(event) => {
+      if (exporting || !["candidate", "reference_image", "sketch"].includes(shape.props.nodeType)) return;
+      const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
+      if (!width || !height) return;
+      const current = editor.getShape<WorkflowNodeShape>(shape.id);
+      if (!current || current.props.imageUrl !== shape.props.imageUrl ||
+        (current.props.imageWidth === width && current.props.imageHeight === height)) return;
+      editor.store.mergeRemoteChanges(() => {
+        editor.updateShape<WorkflowNodeShape>({
+          id: shape.id,
+          type: WORKFLOW_NODE_SHAPE_TYPE,
+          props: { ...imageNodeSize({ width, height }, Boolean(current.props.summary)), imageWidth: width, imageHeight: height },
+        });
+      });
+    }} />
+  );
 }
 
 function WorkflowNodeFrame({
@@ -233,6 +262,7 @@ function WorkflowNodeFrame({
       style={exportStyle}
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
+      data-image={Boolean(shape.props.imageUrl) && ["candidate", "reference_image", "sketch"].includes(shape.props.nodeType) ? "true" : "false"}
       data-muted={shape.props.muted && !interaction?.gesture ? "true" : "false"}
       data-status={shape.props.status}
       data-type={shape.props.nodeType}

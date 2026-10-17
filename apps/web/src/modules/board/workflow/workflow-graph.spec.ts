@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode } from "./workflow-api";
-import { availableInputPorts, lineageOf, projectWorkflowProposal } from "./workflow-graph";
+import { availableInputPorts, imageNodeSize, lineageOf, nodeSize, projectWorkflowProposal } from "./workflow-graph";
 
 function node(id: string, kind: WorkflowNode["kind"], type: WorkflowNode["type"]): WorkflowNode {
   return {
@@ -22,6 +22,36 @@ function edge(id: string, sourceNodeId: string, targetNodeId: string, targetPort
 }
 
 describe("workflow graph", () => {
+  it("fits landscape, portrait and square images without reserving a portrait frame", () => {
+    for (const [width, height] of [[1920, 1080], [768, 1024], [900, 900], [10000, 100], [100, 10000]] as const) {
+      const size = imageNodeSize({ width, height });
+      // The caption and border occupy 60 px; the remaining box keeps the photo ratio.
+      expect((size.w - 2) / (size.h - 60)).toBeCloseTo(width / height, 8);
+      expect(size.w).toBeLessThanOrEqual(322);
+      expect(size.h).toBeLessThanOrEqual(340);
+      expect(size.w).toBeGreaterThan(2);
+      expect(size.h).toBeGreaterThan(60);
+    }
+  });
+
+  it("uses stored metadata immediately and prefers the loaded image ratio for older thumbnails", () => {
+    const image = { ...node("image", "asset", "reference_image"), payload: { width: 1920, height: 1080 } };
+    expect(nodeSize(image)).toEqual(imageNodeSize({ width: 1920, height: 1080 }));
+    expect(nodeSize(image, { width: 1024, height: 1024 })).toEqual(imageNodeSize({ width: 1024, height: 1024 }));
+    expect(nodeSize({ ...image, payload: { width: 0, height: -1 } })).toEqual(imageNodeSize({ width: 1, height: 1 }));
+  });
+
+  it("reserves a single readable summary line without shrinking the photo", () => {
+    const image = { ...node("candidate", "asset", "candidate"), payload: { width: 1920, height: 1080, decision: { kind: "selected", reason: "保留领型" } } };
+    const plain = imageNodeSize({ width: 1920, height: 1080 });
+    expect(nodeSize(image)).toEqual({ w: plain.w, h: plain.h + 22 });
+    const portraitWithSummary = imageNodeSize({ width: 768, height: 1024 }, true);
+    expect(portraitWithSummary.h).toBe(340);
+    expect((portraitWithSummary.w - 2) / (portraitWithSummary.h - 82)).toBeCloseTo(768 / 1024, 8);
+    expect(imageNodeSize({ width: Number.NaN, height: Number.POSITIVE_INFINITY })).toEqual(imageNodeSize({ width: 1, height: 1 }));
+    expect(nodeSize(node("brief", "asset", "brief"))).toEqual({ w: 258, h: 172 });
+  });
+
   it("previews configuration on the existing card and replaces its inputs without changing saved graph", () => {
     const original = { ...node("draft", "tool", "generate_design"), x: 360, y: 200, status: "ready" };
     const graph: WorkflowGraph = { projectId: "p", revision: 2, layoutRevision: 3, legacyAvailable: false, nodes: [node("old", "asset", "constraint"), node("new", "asset", "constraint"), original], edges: [edge("old-edge", "old", "draft", "constraint")] };

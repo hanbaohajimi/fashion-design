@@ -25,14 +25,32 @@ export function projectWorkflowProposal(graph: WorkflowGraph, proposal: Workflow
   return { ...graph, nodes: [...nodes.values()], edges: [...edges.values()] };
 }
 
-/**
- * 节点尺寸。
- *
- * 尺寸应当由内容决定：图像类节点需要高度给图片，文字类节点的留白
- * 则纯粹是"统一卡片"的残留——内容只占上半部，下半部是空的。
- * 因此文字节点收窄到贴合成文本量级，图像节点保留大尺寸。
- */
-export function nodeSize(node: Pick<WorkflowNode, "type" | "kind">): {
+type ImageDimensions = { readonly width: unknown; readonly height: unknown };
+
+function validImageDimensions(dimensions: ImageDimensions): dimensions is { width: number; height: number } {
+  return typeof dimensions.width === "number" && Number.isFinite(dimensions.width) && dimensions.width > 0 &&
+    typeof dimensions.height === "number" && Number.isFinite(dimensions.height) && dimensions.height > 0;
+}
+
+/** 等比展示完整图片；尺寸只包含原比例图片、58px 标题栏与边框。 */
+export function imageNodeSize(dimensions: ImageDimensions, hasSummary = false) {
+  const aspect = validImageDimensions(dimensions) ? dimensions.width / dimensions.height : 1;
+  const captionHeight = 60 + (hasSummary ? 22 : 0);
+  const maxImageHeight = 340 - captionHeight;
+  let width = aspect > 1 ? 320 : 256;
+  let height = width / aspect;
+  if (height > maxImageHeight) {
+    width *= maxImageHeight / height;
+    height = maxImageHeight;
+  }
+  return { w: width + 2, h: height + captionHeight };
+}
+
+/** 图片优先使用已加载的实际尺寸，兼容历史节点没有宽高元数据的情况。 */
+export function nodeSize(
+  node: Pick<WorkflowNode, "type" | "kind"> & Partial<Pick<WorkflowNode, "payload">>,
+  loadedImage?: ImageDimensions,
+): {
   readonly h: number;
   readonly w: number;
 } {
@@ -41,7 +59,11 @@ export function nodeSize(node: Pick<WorkflowNode, "type" | "kind">): {
     node.type === "reference_image" ||
     node.type === "sketch"
   ) {
-    return { h: 340, w: 258 };  // 增加高度让图片更完整展示
+    const payload = node.payload ?? {};
+    return imageNodeSize(
+      loadedImage && validImageDimensions(loadedImage) ? loadedImage : { width: payload.width, height: payload.height },
+      Boolean(nodeSummary({ type: node.type, payload })),
+    );
   }
   if (node.type === "evaluation" || node.type === "constraint") {
     return { h: 196, w: 258 };
@@ -118,7 +140,7 @@ export function displayNodeTitle(
   return trimmed;
 }
 
-export function nodeSummary(node: WorkflowNode): string {
+export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload">): string {
   const payload = node.payload;
   if (
     node.type === "candidate" &&

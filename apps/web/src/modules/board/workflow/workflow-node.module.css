@@ -123,7 +123,7 @@
   -webkit-line-clamp: 3;
 }
 
-/* 图片帧：全幅展示，标题绝对定位悬停渐现 */
+/* 图片帧尺寸跟随图片比例，不再用固定竖版高度承载横图。 */
 .imageFrame {
   position: relative;
   flex: 1;
@@ -143,63 +143,48 @@
   object-position: center;
 }
 
-/* 图片类节点：标题叠加在图片底部，悬停渐现 */
-.node[data-type="candidate"],
-.node[data-type="reference_image"],
-.node[data-type="sketch"] {
+/* 独立标题栏避免遮挡服装细节，也让图片素材的名称始终可见。 */
+.node[data-image="true"] {
+  border-top-width: 1px;
   padding: 0;
 }
 
-.node[data-type="candidate"] .nodeHeader,
-.node[data-type="reference_image"] .nodeHeader,
-.node[data-type="sketch"] .nodeHeader {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
+.node[data-image="true"] .nodeHeader {
+  order: 2;
+  flex: 0 0 58px;
+  min-width: 0;
+  overflow: hidden;
+  justify-content: center;
+  gap: 4px;
   border-bottom: 0;
-  padding: 10px 12px;
-  /* 渐变黑遮底，保证文字可读 */
-  background: linear-gradient(to top, rgba(31, 29, 26, 0.88) 0%, rgba(31, 29, 26, 0.72) 60%, transparent 100%);
-  opacity: 0;
-  transition: opacity var(--duration-normal, 220ms) var(--ease-standard);
+  border-top: 1px solid var(--color-divider);
+  padding: 9px min(12px, 4%);
 }
 
-.node[data-type="candidate"]:hover .nodeHeader,
-.node[data-type="reference_image"]:hover .nodeHeader,
-.node[data-type="sketch"]:hover .nodeHeader,
-.node[data-type="candidate"][data-highlighted="true"] .nodeHeader,
-.node[data-type="reference_image"][data-highlighted="true"] .nodeHeader,
-.node[data-type="sketch"][data-highlighted="true"] .nodeHeader {
+.node[data-image="true"] .eyebrow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   opacity: 1;
 }
 
-.node[data-type="candidate"] .nodeHeader strong,
-.node[data-type="reference_image"] .nodeHeader strong,
-.node[data-type="sketch"] .nodeHeader strong {
-  color: var(--color-paper);
-}
-
-.node[data-type="candidate"] .eyebrow,
-.node[data-type="reference_image"] .eyebrow,
-.node[data-type="sketch"] .eyebrow {
-  color: rgba(252, 251, 248, 0.75);
-  opacity: 1;
-}
-
-.node[data-type="candidate"] .imageFrame,
-.node[data-type="reference_image"] .imageFrame,
-.node[data-type="sketch"] .imageFrame {
+.node[data-image="true"] .imageFrame {
+  order: 1;
+  border-radius: 5px 5px 0 0;
   margin-top: 0;
 }
 
-/* 图像下方的说明文字仍需留白，否则会贴着图片边缘 */
-.node[data-type="candidate"] .summary,
-.node[data-type="reference_image"] .summary,
-.node[data-type="sketch"] .summary {
+.node[data-image="true"] .summary {
+  display: block;
+  order: 3;
+  flex: 0 0 22px;
+  min-width: 0;
   margin: 0;
-  padding: 10px 13px 12px;
+  padding: 0 min(12px, 4%) 6px;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .swatch {

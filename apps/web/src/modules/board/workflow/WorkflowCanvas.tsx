@@ -167,6 +167,13 @@ function graphNodePosition(editor: Editor, node: WorkflowNode) {
     : { x: node.x, y: node.y };
 }
 
+function graphNodeSize(editor: Editor, node: WorkflowNode) {
+  const projected = editor.getShape<WorkflowNodeShape>(nodeShapeId(node.id));
+  return projected?.type === WORKFLOW_NODE_SHAPE_TYPE
+    ? { w: projected.props.w, h: projected.props.h }
+    : nodeSize(node);
+}
+
 function projectEdge(
   editor: Editor,
   graph: WorkflowGraph,
@@ -179,8 +186,8 @@ function projectEdge(
   if (!source || !target) return;
   const sourcePosition = graphNodePosition(editor, source);
   const targetPosition = graphNodePosition(editor, target);
-  const sourceSize = nodeSize(source);
-  const targetSize = nodeSize(target);
+  const sourceSize = graphNodeSize(editor, source);
+  const targetSize = graphNodeSize(editor, target);
   const x = sourcePosition.x + sourceSize.w;
   const y = sourcePosition.y + sourceSize.h / 2;
   const endX = targetPosition.x;
@@ -247,11 +254,18 @@ function WorkflowProjection({
       for (const node of projectedGraph.nodes) {
         const id = nodeShapeId(node.id);
         active.add(id);
-        const size = nodeSize(node);
+        const existing = editor.getShape<WorkflowNodeShape>(id);
+        const imageUrl = nodeImageUrl(node);
+        const loadedImage = existing?.type === WORKFLOW_NODE_SHAPE_TYPE && existing.props.imageUrl === imageUrl
+          ? { width: existing.props.imageWidth, height: existing.props.imageHeight }
+          : { width: 0, height: 0 };
+        const size = nodeSize(node, loadedImage);
         const props = {
           h: size.h,
           highlighted: node.status === "proposed" || (lineage?.nodeIds.has(node.id) ?? false),
-          imageUrl: nodeImageUrl(node),
+          imageUrl,
+          imageWidth: loadedImage.width,
+          imageHeight: loadedImage.height,
           color: typeof node.payload.color === "string" ? node.payload.color : "",
           kind: node.kind,
           muted: node.status !== "proposed" && Boolean(lineage && !lineage.nodeIds.has(node.id)),
@@ -262,7 +276,6 @@ function WorkflowProjection({
           title: displayNodeTitle(node),
           w: size.w,
         };
-        const existing = editor.getShape<WorkflowNodeShape>(id);
         if (existing?.type === WORKFLOW_NODE_SHAPE_TYPE) {
           const previous = projectedPositions.current.get(node.id);
           const positionChanged = !previous || previous.x !== node.x || previous.y !== node.y;
@@ -302,8 +315,8 @@ function WorkflowProjection({
       initialFit.current = true;
         const minX = Math.min(...graph.nodes.map((node) => node.x));
         const minY = Math.min(...graph.nodes.map((node) => node.y));
-        const maxX = Math.max(...graph.nodes.map((node) => node.x + nodeSize(node).w));
-        const maxY = Math.max(...graph.nodes.map((node) => node.y + nodeSize(node).h));
+        const maxX = Math.max(...graph.nodes.map((node) => node.x + graphNodeSize(editor, node).w));
+        const maxY = Math.max(...graph.nodes.map((node) => node.y + graphNodeSize(editor, node).h));
         editor.zoomToBounds({
           x: minX - 65,
           y: minY - 48,
@@ -312,6 +325,23 @@ function WorkflowProjection({
         }, { inset: 24, targetZoom: 0.95 });
     }
   }, [editor, graph, lineage, projectedGraph, proposedEdges]);
+
+  useEffect(() => editor.store.listen((entry) => {
+    const resized = new Set(Object.values(entry.changes.updated).flatMap(([before, after]) =>
+      before.typeName === "shape" && after.typeName === "shape" &&
+      before.type === WORKFLOW_NODE_SHAPE_TYPE && after.type === WORKFLOW_NODE_SHAPE_TYPE &&
+      (before.props.w !== after.props.w || before.props.h !== after.props.h)
+        ? [after.props.nodeId] : [],
+    ));
+    if (resized.size === 0) return;
+    // Image loading changes presentation only; keep wires aligned without saving layout.
+    editor.store.mergeRemoteChanges(() => {
+      for (const edge of projectedGraph.edges) {
+        if (resized.has(edge.sourceNodeId) || resized.has(edge.targetNodeId))
+          projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id));
+      }
+    });
+  }, { scope: "document" }), [editor, projectedGraph, lineage, proposedEdges]);
 
   useEffect(() =>
     editor.store.listen((entry) => {
@@ -578,7 +608,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     const selectedNode = current.nodes.find((node) => node.id === selectedId);
     const viewport = editorRef.current?.getViewportPageBounds();
     const x = selectedNode
-      ? selectedNode.x + nodeSize(selectedNode).w + 130
+      ? selectedNode.x + (editorRef.current ? graphNodeSize(editorRef.current, selectedNode).w : nodeSize(selectedNode).w) + 130
       : (viewport?.center.x ?? 320) - 130;
     const y = selectedNode ? selectedNode.y + (selectedNode.kind === kind ? 240 : 0) : (viewport?.center.y ?? 240) - 105;
     const id = crypto.randomUUID();
@@ -642,6 +672,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       const ready = await waitForThumbnail(signed.file.id, processing);
       const nodeId = await addNode("asset", "reference_image", file.name, {
         fileAssetId: ready.id,
+        width: ready.width,
+        height: ready.height,
         imageUrl: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
         sourceName: file.name,
         role: "style_ref",
@@ -825,8 +857,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
           <div className={styles.sidebarHeader}>
             <h2>{activeTab === "details" ? "节点详情" : "设计助手"}</h2>
             <div className={styles.sidebarActions}>
-              {activeTab === "details" ? <button onClick={() => setActiveTab("assistant")} type="button">返回对话</button> : selected ? <button onClick={() => openDetails(selected.id)} type="button">节点详情</button> : null}
-              <button aria-label="收起设计助手" onClick={() => setSidebarOpen(false)} type="button">收起</button>
+              {activeTab === "details" ? <button className={styles.sidebarNavigation} onClick={() => setActiveTab("assistant")} type="button">返回对话</button> : selected ? <button className={styles.sidebarNavigation} onClick={() => openDetails(selected.id)} type="button">节点详情</button> : null}
+              <button aria-label="收起设计助手" className={styles.sidebarCollapse} onClick={() => setSidebarOpen(false)} type="button">收起</button>
             </div>
           </div>
           {activeTab === "details" ? (
