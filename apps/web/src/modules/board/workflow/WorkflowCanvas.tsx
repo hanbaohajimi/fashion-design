@@ -242,6 +242,14 @@ function WorkflowProjection({
 
   useEffect(() => onEditor(editor), [editor, onEditor]);
   useEffect(() => { editor.user.updateUserPreferences({ colorScheme: "light" }); }, [editor]);
+  useEffect(() => {
+    const container = editor.getContainer();
+    // Ancestor animations can move the viewport without triggering ResizeObserver.
+    // Refresh before tldraw captures the drag origin, rather than during the gesture.
+    const syncViewport = () => { editor.updateViewportScreenBounds(container); };
+    container.addEventListener("pointerdown", syncViewport, true);
+    return () => container.removeEventListener("pointerdown", syncViewport, true);
+  }, [editor]);
 
   useEffect(() => {
     const shape = selectedShapeId ? editor.getShape(selectedShapeId) : undefined;

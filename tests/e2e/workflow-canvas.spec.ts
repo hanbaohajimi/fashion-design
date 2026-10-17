@@ -671,6 +671,8 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
         throw error;
       }
     };
+    // 模拟入场动画移动视口但未触发尺寸变化，首个拖动也必须使用最新屏幕边界。
+    await page.locator(".tl-container").evaluate((element) => { (element as HTMLElement).style.translate = "14px 8px"; });
     await dragImage(60, 30);
     await dragImage(-40, 25);
     const originalBounds = await shape.boundingBox();
