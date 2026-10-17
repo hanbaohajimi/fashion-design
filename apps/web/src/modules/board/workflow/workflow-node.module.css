@@ -115,13 +115,12 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
-/* ── 图片类节点：图片全幅出血 ─────────────────────────────────────────
-   参考图、草图、候选方案的价值全在图像本身。
-   容器内边距会在图像四周留下白框，把内容降级成"卡片里的一张缩略图"。
-   这里取消内边距，让图像顶到节点边缘，只有标题行保留呼吸。 */
+/* 图片类节点取消额外内边距，给完整图像留出空间。
+   原图与图片区域比例不同时允许留白，避免裁掉服装轮廓或草图细节。 */
 .node[data-type="candidate"],
 .node[data-type="reference_image"],
 .node[data-type="sketch"] {

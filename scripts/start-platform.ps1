@@ -1,7 +1,8 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [switch]$NoBrowser,
-  [switch]$SkipInstall
+  [switch]$SkipInstall,
+  [switch]$DryRun
 )
 
 $OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding =
@@ -14,6 +15,9 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $projectRoot ".env"
 $envExampleFile = Join-Path $projectRoot ".env.example"
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
+$installArguments = @("install", "--frozen-lockfile", "--prefer-offline", "--network-concurrency=4")
+$previousPnpmVerify = [Environment]::GetEnvironmentVariable("npm_config_verify_deps_before_run", "Process")
+$pnpmVerifyChanged = $false
 
 function Write-Step {
   param([Parameter(Mandatory)][string]$Message)
@@ -42,17 +46,42 @@ function Invoke-Native {
     [Parameter(ValueFromRemainingArguments)][string[]]$Arguments
   )
 
+  # Windows PowerShell 5.1 may turn redirected stderr warnings into terminating
+  # errors under Stop. Native command success is determined by the exit code.
+  $ErrorActionPreference = "Continue"
+  $PSNativeCommandUseErrorActionPreference = $false
   & $FilePath @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "命令执行失败（退出码 $LASTEXITCODE）：$FilePath $($Arguments -join ' ')"
+  $commandExitCode = $LASTEXITCODE
+  if ($commandExitCode -ne 0) {
+    throw "命令执行失败（退出码 $commandExitCode）：$FilePath $($Arguments -join ' ')"
   }
+}
+
+function Get-NativeOutput {
+  param(
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter(Mandatory)][string[]]$Arguments
+  )
+
+  $ErrorActionPreference = "Continue"
+  $PSNativeCommandUseErrorActionPreference = $false
+  $output = @(& $FilePath @Arguments 2>$null)
+  $commandExitCode = $LASTEXITCODE
+  if ($commandExitCode -ne 0) {
+    throw "命令执行失败（退出码 $commandExitCode）：$FilePath $($Arguments -join ' ')；可单独运行该命令查看详细信息。"
+  }
+  return $output
 }
 
 function Test-DockerDaemon {
   param([Parameter(Mandatory)][string]$DockerCommand)
 
-  & $DockerCommand info *> $null
-  return $LASTEXITCODE -eq 0
+  try {
+    Get-NativeOutput -FilePath $DockerCommand -Arguments @("info", "--format", "{{.ServerVersion}}") | Out-Null
+    return $true
+  } catch {
+    return $false
+  }
 }
 
 function Start-DockerDesktop {
@@ -94,7 +123,7 @@ function Test-HttpEndpoint {
 
   try {
     $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 3
-    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
+    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 300
   } catch {
     return $false
   }
@@ -166,6 +195,20 @@ try {
   Set-Location -LiteralPath $projectRoot
   Write-Host "AI 服装设计平台 · 本地一键启动" -ForegroundColor Green
 
+  if ($DryRun) {
+    Write-Step "预览启动顺序（不会安装依赖、修改配置、迁移数据库或启动服务）"
+    if (-not $SkipInstall) {
+      Write-Host "pnpm $($installArguments -join ' ')"
+    }
+    Write-Host "pnpm infra:up"
+    Write-Host "pnpm auth:start"
+    Write-Host "同步 .env 中的本地 Supabase 地址与公钥"
+    Write-Host "pnpm db:deploy"
+    Write-Host "检查实际数据库结构与 Prisma schema 是否一致"
+    Write-Host "pnpm dev"
+    return
+  }
+
   Write-Step "检查运行环境"
   $node = Get-NativeCommand -Name "node.exe"
   $pnpm = Get-NativeCommand -Name "pnpm.cmd"
@@ -190,26 +233,25 @@ try {
     Write-Host "已从 .env.example 创建 .env。"
   }
 
-  if (-not $SkipInstall -and -not (Test-Path -LiteralPath (Join-Path $projectRoot "node_modules/.pnpm"))) {
-    Write-Step "安装项目依赖"
-    Invoke-Native $pnpm "install" "--frozen-lockfile"
+  if (-not $SkipInstall) {
+    Write-Step "检查并安装项目依赖（优先使用缓存）"
+    Invoke-Native -FilePath $pnpm -Arguments $installArguments
   }
+
+  # Installation is handled once above (or deliberately skipped by the user).
+  # Avoid pnpm 11 starting another install before every subsequent run/exec.
+  $env:npm_config_verify_deps_before_run = "false"
+  $pnpmVerifyChanged = $true
 
   Write-Step "启动 PostgreSQL、Redis 与 MinIO"
   Invoke-Native $pnpm "infra:up"
 
   Write-Step "启动本地 Supabase"
-  & $pnpm "auth:start" *> $null
-  if ($LASTEXITCODE -ne 0) {
-    throw "本地 Supabase 启动失败。可单独运行 pnpm auth:start 查看详细信息。"
-  }
+  Get-NativeOutput -FilePath $pnpm -Arguments @("auth:start") | Out-Null
   Write-Host "Supabase 已就绪。"
 
   Write-Step "同步本地认证配置"
-  $statusOutput = & $pnpm "exec" "supabase" "status" "-o" "env" 2>$null
-  if ($LASTEXITCODE -ne 0) {
-    throw "无法读取本地 Supabase 状态。"
-  }
+  $statusOutput = @(Get-NativeOutput -FilePath $pnpm -Arguments @("exec", "supabase", "status", "-o", "env"))
 
   $supabaseValues = ConvertFrom-EnvOutput -Lines $statusOutput
   $publishableKey = if ($supabaseValues.ContainsKey("PUBLISHABLE_KEY")) {
@@ -228,8 +270,14 @@ try {
   }
   Write-Host "已更新 .env 中的本地 Supabase 地址与公钥（密钥内容不会输出）。"
 
-  Write-Step "应用数据库迁移"
-  Invoke-Native $pnpm "db:migrate"
+  Write-Step "应用已保存的数据库迁移（保留现有数据）"
+  Invoke-Native $pnpm "db:deploy"
+
+  Write-Step "核对数据库结构"
+  Invoke-Native -FilePath $pnpm -Arguments @(
+    "--filter", "@fashion/db", "exec", "prisma", "migrate", "diff",
+    "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"
+  )
 
   $webUrl = "http://localhost:3000"
   $apiHealthUrl = "http://localhost:3001/health/ready"
@@ -264,7 +312,7 @@ try {
       do {
         try {
           $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
-          if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+          if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 300) {
             Start-Process $Url
             return
           }
@@ -285,6 +333,9 @@ try {
   Write-Host "启动失败：$($_.Exception.Message)" -ForegroundColor Red
   exit 1
 } finally {
+  if ($pnpmVerifyChanged) {
+    [Environment]::SetEnvironmentVariable("npm_config_verify_deps_before_run", $previousPnpmVerify, "Process")
+  }
   if (Get-Variable -Name browserJob -ErrorAction SilentlyContinue) {
     Remove-Job -Job $browserJob -Force -ErrorAction SilentlyContinue
   }

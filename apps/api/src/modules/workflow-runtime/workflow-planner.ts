@@ -209,14 +209,14 @@ export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, exp
   if (plan.tool !== "analyze_brief" && at("goal").length) throw new Error("只有需求分析接受goal输入");
   if (at("constraint").length > 1) throw new Error("请明确本次使用的一条设计约束");
   if (["generate_design", "evaluate_design"].includes(plan.tool) && at("constraint").length !== 1) throw new Error("生成或评估需要一条设计约束");
-  if (plan.tool === "edit_design" && at("source").length !== 1) throw new Error("修改需要唯一的实际候选母图");
+  if (plan.tool === "edit_design" && at("source").length !== 1) throw new Error("修改需要唯一的实际母图，可使用候选图或上传的参考图片");
   if (plan.tool !== "edit_design" && at("source").length) throw new Error("只有修改接受source母图");
   if (plan.tool === "evaluate_design" && (at("candidate").length < 1 || at("candidate").length > 4)) throw new Error("评估需要一至四个候选");
   if (plan.tool !== "evaluate_design" && at("candidate").length) throw new Error("candidate槽位仅用于评估");
   if (plan.tool === "evaluate_design" && at("reference").length) throw new Error("评估只能连接候选与约束");
   const selectedCandidates = [...new Set(explicitNodeIds)].filter((value) => graph.nodes.some((node) => node.id === value && node.type === "candidate"));
   const sourceId = at("source")[0]?.nodeId;
-  if (plan.tool === "edit_design" && selectedCandidates.length && !selectedCandidates.includes(sourceId ?? "")) throw new Error("修改母图必须与明确引用的候选一致");
+  if (plan.tool === "edit_design" && selectedCandidates.length && !selectedCandidates.includes(sourceId ?? "") && !explicitNodeIds.includes(sourceId ?? "")) throw new Error("修改母图必须与明确引用的图片一致");
   if (plan.tool === "edit_design" && sourceId && !at("constraint").length && upstreamConstraintIds(graph, sourceId).length) throw new Error("修改必须同时保留母图分支的设计约束");
   if (plan.tool === "evaluate_design" && selectedCandidates.length && (at("candidate").length !== selectedCandidates.length || selectedCandidates.some((id) => !at("candidate").some((input) => input.nodeId === id)))) throw new Error("评估候选必须与明确引用的候选一致");
   const evaluated = [...at("source"), ...at("candidate")];

@@ -331,7 +331,7 @@ export class WorkflowRuntimeService {
     if (node.type === "analyze_brief" && !graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === "goal"))
       throw new BadRequestException("需求分析需要设计需求输入");
     if (node.type === "edit_design" && graph.edges.filter((edge) => edge.targetNodeId === node.id && edge.targetPort === "source").length !== 1)
-      throw new BadRequestException("局部修改必须连接一个实际候选来源");
+      throw new BadRequestException("局部修改必须连接一个原图，请将候选图或上传的参考图片连接为原图");
     const toolKey = workflowToolKeySchema.parse(node.type);
     const legacyParams = object(object(node.payload).params);
     const { maskImageUrl: legacyMask, ...safeParams } = legacyParams;
@@ -823,8 +823,16 @@ export class WorkflowRuntimeService {
     for (const setting of referenceSettings) if (!referenceIds.has(text(setting.nodeId)))
       throw new BadRequestException("参考配置只能指向明确连接到 reference 输入的素材");
     const sourceId = graph.edges.find((edge) => edge.targetNodeId === node.id && edge.targetPort === "source")?.sourceNodeId;
-    const source = sources.find((item) => item.id === sourceId && item.type === "candidate");
-    const sourceAsset = source ? await this.ownedAsset(userId, projectId, text(object(source.payload).assetId)) : null;
+    const source = sources.find((item) => item.id === sourceId);
+    let sourceAsset = null;
+    if (source?.type === "candidate") {
+      sourceAsset = await this.ownedAsset(userId, projectId, text(object(source.payload).assetId));
+    } else if (source?.type === "reference_image" && node.type === "edit_design") {
+      const file = await this.referenceFile(userId, source);
+      if (!file || !file.mimeType.startsWith("image/")) throw new BadRequestException("原图必须引用已就绪的上传图片");
+      const imported = await this.assets.importFile(userId, projectId, file.id);
+      sourceAsset = await this.ownedAsset(userId, projectId, imported.id);
+    }
     const references: Array<{ order: number; role: "style_ref" | "fabric_texture" | "palette_ref" | "silhouette_ref" | "detail_ref"; url: string; weight: number }> = [];
     for (const item of sources) {
       const payload = object(item.payload);

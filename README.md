@@ -24,16 +24,40 @@ packages/
 
 ## 本地启动
 
-Windows 可直接双击仓库根目录的 `start-platform.cmd`。脚本会检查 Node.js、pnpm 与
-Docker，必要时启动 Docker Desktop、创建 `.env`、安装依赖，并依次启动基础设施、
-Supabase、数据库迁移、Web、API 与 Worker；页面就绪后会自动打开浏览器。
+Windows 在仓库根目录运行以下命令，即可依次完成依赖安装、基础设施启动、本地认证
+启动、数据库迁移及开发服务启动：
+
+```bash
+pnpm local:start
+```
+
+也可以直接双击仓库根目录的 `start-platform.cmd`。脚本会检查 Node.js、pnpm 与
+Docker，必要时启动 Docker Desktop、从 `.env.example` 创建 `.env`，并同步本地
+Supabase 地址与公钥；页面就绪后会自动打开浏览器。
+
+默认每次都检查安装依赖，使用冻结锁文件、优先缓存及较低下载并发；网络不可用且
+缓存不足时会明确失败。任一步失败即停止，保留失败原因；`pnpm dev` 在当前窗口运行，
+按 `Ctrl+C` 停止开发服务后，Docker 与 Supabase 数据服务仍会保留。
+一键启动使用 `pnpm db:deploy` 应用已保存的迁移，再只读核对实际数据库结构与 schema；
+结构不一致时停止，不会自动重置数据库。修改 Prisma schema、需要创建开发迁移时，
+再单独运行 `pnpm db:migrate`。已应用迁移的旧校验差异不会由启动脚本改写。
+启动过程中的原生命令按退出码判断成败，兼容 Windows PowerShell 5.1 与 PowerShell 7，
+不会把 Docker 写到 stderr 的普通警告误判为失败。依赖安装阶段之后，仅在本次启动
+进程内关闭 pnpm 的重复自动安装检查，结束时恢复原值，不修改全局配置或供应链策略。
 
 也可以在终端中使用可选参数启动：
 
 ```powershell
 .\start-platform.cmd -NoBrowser
 .\start-platform.cmd -SkipInstall
+.\start-platform.cmd -DryRun
 ```
+
+上述参数也可传给 `pnpm local:start`，例如 `pnpm local:start -SkipInstall -NoBrowser`。
+`-SkipInstall` 仅跳过本脚本的安装步骤，适合依赖已就绪时使用；`-DryRun` 仅预览顺序，
+不会修改 `.env`、运行迁移或启动服务。已有 `.env` 中的模型令牌等配置会保留。
+pnpm 自身可能在执行脚本前自动检查安装依赖，因此仅预览时建议直接运行
+`.\start-platform.cmd -DryRun`，避免在进入脚本前触发额外联网检查。
 
 手动启动流程如下：
 
@@ -42,7 +66,7 @@ cp .env.example .env
 pnpm install
 pnpm infra:up
 pnpm auth:start
-pnpm db:migrate
+pnpm db:deploy
 pnpm dev
 ```
 
@@ -212,6 +236,10 @@ node --env-file=.env.example --env-file-if-exists=.env apps/api/node_modules/tsx
 画布 → 主动执行需求分析 → 查看设计约束 → 生成候选 → 连接约束与候选进行评估 →
 `@候选` 提出修改并确认新分支。建议本身不会调用图片生成。已执行输入与结果保持历史，
 调整需要创建新节点或分支；拖动只更新布局，不使 Agent 建议失效。
+
+上传的参考图片也可以直接连接到“局部修改”作为原图，无需先生成候选。
+同一修改节点已有原图时，新连接的上传图片默认作为参考素材；点击连线可切换
+“用作原图”或“用作参考素材”。原图始终只能有一张；修改结果生成新候选，保留上传来源与版本关系。
 
 候选详情保留大图、生成变体、蒙版局部重绘、版本恢复、单图导出和系列入口。变体、
 局部重绘与恢复结果会回到工作流成为新分支；系列关联保存在候选节点中。普通聊天、

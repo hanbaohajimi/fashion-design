@@ -12,7 +12,8 @@ import {
   type RefObject,
 } from "react";
 import { useEditor, useValue, type Editor } from "tldraw";
-import type { WorkflowGraph } from "./workflow-api";
+import { workflowInputPorts } from "@fashion/shared";
+import type { WorkflowGraph, WorkflowInputPort } from "./workflow-api";
 import { planInputEdit, type InputEdit } from "./workflow-editing";
 import { nodeSize } from "./workflow-graph";
 import { curvePath } from "./workflow-curve";
@@ -40,6 +41,7 @@ interface InteractionContext {
   selectEdge: (edgeId: string) => void;
   reconnect: (edgeId: string, event?: ReactPointerEvent) => void;
   disconnect: () => void;
+  changePort: (port: WorkflowInputPort) => void;
   status: string;
 }
 const Context = createContext<InteractionContext | null>(null);
@@ -318,6 +320,10 @@ export function WorkflowInteractionProvider({
       });
     },
     disconnect,
+    changePort: (port) => {
+      const edge = graph.edges.find((item) => item.id === selectedEdgeId);
+      if (edge) void apply({ targetId: edge.targetNodeId, sourceId: edge.sourceNodeId, edgeId: edge.id, port });
+    },
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
@@ -373,6 +379,10 @@ export function WorkflowConnectionOverlay({ graph }: { graph: WorkflowGraph }) {
       "asset" &&
     graph.nodes.find((node) => node.id === edge.targetNodeId)?.type !==
       "restore_version";
+  const source = graph.nodes.find((node) => node.id === edge?.sourceNodeId);
+  const target = graph.nodes.find((node) => node.id === edge?.targetNodeId);
+  const alternatePort = edge?.targetPort === "source" ? "reference" : edge?.targetPort === "reference" ? "source" : null;
+  const canChangePort = editable && source && target?.type === "edit_design" && alternatePort && workflowInputPorts(source.type, target.type).includes(alternatePort);
   return (
     <>
       {preview ? (
@@ -396,6 +406,7 @@ export function WorkflowConnectionOverlay({ graph }: { graph: WorkflowGraph }) {
           <span>{editable ? labels[edge.targetPort] : "结果来源"}</span>
           {editable ? (
             <>
+              {canChangePort && alternatePort ? <button onClick={() => interaction.changePort(alternatePort)} type="button">用作{labels[alternatePort]}</button> : null}
               <button
                 onClick={() => interaction.reconnect(edge.id)}
                 type="button"

@@ -32,6 +32,8 @@ export function workflowInputPorts(
   )
     return [];
   if (assetType === "constraint") return ["constraint"];
+  if (toolType === "edit_design" && assetType === "reference_image")
+    return ["source", "reference"];
   if (assetType === "candidate")
     return toolType === "evaluate_design"
       ? ["candidate", "reference"]

@@ -67,6 +67,23 @@ function graph(
 }
 
 describe("manual workflow inputs", () => {
+  it("uses uploaded images as the mother by default and still allows an explicit reference", () => {
+    const base = graph();
+    const original: WorkflowGraph = { ...base, nodes: base.nodes.map((node) => node.id === "b" ? { ...node, type: "reference_image" } : node) };
+    const replacement = planInputEdit(original, { targetId: "edit", sourceId: "b", edgeId: "input" });
+    expect(replacement.operations).toContainEqual(expect.objectContaining({
+      type: "add_edge", edge: expect.objectContaining({ sourceNodeId: "b", targetPort: "source" }),
+    }));
+    const reference = planInputEdit(original, { targetId: "edit", sourceId: "b", port: "reference" });
+    expect(reference.operations).toContainEqual(expect.objectContaining({
+      type: "add_edge", edge: expect.objectContaining({ sourceNodeId: "b", targetPort: "reference" }),
+    }));
+    expect(planInputEdit(original, { targetId: "edit", sourceId: "b" }).operations).toContainEqual(expect.objectContaining({
+      type: "add_edge", edge: expect.objectContaining({ targetPort: "reference" }),
+    }));
+    expect(() => planInputEdit(original, { targetId: "edit", sourceId: "b", port: "source" })).toThrow("原图");
+    expect(workflowInputPorts("reference_image", "edit_design")).toEqual(["source", "reference"]);
+  });
   it("replaces the source atomically for an unexecuted tool", () => {
     const edit = planInputEdit(graph(), {
       targetId: "edit",
@@ -82,6 +99,30 @@ describe("manual workflow inputs", () => {
       type: "add_edge",
       edge: { sourceNodeId: "b", targetNodeId: "edit", targetPort: "source" },
     });
+  });
+  it("promotes an existing reference to the mother and removes its old reference settings", () => {
+    const base = graph("ready", { prompt: "收窄袖口", referenceInputs: [{ nodeId: "b", role: "detail_ref", weight: 0.5 }] });
+    const original: WorkflowGraph = {
+      ...base,
+      nodes: base.nodes.map((node) => node.id === "b" ? { ...node, type: "reference_image" } : node),
+      edges: [{ id: "reference", sourceNodeId: "b", targetNodeId: "edit", sourcePort: "out", targetPort: "reference" }],
+    };
+    const promoted = planInputEdit(original, { targetId: "edit", sourceId: "b", edgeId: "reference", port: "source" });
+    expect(promoted.operations).toContainEqual(expect.objectContaining({
+      type: "update_node", payload: expect.objectContaining({ params: { prompt: "收窄袖口", referenceInputs: [] } }),
+    }));
+    expect(promoted.operations).toContainEqual(expect.objectContaining({
+      type: "add_edge", edge: expect.objectContaining({ sourceNodeId: "b", targetPort: "source" }),
+    }));
+  });
+  it("clears the saved mask and palette when an upload replaces the mother", () => {
+    const base = graph("ready", { prompt: "改袖口", taskType: "inpaint", mask: { fileAssetId: "mask" }, palette: [{ hex: "#112233", name: "藏蓝" }] });
+    const original: WorkflowGraph = { ...base, nodes: base.nodes.map((node) => node.id === "b" ? { ...node, type: "reference_image" } : node) };
+    const replaced = planInputEdit(original, { targetId: "edit", sourceId: "b", edgeId: "input" });
+    expect(replaced.maskCleared).toBe(true);
+    expect(replaced.operations).toContainEqual(expect.objectContaining({
+      type: "update_node", payload: expect.objectContaining({ params: { prompt: "改袖口", taskType: "i2i" } }),
+    }));
   });
   it.each(["completed", "running", "pending", "failed"])(
     "branches %s tools without copying results or runtime state",
@@ -154,7 +195,7 @@ describe("manual workflow inputs", () => {
     expect(edit.operations[0]).toMatchObject({
       type: "add_node",
       node: {
-        payload: { params: { taskType: "i2i", prompt: "换领口", palette: [] } },
+        payload: { params: { taskType: "i2i", prompt: "换领口" } },
       },
     });
     expect(JSON.stringify(edit.operations)).not.toContain("old-mask");

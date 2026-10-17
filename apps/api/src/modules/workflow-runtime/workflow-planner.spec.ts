@@ -27,6 +27,20 @@ const edit: WorkflowToolPlan = { tool: "edit_design", title: "收窄袖子", pro
 const action: WorkflowAction = { type: "create_tool", toolKey: "edit_design", toolVersion: "1", targetNodeId: null, targetNodeVersionId: null, title: edit.title, parameters: { prompt: edit.prompt }, inputs: edit.inputs, newObjective: null, rationale: edit.rationale, preserve: ["立领", "藏蓝色"], evidenceRefs: ["a"] };
 
 describe("Fig8 tool contract and action protocol", () => {
+  it("plans edits directly from uploaded images with a single explicit mother", () => {
+    const current = { ...graph, nodes: [...graph.nodes,
+      { id: "upload", kind: "asset", type: "reference_image", status: "ready", title: "上传服装", x: 0, y: 0, payload: { fileAssetId: "file" } },
+    ] } as Graph;
+    const imageEdit = { ...edit, inputs: [{ nodeId: "upload", port: "source" as const }] };
+    expect(compileWorkflowProposal(current, imageEdit, ["upload"])).toContainEqual(expect.objectContaining({
+      type: "add_edge", edge: expect.objectContaining({ sourceNodeId: "upload", targetPort: "source" }),
+    }));
+    expect(compileWorkflowAction(current, { ...action, inputs: imageEdit.inputs }, ["upload"])).toContainEqual(expect.objectContaining({ type: "add_node" }));
+    expect(() => compileWorkflowProposal(current, { ...imageEdit, inputs: [...imageEdit.inputs, { nodeId: "a", port: "reference" }] }, ["upload", "a"])).not.toThrow();
+    expect(() => compileWorkflowProposal(current, { ...edit, inputs: [...edit.inputs, { nodeId: "upload", port: "reference" }] }, ["upload"])).not.toThrow();
+    expect(getWorkflowToolCatalog().find((tool) => tool.key === "edit_design")?.inputSlots.find((slot) => slot.port === "source")?.assetTypes).toContain("reference_image");
+    expect(() => compileWorkflowProposal(current, { ...imageEdit, inputs: [...imageEdit.inputs, { nodeId: "a", port: "source" }] }, [])).toThrow("原图");
+  });
   it("provides one serializable tool catalog with parameter defaults and honest reference semantics", () => {
     const tools = getWorkflowToolCatalog();
     expect(tools.map((tool) => tool.key)).toEqual(["analyze_brief", "generate_design", "evaluate_design", "edit_design"]);

@@ -652,6 +652,44 @@ async function selectWire(page: Page, id: string) {
   await expect(page.getByLabel("连接操作")).toBeVisible();
 }
 
+test("上传图片直接作为修改原图，已有参考连线可切换用途", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  mocked.getGraph().nodes = [
+    { ...node("upload", "asset", "reference_image", "上传服装", 80, 100, { fileAssetId: "uploaded-file", role: "style_ref", roleSource: "manual" }), status: "ready" },
+    { ...node("detail", "asset", "reference_image", "袖口参考", 80, 470, { fileAssetId: "detail-file", role: "detail_ref", roleSource: "manual" }), status: "ready" },
+    { ...node("edit", "tool", "edit_design", "修改上传服装", 480, 100, { toolKey: "edit_design", toolVersion: "1", params: { prompt: "只收窄袖口" } }), status: "ready" },
+  ];
+  mocked.getGraph().edges = [];
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await port(page, "upload", "output").click();
+  await port(page, "edit", "input").click();
+  await expect.poll(() => mocked.getGraph().edges.find((item) => item.sourceNodeId === "upload")?.targetPort).toBe("source");
+  const mother = mocked.getGraph().edges[0];
+  if (!mother) throw new Error("原图连线未保存");
+  await selectWire(page, mother.id);
+  await page.getByRole("button", { name: "用作参考素材", exact: true }).click();
+  await expect.poll(() => mocked.getGraph().edges[0]?.targetPort).toBe("reference");
+  const reference = mocked.getGraph().edges[0];
+  if (!reference) throw new Error("参考连线未保存");
+  await selectWire(page, reference.id);
+  await page.getByRole("button", { name: "用作原图", exact: true }).click();
+  await expect.poll(() => mocked.getGraph().edges[0]?.targetPort).toBe("source");
+  await port(page, "detail", "output").click();
+  await port(page, "edit", "input").click();
+  await expect.poll(() => mocked.getGraph().edges.find((item) => item.sourceNodeId === "detail")?.targetPort).toBe("reference");
+  await page.reload();
+  await expect(page.locator("[data-workflow-edge]")).toHaveCount(2);
+  expect(mocked.getGraph().edges.filter((item) => item.targetPort === "source")).toHaveLength(1);
+  expect(mocked.getExecuteCount()).toBe(0);
+  await page.locator('[data-type="edit_design"]').dblclick();
+  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  await details.getByText("来源与路径", { exact: true }).click();
+  await expect(details.getByText("原图 · 上传服装", { exact: true })).toBeVisible();
+  await details.getByRole("button", { name: "确认并执行", exact: true }).click();
+  await expect.poll(() => mocked.getExecuteCount()).toBe(1);
+});
+
 test("直接拖线、点击连线、键盘连接与断开可刷新恢复", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   const evaluate = mocked.getGraph().nodes.find((item) => item.id === "evaluate");

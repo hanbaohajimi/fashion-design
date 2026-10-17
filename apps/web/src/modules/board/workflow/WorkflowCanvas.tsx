@@ -139,7 +139,7 @@ const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
   constraint: "设计约束",
   goal: "设计目标",
   reference: "参考素材",
-  source: "来源",
+  source: "原图",
 };
 
 /* 节点状态面向设计师表达，不暴露 API 的 ready / proposed 字面量 */
@@ -804,7 +804,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             <button aria-expanded={menuTab === "assets"} onClick={() => setMenuTab(menuTab === "assets" ? null : "assets")} type="button">＋ 添加素材</button>
             <span className={styles.menuDivider} />
             <button aria-expanded={menuTab === "tools"} onClick={() => setMenuTab(menuTab === "tools" ? null : "tools")} type="button">＋ 添加工具</button>
-            <span className={styles.menuHint}>拖动节点 · 选择节点查看路径</span>
             {menuTab ? (
               <div className={styles.addPopover}>
                 <header><strong>{menuTab === "assets" ? "添加设计素材" : "添加设计工具"}</strong><button aria-label="关闭菜单" onClick={() => setMenuTab(null)} type="button">×</button></header>
@@ -1090,6 +1089,7 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEns
   return <section className={styles.detailSection}>
     <h4>工具设置</h4>
     <p>{canEdit ? "确认执行前可调整参数，保存后会记录到设计路径。" : "以下参数为该节点记录的设置；已运行节点不可修改。"}</p>
+    {node.type === "edit_design" ? <p>将要修改的候选图或上传图片连接为「原图」；其他图片可连接为「参考素材」。</p> : null}
     <div className={styles.toolForm}>
       <label>执行指令<textarea aria-label="执行指令" disabled={!canEdit || saving} maxLength={4000} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={3} value={draft.prompt} /></label>
       {imageTool ? <details className={styles.advancedSettings}><summary>高级设置</summary>

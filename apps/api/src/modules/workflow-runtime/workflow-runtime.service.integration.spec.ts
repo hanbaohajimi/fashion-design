@@ -302,6 +302,118 @@ describe("WorkflowRuntimeService integration", () => {
     }
   });
 
+  it.each(["i2i", "inpaint"] as const)("edits an uploaded reference directly with %s and preserves its imported lineage", async (taskType) => {
+    const user = await prisma.user.create({
+      data: { email: `workflow-upload-edit-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Upload edits", projects: { create: { name: "Direct editing" } } } } },
+      include: { ownedWorkspaces: { include: { projects: true } } },
+    });
+    const project = user.ownedWorkspaces[0]?.projects[0];
+    if (!project) throw new Error("test project missing");
+    const file = await prisma.fileAsset.create({ data: {
+      ownerId: user.id, originalName: "garment.png", mimeType: "image/png", sizeBytes: 12,
+      sha256: crypto.randomUUID(), objectKey: `workflow-upload-edit/${crypto.randomUUID()}.png`, status: "READY", width: 768, height: 1024,
+    } });
+    const mask = await prisma.fileAsset.create({ data: {
+      ownerId: user.id, originalName: "mask.png", mimeType: "image/png", sizeBytes: 12,
+      sha256: crypto.randomUUID(), objectKey: `workflow-upload-mask/${crypto.randomUUID()}.png`, status: "READY",
+    } });
+    const imageId = crypto.randomUUID();
+    const referenceId = crypto.randomUUID();
+    const toolIds = [crypto.randomUUID(), crypto.randomUUID()] as const;
+    const createFromAgent = vi.fn(async (_userId: string, request: { projectId: string; taskType: string; parentAssetId?: string }) => {
+      const task = await prisma.generationTask.create({ data: {
+        userId: user.id, projectId: request.projectId, taskType: request.taskType, parentAssetId: request.parentAssetId ?? null,
+        input: { prompt: "只收窄袖口" }, status: "QUEUED",
+      } });
+      return { taskId: task.id };
+    });
+    const generation = { createFromAgent, get: vi.fn(async (_userId: string, taskId: string) => {
+      const task = await prisma.generationTask.findUniqueOrThrow({ where: { id: taskId } });
+      return { id: task.id, status: task.status.toLowerCase(), output: task.output, error: null };
+    }) };
+    const storage = { createDownloadUrl: vi.fn(async (key: string) => `https://storage.example.test/${key}`) };
+    const assets = new DesignAssetsService(prisma, storage as never);
+    const runtime = new WorkflowRuntimeService(prisma, workflows, generation as never, {} as never, storage as never, assets);
+    try {
+      await workflows.patch(user.id, project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0, operations: [
+        { type: "add_node", node: { id: imageId, kind: "asset", type: "reference_image", title: "上传服装", payload: { fileAssetId: file.id }, x: 0, y: 0 } },
+        { type: "add_node", node: { id: referenceId, kind: "asset", type: "reference_image", title: "袖口参考", payload: { fileAssetId: mask.id, role: "detail_ref" }, x: 0, y: 350 } },
+        ...toolIds.flatMap((id, index) => [
+          { type: "add_node" as const, node: { id, kind: "tool" as const, type: "edit_design" as const, title: "直接修改上传图片", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "只收窄袖口", taskType, ...(taskType === "inpaint" ? { mask: { fileAssetId: mask.id } } : {}) } }, x: 400, y: index * 350 } },
+          { type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId: imageId, targetNodeId: id, sourcePort: "out" as const, targetPort: "source" as const } },
+          ...(taskType === "i2i" ? [{ type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId: referenceId, targetNodeId: id, sourcePort: "out" as const, targetPort: "reference" as const } }] : []),
+        ]),
+      ] });
+      for (const toolId of toolIds) {
+        const mutationId = crypto.randomUUID();
+        await runtime.execute(user.id, project.id, toolId, { mutationId });
+        await runtime.execute(user.id, project.id, toolId, { mutationId });
+      }
+      const imported = await prisma.designAsset.findUniqueOrThrow({ where: { projectId_sourceFileId: { projectId: project.id, sourceFileId: file.id } }, include: { designStep: true } });
+      expect(imported).toMatchObject({ operation: "IMPORTED", rootAssetId: imported.id });
+      expect(imported.designStep?.inputSnapshot).toMatchObject({ sources: [expect.objectContaining({ fileAssetId: file.id, role: "import_source" })] });
+      expect(await prisma.designAsset.count({ where: { projectId: project.id, sourceFileId: file.id } })).toBe(1);
+      expect(createFromAgent).toHaveBeenCalledTimes(2);
+      for (const [, request] of createFromAgent.mock.calls) {
+        expect(request).toMatchObject({ taskType, parentAssetId: imported.id, referenceImageUrl: `s3://${file.objectKey}` });
+        if (taskType === "inpaint") expect(request).toHaveProperty("maskImageUrl", `https://storage.example.test/${mask.objectKey}`);
+        else expect(request).toHaveProperty("referenceImages", [{ order: 0, role: "detail_ref", url: `https://storage.example.test/${mask.objectKey}`, weight: 0.7 }]);
+      }
+      const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: toolIds[0] } });
+      expect(attempt.requestSnapshot).toMatchObject({ request: { parentAssetId: imported.id }, inputSnapshot: expect.arrayContaining([
+        expect.objectContaining({ id: imageId, type: "reference_image", payload: { fileAssetId: file.id } }),
+      ]) });
+      if (!attempt.generationTaskId) throw new Error("generation task missing");
+      const output = await prisma.designAsset.create({ data: {
+        projectId: project.id, generationTaskId: attempt.generationTaskId, parentAssetId: imported.id, rootAssetId: imported.id,
+        operation: taskType === "inpaint" ? "INPAINT" : "VARIATION", url: "s3://workflow-upload-edit/output.png", width: 768, height: 1024,
+      } });
+      await prisma.generationTask.update({ where: { id: attempt.generationTaskId }, data: { status: "SUCCEEDED", output: { images: [{ assetId: output.id }] } } });
+      const synced = await runtime.sync(user.id, project.id);
+      expect(synced.nodes).toContainEqual(expect.objectContaining({ type: "candidate", payload: expect.objectContaining({ assetId: output.id }) }));
+      const path = await assets.path(user.id, output.id);
+      expect(path.steps.flatMap((step) => step.sources)).toContainEqual(expect.objectContaining({ fileAssetId: file.id, role: "source" }));
+      expect((await assets.versions(user.id, output.id, undefined, 20)).items.map((asset) => asset.id)).toEqual(expect.arrayContaining([imported.id, output.id]));
+      expect((await workflows.get(user.id, project.id)).nodes.find((node) => node.id === imageId)).toMatchObject({ type: "reference_image", payload: { fileAssetId: file.id } });
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
+
+  it.each(["missing", "processing", "not-image", "foreign"])("rejects an uploaded mother that is %s before creating a task", async (invalid) => {
+    const user = await prisma.user.create({
+      data: { email: `workflow-invalid-upload-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Invalid uploads", projects: { create: { name: "Upload checks" } } } } },
+      include: { ownedWorkspaces: { include: { projects: true } } },
+    });
+    const project = user.ownedWorkspaces[0]?.projects[0];
+    if (!project) throw new Error("test project missing");
+    const foreign = invalid === "foreign" ? await prisma.user.create({ data: { email: `workflow-other-${crypto.randomUUID()}@example.com` } }) : null;
+    const file = await prisma.fileAsset.create({ data: {
+      ownerId: user.id, originalName: "garment.png", mimeType: "image/png", sizeBytes: 12,
+      sha256: crypto.randomUUID(), objectKey: `workflow-invalid-upload/${crypto.randomUUID()}.png`, status: "READY",
+    } });
+    const imageId = crypto.randomUUID(), toolId = crypto.randomUUID();
+    const createFromAgent = vi.fn();
+    const runtime = new WorkflowRuntimeService(prisma, workflows, { createFromAgent } as never, {} as never, {} as never, new DesignAssetsService(prisma, {} as never));
+    try {
+      await workflows.patch(user.id, project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0, operations: [
+        { type: "add_node", node: { id: imageId, kind: "asset", type: "reference_image", title: "上传服装", payload: { fileAssetId: file.id }, x: 0, y: 0 } },
+        { type: "add_node", node: { id: toolId, kind: "tool", type: "edit_design", title: "修改上传图片", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "收窄袖口" } }, x: 400, y: 0 } },
+        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: imageId, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
+      ] });
+      if (invalid === "missing") await prisma.fileAsset.delete({ where: { id: file.id } });
+      else await prisma.fileAsset.update({ where: { id: file.id }, data: {
+        ownerId: foreign?.id ?? user.id, status: invalid === "processing" ? "PROCESSING" : "READY",
+        mimeType: invalid === "not-image" ? "text/plain" : "image/png",
+      } });
+      await expect(runtime.execute(user.id, project.id, toolId, { mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: 400 });
+      expect(createFromAgent).not.toHaveBeenCalled();
+      expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);
+      expect(await prisma.designAsset.count({ where: { projectId: project.id } })).toBe(0);
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
+      if (foreign) await prisma.user.delete({ where: { id: foreign.id } });
+    }
+  });
+
   it("uses selected image roles and library summaries in the actual generation request", async () => {
     const user = await prisma.user.create({
       data: {

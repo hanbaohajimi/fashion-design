@@ -292,12 +292,13 @@
   bottom: 26px;
   left: 50%;
   display: flex;
-  min-height: 54px;
+  width: max-content;
+  min-height: 50px;
   align-items: center;
   gap: 4px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 5px 8px;
+  padding: 4px 6px;
   background: var(--color-paper);
   box-shadow: var(--shadow-card);
   transform: translateX(-50%);
@@ -307,7 +308,7 @@
 .bottomMenu > button {
   border: 0;
   border-radius: var(--radius-md);
-  padding: 11px 15px;
+  padding: 10px 14px;
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
@@ -318,19 +319,6 @@
 .bottomMenu > button:hover,
 .bottomMenu > button[aria-expanded="true"] {
   background: var(--color-surface);
-}
-
-/* menuHint 只在悬停时出现，常态下不占视觉空间 */
-.menuHint {
-  padding: 0 8px;
-  color: var(--color-ink-tertiary);
-  font-size: 10px;
-  opacity: 0;
-  transition: opacity var(--duration-fast, 140ms);
-}
-
-.bottomMenu:hover .menuHint {
-  opacity: 1;
 }
 
 .addPopover {
@@ -1259,10 +1247,6 @@
 
   .workspace {
     grid-template-columns: minmax(0, 1fr) 340px;
-  }
-
-  .menuHint {
-    display: none;
   }
 }
 

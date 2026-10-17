@@ -76,4 +76,11 @@ describe("workflow graph", () => {
     expect(availableInputPorts(generate, brief)).toEqual([]);
     expect(availableInputPorts(brief, candidate)).toEqual([]);
   });
+
+  it("connects an uploaded reference directly as the edit mother image", () => {
+    const image = node("image", "asset", "reference_image");
+    expect(availableInputPorts(image, node("edit", "tool", "edit_design"))).toEqual(["source"]);
+    expect(availableInputPorts(image, node("generate", "tool", "generate_design"))).toEqual(["reference"]);
+    expect(availableInputPorts(image, node("restore", "tool", "restore_version"))).toEqual(["reference"]);
+  });
 });

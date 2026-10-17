@@ -72,7 +72,11 @@ export function planInputEdit(
   const ports = source ? workflowInputPorts(source.type, target.type) : [];
   const port =
     edit.port ??
-    (old && ports.includes(old.targetPort) ? old.targetPort : ports[0]);
+    (old && ports.includes(old.targetPort)
+      ? old.targetPort
+      : !old && source?.type === "reference_image" && target.type === "edit_design" && graph.edges.some((edge) => edge.targetNodeId === target.id && edge.targetPort === "source")
+        ? "reference"
+        : ports[0]);
   if (source && (!port || !ports.includes(port)))
     throw new Error("这类素材不能作为该工具的输入");
   const branched = target.status !== "ready";
@@ -109,15 +113,24 @@ export function planInputEdit(
     !Array.isArray(originalParams)
       ? { ...originalParams }
       : {};
-  const changesMother =
-    (old?.targetPort === "source" || port === "source") &&
-    old?.sourceNodeId !== source?.id;
+  const nextInputs = [...inputs, ...(added ? [added] : [])];
+  const changesMother = graph.edges.find((edge) => edge.targetNodeId === target.id && edge.targetPort === "source")?.sourceNodeId !==
+    nextInputs.find((edge) => edge.targetPort === "source")?.sourceNodeId;
   const maskCleared = changesMother && params.taskType === "inpaint";
   if (maskCleared) {
+    delete params.mask;
+    delete params.palette;
     delete params.maskImageUrl;
     delete params.referenceImageUrl;
     delete params.parentAssetId;
     params.taskType = "i2i";
+  }
+  const referenceIds = new Set(nextInputs.filter((edge) => edge.targetPort === "reference").map((edge) => edge.sourceNodeId));
+  let referencesChanged = false;
+  if (Array.isArray(params.referenceInputs)) {
+    const references = params.referenceInputs.filter((value: unknown) => value && typeof value === "object" && "nodeId" in value && referenceIds.has(String(value.nodeId)));
+    referencesChanged = references.length !== params.referenceInputs.length;
+    params.referenceInputs = references;
   }
   const operations: WorkflowOperation[] = [];
   if (branched) {
@@ -143,7 +156,7 @@ export function planInputEdit(
       });
   } else {
     if (old) operations.push({ type: "remove_edge", edgeId: old.id });
-    if (maskCleared)
+    if (maskCleared || referencesChanged)
       operations.push({
         type: "update_node",
         nodeId: target.id,
