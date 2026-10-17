@@ -3,6 +3,8 @@ import "./instrument";
 import {
   createAiRuntimeFromEnv,
   createAmuxClaudeClientFromEnv,
+  amuxClaudeClientConfigFromEnv,
+  visualSummaryJobId,
 } from "@fashion/ai";
 import { BillingService } from "@fashion/billing";
 import { prisma } from "@fashion/db";
@@ -13,11 +15,15 @@ import {
   PLATFORM_NAME,
   THUMBNAIL_QUEUE_NAME,
   VLM_INFERENCE_QUEUE_NAME,
+  VISUAL_SUMMARY_QUEUE_NAME,
+  VISUAL_SUMMARY_SCHEMA_VERSION,
   type CollectionSimilarityJobData,
   type ExportJobData,
   type GenerationJobData,
   type ThumbnailJobData,
   type VlmInferenceJobData,
+  type VisualSummaryJobData,
+  type VisualSummarySource,
 } from "@fashion/shared";
 import { Queue, Worker } from "bullmq";
 
@@ -34,6 +40,7 @@ import {
   markExportFailed,
 } from "./processors/export.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
+import { createVisualSummaryProcessor } from "./processors/visual-summary.processor";
 import {
   AmuxTrendLlmService,
   AnthropicTrendLlmService,
@@ -84,9 +91,26 @@ const processExport = createExportProcessor({
   database: prisma,
   storage,
 });
+const visualSummaryQueue = new Queue<VisualSummaryJobData>(VISUAL_SUMMARY_QUEUE_NAME, {
+  connection: redisConnection(),
+});
+const visualSummaryJobs = {
+  async enqueue(source: VisualSummarySource) {
+    const data: VisualSummaryJobData = { source, model: amuxClaudeClientConfigFromEnv().model,
+      schemaVersion: VISUAL_SUMMARY_SCHEMA_VERSION };
+    await visualSummaryQueue.add("describe", data, {
+      attempts: 3, backoff: { type: "exponential", delay: 2_000 },
+      jobId: visualSummaryJobId(data),
+      removeOnComplete: { age: 7 * 24 * 60 * 60 },
+      removeOnFail: { age: 30 * 24 * 60 * 60 },
+    });
+  },
+};
+const processVisualSummary = createVisualSummaryProcessor({ database: prisma, storage, client: amuxClaude });
 const processThumbnail = createThumbnailProcessor({
   database: prisma,
   storage,
+  visualSummaryJobs,
 });
 const processRoleInference = createVlmInferenceProcessor({
   classifier: new AmuxClaudeVlmClassifier(amuxClaude),
@@ -102,7 +126,7 @@ const trendDigestQueue = new Queue<TrendDigestJobData>(
   { connection: redisConnection() },
 );
 const trendDigestProcessor = new TrendDigestProcessor({
-  covers: new S3TrendCoverService({ database: prisma, storage }),
+  covers: new S3TrendCoverService({ database: prisma, storage, visualSummaryJobs }),
   database: prisma,
   llm: trendDigestLlm,
   search: new BraveTrendSearchService(),
@@ -118,6 +142,7 @@ const processGeneration = createGenerationProcessor({
   database: prisma,
   moderator: new AmuxClaudeContentModerationService(amuxClaude),
   storage,
+  visualSummaryJobs,
   similarityJobs: {
     async enqueue(collectionId, designAssetId) {
       await collectionSimilarityQueue.add(
@@ -142,6 +167,9 @@ const thumbnailWorker = new Worker<ThumbnailJobData>(
     connection: redisConnection(),
   },
 );
+const visualSummaryWorker = new Worker<VisualSummaryJobData>(VISUAL_SUMMARY_QUEUE_NAME,
+  async (job) => processVisualSummary(job.data),
+  { concurrency: 2, connection: redisConnection(), lockDuration: 120_000, maxStalledCount: 1 });
 const inferenceWorker = new Worker<VlmInferenceJobData>(
   VLM_INFERENCE_QUEUE_NAME,
   async (job) => processRoleInference(job.data),
@@ -254,6 +282,7 @@ async function start(): Promise<void> {
   );
   await Promise.all([
     thumbnailWorker.waitUntilReady(),
+    visualSummaryWorker.waitUntilReady(),
     inferenceWorker.waitUntilReady(),
     generationWorker.waitUntilReady(),
     collectionSimilarityWorker.waitUntilReady(),
@@ -261,7 +290,7 @@ async function start(): Promise<void> {
     trendDigestWorker.waitUntilReady(),
   ]);
   console.log(
-    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断并发数为 2，系列参考相似度、临时导出与趋势周报并发数为 1。`,
+    `${PLATFORM_NAME} Worker 已连接 Redis；生成、缩略图、角色推断与视觉摘要并发数为 2，系列参考相似度、临时导出与趋势周报并发数为 1。`,
   );
   if (!trendDigestEnabled) {
     console.warn(
@@ -281,6 +310,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     trendDigestQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
+    visualSummaryWorker.close(),
+    visualSummaryQueue.close(),
     inferenceWorker.close(),
   ]);
   await prisma.$disconnect();
@@ -291,6 +322,10 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 thumbnailWorker.on("failed", (job, error) => {
   console.error(`缩略图任务 ${job?.id ?? "unknown"} 失败：`, error);
   captureWorkerException(error, { phase: "failed", queue: "thumbnail" });
+});
+visualSummaryWorker.on("failed", (job, error) => {
+  console.error(`视觉摘要任务 ${job?.id ?? "unknown"} 失败：`, error);
+  captureWorkerException(error, { phase: "failed", queue: "visual-summary" });
 });
 inferenceWorker.on("failed", (job, error) => {
   console.error(`角色推断任务 ${job?.id ?? "unknown"} 失败：`, error);
@@ -372,6 +407,8 @@ void start().catch(async (error: unknown) => {
     trendDigestQueue.close(),
     collectionSimilarityQueue.close(),
     thumbnailWorker.close(),
+    visualSummaryWorker.close(),
+    visualSummaryQueue.close(),
     inferenceWorker.close(),
   ]);
   await prisma.$disconnect();

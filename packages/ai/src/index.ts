@@ -8,3 +8,4 @@ export * from "./providers/dashscope.adapter";
 export * from "./providers/mock.adapter";
 export * from "./reference-image.loader";
 export * from "./vlm-classifier";
+export * from "./visual-summary";

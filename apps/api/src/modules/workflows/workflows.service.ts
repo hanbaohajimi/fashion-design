@@ -1,6 +1,9 @@
 import {
   FabricScope,
   Prisma,
+  appendWorkflowOutbox,
+  recordWorkflowSemanticChange,
+  workflowVersionSnapshot,
   type PrismaClient,
   type WorkflowEdge,
   type WorkflowNode,
@@ -32,6 +35,7 @@ type WorkflowDatabase = Pick<
   PrismaClient,
   | "$transaction"
   | "project"
+  | "projectDesignContext"
   | "workflowGraph"
   | "workflowNode"
   | "workflowEdge"
@@ -96,10 +100,13 @@ export class WorkflowsService {
   async applySystemMutation(
     projectId: string,
     input: WorkflowSemanticPatchInput,
+    expectedContextRevision?: number,
+    proposalId?: string,
+    transaction?: WorkflowTransaction,
   ): Promise<WorkflowGraphResult> {
-    const project = await this.assertProject(projectId);
+    const project = await this.assertProject(projectId, undefined, transaction);
     if (project.archived) throw archivedProject();
-    return this.applyPatch(projectId, project.ownerId, input, true);
+    return this.applyPatch(projectId, project.ownerId, input, true, expectedContextRevision, proposalId, transaction);
   }
 
   private async applyPatch(
@@ -107,22 +114,47 @@ export class WorkflowsService {
     ownerId: string,
     input: WorkflowPatchInput,
     system: boolean,
+    expectedContextRevision?: number,
+    proposalId?: string,
+    suppliedTransaction?: WorkflowTransaction,
   ): Promise<WorkflowGraphResult> {
     const requestHash = createHash("sha256")
       .update(JSON.stringify(input))
       .digest("hex");
-    const known = await this.database.workflowMutation.findUnique({
+    const database = suppliedTransaction ?? this.database;
+    const known = await database.workflowMutation.findUnique({
       where: {
         projectId_mutationId: { projectId, mutationId: input.mutationId },
       },
     });
     if (known) {
       this.assertMatchingMutation(known.requestHash, requestHash);
-      return this.readGraph(projectId);
+      return this.readGraph(projectId, suppliedTransaction);
     }
 
     try {
-      await this.database.$transaction(async (transaction) => {
+      const commit = async (transaction: WorkflowTransaction) => {
+        // Match the Coordinator's lock order: conversation, context, graph.
+        const acceptanceCandidate = proposalId ? await transaction.workflowProposal.findFirst({ where: { id: proposalId, projectId, status: "pending" } }) : null;
+        let acceptanceIntentEpoch: number | null = null;
+        if (proposalId && !acceptanceCandidate) throw new ConflictException("建议已被拒绝、接受或失效，请查看最新状态");
+        if (acceptanceCandidate && acceptanceCandidate.schemaVersion >= 2) {
+          if (acceptanceCandidate.conversationId) {
+            const conversation = await transaction.agentConversation.updateMany({ where: { id: acceptanceCandidate.conversationId, projectId }, data: { updatedAt: new Date() } });
+            if (conversation.count !== 1) throw new ConflictException("建议所属会话已不存在");
+            acceptanceIntentEpoch = (await transaction.agentConversation.findUniqueOrThrow({ where: { id: acceptanceCandidate.conversationId }, select: { intentEpoch: true } })).intentEpoch;
+          }
+          const project = await transaction.project.updateMany({ where: { id: projectId, workflowAgentVersion: 2 }, data: { updatedAt: new Date() } });
+          if (project.count !== 1) throw new ConflictException("项目已切换协作框架版本，请重新请求建议");
+        }
+        if (expectedContextRevision !== undefined) {
+          // Lock the same row updated by context corrections until the graph commit.
+          const context = await transaction.projectDesignContext.updateMany({
+            where: { projectId, revision: expectedContextRevision },
+            data: { updatedAt: new Date() },
+          });
+          if (context.count !== 1) throw new ConflictException("设计上下文已变化，请重新请求建议");
+        }
         const graph = await transaction.workflowGraph.findUnique({
           where: { projectId },
         });
@@ -154,14 +186,46 @@ export class WorkflowsService {
         if (versionUpdate.count !== 1) {
           throw revisionConflict(input.mode, baseRevision);
         }
+        if (proposalId) {
+          const candidate = acceptanceCandidate;
+          if (!candidate) throw new ConflictException("建议已被拒绝、接受或失效，请查看最新状态");
+          if (candidate.schemaVersion >= 2) {
+            const evidence = jsonObject(candidate.evidence);
+            if (typeof evidence.intentEpoch === "number" && acceptanceIntentEpoch !== null && evidence.intentEpoch !== acceptanceIntentEpoch) throw new ConflictException("会话设计意图已变化，请重新请求建议");
+            const action = jsonObject(evidence.action as Prisma.JsonValue);
+            if (candidate.targetNodeVersionId) {
+              const targetId = typeof action.targetNodeId === "string" ? action.targetNodeId : null;
+              if (!targetId) throw new ConflictException("建议缺少目标节点，请重新请求建议");
+              const latest = targetId ? await transaction.workflowNodeVersion.findFirst({ where: { projectId, nodeId: targetId }, orderBy: { version: "desc" } }) : null;
+              if (!latest || latest.id !== candidate.targetNodeVersionId) throw new ConflictException("目标节点版本已变化，请重新请求建议");
+              if (action.kind === "configure" || action.type === "configure" || action.type === "configure_tool") {
+                const target = await transaction.workflowNode.findFirst({ where: { id: targetId, projectId }, select: { status: true } });
+                const attempt = await transaction.workflowAttempt.findFirst({ where: { projectId, toolNodeId: targetId }, select: { id: true } });
+                if (target?.status !== "ready" || attempt) throw new ConflictException("目标工具已执行，请改为创建新分支");
+              }
+            }
+            if (candidate.conversationId && candidate.planRevision !== null) {
+              const plan = await transaction.agentPlanRevision.findFirst({ where: { projectId, conversationId: candidate.conversationId }, orderBy: { revision: "desc" }, select: { revision: true, intentEpoch: true } });
+              if (plan?.revision !== candidate.planRevision) throw new ConflictException("设计计划已变化，请重新请求建议");
+              if (acceptanceIntentEpoch !== null && plan.intentEpoch !== acceptanceIntentEpoch) throw new ConflictException("会话设计意图已变化，请重新请求建议");
+            }
+          }
+          const proposal = await transaction.workflowProposal.updateMany({
+            where: { id: proposalId, projectId, status: "pending" }, data: { status: "accepted" },
+          });
+          if (proposal.count !== 1) throw new ConflictException("建议已被拒绝、接受或失效，请查看最新状态");
+          await appendWorkflowOutbox(transaction, { projectId, eventKey: `proposal:${proposalId}:accepted`, eventType: "proposal.decision", payload: { proposalId, kind: "accepted", userId: ownerId, conversationId: candidate.conversationId } });
+        }
 
+        let snapshots: { before: Prisma.InputJsonObject; after: Prisma.InputJsonObject } | undefined;
         if (input.mode === "semantic") {
-          await this.applySemantic(
+          snapshots = await this.applySemantic(
             transaction,
             projectId,
             ownerId,
             input,
             system,
+            proposalId ? "proposal" : system ? "system" : "user",
           );
         } else {
           await this.applyLayout(transaction, projectId, input);
@@ -173,10 +237,19 @@ export class WorkflowsService {
             mutationId: input.mutationId,
             mode: input.mode,
             requestHash,
+            baseRevision,
+            resultRevision: baseRevision + 1,
+            actorId: ownerId,
+            origin: proposalId ? "proposal" : system ? "system" : "user",
+            ...(snapshots ? { beforeSnapshot: snapshots.before, afterSnapshot: snapshots.after } : {}),
           },
         });
-      });
+      };
+      if (suppliedTransaction) await commit(suppliedTransaction);
+      else await this.database.$transaction(commit);
     } catch (error) {
+      // The owner of a supplied transaction controls its rollback and retry.
+      if (suppliedTransaction) throw error;
       // A retry can race the original transaction. The unique mutation row is the
       // authority for whether it was already committed.
       const replay = await this.database.workflowMutation.findUnique({
@@ -198,7 +271,7 @@ export class WorkflowsService {
       throw error;
     }
 
-    return this.readGraph(projectId);
+    return this.readGraph(projectId, suppliedTransaction);
   }
 
   private async applySemantic(
@@ -207,7 +280,8 @@ export class WorkflowsService {
     ownerId: string,
     input: WorkflowSemanticPatchInput,
     system: boolean,
-  ): Promise<void> {
+    origin: string,
+  ): Promise<{ before: Prisma.InputJsonObject; after: Prisma.InputJsonObject }> {
     const [storedNodes, storedEdges] = await Promise.all([
       transaction.workflowNode.findMany({ where: { projectId } }),
       transaction.workflowEdge.findMany({ where: { projectId } }),
@@ -405,6 +479,8 @@ export class WorkflowsService {
     for (const [id, node] of nodes) {
       const previous = storedNodeById.get(id);
       if (!previous) {
+        const historical = await transaction.workflowNodeVersion.findFirst({ where: { nodeId: id }, select: { id: true } });
+        if (historical) throw invalidGraph("节点 ID 已用于历史版本，请创建新的节点 ID");
         await transaction.workflowNode.create({
           data: {
             id,
@@ -446,6 +522,13 @@ export class WorkflowsService {
         throw invalidGraph("既有连线 ID 不能重新指向其他节点");
       }
     }
+    const afterNodes = [...nodes.values()];
+    const afterEdges = [...edges.values()];
+    await recordWorkflowSemanticChange(transaction, {
+      projectId, mutationId: input.mutationId, baseRevision: input.baseRevision, resultRevision: input.baseRevision + 1,
+      actorId: ownerId, origin, before: { nodes: storedNodes, edges: storedEdges }, after: { nodes: afterNodes, edges: afterEdges },
+    });
+    return { before: workflowVersionSnapshot(storedNodes, storedEdges), after: workflowVersionSnapshot(afterNodes, afterEdges) };
   }
 
   private async applyLayout(
@@ -612,8 +695,9 @@ export class WorkflowsService {
   private async assertProject(
     projectId: string,
     userId?: string,
+    transaction?: WorkflowTransaction,
   ): Promise<{ readonly archived: boolean; readonly ownerId: string }> {
-    const project = await this.database.project.findUnique({
+    const project = await (transaction ?? this.database).project.findUnique({
       where: { id: projectId },
       select: {
         archived: true,
@@ -636,10 +720,8 @@ export class WorkflowsService {
     return { archived: project.archived, ownerId: project.workspace.ownerId };
   }
 
-  private async readGraph(projectId: string): Promise<WorkflowGraphResult> {
-    const [graph, nodes, edges, snapshot, legacyElement] =
-      await this.database.$transaction(
-        async (transaction) => {
+  private async readGraph(projectId: string, suppliedTransaction?: WorkflowTransaction): Promise<WorkflowGraphResult> {
+    const read = async (transaction: WorkflowTransaction) => {
           const graph = await transaction.workflowGraph.findUnique({
             where: { projectId },
           });
@@ -660,9 +742,10 @@ export class WorkflowsService {
             select: { id: true },
           });
           return [graph, nodes, edges, snapshot, legacyElement] as const;
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-      );
+    };
+    const [graph, nodes, edges, snapshot, legacyElement] = suppliedTransaction
+      ? await read(suppliedTransaction)
+      : await this.database.$transaction(read, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     return {
       projectId,
       revision: graph?.revision ?? 0,

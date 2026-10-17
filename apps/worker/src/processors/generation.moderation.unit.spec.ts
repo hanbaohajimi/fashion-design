@@ -59,6 +59,8 @@ describe("generation moderation state transition", () => {
       $transaction: vi.fn(),
       collectionLook: { updateMany: vi.fn() },
       designAsset: { findMany: vi.fn() },
+      workflowAttempt: { findMany: vi.fn().mockResolvedValue([{ id: "attempt-a", projectId: task.projectId, executionId: "execution-a" }]) },
+      workflowOutbox: { upsert: vi.fn().mockResolvedValue({}) },
       generationTask: {
         findUnique: vi
           .fn()
@@ -71,6 +73,7 @@ describe("generation moderation state transition", () => {
         updateMany,
       },
     };
+    database.$transaction.mockImplementation(async (operation: (transaction: typeof database) => Promise<unknown>) => operation(database));
     const billing = { incrementCount: vi.fn() };
     const moderator = {
       moderate: vi.fn().mockResolvedValue({
@@ -121,7 +124,13 @@ describe("generation moderation state transition", () => {
         status: GenerationTaskStatus.MODERATION_FAILED,
       }),
     });
-    expect(database.$transaction).not.toHaveBeenCalled();
+    expect(database.$transaction).toHaveBeenCalledOnce();
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        eventType: "generation.terminal", executionId: "execution-a", attemptId: "attempt-a",
+        payload: expect.objectContaining({ status: "MODERATION_FAILED", errorCode: "CONTENT_MODERATION_FAILED" }),
+      }),
+    }));
     expect(database.designAsset.findMany).not.toHaveBeenCalled();
     expect(billing.incrementCount).not.toHaveBeenCalled();
   });
@@ -164,6 +173,8 @@ describe("generation moderation state transition", () => {
       $transaction: vi.fn(),
       collectionLook: { updateMany: vi.fn() },
       designAsset: { findMany: vi.fn() },
+      workflowAttempt: { findMany: vi.fn().mockResolvedValue([{ id: "attempt-review", projectId: task.projectId, executionId: "execution-review" }]) },
+      workflowOutbox: { upsert: vi.fn().mockResolvedValue({}) },
       generationTask: {
         findUnique: vi
           .fn()
@@ -176,6 +187,7 @@ describe("generation moderation state transition", () => {
         updateMany,
       },
     };
+    database.$transaction.mockImplementation(async (operation: (transaction: typeof database) => Promise<unknown>) => operation(database));
     const billing = { incrementCount: vi.fn() };
     const job = {
       attemptsMade: 1,
@@ -214,7 +226,13 @@ describe("generation moderation state transition", () => {
         status: GenerationTaskStatus.FAILED,
       }),
     });
-    expect(database.$transaction).not.toHaveBeenCalled();
+    expect(database.$transaction).toHaveBeenCalledOnce();
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        eventType: "generation.terminal", executionId: "execution-review", attemptId: "attempt-review",
+        payload: expect.objectContaining({ status: "FAILED", errorCode: "CONTENT_MODERATION_UNAVAILABLE" }),
+      }),
+    }));
     expect(database.designAsset.findMany).not.toHaveBeenCalled();
     expect(billing.incrementCount).not.toHaveBeenCalled();
   });

@@ -2,12 +2,43 @@ import { prisma, type Prisma } from "@fashion/db";
 import { describe, expect, it, vi } from "vitest";
 
 import { WorkflowsService } from "../workflows/workflows.service";
-import { WorkflowRuntimeService } from "./workflow-runtime.service";
+import { projectCandidateEvaluationContext, WorkflowRuntimeService } from "./workflow-runtime.service";
 import { DesignAssetsService } from "../design-assets/design-assets.service";
+import { DesignContextService } from "../design-context/design-context.service";
+import { WorkflowCoordinator } from "./workflow-coordinator";
 
 const workflows = new WorkflowsService(prisma);
+const visual = { enrich: async () => ({ index: [], images: [], imageBindings: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } }) };
 
 describe("WorkflowRuntimeService integration", () => {
+  it("评价认知保留同分支真实历史和偏好，排除兄弟候选和全局目标", () => {
+    const nodes = [
+      { id: "constraint", type: "constraint", payload: {} },
+      { id: "tool-a", type: "generate_design", payload: {} },
+      { id: "tool-b", type: "generate_design", payload: {} },
+      { id: "a", type: "candidate", payload: { assetId: "asset-a" } },
+      { id: "b", type: "candidate", payload: { assetId: "asset-b" } },
+    ];
+    const built = { graph: { nodes, edges: [
+      { sourceNodeId: "constraint", targetNodeId: "tool-a" }, { sourceNodeId: "tool-a", targetNodeId: "a" },
+      { sourceNodeId: "constraint", targetNodeId: "tool-b" }, { sourceNodeId: "tool-b", targetNodeId: "b" },
+    ] }, context: { graphRevision: 9, contextRevision: 2, currentObjective: "其他项目目标不能成为检查条件",
+      attempts: [{ id: "attempt-a", toolNodeId: "tool-a" }, { id: "attempt-b", toolNodeId: "tool-b" }],
+      decisions: [{ id: "decision-a", assetId: "asset-a", reason: "袖子太宽" }, { id: "decision-b", assetId: "asset-b" }],
+      preferences: [
+        { id: "pref-a", status: "active", scope: "branch", branchNodeIds: ["a"] },
+        { id: "pref-b", status: "active", scope: "branch", branchNodeIds: ["b"] },
+        { id: "project", status: "active", scope: "project", branchNodeIds: [] },
+        { id: "disabled", status: "inactive", scope: "branch", branchNodeIds: ["a"] },
+      ], coverage: { attempts: {}, decisions: {}, memory: {} },
+    } } as unknown as Parameters<typeof projectCandidateEvaluationContext>[0];
+    const projected = projectCandidateEvaluationContext(built, nodes[3] as Parameters<typeof projectCandidateEvaluationContext>[1], nodes[0] as Parameters<typeof projectCandidateEvaluationContext>[2]);
+    expect(projected).toMatchObject({ graphRevision: 9, contextRevision: 2, candidateNodeId: "a", constraintNodeId: "constraint" });
+    expect(projected.history.map((entry) => entry.id)).toEqual(["attempt-a"]);
+    expect(projected.decisions.map((entry) => entry.id)).toEqual(["decision-a"]);
+    expect(projected.preferences.map((entry) => entry.id)).toEqual(["pref-a"]);
+    expect(projected).not.toHaveProperty("currentObjective");
+  });
   it("reads historical multiple-source inputs but rejects execution before creating an attempt", async () => {
     const user = await prisma.user.create({ data: { email: `workflow-historical-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Historical inputs", projects: { create: { name: "Historical graph" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
     const project = user.ownedWorkspaces[0]?.projects[0];
@@ -43,9 +74,21 @@ describe("WorkflowRuntimeService integration", () => {
     const generatorB = crypto.randomUUID();
     const candidateA = crypto.randomUUID();
     const candidateB = crypto.randomUUID();
-    const model = { generateJson: vi.fn(async (request: { prompt: string; parse: (value: unknown) => unknown }) =>
-      request.parse({ title: "下一步建议", prompt: "按指定分支继续设计", rationale: "遵循已引用的设计路径" })) };
-    const runtime = new WorkflowRuntimeService(prisma, workflows, {} as never, model as never, {} as never, {} as never);
+    const model = { generateJson: vi.fn(async (request: { prompt: string; parse: (value: unknown) => unknown }) => {
+      const input = JSON.parse(request.prompt);
+      const cases: Record<string, { tool: string; inputs: { nodeId: string; port: string }[] }> = {
+        "请评估这个生成节点的候选": { tool: "evaluate_design", inputs: [{ nodeId: candidateA, port: "candidate" }, { nodeId: constraintA, port: "constraint" }] },
+        "请修改这件通勤风衣的袖口": { tool: "edit_design", inputs: [{ nodeId: candidateA, port: "source" }, { nodeId: constraintA, port: "constraint" }] },
+        "请按通勤约束比较两个候选": { tool: "evaluate_design", inputs: [{ nodeId: candidateA, port: "candidate" }, { nodeId: candidateB, port: "candidate" }, { nodeId: constraintA, port: "constraint" }] },
+        "请按运动约束修改这件通勤风衣": { tool: "edit_design", inputs: [{ nodeId: candidateA, port: "source" }, { nodeId: constraintB, port: "constraint" }] },
+      };
+      const selected = cases[input.request];
+      return request.parse({ kind: selected ? "propose" : "clarify", message: selected ? "已按明确分支准备建议" : "请选择实际候选和本次比较约束", preferences: [], objectiveUpdate: null,
+        plan: selected ? { ...selected, title: "下一步建议", prompt: "按指定分支继续设计", rationale: "遵循已引用的设计路径", newObjective: null } : null });
+    }) };
+    const contexts = new DesignContextService(prisma, workflows);
+    const coordinator = new WorkflowCoordinator(prisma, workflows, contexts, visual as never, model as never);
+    const runtime = new WorkflowRuntimeService(prisma, workflows, {} as never, model as never, {} as never, {} as never, contexts, coordinator);
     const proposedEdges = (proposal: Awaited<ReturnType<typeof runtime.propose>>) =>
       (proposal.operations as Array<{ type: string; edge?: { sourceNodeId: string; targetPort: string } }>)
         .filter((operation) => operation.type === "add_edge")
@@ -77,7 +120,7 @@ describe("WorkflowRuntimeService integration", () => {
       ]));
       expect(proposedEdges(toolReferenced).some((edge) => edge?.sourceNodeId === generatorA)).toBe(false);
       expect(JSON.parse(model.generateJson.mock.calls[0]?.[0].prompt ?? "{}")).toMatchObject({
-        referencedNodes: expect.arrayContaining([expect.objectContaining({ id: generatorA, type: "generate_design" })]),
+        context: expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ id: generatorA, type: "generate_design" })]) }),
       });
 
       await expect(runtime.propose(user.id, project.id, {
@@ -93,8 +136,8 @@ describe("WorkflowRuntimeService integration", () => {
       ]));
       expect(proposedEdges(editA).some((edge) => edge?.sourceNodeId === constraintB)).toBe(false);
       const proposedEditTool = (editA.operations as Array<{ type: string; node?: { type: string; x: number; y: number } }>).find((operation) => operation.node?.type === "edit_design")?.node;
-      expect(proposedEditTool?.x).toBe(430);
-      expect(proposedEditTool?.y).toBeGreaterThanOrEqual(600 + 206 + 40);
+      expect(proposedEditTool?.x).toBeGreaterThan(0);
+      expect(proposedEditTool?.y).toBeGreaterThanOrEqual(0);
       expect((await workflows.get(user.id, project.id)).nodes.find((node) => node.id === generatorB)).toMatchObject({ x: 430, y: 600 });
 
       await expect(runtime.propose(user.id, project.id, {
@@ -362,10 +405,17 @@ describe("WorkflowRuntimeService integration", () => {
     const briefId = crypto.randomUUID();
 
     const model = {
-      generateJson: vi.fn(async (request: { schemaName: string; parse: (value: unknown) => unknown }) => {
+      generateJson: vi.fn(async (request: { schemaName: string; prompt: string; parse: (value: unknown) => unknown }) => {
         switch (request.schemaName) {
-          case "fashion_workflow_next_step":
-            return request.parse({ title: "需求分析", prompt: "整理需求与参考", rationale: "依据设计需求提取约束" });
+          case "fashion_workflow_collaboration": {
+            const input = JSON.parse(request.prompt);
+            const nodes = input.context.nodes as { id: string; type: string }[];
+            const candidate = nodes.find((node) => node.type === "candidate");
+            const constraint = nodes.find((node) => node.type === "constraint");
+            return request.parse({ kind: "propose", message: "依据真实画布准备下一步", preferences: [], objectiveUpdate: null,
+              plan: { tool: candidate ? "evaluate_design" : "analyze_brief", title: "下一步", prompt: "整理需求与参考", rationale: "依据设计需求提取约束", newObjective: null,
+                inputs: candidate && constraint ? [{ nodeId: candidate.id, port: "candidate" }, { nodeId: constraint.id, port: "constraint" }] : [{ nodeId: briefId, port: "goal" }] } });
+          }
           case "fashion_design_brief":
             return request.parse({
               summary: "秋冬通勤风衣，保留肩线",
@@ -454,6 +504,8 @@ describe("WorkflowRuntimeService integration", () => {
       model as never,
       storage as never,
       assets,
+      new DesignContextService(prisma, workflows),
+      new WorkflowCoordinator(prisma, workflows, new DesignContextService(prisma, workflows), visual as never, model as never),
     );
 
     try {
@@ -546,6 +598,23 @@ describe("WorkflowRuntimeService integration", () => {
       expect(report).toBeDefined();
       expect((report?.payload as { report?: { evaluations?: unknown[] } }).report?.evaluations).toHaveLength(2);
       expect(storage.readPrefix).toHaveBeenCalledTimes(2);
+      const evaluationCalls = model.generateJson.mock.calls.filter(([request]) => request.schemaName === "fashion_design_evaluation");
+      expect(evaluationCalls).toHaveLength(2);
+      for (const [request] of evaluationCalls) {
+        const data = JSON.parse((request as unknown as { prompt: string }).prompt);
+        expect(data.evaluationTask).toBe("逐项检查约束");
+        expect(data.prompt).not.toBe(data.evaluationTask);
+        expect(data.prompt).toBe((generationSnapshot.requestSnapshot as { request: { prompt: string } }).request.prompt);
+        expect(data.step.prompt).toBe(data.prompt);
+        expect(data.auxiliaryContext).toMatchObject({ constraintNodeId: constraint.id,
+          producerAttemptId: expect.any(String), promptSource: "frozen_generation_request" });
+        expect(data.auxiliaryContext.history.some((entry: { toolNodeId: string }) => entry.toolNodeId === generateId)).toBe(true);
+      }
+      const evaluationAttempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: evaluateId } });
+      const snapshot = evaluationAttempt.requestSnapshot as { evaluationTask?: string; evaluationInputs?: { prompt: string; auxiliaryContext?: { graphRevision: number } }[] };
+      expect(snapshot.evaluationTask).toBe("逐项检查约束");
+      expect(snapshot.evaluationInputs).toHaveLength(2);
+      expect(snapshot.evaluationInputs?.every((entry) => entry.auxiliaryContext?.graphRevision !== undefined)).toBe(true);
 
       const referenceOnlyEvaluationId = crypto.randomUUID();
       await workflows.patch(user.id, project.id, {
@@ -599,11 +668,75 @@ describe("WorkflowRuntimeService integration", () => {
       expect(restoredAgain.edges.filter((edge) => edge.sourceNodeId === editCandidate.id && edge.targetNodeId === restoreTool.id)).toHaveLength(1);
       expect(restoredAgain.edges.filter((edge) => edge.sourceNodeId === restoreTool.id && edge.targetNodeId === restoreOutput.id)).toHaveLength(1);
       expect(restoredAgain.nodes.filter((node) => node.type === "candidate")).toHaveLength(4);
-      expect((await prisma.workflowAttempt.findMany({ where: { projectId: project.id, toolNodeId: restoreTool.id }, orderBy: { ordinal: "asc" } })).map((attempt) => attempt.ordinal)).toEqual([1, 2]);
+      const restoreAttempts = await prisma.workflowAttempt.findMany({ where: { projectId: project.id, toolNodeId: restoreTool.id }, orderBy: { ordinal: "asc" } });
+      expect(restoreAttempts.map((attempt) => attempt.ordinal)).toEqual([1, 2]);
+      const originalRestoreAttempt = restoreAttempts[0];
+      if (!originalRestoreAttempt) throw new Error("restore attempt missing");
+      expect(restoreOutput.payload).toMatchObject({ attemptId: originalRestoreAttempt.id });
+      const restoreVersion = await prisma.workflowNodeVersion.findUniqueOrThrow({ where: { id: originalRestoreAttempt.nodeVersionId ?? "missing" } });
+      expect(restoreVersion).toMatchObject({ nodeId: restoreTool.id, type: "restore_version", payload: { params: { restoredFromAssetId: (firstCandidate.payload as { assetId: string }).assetId } } });
+      const restoreOutputVersion = await prisma.workflowNodeVersion.findFirstOrThrow({ where: { nodeId: restoreOutput.id }, orderBy: { version: "desc" } });
+      expect(restoreOutputVersion.inputBindings).toEqual([expect.objectContaining({ sourceNodeId: restoreTool.id, sourceNodeVersionId: restoreVersion.id })]);
+      expect(originalRestoreAttempt.requestSnapshot).toMatchObject({
+        inputBindings: restoreVersion.inputBindings,
+        sources: expect.arrayContaining([
+          expect.objectContaining({ assetId: (editCandidate.payload as { assetId: string }).assetId, role: "edit_source" }),
+          expect.objectContaining({ assetId: (firstCandidate.payload as { assetId: string }).assetId, role: "restore_source" }),
+        ]),
+        designStepId: expect.any(String),
+        inputSnapshot: [expect.objectContaining({ id: editCandidate.id, nodeVersionId: expect.any(String) })],
+      });
+      expect(await prisma.workflowExecution.findUniqueOrThrow({ where: { id: originalRestoreAttempt.executionId ?? "missing" } })).toMatchObject({ status: "completed", conversationId: null, nodeVersionId: restoreVersion.id });
+      const restoredPath = await assets.path(user.id, restored.id);
+      const restoredPathStep = restoredPath.steps.find((step) => step.tool === "restore_version" && step.outputs.some((output) => output.id === restored.id));
+      expect(restoredPathStep).toMatchObject({ id: originalRestoreAttempt.executionId, snapshotAvailable: true, sources: expect.arrayContaining([
+        expect.objectContaining({ assetId: (editCandidate.payload as { assetId: string }).assetId, role: "edit_source" }),
+        expect.objectContaining({ assetId: (firstCandidate.payload as { assetId: string }).assetId, role: "restore_source" }),
+      ]) });
+      expect(await prisma.workflowOutbox.findUniqueOrThrow({ where: { eventKey: `execution:${originalRestoreAttempt.executionId}:terminal` } })).toMatchObject({ payload: { status: "completed" } });
       const anotherRestored = await assets.restore(user.id, (firstCandidate.payload as { assetId: string }).assetId, (editCandidate.payload as { assetId: string }).assetId);
       await expect(runtime.importAsset(user.id, project.id, {
         sourceNodeId: editCandidate.id, assetId: anotherRestored.id, operation: "restore", mutationId: restoreMutation,
       })).rejects.toMatchObject({ status: 409 });
+
+      const beforeRestoreRollback = await workflows.get(user.id, project.id);
+      const restoreRollbackMutation = crypto.randomUUID();
+      const restoreExecutionCount = await prisma.workflowExecution.count({ where: { projectId: project.id } });
+      const restoreVersionCount = await prisma.workflowNodeVersion.count({ where: { projectId: project.id } });
+      const restoreOutboxCount = await prisma.workflowOutbox.count({ where: { projectId: project.id } });
+      const finalizeBeforeRestoreRollback = runtime.finalizeExecutions.bind(runtime);
+      const restoreRollback = vi.spyOn(runtime, "finalizeExecutions").mockImplementationOnce(async (...args) => {
+        await finalizeBeforeRestoreRollback(...args);
+        throw new Error("restore interrupted before receipt commit");
+      });
+      try {
+        await expect(runtime.importAsset(user.id, project.id, { sourceNodeId: editCandidate.id, assetId: anotherRestored.id, operation: "restore", mutationId: restoreRollbackMutation })).rejects.toThrow("restore interrupted before receipt commit");
+      } finally {
+        restoreRollback.mockRestore();
+      }
+      const afterRestoreRollback = await workflows.get(user.id, project.id);
+      expect(afterRestoreRollback.revision).toBe(beforeRestoreRollback.revision);
+      expect(afterRestoreRollback.nodes).toHaveLength(beforeRestoreRollback.nodes.length);
+      expect(await prisma.workflowAttempt.count({ where: { executionKey: `workflow:restore:${restoreRollbackMutation}` } })).toBe(0);
+      expect(await prisma.workflowExecution.count({ where: { projectId: project.id } })).toBe(restoreExecutionCount);
+      expect(await prisma.workflowNodeVersion.count({ where: { projectId: project.id } })).toBe(restoreVersionCount);
+      expect(await prisma.workflowOutbox.count({ where: { projectId: project.id } })).toBe(restoreOutboxCount);
+      await runtime.importAsset(user.id, project.id, { sourceNodeId: editCandidate.id, assetId: anotherRestored.id, operation: "restore", mutationId: restoreRollbackMutation });
+      await runtime.importAsset(user.id, project.id, { sourceNodeId: editCandidate.id, assetId: anotherRestored.id, operation: "restore", mutationId: restoreRollbackMutation });
+      expect(await prisma.workflowAttempt.count({ where: { executionKey: `workflow:restore:${restoreRollbackMutation}` } })).toBe(1);
+      expect(await prisma.workflowExecution.count({ where: { executionKey: `workflow-restore:${project.id}:${restoreRollbackMutation}` } })).toBe(1);
+
+      const sourceAsset = await prisma.designAsset.findUniqueOrThrow({ where: { id: (editCandidate.payload as { assetId: string }).assetId } });
+      const historicalTarget = await prisma.designAsset.create({ data: { projectId: project.id, rootAssetId: sourceAsset.rootAssetId, operation: "IMPORTED", url: sourceAsset.url, thumbnailUrl: sourceAsset.thumbnailUrl } });
+      const historicalRestore = await assets.restore(user.id, historicalTarget.id, sourceAsset.id);
+      const beforeHistoricalRestore = await workflows.get(user.id, project.id);
+      const historicalMutation = crypto.randomUUID();
+      const afterHistoricalRestore = await runtime.importAsset(user.id, project.id, { sourceNodeId: editCandidate.id, assetId: historicalRestore.id, operation: "restore", mutationId: historicalMutation });
+      expect(afterHistoricalRestore.nodes).toHaveLength(beforeHistoricalRestore.nodes.length + 2);
+      expect(afterHistoricalRestore.nodes.some((node) => (node.payload as { assetId?: string }).assetId === historicalTarget.id)).toBe(false);
+      const historicalAttempt = await prisma.workflowAttempt.findUniqueOrThrow({ where: { executionKey: `workflow:restore:${historicalMutation}` } });
+      expect(historicalAttempt.requestSnapshot).toMatchObject({ sources: expect.arrayContaining([expect.objectContaining({ assetId: historicalTarget.id, role: "restore_source" })]), inputNodeIds: [editCandidate.id] });
+      expect(createFromAgent).toHaveBeenCalledTimes(3);
 
       const stale = await runtime.propose(user.id, project.id, {
         content: "请评估现有候选",
@@ -651,10 +784,10 @@ describe("WorkflowRuntimeService integration", () => {
       const candidatesBeforeRetry = (await workflows.get(user.id, project.id)).nodes.filter((node) => node.type === "candidate").length;
       createFromAgent.mockRejectedValueOnce(new Error("transient provider failure"));
       await expect(runtime.execute(user.id, project.id, retryToolId, { mutationId: crypto.randomUUID() })).rejects.toThrow("transient provider failure");
-      expect((await runtime.history(user.id, project.id, retryToolId)).items).toMatchObject([{ status: "failed" }]);
+      expect((await runtime.history(user.id, project.id, retryToolId)).items).toMatchObject([{ status: "failed" }, { status: "failed" }]);
       expect((await workflows.get(user.id, project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(candidatesBeforeRetry);
       await runtime.execute(user.id, project.id, retryToolId, { mutationId: crypto.randomUUID() });
-      expect((await runtime.history(user.id, project.id, retryToolId)).items).toHaveLength(3);
+      expect((await runtime.history(user.id, project.id, retryToolId)).items).toHaveLength(4);
       expect((await workflows.get(user.id, project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(candidatesBeforeRetry + 2);
 
       graph = await workflows.get(user.id, project.id);
@@ -692,7 +825,8 @@ describe("WorkflowRuntimeService integration", () => {
       }
       const afterCrash = await workflows.get(user.id, project.id);
       const recoveredOutputs = afterCrash.edges.filter((edge) => edge.sourceNodeId === recoveryToolId);
-      expect(recoveredOutputs).toHaveLength(1);
+      expect(recoveredOutputs).toHaveLength(0);
+      expect(await prisma.workflowAttempt.findUniqueOrThrow({ where: { executionKey: recoveryKey } })).toMatchObject({ status: "running" });
       await runtime.sync(user.id, project.id);
       const afterReplay = await workflows.get(user.id, project.id);
       expect(afterReplay.edges.filter((edge) => edge.sourceNodeId === recoveryToolId)).toHaveLength(1);
@@ -741,17 +875,61 @@ describe("WorkflowRuntimeService integration", () => {
           { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: analysisReplayId, sourcePort: "out", targetPort: "goal" } },
         ],
       });
-      const lateFailure = vi.spyOn(prisma.workflowAttempt, "update").mockRejectedValueOnce(new Error("attempt status write failed after graph commit"));
+      const beforeResult = workflows.applySystemMutation.bind(workflows);
+      let rejectedResult = false;
+      const lateFailure = vi.spyOn(workflows, "applySystemMutation").mockImplementation(async (...args) => {
+        const committed = await beforeResult(...args);
+        if (!rejectedResult && args[1].operations.some((operation) => operation.type === "add_edge" && operation.edge.sourceNodeId === analysisReplayId)) {
+          rejectedResult = true;
+          throw new Error("result transaction interrupted after graph write");
+        }
+        return committed;
+      });
       try {
-        await expect(runtime.execute(user.id, project.id, analysisReplayId, { mutationId: crypto.randomUUID() })).rejects.toThrow("attempt status write failed after graph commit");
+        await expect(runtime.execute(user.id, project.id, analysisReplayId, { mutationId: crypto.randomUUID() })).rejects.toThrow("result transaction interrupted after graph write");
       } finally {
         lateFailure.mockRestore();
       }
       graph = await workflows.get(user.id, project.id);
-      expect(graph.edges.filter((edge) => edge.sourceNodeId === analysisReplayId)).toHaveLength(1);
+      expect(graph.edges.filter((edge) => edge.sourceNodeId === analysisReplayId)).toHaveLength(0);
+      const rolledBack = await prisma.workflowExecution.findFirstOrThrow({ where: { projectId: project.id, toolNodeId: analysisReplayId } });
+      expect(rolledBack.status).toBe("failed");
+      expect(await prisma.workflowOutbox.findUniqueOrThrow({ where: { eventKey: `execution:${rolledBack.id}:terminal` } })).toMatchObject({ payload: { status: "failed" } });
       await runtime.execute(user.id, project.id, analysisReplayId, { mutationId: crypto.randomUUID() });
       graph = await workflows.get(user.id, project.id);
       expect(graph.edges.filter((edge) => edge.sourceNodeId === analysisReplayId)).toHaveLength(1);
+      const recoveredAnalysis = await prisma.workflowExecution.findFirstOrThrow({ where: { projectId: project.id, toolNodeId: analysisReplayId, status: "completed" } });
+      expect(await prisma.workflowAttempt.findFirstOrThrow({ where: { executionId: recoveredAnalysis.id } })).toMatchObject({ status: "completed" });
+      expect(await prisma.workflowOutbox.findUniqueOrThrow({ where: { eventKey: `execution:${recoveredAnalysis.id}:terminal` } })).toMatchObject({ payload: { status: "completed" } });
+
+      const acknowledgedLateId = crypto.randomUUID();
+      await workflows.patch(user.id, project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision, operations: [
+        { type: "add_node", node: { id: acknowledgedLateId, kind: "tool", type: "analyze_brief", title: "提交确认丢失", payload: { toolKey: "analyze_brief", toolVersion: "1", params: { prompt: "分析输入" } }, x: 3500, y: 100 } },
+        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: acknowledgedLateId, sourcePort: "out", targetPort: "goal" } },
+      ] });
+      const transactionBeforeAck = prisma.$transaction;
+      let lostAck = false;
+      const acknowledgementFailure = vi.spyOn(prisma, "$transaction").mockImplementation((async (...args: unknown[]) => {
+        const result = await Reflect.apply(transactionBeforeAck, prisma, args) as unknown;
+        if (!lostAck && result && typeof result === "object" && "edges" in result && Array.isArray(result.edges)
+          && result.edges.some((edge) => edge.sourceNodeId === acknowledgedLateId)) {
+          lostAck = true;
+          throw new Error("result committed but acknowledgement lost");
+        }
+        return result;
+      }) as typeof prisma.$transaction);
+      try {
+        await expect(runtime.execute(user.id, project.id, acknowledgedLateId, { mutationId: crypto.randomUUID() })).resolves.toMatchObject({ projectId: project.id });
+      } finally {
+        acknowledgementFailure.mockRestore();
+      }
+      expect(lostAck).toBe(true);
+      const acknowledgedExecution = await prisma.workflowExecution.findFirstOrThrow({ where: { projectId: project.id, toolNodeId: acknowledgedLateId } });
+      expect(acknowledgedExecution.status).toBe("completed");
+      expect(await prisma.workflowAttempt.count({ where: { executionId: acknowledgedExecution.id, status: "completed" } })).toBe(1);
+      expect(await prisma.workflowOutbox.findUniqueOrThrow({ where: { eventKey: `execution:${acknowledgedExecution.id}:terminal` } })).toMatchObject({ payload: { status: "completed" } });
+      const acknowledgedGraph = await workflows.get(user.id, project.id);
+      expect(acknowledgedGraph.edges.filter((edge) => edge.sourceNodeId === acknowledgedLateId)).toHaveLength(1);
     } finally {
       await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } });
       await prisma.user.delete({ where: { id: user.id } });

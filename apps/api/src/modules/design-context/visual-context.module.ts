@@ -1,0 +1,13 @@
+import { prisma } from "@fashion/db";
+import { Module } from "@nestjs/common";
+
+import { FilesModule } from "../files/files.module";
+import { VISUAL_CONTEXT_DB, VisualContextService } from "./visual-context.service";
+import { BullVisualSummaryJobs } from "./visual-summary-queue.service";
+
+@Module({
+  imports: [FilesModule],
+  providers: [VisualContextService, BullVisualSummaryJobs, { provide: VISUAL_CONTEXT_DB, useValue: prisma }],
+  exports: [VisualContextService],
+})
+export class VisualContextModule {}

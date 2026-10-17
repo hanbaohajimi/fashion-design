@@ -7,7 +7,6 @@ import {
 } from "@fashion/db";
 import type {
   AgentConversationSummary,
-  AgentDesignEvidence,
   AgentMessageContext,
   AgentMessageView,
   AgentRunView,
@@ -15,6 +14,7 @@ import type {
 import {
   BadRequestException,
   ForbiddenException,
+  GoneException,
   Inject,
   Injectable,
   NotFoundException,
@@ -28,7 +28,7 @@ import { S3FileStorage } from "../files/storage.service";
 import { GenerationService } from "../generation/generation.service";
 import { RETIRED_BOARD_SHAPE_TYPE } from "../boards/boards.schemas";
 import { AgentRunsService } from "../agent-runs/agent-runs.service";
-import { FashionAgentFramework } from "../agent-runs/fashion-agent-framework";
+import { WorkflowAssistantService } from "../workflow-runtime/workflow-assistant.service";
 import type {
   AttachGenerationTaskInput,
   CreateAgentConversationInput,
@@ -206,6 +206,8 @@ export class AgentConversationsService {
     @Optional()
     @Inject(AgentRunsService)
     private readonly runs?: AgentRunsService,
+    @Optional() @Inject(WorkflowAssistantService)
+    private readonly assistant?: WorkflowAssistantService,
   ) {}
 
   async plans(userId: string, conversationId: string) {
@@ -218,130 +220,18 @@ export class AgentConversationsService {
     conversationId: string,
     input: SendAgentMessageInput,
   ): Promise<AgentRunView> {
-    const conversation = await this.assertConversationOwnership(
-      userId,
-      conversationId,
-    );
-    if (conversation.archivedAt) {
-      throw new BadRequestException({
-        code: "AGENT_CONVERSATION_ARCHIVED",
-        message: "已归档会话不能创建计划",
-      });
-    }
+    await this.assertConversationOwnership(userId, conversationId);
     const runs = this.workflowRuntime();
-    const requestContext = {
-      fileAssetIds: input.fileAssetIds,
-      shapeIds: input.shapeIds,
-    };
     const existing = await runs.findReservation(userId, conversationId, {
       clientRequestId: input.clientRequestId,
       intent: input.content,
-      contextSnapshot: { requestContext },
+      contextSnapshot: { requestContext: { fileAssetIds: input.fileAssetIds, shapeIds: input.shapeIds } },
     });
     if (existing) return existing;
-    const context = await this.validateContext(
-      userId,
-      conversation.projectId,
-      input,
-    );
-    const reservation = await runs.reserve(userId, conversationId, {
-      clientRequestId: input.clientRequestId,
-      intent: input.content,
-      contextSnapshot: {
-        ...context,
-        requestContext,
-      },
+    throw new GoneException({
+      code: "LEGACY_AGENT_PLAN_RETIRED",
+      message: "旧版多步计划已停止创建。请使用持续设计助手 workflow-messages 入口；已有计划和执行历史仍可查看与继续。",
     });
-    if (!reservation.created) return reservation.run;
-    try {
-      const [history, loaded, evidence] = await Promise.all([
-        this.loadHistory(conversationId, reservation.run.id),
-        this.loadContextImages(
-          userId,
-          conversation.projectId,
-          context.fileAssetIds,
-          context.designAssetIds,
-        ),
-        this.loadPlanEvidence(
-          userId,
-          conversation.projectId,
-          input.content,
-          context,
-        ),
-      ]);
-      const result = await new FashionAgentFramework(this.model).plan({
-        images: loaded.images,
-        intent: input.content,
-        evidence,
-        selectedAssetIds: context.designAssetIds,
-        conversationContext: JSON.stringify({
-          recentConversation: history,
-          imageSources: {
-            fileAssetIds: context.fileAssetIds,
-            designAssetIds: context.designAssetIds,
-          },
-        }),
-      });
-      return await runs.completePlan(
-        userId,
-        reservation.run.id,
-        result.steps,
-        result.intelligence,
-      );
-    } catch (error) {
-      const failure = describeAgentRequestFailure(error);
-      return runs.failPlanning(userId, reservation.run.id, failure.content);
-    }
-  }
-
-  private async loadPlanEvidence(
-    userId: string,
-    projectId: string,
-    intent: string,
-    context: ValidatedAgentContext,
-  ): Promise<readonly AgentDesignEvidence[]> {
-    const decisions = context.designAssetIds.length
-      ? await this.database.designAssetDecision.findMany({
-          where: {
-            userId,
-            assetId: { in: [...context.designAssetIds] },
-            asset: {
-              projectId,
-              archivedAt: null,
-              project: { deletedAt: null, workspace: { ownerId: userId } },
-            },
-          },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-          take: 20,
-          select: { id: true, assetId: true, kind: true, reason: true },
-        })
-      : [];
-    return [
-      {
-        id: "goal",
-        kind: "intent",
-        label: "本轮设计目标",
-        text: intent,
-        assetId: null,
-      },
-      ...context.elements.map((element, index): AgentDesignEvidence => ({
-        id: `board_${index + 1}`,
-        kind: "board",
-        label: element.label ?? element.roleLabel ?? `选中元素 ${index + 1}`,
-        text: JSON.stringify(element),
-        assetId: element.assetId ?? null,
-      })),
-      ...decisions.map((decision): AgentDesignEvidence => ({
-        id: `decision_${decision.id}`,
-        kind: "decision",
-        label: `选中设计的历史决策：${decision.kind}`,
-        text: JSON.stringify({
-          kind: decision.kind,
-          reason: decision.reason.slice(0, 2_000),
-        }),
-        assetId: decision.assetId,
-      })),
-    ];
   }
 
   private workflowRuntime(): AgentRunsService {
@@ -385,6 +275,7 @@ export class AgentConversationsService {
           createdById: userId,
           projectId,
           title: input.title ?? DEFAULT_TITLE,
+          mode: input.mode ?? "legacy",
         },
       }),
     );
@@ -414,7 +305,8 @@ export class AgentConversationsService {
     conversationId: string,
     input: ListAgentMessagesInput,
   ) {
-    await this.assertConversationOwnership(userId, conversationId);
+    const conversation = await this.assertConversationOwnership(userId, conversationId);
+    if (conversation.mode === "workflow" && this.assistant) return this.assistant.messages(userId, conversationId, input);
     await this.database.agentMessage.updateMany({
       where: {
         conversationId,
@@ -512,6 +404,7 @@ export class AgentConversationsService {
       userId,
       conversationId,
     );
+    if (conversation.mode === "workflow") throw new BadRequestException("请使用持续设计助手消息入口");
     if (conversation.archivedAt) {
       throw new BadRequestException({
         code: "AGENT_CONVERSATION_ARCHIVED",
@@ -1247,7 +1140,8 @@ function toConversation(conversation: {
   readonly projectId: string;
   readonly title: string;
   readonly updatedAt: Date;
-}): AgentConversationSummary {
+  readonly mode?: string;
+}): AgentConversationSummary & { mode: string } {
   return {
     archivedAt: conversation.archivedAt?.toISOString() ?? null,
     createdAt: conversation.createdAt.toISOString(),
@@ -1255,6 +1149,7 @@ function toConversation(conversation: {
     projectId: conversation.projectId,
     title: conversation.title,
     updatedAt: conversation.updatedAt.toISOString(),
+    mode: conversation.mode ?? "legacy",
   };
 }
 

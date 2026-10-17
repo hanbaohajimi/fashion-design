@@ -29,6 +29,7 @@ export interface WorkflowAssetWorkspaceProps {
   readonly open: boolean;
   readonly onClose: () => void;
   readonly onGraphRefresh: () => void;
+  readonly onEnsureConversation?: () => Promise<string>;
 }
 
 interface ImageDimensions { readonly width: number; readonly height: number }
@@ -102,7 +103,7 @@ export function WorkflowAssetWorkspace(props: WorkflowAssetWorkspaceProps) {
   return <AssetWorkspaceContent key={props.assetId} {...props} />;
 }
 
-function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefresh }: WorkflowAssetWorkspaceProps) {
+function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefresh, onEnsureConversation }: WorkflowAssetWorkspaceProps) {
   const [tab, setTab] = useState<Tab>("preview");
   const [graph, setGraph] = useState<WorkflowGraph | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -205,7 +206,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
     setActionError(null);
     setSubmissionStage("正在创建修改任务…");
     try {
-      const result = await executeWorkflowNode(projectId, toolNodeId);
+      const result = await executeWorkflowNode(projectId, toolNodeId, await onEnsureConversation?.());
       setGraph(result);
       setPendingToolId(null);
       onGraphRefresh();

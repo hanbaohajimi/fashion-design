@@ -38,6 +38,9 @@ function taskRecord(overrides: Record<string, unknown> = {}) {
 
 describe("GenerationService", () => {
   const database = {
+    $transaction: vi.fn(),
+    workflowAttempt: { findMany: vi.fn() },
+    workflowOutbox: { upsert: vi.fn() },
     designAsset: {
       findUnique: vi.fn(),
     },
@@ -74,6 +77,8 @@ describe("GenerationService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    database.$transaction.mockImplementation(async (operation: (transaction: typeof database) => Promise<unknown>) => operation(database));
+    database.workflowAttempt.findMany.mockResolvedValue([]);
     billing.canGenerate.mockResolvedValue({
       allowed: true,
       limit: 100,
@@ -115,6 +120,18 @@ describe("GenerationService", () => {
       positivePrompt: "fashion editorial",
       version: 1,
     });
+  });
+
+  it("writes workflow cancellation receipt before removing the queued job", async () => {
+    database.generationTask.findFirst.mockResolvedValueOnce(taskRecord()).mockResolvedValueOnce(taskRecord({ status: GenerationTaskStatus.CANCELED }));
+    database.workflowAttempt.findMany.mockResolvedValue([{ id: "attempt-1", projectId: "project-1", executionId: "execution-1" }]);
+    await service.cancel("user-1", "task-1");
+    expect(database.$transaction).toHaveBeenCalledOnce();
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { eventKey: "generation:task-1:attempt-1:terminal" },
+      create: expect.objectContaining({ projectId: "project-1", eventType: "generation.terminal", executionId: "execution-1", payload: { status: "CANCELED", assetIds: [], errorCode: null } }),
+    }));
+    expect(database.workflowOutbox.upsert.mock.invocationCallOrder[0]).toBeLessThan(jobs.cancel.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("超限时返回 429 且不建任务、不入队", async () => {

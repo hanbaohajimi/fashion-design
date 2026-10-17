@@ -5,7 +5,25 @@ import type {
   WorkflowInputPort,
   WorkflowNode,
   WorkflowToolType,
+  WorkflowProposal,
 } from "./workflow-api";
+
+/** Project a pending proposal for review; saved nodes and their positions remain authoritative. */
+export function projectWorkflowProposal(graph: WorkflowGraph, proposal: WorkflowProposal | null): WorkflowGraph {
+  if (!proposal || proposal.status !== "pending") return graph;
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const edges = new Map(graph.edges.map((edge) => [edge.id, edge]));
+  for (const operation of proposal.operations) {
+    if (operation.type === "add_node") nodes.set(operation.node.id, { ...operation.node, status: "proposed", createdAt: "", updatedAt: "" });
+    if (operation.type === "update_node") {
+      const previous = nodes.get(operation.nodeId);
+      if (previous) nodes.set(operation.nodeId, { ...previous, ...(operation.title !== undefined ? { title: operation.title } : {}), ...(operation.payload ? { payload: operation.payload } : {}), status: "proposed" });
+    }
+    if (operation.type === "remove_edge") edges.delete(operation.edgeId);
+    if (operation.type === "add_edge") edges.set(operation.edge.id, operation.edge);
+  }
+  return { ...graph, nodes: [...nodes.values()], edges: [...edges.values()] };
+}
 
 /**
  * 节点尺寸。

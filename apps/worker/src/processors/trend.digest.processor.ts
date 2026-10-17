@@ -438,6 +438,9 @@ export class S3TrendCoverService implements TrendCoverService {
       readonly now?: () => Date;
       readonly ownerId?: string;
       readonly storage: ThumbnailStorage;
+      readonly visualSummaryJobs?: {
+        enqueue(source: import("@fashion/shared").VisualSummarySource): Promise<void>;
+      };
     },
   ) {}
 
@@ -478,7 +481,7 @@ export class S3TrendCoverService implements TrendCoverService {
     await this.dependencies.storage.put(objectKey, output, "image/webp");
     const now = this.dependencies.now?.() ?? new Date();
     const sourceName = safeSourceName(sourceUrl, sha256);
-    return this.dependencies.database.fileAsset.upsert({
+    const file = await this.dependencies.database.fileAsset.upsert({
       where: { ownerId_sha256: { ownerId, sha256 } },
       create: {
         completedAt: now,
@@ -497,6 +500,8 @@ export class S3TrendCoverService implements TrendCoverService {
       update: {},
       select: { id: true },
     });
+    await this.dependencies.visualSummaryJobs?.enqueue({ kind: "file", id: file.id }).catch(() => undefined);
+    return file;
   }
 }
 

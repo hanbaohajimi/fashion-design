@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode } from "./workflow-api";
-import { availableInputPorts, lineageOf } from "./workflow-graph";
+import { availableInputPorts, lineageOf, projectWorkflowProposal } from "./workflow-graph";
 
 function node(id: string, kind: WorkflowNode["kind"], type: WorkflowNode["type"]): WorkflowNode {
   return {
@@ -22,6 +22,16 @@ function edge(id: string, sourceNodeId: string, targetNodeId: string, targetPort
 }
 
 describe("workflow graph", () => {
+  it("previews configuration on the existing card and replaces its inputs without changing saved graph", () => {
+    const original = { ...node("draft", "tool", "generate_design"), x: 360, y: 200, status: "ready" };
+    const graph: WorkflowGraph = { projectId: "p", revision: 2, layoutRevision: 3, legacyAvailable: false, nodes: [node("old", "asset", "constraint"), node("new", "asset", "constraint"), original], edges: [edge("old-edge", "old", "draft", "constraint")] };
+    const preview = projectWorkflowProposal(graph, { id: "proposal", baseRevision: 2, status: "pending", rationale: "改用新约束", content: "修改", toolNodeId: "draft", referencedNodeIds: ["new"], createdAt: "", operations: [{ type: "update_node", nodeId: "draft", title: "新的方案", payload: { params: { prompt: "新指令" } } }, { type: "remove_edge", edgeId: "old-edge" }, { type: "add_edge", edge: edge("new-edge", "new", "draft", "constraint") }] });
+    expect(preview.nodes).toHaveLength(3);
+    expect(preview.nodes.find((item) => item.id === "draft")).toMatchObject({ x: 360, y: 200, title: "新的方案", status: "proposed" });
+    expect(preview.edges.map((item) => item.id)).toEqual(["new-edge"]);
+    expect(graph.edges.map((item) => item.id)).toEqual(["old-edge"]);
+    expect(original.title).toBe("draft");
+  });
   it("highlights only the real ancestors of a selected branch", () => {
     const graph: WorkflowGraph = {
       projectId: "project",

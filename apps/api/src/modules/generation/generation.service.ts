@@ -2,6 +2,7 @@ import {
   CollectionVariationAxis,
   GenerationTaskStatus,
   Prisma,
+  appendGenerationTerminalOutbox,
   type PrismaClient,
 } from "@fashion/db";
 import type { AiGenerationRequest } from "@fashion/ai";
@@ -72,7 +73,7 @@ interface PresentationPolicy {
   readonly version: typeof PRESENTATION_POLICY_VERSION;
 }
 
-type GenerationDatabase = Pick<PrismaClient, "designAsset" | "generationTask">;
+type GenerationDatabase = Pick<PrismaClient, "$transaction" | "designAsset" | "generationTask">;
 
 export interface GenerationJobs {
   enqueue(taskId: string, userId: string): Promise<void>;
@@ -720,7 +721,8 @@ export class GenerationService {
       task.status === GenerationTaskStatus.RUNNING
     ) {
       const canceledAt = new Date();
-      const canceled = await this.database.generationTask.updateMany({
+      const { canceled, current } = await this.database.$transaction(async (transaction) => {
+      const canceled = await transaction.generationTask.updateMany({
         where: {
           id: task.id,
           status: {
@@ -736,7 +738,7 @@ export class GenerationService {
           status: GenerationTaskStatus.CANCELED,
         },
       });
-      const current = await this.database.generationTask.findFirst({
+      const current = await transaction.generationTask.findFirst({
         where: { id: taskId, userId },
       });
       if (!current) {
@@ -745,6 +747,9 @@ export class GenerationService {
           message: "生成任务不存在",
         });
       }
+      if (current.status === GenerationTaskStatus.CANCELED) await appendGenerationTerminalOutbox(transaction, { taskId, status: "CANCELED" });
+      return { canceled, current };
+      });
       if (canceled.count === 1) {
         await this.jobs.cancel(task.id).catch(() => undefined);
       }

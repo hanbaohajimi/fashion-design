@@ -445,6 +445,29 @@ describe("FashionAgentFramework", () => {
       result.checks.find((check) => check.constraintId === "fiber")
         ?.observation,
     ).not.toContain("满足此要求");
+    const legacyData = JSON.parse(required(model.generateJson.mock.calls[0])[0].prompt);
+    expect(legacyData).not.toHaveProperty("evaluationTask");
+    expect(legacyData).not.toHaveProperty("auxiliaryContext");
+  });
+
+  it("评价重点和分支认知单独传入，不能替换冻结生成输入或新增硬检查", async () => {
+    const model = modelWith(evaluationOutput());
+    const input = { ...evaluationInput(), evaluationTask: "重点检查袖子是否仍然过宽",
+      auxiliaryContext: { graphRevision: 8, contextRevision: 3,
+        decisions: [{ kind: "rejected", reason: "上一轮袖子太宽" }],
+        preferences: [{ text: "可能偏好窄袖", priority: "prefer" }] } };
+    const result = await new FashionAgentFramework(model.client).evaluate(input);
+    const request = required(model.generateJson.mock.calls[0])[0];
+    const data = JSON.parse(request.prompt);
+    expect(data).toMatchObject({ prompt: input.prompt, negativePrompt: input.negativePrompt,
+      evaluationTask: input.evaluationTask, auxiliaryContext: input.auxiliaryContext });
+    expect(data.step.prompt).toBe(input.step.prompt);
+    expect(data.responseSchema).toEqual(request.jsonSchema);
+    expect(request.instructions).toContain("辅助背景而非硬条件");
+    expect(request.instructions).toContain("不能替换brief、增删checks");
+    expect(request.instructions).toContain("若渠道忽略tool_choice");
+    expect(request.instructions).not.toContain("上一轮袖子太宽");
+    expect(result.checks.map((check) => check.constraintId)).toEqual(input.brief.constraints.map((constraint) => constraint.id));
   });
 
   it("模型把成分与尺寸错误标visual仍不能用图片确认", async () => {

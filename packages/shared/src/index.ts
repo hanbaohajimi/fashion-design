@@ -1,4 +1,6 @@
 export const PLATFORM_NAME = "AI 服装设计平台";
+export * from "./visual-context";
+export * from "./workflow-tools";
 export { workflowInputPorts, isWorkflowInputPort, workflowInputConnectionError, type WorkflowConnectionPort } from "./workflow-connections";
 export const DESIGN_PATH_MAX_ASSETS = 100;
 export const DESIGN_DECISION_KINDS = [

@@ -1,12 +1,125 @@
-import { prisma, type Prisma } from "@fashion/db";
+import { ensureWorkflowNodeVersions, prisma, type Prisma } from "@fashion/db";
 import { describe, expect, it } from "vitest";
 
 import { WorkflowsService } from "./workflows.service";
 import { workflowSemanticPatchSchema } from "./workflows.schemas";
 
 const workflows = new WorkflowsService(prisma);
+function required<T>(value: T | null | undefined): T { if (value === null || value === undefined) throw new Error("test fixture missing"); return value; }
 
 describe("WorkflowsService persistence integration", () => {
+  it("shares the caller transaction so execution admission and graph reservation roll back together", async () => {
+    const user = await prisma.user.create({ data: { email: `workflow-reserve-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Reserve", projects: { create: { name: "Atomic execute" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
+    const project = required(user.ownedWorkspaces[0]?.projects[0]);
+    const tool = crypto.randomUUID();
+    try {
+      await workflows.patch(user.id, project.id, { mode: "semantic", baseRevision: 0, mutationId: crypto.randomUUID(), operations: [{ type: "add_node", node: { id: tool, kind: "tool", type: "analyze_brief", title: "分析", payload: { toolKey: "analyze_brief", toolVersion: "1", params: {} }, x: 0, y: 0 } }] });
+      const baseline = await workflows.get(user.id, project.id);
+      const mutationId = crypto.randomUUID();
+      await expect(prisma.$transaction(async (tx) => {
+        const versions = await ensureWorkflowNodeVersions(tx, project.id, baseline.revision);
+        const execution = await tx.workflowExecution.create({ data: { projectId: project.id, toolNodeId: tool, nodeVersionId: required(versions.get(tool)).id, userId: user.id, executionKey: crypto.randomUUID(), requestSnapshot: {} } });
+        await tx.workflowAttempt.create({ data: { projectId: project.id, toolNodeId: tool, ordinal: 1, executionKey: crypto.randomUUID(), executionId: execution.id, status: "queued", requestSnapshot: {} } });
+        const running = await workflows.applySystemMutation(project.id, { mode: "semantic", baseRevision: 1, mutationId, operations: [{ type: "update_node", nodeId: tool, status: "running" }] }, undefined, undefined, tx);
+        expect(running.revision).toBe(2);
+        throw new Error("admission failed");
+      })).rejects.toThrow("admission failed");
+      expect(await workflows.get(user.id, project.id)).toEqual(baseline);
+      expect(await prisma.workflowExecution.count({ where: { projectId: project.id } })).toBe(0);
+      expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);
+      expect(await prisma.workflowMutation.count({ where: { projectId: project.id, mutationId } })).toBe(0);
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
+  it("records semantic node versions and causal input bindings without recording moves or status changes", async () => {
+    const user = await prisma.user.create({ data: { email: `workflow-versions-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Versions", projects: { create: { name: "Version graph" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
+    const project = required(user.ownedWorkspaces[0]?.projects[0]);
+    const brief = crypto.randomUUID(), tool = crypto.randomUUID(), edge = crypto.randomUUID();
+    try {
+      const mutationId = crypto.randomUUID();
+      await workflows.patch(user.id, project.id, { mode: "semantic", baseRevision: 0, mutationId, operations: [
+        { type: "add_node", node: { id: brief, kind: "asset", type: "brief", title: "原需求", payload: { text: "藏蓝外套" }, x: 0, y: 0 } },
+        { type: "add_node", node: { id: tool, kind: "tool", type: "analyze_brief", title: "分析", payload: { toolKey: "analyze_brief", toolVersion: "1", params: { prompt: "保留肩线" } }, x: 300, y: 0 } },
+        { type: "add_edge", edge: { id: edge, sourceNodeId: brief, targetNodeId: tool, sourcePort: "out", targetPort: "goal" } },
+      ] });
+      const initial = await prisma.workflowNodeVersion.findMany({ where: { projectId: project.id } });
+      expect(initial).toHaveLength(2);
+      const source = required(initial.find((row) => row.nodeId === brief));
+      expect(initial.find((row) => row.nodeId === tool)).toMatchObject({ version: 1, baseline: false, inputBindings: [{ edgeId: edge, sourceNodeId: brief, sourceNodeVersionId: source.id, sourcePort: "out", targetPort: "goal" }] });
+      await workflows.patch(user.id, project.id, { mode: "layout", mutationId: crypto.randomUUID(), baseLayoutRevision: 0, positions: [{ nodeId: tool, x: 500, y: 300 }] });
+      await workflows.applySystemMutation(project.id, { mode: "semantic", baseRevision: 1, mutationId: crypto.randomUUID(), operations: [{ type: "update_node", nodeId: tool, status: "running" }] });
+      expect(await prisma.workflowNodeVersion.count({ where: { projectId: project.id } })).toBe(2);
+      expect(await prisma.workflowOutbox.count({ where: { projectId: project.id, eventType: "workflow.semantic_changed" } })).toBe(1);
+      const recorded = await prisma.workflowMutation.findUniqueOrThrow({ where: { projectId_mutationId: { projectId: project.id, mutationId } } });
+      expect(recorded).toMatchObject({ baseRevision: 0, resultRevision: 1, actorId: user.id, origin: "user", beforeSnapshot: { nodes: [], edges: [] } });
+      expect(recorded.afterSnapshot).toMatchObject({ nodes: expect.arrayContaining([expect.objectContaining({ id: brief })]) });
+      expect(JSON.stringify(recorded.afterSnapshot)).not.toContain('"x":');
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
+
+  it("creates one honest baseline for an existing graph and keeps prior input versions immutable", async () => {
+    const user = await prisma.user.create({ data: { email: `workflow-baseline-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Baseline", projects: { create: { name: "Existing graph" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
+    const project = required(user.ownedWorkspaces[0]?.projects[0]);
+    const brief = crypto.randomUUID(), tool = crypto.randomUUID(), edge = crypto.randomUUID();
+    try {
+      await prisma.workflowGraph.create({ data: { projectId: project.id, revision: 8 } });
+      await prisma.workflowNode.createMany({ data: [
+        { id: brief, projectId: project.id, kind: "asset", type: "brief", title: "需求", payload: { text: "灰色外套" }, x: 0, y: 0 },
+        { id: tool, projectId: project.id, kind: "tool", type: "analyze_brief", title: "分析", payload: { toolKey: "analyze_brief", params: {} }, x: 300, y: 0 },
+      ] });
+      await prisma.workflowEdge.create({ data: { id: edge, projectId: project.id, sourceNodeId: brief, targetNodeId: tool, sourcePort: "out", targetPort: "goal" } });
+      await prisma.$transaction((tx) => ensureWorkflowNodeVersions(tx, project.id, 8));
+      await prisma.$transaction((tx) => ensureWorkflowNodeVersions(tx, project.id, 8));
+      const baseline = await prisma.workflowNodeVersion.findMany({ where: { projectId: project.id } });
+      expect(baseline).toHaveLength(2);
+      expect(baseline.every((row) => row.baseline && row.graphRevision === 8 && row.version === 1)).toBe(true);
+      await workflows.patch(user.id, project.id, { mode: "semantic", baseRevision: 8, mutationId: crypto.randomUUID(), operations: [{ type: "update_node", nodeId: brief, payload: { text: "银色外套" } }] });
+      const versions = await prisma.workflowNodeVersion.findMany({ where: { projectId: project.id }, orderBy: { version: "asc" } });
+      expect(versions).toHaveLength(4);
+      expect(versions.filter((row) => row.version === 1)).toEqual(expect.arrayContaining(baseline));
+      const newBrief = required(versions.find((row) => row.nodeId === brief && row.version === 2));
+      expect(versions.find((row) => row.nodeId === tool && row.version === 2)).toMatchObject({ inputBindings: [{ sourceNodeVersionId: newBrief.id }], previousVersionId: required(baseline.find((row) => row.nodeId === tool)).id });
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
+
+  it("rejects v2 acceptance when node version, plan revision or project rollout changed", async () => {
+    const user = await prisma.user.create({ data: { email: `workflow-accept-v2-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Accept", projects: { create: { name: "Proposal checks" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
+    const project = required(user.ownedWorkspaces[0]?.projects[0]);
+    const tool = crypto.randomUUID();
+    try {
+      await workflows.patch(user.id, project.id, { mode: "semantic", baseRevision: 0, mutationId: crypto.randomUUID(), operations: [{ type: "add_node", node: { id: tool, kind: "tool", type: "analyze_brief", title: "分析", payload: { toolKey: "analyze_brief", toolVersion: "1", params: {} }, x: 0, y: 0 } }] });
+      const version = await prisma.workflowNodeVersion.findFirstOrThrow({ where: { nodeId: tool } });
+      const conversation = await prisma.agentConversation.create({ data: { projectId: project.id, createdById: user.id, title: "本轮", mode: "workflow" } });
+      await prisma.agentPlanRevision.create({ data: { projectId: project.id, conversationId: conversation.id, revision: 2, intentEpoch: 0, graphRevision: 1, contextRevision: 0, plan: {} } });
+      const proposal = await prisma.workflowProposal.create({ data: { projectId: project.id, userId: user.id, mutationId: crypto.randomUUID(), baseRevision: 1, schemaVersion: 2, targetNodeVersionId: version.id, planRevision: 1, conversationId: conversation.id, evidence: { action: { type: "configure_tool", targetNodeId: tool } }, diff: [] } });
+      const input = { mode: "semantic" as const, baseRevision: 1, mutationId: proposal.mutationId, operations: [{ type: "update_node" as const, nodeId: tool, title: "新分析" }] };
+      await expect(workflows.applySystemMutation(project.id, input, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      await prisma.workflowProposal.update({ where: { id: proposal.id }, data: { planRevision: 2 } });
+      await prisma.agentConversation.update({ where: { id: conversation.id }, data: { intentEpoch: 1 } });
+      await expect(workflows.applySystemMutation(project.id, input, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      await prisma.workflowProposal.update({ where: { id: proposal.id }, data: { planRevision: null, evidence: { intentEpoch: 0, action: { type: "configure_tool", targetNodeId: tool } } } });
+      await expect(workflows.applySystemMutation(project.id, input, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      await prisma.workflowProposal.update({ where: { id: proposal.id }, data: { planRevision: 2 } });
+      await prisma.agentConversation.update({ where: { id: conversation.id }, data: { intentEpoch: 0 } });
+      await prisma.project.update({ where: { id: project.id }, data: { workflowAgentVersion: 1 } });
+      await expect(workflows.applySystemMutation(project.id, input, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      await prisma.project.update({ where: { id: project.id }, data: { workflowAgentVersion: 2 } });
+      await prisma.workflowAttempt.create({ data: { projectId: project.id, toolNodeId: tool, ordinal: 1, executionKey: crypto.randomUUID(), status: "failed", requestSnapshot: {} } });
+      await expect(workflows.applySystemMutation(project.id, input, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      expect((await prisma.workflowProposal.findUniqueOrThrow({ where: { id: proposal.id } })).status).toBe("pending");
+      expect((await workflows.get(user.id, project.id)).revision).toBe(1);
+      await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } });
+      await workflows.patch(user.id, project.id, { mode: "semantic", baseRevision: 1, mutationId: crypto.randomUUID(), operations: [{ type: "update_node", nodeId: tool, title: "人工更正" }] });
+      const refreshedInput = { ...input, baseRevision: 2 };
+      await expect(workflows.applySystemMutation(project.id, refreshedInput, undefined, proposal.id)).rejects.toMatchObject({ status: 409 });
+      const currentVersion = await prisma.workflowNodeVersion.findFirstOrThrow({ where: { nodeId: tool }, orderBy: { version: "desc" } });
+      await prisma.workflowProposal.update({ where: { id: proposal.id }, data: { baseRevision: 2, targetNodeVersionId: currentVersion.id } });
+      await workflows.applySystemMutation(project.id, refreshedInput, undefined, proposal.id);
+      const replay = await workflows.applySystemMutation(project.id, refreshedInput, undefined, proposal.id);
+      expect(replay.revision).toBe(3);
+      expect(await prisma.workflowOutbox.count({ where: { eventKey: `proposal:${proposal.id}:accepted` } })).toBe(1);
+      expect((await prisma.workflowProposal.findUniqueOrThrow({ where: { id: proposal.id } })).status).toBe("accepted");
+    } finally { await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } }); await prisma.user.delete({ where: { id: user.id } }); }
+  });
   it("commits an input branch atomically, safely replays it and preserves the running original", async () => {
     const user = await prisma.user.create({
       data: { email: `workflow-input-${crypto.randomUUID()}@example.com`, ownedWorkspaces: { create: { name: "Input edits", projects: { create: { name: "Branch test" } } } } },

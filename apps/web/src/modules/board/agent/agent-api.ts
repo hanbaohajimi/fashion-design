@@ -5,6 +5,65 @@ import type {
   AgentPlanStepSpec,
   AgentDomainActionView,
 } from "@fashion/shared";
+import type { WorkflowProposal } from "../workflow/workflow-api";
+
+export type WorkflowConversationSummary = AgentConversationSummary & {
+  readonly mode?: "legacy" | "workflow";
+};
+
+export interface WorkflowContextItem {
+  readonly id: string;
+  readonly text: string;
+  readonly status?: string;
+  readonly origin?: "explicit" | "inferred";
+  readonly priority?: "must" | "prefer";
+  readonly scope?: "project" | "branch";
+  readonly branchNodeIds?: readonly string[];
+  readonly sourceQuote?: string | null;
+  readonly sourceMessageId?: string | null;
+  readonly sourceNodeIds?: readonly string[];
+}
+
+export interface WorkflowConversationContext {
+  readonly revision: number;
+  readonly summaryRevision?: number;
+  readonly graphRevision?: number;
+  readonly currentObjective: string | null;
+  readonly objectiveOrigin?: "explicit" | "inferred" | null;
+  readonly currentTask: string | null;
+  readonly focusNodeIds: readonly string[];
+  readonly requirements: readonly WorkflowContextItem[];
+  readonly preferences: readonly WorkflowContextItem[];
+  readonly state?: { readonly preferences: readonly WorkflowContextItem[] };
+  readonly scopedMemory?: readonly {
+    readonly id: string;
+    readonly branchNodeIds: readonly string[];
+    readonly applicable: boolean;
+  }[];
+  readonly sources?: readonly {
+    readonly nodeId: string;
+    readonly title: string;
+    readonly reason: string;
+  }[];
+  readonly nodes?: readonly { readonly id: string; readonly title: string; readonly type: string; readonly kind?: string }[];
+  readonly coverage?: Readonly<Record<string, unknown>>;
+  readonly visualCoverage: {
+    readonly total: number;
+    readonly ready: number;
+    readonly pending: number;
+    readonly failed: number;
+    readonly attachedNodeIds: readonly string[];
+  };
+}
+
+export type WorkflowMessageView = Omit<AgentMessageView, "context"> & {
+  readonly kind?: "reply" | "clarify" | "propose" | null;
+  readonly proposal?: WorkflowProposal | null;
+  readonly origin?: "user" | "execution_result" | "background_analysis";
+  readonly executionId?: string | null;
+  readonly sourceEventId?: string | null;
+  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null }) | null;
+};
 
 interface CursorPage<T> {
   readonly items: readonly T[];
@@ -107,7 +166,7 @@ async function apiError(response: Response, fallback: string): Promise<Error> {
 export async function listAgentConversations(
   projectId: string,
   cursor?: string,
-): Promise<CursorPage<AgentConversationSummary>> {
+): Promise<CursorPage<WorkflowConversationSummary>> {
   const query = new URLSearchParams({ limit: "50" });
   if (cursor) query.set("cursor", cursor);
   const response = await fetch(
@@ -117,16 +176,17 @@ export async function listAgentConversations(
   if (!response.ok) {
     throw await apiError(response, "会话列表读取失败");
   }
-  return (await response.json()) as CursorPage<AgentConversationSummary>;
+  return (await response.json()) as CursorPage<WorkflowConversationSummary>;
 }
 
 export async function createAgentConversation(
   projectId: string,
-): Promise<AgentConversationSummary> {
+  input: { readonly mode?: "workflow" } = {},
+): Promise<WorkflowConversationSummary> {
   const response = await fetch(
     `/api/projects/${encodeURIComponent(projectId)}/agent-conversations`,
     {
-      body: JSON.stringify({}),
+      body: JSON.stringify(input),
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       method: "POST",
@@ -135,7 +195,86 @@ export async function createAgentConversation(
   if (!response.ok) {
     throw await apiError(response, "新会话创建失败");
   }
-  return (await response.json()) as AgentConversationSummary;
+  return (await response.json()) as WorkflowConversationSummary;
+}
+
+export async function listWorkflowMessages(
+  conversationId: string,
+  cursor?: string,
+): Promise<CursorPage<WorkflowMessageView>> {
+  return (await listAgentMessages(conversationId, cursor)) as unknown as CursorPage<WorkflowMessageView>;
+}
+
+async function workflowConversationRequest<T>(url: string, init: RequestInit | undefined, fallback: string): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", credentials: "include", ...init, ...(init ? { headers: { "Content-Type": "application/json" } } : {}) });
+  if (!response.ok) throw await apiError(response, fallback);
+  return (await response.json()) as T;
+}
+
+export function sendWorkflowMessage(
+  conversationId: string,
+  input: {
+    readonly clientRequestId: string;
+    readonly content: string;
+    readonly referencedNodeIds: readonly string[];
+    readonly focusNodeIds?: readonly string[];
+    readonly respondingToProposalId?: string;
+  },
+): Promise<{ readonly userMessage: WorkflowMessageView; readonly assistantMessage: WorkflowMessageView }> {
+  return workflowConversationRequest(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/workflow-messages`,
+    { method: "POST", body: JSON.stringify(input) },
+    "设计消息发送失败，请重试",
+  );
+}
+
+export function fetchWorkflowConversationContext(
+  conversationId: string,
+): Promise<WorkflowConversationContext> {
+  return workflowConversationRequest(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/context`,
+    undefined,
+    "设计上下文读取失败",
+  );
+}
+
+export interface WorkflowCollaborationPlan {
+  readonly revision: number;
+  readonly graphRevision?: number;
+  readonly contextRevision?: number;
+  readonly plan: {
+    readonly goal: string;
+    readonly milestones: readonly { readonly id: string; readonly title: string; readonly status: "pending" | "active" | "completed" | "blocked"; readonly completionCriteria: readonly string[]; readonly evidenceRefs: readonly string[] }[];
+    readonly activeMilestoneId: string | null;
+    readonly nextGoal: string | null;
+    readonly completionCriteria: readonly string[];
+  } | null;
+}
+
+export function fetchWorkflowConversationPlan(conversationId: string): Promise<WorkflowCollaborationPlan> {
+  return workflowConversationRequest(`/api/agent-conversations/${encodeURIComponent(conversationId)}/plan`, undefined, "协作计划读取失败");
+}
+
+export interface WorkflowContextCorrection {
+  readonly currentObjective?: string;
+  readonly focusNodeIds?: readonly string[];
+  readonly disabledPreferenceIds?: readonly string[];
+  readonly updatedItems?: readonly { readonly id: string; readonly text?: string; readonly confirm?: boolean; readonly scope?: "project" | "branch" }[];
+}
+
+export function updateWorkflowConversationContext(
+  conversationId: string,
+  input: WorkflowContextCorrection & {
+    readonly baseRevision: number;
+    readonly summaryRevision?: number;
+    readonly mutationId: string;
+  },
+): Promise<WorkflowConversationContext> {
+  return workflowConversationRequest(
+    `/api/agent-conversations/${encodeURIComponent(conversationId)}/context`,
+    { method: "PATCH", body: JSON.stringify(input) },
+    "设计上下文保存失败",
+  );
 }
 
 export async function listAgentMessages(

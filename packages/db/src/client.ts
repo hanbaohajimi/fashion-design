@@ -45,6 +45,11 @@ import {
   type WorkflowMutation,
   type WorkflowProposal,
   type WorkflowAttempt,
+  type WorkflowNodeVersion,
+  type WorkflowExecution,
+  type WorkflowOutbox,
+  type AgentTurn,
+  type AgentPlanRevision,
 } from "../generated/prisma/client.js";
 
 const globalForPrisma = globalThis as typeof globalThis & {
@@ -118,4 +123,11 @@ export type {
   WorkflowMutation,
   WorkflowProposal,
   WorkflowAttempt,
+  WorkflowNodeVersion,
+  WorkflowExecution,
+  WorkflowOutbox,
+  AgentTurn,
+  AgentPlanRevision,
 };
+export { appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, recordWorkflowSemanticChange, workflowVersionSnapshot } from "./workflow-events.js";
+export type { WorkflowVersionNode, WorkflowVersionEdge, WorkflowVersionBinding, WorkflowVersionSnapshot } from "./workflow-events.js";

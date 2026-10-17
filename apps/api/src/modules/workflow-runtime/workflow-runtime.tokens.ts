@@ -1,0 +1,1 @@
+export const WORKFLOW_RUNTIME_DB = Symbol("WORKFLOW_RUNTIME_DB");

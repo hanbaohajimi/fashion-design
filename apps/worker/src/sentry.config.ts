@@ -65,6 +65,7 @@ export function captureWorkerException(
       | "thumbnail"
       | "trend-digest"
       | "vlm-inference"
+      | "visual-summary"
       | "worker";
   },
 ): void {

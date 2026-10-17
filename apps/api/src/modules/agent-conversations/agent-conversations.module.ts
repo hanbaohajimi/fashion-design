@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 
 import { AiModule } from "../ai/ai.module";
 import { AgentRunsModule } from "../agent-runs/agent-runs.module";
+import { WorkflowRuntimeModule } from "../workflow-runtime/workflow-runtime.module";
 import { FilesModule } from "../files/files.module";
 import { GenerationModule } from "../generation/generation.module";
 import { SecurityModule } from "../../security/security.module";
@@ -22,6 +23,7 @@ import {
     GenerationModule,
     SecurityModule,
     AgentRunsModule,
+    WorkflowRuntimeModule,
   ],
   controllers: [
     AgentConversationsController,

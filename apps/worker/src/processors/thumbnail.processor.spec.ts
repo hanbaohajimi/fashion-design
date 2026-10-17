@@ -115,6 +115,26 @@ describe("thumbnail processor", () => {
     expect(storage.put).not.toHaveBeenCalled();
   });
 
+  it("新图就绪后异步入队视觉摘要，队列失败不撤销已就绪文件", async () => {
+    const visualSummaryJobs = { enqueue: vi.fn().mockRejectedValue(new Error("queue unavailable")) };
+    const process = createThumbnailProcessor({ database: database as never, storage, visualSummaryJobs });
+    await expect(process("file-1")).resolves.toBeUndefined();
+    expect(visualSummaryJobs.enqueue).toHaveBeenCalledWith({ kind: "file", id: "file-1" });
+    expect(database.fileAsset.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: FileStatus.READY }),
+    }));
+  });
+
+  it("READY 重投任务补齐在持久化后崩溃而缺失的视觉任务", async () => {
+    database.fileAsset.findUnique.mockResolvedValueOnce({ ...record(), status: FileStatus.READY,
+      thumbnail1024Key: "thumbnails/file-1/1024.webp" });
+    const visualSummaryJobs = { enqueue: vi.fn().mockResolvedValue(undefined) };
+    const process = createThumbnailProcessor({ database: database as never, storage, visualSummaryJobs });
+    await process("file-1");
+    expect(visualSummaryJobs.enqueue).toHaveBeenCalledWith({ kind: "file", id: "file-1" });
+    expect(storage.get).not.toHaveBeenCalled();
+  });
+
   it("PENDING 的陈旧任务不会下载或生成缩略图", async () => {
     database.fileAsset.findUnique.mockResolvedValueOnce({
       ...record("file-pending"),

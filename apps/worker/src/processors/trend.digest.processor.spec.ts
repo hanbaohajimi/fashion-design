@@ -326,12 +326,14 @@ describe("trend providers", () => {
         upsert: vi.fn().mockResolvedValue({ id: "cover-a" }),
       },
     };
+    const visualSummaryJobs = { enqueue: vi.fn().mockRejectedValue(new Error("analysis queue unavailable")) };
     const service = new S3TrendCoverService({
       database: database as never,
       download: vi.fn().mockResolvedValue(input),
       now: () => new Date("2026-08-02T08:00:00.000Z"),
       ownerId: "system-user",
       storage: storage as never,
+      visualSummaryJobs,
     });
 
     await service.store(
@@ -347,6 +349,7 @@ describe("trend providers", () => {
       expect.any(Buffer),
       "image/webp",
     );
+    expect(visualSummaryJobs.enqueue).toHaveBeenCalledWith({ kind: "file", id: "cover-a" });
     expect(database.fileAsset.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({

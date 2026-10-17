@@ -54,6 +54,37 @@ function resolvePublicHostname(): Promise<string[]> {
 }
 
 describe("Generation processor", () => {
+  it.each(["SUCCEEDED", "FAILED", "MODERATION_FAILED", "CANCELED"] as const)("atomically emits one durable workflow receipt for terminal %s", async (terminal) => {
+    const fixture = await createTask(terminal === "CANCELED" ? GenerationTaskStatus.CANCELED : GenerationTaskStatus.QUEUED);
+    const projectId = fixture.task.projectId;
+    if (!projectId) throw new Error("workflow fixture project missing");
+    const toolNodeId = crypto.randomUUID();
+    await prisma.workflowGraph.create({ data: { projectId } });
+    await prisma.workflowNode.create({ data: { id: toolNodeId, projectId, kind: "tool", type: "generate_design", title: "生成", payload: { params: {} }, status: "running", x: 0, y: 0 } });
+    const execution = await prisma.workflowExecution.create({ data: { projectId, toolNodeId, userId: fixture.userId, executionKey: crypto.randomUUID(), requestSnapshot: {} } });
+    const attempt = await prisma.workflowAttempt.create({ data: { projectId, toolNodeId, ordinal: 1, executionKey: crypto.randomUUID(), executionId: execution.id, generationTaskId: fixture.task.id, status: "queued", requestSnapshot: {} } });
+    const ai = successfulAi();
+    if (terminal === "FAILED") ai.submit.mockRejectedValue(new AiProviderError({ provider: "mock", message: "provider denied", code: "INVALID_REQUEST", retryable: false }));
+    const process = createGenerationProcessor({ ai, billing: new BillingService(prisma), database: prisma,
+      moderator: terminal === "MODERATION_FAILED" ? { moderate: async () => ({ status: "rejected", categories: ["unsafe"] }) } : approvedModerator(), pollIntervalMs: 1 });
+    try {
+      if (terminal === "FAILED") await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow();
+      else await process(fakeJob(fixture.task));
+      if (terminal !== "FAILED") await process(fakeJob(fixture.task));
+      else await expect(process(fakeJob(fixture.task, 1))).rejects.toThrow();
+      const task = await prisma.generationTask.findUniqueOrThrow({ where: { id: fixture.task.id } });
+      expect(task.status).toBe(terminal);
+      const receipts = await prisma.workflowOutbox.findMany({ where: { projectId, eventType: "generation.terminal" } });
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0]).toMatchObject({ status: "pending", executionId: execution.id, attemptId: attempt.id, generationTaskId: fixture.task.id, payload: { status: terminal } });
+      expect(JSON.stringify(receipts)).not.toContain("https://");
+      expect(JSON.stringify(receipts)).not.toContain("data:image");
+      if (terminal === "SUCCEEDED") expect(receipts[0]?.payload).toMatchObject({ assetIds: [(await prisma.designAsset.findFirstOrThrow({ where: { generationTaskId: fixture.task.id } })).id] });
+    } finally {
+      await prisma.workflowAttempt.deleteMany({ where: { projectId } });
+      await cleanup(fixture.userId);
+    }
+  });
   it("默认给 Amux 生图和后处理预留十二分钟，并允许环境变量覆盖", () => {
     expect(generationTimeoutMsFromEnv(undefined)).toBe(720_000);
     expect(generationTimeoutMsFromEnv("900000")).toBe(900_000);

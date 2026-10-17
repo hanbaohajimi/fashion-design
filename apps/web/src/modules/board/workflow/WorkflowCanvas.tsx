@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { AgentConversationSummary, AgentDesignBrief, AgentDesignEvaluation, AgentRunView } from "@fashion/shared";
+import type { AgentDesignBrief, AgentDesignEvaluation, AgentRunView } from "@fashion/shared";
+import { getWorkflowToolCatalog, getWorkflowToolContract, parseWorkflowToolParameters, WORKFLOW_TOOL_KEYS, WORKFLOW_REFERENCE_ROLES, type WorkflowToolKey } from "@fashion/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createShapeId,
@@ -19,12 +20,9 @@ import {
 
 import { fetchProject } from "../../projects/projects-api";
 import {
-  createAgentConversation,
   fetchAgentRun,
-  listAgentConversations,
-  listAgentMessages,
   listAgentRuns,
-  sendAgentMessage,
+  createAgentConversation,
 } from "../agent/agent-api";
 import { BoardProjectContext } from "../board-context";
 import { CollectionDrawer } from "../generation/CollectionDrawer";
@@ -52,13 +50,11 @@ import {
   type WorkflowToolType,
   WorkflowApiError,
   decideWorkflowCandidate,
-  decideWorkflowProposal,
   executeWorkflowNode,
   fetchWorkflow,
   fetchWorkflowNodeHistory,
   inferWorkflowNodeRole,
   patchWorkflow,
-  proposeWorkflowStep,
 } from "./workflow-api";
 import {
   displayNodeTitle,
@@ -69,6 +65,7 @@ import {
   nodeSummary,
   nodeTypeLabel,
   outgoingEdges,
+  projectWorkflowProposal,
 } from "./workflow-graph";
 import {
   WORKFLOW_NODE_SHAPE_TYPE,
@@ -79,6 +76,7 @@ import styles from "./workflow-canvas.module.css";
 import { WORKFLOW_EDGE_SHAPE_TYPE, WorkflowEdgeShapeUtil, type WorkflowEdgeShape } from "./WorkflowEdgeShape";
 import { WorkflowInteractionProvider, WorkflowConnectionOverlay } from "./WorkflowInteractions";
 import { planInputEdit, type InputEdit, type PlannedInputEdit } from "./workflow-editing";
+import { WorkflowAssistantPanel } from "./WorkflowAssistantPanel";
 
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 const cameraActionIds = new Set([
@@ -125,12 +123,8 @@ const ASSET_OPTIONS: readonly { type: WorkflowAssetType; title: string; hint: st
   { type: "fabric", title: "面料库", hint: "引用现有面料记录" },
 ];
 
-const TOOL_OPTIONS: readonly { type: WorkflowToolType; title: string; hint: string }[] = [
-  { type: "analyze_brief", title: "需求分析", hint: "需求与参考 → 设计约束" },
-  { type: "generate_design", title: "方案生成", hint: "约束与参考 → 候选方案" },
-  { type: "evaluate_design", title: "服装评估", hint: "候选与约束 → 评估报告" },
-  { type: "edit_design", title: "局部修改", hint: "候选 → 新的设计分支" },
-];
+const toolInputHints = { analyze_brief: "需求与参考", generate_design: "约束与参考", evaluate_design: "候选与约束", edit_design: "候选" };
+const TOOL_OPTIONS = getWorkflowToolCatalog().map((tool) => ({ type: tool.key, title: tool.name, hint: `${toolInputHints[tool.key]} → ${tool.output.type === "constraint" ? "设计约束" : tool.output.type === "evaluation" ? "评估报告" : "新的设计方案"}` }));
 
 const REFERENCE_ROLE_OPTIONS = [
   { value: "style_ref", label: "风格参考" },
@@ -234,19 +228,10 @@ function WorkflowProjection({
     [editor],
   );
   const lineage = selectedId ? lineageOf(graph, selectedId) : null;
-  const proposedNodes = useMemo(() => (proposal?.operations ?? []).flatMap((operation) =>
-    operation.type === "add_node"
-      ? [{ ...operation.node, status: "proposed", createdAt: "", updatedAt: "" } as WorkflowNode]
-      : [],
-  ), [proposal]);
   const proposedEdges = useMemo(() => (proposal?.operations ?? []).flatMap((operation) =>
     operation.type === "add_edge" ? [operation.edge] : [],
   ), [proposal]);
-  const projectedGraph = useMemo(() =>
-    proposedNodes.length > 0 || proposedEdges.length > 0
-      ? { ...graph, nodes: [...graph.nodes, ...proposedNodes], edges: [...graph.edges, ...proposedEdges] }
-      : graph,
-  [graph, proposedNodes, proposedEdges]);
+  const projectedGraph = useMemo(() => projectWorkflowProposal(graph, proposal), [graph, proposal]);
 
   useEffect(() => onEditor(editor), [editor, onEditor]);
   useEffect(() => { editor.user.updateUserPreferences({ colorScheme: "light" }); }, [editor]);
@@ -374,6 +359,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   }), []);
   const [graph, setGraph] = useState<WorkflowGraph | null>(null);
   const [proposal, setProposal] = useState<WorkflowProposal | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const executionConversation = useRef<Promise<string> | null>(null);
   const graphRef = useRef<WorkflowGraph | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const [projectName, setProjectName] = useState("设计项目");
@@ -414,6 +401,15 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   const pendingLayout = useRef(new Map<string, { nodeId: string; x: number; y: number }>());
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const ensureConversation = async (): Promise<string> => {
+    if (activeConversationId) return activeConversationId;
+    if (!executionConversation.current) executionConversation.current = createAgentConversation(projectId, { mode: "workflow" }).then((created) => {
+      setActiveConversationId(created.id);
+      window.dispatchEvent(new CustomEvent("fashion-workflow:conversation", { detail: { id: created.id } }));
+      return created.id;
+    }).finally(() => { executionConversation.current = null; });
+    return executionConversation.current;
+  };
 
   const commitGraph = useCallback((next: WorkflowGraph) => {
     const previous = graphRef.current;
@@ -430,7 +426,10 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     const previousRevision = previous?.revision;
     graphRef.current = next;
     setGraph(next);
-    if (next.proposals) setProposal(next.proposals.find((item) => item.status === "pending") ?? null);
+    if (next.proposals) {
+      const pending = next.proposals;
+      setProposal((current) => current ? pending.find((item) => item.id === current.id && item.status === "pending") ?? null : null);
+    }
     else if (previousRevision !== next.revision) setProposal(null);
   }, []);
 
@@ -812,7 +811,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
                 {(menuTab === "assets" ? ASSET_OPTIONS : TOOL_OPTIONS).map((option) => (
                   <button key={option.type} onClick={() => {
                     if (menuTab === "assets") handleAssetOption(option.type as WorkflowAssetType);
-                    else void addNode("tool", option.type, option.title, { toolKey: option.type, toolVersion: "1", params: {} }).catch(() => undefined);
+                    else { const tool = getWorkflowToolContract(option.type as WorkflowToolKey); void addNode("tool", option.type, option.title, { toolKey: tool.key, toolVersion: tool.version, params: { ...tool.defaults, prompt: "" } }).catch(() => undefined); }
                   }} type="button">
                     <strong>{option.title}</strong><span>{option.hint}</span>
                   </button>
@@ -855,6 +854,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
               }}
               path={path}
               projectId={projectId}
+              onEnsureConversation={ensureConversation}
               onGraphChange={commitGraph}
               onSavePayload={async (nodeId, payload) => { await mutate([{ type: "update_node", nodeId, payload }]); }}
               onInferRole={async (nodeId) => {
@@ -865,7 +865,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             />
           ) : null}
           <div className={styles.assistantMount} hidden={activeTab !== "assistant"}>
-            <AssistantPanel graph={graph} onGraphChange={commitGraph} onNotice={setNotice} onError={setError} onProposal={setProposal} projectId={projectId} proposal={proposal} selected={selected} />
+            <WorkflowAssistantPanel graph={graph} onConversationChange={setActiveConversationId} onGraphChange={commitGraph} onNotice={setNotice} onError={setError} onProposal={setProposal} projectId={projectId} selected={selected} onLocate={(nodeId) => { setSelectedId(nodeId); editorRef.current?.select(nodeShapeId(nodeId)); editorRef.current?.zoomToSelection({ animation: { duration: 220 } }); }} renderLegacyRuns={(conversationId) => <LegacyRunHistory conversationId={conversationId} onError={setError} />} />
           </div>
           {sidebarOpen && (error || notice) ? <div aria-live="polite" className={error ? styles.errorNotice : styles.successNotice} role={error ? "alert" : "status"}>{error ?? notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
         </aside>
@@ -911,7 +911,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
         </div>
       ) : null}
       {historyOpen ? <LegacyBoardHistory onClose={() => setHistoryOpen(false)} onImport={importLegacy} projectId={projectId} /> : null}
-      {workspaceAssetId ? <WorkflowAssetWorkspace assetId={workspaceAssetId} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /> : null}
+      {workspaceAssetId ? <WorkflowAssetWorkspace assetId={workspaceAssetId} onEnsureConversation={ensureConversation} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /> : null}
       <WorkflowSketchEditor onClose={() => setSketchOpen(false)} onCreated={async ({ fileAssetId, title, imageUrl }) => {
         const nodeId = await addNode("asset", "sketch", title, {
           fileAssetId,
@@ -940,6 +940,7 @@ function NodeDetails({
   onGraphChange,
   onSavePayload,
   onInferRole,
+  onEnsureConversation,
   setError,
 }: {
   readonly graph: WorkflowGraph;
@@ -952,6 +953,7 @@ function NodeDetails({
   readonly onGraphChange: (next: WorkflowGraph) => void;
   readonly onSavePayload: (nodeId: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
   readonly onInferRole: (nodeId: string) => Promise<void>;
+  readonly onEnsureConversation: () => Promise<string>;
   readonly setError: (message: string | null) => void;
 }) {
   const [decisionKind, setDecisionKind] = useState<"selected" | "rejected" | "compare">("selected");
@@ -982,7 +984,7 @@ function NodeDetails({
         {path && path.nodeIds.size > 1 ? <ol>{graph.nodes.filter((item) => path.nodeIds.has(item.id)).map((item) => <li key={item.id}>{displayNodeTitle(item)}</li>)}</ol> : null}
         {assetId ? <DesignPathPanel assetId={assetId} /> : null}
       </details>
-      {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={`${node.id}:${node.updatedAt}`} node={node} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
+      {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={`${node.id}:${node.updatedAt}`} node={node} onEnsureConversation={onEnsureConversation} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
       {node.type === "candidate" && assetId ? <section className={styles.detailSection}><h4>候选方案</h4><button onClick={() => onOpenAsset(assetId)} type="button">打开大图、版本与局部重绘</button><h4>设计师决定</h4><select onChange={(event) => setDecisionKind(event.target.value as typeof decisionKind)} value={decisionKind}><option value="selected">选定方案</option><option value="compare">保留比较</option><option value="rejected">否决方案</option></select><textarea className={styles.decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder="记录选择或否决理由" rows={3} value={decisionReason} /><button disabled={!decisionReason.trim()} onClick={() => void decideWorkflowCandidate(projectId, node.id, assetId, decisionKind, decisionReason.trim()).then((next) => { onGraphChange(next); setDecisionReason(""); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "决定保存失败"))} type="button">保存决定</button></section> : null}
       {assetId && node.type === "candidate" ? <section className={styles.detailSection}><h4>系列</h4><button onClick={() => void onCreateCollection(node.id, assetId)} type="button">{typeof node.payload.collectionId === "string" ? "打开关联系列" : "设为 Hero / 建立系列"}</button></section> : null}
       <section className={styles.detailSection}><button className={styles.dangerButton} onClick={() => void onDelete(node.id)} type="button">从工作流移除节点</button></section>
@@ -996,6 +998,8 @@ interface ToolDraft {
   readonly count: string;
   readonly width: string;
   readonly height: string;
+  readonly quality: string;
+  readonly referenceInputs: readonly { readonly nodeId: string; readonly role: string; readonly weight: number }[];
 }
 
 function toolParams(node: WorkflowNode): Readonly<Record<string, unknown>> {
@@ -1007,16 +1011,19 @@ function toolParams(node: WorkflowNode): Readonly<Record<string, unknown>> {
 
 function toolDraft(node: WorkflowNode): ToolDraft {
   const params = toolParams(node);
+  const defaults = WORKFLOW_TOOL_KEYS.includes(node.type as WorkflowToolKey) ? getWorkflowToolContract(node.type as WorkflowToolKey).defaults : {};
   return {
     prompt: typeof params.prompt === "string" ? params.prompt : "",
     negativePrompt: typeof params.negativePrompt === "string" ? params.negativePrompt : "",
-    count: String(params.count ?? 2),
-    width: String(params.width ?? 768),
-    height: String(params.height ?? 1024),
+    count: String(params.count ?? defaults.count ?? 1),
+    width: String(params.width ?? defaults.width ?? 768),
+    height: String(params.height ?? defaults.height ?? 1024),
+    quality: String(params.quality ?? defaults.quality ?? "high"),
+    referenceInputs: Array.isArray(params.referenceInputs) ? params.referenceInputs as ToolDraft["referenceInputs"] : [],
   };
 }
 
-function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, projectId, setError }: {
+function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEnsureConversation, projectId, setError }: {
   readonly graph: WorkflowGraph;
   readonly inputs: number;
   readonly node: WorkflowNode;
@@ -1024,6 +1031,7 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, proje
   readonly onSavePayload: (nodeId: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
   readonly projectId: string;
   readonly setError: (message: string | null) => void;
+  readonly onEnsureConversation: () => Promise<string>;
 }) {
   const original = toolDraft(node);
   const [draft, setDraft] = useState<ToolDraft>(original);
@@ -1032,32 +1040,34 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, proje
   const [localError, setLocalError] = useState<string | null>(null);
   const canEdit = node.status === "ready" && node.type !== "restore_version";
   const imageTool = node.type === "generate_design" || node.type === "edit_design";
-  const dirty = draft.prompt !== original.prompt ||
-    (imageTool && (draft.negativePrompt !== original.negativePrompt || draft.width !== original.width || draft.height !== original.height ||
-      (node.type === "generate_design" && draft.count !== original.count)));
+  const dirty = draft.prompt !== original.prompt || (imageTool && (draft.negativePrompt !== original.negativePrompt || draft.width !== original.width || draft.height !== original.height || draft.quality !== original.quality || draft.count !== original.count || JSON.stringify(draft.referenceInputs) !== JSON.stringify(original.referenceInputs)));
+  const referenceNodes = graph.nodes.filter((source) => graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === "reference" && edge.sourceNodeId === source.id) && Boolean(nodeImageUrl(source)));
 
   const save = async () => {
     if (!canEdit || !dirty || saving) return;
-    const nextParams: Record<string, unknown> = { ...toolParams(node), prompt: draft.prompt.trim() };
+    let nextParams: Record<string, unknown> = { ...toolParams(node), prompt: draft.prompt.trim() };
     if (imageTool) {
-      const width = Number(draft.width);
-      const height = Number(draft.height);
-      if (![width, height].every((value) => Number.isInteger(value) && value >= 256 && value <= 2048 && value % 8 === 0)) {
-        setLocalError("图像宽高需在 256–2048 之间，且为 8 的倍数");
-        return;
-      }
       nextParams.negativePrompt = draft.negativePrompt.trim();
-      nextParams.width = width;
-      nextParams.height = height;
-      if (node.type === "generate_design") {
-        const count = Number(draft.count);
-        if (!Number.isInteger(count) || count < 1 || count > 3) {
-          setLocalError("候选数量需在 1–3 之间");
-          return;
-        }
-        nextParams.count = count;
-      }
+      nextParams.width = Number(draft.width);
+      nextParams.height = Number(draft.height);
+      nextParams.count = Number(draft.count);
+      nextParams.quality = draft.quality;
+      nextParams.referenceInputs = draft.referenceInputs;
     }
+    try {
+      if (WORKFLOW_TOOL_KEYS.includes(node.type as WorkflowToolKey)) {
+        // Old manually drawn masks retain their existing trusted temporary URL; new parameters use the shared contract.
+        const legacyMask = nextParams.taskType === "inpaint" && typeof nextParams.maskImageUrl === "string" ? nextParams.maskImageUrl : null;
+        if (legacyMask) {
+          const validation: Record<string, unknown> = { ...nextParams, taskType: "i2i" };
+          delete validation.maskImageUrl;
+          const palette = validation.palette;
+          delete validation.palette;
+          const checked = parseWorkflowToolParameters(node.type as WorkflowToolKey, validation);
+          nextParams = { ...checked, taskType: "inpaint", maskImageUrl: legacyMask, ...(palette ? { palette } : {}) };
+        } else nextParams = parseWorkflowToolParameters(node.type as WorkflowToolKey, nextParams);
+      }
+    } catch { setLocalError("参数不符合工具要求：数量为 1–4，宽高为 256–2048 且是 8 的倍数；请检查指令、质量及参考配置。"); return; }
     setSaving(true);
     setLocalError(null);
     try {
@@ -1071,7 +1081,7 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, proje
 
   const execute = async () => {
     try {
-      const next = await executeWorkflowNode(projectId, node.id);
+      const next = await executeWorkflowNode(projectId, node.id, await onEnsureConversation());
       onGraphChange(next);
       window.dispatchEvent(new Event("fashion-workflow:refresh"));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "节点执行失败"); }
@@ -1085,10 +1095,12 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, proje
       {imageTool ? <details className={styles.advancedSettings}><summary>高级设置</summary>
         <label>排除内容<textarea aria-label="排除内容" disabled={!canEdit || saving} maxLength={3000} onChange={(event) => setDraft({ ...draft, negativePrompt: event.target.value })} rows={2} value={draft.negativePrompt} /></label>
         <div className={styles.toolDimensions}>
-          {node.type === "generate_design" ? <label>候选数量<input aria-label="候选数量" disabled={!canEdit || saving} max={3} min={1} onChange={(event) => setDraft({ ...draft, count: event.target.value })} step={1} type="number" value={draft.count} /></label> : null}
+          <label>候选数量<input aria-label="候选数量" disabled={!canEdit || saving} max={4} min={1} onChange={(event) => setDraft({ ...draft, count: event.target.value })} step={1} type="number" value={draft.count} /></label>
           <label>宽度<input aria-label="宽度" disabled={!canEdit || saving} max={2048} min={256} onChange={(event) => setDraft({ ...draft, width: event.target.value })} step={8} type="number" value={draft.width} /></label>
           <label>高度<input aria-label="高度" disabled={!canEdit || saving} max={2048} min={256} onChange={(event) => setDraft({ ...draft, height: event.target.value })} step={8} type="number" value={draft.height} /></label>
         </div>
+        <label>图像质量<select aria-label="图像质量" disabled={!canEdit || saving} onChange={(event) => setDraft({ ...draft, quality: event.target.value })} value={draft.quality}><option value="auto">自动</option><option value="low">低</option><option value="medium">标准</option><option value="high">高</option></select></label>
+        {referenceNodes.length ? <><p>参考作用与强度仅为提示词引导，不能保证模型精确控制。</p>{referenceNodes.map((reference) => { const current = draft.referenceInputs.find((entry) => entry.nodeId === reference.id) ?? { nodeId: reference.id, role: typeof reference.payload.role === "string" ? reference.payload.role : "style_ref", weight: 0.7 }; const update = (value: Partial<typeof current>) => setDraft({ ...draft, referenceInputs: [...draft.referenceInputs.filter((entry) => entry.nodeId !== reference.id), { ...current, ...value }] }); return <div className={styles.referenceConfig} key={reference.id}><strong>{displayNodeTitle(reference)}</strong><label>参考作用<select aria-label={`参考作用 ${reference.title}`} disabled={!canEdit || saving} value={current.role} onChange={(event) => update({ role: event.target.value })}>{WORKFLOW_REFERENCE_ROLES.map((role) => <option key={role} value={role}>{REFERENCE_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role}</option>)}</select></label><label>参考强度<input aria-label={`参考强度 ${reference.title}`} disabled={!canEdit || saving} type="number" min={0} max={1} step={0.1} value={current.weight} onChange={(event) => update({ weight: Number(event.target.value) })} /></label></div>; })}</> : null}
       </details> : null}
     </div>
     {localError ? <p className={styles.toolError} role="alert">{localError}</p> : null}
@@ -1158,228 +1170,4 @@ function LegacyRunHistory({ conversationId, onError }: {
       {selected.intelligence?.actions.length ? <section><h5>领域评价与修订</h5>{selected.intelligence.actions.map((action) => <div className={styles.legacyAttempt} key={action.id}><strong>{action.kind === "evaluate_candidate" ? "候选评价" : "修订建议"} · {action.status}</strong>{action.evaluation ? <p>{action.evaluation.summary}</p> : null}{action.refinement ? <><p>{action.refinement.summary}</p><p>建议提示词：{action.refinement.prompt}</p></> : null}{action.error ? <p>{action.error}</p> : null}</div>)}</section> : null}
     </div> : null}
   </section>;
-}
-
-function AssistantPanel({
-  graph,
-  onGraphChange,
-  onNotice,
-  onError,
-  onProposal,
-  projectId,
-  proposal,
-  selected,
-}: {
-  readonly graph: WorkflowGraph;
-  readonly onGraphChange: (next: WorkflowGraph) => void;
-  readonly onNotice: (message: string | null) => void;
-  readonly onError: (message: string | null) => void;
-  readonly onProposal: (proposal: WorkflowProposal | null) => void;
-  readonly projectId: string;
-  readonly proposal: WorkflowProposal | null;
-  readonly selected: WorkflowNode | null;
-}) {
-  const [prompt, setPrompt] = useState("");
-  const [lastWorkflowMessage, setLastWorkflowMessage] = useState("");
-  const [referencedIds, setReferencedIds] = useState<readonly string[]>([]);
-  const [sending, setSending] = useState(false);
-  const [chatMode, setChatMode] = useState(false);
-  const [legacyRunsOpen, setLegacyRunsOpen] = useState(false);
-  const [chatHistoryOpen, setChatHistoryOpen] = useState(false);
-  const [workflowHistory, setWorkflowHistory] = useState<Array<{ id: string; content: string; reply: string }>>([]);
-  const [conversationId, setConversationId] = useState("");
-  const [conversations, setConversations] = useState<readonly AgentConversationSummary[]>([]);
-  const [messages, setMessages] = useState<readonly { id: string; content: string; role: string; status: string }[]>([]);
-  const mentionMatch = chatMode ? null : prompt.match(/(?:^|\s)@([^@\s]*)$/u);
-  const mentionChoices = mentionMatch
-    ? graph.nodes.filter((node) => node.title.includes(mentionMatch[1] ?? "") && !referencedIds.includes(node.id)).slice(0, 6)
-    : [];
-  const hasPendingChatReply = messages.some((message) => message.role === "assistant" && message.status === "pending");
-
-  useEffect(() => {
-    if (!chatMode) return;
-    let active = true;
-    void (async () => {
-      const list = await listAgentConversations(projectId);
-      const conversation = list.items[0];
-      const page = conversation ? await listAgentMessages(conversation.id) : null;
-      if (active) {
-        setConversations(list.items);
-        setConversationId(conversation?.id ?? "");
-        setMessages(page?.items ?? []);
-      }
-    })().catch((cause: unknown) => { if (active) onError(cause instanceof Error ? cause.message : "会话读取失败"); });
-    return () => { active = false; };
-  }, [chatMode, onError, projectId]);
-
-  useEffect(() => {
-    if (!chatMode || !conversationId || !hasPendingChatReply) return;
-    let active = true;
-    let inFlight = false;
-    const timer = window.setInterval(() => {
-      if (inFlight) return;
-      inFlight = true;
-      void listAgentMessages(conversationId)
-        .then((page) => { if (active) setMessages(page.items); })
-        .catch((cause: unknown) => { if (active) onError(cause instanceof Error ? cause.message : "会话消息读取失败"); })
-        .finally(() => { inFlight = false; });
-    }, 2_500);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [chatMode, conversationId, hasPendingChatReply, onError]);
-
-  const selectConversation = async (id: string) => {
-    if (!id || id === conversationId) return;
-    setSending(true);
-    try {
-      const page = await listAgentMessages(id);
-      setConversationId(id);
-      setMessages(page.items);
-    } catch (cause) { onError(cause instanceof Error ? cause.message : "会话读取失败"); }
-    finally { setSending(false); }
-  };
-
-  const createConversation = async () => {
-    setSending(true);
-    try {
-      const conversation = await createAgentConversation(projectId);
-      setConversations((current) => [conversation, ...current]);
-      setConversationId(conversation.id);
-      setMessages([]);
-      setChatMode(true);
-    } catch (cause) { onError(cause instanceof Error ? cause.message : "新会话创建失败"); }
-    finally { setSending(false); }
-  };
-
-  const send = async () => {
-    const content = prompt.trim();
-    if (!content || sending) return;
-    setSending(true);
-    onError(null);
-    try {
-      if (chatMode) {
-        const created = conversationId ? null : await createAgentConversation(projectId);
-        const activeId = created?.id ?? conversationId;
-        if (created) {
-          setConversationId(created.id);
-          setConversations((current) => [created, ...current]);
-        }
-        const result = await sendAgentMessage(activeId, { clientRequestId: crypto.randomUUID(), content, fileAssetIds: [], shapeIds: [] });
-        setMessages((current) => [...current, result.userMessage, result.assistantMessage]);
-        void listAgentConversations(projectId).then((page) => setConversations(page.items)).catch(() => undefined);
-        setPrompt("");
-        return;
-      }
-      const explicitRefs = [...new Set(referencedIds)];
-      const namedRefs: string[] = [];
-      for (const mention of content.matchAll(/(?:^|\s)@/gu)) {
-        const at = (mention.index ?? 0) + mention[0].lastIndexOf("@");
-        const suffix = content.slice(at + 1);
-        const matches = graph.nodes.filter((node) => suffix.startsWith(node.title) &&
-          (!suffix[node.title.length] || /[\s，。！？,.;:!?）)]/u.test(suffix[node.title.length] ?? "")));
-        const longest = Math.max(0, ...matches.map((node) => node.title.length));
-        const exactMatches = matches.filter((node) => node.title.length === longest);
-        if (exactMatches.length > 1 && !exactMatches.some((node) => explicitRefs.includes(node.id))) {
-          onError(`画布中有多个「${exactMatches[0]?.title}」，请从 @列表选择准确节点`);
-          return;
-        }
-        const uniqueMatch = exactMatches.length === 1 ? exactMatches[0] : undefined;
-        if (uniqueMatch && !explicitRefs.some((id) => graph.nodes.find((node) => node.id === id)?.title === uniqueMatch.title)) {
-          namedRefs.push(uniqueMatch.id);
-        }
-      }
-      const refs = [...new Set([...explicitRefs, ...namedRefs])].slice(0, 16);
-      const result = await proposeWorkflowStep(projectId, content, refs);
-      setReferencedIds(refs);
-      setLastWorkflowMessage(content);
-      onProposal(result);
-      setPrompt("");
-    } catch (cause) {
-      onError(cause instanceof Error ? cause.message : "消息发送失败");
-    } finally { setSending(false); }
-  };
-
-  const decideProposal = async (decision: "accept" | "reject", adjusting = false) => {
-    if (!proposal) return;
-    setSending(true);
-    try {
-      const result = await decideWorkflowProposal(projectId, proposal, decision);
-      onGraphChange(result);
-      setWorkflowHistory((history) => [...history, { id: proposal.id, content: proposal.content, reply: decision === "accept" ? "已加入画布，准备好后可执行工具。" : adjusting ? "继续描述你想调整的地方。" : "已跳过这条建议。" }]);
-      setLastWorkflowMessage("");
-      onProposal(null);
-      if (!adjusting) setReferencedIds([]);
-      onNotice(decision === "accept" ? "建议已加入工作流" : "已跳过这条建议");
-    } catch (cause) { onError(cause instanceof Error ? cause.message : "建议处理失败"); }
-    finally { setSending(false); }
-  };
-
-  return (
-    <div className={styles.assistantBody}>
-      <div className={styles.assistantUtility}>
-        <span>{chatMode ? "普通聊天" : "设计协作"}</span>
-        <details className={styles.assistantMore}><summary>更多</summary><div onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}>
-          <button onClick={() => { setChatMode((current) => !current); }} type="button">{chatMode ? "返回设计协作" : "普通聊天"}</button>
-          <button onClick={() => { setChatMode(true); setChatHistoryOpen((current) => !current); }} type="button">历史会话</button>
-          <button disabled={sending} onClick={() => { void createConversation(); }} type="button">新建会话</button>
-          <button onClick={() => { setChatMode(true); setLegacyRunsOpen((current) => !current); }} type="button">旧设计运行</button>
-        </div></details>
-      </div>
-      {chatMode ? <>
-        {chatHistoryOpen ? <div className={styles.chatToolbar}>
-          <select aria-label="历史会话" disabled={sending} onChange={(event) => void selectConversation(event.target.value)} value={conversationId}>
-            {conversations.length === 0 ? <option value="">新会话</option> : null}
-            {conversations.map((item) => <option key={item.id} value={item.id}>{item.title || "未命名会话"}</option>)}
-          </select>
-        </div> : null}
-        <div className={`${styles.chatMessages} ${legacyRunsOpen ? styles.chatMessagesCompact : ""}`}>{messages.length === 0 ? <p className={styles.chatEmpty}>输入消息，开始这段对话。</p> : messages.map((message) => <p data-role={message.role} key={message.id}>{message.content}</p>)}</div>
-        {legacyRunsOpen && conversationId ? <LegacyRunHistory conversationId={conversationId} key={conversationId} onError={onError} /> : null}
-      </> : (
-        <div className={styles.assistantConversation}>
-          {workflowHistory.map((item) => <article className={styles.workflowMessage} key={item.id}><p className={styles.userExample}>{item.content}</p><p>{item.reply}</p></article>)}
-          {proposal?.content || lastWorkflowMessage ? <div className={styles.userExample}>{proposal?.content || lastWorkflowMessage}</div> : null}
-          {proposal ? <div
-            className={styles.suggestionCard}
-            data-empty="false"
-          >
-            <span className={styles.suggestionLabel}>
-              设计助手
-            </span>
-                <SuggestionText key={proposal.id} text={proposal.rationale || "建议已生成，可查看画布中的预览。"} />
-                <details className={styles.suggestionEvidence}><summary>参考依据</summary><small>{(proposal.referencedNodeIds ?? referencedIds).map((id) => { const item = graph.nodes.find((node) => node.id === id); return item ? displayNodeTitle(item) : "已移除素材"; }).join("、") || "当前设计路径"}</small></details>
-                <div className={styles.suggestionActions}><button disabled={sending} onClick={() => void decideProposal("accept")} type="button">加入画布</button><button disabled={sending} onClick={() => { setPrompt(proposal.content); setReferencedIds(proposal.referencedNodeIds); void decideProposal("reject", true); }} type="button">调整</button><button disabled={sending} onClick={() => void decideProposal("reject")} type="button">跳过</button></div>
-          </div> : workflowHistory.length === 0 ? <p className={styles.assistantWelcome}>描述你的设计目标，也可以先在画布上连接素材。</p> : null}
-        </div>
-      )}
-      <div className={styles.composer}>
-        {!chatMode && selected && !referencedIds.includes(selected.id) ? <button className={styles.referenceSelected} onClick={() => setReferencedIds((current) => [...new Set([...current, selected.id])].slice(0, 16))} type="button">＋ 引用「{displayNodeTitle(selected)}」</button> : null}
-        {!chatMode && referencedIds.length > 0 ? <div className={styles.mentions}>{referencedIds.map((id) => <button aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`} key={id} onClick={() => {
-          const title = graph.nodes.find((node) => node.id === id)?.title;
-          setReferencedIds((current) => current.filter((item) => item !== id));
-          if (title) setPrompt((current) => current.replace(`@${title}`, "").trimStart());
-        }} type="button">@{graph.nodes.find((node) => node.id === id)?.title ?? id} ×</button>)}</div> : null}
-        {mentionChoices.length > 0 ? <div aria-label="引用画布节点" className={styles.mentionChoices} role="listbox">{mentionChoices.map((node) => <button aria-selected={false} key={node.id} onClick={() => {
-          setReferencedIds((current) => [...new Set([...current, node.id])].slice(0, 16));
-          setPrompt((current) => current.replace(/(?:^|\s)@([^@\s]*)$/u, (match) => `${match.startsWith(" ") ? " " : ""}@${node.title} `));
-        }} role="option" type="button">@{node.title}<small>{node.kind === "asset" ? "素材" : "工具"}{graph.nodes.filter((item) => item.title === node.title).length > 1 ? ` · ${node.id.slice(0, 8)}` : ""}</small></button>)}</div> : null}
-        <textarea aria-label="向设计助手描述下一步" onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder={chatMode ? "输入普通对话…" : "输入你的修改，或 @ 引用画布节点…"} rows={3} value={prompt} />
-        <div className={styles.composerActions}><button disabled={sending || !prompt.trim()} onClick={() => void send()} type="button">{sending ? "处理中…" : "发送 ↑"}</button></div>
-      </div>
-    </div>
-  );
-}
-
-function SuggestionText({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  const paragraph = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
-    const element = paragraph.current;
-    if (!element || expanded) return;
-    const measure = () => setOverflows(element.scrollHeight > element.clientHeight + 1);
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    measure();
-    return () => observer.disconnect();
-  }, [expanded, text]);
-  return <><p ref={paragraph} className={styles.suggestionText} data-expanded={expanded ? "true" : "false"}>{text}</p>{overflows ? <button className={styles.expandSuggestion} aria-expanded={expanded} onClick={() => setExpanded((current) => !current)} type="button">{expanded ? "收起说明" : "展开说明"}</button> : null}</>;
 }

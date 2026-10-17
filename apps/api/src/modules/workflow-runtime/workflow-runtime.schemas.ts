@@ -13,7 +13,8 @@ export const workflowProposalDecisionSchema = z.object({
   mutationId: z.uuid(),
 });
 
-export const workflowExecuteSchema = z.object({ mutationId: z.uuid() });
+export const workflowExecuteSchema = z.object({ mutationId: z.uuid(), conversationId: id.optional() });
+export const workflowRejectSchema = z.object({ mutationId: z.uuid(), reason: z.string().trim().min(1).max(2_000).optional() });
 export const workflowRoleInferenceSchema = z.object({ mutationId: z.uuid() });
 
 export const workflowImportAssetSchema = z.object({
@@ -37,5 +38,6 @@ export type WorkflowProposalDecision = z.infer<
   typeof workflowProposalDecisionSchema
 >;
 export type WorkflowExecuteRequest = z.infer<typeof workflowExecuteSchema>;
+export type WorkflowRejectRequest = z.infer<typeof workflowRejectSchema>;
 export type WorkflowRoleInferenceRequest = z.infer<typeof workflowRoleInferenceSchema>;
 export type WorkflowNodeDecision = z.infer<typeof workflowNodeDecisionSchema>;

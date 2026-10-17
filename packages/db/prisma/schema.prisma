@@ -365,6 +365,7 @@ model Project {
   coverAssetId       String?             @map("cover_asset_id")
   idempotencyKey     String?             @map("idempotency_key")
   archived           Boolean             @default(false)
+  workflowAgentVersion Int                @default(2) @map("workflow_agent_version")
   deletedAt          DateTime?           @map("deleted_at")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
@@ -381,6 +382,13 @@ model Project {
   workflowGraph      WorkflowGraph?
   workflowProposals  WorkflowProposal[]
   workflowAttempts   WorkflowAttempt[]
+  designContext      ProjectDesignContext?
+  contextRevisions   ProjectDesignContextRevision[]
+  workflowNodeVersions WorkflowNodeVersion[]
+  workflowExecutions WorkflowExecution[]
+  workflowOutbox WorkflowOutbox[]
+  agentTurns AgentTurn[]
+  agentPlanRevisions AgentPlanRevision[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -571,6 +579,12 @@ model WorkflowMutation {
   mutationId String        @map("mutation_id")
   mode       String
   requestHash String       @map("request_hash")
+  baseRevision Int?        @map("base_revision")
+  resultRevision Int?      @map("result_revision")
+  beforeSnapshot Json?     @map("before_snapshot")
+  afterSnapshot Json?      @map("after_snapshot")
+  actorId String?          @map("actor_id")
+  origin String            @default("user")
   createdAt  DateTime      @default(now()) @map("created_at")
   graph      WorkflowGraph @relation(fields: [projectId], references: [projectId], onDelete: Cascade)
 
@@ -588,13 +602,23 @@ model WorkflowProposal {
   diff         Json
   evidence     Json
   mutationId   String   @map("mutation_id")
+  conversationId String? @map("conversation_id")
+  contextRevision Int? @map("context_revision")
+  schemaVersion Int @default(1) @map("schema_version")
+  targetNodeVersionId String? @map("target_node_version_id")
+  planRevision Int? @map("plan_revision")
+  actionFingerprint String? @map("action_fingerprint")
+  rejectionReason String? @db.Text @map("rejection_reason")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation AgentConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  assistantMessage AgentMessage?
 
   @@unique([projectId, mutationId])
   @@index([projectId, createdAt])
+  @@index([conversationId, createdAt])
   @@map("workflow_proposals")
 }
 
@@ -607,6 +631,8 @@ model WorkflowAttempt {
   status           String
   requestSnapshot  Json            @map("request_snapshot")
   generationTaskId String?         @map("generation_task_id")
+  executionId      String?         @map("execution_id")
+  nodeVersionId    String?         @map("node_version_id")
   error            String?         @db.Text
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
@@ -616,7 +642,129 @@ model WorkflowAttempt {
 
   @@unique([toolNodeId, ordinal])
   @@index([projectId, createdAt])
+  @@index([executionId])
   @@map("workflow_attempts")
+}
+
+model WorkflowNodeVersion {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  nodeId String @map("node_id")
+  version Int
+  graphRevision Int @map("graph_revision")
+  kind String
+  type String
+  title String
+  payload Json
+  inputBindings Json @map("input_bindings")
+  previousVersionId String? @map("previous_version_id")
+  origin String
+  actorId String? @map("actor_id")
+  mutationId String? @map("mutation_id")
+  baseline Boolean @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, version])
+  @@index([projectId, graphRevision])
+  @@index([nodeId, createdAt])
+  @@map("workflow_node_versions")
+}
+
+model WorkflowExecution {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  toolNodeId String @map("tool_node_id")
+  nodeVersionId String? @map("node_version_id")
+  conversationId String? @map("conversation_id")
+  userId String @map("user_id")
+  executionKey String @unique @map("execution_key")
+  status String @default("queued")
+  expectedAttempts Int @default(1) @map("expected_attempts")
+  intentEpoch Int? @map("intent_epoch")
+  requestSnapshot Json @map("request_snapshot")
+  completedAt DateTime? @map("completed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt])
+  @@index([conversationId, createdAt])
+  @@map("workflow_executions")
+}
+
+model WorkflowOutbox {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  eventKey String @unique @map("event_key")
+  eventType String @map("event_type")
+  executionId String? @map("execution_id")
+  attemptId String? @map("attempt_id")
+  generationTaskId String? @map("generation_task_id")
+  payload Json
+  status String @default("pending")
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @map("available_at")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  processedAt DateTime? @map("processed_at")
+  lastError String? @db.Text @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([executionId, createdAt])
+  @@map("workflow_outbox")
+}
+
+model AgentTurn {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  conversationId String @map("conversation_id")
+  userId String @map("user_id")
+  trigger String @default("user")
+  clientRequestId String? @map("client_request_id")
+  sourceEventId String? @unique @map("source_event_id")
+  intentEpoch Int @map("intent_epoch")
+  status String @default("pending")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  graphRevision Int? @map("graph_revision")
+  contextRevision Int? @map("context_revision")
+  summaryRevision Int? @map("summary_revision")
+  planRevision Int? @map("plan_revision")
+  snapshots Json?
+  budget Json?
+  error String? @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, clientRequestId])
+  @@index([conversationId, createdAt])
+  @@index([status, leaseExpiresAt])
+  @@map("agent_turns")
+}
+
+model AgentPlanRevision {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  conversationId String @map("conversation_id")
+  revision Int
+  turnId String? @map("turn_id")
+  intentEpoch Int @map("intent_epoch")
+  graphRevision Int @map("graph_revision")
+  contextRevision Int @map("context_revision")
+  plan Json
+  status String @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, revision])
+  @@index([projectId, createdAt])
+  @@map("agent_plan_revisions")
 }
 
 model BoardElement {
@@ -681,6 +829,10 @@ model AgentConversation {
   projectId   String         @map("project_id")
   createdById String         @map("created_by_id")
   title       String
+  mode        String         @default("legacy")
+  intentEpoch Int            @default(0) @map("intent_epoch")
+  activeTurnId String?       @map("active_turn_id")
+  activeTurnStartedAt DateTime? @map("active_turn_started_at")
   archivedAt  DateTime?      @map("archived_at")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
@@ -688,6 +840,8 @@ model AgentConversation {
   createdBy   User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
   messages    AgentMessage[]
   runs        AgentRun[]
+  proposals   WorkflowProposal[]
+  contextSummary AgentContextSummary?
 
   @@index([projectId, updatedAt])
   @@index([createdById, updatedAt])
@@ -772,6 +926,12 @@ model AgentMessage {
   role             AgentMessageRole
   status           AgentMessageStatus @default(COMPLETED)
   content          String             @db.Text
+  kind             String?
+  turnId           String?            @map("turn_id")
+  sourceEventId    String?            @map("source_event_id")
+  origin           String             @default("user")
+  executionId      String?            @map("execution_id")
+  proposalId       String?            @unique @map("proposal_id")
   context          Json?
   clientRequestId  String?            @map("client_request_id")
   replyToId        String?            @unique @map("reply_to_id")
@@ -784,9 +944,71 @@ model AgentMessage {
   replyTo          AgentMessage?      @relation("AgentMessageReply", fields: [replyToId], references: [id], onDelete: Cascade)
   reply            AgentMessage?      @relation("AgentMessageReply")
   generationTask   GenerationTask?    @relation(fields: [generationTaskId], references: [id], onDelete: SetNull)
+  proposal         WorkflowProposal?  @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  contextRevisions ProjectDesignContextRevision[]
 
   @@unique([conversationId, clientRequestId])
   @@index([conversationId, createdAt])
   @@index([status, updatedAt])
+  @@index([sourceEventId])
   @@map("agent_messages")
+}
+
+model ProjectDesignContext {
+  projectId String @id @map("project_id")
+  revision Int @default(0)
+  state Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_design_contexts")
+}
+
+model ProjectDesignContextRevision {
+  id String @id @default(cuid(2))
+  projectId String @map("project_id")
+  revision Int
+  state Json
+  sourceMessageId String? @map("source_message_id")
+  mutationId String? @map("mutation_id")
+  requestHash String? @map("request_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceMessage AgentMessage? @relation(fields: [sourceMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, revision])
+  @@unique([projectId, mutationId])
+  @@index([projectId, createdAt])
+  @@map("project_design_context_revisions")
+}
+
+model AgentContextSummary {
+  conversationId String @id @map("conversation_id")
+  summary Json
+  throughMessageId String? @map("through_message_id")
+  graphRevision Int @map("graph_revision")
+  revision Int @default(0)
+  focusNodeIds String[] @default([]) @map("focus_node_ids")
+  currentTask String? @db.Text @map("current_task")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("agent_context_summaries")
+}
+
+model ImageVisualSummary {
+  fingerprint String @id
+  sourceKey String @map("source_key")
+  status String
+  summary Json?
+  error String? @db.Text
+  model String
+  schemaVersion String @map("schema_version")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@index([sourceKey, model, schemaVersion, updatedAt(sort: Desc)], map: "image_visual_summary_source_lookup_idx")
+  @@map("image_visual_summaries")
 }

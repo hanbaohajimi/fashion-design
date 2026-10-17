@@ -13,6 +13,7 @@ import {
   GenerationTaskStatus,
   Prisma,
   SimilarityAnalysisStatus,
+  appendGenerationTerminalOutbox,
   type PrismaClient,
 } from "@fashion/db";
 import type { GenerationJobData, GenerationTaskEvent } from "@fashion/shared";
@@ -72,6 +73,9 @@ export interface GenerationProcessorDependencies {
   readonly similarityJobs?: {
     enqueue(collectionId: string, designAssetId: string): Promise<void>;
   };
+  readonly visualSummaryJobs?: {
+    enqueue(source: import("@fashion/shared").VisualSummarySource): Promise<void>;
+  };
   readonly storage?: ThumbnailStorage;
   readonly timeoutMs?: number;
 }
@@ -104,6 +108,7 @@ export function createGenerationProcessor({
   providerCancelTimeoutMs = PROVIDER_CANCEL_TIMEOUT_MS,
   resolveHostname = resolveGeneratedImageHostname,
   similarityJobs,
+  visualSummaryJobs,
   storage,
   timeoutMs = generationTimeoutMsFromEnv(),
 }: GenerationProcessorDependencies) {
@@ -122,9 +127,11 @@ export function createGenerationProcessor({
       throw new UnrecoverableError("生成任务不存在或队列数据无效");
     }
     if (task.status === GenerationTaskStatus.CANCELED) {
+      await repairTerminalReceipt(database, task.id);
       return { skipped: true, status: "canceled", taskId: task.id };
     }
     if (task.status === GenerationTaskStatus.MODERATION_FAILED) {
+      await repairTerminalReceipt(database, task.id);
       return {
         skipped: true,
         status: "moderation_failed",
@@ -132,8 +139,15 @@ export function createGenerationProcessor({
       };
     }
     if (task.status === GenerationTaskStatus.SUCCEEDED) {
+      await repairTerminalReceipt(database, task.id);
+      if (task.projectId && visualSummaryJobs) {
+        await database.designAsset.findMany({ where: { generationTaskId: task.id }, select: { id: true } })
+          .then((assets) => Promise.all(assets.map((asset) => visualSummaryJobs.enqueue({ kind: "asset", id: asset.id }))))
+          .catch(() => undefined);
+      }
       return { skipped: true, status: "succeeded", taskId: task.id };
     }
+    if (task.status === GenerationTaskStatus.FAILED) await repairTerminalReceipt(database, task.id);
 
     if (
       task.status !== GenerationTaskStatus.QUEUED &&
@@ -324,6 +338,14 @@ export function createGenerationProcessor({
             data: { analysisStatus: SimilarityAnalysisStatus.FAILED },
           });
         }
+      }
+      if (finalStatus === "succeeded" && task.projectId && visualSummaryJobs) {
+        // Analysis is recoverable from the context builder and never changes generation success.
+        await database.designAsset.findMany({
+          where: { generationTaskId: task.id }, select: { id: true },
+        }).then((assets) => Promise.all(assets.map((asset) =>
+          visualSummaryJobs.enqueue({ kind: "asset", id: asset.id }))))
+          .catch(() => undefined);
       }
       await updateProgressSafely(job, event(task.id, finalStatus));
       return {
@@ -601,6 +623,7 @@ async function persistSuccessOnce(
         data: { output: toJson(output) },
       });
       await billing.incrementCount(userId, transaction);
+      await appendGenerationTerminalOutbox(transaction, { taskId, status: "SUCCEEDED", assetIds: output.images.flatMap((image) => "assetId" in image && typeof image.assetId === "string" ? [image.assetId] : []) });
       return "succeeded";
     }
     const current = await transaction.generationTask.findUnique({
@@ -608,6 +631,7 @@ async function persistSuccessOnce(
       select: { status: true },
     });
     if (current?.status === GenerationTaskStatus.CANCELED) {
+      await appendGenerationTerminalOutbox(transaction, { taskId, status: "CANCELED" });
       return "canceled";
     }
     if (current?.status === GenerationTaskStatus.SUCCEEDED) {
@@ -1233,7 +1257,8 @@ async function markCanceled(
   taskId: string,
   attemptCount: number,
 ): Promise<void> {
-  await database.generationTask.updateMany({
+  await database.$transaction(async (transaction) => {
+  const changed = await transaction.generationTask.updateMany({
     where: {
       attemptCount,
       id: taskId,
@@ -1248,6 +1273,8 @@ async function markCanceled(
       status: GenerationTaskStatus.CANCELED,
     },
   });
+  if (changed.count === 1) await appendGenerationTerminalOutbox(transaction, { taskId, status: "CANCELED" });
+  });
 }
 
 async function markModerationFailed(
@@ -1256,8 +1283,9 @@ async function markModerationFailed(
   attemptCount: number,
   categories: readonly string[],
 ): Promise<"canceled" | "moderation_failed"> {
+  return database.$transaction(async (transaction) => {
   const completedAt = new Date();
-  const updated = await database.generationTask.updateMany({
+  const updated = await transaction.generationTask.updateMany({
     where: {
       attemptCount,
       countedAt: null,
@@ -1277,18 +1305,23 @@ async function markModerationFailed(
       status: GenerationTaskStatus.MODERATION_FAILED,
     },
   });
-  if (updated.count === 1) return "moderation_failed";
-  const current = await database.generationTask.findUnique({
+  if (updated.count === 1) {
+    await appendGenerationTerminalOutbox(transaction, { taskId, status: "MODERATION_FAILED", errorCode: "CONTENT_MODERATION_FAILED" });
+    return "moderation_failed";
+  }
+  const current = await transaction.generationTask.findUnique({
     where: { id: taskId },
     select: { status: true },
   });
   if (current?.status === GenerationTaskStatus.CANCELED) {
+    await appendGenerationTerminalOutbox(transaction, { taskId, status: "CANCELED" });
     return "canceled";
   }
   if (current?.status === GenerationTaskStatus.MODERATION_FAILED) {
     return "moderation_failed";
   }
   throw new GenerationLeaseLostError("生成任务执行租约已失效");
+  });
 }
 
 async function markFinalFailure(
@@ -1298,7 +1331,8 @@ async function markFinalFailure(
   errorCode: string,
   errorMessage: string,
 ): Promise<"canceled" | "failed"> {
-  const updated = await database.generationTask.updateMany({
+  return database.$transaction(async (transaction) => {
+  const updated = await transaction.generationTask.updateMany({
     where: {
       attemptCount,
       id: taskId,
@@ -1313,12 +1347,25 @@ async function markFinalFailure(
     },
   });
   if (updated.count === 1) {
+    await appendGenerationTerminalOutbox(transaction, { taskId, status: "FAILED", errorCode });
     return "failed";
   }
-  if (await isCanceled(database, taskId)) {
+  const current = await transaction.generationTask.findUnique({ where: { id: taskId }, select: { status: true } });
+  if (current?.status === GenerationTaskStatus.CANCELED) {
+    await appendGenerationTerminalOutbox(transaction, { taskId, status: "CANCELED" });
     return "canceled";
   }
   throw new GenerationLeaseLostError("生成任务执行租约已失效");
+  });
+}
+
+async function repairTerminalReceipt(database: GenerationDatabase, taskId: string): Promise<void> {
+  await database.$transaction(async (transaction) => {
+    const task = await transaction.generationTask.findUnique({ where: { id: taskId }, select: { status: true, errorCode: true } });
+    if (!task || task.status !== GenerationTaskStatus.SUCCEEDED && task.status !== GenerationTaskStatus.FAILED && task.status !== GenerationTaskStatus.CANCELED && task.status !== GenerationTaskStatus.MODERATION_FAILED) return;
+    const assets = task.status === GenerationTaskStatus.SUCCEEDED ? await transaction.designAsset.findMany({ where: { generationTaskId: taskId }, select: { id: true } }) : [];
+    await appendGenerationTerminalOutbox(transaction, { taskId, status: task.status, assetIds: assets.map((asset) => asset.id), errorCode: task.errorCode });
+  });
 }
 
 async function moderateSafely(

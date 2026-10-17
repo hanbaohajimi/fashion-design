@@ -1,4 +1,5 @@
 import type { AgentMessageView } from "@fashion/shared";
+import { decideWorkflowProposal, executeWorkflowNode, fetchWorkflowToolCatalog, updateWorkflowAgentSettings, type WorkflowProposal } from "../workflow/workflow-api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -7,6 +8,9 @@ import {
   AgentRunApiError,
   controlAgentRun,
   createAgentRun,
+  createAgentConversation,
+  fetchWorkflowConversationContext,
+  fetchWorkflowConversationPlan,
   fetchAgentRun,
   getProjectConversationRequest,
   hasPendingAgentMessage,
@@ -16,9 +20,11 @@ import {
   requestAgentDomainAction,
   reconcileAgentTurnMessages,
   sendAgentMessage,
+  sendWorkflowMessage,
   updateAgentConversation,
   updateAgentRunStep,
   updateAgentRunPlan,
+  updateWorkflowConversationContext,
   validateAgentMessage,
 } from "./agent-api";
 
@@ -46,6 +52,68 @@ function agentMessage(
 }
 
 describe("agent-api", () => {
+  it("工具执行明确归属会话，拒绝理由和项目开关走独立接口", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ revision: 3 })));
+    vi.stubGlobal("fetch", fetchMock);
+    await executeWorkflowNode("project/a", "tool/a", "conversation-a");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/projects/project%2Fa/workflow/nodes/tool%2Fa/execute");
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({ conversationId: "conversation-a" });
+    await decideWorkflowProposal("project/a", { id: "proposal/a", baseRevision: 7 } as WorkflowProposal, "reject", "这个分支要保持袖型");
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toMatchObject({ reason: "这个分支要保持袖型" });
+    await fetchWorkflowToolCatalog("project/a");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/projects/project%2Fa/workflow/tools");
+    await updateWorkflowAgentSettings("project/a", 1);
+    expect(JSON.parse(String((fetchMock.mock.calls[3]?.[1] as RequestInit).body))).toEqual({ version: 1 });
+  });
+  it("持续设计消息使用专用接口，保留请求编号、显式引用和持久焦点", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ userMessage: { id: "u" }, assistantMessage: { id: "a", kind: "reply", proposal: null } })));
+    vi.stubGlobal("fetch", fetchMock);
+    await createAgentConversation("project a", { mode: "workflow" });
+    const input = { clientRequestId: "request-one", content: "比较当前方案", referencedNodeIds: ["candidate-b"], focusNodeIds: ["candidate-a"] };
+    await sendWorkflowMessage("conversation/a", input);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({ mode: "workflow" });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/agent-conversations/conversation%2Fa/workflow-messages");
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(input);
+  });
+
+  it("调整绑定原提案，结构化更正和计划读取保留新协议字段", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ revision: 3, plan: null })));
+    vi.stubGlobal("fetch", fetchMock);
+    const adjustment = { clientRequestId: "adjust-1", content: "只修改数量为4", referencedNodeIds: ["new-constraint"], respondingToProposalId: "proposal-a" };
+    await sendWorkflowMessage("conversation/a", adjustment);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual(adjustment);
+    const correction = { baseRevision: 3, mutationId: "correct-1", updatedItems: [{ id: "prefer-a", text: "该分支使用银色", confirm: true, scope: "branch" as const }] };
+    await updateWorkflowConversationContext("conversation/a", correction);
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(correction);
+    await fetchWorkflowConversationPlan("conversation/a");
+    expect(fetchMock.mock.calls[2]).toEqual(["/api/agent-conversations/conversation%2Fa/plan", { cache: "no-store", credentials: "include" }]);
+  });
+
+  it("上下文读取禁用缓存，更正携带项目revision、会话summaryRevision与mutationId", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ revision: 4, summaryRevision: 7 })));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchWorkflowConversationContext("conversation/a")).resolves.toMatchObject({ revision: 4, summaryRevision: 7 });
+    const update = { baseRevision: 4, summaryRevision: 7, mutationId: "context-edit", currentObjective: "轻量通勤风衣", focusNodeIds: [], disabledPreferenceIds: ["prefer-shine"] };
+    await updateWorkflowConversationContext("conversation/a", update);
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/agent-conversations/conversation%2Fa/context", { cache: "no-store", credentials: "include" }]);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/agent-conversations/conversation%2Fa/context");
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(update);
+  });
+
+  it("持续对话冲突保留服务端的具体原因，提示等待或刷新相应状态", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "上一条消息正在处理，请等待完成后再发送" }), { status: 409 })));
+    await expect(sendWorkflowMessage("conversation-a", { clientRequestId: "busy", content: "继续", referencedNodeIds: [] })).rejects.toThrow("上一条消息正在处理，请等待完成后再发送");
+  });
+
+  it("焦点版本冲突保留服务端提示，不自动使用新summaryRevision重放旧焦点", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "会话焦点已更新，请刷新后再修改" }), { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(updateWorkflowConversationContext("conversation-a", { baseRevision: 4, summaryRevision: 2, mutationId: "stale-focus", focusNodeIds: ["old-candidate"] })).rejects.toThrow("会话焦点已更新，请刷新后再修改");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({ summaryRevision: 2, focusNodeIds: ["old-candidate"] });
+  });
+
   it("领域动作保留请求ID并绑定具体节点与候选；应用建议只带当前revision", async () => {
     const fetchMock = vi
       .fn()

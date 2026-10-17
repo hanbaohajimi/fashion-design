@@ -1,3 +1,5 @@
+import type { WorkflowToolKey } from "@fashion/shared";
+
 export type WorkflowNodeKind = "asset" | "tool";
 
 export type WorkflowAssetType =
@@ -68,6 +70,23 @@ export interface WorkflowProposal {
   readonly content: string;
   readonly referencedNodeIds: readonly string[];
   readonly createdAt: string;
+  readonly schemaVersion?: number;
+  readonly action?: {
+    readonly type: "create_tool" | "configure_tool" | "fork_tool";
+    readonly toolKey: WorkflowToolKey;
+    readonly toolVersion: string;
+    readonly title: string;
+    readonly parameters: Readonly<Record<string, unknown>>;
+    readonly inputs: readonly { readonly nodeId: string; readonly port: WorkflowInputPort }[];
+    readonly targetNodeId?: string | null;
+    readonly targetNodeVersionId?: string | null;
+    readonly preserve?: readonly string[];
+  } | null;
+  readonly preview?: { readonly before?: unknown; readonly after?: unknown; readonly effect?: string | readonly string[] } | null;
+  readonly preserve?: readonly string[];
+  readonly planRevision?: number | null;
+  readonly targetNodeVersionId?: string | null;
+  readonly rejectionReason?: string | null;
 }
 
 export type WorkflowOperation =
@@ -191,17 +210,30 @@ export function decideWorkflowProposal(
   projectId: string,
   proposal: WorkflowProposal,
   decision: "accept" | "reject",
+  reason?: string,
 ): Promise<WorkflowGraph> {
   return runtimePost(projectId, `/proposals/${encodeURIComponent(proposal.id)}/${decision}`, {
     ...(decision === "accept" ? { baseRevision: proposal.baseRevision } : {}),
+    ...(decision === "reject" && reason?.trim() ? { reason: reason.trim() } : {}),
     mutationId: crypto.randomUUID(),
   });
 }
 
-export function executeWorkflowNode(projectId: string, nodeId: string): Promise<WorkflowGraph> {
+export function executeWorkflowNode(projectId: string, nodeId: string, conversationId?: string): Promise<WorkflowGraph> {
   return runtimePost(projectId, `/nodes/${encodeURIComponent(nodeId)}/execute`, {
     mutationId: crypto.randomUUID(),
+    ...(conversationId ? { conversationId } : {}),
   });
+}
+
+export async function fetchWorkflowToolCatalog(projectId: string): Promise<{ readonly agentVersion: 1 | 2; readonly tools: readonly { readonly key: WorkflowToolKey; readonly name: string; readonly version: string; readonly description: string; readonly defaults: Readonly<Record<string, unknown>> }[] }> {
+  const response = await fetch(`${graphUrl(projectId)}/tools`, { cache: "no-store", credentials: "include" });
+  if (!response.ok) throw await responseError(response, "工具目录读取失败");
+  return response.json();
+}
+
+export function updateWorkflowAgentSettings(projectId: string, version: 1 | 2): Promise<{ readonly version: 1 | 2 }> {
+  return runtimePost(projectId, "/agent-settings", { version });
 }
 
 export function inferWorkflowNodeRole(projectId: string, nodeId: string): Promise<WorkflowGraph> {

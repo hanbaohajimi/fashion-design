@@ -4,6 +4,7 @@ export const agentIdSchema = z.string().trim().min(1).max(128);
 
 export const createAgentConversationSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
+  mode: z.enum(["legacy", "workflow"]).optional(),
 });
 
 export const updateAgentConversationSchema = z

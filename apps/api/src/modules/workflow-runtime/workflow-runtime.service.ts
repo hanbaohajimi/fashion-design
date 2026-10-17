@@ -1,18 +1,19 @@
-import { FileStatus, Prisma, type PrismaClient } from "@fashion/db";
+import { FileStatus, Prisma, appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, type PrismaClient, type WorkflowProposal } from "@fashion/db";
 import { AmuxClaudeVlmClassifier, type AmuxClaudeImageInput, type AmuxClaudeJsonClient } from "@fashion/ai";
 import type { AgentDesignBrief, AgentDesignEvidence, VlmRoleLabel } from "@fashion/shared";
-import { workflowInputConnectionError } from "@fashion/shared";
+import { workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowToolParameters, workflowToolKeySchema } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
-import { z } from "zod";
 import { AMUX_CLAUDE_CLIENT } from "../ai/ai.tokens";
 import { FashionAgentFramework } from "../agent-runs/fashion-agent-framework";
+import { DesignContextService } from "../design-context/design-context.service";
 import { S3FileStorage } from "../files/storage.service";
 import { GenerationService } from "../generation/generation.service";
 import {
@@ -31,23 +32,23 @@ import type {
   WorkflowProposalDecision,
   WorkflowProposalRequest,
   WorkflowRoleInferenceRequest,
+  WorkflowRejectRequest,
 } from "./workflow-runtime.schemas";
+import { compileWorkflowProposal, compileWorkflowAction, workflowActionFingerprint, type WorkflowAction, type WorkflowToolPlan } from "./workflow-planner";
+import { WorkflowCoordinator } from "./workflow-coordinator";
 
-export const WORKFLOW_RUNTIME_DB = Symbol("WORKFLOW_RUNTIME_DB");
+import { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
+export { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
 type Graph = Awaited<ReturnType<WorkflowsService["get"]>>;
 type Node = Graph["nodes"][number];
 type Operation = WorkflowSemanticPatchInput["operations"][number];
-const recommendationSchema = z.object({
-  title: z.string().trim().min(1).max(120),
-  prompt: z.string().trim().min(1).max(3_000),
-  rationale: z.string().trim().min(1).max(1_000),
-});
-const TOOL_TITLES: Record<string, string> = {
-  analyze_brief: "需求分析",
-  generate_design: "方案生成",
-  evaluate_design: "服装评估",
-  edit_design: "局部修改",
-};
+export interface WorkflowProposalView {
+  id: string; baseRevision: number; contextRevision: number | null; schemaVersion: number;
+  targetNodeVersionId: string | null; planRevision: number | null; rejectionReason: string | null;
+  status: string; operations: Prisma.JsonValue; rationale: unknown; toolNodeId: unknown; referencedNodeIds: unknown;
+  action: unknown; preview: unknown; preserve: unknown; createdAt: Date;
+}
+type SyncedGraph = Graph & { proposals: WorkflowProposalView[] };
 const ACTIVE_ATTEMPT_STATUSES = ["submitting", "running"];
 const ROLE_INFERENCE_LEASE_MS = 15 * 60_000;
 const ROLE_INFERENCE_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -97,31 +98,40 @@ function incoming(graph: Graph, node: Node): Node[] {
   return graph.nodes.filter((item) => ids.has(item.id));
 }
 
-function adjacentAssets(graph: Graph, tool: Node): Node[] {
-  const ids = new Set(graph.edges.flatMap((edge) => {
-    if (edge.sourceNodeId === tool.id) return [edge.targetNodeId];
-    if (edge.targetNodeId === tool.id) return [edge.sourceNodeId];
-    return [];
-  }));
-  return graph.nodes.filter((node) => node.kind === "asset" && ids.has(node.id));
+/** Cognition is limited to this candidate's ancestry; selected brief remains the sole check contract. */
+export function projectCandidateEvaluationContext(
+  built: Awaited<ReturnType<DesignContextService["build"]>>, candidate: Node, constraint: Node,
+) {
+  const upstream = (start: string) => {
+    const ids = new Set([start]);
+    const pending = [start];
+    while (pending.length) {
+      const current = pending.pop();
+      for (const edge of built.graph.edges) {
+        if (edge.targetNodeId === current && !ids.has(edge.sourceNodeId)) {
+          ids.add(edge.sourceNodeId); pending.push(edge.sourceNodeId);
+        }
+      }
+    }
+    return ids;
+  };
+  const ancestors = upstream(candidate.id);
+  const historyIds = new Set([...ancestors, ...upstream(constraint.id)]);
+  const assetIds = new Set(built.graph.nodes.filter((item) => ancestors.has(item.id) && item.type === "candidate")
+    .map((item) => text(object(item.payload).assetId)).filter(Boolean));
+  const history = built.context.attempts.filter((attempt) => historyIds.has(attempt.toolNodeId));
+  const decisions = built.context.decisions.filter((decision) => assetIds.has(decision.assetId));
+  const preferences = built.context.preferences.filter((preference) => preference.status === "active" &&
+    preference.scope === "branch" && preference.branchNodeIds.some((id) => ancestors.has(id)));
+  return { version: "evaluation-context/1", graphRevision: built.context.graphRevision,
+    contextRevision: built.context.contextRevision, candidateNodeId: candidate.id, constraintNodeId: constraint.id,
+    history, decisions, preferences,
+    coverage: { includedAttempts: history.length, includedDecisions: decisions.length, includedPreferences: preferences.length,
+      source: { attempts: built.context.coverage.attempts, decisions: built.context.coverage.decisions, memory: built.context.coverage.memory },
+      note: "仅供理解此候选产生与被选择/否决的过程；缺失历史不代表未发生。评价条件仅来自显式连接的冻结brief，辅助偏好不能成为硬条件。" },
+  };
 }
 
-function nearestUpstreamConstraints(graph: Graph, candidate: Node): Node[] {
-  const visited = new Set([candidate.id]);
-  let frontier = [candidate.id];
-  while (frontier.length) {
-    const current = new Set(frontier);
-    const upstream = graph.edges
-      .filter((edge) => current.has(edge.targetNodeId) && !visited.has(edge.sourceNodeId))
-      .map((edge) => edge.sourceNodeId);
-    const parents = new Set(upstream);
-    const constraints = graph.nodes.filter((node) => node.type === "constraint" && parents.has(node.id));
-    if (constraints.length) return constraints;
-    frontier = [...parents];
-    for (const id of frontier) visited.add(id);
-  }
-  return [];
-}
 
 function persistedGenerationModel(task: { output: unknown; providerJob?: unknown }): string | undefined {
   return text(object(object(task.output).job).model) || text(object(task.providerJob).model) || undefined;
@@ -168,152 +178,107 @@ export class WorkflowRuntimeService {
     @Inject(AMUX_CLAUDE_CLIENT) private readonly model: AmuxClaudeJsonClient,
     @Inject(S3FileStorage) private readonly storage: S3FileStorage,
     @Inject(DesignAssetsService) private readonly assets: DesignAssetsService,
+    @Optional() @Inject(DesignContextService) private readonly contexts?: DesignContextService,
+    @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
   ) {}
 
-  async propose(userId: string, projectId: string, input: WorkflowProposalRequest) {
-    const graph = await this.workflows.get(userId, projectId);
-    const replay = await this.database.workflowProposal.findUnique({
-      where: { projectId_mutationId: { projectId, mutationId: input.mutationId } },
+  async toolCatalog(userId: string, projectId: string) {
+    await this.workflows.get(userId, projectId);
+    const project = await this.database.project.findUniqueOrThrow({ where: { id: projectId }, select: { workflowAgentVersion: true } });
+    return { agentVersion: project.workflowAgentVersion, tools: getWorkflowToolCatalog() };
+  }
+
+  async setAgentVersion(userId: string, projectId: string, version: 1 | 2) {
+    await this.workflows.get(userId, projectId);
+    await this.database.$transaction(async (tx) => {
+      await tx.agentConversation.updateMany({ where: { projectId }, data: { intentEpoch: { increment: 1 } } });
+      const changed = await tx.project.updateMany({ where: { id: projectId, deletedAt: null, archived: false, workspace: { ownerId: userId } }, data: { workflowAgentVersion: version } });
+      if (!changed.count) throw new BadRequestException("项目不可修改");
+      await tx.workflowProposal.updateMany({ where: { projectId, schemaVersion: 2, status: "pending" }, data: { status: "superseded" } });
     });
+    return this.toolCatalog(userId, projectId);
+  }
+
+  /** Prepare a model-selected, validated proposal without running a tool. */
+  async prepareProposal(userId: string, projectId: string, input: {
+    content: string; referencedNodeIds: string[]; mutationId: string;
+    conversationId: string; graphRevision: number; contextRevision: number;
+    plan: WorkflowToolPlan;
+  }, transaction?: Prisma.TransactionClient): Promise<WorkflowProposal> {
+    const graph: Graph = transaction ? {
+      projectId, revision: (await transaction.workflowGraph.findUnique({ where: { projectId } }))?.revision ?? 0,
+      layoutRevision: 0, legacyAvailable: false,
+      nodes: await transaction.workflowNode.findMany({ where: { projectId } }),
+      edges: await transaction.workflowEdge.findMany({ where: { projectId } }),
+    } : await this.workflows.get(userId, projectId);
+    if (graph.revision !== input.graphRevision) throw new ConflictException("画布已变化，请重新讨论本次建议");
+    const operations = compileWorkflowProposal(graph, input.plan, input.referencedNodeIds);
+    const toolNodeId = operations.find((operation) => operation.type === "add_node" && operation.node.kind === "tool");
+    return (transaction ?? this.database).workflowProposal.create({ data: {
+      projectId, userId, baseRevision: graph.revision, contextRevision: input.contextRevision,
+      conversationId: input.conversationId, mutationId: input.mutationId, status: "pending",
+      diff: json(operations), evidence: json({ content: input.content, referencedNodeIds: input.referencedNodeIds,
+        rationale: input.plan.rationale, toolNodeId: toolNodeId?.type === "add_node" ? toolNodeId.node.id : null }),
+    } });
+  }
+
+  /** Compatibility endpoint delegates to the same planner; a discussion never fabricates a tool. */
+  async propose(userId: string, projectId: string, input: WorkflowProposalRequest): Promise<WorkflowProposalView> {
+    const replay = await this.database.workflowProposal.findUnique({ where: { projectId_mutationId: { projectId, mutationId: input.mutationId } } });
     if (replay) {
       const evidence = object(replay.evidence);
-      if (replay.userId !== userId || evidence.content !== input.content ||
-          JSON.stringify(evidence.referencedNodeIds) !== JSON.stringify(input.referencedNodeIds))
+      if (replay.userId !== userId || evidence.content !== input.content || JSON.stringify(evidence.referencedNodeIds) !== JSON.stringify(input.referencedNodeIds))
         throw new ConflictException("该请求编号已用于其他工作流建议");
       return this.proposalView(replay);
     }
-    const references = input.referencedNodeIds.map((id) => {
-      const node = graph.nodes.find((item) => item.id === id);
-      if (!node) throw new BadRequestException("引用节点必须属于当前工作流");
-      return node;
-    });
-    const directAssets = references.filter((node) => node.kind === "asset");
-    const relatedIds = new Set(references.filter((node) => node.kind === "tool").flatMap((node) => adjacentAssets(graph, node).map((asset) => asset.id)));
-    const relatedAssets = graph.nodes.filter((node) => node.kind === "asset" && relatedIds.has(node.id));
-    const explicitCandidateIds = new Set(directAssets.filter((node) => node.type === "candidate").map((node) => node.id));
-    const contextualCandidateIds = new Set(relatedAssets.filter((node) => node.type === "candidate").map((node) => node.id));
-    const candidates = graph.nodes.filter((node) => (explicitCandidateIds.size ? explicitCandidateIds : contextualCandidateIds).has(node.id));
-    const allCandidates = graph.nodes.filter((node) => node.type === "candidate");
-    const constraints = graph.nodes.filter((node) => node.type === "constraint");
-    const wantsEdit = /修改|收窄|调整|保留|重绘|换色|袖口|edit/iu.test(input.content);
-    const wantsEvaluation = /评估|评价|检查|比较|evaluate/iu.test(input.content);
-    const tool = wantsEdit && allCandidates.length
-      ? "edit_design"
-      : wantsEvaluation && allCandidates.length
-        ? "evaluate_design"
-        : !constraints.length
-          ? "analyze_brief"
-          : !allCandidates.length || /生成|新方案|generate/iu.test(input.content)
-            ? "generate_design"
-            : "evaluate_design";
-    const candidatePool = candidates.length ? candidates : references.length ? [] : allCandidates;
-    const selectedCandidates = tool === "edit_design"
-      ? candidatePool
-      : tool === "evaluate_design"
-        ? candidatePool.slice(-4)
-        : [];
-    if (tool === "edit_design" && selectedCandidates.length !== 1)
-      throw new BadRequestException("请 @ 引用一件要修改的候选设计");
-    if (tool === "evaluate_design" && !selectedCandidates.length)
-      throw new BadRequestException("请先选择要评估的候选设计");
-    const explicitConstraints = directAssets.filter((node) => node.type === "constraint");
-    if (explicitConstraints.length > 1)
-      throw new BadRequestException("请只 @ 引用一条本次使用的设计约束");
-    let selectedConstraint = explicitConstraints[0];
-    if (tool !== "analyze_brief" && !selectedConstraint && selectedCandidates.length) {
-      const lineages = selectedCandidates.map((candidate) => nearestUpstreamConstraints(graph, candidate));
-      const uniqueLineageIds = new Set(lineages.flatMap((nodes) => nodes.map((node) => node.id)));
-      if (uniqueLineageIds.size > 1 || lineages.some((nodes) => nodes.length > 1) || (uniqueLineageIds.size && lineages.some((nodes) => !nodes.length)))
-        throw new BadRequestException("候选分支的设计约束不一致，请 @ 引用本次使用的约束节点");
-      selectedConstraint = constraints.find((node) => uniqueLineageIds.has(node.id));
-    }
-    if (tool !== "analyze_brief" && !selectedConstraint) {
-      const contextualConstraints = relatedAssets.filter((node) => node.type === "constraint");
-      if (contextualConstraints.length > 1)
-        throw new BadRequestException("引用的工具涉及多条设计约束，请 @ 引用本次使用的约束节点");
-      selectedConstraint = contextualConstraints[0] ?? (selectedCandidates.length ? undefined : constraints.at(-1));
-    }
-    if (tool === "evaluate_design" && !selectedConstraint)
-      throw new BadRequestException("候选缺少可追溯的设计约束，请 @ 引用约束节点");
-    const goal = graph.nodes.find((node) => node.type === "brief");
-    const operations: Operation[] = [];
-    let goalId = goal?.id;
-    if (!goalId) {
-      goalId = randomUUID();
-      const briefPosition = availableNodePosition(graph, operations, { kind: "asset", type: "brief" }, 80, 100);
-      operations.push({ type: "add_node", node: {
-        id: goalId, kind: "asset", type: "brief", title: "设计需求",
-        payload: { text: input.content }, ...briefPosition, status: "ready",
-      } });
-    }
-    const inputs: Array<{ id: string; port: "goal" | "reference" | "constraint" | "candidate" | "source" }> = [];
-    if (tool === "analyze_brief") inputs.push({ id: goalId, port: "goal" });
-    if (tool !== "analyze_brief" && selectedConstraint)
-      inputs.push({ id: selectedConstraint.id, port: "constraint" });
-    if (tool === "generate_design" || tool === "analyze_brief") {
-      const materials = (references.length ? [...directAssets, ...relatedAssets] : graph.nodes).filter(
-        (node) => node.kind === "asset" && !["brief", "constraint", "candidate", "evaluation"].includes(node.type),
-      );
-      for (const node of new Map(materials.map((material) => [material.id, material])).values()) {
-        if (inputs.filter((input) => input.port === "reference").length >= 12) break;
-        inputs.push({ id: node.id, port: "reference" });
-      }
-    }
-    if (tool === "evaluate_design")
-      for (const node of selectedCandidates)
-        inputs.push({ id: node.id, port: "candidate" });
-    if (tool === "edit_design") {
-      const source = selectedCandidates[0];
-      if (!source) throw new BadRequestException("请先引用要修改的候选设计");
-      inputs.push({ id: source.id, port: "source" });
-    }
-    let reservation;
-    try {
-      reservation = await this.database.workflowProposal.create({ data: {
-        projectId, userId, baseRevision: graph.revision, mutationId: input.mutationId,
-        status: "planning", diff: [], evidence: json({ content: input.content, referencedNodeIds: input.referencedNodeIds }),
-      } });
-    } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
-      const existing = await this.database.workflowProposal.findUniqueOrThrow({ where: { projectId_mutationId: { projectId, mutationId: input.mutationId } } });
-      const existingEvidence = object(existing.evidence);
-      if (existing.userId !== userId || existingEvidence.content !== input.content || JSON.stringify(existingEvidence.referencedNodeIds) !== JSON.stringify(input.referencedNodeIds))
-        throw new ConflictException("该请求编号已用于其他工作流建议");
-      return this.proposalView(existing);
-    }
-    const dialog = await this.database.workflowProposal.findMany({ where: { projectId, userId, status: { in: ["accepted", "rejected", "pending"] } }, orderBy: { createdAt: "desc" }, take: 10, select: { evidence: true, status: true } });
-    const recommendation = await this.model.generateJson({
-      schemaName: "fashion_workflow_next_step",
-      instructions: "你是服装设计工作流规划助手。只为指定的下一步工具撰写标题、执行描述和理由；不得替用户执行、采用结果或虚构工具能力。保留明确要求，说明依据来自哪些输入。图片无法确定尺寸、真实成分或性能。执行描述必须能直接用于服装设计，并将修改范围和保留项写清楚。",
-      jsonSchema: z.toJSONSchema(recommendationSchema), maxTokens: 2_000,
-      prompt: JSON.stringify({ tool, request: input.content, dialog: dialog.reverse().map((item) => ({ ...object(item.evidence), status: item.status })), inputs: graph.nodes.filter((node) => inputs.some((item) => item.id === node.id)).map((node) => ({ id: node.id, type: node.type, content: nodeText(node) })), referencedNodes: references.map((node) => ({ id: node.id, kind: node.kind, type: node.type, status: node.status, content: nodeText(node) })), relatedAssets: relatedAssets.map((node) => ({ id: node.id, type: node.type, content: nodeText(node) })), trajectory: graph.nodes.filter((node) => node.kind === "tool").map((node) => ({ title: node.title, type: node.type, status: node.status })) }),
-      parse: (value) => recommendationSchema.parse(value),
-    }).catch(async (error: unknown) => {
-      await this.database.workflowProposal.update({ where: { id: reservation.id }, data: { status: "failed", evidence: json({ content: input.content, referencedNodeIds: input.referencedNodeIds, error: error instanceof Error ? error.message.slice(0, 1_000) : "建议规划失败" }) } });
-      throw error;
-    });
-    const nodeId = randomUUID();
-    const inputNodes = graph.nodes.filter((node) => inputs.some((item) => item.id === node.id));
-    const branching = tool === "evaluate_design" || tool === "edit_design";
-    const preferredX = Math.max(80, ...inputNodes.map((node) => node.x)) + (branching ? -330 : 330);
-    const preferredY = branching
-      ? Math.max(100, ...inputNodes.map((node) => node.y)) + 400
-      : inputNodes.length ? inputNodes.reduce((sum, node) => sum + node.y, 0) / inputNodes.length : 100;
-    const { x, y } = availableNodePosition(graph, operations, { kind: "tool", type: tool }, preferredX, preferredY);
-    operations.push({ type: "add_node", node: {
-      id: nodeId, kind: "tool", type: tool, title: recommendation.title || TOOL_TITLES[tool] || "设计操作",
-      payload: { toolKey: tool, toolVersion: "1", params: { prompt: recommendation.prompt, count: tool === "generate_design" ? 2 : 1 }, rationale: recommendation.rationale },
-      x, y, status: "ready",
-    } });
-    for (const source of inputs) operations.push({ type: "add_edge", edge: {
-      id: randomUUID(), sourceNodeId: source.id, targetNodeId: nodeId,
-      sourcePort: "out", targetPort: source.port,
-    } });
-    const proposal = await this.database.workflowProposal.update({ where: { id: reservation.id }, data: {
-      status: "pending",
-      diff: json(operations), evidence: json({ content: input.content, referencedNodeIds: input.referencedNodeIds, rationale: recommendation.rationale, toolNodeId: nodeId }),
-    } });
-    return this.proposalView(proposal);
+    if (!this.coordinator) throw new BadRequestException("请使用持续设计助手；旧关键词规划入口已停用");
+    const result = await this.coordinator.run({ userId, projectId, request: input.content, referencedNodeIds: input.referencedNodeIds });
+    if (!result.decision.action) throw new BadRequestException({ code: "NO_TOOL_ACTION", message: result.decision.message });
+    return this.proposalView(await this.prepareAction(userId, projectId, {
+      content: input.content, referencedNodeIds: input.referencedNodeIds, mutationId: input.mutationId,
+      graphRevision: result.built.graph.revision, contextRevision: result.built.context.contextRevision, action: result.decision.action,
+    }));
+  }
+
+  async prepareAction(userId: string, projectId: string, input: {
+    content: string; referencedNodeIds: string[]; mutationId: string; conversationId?: string;
+    graphRevision: number; contextRevision: number; planRevision?: number; action: WorkflowAction;
+  }, suppliedTransaction?: Prisma.TransactionClient): Promise<WorkflowProposal> {
+    if (!suppliedTransaction) return this.database.$transaction((tx) => this.prepareAction(userId, projectId, input, tx));
+    const tx = suppliedTransaction;
+    const project = await tx.project.findFirst({ where: { id: projectId, deletedAt: null, archived: false, workspace: { ownerId: userId } } });
+    if (!project) throw new NotFoundException("项目不存在或不可修改");
+    if (project.workflowAgentVersion !== 2) throw new BadRequestException("当前项目已暂停新版设计协作");
+    const graph: Graph = { projectId, revision: (await tx.workflowGraph.findUnique({ where: { projectId } }))?.revision ?? 0,
+      layoutRevision: 0, legacyAvailable: false, nodes: await tx.workflowNode.findMany({ where: { projectId } }), edges: await tx.workflowEdge.findMany({ where: { projectId } }) };
+    if (graph.revision !== input.graphRevision) throw new ConflictException("画布已变化，请重新讨论本次建议");
+    const versions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision, graph.nodes, graph.edges);
+    const attempts = await tx.workflowAttempt.groupBy({ by: ["toolNodeId"], where: { projectId }, _count: true });
+    const eligibility = Object.fromEntries([...versions].map(([id, version]) => [id, { nodeVersionId: version.id, attemptCount: attempts.find((row) => row.toolNodeId === id)?._count ?? 0 }]));
+    const operations = compileWorkflowAction(graph, input.action, input.referencedNodeIds, eligibility);
+    const parameterOperation = operations.find((operation) => operation.type === "update_node" || operation.type === "add_node" && operation.node.kind === "tool");
+    const compiledParameters = parameterOperation?.type === "update_node" ? object(parameterOperation.payload).params
+      : parameterOperation?.type === "add_node" ? object(parameterOperation.node.payload).params : input.action.parameters;
+    const actionFingerprint = workflowActionFingerprint({ ...input.action, parameters: object(compiledParameters) });
+    const declined = await tx.workflowProposal.findFirst({ where: { projectId, ...(input.conversationId ? { conversationId: input.conversationId } : {}), status: "rejected", actionFingerprint } });
+    if (declined) throw new BadRequestException("这项相同动作已被跳过，请明确改变参数或修改范围后再建议");
+    const toolOperation = operations.find((operation) => operation.type === "add_node" && operation.node.kind === "tool");
+    const target = graph.nodes.find((node) => node.id === input.action.targetNodeId);
+    const configured = operations.find((operation) => operation.type === "update_node" && operation.nodeId === target?.id);
+    const afterParameters = configured?.type === "update_node" ? object(configured.payload).params : input.action.parameters;
+    const conversation = input.conversationId ? await tx.agentConversation.findFirst({ where: { id: input.conversationId, projectId, createdById: userId } }) : null;
+    if (input.conversationId && !conversation) throw new BadRequestException("建议会话不属于当前项目");
+    const evidence = { content: input.content, referencedNodeIds: input.referencedNodeIds, rationale: input.action.rationale,
+      intentEpoch: conversation?.intentEpoch ?? null,
+      toolNodeId: toolOperation?.type === "add_node" ? toolOperation.node.id : input.action.targetNodeId,
+      action: input.action, preserve: input.action.preserve,
+      preview: { before: target ? { nodeId: target.id, title: target.title, parameters: object(target.payload).params,
+        inputs: graph.edges.filter((edge) => edge.targetNodeId === target.id).map((edge) => ({ nodeId: edge.sourceNodeId, port: edge.targetPort })) } : null,
+        after: { title: input.action.title, parameters: afterParameters, inputs: input.action.inputs },
+        effect: input.action.type === "configure_tool" ? "更新未执行工具并保存新版本" : input.action.type === "fork_tool" ? "保留已有执行并创建新分支" : "新增待执行工具" } };
+    return tx.workflowProposal.create({ data: { projectId, userId, baseRevision: graph.revision, contextRevision: input.contextRevision,
+      conversationId: input.conversationId ?? null, planRevision: input.planRevision ?? null, mutationId: input.mutationId, schemaVersion: 2,
+      targetNodeVersionId: input.action.targetNodeVersionId, actionFingerprint, status: "pending", diff: json(operations), evidence: json(evidence) } });
   }
 
   async accept(userId: string, projectId: string, proposalId: string, input: WorkflowProposalDecision) {
@@ -326,16 +291,20 @@ export class WorkflowRuntimeService {
     const result = await this.workflows.applySystemMutation(projectId, workflowSemanticPatchSchema.parse({
       mode: "semantic", baseRevision: proposal.baseRevision,
       mutationId: stableMutationId(`proposal:${proposal.id}`), operations: proposal.diff,
-    }));
-    await this.database.workflowProposal.update({ where: { id: proposal.id }, data: { status: "accepted" } });
+    }), proposal.contextRevision ?? undefined, proposal.id);
     return result;
   }
 
-  async reject(userId: string, projectId: string, proposalId: string, input: WorkflowExecuteRequest) {
+  async reject(userId: string, projectId: string, proposalId: string, input: WorkflowRejectRequest): Promise<SyncedGraph> {
     await this.workflows.get(userId, projectId);
     const proposal = await this.ownedProposal(userId, projectId, proposalId);
     if (proposal.status === "accepted") throw new ConflictException("已接受的节点请在画布中处理");
-    await this.database.workflowProposal.update({ where: { id: proposal.id }, data: { status: "rejected", evidence: json({ ...object(proposal.evidence), rejectionMutationId: input.mutationId }) } });
+    if (proposal.status === "rejected") return this.sync(userId, projectId);
+    await this.database.$transaction(async (tx) => {
+      const changed = await tx.workflowProposal.updateMany({ where: { id: proposal.id, status: { in: ["pending", "planning"] } }, data: { status: "rejected", rejectionReason: input.reason ?? null, evidence: json({ ...object(proposal.evidence), rejectionMutationId: input.mutationId }) } });
+      if (changed.count !== 1) throw new ConflictException("建议状态已变化，请查看最新画布");
+      await appendWorkflowOutbox(tx, { projectId, eventKey: `proposal:${proposal.id}:rejected`, eventType: "proposal.decision", payload: { proposalId, kind: "rejected", reason: input.reason ?? null, userId } });
+    });
     return this.sync(userId, projectId);
   }
 
@@ -363,59 +332,109 @@ export class WorkflowRuntimeService {
       throw new BadRequestException("需求分析需要设计需求输入");
     if (node.type === "edit_design" && graph.edges.filter((edge) => edge.targetNodeId === node.id && edge.targetPort === "source").length !== 1)
       throw new BadRequestException("局部修改必须连接一个实际候选来源");
-    const params = object(object(node.payload).params);
-    const count = node.type === "generate_design" ? Math.min(3, Math.max(1, Number(params.count) || 2)) : 1;
-    graph = await this.mutate(graph, [{ type: "update_node", nodeId, status: "running" }]);
+    const toolKey = workflowToolKeySchema.parse(node.type);
+    const legacyParams = object(object(node.payload).params);
+    const { maskImageUrl: legacyMask, ...safeParams } = legacyParams;
+    const params = parseWorkflowToolParameters(toolKey, { ...safeParams, prompt: text(safeParams.prompt) || node.title,
+      ...(toolKey === "edit_design" && legacyMask && !safeParams.mask ? { mask: await this.resolveLegacyMask(userId, projectId, text(legacyMask)) } : {}) });
+    const count = typeof params.count === "number" ? params.count : 1;
     const ordinal = (attempts[0]?.ordinal ?? 0) + 1;
+    const request = node.type === "generate_design" || node.type === "edit_design"
+      ? await this.generationRequest(userId, projectId, { ...node, payload: json({ ...object(node.payload), params }) as Prisma.JsonValue }, sources, graph) : null;
+    const execution = await this.database.$transaction(async (tx) => {
+      let intentEpoch: number | null = null;
+      if (input.conversationId) {
+        const conversation = await tx.agentConversation.findFirst({ where: { id: input.conversationId, projectId, mode: "workflow", archivedAt: null, project: { workspace: { ownerId: userId } } } });
+        if (!conversation) throw new BadRequestException("执行会话不属于当前项目或已归档");
+        const locked = await tx.agentConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+        intentEpoch = locked.intentEpoch;
+      }
+      const versions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision);
+      const current = await tx.workflowGraph.findUnique({ where: { projectId } });
+      if (current?.revision !== graph.revision) throw new ConflictException("执行前画布已变化，请重新确认输入");
+      const nodeVersionId = versions.get(nodeId)?.id;
+      if (!nodeVersionId) throw new ConflictException("节点版本缺失，请刷新后重试");
+      const snapshot = json({ mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
+        inputNodeIds: sources.map((source) => source.id), inputBindings: versions.get(nodeId)?.inputBindings,
+        inputSnapshot: sources.map((source) => ({ id: source.id, nodeVersionId: versions.get(source.id)?.id, type: source.type, title: source.title, payload: source.payload })),
+        ...(request ? { request } : { model: process.env.AMUX_CLAUDE_MODEL }) });
+      const created = await tx.workflowExecution.create({ data: { projectId, toolNodeId: nodeId, nodeVersionId,
+        conversationId: input.conversationId ?? null, userId, intentEpoch, executionKey: `workflow-execution:${projectId}:${nodeId}:${input.mutationId}`,
+        status: "running", expectedAttempts: count, requestSnapshot: snapshot } });
+      // Reserve every candidate before submitting any generation; recovery can finish partial submissions.
+      for (let index = 0; index < count; index++) await tx.workflowAttempt.create({ data: {
+        projectId, toolNodeId: nodeId, executionId: created.id, nodeVersionId, ordinal: ordinal + index,
+        executionKey: `workflow:${projectId}:${nodeId}:${ordinal + index}`, status: request ? "submitting" : "running", requestSnapshot: snapshot,
+      } });
+      await this.workflows.applySystemMutation(projectId, { mode: "semantic", mutationId: stableMutationId(`execution:start:${created.id}`),
+        baseRevision: graph.revision, operations: [{ type: "update_node", nodeId, status: "running" }] }, undefined, undefined, tx);
+      return created;
+    });
+    graph = await this.workflows.get(userId, projectId);
+    const reserved = await this.database.workflowAttempt.findMany({ where: { executionId: execution.id }, orderBy: { ordinal: "asc" } });
     try {
-      if (node.type === "generate_design" || node.type === "edit_design") {
-        const request = await this.generationRequest(userId, projectId, node, sources, graph);
-        for (let index = 0; index < count; index++) {
-          const executionKey = `workflow:${projectId}:${nodeId}:${ordinal + index}`;
-          const attempt = await this.database.workflowAttempt.create({ data: {
-            projectId, toolNodeId: nodeId, ordinal: ordinal + index, executionKey, status: "submitting",
-            requestSnapshot: json({ mutationId: input.mutationId, request, inputNodeIds: sources.map((source) => source.id), inputSnapshot: sources.map((source) => ({ id: source.id, type: source.type, title: source.title, payload: source.payload })), graphRevision: graph.revision, toolVersion: "1" }),
-          } });
-          const result = await this.generation.createFromAgent(userId, request, executionKey, request.prompt);
-          await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: { generationTaskId: result.taskId, status: "running" } });
+      if (request) {
+        for (const attempt of reserved) {
+          const result = await this.generation.createFromAgent(userId, request, attempt.executionKey, request.prompt);
+          await this.linkTask(attempt.id, result.taskId);
         }
         return this.sync(userId, projectId);
       }
-      const attempt = await this.database.workflowAttempt.create({ data: {
-        projectId, toolNodeId: nodeId, ordinal, executionKey: `workflow:${projectId}:${nodeId}:${ordinal}`, status: "running",
-        requestSnapshot: json({ mutationId: input.mutationId, inputNodeIds: sources.map((source) => source.id), inputSnapshot: sources.map((source) => ({ id: source.id, type: source.type, title: source.title, payload: source.payload })), graphRevision: graph.revision, toolVersion: "1", model: process.env.AMUX_CLAUDE_MODEL, params }),
-      } });
+      const attempt = reserved[0];
+      if (!attempt) throw new ConflictException("执行尝试预留失败");
       const evidence = this.evidence(sources);
       let outputType: "constraint" | "evaluation";
       let payload: Record<string, unknown>;
       if (node.type === "analyze_brief") {
-        const result = await new FashionAgentFramework(this.model).plan({
+        const result = await new FashionAgentFramework(this.model).curateBrief({
           intent: sources.map(nodeText).join("\n").slice(0, 4_000), evidence,
           images: await this.sourceImages(userId, projectId, sources),
-          selectedAssetIds: sources.map((source) => text(object(source.payload).assetId)).filter(Boolean),
           conversationContext: text(params.prompt),
         });
         outputType = "constraint";
-        payload = { text: result.intelligence.brief.summary, brief: result.intelligence.brief, evidence: result.intelligence.evidence, plannedSteps: result.steps };
+        payload = { text: result.brief.summary, brief: result.brief, evidence: result.evidence };
       } else {
         const constraint = sources.find((source) => source.type === "constraint");
         if (!constraint) throw new BadRequestException("评估需要设计约束输入");
         const brief = object(constraint.payload).brief as AgentDesignBrief;
         if (!brief?.constraints) throw new BadRequestException("设计约束不完整，请先执行需求分析");
         const briefEvidence = object(constraint.payload).evidence as AgentDesignEvidence[];
-        const evaluations = [];
         const candidateInputs = new Set(graph.edges.filter((edge) => edge.targetNodeId === node.id && edge.targetPort === "candidate").map((edge) => edge.sourceNodeId));
-        for (const candidate of sources.filter((source) => source.type === "candidate" && candidateInputs.has(source.id)).slice(0, 4)) {
+        const candidates = sources.filter((source) => source.type === "candidate" && candidateInputs.has(source.id)).slice(0, 4);
+        const evaluationTask = text(params.prompt).slice(0, 4_000);
+        const built = this.contexts ? await this.contexts.build(userId, projectId, {
+          focusNodeIds: candidates.map((candidate) => candidate.id),
+          referencedNodeIds: [...candidates.map((candidate) => candidate.id), constraint.id],
+        }) : undefined;
+        const evaluationInputs = [];
+        for (const candidate of candidates) {
           const assetId = text(object(candidate.payload).assetId);
           const asset = await this.ownedAsset(userId, projectId, assetId);
           const parent = asset.parentAssetId ? await this.ownedAsset(userId, projectId, asset.parentAssetId) : null;
           const images = await this.loadImages([asset, ...(parent ? [parent] : [])]);
-          evaluations.push(await new FashionAgentFramework(this.model).evaluate({
+          const producerAttempt = text(object(candidate.payload).attemptId)
+            ? await this.database.workflowAttempt.findFirst({ where: { id: text(object(candidate.payload).attemptId), projectId } }) : null;
+          const frozenRequest = object(object(producerAttempt?.requestSnapshot).request);
+          const actualPrompt = text(frozenRequest.prompt) || text(object(object(producerAttempt?.requestSnapshot).params).prompt) || brief.summary;
+          const actualNegativePrompt = text(frozenRequest.negativePrompt);
+          evaluationInputs.push({
             brief, evidence: briefEvidence ?? evidence, stepId: node.id, attemptId: attempt.id, assetId,
-            step: { key: node.id, tool: parent ? "edit_design" : "generate_design", title: node.title, instruction: node.title, prompt: text(params.prompt) || brief.summary, negativePrompt: "", sourceAssetId: parent?.id ?? null, sourceStepKey: null },
-            prompt: text(params.prompt) || brief.summary, negativePrompt: "", images,
-          }));
+            step: { key: node.id, tool: parent ? "edit_design" as const : "generate_design" as const, title: node.title, instruction: node.title, prompt: actualPrompt, negativePrompt: actualNegativePrompt, sourceAssetId: parent?.id ?? null, sourceStepKey: null },
+            prompt: actualPrompt, negativePrompt: actualNegativePrompt, images, evaluationTask,
+            ...(built ? { auxiliaryContext: { ...projectCandidateEvaluationContext(built, candidate, constraint),
+              producerAttemptId: producerAttempt?.id ?? null,
+              promptSource: text(frozenRequest.prompt) ? "frozen_generation_request" :
+                text(object(object(producerAttempt?.requestSnapshot).params).prompt) ? "frozen_tool_parameters" : "brief_summary_fallback",
+            } } : {}),
+          });
         }
+        await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: { requestSnapshot: json({
+          ...object(attempt.requestSnapshot), evaluationTask,
+          evaluationInputs: evaluationInputs.map((entry) => ({ assetId: entry.assetId, prompt: entry.prompt,
+            negativePrompt: entry.negativePrompt, ...(entry.auxiliaryContext ? { auxiliaryContext: entry.auxiliaryContext } : {}) })),
+        }) } });
+        const evaluations = [];
+        for (const evaluation of evaluationInputs) evaluations.push(await new FashionAgentFramework(this.model).evaluate(evaluation));
         if (!evaluations.length) throw new BadRequestException("请选择至少一个候选进行评估");
         outputType = "evaluation";
         payload = { text: evaluations.map((evaluation) => evaluation.summary).join("\n"), report: { evaluations, constraintNodeId: constraint.id, inputNodeIds: sources.map((source) => source.id) } };
@@ -423,23 +442,34 @@ export class WorkflowRuntimeService {
       graph = await this.workflows.get(userId, projectId);
       const outputId = randomUUID();
       const outputPosition = availableNodePosition(graph, [], { kind: "asset", type: outputType }, node.x + 340, node.y);
-      graph = await this.mutate(graph, [
+      graph = await this.persistAttemptResult(graph, attempt.id, { status: "completed", error: null }, [
         { type: "add_node", node: { id: outputId, kind: "asset", type: outputType, title: outputType === "constraint" ? "设计约束" : "评估报告", payload: { ...payload, attemptId: attempt.id }, ...outputPosition, status: "completed" } },
         { type: "add_edge", edge: { id: randomUUID(), sourceNodeId: node.id, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } },
         { type: "update_node", nodeId, status: "completed" },
       ]);
-      await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: { status: "completed" } });
       return graph;
     } catch (error) {
+      // A committed transaction remains authoritative if its acknowledgement was
+      // lost. Never overwrite a durable successful result with a failure receipt.
+      const committed = await this.database.workflowExecution.findUnique({ where: { id: execution.id }, select: { status: true } });
+      if (committed?.status === "completed") return this.sync(userId, projectId);
       const message = error instanceof Error ? error.message : "工具执行失败";
       await this.database.workflowAttempt.updateMany({ where: { toolNodeId: nodeId, status: { in: ACTIVE_ATTEMPT_STATUSES }, generationTaskId: null }, data: { status: "failed", error: message.slice(0, 2_000) } });
       const latest = await this.workflows.get(userId, projectId);
       await this.mutate(latest, [{ type: "update_node", nodeId, status: "failed", payload: { ...object(node.payload), error: message.slice(0, 2_000) } }]);
+      await this.finalizeExecutions(projectId);
       throw error;
     }
   }
 
-  async sync(userId: string, projectId: string) {
+  async sync(userId: string, projectId: string): Promise<SyncedGraph> {
+    for (let retry = 0; ; retry++) {
+      try { return await this.syncOnce(userId, projectId); }
+      catch (error) { if (!(error instanceof ConflictException) || retry >= 2) throw error; }
+    }
+  }
+
+  private async syncOnce(userId: string, projectId: string) {
     let graph = await this.workflows.get(userId, projectId);
     // A committed output is durable evidence even if updating the attempt or
     // acknowledging the graph transaction was interrupted afterwards.
@@ -459,7 +489,7 @@ export class WorkflowRuntimeService {
         }
         const request = generationCreateRequestSchema.parse(snapshot.request);
         const result = await this.generation.createFromAgent(userId, request, attempt.executionKey, request.prompt);
-        await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: { generationTaskId: result.taskId, status: "running" } });
+        await this.linkTask(attempt.id, result.taskId);
         continue;
       }
       const task = await this.generation.get(userId, attempt.generationTaskId);
@@ -478,27 +508,26 @@ export class WorkflowRuntimeService {
           const independentReference = matchingNodes.find((node) => !graph.edges.some((edge) => edge.targetNodeId === node.id));
           if (independentReference) {
             operations.push({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId: tool.id, targetNodeId: independentReference.id, sourcePort: "out", targetPort: "source" } });
-            operations.push({ type: "update_node", nodeId: independentReference.id, status: "completed" });
+            operations.push({ type: "update_node", nodeId: independentReference.id, status: "completed", payload: { ...object(independentReference.payload), generationTaskId: task.id, attemptId: attempt.id } });
             continue;
           }
-          const outputId = randomUUID();
+          const outputId = stableMutationId(`workflow:output:${attempt.id}:${assetId}`);
           const existingOutputs = graph.edges.filter((edge) => edge.sourceNodeId === tool.id).length + operations.filter((operation) => operation.type === "add_node").length;
           const outputPosition = availableNodePosition(graph, operations, { kind: "asset", type: "candidate" }, tool.x + 340, tool.y + existingOutputs * 350);
           operations.push({ type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: `候选 ${String.fromCharCode(65 + existingOutputs + index)}`, payload: { assetId, imageUrl: `/api/design-assets/${encodeURIComponent(assetId)}/content`, thumbnailUrl: `/api/design-assets/${encodeURIComponent(assetId)}/thumbnail`, generationTaskId: task.id, attemptId: attempt.id, width: image.width, height: image.height }, ...outputPosition, status: "completed" } });
-          operations.push({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId: tool.id, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } });
+          operations.push({ type: "add_edge", edge: { id: stableMutationId(`workflow:output-edge:${attempt.id}:${assetId}`), sourceNodeId: tool.id, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } });
         }
       }
-      if (operations.length) graph = await this.mutate(graph, operations);
+      const resultAssets = Array.isArray(object(task.output).images) ? (object(task.output).images as unknown[]).map((image) => text(object(image).assetId)).filter(Boolean) : [];
+      const projectedNodes = [...graph.nodes, ...operations.flatMap((operation) => operation.type === "add_node" ? [operation.node] : [])];
+      const projectedEdges = [...graph.edges, ...operations.flatMap((operation) => operation.type === "add_edge" ? [operation.edge] : [])];
+      const outputPresent = resultAssets.length > 0 && resultAssets.every((assetId) => projectedNodes.some((output) => output.type === "candidate" && object(output.payload).assetId === assetId && projectedEdges.some((edge) => edge.sourceNodeId === tool.id && edge.targetNodeId === output.id)));
       const model = persistedGenerationModel(task);
-      await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: {
-        status: task.status === "succeeded" ? "completed" : "failed", error: task.error?.message ?? null,
+      graph = await this.persistAttemptResult(graph, attempt.id, {
+        status: task.status === "succeeded" && outputPresent ? "completed" : task.status === "canceled" ? "canceled" : task.status === "moderation_failed" ? "moderation_failed" : "failed",
+        error: task.status === "succeeded" && !outputPresent ? "生成任务已结束但缺少可追溯的输出资产" : task.error?.message ?? null,
         ...(model ? { requestSnapshot: json({ ...snapshot, model }) } : {}),
-      } });
-      const remaining = await this.database.workflowAttempt.count({ where: { toolNodeId: tool.id, status: { in: ACTIVE_ATTEMPT_STATUSES } } });
-      if (!remaining) {
-        const hasOutput = graph.edges.some((edge) => edge.sourceNodeId === tool.id);
-        graph = await this.mutate(graph, [{ type: "update_node", nodeId: tool.id, status: hasOutput ? "completed" : "failed" }]);
-      }
+      }, operations);
     }
     await this.database.workflowProposal.updateMany({ where: { projectId, userId, status: "pending", baseRevision: { lt: graph.revision } }, data: { status: "superseded" } });
     const proposals = await this.database.workflowProposal.findMany({ where: { projectId, userId, status: { in: ["pending", "planning"] } }, orderBy: { createdAt: "desc" }, take: 10 });
@@ -506,10 +535,62 @@ export class WorkflowRuntimeService {
       const active = await this.database.workflowAttempt.count({ where: { toolNodeId: node.id, status: { in: ACTIVE_ATTEMPT_STATUSES } } });
       if (active) continue;
       const hasOutput = graph.edges.some((edge) => edge.sourceNodeId === node.id);
-      if (hasOutput || Date.now() - new Date(node.updatedAt).getTime() > 15 * 60_000)
-        graph = await this.mutate(graph, [{ type: "update_node", nodeId: node.id, status: hasOutput ? "completed" : "failed" }]);
+      const status = hasOutput ? "completed" : "failed";
+      if ((hasOutput || Date.now() - new Date(node.updatedAt).getTime() > 15 * 60_000) && node.status !== status)
+        graph = await this.mutate(graph, [{ type: "update_node", nodeId: node.id, status }]);
     }
+    await this.finalizeExecutions(projectId);
     return { ...graph, proposals: proposals.map((proposal) => this.proposalView(proposal)) };
+  }
+
+  private async linkTask(attemptId: string, taskId: string) {
+    await this.database.$transaction(async (tx) => {
+      await tx.workflowAttempt.updateMany({ where: { id: attemptId, status: { in: ACTIVE_ATTEMPT_STATUSES } }, data: { generationTaskId: taskId, status: "running" } });
+      const task = await tx.generationTask.findUnique({ where: { id: taskId } });
+      if (task && ["SUCCEEDED", "FAILED", "CANCELED", "MODERATION_FAILED"].includes(task.status))
+        await appendGenerationTerminalOutbox(tx, { taskId, status: task.status as "SUCCEEDED" | "FAILED" | "CANCELED" | "MODERATION_FAILED" });
+    });
+  }
+
+  /** Commit the result projection and its receipts together, before observers can read them. */
+  private async persistAttemptResult(graph: Graph, attemptId: string, data: Prisma.WorkflowAttemptUpdateInput, operations: Operation[]) {
+    return this.database.$transaction(async (tx) => {
+      const attempt = await tx.workflowAttempt.update({ where: { id: attemptId }, data });
+      const nextOperations = [...operations];
+      const remaining = await tx.workflowAttempt.count({ where: { projectId: graph.projectId, toolNodeId: attempt.toolNodeId, status: { in: ACTIVE_ATTEMPT_STATUSES } } });
+      if (!remaining && !nextOperations.some((operation) => operation.type === "update_node" && operation.nodeId === attempt.toolNodeId && operation.status !== undefined)) {
+        const hasOutput = graph.edges.some((edge) => edge.sourceNodeId === attempt.toolNodeId)
+          || nextOperations.some((operation) => operation.type === "add_edge" && operation.edge.sourceNodeId === attempt.toolNodeId);
+        const status = hasOutput ? "completed" : "failed";
+        if (graph.nodes.find((node) => node.id === attempt.toolNodeId)?.status !== status) nextOperations.push({ type: "update_node", nodeId: attempt.toolNodeId, status });
+      }
+      const result = nextOperations.length ? await this.workflows.applySystemMutation(graph.projectId, {
+        mode: "semantic", mutationId: randomUUID(), baseRevision: graph.revision, operations: nextOperations,
+      }, undefined, undefined, tx) : graph;
+      await this.finalizeExecutions(graph.projectId, tx);
+      return result;
+    });
+  }
+
+  /** One durable observation for the whole explicit execution, including partial failures. */
+  async finalizeExecutions(projectId: string, transaction?: Prisma.TransactionClient) {
+    const finalize = async (tx: Prisma.TransactionClient) => {
+      const executions = await tx.workflowExecution.findMany({ where: { projectId, status: { in: ["queued", "running"] } }, orderBy: { createdAt: "asc" } });
+      for (const execution of executions) {
+        const attempts = await tx.workflowAttempt.findMany({ where: { executionId: execution.id }, orderBy: { ordinal: "asc" } });
+        if (attempts.length !== execution.expectedAttempts || attempts.some((attempt) => ACTIVE_ATTEMPT_STATUSES.includes(attempt.status))) continue;
+        const successful = attempts.filter((attempt) => attempt.status === "completed").length;
+        const status = successful === attempts.length ? "completed" : successful ? "partial_failed"
+          : attempts.every((attempt) => attempt.status === "canceled") ? "canceled"
+            : attempts.every((attempt) => attempt.status === "moderation_failed") ? "moderation_failed" : "failed";
+        const changed = await tx.workflowExecution.updateMany({ where: { id: execution.id, status: { in: ["queued", "running"] } }, data: { status, completedAt: new Date() } });
+        if (changed.count) await appendWorkflowOutbox(tx, { projectId, executionId: execution.id, eventKey: `execution:${execution.id}:terminal`, eventType: "execution.terminal",
+          payload: { status, toolNodeId: execution.toolNodeId, conversationId: execution.conversationId, userId: execution.userId,
+            attempts: attempts.map((attempt) => ({ id: attempt.id, status: attempt.status, generationTaskId: attempt.generationTaskId, error: attempt.error })) } });
+      }
+    };
+    if (transaction) await finalize(transaction);
+    else await this.database.$transaction(finalize);
   }
 
   async history(userId: string, projectId: string, nodeId: string) {
@@ -537,6 +618,8 @@ export class WorkflowRuntimeService {
     const node = graph.nodes.find((item) => item.id === nodeId && object(item.payload).assetId === input.assetId);
     if (!node) throw new BadRequestException("决策必须绑定当前候选节点");
     const decision = await this.assets.decide(userId, input.assetId, { kind: input.kind, reason: input.reason.slice(0, 1_000), clientRequestId: input.mutationId });
+    await this.database.$transaction((tx) => appendWorkflowOutbox(tx, { projectId, eventKey: `asset-decision:${decision.id}`, eventType: "asset.decision",
+      payload: { decisionId: decision.id, nodeId, assetId: input.assetId, kind: input.kind, reason: input.reason, userId } }));
     return this.mutate(graph, [{ type: "update_node", nodeId, payload: { ...object(node.payload), decision: { id: decision.id, kind: input.kind, reason: input.reason } } }]);
   }
 
@@ -662,38 +745,83 @@ export class WorkflowRuntimeService {
       throw new BadRequestException("恢复资产与当前候选来源不匹配");
     const toolId = stableMutationId(`restore:tool:${asset.id}`);
     const outputId = stableMutationId(`restore:output:${asset.id}`);
-    const existingOutput = graph.nodes.find((node) => node.id === outputId);
-    const existingAttempt = await this.database.workflowAttempt.findUnique({ where: { executionKey: `workflow:restore:${input.mutationId}` } });
-    if (existingOutput && (object(existingOutput.payload).assetId !== input.assetId || !graph.edges.some((edge) => edge.sourceNodeId === input.sourceNodeId && edge.targetNodeId === toolId)))
-      throw new ConflictException("该请求编号已用于另一项版本恢复");
-    if (existingAttempt) {
-      const snapshot = object(existingAttempt.requestSnapshot);
-      if (existingAttempt.projectId !== projectId || snapshot.outputAssetId !== input.assetId || JSON.stringify(snapshot.inputNodeIds) !== JSON.stringify([input.sourceNodeId]) || snapshot.operation !== input.operation)
+    const executionKey = `workflow:restore:${input.mutationId}`;
+    const assertReplay = (attempt: { projectId: string; toolNodeId: string; requestSnapshot: Prisma.JsonValue }) => {
+      const snapshot = object(attempt.requestSnapshot);
+      if (attempt.projectId !== projectId || attempt.toolNodeId !== toolId || snapshot.outputAssetId !== input.assetId || JSON.stringify(snapshot.inputNodeIds) !== JSON.stringify([input.sourceNodeId]) || snapshot.operation !== input.operation)
         throw new ConflictException("该请求编号已用于另一项版本恢复");
+    };
+    const known = await this.database.workflowAttempt.findUnique({ where: { executionKey } });
+    if (known) { assertReplay(known); return graph; }
+    const restoredFrom = asset.restoredFromAssetId ? await this.ownedAsset(userId, projectId, asset.restoredFromAssetId) : null;
+    if (restoredFrom && restoredFrom.rootAssetId !== asset.rootAssetId) throw new BadRequestException("恢复来源不属于同一设计资产链");
+    try {
+      await this.database.$transaction(async (tx) => {
+        // Serialize projection, immutable bindings and the explicit restore receipt.
+        const beforeVersions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision);
+        const replay = await tx.workflowAttempt.findUnique({ where: { executionKey } });
+        if (replay) { assertReplay(replay); return; }
+        const current = await tx.workflowGraph.findUniqueOrThrow({ where: { projectId } });
+        if (current.revision !== graph.revision) throw new ConflictException("恢复前画布已变化，请刷新后重试");
+        const existingOutput = graph.nodes.find((node) => node.id === outputId);
+        if (existingOutput && (object(existingOutput.payload).assetId !== input.assetId || !graph.edges.some((edge) => edge.sourceNodeId === input.sourceNodeId && edge.targetNodeId === toolId)))
+          throw new ConflictException("该恢复结果已关联另一项来源");
+        const attemptId = randomUUID();
+        let result = graph;
+        if (!existingOutput) {
+          const operations: Operation[] = [];
+          const toolPosition = availableNodePosition(graph, operations, { kind: "tool", type: "restore_version" }, source.x + 340, source.y + 180);
+          operations.push({ type: "add_node", node: { id: toolId, kind: "tool", type: "restore_version", title: "版本恢复", payload: { toolKey: "restore_version", toolVersion: "1", params: { restoredFromAssetId: asset.restoredFromAssetId } }, ...toolPosition, status: "completed" } });
+          const outputPosition = availableNodePosition(graph, operations, { kind: "asset", type: "candidate" }, toolPosition.x + 340, toolPosition.y);
+          operations.push(
+            { type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: "恢复的版本", payload: { assetId: asset.id, imageUrl: `/api/design-assets/${encodeURIComponent(asset.id)}/content`, parentAssetId: asset.parentAssetId, attemptId }, ...outputPosition, status: "completed" } },
+            { type: "add_edge", edge: { id: stableMutationId(`restore:input:${asset.id}`), sourceNodeId: source.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
+            { type: "add_edge", edge: { id: stableMutationId(`restore:edge:${asset.id}`), sourceNodeId: toolId, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } },
+          );
+          result = await this.workflows.applySystemMutation(projectId, { mode: "semantic", mutationId: input.mutationId, baseRevision: graph.revision, operations }, undefined, undefined, tx);
+        }
+        const versions = await ensureWorkflowNodeVersions(tx, projectId, result.revision);
+        const toolVersion = versions.get(toolId);
+        if (!toolVersion) throw new ConflictException("恢复工具的不可变版本缺失");
+        const designStep = await tx.designStep.findFirst({ where: { projectId, outputAssetId: asset.id } });
+        const designStepSnapshot = designStep ? object(designStep.inputSnapshot) : null;
+        const recordedSources = Array.isArray(designStepSnapshot?.sources) ? designStepSnapshot.sources.map(object) : [];
+        // Asset sources are real lineage records; only inputSnapshot/inputBindings
+        // contain graph node IDs. A historical target need not be on the canvas.
+        const assetSources = [
+          { ...recordedSources.find((entry) => entry.role === "edit_source" && entry.assetId === asset.parentAssetId), elementId: asset.parentAssetId, assetId: asset.parentAssetId, role: "edit_source" },
+          ...(restoredFrom ? [{ ...recordedSources.find((entry) => entry.role === "restore_source" && entry.assetId === restoredFrom.id), elementId: restoredFrom.id, assetId: restoredFrom.id, role: "restore_source" }] : []),
+        ];
+        const snapshot = json({ mutationId: input.mutationId, operation: input.operation, graphRevision: result.revision, baseGraphRevision: graph.revision,
+          params: { restoredFromAssetId: asset.restoredFromAssetId }, toolVersion: "1", nodeVersionId: toolVersion.id, inputNodeIds: [source.id], inputBindings: toolVersion.inputBindings,
+          inputSnapshot: [{ id: source.id, nodeVersionId: beforeVersions.get(source.id)?.id, type: source.type, title: source.title, payload: source.payload }],
+          restoredFromAssetId: asset.restoredFromAssetId, outputAssetId: asset.id, sources: assetSources,
+          designStepId: designStep?.id ?? null, designStepSnapshot,
+          projectionAlreadyPresent: Boolean(existingOutput), missingRestoreSource: !restoredFrom,
+        });
+        const execution = await tx.workflowExecution.create({ data: { projectId, toolNodeId: toolId, nodeVersionId: toolVersion.id,
+          conversationId: null, userId, executionKey: `workflow-restore:${projectId}:${input.mutationId}`, status: "running", expectedAttempts: 1, requestSnapshot: snapshot } });
+        const latestAttempt = await tx.workflowAttempt.findFirst({ where: { toolNodeId: toolId }, orderBy: { ordinal: "desc" }, select: { ordinal: true } });
+        await tx.workflowAttempt.create({ data: { id: attemptId, projectId, toolNodeId: toolId, executionId: execution.id, nodeVersionId: toolVersion.id,
+          ordinal: (latestAttempt?.ordinal ?? 0) + 1, executionKey, status: "completed", requestSnapshot: snapshot } });
+        await this.finalizeExecutions(projectId, tx);
+      });
+    } catch (error) {
+      // Retrying a committed request must not create another execution, even if
+      // the transaction acknowledgement was lost or a duplicate caller raced it.
+      const replay = await this.database.workflowAttempt.findUnique({ where: { executionKey } });
+      if (!replay) throw error;
+      assertReplay(replay);
     }
-    let result = graph;
-    if (!graph.nodes.some((node) => node.id === outputId)) {
-      const operations: Operation[] = [];
-      const toolPosition = availableNodePosition(graph, operations, { kind: "tool", type: "restore_version" }, source.x + 340, source.y + 180);
-      operations.push({ type: "add_node", node: { id: toolId, kind: "tool", type: "restore_version", title: "版本恢复", payload: { toolKey: "restore_version", toolVersion: "1", params: { restoredFromAssetId: asset.restoredFromAssetId } }, ...toolPosition, status: "completed" } });
-      const outputPosition = availableNodePosition(graph, operations, { kind: "asset", type: "candidate" }, toolPosition.x + 340, toolPosition.y);
-      operations.push(
-        { type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: "恢复的版本", payload: { assetId: asset.id, imageUrl: `/api/design-assets/${encodeURIComponent(asset.id)}/content`, parentAssetId: asset.parentAssetId }, ...outputPosition, status: "completed" } },
-        { type: "add_edge", edge: { id: stableMutationId(`restore:input:${asset.id}`), sourceNodeId: source.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
-        { type: "add_edge", edge: { id: stableMutationId(`restore:edge:${asset.id}`), sourceNodeId: toolId, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } },
-      );
-      result = await this.workflows.applySystemMutation(projectId, { mode: "semantic", mutationId: input.mutationId, baseRevision: graph.revision, operations });
-    }
-    const latestAttempt = await this.database.workflowAttempt.findFirst({ where: { toolNodeId: toolId }, orderBy: { ordinal: "desc" }, select: { ordinal: true } });
-    await this.database.workflowAttempt.upsert({ where: { executionKey: `workflow:restore:${input.mutationId}` }, update: {}, create: {
-      projectId, toolNodeId: toolId, ordinal: existingAttempt?.ordinal ?? (latestAttempt?.ordinal ?? 0) + 1, executionKey: `workflow:restore:${input.mutationId}`, status: "completed",
-      requestSnapshot: json({ mutationId: input.mutationId, operation: input.operation, inputNodeIds: [source.id], inputSnapshot: [{ id: source.id, payload: source.payload }], restoredFromAssetId: asset.restoredFromAssetId, outputAssetId: asset.id, toolVersion: "1" }),
-    } });
-    return result;
+    return this.workflows.get(userId, projectId);
   }
 
   private async generationRequest(userId: string, projectId: string, node: Node, sources: Node[], graph: Graph): Promise<GenerationCreateRequest> {
     const params = object(object(node.payload).params);
+    const referenceSettings = Array.isArray(params.referenceInputs) ? params.referenceInputs.map(object) : [];
+    const referenceIds = new Set(graph.edges.filter((edge) => edge.targetNodeId === node.id && edge.targetPort === "reference").map((edge) => edge.sourceNodeId));
+    for (const setting of referenceSettings) if (!referenceIds.has(text(setting.nodeId)))
+      throw new BadRequestException("参考配置只能指向明确连接到 reference 输入的素材");
     const sourceId = graph.edges.find((edge) => edge.targetNodeId === node.id && edge.targetPort === "source")?.sourceNodeId;
     const source = sources.find((item) => item.id === sourceId && item.type === "candidate");
     const sourceAsset = source ? await this.ownedAsset(userId, projectId, text(object(source.payload).assetId)) : null;
@@ -705,23 +833,45 @@ export class WorkflowRuntimeService {
       const url = payload.assetId
         ? await this.referenceUrl((await this.ownedAsset(userId, projectId, text(payload.assetId))).url)
         : file ? await this.storage.createDownloadUrl(file.objectKey, 60 * 60) : null;
-      const requestedRole = text(payload.role);
-      const role = item.type === "fabric" ? "fabric_texture"
+      const setting = referenceSettings.find((entry) => entry.nodeId === item.id);
+      const requestedRole = text(setting?.role) || text(payload.role);
+      const role = setting && REFERENCE_ROLES.has(requestedRole) ? requestedRole as "style_ref" | "silhouette_ref" | "detail_ref" | "fabric_texture" | "palette_ref" : item.type === "fabric" ? "fabric_texture"
         : item.type === "swatch" ? "palette_ref"
           : (item.type === "reference_image" || item.type === "sketch") && REFERENCE_ROLES.has(requestedRole)
             ? requestedRole as "style_ref" | "silhouette_ref" | "detail_ref" | "fabric_texture" | "palette_ref"
             : item.type === "sketch" ? "silhouette_ref" : "style_ref";
-      if (url) references.push({ order: references.length, role, url, weight: 0.7 });
+      if (url) references.push({ order: references.length, role, url, weight: typeof setting?.weight === "number" ? setting.weight : 0.7 });
     }
-    const prompt = [text(params.prompt), ...sources.filter((item) => ["constraint", "brief", "reference_text", "swatch", "trend", "fabric"].includes(item.type)).map(nodeText)].filter(Boolean).join("\n").slice(0, 4_000);
-    const base = { projectId, shapeIds: [], prompt, negativePrompt: text(params.negativePrompt), width: typeof params.width === "number" ? params.width : 768, height: typeof params.height === "number" ? params.height : 1024, quality: params.quality === "low" || params.quality === "medium" ? params.quality : "high", outputFormat: "png" };
+    const prompt = [text(params.prompt), ...sources.filter((item) => ["constraint", "brief", "reference_text", "swatch", "trend", "fabric"].includes(item.type)).map(nodeText)].filter(Boolean).join("\n");
+    if (prompt.length > 4_000) throw new BadRequestException("工具提示词与已连接文字超过 4000 字符，请缩短本轮描述或参考文字；系统不会静默截掉设计要求");
+    if (references.length > (sourceAsset ? 15 : 16)) throw new BadRequestException("本次图片输入超过上限（含母图最多 16 张），请明确减少参考图后再执行；系统不会静默忽略参考");
+    const base = { projectId, shapeIds: [], prompt, negativePrompt: text(params.negativePrompt), width: params.width, height: params.height, quality: params.quality, outputFormat: "png" };
     if (params.taskType === "inpaint") {
-      if (!sourceAsset || !text(params.maskImageUrl)) throw new BadRequestException("局部重绘需要实际母图与蒙版");
-      return generationCreateRequestSchema.parse({ ...base, taskType: "inpaint", parentAssetId: sourceAsset.id, referenceImageUrl: sourceAsset.url, maskImageUrl: params.maskImageUrl, ...(params.palette ? { palette: params.palette } : {}) });
+      if (!sourceAsset || !params.mask) throw new BadRequestException("局部重绘需要实际母图与蒙版");
+      if (references.length) throw new BadRequestException("当前局部重绘只接受母图、蒙版和可选调色板，请移除图片参考连接");
+      const mask = object(params.mask);
+      let maskUrl: string;
+      if (mask.assetId) maskUrl = (await this.ownedAsset(userId, projectId, text(mask.assetId))).url;
+      else {
+        const file = await this.database.fileAsset.findFirst({ where: { id: text(mask.fileAssetId), ownerId: userId, status: "READY" } });
+        if (!file || !file.mimeType.startsWith("image/")) throw new BadRequestException("蒙版图片不可用或不属于当前用户");
+        maskUrl = await this.storage.createDownloadUrl(file.objectKey, 60 * 60);
+      }
+      return generationCreateRequestSchema.parse({ ...base, taskType: "inpaint", parentAssetId: sourceAsset.id, referenceImageUrl: sourceAsset.url, maskImageUrl: maskUrl, ...(params.palette ? { palette: params.palette } : {}) });
     }
     return generationCreateRequestSchema.parse(sourceAsset
-      ? { ...base, taskType: "i2i", parentAssetId: sourceAsset.id, referenceImageUrl: sourceAsset.url, referenceImages: references.slice(0, 15) }
-      : { ...base, taskType: "t2i", referenceImages: references.slice(0, 16) });
+      ? { ...base, taskType: "i2i", parentAssetId: sourceAsset.id, referenceImageUrl: sourceAsset.url, referenceImages: references }
+      : { ...base, taskType: "t2i", referenceImages: references });
+  }
+
+  private async resolveLegacyMask(userId: string, projectId: string, url: string) {
+    const key = storageObjectKey(url);
+    if (!key) throw new BadRequestException("旧蒙版必须引用当前用户的实际存储图片，请重新选择蒙版");
+    const file = await this.database.fileAsset.findFirst({ where: { objectKey: key, ownerId: userId, status: "READY" } });
+    if (file) return { fileAssetId: file.id };
+    const asset = await this.database.designAsset.findFirst({ where: { url, projectId, project: { workspace: { ownerId: userId } } } });
+    if (asset) return { assetId: asset.id };
+    throw new BadRequestException("旧蒙版不属于当前用户，请重新选择蒙版");
   }
 
   private evidence(nodes: Node[]): AgentDesignEvidence[] {
@@ -730,7 +880,8 @@ export class WorkflowRuntimeService {
 
   private async sourceImages(userId: string, projectId: string, nodes: Node[]): Promise<AmuxClaudeImageInput[]> {
     const images: AmuxClaudeImageInput[] = [];
-    for (const node of nodes.slice(0, 8)) {
+    for (const node of nodes) {
+      if (images.length >= 8) break;
       const payload = object(node.payload);
       if (payload.assetId) images.push(...await this.loadImages([await this.ownedAsset(userId, projectId, text(payload.assetId))]));
       else {
@@ -795,8 +946,13 @@ export class WorkflowRuntimeService {
     return proposal;
   }
 
-  private proposalView(proposal: { id: string; baseRevision: number; status: string; diff: unknown; evidence: unknown; createdAt: Date }) {
-    return { id: proposal.id, baseRevision: proposal.baseRevision, status: proposal.status, operations: proposal.diff, ...object(proposal.evidence), createdAt: proposal.createdAt };
+  private proposalView(proposal: WorkflowProposal): WorkflowProposalView {
+    const evidence = object(proposal.evidence);
+    return { id: proposal.id, baseRevision: proposal.baseRevision, contextRevision: proposal.contextRevision,
+      schemaVersion: proposal.schemaVersion, targetNodeVersionId: proposal.targetNodeVersionId, planRevision: proposal.planRevision,
+      rejectionReason: proposal.rejectionReason, status: proposal.status, operations: proposal.diff,
+      rationale: evidence.rationale, toolNodeId: evidence.toolNodeId, referencedNodeIds: evidence.referencedNodeIds,
+      action: evidence.action, preview: evidence.preview, preserve: evidence.preserve, createdAt: proposal.createdAt };
   }
 
   private mutate(graph: Graph, operations: Operation[]) {

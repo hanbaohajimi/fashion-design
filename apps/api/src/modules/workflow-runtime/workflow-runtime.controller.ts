@@ -20,6 +20,7 @@ import {
   workflowProposalDecisionSchema,
   workflowProposalRequestSchema,
   workflowRoleInferenceSchema,
+  workflowRejectSchema,
 } from "./workflow-runtime.schemas";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 
@@ -48,6 +49,18 @@ export class WorkflowRuntimeController {
     @Inject(WorkflowRuntimeService)
     private readonly runtime: WorkflowRuntimeService,
   ) {}
+
+  @Get("tools")
+  @Header("Cache-Control", "private, no-store")
+  tools(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string) {
+    return this.runtime.toolCatalog(user.userId, parse(idSchema, projectId));
+  }
+
+  @Post("agent-settings")
+  settings(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Body() body: unknown) {
+    const input = parse(z.object({ version: z.union([z.literal(1), z.literal(2)]) }).strict(), body);
+    return this.runtime.setAgentVersion(user.userId, parse(idSchema, projectId), input.version);
+  }
 
   @Get("sync")
   @Header("Cache-Control", "private, no-store")
@@ -97,7 +110,7 @@ export class WorkflowRuntimeController {
       user.userId,
       parse(idSchema, projectId),
       parse(idSchema, proposalId),
-      parse(workflowExecuteSchema, body),
+      parse(workflowRejectSchema, body),
     );
   }
 

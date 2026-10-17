@@ -1,6 +1,7 @@
 import { FileStatus, type FileAsset, type PrismaClient } from "@fashion/db";
 import decodeHeic from "heic-decode";
 import sharp, { type SharpOptions } from "sharp";
+import type { VisualSummarySource } from "@fashion/shared";
 
 import type { ThumbnailStorage } from "../storage";
 
@@ -30,6 +31,7 @@ interface HeicImageHandle {
 export interface ThumbnailProcessorDependencies {
   readonly database: ThumbnailDatabase;
   readonly storage: ThumbnailStorage;
+  readonly visualSummaryJobs?: { enqueue(source: VisualSummarySource): Promise<void> };
 }
 
 function isHeic(mimeType: string): boolean {
@@ -160,6 +162,7 @@ async function cleanupUnreferencedThumbnails(
 export function createThumbnailProcessor({
   database,
   storage,
+  visualSummaryJobs,
 }: ThumbnailProcessorDependencies) {
   return async (fileId: string): Promise<void> => {
     const file = await database.fileAsset.findUnique({
@@ -167,6 +170,10 @@ export function createThumbnailProcessor({
     });
     if (!file) {
       throw new Error(`缩略图文件记录不存在：${fileId}`);
+    }
+    if (file.status === FileStatus.READY && file.thumbnail1024Key) {
+      await visualSummaryJobs?.enqueue({ kind: "file", id: file.id }).catch(() => undefined);
+      return;
     }
     if (
       !file.completedAt ||
@@ -223,6 +230,7 @@ export function createThumbnailProcessor({
             thumbnail1024Key,
           )
         ) {
+          await visualSummaryJobs?.enqueue({ kind: "file", id: file.id }).catch(() => undefined);
           return;
         }
         if (
@@ -233,6 +241,8 @@ export function createThumbnailProcessor({
         }
         throw new Error("缩略图任务状态已发生变化");
       }
+      // A failed optional analysis queue must not turn a completed upload into a failed file.
+      await visualSummaryJobs?.enqueue({ kind: "file", id: file.id }).catch(() => undefined);
     } catch (error) {
       if (reconciledCurrent === undefined) {
         try {
@@ -251,6 +261,7 @@ export function createThumbnailProcessor({
           thumbnail1024Key,
         )
       ) {
+        await visualSummaryJobs?.enqueue({ kind: "file", id: file.id }).catch(() => undefined);
         return;
       }
       if (reconciledCurrent !== undefined) {

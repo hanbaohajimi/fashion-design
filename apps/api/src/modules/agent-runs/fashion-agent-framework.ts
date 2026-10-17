@@ -36,6 +36,10 @@ export interface FashionAgentEvaluationInput {
   readonly assetId: string;
   readonly prompt: string;
   readonly negativePrompt: string;
+  /** What to inspect now; never replaces the candidate's immutable generation prompt. */
+  readonly evaluationTask?: string;
+  /** Server-projected branch history and preferences, never additional hard checks. */
+  readonly auxiliaryContext?: Readonly<Record<string, unknown>>;
   /** The server supplies the actual candidate first and its actual editing parent second. */
   readonly images: readonly AmuxClaudeImageInput[];
 }
@@ -398,6 +402,9 @@ const PLAN_INSTRUCTIONS = [
 const EVALUATION_INSTRUCTIONS = [
   "你是服装 Candidate Evaluator，只评价输入提供的真实候选，第一张图是该候选，第二张若有则是实际编辑parent，不是另一个候选。",
   "根据冻结brief，对每个已知约束恰好输出一条check；指出可见证据、缺陷或无法判断，不能生成或编辑图片。",
+  "evaluationTask是本次评价的观察重点，prompt/negativePrompt仍是候选实际冻结的生成输入，不能相互替换。auxiliaryContext仅为当前候选分支的真实历史、人工决定和可能偏好，是辅助背景而非硬条件；不能替换brief、增删checks、把偏好升级为must或把其他目标当评价条件。",
+  "auxiliaryContext.promptSource若为brief_summary_fallback，表示导入图片或历史记录缺少真实生成提示词，prompt只是明确标注的brief摘要回退；不能声称知道它实际如何生成。",
+  "通过fashion_design_evaluation提交结构化结果。若渠道忽略tool_choice，直接输出一个符合responseSchema的JSON对象，不加Markdown或其他正文；不能省略约束检查。",
   "met表示可见符合，concern表示具体可见不符，unknown表示不可见或无法确认。尺寸、合体、成分、克重、性能和生产可行性只能unknown；遮挡或角度不足也返回unknown。",
   "对preserve约束仅在有实际parent且能观察相关区域时判断保留；没有parent对照时应承认无法确认变化。",
   "不要输出数值审美分、虚构测量结果或以主观喜好取代明确要求；nextActions是供设计师参考的建议，不执行。",
@@ -414,13 +421,8 @@ const REFINEMENT_INSTRUCTIONS = [
 export class FashionAgentFramework {
   constructor(private readonly model: AmuxClaudeJsonClient) {}
 
-  async plan(input: FashionAgentPlanInput): Promise<FashionAgentPlanResult> {
+  async curateBrief(input: Omit<FashionAgentPlanInput, "selectedAssetIds">) {
     const evidence = validateEvidence(input.evidence);
-    const selectedAssetIds = z
-      .array(idSchema)
-      .max(128)
-      .parse(input.selectedAssetIds);
-    unique(selectedAssetIds, "选中资产");
     const intent = promptSchema.parse(input.intent);
     const curated = await this.model.generateJson({
       schemaName: "fashion_design_brief",
@@ -435,7 +437,14 @@ export class FashionAgentFramework {
       }),
       parse: (value) => normalizeBrief(value, evidence),
     });
-    const brief = normalizeBrief(curated, evidence);
+    return { brief: normalizeBrief(curated, evidence), evidence };
+  }
+
+  async plan(input: FashionAgentPlanInput): Promise<FashionAgentPlanResult> {
+    const selectedAssetIds = z.array(idSchema).max(128).parse(input.selectedAssetIds);
+    unique(selectedAssetIds, "选中资产");
+    const intent = promptSchema.parse(input.intent);
+    const { brief, evidence } = await this.curateBrief(input);
     const response = await this.model.generateJson({
       schemaName: "fashion_design_plan",
       instructions: PLAN_INSTRUCTIONS,
@@ -490,10 +499,12 @@ export class FashionAgentFramework {
     const plannedStep = agentPlanStepSchema.parse(input.step);
     const prompt = promptSchema.parse(input.prompt);
     const negativePrompt = negativePromptSchema.parse(input.negativePrompt);
+    const evaluationTask = input.evaluationTask === undefined ? undefined : z.string().trim().max(4_000).parse(input.evaluationTask);
+    const responseSchema = z.toJSONSchema(evaluationOutputSchema);
     const response = await this.model.generateJson({
       schemaName: "fashion_design_evaluation",
       instructions: EVALUATION_INSTRUCTIONS,
-      jsonSchema: z.toJSONSchema(evaluationOutputSchema),
+      jsonSchema: responseSchema,
       maxTokens: 4000,
       images: input.images,
       prompt: JSON.stringify({
@@ -502,6 +513,9 @@ export class FashionAgentFramework {
         step: plannedStep,
         prompt,
         negativePrompt,
+        evaluationTask,
+        auxiliaryContext: input.auxiliaryContext,
+        responseSchema,
         imageRoles: input.images.map((_, index) =>
           index === 0 ? "actual_candidate" : "actual_editing_parent",
         ),

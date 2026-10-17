@@ -23,6 +23,53 @@ describe("DesignAssetsService lineage integration", () => {
     await prisma.$disconnect();
   });
 
+  it("新画布被修改或移除后仍按真实执行版本读取旧候选路径", async () => {
+    const fixture = await createImportFixture();
+    try {
+      const workflows = new WorkflowsService(prisma);
+      const goalId = crypto.randomUUID(), toolId = crypto.randomUUID(), outputId = crypto.randomUUID();
+      await workflows.patch(fixture.userId, fixture.projectId, {
+        mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0,
+        operations: [
+          { type: "add_node", node: { id: goalId, kind: "asset", type: "constraint", title: "原要求", payload: { text: "保留藏蓝色" }, x: 0, y: 0 } },
+          { type: "add_node", node: { id: toolId, kind: "tool", type: "generate_design", title: "初稿", payload: { toolKey: "generate_design", toolVersion: "1", params: { prompt: "保留廓形", count: 1 } }, x: 340, y: 0 } },
+          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: goalId, targetNodeId: toolId, sourcePort: "out", targetPort: "constraint" } },
+        ],
+      });
+      const version = await prisma.workflowNodeVersion.findFirstOrThrow({ where: { nodeId: toolId } });
+      const goalVersion = await prisma.workflowNodeVersion.findFirstOrThrow({ where: { nodeId: goalId } });
+      const task = await prisma.generationTask.create({ data: { userId: fixture.userId, projectId: fixture.projectId, status: "SUCCEEDED", taskType: "t2i", input: {} } });
+      const output = await prisma.designAsset.create({ data: { projectId: fixture.projectId, rootAssetId: crypto.randomUUID(), generationTaskId: task.id, operation: "GENERATED", url: "s3://generated/frozen.png" } });
+      const conversation = await prisma.agentConversation.create({ data: { projectId: fixture.projectId, createdById: fixture.userId, title: "发起会话", mode: "workflow" } });
+      const execution = await prisma.workflowExecution.create({ data: { projectId: fixture.projectId, userId: fixture.userId, toolNodeId: toolId, nodeVersionId: version.id,
+        conversationId: conversation.id, executionKey: crypto.randomUUID(), status: "completed", requestSnapshot: {} } });
+      const attempt = await prisma.workflowAttempt.create({ data: { projectId: fixture.projectId, toolNodeId: toolId, nodeVersionId: version.id, executionId: execution.id,
+        generationTaskId: task.id, ordinal: 1, executionKey: crypto.randomUUID(), status: "completed", requestSnapshot: {
+          params: { prompt: "保留廓形", count: 1 }, inputBindings: version.inputBindings,
+          inputSnapshot: [{ id: goalId, nodeVersionId: goalVersion.id, type: "constraint", title: "原要求", payload: { text: "保留藏蓝色" } }],
+          request: { prompt: "保留廓形\n保留藏蓝色", width: 1024, referenceImageUrl: "https://signed.test/private?token=secret" }, toolVersion: "1",
+        } } });
+      await workflows.applySystemMutation(fixture.projectId, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 1, operations: [
+        { type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: "旧候选", payload: { assetId: output.id, attemptId: attempt.id, generationTaskId: task.id }, x: 680, y: 0, status: "completed" } },
+        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: toolId, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } },
+      ] });
+      // Simulate a migrated/current projection that no longer contains the original path.
+      await prisma.workflowEdge.deleteMany({ where: { projectId: fixture.projectId } });
+      await prisma.workflowNode.update({ where: { id: toolId }, data: { payload: { params: { prompt: "当前银色分支" } } } });
+      await prisma.workflowNode.delete({ where: { id: outputId } });
+      const path = await service.path(fixture.userId, output.id);
+      expect(path.incomplete).toBe(false);
+      expect(path.steps).toHaveLength(1);
+      expect(path.steps[0]).toMatchObject({ id: execution.id, conversationId: conversation.id, snapshotAvailable: true,
+        parameters: { prompt: "保留廓形\n保留藏蓝色", width: 1024 }, sources: [{ elementId: goalId, role: "constraint", text: "保留藏蓝色" }],
+        outputs: [{ id: output.id, url: `/api/design-assets/${output.id}/content` }] });
+      expect(JSON.stringify(path)).not.toContain("当前银色分支");
+      expect(JSON.stringify(path)).not.toContain("signed.test");
+    } finally {
+      await prisma.user.delete({ where: { id: fixture.userId } });
+    }
+  });
+
   it("已否决产物仍保留原执行快照和会话关联，即使节点已开始下一次尝试", async () => {
     const fixture = await createImportFixture();
     try {
