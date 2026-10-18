@@ -665,7 +665,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
           id: String(item.id),
           imageUrl: typeof item.coverImageUrl === "string" ? item.coverImageUrl : typeof item.mainImageUrl === "string" ? item.mainImageUrl : null,
           label: libraryKind === "trend" ? String(item.title ?? "趋势") : (Array.isArray(item.tags) ? item.tags.join(" · ") : "面料参考"),
-          summary: libraryKind === "trend" ? String(item.summary ?? "") : (Array.isArray(item.tags) ? item.tags.join("、") : ""),
+          summary: libraryKind === "trend" ? String(item.summary ?? "") : "",
           ...(typeof item.sourceUrl === "string" ? { sourceUrl: item.sourceUrl } : {}),
         }));
       })

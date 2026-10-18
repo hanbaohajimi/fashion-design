@@ -27,6 +27,11 @@ export function projectWorkflowProposal(graph: WorkflowGraph, proposal: Workflow
 
 type ImageDimensions = { readonly width: unknown; readonly height: unknown };
 
+/** 共用图片卡片布局、原图比例及加载后的尺寸校正。 */
+export function isImageNodeType(type: string): boolean {
+  return ["candidate", "reference_image", "sketch", "fabric"].includes(type);
+}
+
 function validImageDimensions(dimensions: ImageDimensions): dimensions is { width: number; height: number } {
   return typeof dimensions.width === "number" && Number.isFinite(dimensions.width) && dimensions.width > 0 &&
     typeof dimensions.height === "number" && Number.isFinite(dimensions.height) && dimensions.height > 0;
@@ -48,16 +53,15 @@ export function imageNodeSize(dimensions: ImageDimensions, hasSummary = false) {
 
 /** 图片优先使用已加载的实际尺寸，兼容历史节点没有宽高元数据的情况。 */
 export function nodeSize(
-  node: Pick<WorkflowNode, "type" | "kind"> & Partial<Pick<WorkflowNode, "payload">>,
+  node: Pick<WorkflowNode, "type" | "kind"> & Partial<Pick<WorkflowNode, "payload" | "title">>,
   loadedImage?: ImageDimensions,
 ): {
   readonly h: number;
   readonly w: number;
 } {
   if (
-    node.type === "candidate" ||
-    node.type === "reference_image" ||
-    node.type === "sketch"
+    isImageNodeType(node.type) &&
+    (node.type !== "fabric" || Boolean(nodeImageUrl({ payload: node.payload ?? {} })))
   ) {
     const payload = node.payload ?? {};
     return imageNodeSize(
@@ -140,7 +144,7 @@ export function displayNodeTitle(
   return trimmed;
 }
 
-export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload">): string {
+export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Partial<Pick<WorkflowNode, "title">>): string {
   const payload = node.payload;
   if (
     node.type === "candidate" &&
@@ -167,8 +171,12 @@ export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload">): strin
   }
   for (const key of ["text", "summary", "description", "report", "prompt"]) {
     const value = payload[key];
-    if (typeof value === "string" && value.trim())
+    if (typeof value === "string" && value.trim()) {
+      // 历史面料节点把同一组标签分别用「 · 」和「、」写入名称与摘要。
+      const normalizeTags = (text: string) => text.split(/[·、]/u).map((tag) => tag.trim()).join("、");
+      if (node.type === "fabric" && node.title && normalizeTags(value) === normalizeTags(node.title)) continue;
       return value.trim().slice(0, 180);
+    }
   }
   if (node.type === "generate_design")
     return "输入约束与参考，生成可比较的候选方案";
@@ -181,7 +189,7 @@ export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload">): strin
   return "";
 }
 
-export function nodeImageUrl(node: WorkflowNode): string {
+export function nodeImageUrl(node: Pick<WorkflowNode, "payload">): string {
   for (const key of ["imageUrl", "thumbnailUrl", "url"]) {
     const value = node.payload[key];
     if (typeof value === "string" && /^(https?:\/\/|\/)/u.test(value))

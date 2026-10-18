@@ -550,18 +550,46 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   expect(mocked.getGraph().nodes.find((item) => item.id === "brief")?.x).toBe(savedPosition?.x);
 });
 
+test("从面料库加入的图片使用素材布局且名称只显示一次", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  await page.route("**/api/fabrics?*", (route) => route.fulfill({ json: { items: [
+    { id: "fabric-cotton", tags: ["棉麻", "斜纹"], mainImageUrl: "/api/files/sketch-file/thumbnail/1024" },
+  ] } }));
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole("button", { name: "＋ 添加素材" }).click();
+  await page.getByRole("button", { name: /面料库/ }).click();
+  await page.getByRole("region", { name: "选择面料" }).getByRole("button", { name: "棉麻 · 斜纹" }).click();
+  const fabric = page.locator('[data-type="fabric"]');
+  await expect(fabric).toHaveAttribute("data-image", "true");
+  await expect(fabric.getByText("棉麻 · 斜纹", { exact: true })).toHaveCount(1);
+  await expect(fabric.locator("p")).toHaveCount(0);
+  await expect(fabric.locator("img")).toHaveCSS("object-fit", "contain");
+  expect(mocked.getGraph().nodes.find((item) => item.type === "fabric")?.payload).toMatchObject({ fabricId: "fabric-cotton", text: "" });
+  await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
+  await expect(fabric).toHaveAttribute("data-image", "true");
+  await expect(fabric.getByText("棉麻 · 斜纹", { exact: true })).toHaveCount(1);
+  await expect(fabric.locator("p")).toHaveCount(0);
+});
+
 for (const { imageType, width, height, metadata } of [
   { imageType: "reference_image", width: 1600, height: 900, metadata: false },
   { imageType: "sketch", width: 600, height: 900, metadata: true },
   { imageType: "candidate", width: 1200, height: 1200, metadata: false },
   { imageType: "reference_image", width: 2400, height: 400, metadata: true },
   { imageType: "candidate", width: 400, height: 2400, metadata: true },
+  { imageType: "fabric", width: 1600, height: 900, metadata: false },
+  { imageType: "fabric", width: 600, height: 900, metadata: true },
+  { imageType: "fabric", width: 900, height: 900, metadata: false },
 ] as const) {
   test(`${imageType} ${width}×${height} 图片完整贴合节点，连线随尺寸同步且刷新后保持`, async ({ page }) => {
     const mocked = await mockWorkflow(page);
     const graph = mocked.getGraph();
     graph.nodes = [
-      node("ratio-image", "asset", imageType, "自适应图片", 40, 120, { imageUrl: "/api/ratio-image", ...(metadata ? { width, height } : {}) }),
+      node("ratio-image", "asset", imageType, "自适应图片", 40, 120, { imageUrl: "/api/ratio-image", ...(imageType === "fabric" ? { text: "自适应图片" } : {}), ...(metadata ? { width, height } : {}) }),
       node("ratio-target", "tool", "evaluate_design", "服装评估", 540, 120),
     ];
     graph.edges = [edge("ratio-edge", "ratio-image", "ratio-target", imageType === "candidate" ? "candidate" : "reference")];
@@ -584,6 +612,8 @@ for (const { imageType, width, height, metadata } of [
       })).toBeLessThan(1);
       const title = page.locator(`[data-type="${imageType}"] header`);
       await expect(title).toBeVisible();
+      await expect(page.locator(`[data-type="${imageType}"]`).getByText("自适应图片", { exact: true })).toHaveCount(1);
+      await expect(image).toHaveCSS("object-fit", "contain");
       await expect.poll(() => image.evaluate((element) => {
         const imageBox = element.getBoundingClientRect();
         const titleBox = element.closest('[data-image="true"]')?.querySelector("header")?.getBoundingClientRect();
@@ -599,7 +629,7 @@ for (const { imageType, width, height, metadata } of [
     await expectFittedImage();
     if (width === 1600 || width === 400) {
       await mkdir("output/playwright", { recursive: true });
-      await page.screenshot({ path: `output/playwright/workflow-image-${width === 1600 ? "landscape" : "portrait"}-fitted.png` });
+      await page.screenshot({ path: `output/playwright/workflow-${imageType}-${width === 1600 ? "landscape" : "portrait"}-fitted.png` });
     }
     await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();

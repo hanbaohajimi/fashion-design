@@ -10,7 +10,7 @@ import {
 } from "tldraw";
 
 import type { WorkflowNode } from "./workflow-api";
-import { displayNodeTitle, imageNodeSize } from "./workflow-graph";
+import { displayNodeTitle, imageNodeSize, isImageNodeType } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
@@ -202,7 +202,7 @@ function WorkflowNodeImage({ shape, title }: { shape: WorkflowNodeShape; title: 
     // Canvas assets use their authenticated image URL directly, including during export.
     // eslint-disable-next-line @next/next/no-img-element
     <img alt={title} draggable={false} src={shape.props.imageUrl} onLoad={(event) => {
-      if (exporting || !["candidate", "reference_image", "sketch"].includes(shape.props.nodeType)) return;
+      if (exporting || !isImageNodeType(shape.props.nodeType)) return;
       const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
       if (!width || !height) return;
       const current = editor.getShape<WorkflowNodeShape>(shape.id);
@@ -272,7 +272,7 @@ function WorkflowNodeFrame({
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
       data-compact={!exporting && compact ? "true" : "false"}
-      data-image={Boolean(shape.props.imageUrl) && ["candidate", "reference_image", "sketch"].includes(shape.props.nodeType) ? "true" : "false"}
+      data-image={Boolean(shape.props.imageUrl) && isImageNodeType(shape.props.nodeType) ? "true" : "false"}
       data-muted={shape.props.muted && !interaction?.gesture ? "true" : "false"}
       data-status={shape.props.status}
       data-type={shape.props.nodeType}

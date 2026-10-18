@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode } from "./workflow-api";
-import { availableInputPorts, imageNodeSize, lineageOf, nodeSize, projectWorkflowProposal } from "./workflow-graph";
+import { availableInputPorts, imageNodeSize, lineageOf, nodeSize, nodeSummary, projectWorkflowProposal } from "./workflow-graph";
 
 function node(id: string, kind: WorkflowNode["kind"], type: WorkflowNode["type"]): WorkflowNode {
   return {
@@ -22,6 +22,20 @@ function edge(id: string, sourceNodeId: string, targetNodeId: string, targetPort
 }
 
 describe("workflow graph", () => {
+  it("renders fabric photos like uploads while omitting duplicated tag captions", () => {
+    const fabric = { ...node("fabric", "asset", "fabric"), title: "棉麻 · 斜纹", payload: { imageUrl: "/fabric.jpg", text: "棉麻、斜纹" } };
+    expect(nodeSummary(fabric)).toBe("");
+    for (const [width, height] of [[1600, 900], [600, 900], [900, 900]]) {
+      expect(nodeSize(fabric, { width, height })).toEqual(imageNodeSize({ width, height }));
+      expect(nodeSize({ ...fabric, payload: { ...fabric.payload, width, height } })).toEqual(imageNodeSize({ width, height }));
+    }
+    expect(nodeSize(fabric)).toEqual(imageNodeSize({ width: 1, height: 1 }));
+    expect(nodeSummary({ ...fabric, payload: { text: "棉麻、斜纹", description: "柔软透气" } })).toBe("柔软透气");
+    expect(nodeSummary({ ...fabric, payload: { text: "棉麻混纺，适合春夏" } })).toBe("棉麻混纺，适合春夏");
+    expect(nodeSize({ ...fabric, payload: { imageUrl: "/fabric.jpg", text: "柔软透气", width: 1600, height: 900 } })).toEqual(imageNodeSize({ width: 1600, height: 900 }, true));
+    expect(nodeSize({ ...fabric, payload: {} })).toEqual({ w: 258, h: 172 });
+  });
+
   it("fits landscape, portrait and square images without reserving a portrait frame", () => {
     for (const [width, height] of [[1920, 1080], [768, 1024], [900, 900], [10000, 100], [100, 10000]] as const) {
       const size = imageNodeSize({ width, height });
