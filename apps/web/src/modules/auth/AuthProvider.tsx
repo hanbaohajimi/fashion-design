@@ -133,12 +133,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [router]);
 
   useEffect(() => {
+    if (isPublicPath) {
+      epoch.current += 1;
+      flight.current = null;
+      sessionRef.current = null;
+      const resetId = window.setTimeout(() => { setSession(null); setLoading(false); }, 0);
+      return () => window.clearTimeout(resetId);
+    }
     const timerId = window.setTimeout(() => {
       void loadSession();
     }, 0);
 
     return () => window.clearTimeout(timerId);
-  }, [loadSession]);
+  }, [isPublicPath, loadSession]);
 
   useEffect(() => {
     if (isPublicPath) {
@@ -157,7 +164,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     document.addEventListener("visibilitychange", handleVisibility);
     const handleStorage = (event: StorageEvent): void => {
-      if (event.key === SESSION_CHANGE_KEY) void loadSession();
+      if (event.key !== SESSION_CHANGE_KEY) return;
+      epoch.current += 1;
+      flight.current = null;
+      void loadSession();
     };
     window.addEventListener("storage", handleStorage);
     return () => {
