@@ -29,6 +29,7 @@ export function fetchProjects(
   page: number,
   search: string,
   status: ProjectStatusFilter,
+  signal?: AbortSignal,
 ): Promise<ProjectPage> {
   const params = new URLSearchParams({
     archived: status,
@@ -40,7 +41,7 @@ export function fetchProjects(
     params.set("search", search);
   }
 
-  return requestJson<ProjectPage>(`/api/projects?${params.toString()}`);
+  return requestJson<ProjectPage>(`/api/projects?${params.toString()}`, signal ? { signal } : undefined);
 }
 
 export function fetchProject(projectId: string): Promise<Project> {

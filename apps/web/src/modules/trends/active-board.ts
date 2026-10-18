@@ -13,7 +13,19 @@ export interface BrowserStorage {
 }
 
 function defaultStorage(): BrowserStorage | undefined {
-  return typeof window === "undefined" ? undefined : window.localStorage;
+  if (typeof window === "undefined" || !activeUserId) return undefined;
+  const storage = window.localStorage;
+  const key = `${ACTIVE_BOARD_STORAGE_KEY}:${activeUserId}`;
+  return {
+    getItem: () => storage.getItem(key),
+    setItem: (_key, value) => storage.setItem(key, value),
+    removeItem: () => storage.removeItem(key),
+  };
+}
+
+let activeUserId: string | null = null;
+export function setActiveBoardUser(userId: string | null): void {
+  activeUserId = userId;
 }
 
 export function readActiveBoardId(

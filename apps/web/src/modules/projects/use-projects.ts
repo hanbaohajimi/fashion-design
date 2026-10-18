@@ -21,11 +21,12 @@ import type {
   ProjectPage,
   ProjectStatusFilter,
 } from "./project-types";
+import { useAuth } from "../auth/AuthProvider";
 
 const projectKeys = {
   all: ["projects"] as const,
-  list: (search: string, status: ProjectStatusFilter) =>
-    ["projects", { search, status }] as const,
+  list: (search: string, status: ProjectStatusFilter, userId: string | undefined) =>
+    ["projects", { search, status, userId }] as const,
 };
 
 type ProjectCache = InfiniteData<ProjectPage, number>;
@@ -141,10 +142,11 @@ export function useProjects(
   status: ProjectStatusFilter,
   enabled = true,
 ) {
+  const { session } = useAuth();
   return useInfiniteQuery({
-    enabled,
-    queryKey: projectKeys.list(search, status),
-    queryFn: ({ pageParam }) => fetchProjects(pageParam, search, status),
+    enabled: enabled && Boolean(session),
+    queryKey: projectKeys.list(search, status, session?.user.id),
+    queryFn: ({ pageParam, signal }) => fetchProjects(pageParam, search, status, signal),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.page + 1 : undefined,

@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -47,49 +48,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname);
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+  const flight = useRef<Promise<void> | null>(null);
+  const epoch = useRef(0);
 
-  const loadSession = useCallback(async (): Promise<void> => {
+  const loadSession = useCallback((): Promise<void> => {
     if (isPublicPath) {
       setLoading(false);
-      return;
+      return Promise.resolve();
     }
 
-    setLoading(true);
+    if (flight.current) return flight.current;
+    const currentEpoch = epoch.current;
+    const isCurrent = () => epoch.current === currentEpoch;
+    if (!sessionRef.current) setLoading(true);
     setError(null);
-
+    const task = async () => {
     try {
       let response = await fetchMe();
+      if (!isCurrent()) return;
 
       if (response.status === 401) {
         const refreshed = await refreshSession();
+        if (!isCurrent()) return;
 
-        if (!refreshed.ok) {
+        if (refreshed.status === 401 || refreshed.status === 400) {
           setSession(null);
           router.replace("/login");
           return;
         }
+        if (!refreshed.ok) throw new Error("会话刷新暂时不可用");
 
         response = await fetchMe();
+        if (!isCurrent()) return;
       }
 
       if (!response.ok) {
-        setSession(null);
-        setError(
+        if (response.status === 401) {
+          setSession(null);
+          router.replace("/login");
+          return;
+        }
+        if (!sessionRef.current) setError(
           await readErrorMessage(response, "会话加载失败，请稍后重试。"),
         );
         return;
       }
 
-      setSession((await response.json()) as MeResponse);
+      const next = (await response.json()) as MeResponse;
+      if (isCurrent()) setSession(next);
     } catch {
-      setSession(null);
-      setError("无法连接认证服务，请检查网络后重试。");
+      if (isCurrent() && !sessionRef.current) setError("无法连接认证服务，请检查网络后重试。");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
+    };
+    const promise = task().finally(() => { if (flight.current === promise) flight.current = null; });
+    flight.current = promise;
+    return promise;
   }, [isPublicPath, router]);
 
   const logout = useCallback(async (): Promise<void> => {
+    epoch.current += 1;
+    flight.current = null;
     const response = await logoutSession();
 
     if (!response.ok) {
@@ -136,7 +158,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     if (isPublicPath) return;
     const handleExpired = (): void => {
-      setSession(null);
       void loadSession();
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);

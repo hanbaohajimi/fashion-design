@@ -40,9 +40,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           跳到主要内容
         </a>
         <div className="app-root" id="main-content" tabIndex={-1}>
-          <QueryProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </QueryProvider>
+          <AuthProvider>
+            <QueryProvider>{children}</QueryProvider>
+          </AuthProvider>
         </div>
       </body>
     </html>

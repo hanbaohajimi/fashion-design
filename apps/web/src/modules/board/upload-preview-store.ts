@@ -25,6 +25,10 @@ export function clearAllUploadPreviews(): void {
   previews.set({});
 }
 
+if (typeof window !== "undefined") {
+  window.addEventListener("fashion:session-changed", clearAllUploadPreviews);
+}
+
 export function useUploadPreview(shapeId: TLShapeId): string {
   return useValue(
     `upload-preview-${shapeId}`,

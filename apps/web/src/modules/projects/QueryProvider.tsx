@@ -1,13 +1,23 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
+import { SWRConfig } from "swr";
+import { useAuth } from "../auth/AuthProvider";
+import { setActiveBoardUser } from "../trends/active-board";
 
 interface QueryProviderProps {
   readonly children: ReactNode;
 }
 
 export function QueryProvider({ children }: QueryProviderProps) {
+  const { session } = useAuth();
+  const userId = session?.user.id ?? "anonymous";
+  useLayoutEffect(() => { setActiveBoardUser(session?.user.id ?? null); }, [session?.user.id]);
+  return <UserQueryScope key={userId}>{children}</UserQueryScope>;
+}
+
+function UserQueryScope({ children }: QueryProviderProps) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -21,7 +31,16 @@ export function QueryProvider({ children }: QueryProviderProps) {
       }),
   );
 
+  const [swrCache] = useState(() => new Map());
+  useEffect(() => () => {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    swrCache.clear();
+    window.dispatchEvent(new Event("fashion:session-changed"));
+  }, [queryClient, swrCache]);
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <SWRConfig value={{ provider: () => swrCache }}>{children}</SWRConfig>
+    </QueryClientProvider>
   );
 }
