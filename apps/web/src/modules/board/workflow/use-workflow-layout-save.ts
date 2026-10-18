@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { WorkflowLayoutSave, type LayoutBatch } from "./workflow-layout-save";
+import { HISTORY_POSITION, navigationPosition, registerNavigationGuard, registerTraversalGuard } from "../../navigation";
 
 export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void>, onError: (error: unknown) => void) {
   const router = useRouter();
@@ -12,11 +13,14 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
     catch (error) { onError(error); throw error; }
   }), [queue, save, onError]);
   const state = useSyncExternalStore(queue.subscribe, queue.getSnapshot, queue.getSnapshot);
+  const pendingCount = useSyncExternalStore(queue.subscribe, queue.getPendingCount, queue.getPendingCount);
 
   useEffect(() => {
-    const currentUrl = location.href;
-    const currentHistoryState = history.state;
     let leaving = false;
+    let restoring = false;
+    let permitted = false;
+    let traversal = 0;
+    const unregister = registerNavigationGuard(queue.flush);
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (!queue.hasUnsaved()) return;
       event.preventDefault();
@@ -35,24 +39,36 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
       void queue.flush().then(() => router.push(url.pathname + url.search + url.hash)).catch(() => undefined).finally(() => { leaving = false; });
     };
     const popstate = (event: PopStateEvent) => {
+      if (permitted) { permitted = false; return; }
+      if (restoring) {
+        event.stopImmediatePropagation();
+        restoring = false;
+        void queue.flush().then(() => {
+          permitted = true;
+          history.go(-traversal);
+        }).catch(() => { leaving = false; });
+        return;
+      }
       if (!queue.hasUnsaved()) return;
-      const destination = location.href;
       event.stopImmediatePropagation();
-      history.pushState(currentHistoryState, "", currentUrl);
       if (leaving) return;
+      traversal = navigationPosition() - Number(event.state?.[HISTORY_POSITION] ?? 0);
+      if (!traversal) return;
       leaving = true;
-      void queue.flush().then(() => router.replace(destination)).catch(() => undefined).finally(() => { leaving = false; });
+      restoring = true;
+      history.go(traversal);
     };
     window.addEventListener("beforeunload", beforeUnload);
     document.addEventListener("click", click, true);
-    window.addEventListener("popstate", popstate, true);
+    const unregisterTraversal = registerTraversalGuard(popstate);
     return () => {
       queue.dispose();
+      unregister();
       window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("click", click, true);
-      window.removeEventListener("popstate", popstate, true);
+      unregisterTraversal();
     };
   }, [queue, router]);
 
-  return { queue, state };
+  return { queue, state, pendingCount };
 }

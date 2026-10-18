@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { SWRConfig } from "swr";
 import { useAuth } from "../auth/AuthProvider";
 import { setActiveBoardUser } from "../trends/active-board";
+import { installNavigationHistory } from "../navigation";
 import { setPrivateRequestUser } from "../auth/private-fetch";
 
 interface QueryProviderProps {
@@ -14,6 +15,7 @@ interface QueryProviderProps {
 export function QueryProvider({ children }: QueryProviderProps) {
   const { session } = useAuth();
   const userId = session?.user.id ?? "anonymous";
+  useLayoutEffect(installNavigationHistory, []);
   useLayoutEffect(() => {
     setPrivateRequestUser(session?.user.id ?? null);
     setActiveBoardUser(session?.user.id ?? null);

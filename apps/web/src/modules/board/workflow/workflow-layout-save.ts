@@ -31,6 +31,7 @@ export class WorkflowLayoutSave {
   };
   readonly getSnapshot = () => this.state;
   readonly hasUnsaved = () => this.batch !== null || this.pending.size > 0;
+  readonly getPendingCount = () => this.getPositions().length;
   readonly getPositions = (): readonly LayoutPosition[] => [...new Map([
     ...(this.batch?.positions ?? []).map((position) => [position.nodeId, position] as const),
     ...this.pending.entries(),
@@ -39,7 +40,7 @@ export class WorkflowLayoutSave {
   stage(positions: readonly LayoutPosition[]): void {
     for (const position of positions) this.pending.set(position.nodeId, position);
     if (!this.hasUnsaved()) return;
-    if (!this.flight && this.state !== "error") this.publish("dirty");
+    this.publish(!this.flight && this.state !== "error" ? "dirty" : this.state);
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => { void this.flush().catch(() => undefined); }, 500);
   }
@@ -59,6 +60,7 @@ export class WorkflowLayoutSave {
         }
         await this.save(this.batch);
         this.batch = null;
+        if (this.hasUnsaved()) this.publish("saving");
       }
       this.publish("saved");
     }).catch((error: unknown) => {

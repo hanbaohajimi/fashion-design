@@ -729,6 +729,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
         </div>
         <div className={styles.topActions}>
           <span aria-live="polite" className={styles.saved} data-save-state={layoutSave.state}><span aria-hidden="true" /> {layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</span>
+          {layoutSave.pendingCount > 0 ? <span className={styles.saved} aria-label="待保存节点数">{layoutSave.pendingCount} 个节点待保存</span> : null}
           {layoutSave.state === "error" ? <button onClick={() => void layoutSave.queue.flush().catch(() => undefined)} type="button">重试保存</button> : null}
           <Link href={`/trends?from=board&boardId=${encodeURIComponent(projectId)}`}>趋势</Link>
           <Link href="/fabrics">面料</Link>
