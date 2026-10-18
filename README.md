@@ -331,7 +331,13 @@ Agent 修改选中的设计时会绑定来源资产，创建图片编辑任务�
 文件只保留兼容导出。工作流中的布局保存、节点详情和素材弹窗已拆分为独立模块。
 画布首次定位需求节点，以可读比例打开；“查看全图”和“100%”可切换视图，不改动已保存位置。
 拖动后只有服务端确认且没有剩余改动时才显示“画布已保存”；失败批次保留原请求编号，
-可点击“重试保存”。站内离开会先保存，刷新或关闭时对未保存内容提示。
+可点击“重试保存”，并显示待保存节点数。链接、程序化导航和浏览器前进/后退均等待保存；
+保存失败保留当前页面与历史目标，刷新或关闭时对未保存内容提示。
+账号切换会取消所有私有接口请求，销毁旧 Query/SWR 缓存和组件状态；登录与退出通过
+同源浏览器存储事件同步其他标签，不保存认证凭证。弹窗支持 Escape、双向 Tab 循环和焦点恢复，
+画布节点可用键盘进入详情。四种视口下的正常及错误界面检查文字对比度与控件字号。
+会话切换通知会使进行中的旧会话查询失效；进入登录确认页也会清除上一身份，防止
+旧 `/me` 响应覆盖新账号，或登录返回工作区时短暂复用旧账号缓存。
 可删除性由服务端返回，移除未执行节点前需要确认关联连线；执行历史保持只读。
 
 所有业务写请求必须提供与 `APP_ORIGIN` 匹配的 `Origin`，否则返回 403。
@@ -353,7 +359,9 @@ pnpm verify:file-pipeline
 ```
 
 前者使用真实 PostgreSQL、Redis/BullMQ Worker、私有 MinIO 与可控图片适配器，验证上传、
-节点执行、生成资产归属、PNG 导出及重复任务不重复产出或计次。后者额外验证对象存储
+节点执行、生成资产归属、PNG 导出及重复任务不重复产出或计次；还会在远程任务编号
+持久化后强制终止 Worker 子进程，验证 BullMQ 恢复废弃任务后不重复提交模型、产出或计次。
+仅测试记录的恢复租约时间被推进，实际 Redis 锁仍由队列检测并恢复。后者额外验证对象存储
 实际拒绝超出签名长度的上传。测试前必须应用迁移并配置独立测试基础设施。
 
 正式演示与上线仍须独立验收两项：为 `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` 配置有效授权并确认
@@ -367,16 +375,20 @@ pnpm verify:file-pipeline
 | --- | --- | --- |
 | 静态检查 | `pnpm lint`、`pnpm typecheck` | 全工作区通过 |
 | 构建 | `pnpm build` | 7 个工作区通过 |
-| 应用测试 | `pnpm test`，最终另跑 `pnpm --filter @fashion/api test` | Web 124、Worker 95、最终 API 567 项通过 |
+| 应用测试 | `pnpm test`；最终追加 `pnpm --filter @fashion/web test` | Web 130、Worker 95、API 568 项通过 |
 | 数据库 | `pnpm db:validate`、`pnpm db:test` | schema 校验和 2 项集成测试通过 |
-| 浏览器 | `pnpm exec playwright test --reporter=list` | 全量 77 项通过；随后新增 2 项 409 场景和 1 项封面回退测试均通过 |
+| 浏览器 | `pnpm exec playwright test --reporter=list` | 源码冻结、重启开发服务后的最终全量 101 项通过；趋势页额外连续重复 3 次通过 |
 | 文件存储 | `pnpm verify:file-pipeline` | 超长上传拒绝、去重、真实缩略图通过 |
-| 依赖 | `pnpm audit:all` | 补丁校验 36 项通过，审计通过；首次子进程失败后重跑成功 |
+| 依赖 | `pnpm audit:all` | 最终补丁校验 36 项通过，依赖审计通过 |
 
 本地截图位于 `output/playwright/`：`review-login-before.png` / `review-login-after.png`、
 `review-projects-before.png` / `review-projects-after.png`、
 `review-canvas-before.png` / `review-canvas-after.png`。
-异常状态截图为 `review-login-error-after.png` 和 `review-save-error-after.png`。
+异常状态前后截图为 `review-login-error-before.png` / `review-login-error-after.png`、
+`review-save-error-before.png` / `review-save-error-after.png`。其中错误状态修改前图片按提交
+`48db5c6b` 的原代码与可控接口重建，未改写旧版界面。
+四种尺寸的最终截图为 `review-{login,projects,canvas}-{1366,1440,1920,390}-final.png`，
+对应错误状态为 `review-{login,projects,canvas}-error-{宽度}-final.png`。
 浏览器截图使用可控数据；真实文件与队列链路由上述集成测试另行验证。
 
 ```bash
