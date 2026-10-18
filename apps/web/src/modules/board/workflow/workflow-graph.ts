@@ -62,7 +62,7 @@ export function nodeSize(
     const payload = node.payload ?? {};
     return imageNodeSize(
       loadedImage && validImageDimensions(loadedImage) ? loadedImage : { width: payload.width, height: payload.height },
-      Boolean(nodeSummary({ type: node.type, payload })),
+      Boolean(nodeSummary({ type: node.type, ...("title" in node && typeof node.title === "string" ? { title: node.title } : {}), payload })),
     );
   }
   if (node.type === "evaluation" || node.type === "constraint") {
