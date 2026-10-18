@@ -35,7 +35,7 @@
 
   --color-ink: #1F1D1A;           /* 主要文字 —— 深墨 */
   --color-ink-secondary: #5C574F; /* 次要文字 —— 说明、元数据 */
-  --color-ink-tertiary: #8F8A80;  /* 辅助文字 —— 占位符、标签 */
+  --color-ink-tertiary: #706A60;  /* 辅助文字，保持暖白底上的可读对比度 */
   --color-ink-disabled: #BDB8AE;  /* 禁用 */
 
   /* ============================================================
@@ -111,7 +111,7 @@
   --swatch-sage: #8A927F;
   --swatch-sage-wash: #E5E8E0;
   /* 紫草 —— 二级强调 */
-  --swatch-mauve: #7D6B84;
+  --swatch-mauve: #68586F;
   --swatch-mauve-wash: #E6E0E9;
 
   /* ============================================================

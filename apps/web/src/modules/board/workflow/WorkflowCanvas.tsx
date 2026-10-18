@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import type { AgentDesignBrief, AgentDesignEvaluation, AgentRunView } from "@fashion/shared";
-import { getWorkflowToolCatalog, getWorkflowToolContract, parseWorkflowToolParameters, WORKFLOW_TOOL_KEYS, WORKFLOW_REFERENCE_ROLES, type WorkflowToolKey } from "@fashion/shared";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AgentRunView } from "@fashion/shared";
+import { getWorkflowToolCatalog, getWorkflowToolContract, type WorkflowToolKey } from "@fashion/shared";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   createShapeId,
   createTLStore,
@@ -27,7 +27,6 @@ import {
 import { BoardProjectContext } from "../board-context";
 import { CollectionDrawer } from "../generation/CollectionDrawer";
 import { createCollection } from "../generation/collection-api";
-import { DesignPathPanel } from "../generation/DesignPathPanel";
 import { GenerationWorkspace } from "../generation/GenerationWorkspace";
 import {
   completeUpload,
@@ -46,25 +45,18 @@ import {
   type WorkflowNode,
   type WorkflowOperation,
   type WorkflowProposal,
-  type WorkflowAttempt,
   type WorkflowToolType,
   WorkflowApiError,
-  decideWorkflowCandidate,
-  executeWorkflowNode,
   fetchWorkflow,
-  fetchWorkflowNodeHistory,
   inferWorkflowNodeRole,
   patchWorkflow,
 } from "./workflow-api";
 import {
   displayNodeTitle,
-  incomingEdges,
   lineageOf,
   nodeImageUrl,
   nodeSize,
   nodeSummary,
-  nodeTypeLabel,
-  outgoingEdges,
   projectWorkflowProposal,
 } from "./workflow-graph";
 import {
@@ -77,6 +69,10 @@ import { WORKFLOW_EDGE_SHAPE_TYPE, WorkflowEdgeShapeUtil, type WorkflowEdgeShape
 import { WorkflowInteractionProvider, WorkflowConnectionOverlay } from "./WorkflowInteractions";
 import { planInputEdit, type InputEdit, type PlannedInputEdit } from "./workflow-editing";
 import { WorkflowAssistantPanel } from "./WorkflowAssistantPanel";
+import { useWorkflowLayoutSave } from "./use-workflow-layout-save";
+import type { WorkflowLayoutSave } from "./workflow-layout-save";
+import { NodeDetails } from "./WorkflowNodeDetails";
+import { WorkflowMaterialEntry, WorkflowLibraryDialog } from "./WorkflowMaterialDialogs";
 
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 const cameraActionIds = new Set([
@@ -126,31 +122,7 @@ const ASSET_OPTIONS: readonly { type: WorkflowAssetType; title: string; hint: st
 const toolInputHints = { analyze_brief: "需求与参考", generate_design: "约束与参考", evaluate_design: "候选与约束", edit_design: "候选" };
 const TOOL_OPTIONS = getWorkflowToolCatalog().map((tool) => ({ type: tool.key, title: tool.name, hint: `${toolInputHints[tool.key]} → ${tool.output.type === "constraint" ? "设计约束" : tool.output.type === "evaluation" ? "评估报告" : "新的设计方案"}` }));
 
-const REFERENCE_ROLE_OPTIONS = [
-  { value: "style_ref", label: "风格参考" },
-  { value: "silhouette_ref", label: "廓形参考" },
-  { value: "detail_ref", label: "细节参考" },
-  { value: "fabric_texture", label: "面料纹理" },
-  { value: "palette_ref", label: "配色参考" },
-] as const;
-
-const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
-  candidate: "候选方案",
-  constraint: "设计约束",
-  goal: "设计目标",
-  reference: "参考素材",
-  source: "原图",
-};
-
-/* 节点状态面向设计师表达，不暴露 API 的 ready / proposed 字面量 */
-const STATUS_LABELS: Readonly<Record<string, string>> = {
-  completed: "已完成",
-  failed: "执行失败",
-  proposed: "待确认",
-  ready: "就绪",
-  running: "执行中",
-  succeeded: "已完成",
-};
+const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = { candidate: "候选方案", constraint: "设计约束", goal: "设计目标", reference: "参考素材", source: "原图" };
 
 function nodeShapeId(id: string): TLShapeId {
   return createShapeId(`workflow-node-${id}`);
@@ -321,18 +293,16 @@ function WorkflowProjection({
     });
     if (!initialFit.current && graph.nodes.length > 0) {
       initialFit.current = true;
-        const minX = Math.min(...graph.nodes.map((node) => node.x));
-        const minY = Math.min(...graph.nodes.map((node) => node.y));
-        const maxX = Math.max(...graph.nodes.map((node) => node.x + graphNodeSize(editor, node).w));
-        const maxY = Math.max(...graph.nodes.map((node) => node.y + graphNodeSize(editor, node).h));
+        const focus = graph.nodes.find((node) => node.id === selectedId)
+          ?? graph.nodes.find((node) => node.type === "brief") ?? graph.nodes[0];
+        if (!focus) return;
+        const size = graphNodeSize(editor, focus);
         editor.zoomToBounds({
-          x: minX - 65,
-          y: minY - 48,
-          w: maxX - minX + 130,
-          h: maxY - minY + 210,
+          x: focus.x - 40, y: focus.y - 40,
+          w: size.w + 80, h: size.h + 80,
         }, { inset: 24, targetZoom: 0.95 });
     }
-  }, [editor, graph, lineage, projectedGraph, proposedEdges]);
+  }, [editor, graph, lineage, projectedGraph, proposedEdges, selectedId]);
 
   useEffect(() => editor.store.listen((entry) => {
     const resized = new Set(Object.values(entry.changes.updated).flatMap(([before, after]) =>
@@ -405,9 +375,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menuTab, setMenuTab] = useState<MenuTab | null>(null);
   const [draftType, setDraftType] = useState<WorkflowAssetType | null>(null);
-  const [draftTitle, setDraftTitle] = useState("");
-  const [draftText, setDraftText] = useState("");
-  const [draftColor, setDraftColor] = useState("#40536D");
   const [libraryKind, setLibraryKind] = useState<LibraryKind | null>(null);
   const [libraryItems, setLibraryItems] = useState<readonly LibraryItem[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
@@ -436,9 +403,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   }, []);
   const pendingInputEdits = useRef(new Map<string, { planned: PlannedInputEdit; mutationId: string; baseRevision: number }>());
   const uploadRef = useRef<HTMLInputElement>(null);
-  const pendingLayout = useRef(new Map<string, { nodeId: string; x: number; y: number }>());
-  const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const layoutQueueRef = useRef<WorkflowLayoutSave | null>(null);
   const ensureConversation = async (): Promise<string> => {
     if (activeConversationId) return activeConversationId;
     if (!executionConversation.current) executionConversation.current = createAgentConversation(projectId, { mode: "workflow" }).then((created) => {
@@ -463,7 +429,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     }
     const previousRevision = previous?.revision;
     graphRef.current = next;
-    setGraph(next);
+    const optimistic = new Map(layoutQueueRef.current?.getPositions().map((position) => [position.nodeId, position]) ?? []);
+    setGraph(optimistic.size ? { ...next, nodes: next.nodes.map((node) => ({ ...node, ...(optimistic.get(node.id) ?? {}) })) } : next);
     if (next.proposals) {
       const pending = next.proposals;
       setProposal((current) => current ? pending.find((item) => item.id === current.id && item.status === "pending") ?? null : null);
@@ -509,10 +476,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     return () => window.removeEventListener("fashion-workflow:refresh", refresh);
   }, [reload]);
 
-  useEffect(() => () => {
-    if (layoutTimer.current) clearTimeout(layoutTimer.current);
-  }, []);
-
   const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
     const queued = mutationQueue.current.catch(() => undefined).then(task);
     mutationQueue.current = queued.catch(() => undefined);
@@ -540,41 +503,30 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       }
     }), [commitGraph, enqueue, projectId, reload]);
 
+  const layoutSave = useWorkflowLayoutSave(async (batch) => enqueue(async () => {
+    const current = graphRef.current;
+    if (!current) throw new Error("工作流仍在加载");
+    const request = batch.request ??= { mutationId: batch.mutationId, baseLayoutRevision: current.layoutRevision, positions: batch.positions };
+    try {
+      commitGraph(await patchWorkflow(projectId, {
+        ...request, mode: "layout",
+      }));
+    } catch (cause) {
+      if (!(cause instanceof WorkflowApiError) || cause.status !== 409) throw cause;
+      const fresh = await reload();
+      const ids = new Set(fresh.nodes.map((node) => node.id));
+      const positions = batch.positions.filter((position) => ids.has(position.nodeId));
+      if (positions.length) {
+        batch.request = { baseLayoutRevision: fresh.layoutRevision, mutationId: crypto.randomUUID(), positions };
+        commitGraph(await patchWorkflow(projectId, { ...batch.request, mode: "layout" }));
+      }
+    }
+    setError(null);
+  }), (cause) => setError(cause instanceof Error ? cause.message : "节点位置保存失败"));
+  useLayoutEffect(() => { layoutQueueRef.current = layoutSave.queue; }, [layoutSave.queue]);
   const saveLayout = useCallback((positions: readonly { nodeId: string; x: number; y: number }[]) => {
-    for (const position of positions) pendingLayout.current.set(position.nodeId, position);
-    if (layoutTimer.current) clearTimeout(layoutTimer.current);
-    layoutTimer.current = setTimeout(() => {
-      const changed = [...pendingLayout.current.values()];
-      pendingLayout.current.clear();
-      if (changed.length === 0) return;
-      void enqueue(async () => {
-        let current = graphRef.current;
-        if (!current) return;
-        try {
-          const next = await patchWorkflow(projectId, {
-            baseLayoutRevision: current.layoutRevision,
-            mode: "layout",
-            mutationId: crypto.randomUUID(),
-            positions: changed,
-          });
-          commitGraph(next);
-        } catch (cause) {
-          if (cause instanceof WorkflowApiError && cause.status === 409) {
-            current = await reload();
-            const next = await patchWorkflow(projectId, {
-              baseLayoutRevision: current.layoutRevision,
-              mode: "layout",
-              mutationId: crypto.randomUUID(),
-              positions: changed,
-            });
-            commitGraph(next);
-            return;
-          }
-          setError(cause instanceof Error ? cause.message : "节点位置保存失败");
-        }
-      });
-    }, 500);
-  }, [commitGraph, enqueue, projectId, reload]);
+    layoutSave.queue.stage(positions);
+  }, [layoutSave.queue]);
 
   const editInput = useCallback((edit: InputEdit) => enqueue(async () => {
     const current = graphRef.current;
@@ -662,8 +614,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       return;
     }
     setDraftType(type);
-    setDraftTitle(ASSET_OPTIONS.find((item) => item.type === type)?.title ?? "参考素材");
-    setDraftText("");
     setMenuTab(null);
   };
 
@@ -770,13 +720,14 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
           <Link aria-label="返回项目库" className={styles.brandIcon} href="/">◆</Link>
-          <strong className={styles.brand}>新时尚 · 设计工作台</strong>
+          <strong className={styles.brand}>Atelier 设计工作室</strong>
           <span className={styles.topDivider} />
           <span className={styles.projectName}>{projectName}</span>
           <span className={styles.workflowBadge}>设计工作流</span>
         </div>
         <div className={styles.topActions}>
-          <span className={styles.saved}><span aria-hidden="true" /> {busy ? "正在处理" : "画布已保存"}</span>
+          <span aria-live="polite" className={styles.saved} data-save-state={layoutSave.state}><span aria-hidden="true" /> {layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</span>
+          {layoutSave.state === "error" ? <button onClick={() => void layoutSave.queue.flush().catch(() => undefined)} type="button">重试保存</button> : null}
           <Link href={`/trends?from=board&boardId=${encodeURIComponent(projectId)}`}>趋势</Link>
           <Link href="/fabrics">面料</Link>
           {graph.legacyAvailable ? <button onClick={() => setHistoryOpen(true)} type="button">历史白板</button> : null}
@@ -836,12 +787,13 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 
           <div className={styles.zoomControls}>
             <button aria-label="缩小画布" onClick={() => editorRef.current?.zoomOut()} type="button">−</button>
-            <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit({ animation: { duration: 220 } })} type="button">适合</button>
+            <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit({ animation: { duration: 220 } })} type="button">查看全图</button>
+            <button aria-label="画布原始比例" onClick={() => editorRef.current?.resetZoom()} type="button">100%</button>
             <button aria-label="放大画布" onClick={() => editorRef.current?.zoomIn()} type="button">＋</button>
           </div>
 
           <div className={styles.bottomMenu}>
-            <button aria-expanded={menuTab === "assets"} onClick={() => setMenuTab(menuTab === "assets" ? null : "assets")} type="button">＋ 添加素材</button>
+            <button data-material-trigger aria-expanded={menuTab === "assets"} onClick={() => setMenuTab(menuTab === "assets" ? null : "assets")} type="button">＋ 添加素材</button>
             <span className={styles.menuDivider} />
             <button aria-expanded={menuTab === "tools"} onClick={() => setMenuTab(menuTab === "tools" ? null : "tools")} type="button">＋ 添加工具</button>
             {menuTab ? (
@@ -888,8 +840,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
               }}
               onOpenAsset={setWorkspaceAssetId}
               onDelete={async (nodeId) => {
-                try { await mutate([{ type: "remove_node", nodeId }]); setSelectedId(null); }
-                catch (cause) { setError(cause instanceof Error ? cause.message : "节点删除失败"); }
+                await mutate([{ type: "remove_node", nodeId }]); setSelectedId(null);
               }}
               path={path}
               projectId={projectId}
@@ -912,43 +863,16 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 
       <input accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); }} ref={uploadRef} type="file" />
       {draftType && draftType !== "reference_image" && draftType !== "sketch" ? (
-        <div className={styles.modalBackdrop}>
-          <form className={styles.entryDialog} onSubmit={(event) => {
-            event.preventDefault();
-            const title = draftTitle.trim();
-            if (!title) return;
-            void addNode("asset", draftType, title, draftType === "swatch" ? { color: draftColor, text: draftText.trim() } : { text: draftText.trim() }).catch(() => undefined);
-          }}>
-            <header><span className={styles.overline}>NEW MATERIAL</span><button aria-label="关闭" onClick={() => setDraftType(null)} type="button">×</button></header>
-            <h2>{ASSET_OPTIONS.find((item) => item.type === draftType)?.title}</h2>
-            <label>名称<input autoFocus maxLength={200} onChange={(event) => setDraftTitle(event.target.value)} required value={draftTitle} /></label>
-            {draftType === "swatch" ? <label>色号<input onChange={(event) => setDraftColor(event.target.value)} type="color" value={draftColor} /></label> : null}
-            <label>内容<textarea maxLength={4000} onChange={(event) => setDraftText(event.target.value)} placeholder="写下设计目标、场景或参考说明…" rows={5} value={draftText} /></label>
-            <button disabled={busy} type="submit">加入工作流</button>
-          </form>
-        </div>
+        <WorkflowMaterialEntry key={draftType} type={draftType} initialTitle={ASSET_OPTIONS.find((item) => item.type === draftType)?.title ?? "参考素材"} busy={busy} onClose={() => setDraftType(null)}
+          onAdd={async (title, payload) => { await addNode("asset", draftType, title, payload); }} />
       ) : null}
-      {libraryKind ? (
-        <div className={styles.modalBackdrop}>
-          <section aria-label={libraryKind === "trend" ? "选择趋势" : "选择面料"} className={styles.libraryDialog}>
-            <header><div><span className={styles.overline}>SOURCE LIBRARY</span><h2>{libraryKind === "trend" ? "选择趋势参考" : "选择面料参考"}</h2></div><button aria-label="关闭" onClick={() => setLibraryKind(null)} type="button">×</button></header>
-            <div className={styles.libraryGrid}>{libraryLoading ? <p>正在读取资料库…</p> : libraryItems.map((item) => (
-              <button key={item.id} onClick={() => void addNode("asset", libraryKind, item.label.slice(0, 200), {
-                [libraryKind === "trend" ? "trendItemId" : "fabricId"]: item.id,
-                imageUrl: item.imageUrl,
-                text: item.summary,
-                ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
-              }).then(() => setLibraryKind(null)).catch(() => undefined)} type="button">
-                {item.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="" src={item.imageUrl} />
-                ) : <span className={styles.libraryPlaceholder}>◇</span>}
-                <strong>{item.label}</strong><small>{item.summary}</small>
-              </button>
-            ))}</div>
-          </section>
-        </div>
-      ) : null}
+      {libraryKind ? <WorkflowLibraryDialog kind={libraryKind} items={libraryItems} loading={libraryLoading} onClose={() => setLibraryKind(null)} onAdd={async (item) => {
+        await addNode("asset", libraryKind, item.label.slice(0, 200), {
+          [libraryKind === "trend" ? "trendItemId" : "fabricId"]: item.id,
+          imageUrl: item.imageUrl, text: item.summary, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
+        });
+        setLibraryKind(null);
+      }} /> : null}
       {historyOpen ? <LegacyBoardHistory onClose={() => setHistoryOpen(false)} onImport={importLegacy} projectId={projectId} /> : null}
       {workspaceAssetId ? <WorkflowAssetWorkspace assetId={workspaceAssetId} onEnsureConversation={ensureConversation} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /> : null}
       <WorkflowSketchEditor onClose={() => setSketchOpen(false)} onCreated={async ({ fileAssetId, title, imageUrl }) => {
@@ -966,201 +890,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       {collectionId ? <BoardProjectContext.Provider value={projectId}><GenerationWorkspace><CollectionDrawer collectionId={collectionId} onClose={() => setCollectionId(null)} /></GenerationWorkspace></BoardProjectContext.Provider> : null}
     </main>
   );
-}
-
-function NodeDetails({
-  graph,
-  node,
-  onCreateCollection,
-  onOpenAsset,
-  onDelete,
-  path,
-  projectId,
-  onGraphChange,
-  onSavePayload,
-  onInferRole,
-  onEnsureConversation,
-  setError,
-}: {
-  readonly graph: WorkflowGraph;
-  readonly node: WorkflowNode | null;
-  readonly onCreateCollection: (nodeId: string, assetId: string) => Promise<void>;
-  readonly onOpenAsset: (assetId: string) => void;
-  readonly onDelete: (nodeId: string) => Promise<void>;
-  readonly path: ReturnType<typeof lineageOf> | null;
-  readonly projectId: string;
-  readonly onGraphChange: (next: WorkflowGraph) => void;
-  readonly onSavePayload: (nodeId: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
-  readonly onInferRole: (nodeId: string) => Promise<void>;
-  readonly onEnsureConversation: () => Promise<string>;
-  readonly setError: (message: string | null) => void;
-}) {
-  const [decisionKind, setDecisionKind] = useState<"selected" | "rejected" | "compare">("selected");
-  const [decisionReason, setDecisionReason] = useState("");
-  if (!node) return <div className={styles.sideEmpty}><span>◌</span><h3>选择画布节点</h3><p>查看来源、输入、输出与可执行操作。</p></div>;
-  const assetId = typeof node.payload.assetId === "string" ? node.payload.assetId : null;
-  const inputs = incomingEdges(graph, node.id);
-  const outputs = outgoingEdges(graph, node.id);
-  const brief = node.type === "constraint" && node.payload.brief && typeof node.payload.brief === "object"
-    ? node.payload.brief as AgentDesignBrief : null;
-  const report = node.type === "evaluation" && node.payload.report && typeof node.payload.report === "object"
-    ? node.payload.report as { readonly evaluations?: readonly AgentDesignEvaluation[] } : null;
-  return (
-    <div className={styles.detailScroll}>
-      <span className={styles.overline}>{node.kind === "asset" ? "设计素材" : "设计工具"} · {nodeTypeLabel(node.type)}</span>
-      <h3>{displayNodeTitle(node)}</h3>
-      <p className={styles.detailSummary}>{nodeSummary(node) || "这个节点尚无说明。"}</p>
-      {nodeImageUrl(node) ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img alt={node.title} className={styles.detailImage} src={nodeImageUrl(node)} />
-      ) : null}
-      {node.type === "reference_image" || node.type === "sketch" ? <section className={styles.detailSection}><h4>参考图角色</h4><p>当前标签：{String(node.payload.roleLabel ?? node.payload.role ?? "待识别")} · {node.payload.roleSource === "manual" ? "设计师指定" : node.payload.roleSource === "inferred" ? "模型建议" : "默认值"}。角色仅说明素材用途，不会自动成为硬性设计要求。</p><select aria-label="参考图角色" disabled={node.status !== "ready"} onChange={(event) => void onSavePayload(node.id, { ...node.payload, role: event.target.value, roleSource: "manual", roleInferenceState: "ready" }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "参考角色保存失败"))} value={typeof node.payload.role === "string" ? node.payload.role : node.type === "sketch" ? "silhouette_ref" : "style_ref"}>{REFERENCE_ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{node.status === "ready" && node.payload.roleSource !== "manual" && !(node.payload.roleSource === "inferred" && node.payload.roleInferenceState === "ready") && typeof node.payload.fileAssetId === "string" ? <button onClick={() => void onInferRole(node.id)} type="button">{node.payload.roleInferenceState === "failed" ? "重试识别参考角色" : "识别参考角色"}</button> : null}</section> : null}
-      {brief ? <section className={styles.detailSection}><h4>设计约束</h4>{brief.constraints.map((constraint) => <div className={styles.constraintRow} key={constraint.id}><span>{constraint.priority === "must" ? "必须" : "偏好"} · {constraint.origin === "explicit" ? "明确提出" : "解释性建议"}</span><p>{constraint.requirement}</p><small>{constraint.verification === "visual" ? "可由图像判断" : "需实测或规格确认"}</small></div>)}{brief.unknowns.length > 0 ? <p>待确认：{brief.unknowns.join("；")}</p> : null}</section> : null}
-      {report?.evaluations ? <section className={styles.detailSection}><h4>逐候选评估</h4>{report.evaluations.map((evaluation) => <div className={styles.constraintRow} key={evaluation.assetId}><strong>{graph.nodes.find((item) => item.payload.assetId === evaluation.assetId)?.title ?? "候选方案"}</strong><p>{evaluation.summary}</p>{evaluation.checks.map((check) => <p key={check.constraintId}>{check.status === "met" ? "✓ 符合" : check.status === "concern" ? "! 存疑" : "? 无法判断"} · {check.observation}</p>)}</div>)}</section> : null}
-      <details className={styles.detailSection}><summary>来源与路径</summary>
-        <div className={styles.detailMeta}><span>状态</span><strong>{STATUS_LABELS[node.status] ?? node.status}</strong><span>输入</span><strong>{inputs.length}</strong><span>输出</span><strong>{outputs.length}</strong></div>
-        {inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} · {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>)}
-        {path && path.nodeIds.size > 1 ? <ol>{graph.nodes.filter((item) => path.nodeIds.has(item.id)).map((item) => <li key={item.id}>{displayNodeTitle(item)}</li>)}</ol> : null}
-        {assetId ? <DesignPathPanel assetId={assetId} /> : null}
-      </details>
-      {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={`${node.id}:${node.updatedAt}`} node={node} onEnsureConversation={onEnsureConversation} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
-      {node.type === "candidate" && assetId ? <section className={styles.detailSection}><h4>候选方案</h4><button onClick={() => onOpenAsset(assetId)} type="button">打开大图、版本与局部重绘</button><h4>设计师决定</h4><select onChange={(event) => setDecisionKind(event.target.value as typeof decisionKind)} value={decisionKind}><option value="selected">选定方案</option><option value="compare">保留比较</option><option value="rejected">否决方案</option></select><textarea className={styles.decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder="记录选择或否决理由" rows={3} value={decisionReason} /><button disabled={!decisionReason.trim()} onClick={() => void decideWorkflowCandidate(projectId, node.id, assetId, decisionKind, decisionReason.trim()).then((next) => { onGraphChange(next); setDecisionReason(""); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "决定保存失败"))} type="button">保存决定</button></section> : null}
-      {assetId && node.type === "candidate" ? <section className={styles.detailSection}><h4>系列</h4><button onClick={() => void onCreateCollection(node.id, assetId)} type="button">{typeof node.payload.collectionId === "string" ? "打开关联系列" : "设为 Hero / 建立系列"}</button></section> : null}
-      <section className={styles.detailSection}><button className={styles.dangerButton} onClick={() => void onDelete(node.id)} type="button">从工作流移除节点</button></section>
-    </div>
-  );
-}
-
-interface ToolDraft {
-  readonly prompt: string;
-  readonly negativePrompt: string;
-  readonly count: string;
-  readonly width: string;
-  readonly height: string;
-  readonly quality: string;
-  readonly referenceInputs: readonly { readonly nodeId: string; readonly role: string; readonly weight: number }[];
-}
-
-function toolParams(node: WorkflowNode): Readonly<Record<string, unknown>> {
-  const value = node.payload.params;
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Readonly<Record<string, unknown>>
-    : {};
-}
-
-function toolDraft(node: WorkflowNode): ToolDraft {
-  const params = toolParams(node);
-  const defaults = WORKFLOW_TOOL_KEYS.includes(node.type as WorkflowToolKey) ? getWorkflowToolContract(node.type as WorkflowToolKey).defaults : {};
-  return {
-    prompt: typeof params.prompt === "string" ? params.prompt : "",
-    negativePrompt: typeof params.negativePrompt === "string" ? params.negativePrompt : "",
-    count: String(params.count ?? defaults.count ?? 1),
-    width: String(params.width ?? defaults.width ?? 768),
-    height: String(params.height ?? defaults.height ?? 1024),
-    quality: String(params.quality ?? defaults.quality ?? "high"),
-    referenceInputs: Array.isArray(params.referenceInputs) ? params.referenceInputs as ToolDraft["referenceInputs"] : [],
-  };
-}
-
-function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEnsureConversation, projectId, setError }: {
-  readonly graph: WorkflowGraph;
-  readonly inputs: number;
-  readonly node: WorkflowNode;
-  readonly onGraphChange: (next: WorkflowGraph) => void;
-  readonly onSavePayload: (nodeId: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
-  readonly projectId: string;
-  readonly setError: (message: string | null) => void;
-  readonly onEnsureConversation: () => Promise<string>;
-}) {
-  const original = toolDraft(node);
-  const [draft, setDraft] = useState<ToolDraft>(original);
-  const [saving, setSaving] = useState(false);
-  const [history, setHistory] = useState<readonly WorkflowAttempt[] | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const canEdit = node.status === "ready" && node.type !== "restore_version";
-  const imageTool = node.type === "generate_design" || node.type === "edit_design";
-  const dirty = draft.prompt !== original.prompt || (imageTool && (draft.negativePrompt !== original.negativePrompt || draft.width !== original.width || draft.height !== original.height || draft.quality !== original.quality || draft.count !== original.count || JSON.stringify(draft.referenceInputs) !== JSON.stringify(original.referenceInputs)));
-  const referenceNodes = graph.nodes.filter((source) => graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === "reference" && edge.sourceNodeId === source.id) && Boolean(nodeImageUrl(source)));
-
-  const save = async () => {
-    if (!canEdit || !dirty || saving) return;
-    let nextParams: Record<string, unknown> = { ...toolParams(node), prompt: draft.prompt.trim() };
-    if (imageTool) {
-      nextParams.negativePrompt = draft.negativePrompt.trim();
-      nextParams.width = Number(draft.width);
-      nextParams.height = Number(draft.height);
-      nextParams.count = Number(draft.count);
-      nextParams.quality = draft.quality;
-      nextParams.referenceInputs = draft.referenceInputs;
-    }
-    try {
-      if (WORKFLOW_TOOL_KEYS.includes(node.type as WorkflowToolKey)) {
-        // Old manually drawn masks retain their existing trusted temporary URL; new parameters use the shared contract.
-        const legacyMask = nextParams.taskType === "inpaint" && typeof nextParams.maskImageUrl === "string" ? nextParams.maskImageUrl : null;
-        if (legacyMask) {
-          const validation: Record<string, unknown> = { ...nextParams, taskType: "i2i" };
-          delete validation.maskImageUrl;
-          const palette = validation.palette;
-          delete validation.palette;
-          const checked = parseWorkflowToolParameters(node.type as WorkflowToolKey, validation);
-          nextParams = { ...checked, taskType: "inpaint", maskImageUrl: legacyMask, ...(palette ? { palette } : {}) };
-        } else nextParams = parseWorkflowToolParameters(node.type as WorkflowToolKey, nextParams);
-      }
-    } catch { setLocalError("参数不符合工具要求：数量为 1–4，宽高为 256–2048 且是 8 的倍数；请检查指令、质量及参考配置。"); return; }
-    setSaving(true);
-    setLocalError(null);
-    try {
-      await onSavePayload(node.id, { ...node.payload, params: nextParams });
-    } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : "工具参数保存失败");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const execute = async () => {
-    try {
-      const next = await executeWorkflowNode(projectId, node.id, await onEnsureConversation());
-      onGraphChange(next);
-      window.dispatchEvent(new Event("fashion-workflow:refresh"));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "节点执行失败"); }
-  };
-
-  return <section className={styles.detailSection}>
-    <h4>工具设置</h4>
-    <p>{canEdit ? "确认执行前可调整参数，保存后会记录到设计路径。" : "以下参数为该节点记录的设置；已运行节点不可修改。"}</p>
-    {node.type === "edit_design" ? <p>将要修改的候选图或上传图片连接为「原图」；其他图片可连接为「参考素材」。</p> : null}
-    <div className={styles.toolForm}>
-      <label>执行指令<textarea aria-label="执行指令" disabled={!canEdit || saving} maxLength={4000} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={3} value={draft.prompt} /></label>
-      {imageTool ? <details className={styles.advancedSettings}><summary>高级设置</summary>
-        <label>排除内容<textarea aria-label="排除内容" disabled={!canEdit || saving} maxLength={3000} onChange={(event) => setDraft({ ...draft, negativePrompt: event.target.value })} rows={2} value={draft.negativePrompt} /></label>
-        <div className={styles.toolDimensions}>
-          <label>候选数量<input aria-label="候选数量" disabled={!canEdit || saving} max={4} min={1} onChange={(event) => setDraft({ ...draft, count: event.target.value })} step={1} type="number" value={draft.count} /></label>
-          <label>宽度<input aria-label="宽度" disabled={!canEdit || saving} max={2048} min={256} onChange={(event) => setDraft({ ...draft, width: event.target.value })} step={8} type="number" value={draft.width} /></label>
-          <label>高度<input aria-label="高度" disabled={!canEdit || saving} max={2048} min={256} onChange={(event) => setDraft({ ...draft, height: event.target.value })} step={8} type="number" value={draft.height} /></label>
-        </div>
-        <label>图像质量<select aria-label="图像质量" disabled={!canEdit || saving} onChange={(event) => setDraft({ ...draft, quality: event.target.value })} value={draft.quality}><option value="auto">自动</option><option value="low">低</option><option value="medium">标准</option><option value="high">高</option></select></label>
-        {referenceNodes.length ? <><p>参考作用与强度仅为提示词引导，不能保证模型精确控制。</p>{referenceNodes.map((reference) => { const current = draft.referenceInputs.find((entry) => entry.nodeId === reference.id) ?? { nodeId: reference.id, role: typeof reference.payload.role === "string" ? reference.payload.role : "style_ref", weight: 0.7 }; const update = (value: Partial<typeof current>) => setDraft({ ...draft, referenceInputs: [...draft.referenceInputs.filter((entry) => entry.nodeId !== reference.id), { ...current, ...value }] }); return <div className={styles.referenceConfig} key={reference.id}><strong>{displayNodeTitle(reference)}</strong><label>参考作用<select aria-label={`参考作用 ${reference.title}`} disabled={!canEdit || saving} value={current.role} onChange={(event) => update({ role: event.target.value })}>{WORKFLOW_REFERENCE_ROLES.map((role) => <option key={role} value={role}>{REFERENCE_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role}</option>)}</select></label><label>参考强度<input aria-label={`参考强度 ${reference.title}`} disabled={!canEdit || saving} type="number" min={0} max={1} step={0.1} value={current.weight} onChange={(event) => update({ weight: Number(event.target.value) })} /></label></div>; })}</> : null}
-      </details> : null}
-    </div>
-    {localError ? <p className={styles.toolError} role="alert">{localError}</p> : null}
-    {canEdit ? <button disabled={!dirty || saving} onClick={() => void save()} type="button">{saving ? "正在保存…" : "保存工具参数"}</button> : null}
-    {node.type !== "restore_version" && node.status !== "completed" ? <button disabled={saving || node.status === "running" || inputs === 0 || (canEdit && dirty)} onClick={() => void execute()} type="button">{node.status === "running" ? "正在执行…" : node.status === "failed" ? "重试执行" : "确认并执行"}</button> : null}
-    {canEdit && dirty ? <p>请先保存参数，再确认执行。</p> : null}
-    <details className={styles.advancedSettings}><summary>执行记录</summary>
-    <button onClick={() => void fetchWorkflowNodeHistory(projectId, node.id).then((value) => setHistory(value.items)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "执行历史读取失败"))} type="button">读取尝试记录</button>
-    {history ? <ol className={styles.attemptList}>{history.length === 0 ? <li>尚无执行记录</li> : history.map((attempt) => <li key={attempt.id}>
-      <strong>第 {attempt.ordinal} 次 · {attempt.status}</strong><span>{new Date(attempt.createdAt).toLocaleString("zh-CN")}</span>
-      <p>模型：{typeof attempt.request.model === "string" ? attempt.request.model : "历史记录未提供"}</p>
-      <p>指令：{typeof attempt.request.prompt === "string" ? attempt.request.prompt : typeof (attempt.request.params as Record<string, unknown> | undefined)?.prompt === "string" ? String((attempt.request.params as Record<string, unknown>).prompt) : "未记录"}</p>
-      {typeof attempt.request.negativePrompt === "string" && attempt.request.negativePrompt ? <p>排除内容：{attempt.request.negativePrompt}</p> : null}
-      {typeof attempt.request.width === "number" && typeof attempt.request.height === "number" ? <p>尺寸：{attempt.request.width} × {attempt.request.height}</p> : null}
-      {Array.isArray(attempt.request.inputNodeIds) ? <p>来源：{attempt.request.inputNodeIds.map((id: unknown) => graph.nodes.find((item) => item.id === id)?.title ?? String(id)).join("、") || "无"}</p> : null}
-      {Array.isArray(attempt.request.referenceInputs) && attempt.request.referenceInputs.length > 0 ? <p>参考角色：{attempt.request.referenceInputs.map((item: unknown) => { const ref = item as Record<string, unknown>; return `${String(ref.role ?? "参考")} · 权重 ${String(ref.weight ?? "—")}`; }).join("；")}</p> : null}
-      {attempt.error ? <p>{attempt.error}</p> : null}
-    </li>)}</ol> : null}
-    </details>
-  </section>;
 }
 
 function LegacyRunHistory({ conversationId, onError }: {

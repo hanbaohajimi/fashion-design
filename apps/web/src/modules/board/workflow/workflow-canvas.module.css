@@ -11,6 +11,22 @@
   font-family: var(--font-sans);
 }
 
+.nativeDialog {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  overflow: auto;
+}
+
+.nativeDialog::backdrop { background: var(--color-scrim-soft); }
+.saved[data-save-state="error"] { color: var(--color-error); }
+.saved[data-save-state="dirty"], .saved[data-save-state="saving"] { color: var(--color-ink-secondary); }
+
 /* 顶栏：一条细带，不是工具栏。
    品牌、项目名、操作三段分明，但整体高度和对比度都压到最低——
    视线应该落在画布上，而不是停在这里。 */
@@ -56,7 +72,7 @@
 .brand {
   overflow: hidden;
   color: var(--color-ink-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-overflow: ellipsis;
@@ -89,7 +105,7 @@
 .workflowBadge {
   flex: none;
   color: var(--color-ink-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -107,9 +123,9 @@
   border: 0;
   padding: 4px 0;
   background: none;
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
   transition: color var(--duration-fast);
@@ -131,7 +147,7 @@
   align-items: center;
   gap: 6px;
   color: var(--color-ink-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
 }
 
@@ -172,7 +188,7 @@
 
 .overline {
   color: var(--color-ink-disabled);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -223,7 +239,7 @@
 
 .emptyState > span {
   color: var(--color-signal);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.14em;
 }
@@ -236,7 +252,7 @@
 
 .emptyState p {
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
 }
 
@@ -249,7 +265,7 @@
   background: var(--color-signal);
   color: white;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -274,7 +290,7 @@
   background: none;
   color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -374,7 +390,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 10px 12px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .addPopover header button {
@@ -406,12 +422,12 @@
 }
 
 .addPopover > button strong {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .addPopover > button span {
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .sidebar {
@@ -524,7 +540,7 @@
   background: transparent;
   color: var(--color-ink-tertiary);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   transition: background 140ms var(--ease-standard), color 140ms var(--ease-standard);
 }
@@ -578,7 +594,7 @@
   padding: 15px;
   background: var(--color-surface);
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -601,7 +617,7 @@
 
 .suggestionCard[data-empty="true"] .suggestionLabel {
   color: var(--color-ink-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -618,14 +634,14 @@
 
 .suggestionLabel {
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 750;
 }
 
 .suggestionCard p {
   margin: 13px 0;
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -635,7 +651,7 @@
   padding: 9px 10px;
   background: var(--color-surface);
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -686,7 +702,7 @@
   background: var(--color-surface);
   color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -730,14 +746,14 @@
   color: var(--color-ink);
 }
 
-.legacyRuns h3 { font-size: 13px; }
+.legacyRuns h3 { font-size: 14px; }
 .legacyRuns h4 { font-size: 12px; }
-.legacyRuns h5 { font-size: 11px; }
+.legacyRuns h5 { font-size: 12px; }
 
 .legacyRuns p,
 .legacyRuns li {
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -765,7 +781,7 @@
 
 .legacyRunList span {
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .legacyRunDetail {
@@ -813,7 +829,7 @@
   padding: 5px 3px;
   background: transparent;
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -842,7 +858,7 @@
   background: var(--swatch-indigo-wash);
   color: var(--swatch-indigo);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .mentionChoices {
@@ -875,7 +891,7 @@
 
 .mentionChoices small {
   color: var(--color-ink-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .detailScroll {
@@ -894,7 +910,7 @@
 .detailSummary {
   margin: 0 0 15px;
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
 }
@@ -931,7 +947,7 @@
 
 .detailSection h4 {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .detailSection p,
@@ -955,7 +971,7 @@
   display: grid;
   gap: 5px;
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .toolForm textarea,
@@ -998,7 +1014,7 @@
 .constraintRow span,
 .constraintRow small {
   color: var(--swatch-mauve);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .constraintRow p {
@@ -1061,7 +1077,7 @@
   padding: 10px;
   background: var(--color-surface);
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: 12px;
   white-space: pre-wrap;
 }
 
@@ -1189,7 +1205,7 @@
   padding: 10px;
   background: var(--color-paper);
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .libraryDialog {
@@ -1255,7 +1271,7 @@
 .libraryGrid small {
   margin-top: 3px;
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .loading,
@@ -1323,7 +1339,7 @@
   }
 
   .brand {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .brandGroup {
@@ -1342,7 +1358,7 @@
   }
 
   .topActions button {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .workspace {
@@ -1379,7 +1395,7 @@
     padding: 7px;
     background: var(--color-paper);
     color: var(--color-ink);
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .canvas[data-mobile-list-open="true"] {
@@ -1422,7 +1438,7 @@
   .mobileNodeList span {
     overflow: hidden;
     color: var(--color-ink-secondary);
-    font-size: 11px;
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1524,7 +1540,7 @@
   border-bottom: 1px solid var(--color-divider);
   padding-bottom: 8px;
   color: var(--color-ink-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1535,16 +1551,16 @@
 .designContext > summary > small { overflow: hidden; color: var(--color-ink-tertiary); text-overflow: ellipsis; white-space: nowrap; }
 .contextContents { max-height: 36dvh; overflow: auto; padding: 6px 0; }
 .contextContents section { border-top: 1px solid var(--color-divider); padding: 10px 0; }
-.contextContents h3 { margin: 0 0 6px; font-size: 11px; font-weight: 650; }
+.contextContents h3 { margin: 0 0 6px; font-size: 12px; font-weight: 650; }
 .contextContents p, .contextContents blockquote { margin: 5px 0; color: var(--color-ink-secondary); font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
-.contextContents blockquote { border-left: 2px solid var(--color-border); padding-left: 8px; font-size: 11px; }
-.contextContents small { display: block; margin: 4px 0; color: var(--color-ink-tertiary); font-size: 10px; line-height: 1.5; }
+.contextContents blockquote { border-left: 2px solid var(--color-border); padding-left: 8px; font-size: 12px; }
+.contextContents small { display: block; margin: 4px 0; color: var(--color-ink-tertiary); font-size: 12px; line-height: 1.5; }
 .contextContents ul { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .contextContents li[data-status="inactive"] { opacity: 0.6; }
 .contextContents :is(.actionPrimary, .actionSecondary, .actionQuiet, .nodeLink), .legacyReadOnly :is(.actionPrimary, .actionSecondary) { margin: 4px 5px 0 0; }
 .contextContents textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 12px/1.6 var(--font-sans); resize: vertical; }
-.assistantReply { margin: 0 0 12px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; }
-.messageKind { color: var(--swatch-mauve); font-size: 10px; }
+.assistantReply { margin: 0 0 12px; font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
+.messageKind { color: var(--swatch-mauve); font-size: 12px; }
 .legacyReadOnly { border-top: 1px solid var(--color-divider); padding: 10px 0; font-size: 12px; line-height: 1.6; color: var(--color-ink-secondary); }
 .workflowMessage[data-role="user"] .userExample { display: block; }
 .assistantMore { position: relative; }
@@ -1565,13 +1581,13 @@
   margin: 0;
   padding: 8px 0;
   color: var(--color-ink-tertiary);
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
 }
 .workflowMessage {
   margin-bottom: 24px;
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
   /* 消息入场：淡入 + 轻微上移 */
   animation: messageEnter var(--dur-standard) var(--ease-enter) backwards;
@@ -1589,7 +1605,7 @@
 }
 .suggestionText[data-expanded="false"] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 .expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
-.suggestionEvidence { margin-top: 12px; color: var(--color-ink-tertiary); font-size: 11px; line-height: 1.7; }
+.suggestionEvidence { margin-top: 12px; color: var(--color-ink-tertiary); font-size: 12px; line-height: 1.7; }
 .suggestionEvidence summary, .detailSection > summary, .advancedSettings > summary { cursor: pointer; }
 .suggestionEvidence small { display: block; margin-top: 8px; }
 .composerActions { justify-content: flex-end; }
@@ -1598,15 +1614,15 @@
 .detailSection > summary { color: var(--color-ink-secondary); font-size: 12px; }
 .detailSection[open] > summary { margin-bottom: 12px; }
 .proposalEditor { display: grid; gap: 10px; max-width: 100%; margin-top: 12px; }
-.proposalEditor label { display: grid; min-width: 0; gap: 5px; color: var(--color-ink-secondary); font-size: 11px; }
+.proposalEditor label { display: grid; min-width: 0; gap: 5px; color: var(--color-ink-secondary); font-size: 12px; }
 .proposalEditor textarea, .proposalEditor input, .proposalEditor select { width: 100%; min-width: 0; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 12px/1.5 var(--font-sans); }
 .proposalEditor textarea { resize: vertical; }
 .proposalInput { display: flex; gap: 6px; align-items: end; }
 .proposalInput label { flex: 1; }
-.proposalInput button { padding: 7px; border: 0; background: transparent; color: var(--color-ink-secondary); font-size: 11px; cursor: pointer; }
+.proposalInput button { padding: 7px; border: 0; background: transparent; color: var(--color-ink-secondary); font-size: 12px; cursor: pointer; }
 .previewValue { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .referenceConfig { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 8px; margin: 12px 0; }
-.referenceConfig strong { grid-column: 1 / -1; font-size: 11px; }
+.referenceConfig strong { grid-column: 1 / -1; font-size: 12px; }
 
 /* 用操作含义表达主次，避免按钮顺序变化后继承错误的强调色。 */
 .actionPrimary,

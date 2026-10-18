@@ -40,6 +40,8 @@ export interface WorkflowNode {
   readonly status: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly canDelete?: boolean;
+  readonly deleteDisabledReason?: string | null;
 }
 
 export interface WorkflowEdge {

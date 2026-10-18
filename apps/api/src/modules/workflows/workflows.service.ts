@@ -58,7 +58,7 @@ export interface WorkflowGraphResult {
   readonly projectId: string;
   readonly revision: number;
   readonly layoutRevision: number;
-  readonly nodes: readonly WorkflowNode[];
+  readonly nodes: readonly (WorkflowNode & { readonly canDelete?: boolean; readonly deleteDisabledReason?: string | null })[];
   readonly edges: readonly WorkflowEdge[];
   readonly legacyAvailable: boolean;
 }
@@ -82,8 +82,9 @@ export class WorkflowsService {
   ) {}
 
   async get(userId: string, projectId: string): Promise<WorkflowGraphResult> {
-    await this.assertProject(projectId, userId);
-    return this.readGraph(projectId);
+    const project = await this.assertProject(projectId, userId);
+    const graph = await this.readGraph(projectId);
+    return project.archived ? { ...graph, nodes: graph.nodes.map((node) => ({ ...node, canDelete: false, deleteDisabledReason: "项目已归档，请先恢复项目" })) } : graph;
   }
 
   async patch(
@@ -750,7 +751,13 @@ export class WorkflowsService {
       projectId,
       revision: graph?.revision ?? 0,
       layoutRevision: graph?.layoutRevision ?? 0,
-      nodes,
+      nodes: nodes.map((node) => {
+        const frozen = node.kind === "asset" && edges.some((edge) =>
+          edge.sourceNodeId === node.id && nodes.some((target) => target.id === edge.targetNodeId && target.status !== "ready"));
+        const deleteDisabledReason = node.status !== "ready" ? "已执行或正在处理的节点需要保留历史路径"
+          : frozen ? "该素材已被执行工具引用，需要保留历史路径" : null;
+        return { ...node, canDelete: deleteDisabledReason === null, deleteDisabledReason };
+      }),
       edges,
       legacyAvailable: Boolean(snapshot || legacyElement),
     };

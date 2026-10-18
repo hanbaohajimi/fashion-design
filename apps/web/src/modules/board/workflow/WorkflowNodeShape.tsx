@@ -260,6 +260,7 @@ function WorkflowNodeFrame({
     [editor, shape.id],
   );
   const side = shape.props.kind === "asset" ? "output" : "input";
+  const compact = useValue("workflow-overview", () => editor.getZoomLevel() < 0.85, [editor]);
   const hint = interaction?.hint(shape.props.nodeId, side);
   return (
     <HTMLContainer
@@ -267,6 +268,7 @@ function WorkflowNodeFrame({
       style={exportStyle}
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
+      data-compact={!exporting && compact ? "true" : "false"}
       data-image={Boolean(shape.props.imageUrl) && ["candidate", "reference_image", "sketch"].includes(shape.props.nodeType) ? "true" : "false"}
       data-muted={shape.props.muted && !interaction?.gesture ? "true" : "false"}
       data-status={shape.props.status}

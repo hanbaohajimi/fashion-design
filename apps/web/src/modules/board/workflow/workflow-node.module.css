@@ -28,6 +28,8 @@
   animation: nodeEnter var(--dur-material-enter) var(--ease-material-drop) backwards;
 }
 
+.node[data-compact="true"] .summary { visibility: hidden; }
+
 @keyframes nodeEnter {
   from {
     opacity: 0;
@@ -83,7 +85,7 @@
 /* eyebrow 类型标签：默认隐藏，只在鼠标悬停时出现 */
 .eyebrow {
   color: var(--color-ink-tertiary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.1em;
   line-height: 1.2;
@@ -179,7 +181,7 @@
   min-width: 0;
   margin: 0;
   padding: 0 min(12px, 4%) 6px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -205,7 +207,7 @@
   padding: 3px 6px;
   background: var(--swatch-mauve-wash);
   color: var(--swatch-mauve);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -276,12 +278,12 @@
 .interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.4); border-color: var(--swatch-indigo); box-shadow: 0 0 0 3px var(--swatch-indigo-wash); }
 .interactivePort:focus-visible { outline: 2px solid var(--swatch-indigo); border-radius: 50%; outline-offset: 2px; }
 .interactivePort:disabled { cursor: default; }
-.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: 4px 8px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
+.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: 4px 8px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 12px; line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
 .interactivePort:hover .portLabel, .interactivePort:focus-visible .portLabel, .interactivePort[data-valid="true"] .portLabel { opacity: 1; transform: translateY(0); }
 .node[data-connectable="valid"] { border-color: var(--swatch-indigo); }
 .node[data-connectable="invalid"] { opacity: .55; }
 .nodeActions { position: absolute; right: 0; bottom: -34px; display: flex; gap: 8px; }
-.nodeActions button { border: 1px solid var(--color-border); border-radius: 5px; padding: 5px 12px; background: var(--color-paper); color: var(--color-ink-secondary); font: 11px/1.4 var(--font-sans); cursor: pointer; }
+.nodeActions button { border: 1px solid var(--color-border); border-radius: 5px; padding: 5px 12px; background: var(--color-paper); color: var(--color-ink-secondary); font: 14px/1.4 var(--font-sans); cursor: pointer; }
 .nodeActions button:hover { color: var(--swatch-indigo); }
 @media (pointer: coarse) { .interactivePort { width: 44px; height: 44px; top: calc(50% - 22px); } .portInput { left: -22px; } .portOutput { right: -22px; } }
 
