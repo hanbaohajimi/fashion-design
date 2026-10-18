@@ -1,7 +1,6 @@
 "use client";
 
 import { privateFetch as fetch } from "../../auth/private-fetch";
-
 import Link from "next/link";
 import type { AgentRunView } from "@fashion/shared";
 import { getWorkflowToolCatalog, getWorkflowToolContract, type WorkflowToolKey } from "@fashion/shared";
@@ -299,10 +298,10 @@ function WorkflowProjection({
           ?? graph.nodes.find((node) => node.type === "brief") ?? graph.nodes[0];
         if (!focus) return;
         const size = graphNodeSize(editor, focus);
-        editor.zoomToBounds({
-          x: focus.x - 40, y: focus.y - 40,
-          w: size.w + 80, h: size.h + 80,
-        }, { inset: 24, targetZoom: 0.95 });
+        const zoom = 0.95;
+        const viewport = editor.getViewportScreenBounds();
+        editor.setCamera({ x: viewport.w / (2 * zoom) - focus.x - size.w / 2,
+          y: viewport.h / (2 * zoom) - focus.y - size.h / 2, z: zoom });
     }
   }, [editor, graph, lineage, projectedGraph, proposedEdges, selectedId]);
 
@@ -402,6 +401,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     setActiveTab("details");
     setSidebarOpen(true);
     editorRef.current?.select(nodeShapeId(id));
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="设计助手与节点详情"] h2')?.focus());
   }, []);
   const pendingInputEdits = useRef(new Map<string, { planned: PlannedInputEdit; mutationId: string; baseRevision: number }>());
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -718,7 +718,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   );
 
   return (
-    <main className={styles.shell}>
+    <main className={styles.shell} onKeyDownCapture={(event) => { if (event.key === "Tab" && !(event.target instanceof Element && event.target.closest("dialog[open]"))) event.stopPropagation(); }}>
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
           <Link aria-label="返回项目库" className={styles.brandIcon} href="/">◆</Link>
@@ -818,7 +818,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 
         <aside aria-label="设计助手与节点详情" className={styles.sidebar} hidden={!sidebarOpen}>
           <div className={styles.sidebarHeader}>
-            <h2>{activeTab === "details" ? "节点详情" : "设计助手"}</h2>
+            <h2 tabIndex={-1}>{activeTab === "details" ? "节点详情" : "设计助手"}</h2>
             <div className={styles.sidebarActions}>
               {activeTab === "details" ? <button className={styles.sidebarNavigation} onClick={() => setActiveTab("assistant")} type="button">返回对话</button> : selected ? <button className={styles.sidebarNavigation} onClick={() => openDetails(selected.id)} type="button">节点详情</button> : null}
               <button aria-label="收起设计助手" className={styles.sidebarCollapse} onClick={() => setSidebarOpen(false)} type="button">收起</button>

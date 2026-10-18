@@ -187,7 +187,7 @@
 }
 
 .overline {
-  color: var(--color-ink-disabled);
+  color: var(--color-ink-tertiary);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -427,7 +427,7 @@
 
 .addPopover > button span {
   color: var(--color-ink-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .sidebar {
@@ -506,7 +506,7 @@
   background: none;
   color: var(--color-ink-tertiary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   transition: color var(--duration-fast), border-color var(--duration-fast);
 }
@@ -540,7 +540,7 @@
   background: transparent;
   color: var(--color-ink-tertiary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   transition: background 140ms var(--ease-standard), color 140ms var(--ease-standard);
 }
@@ -691,7 +691,7 @@
   padding: 8px;
   background: var(--color-paper);
   color: var(--color-ink-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .chatToolbar button {
@@ -702,7 +702,7 @@
   background: var(--color-surface);
   color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -858,7 +858,7 @@
   background: var(--swatch-indigo-wash);
   color: var(--swatch-indigo);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .mentionChoices {
@@ -881,7 +881,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   text-align: left;
 }
 
@@ -1031,7 +1031,7 @@
   background: var(--color-paper);
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .decisionReason {
@@ -1319,6 +1319,11 @@
     display: none;
   }
 
+  .topActions .saved[data-save-state]:not([data-save-state="saved"]),
+  .topActions .saved[aria-label="待保存节点数"] { display: inline-flex; }
+  .topbar { flex-wrap: wrap; height: auto; min-height: 58px; padding-block: 8px; }
+  .topActions { flex-wrap: wrap; max-width: 100%; }
+
   .canvasHeading {
     left: 25px;
   }
@@ -1334,8 +1339,9 @@
   }
 
   .topbar {
-    height: 58px;
-    padding: 0 12px;
+    height: auto;
+    min-height: 58px;
+    padding: 8px 12px;
   }
 
   .brand {
@@ -1358,7 +1364,7 @@
   }
 
   .topActions button {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .workspace {
@@ -1395,7 +1401,7 @@
     padding: 7px;
     background: var(--color-paper);
     color: var(--color-ink);
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .canvas[data-mobile-list-open="true"] {
@@ -1451,12 +1457,14 @@
 
   .bottomMenu > button {
     padding: 7px;
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .addPopover {
     left: 50%;
     width: min(295px, calc(100vw - 24px));
+    max-height: calc(48dvh - 96px);
+    overscroll-behavior: contain;
     transform: translateX(-50%);
   }
 
@@ -1546,9 +1554,9 @@
   text-transform: uppercase;
 }
 .designContext { flex: none; margin-top: 12px; border-bottom: 1px solid var(--color-divider); padding-bottom: 10px; font-size: 12px; }
-.designContext > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; color: var(--color-ink-secondary); }
+.designContext > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; color: var(--color-ink-secondary); font-size: 14px; }
 .designContext > summary > span { flex: none; }
-.designContext > summary > small { overflow: hidden; color: var(--color-ink-tertiary); text-overflow: ellipsis; white-space: nowrap; }
+.designContext > summary > small { overflow: hidden; color: var(--color-ink-tertiary); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .contextContents { max-height: 36dvh; overflow: auto; padding: 6px 0; }
 .contextContents section { border-top: 1px solid var(--color-divider); padding: 10px 0; }
 .contextContents h3 { margin: 0 0 6px; font-size: 12px; font-weight: 650; }
@@ -1558,19 +1566,19 @@
 .contextContents ul { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .contextContents li[data-status="inactive"] { opacity: 0.6; }
 .contextContents :is(.actionPrimary, .actionSecondary, .actionQuiet, .nodeLink), .legacyReadOnly :is(.actionPrimary, .actionSecondary) { margin: 4px 5px 0 0; }
-.contextContents textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 12px/1.6 var(--font-sans); resize: vertical; }
+.contextContents textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 14px/1.6 var(--font-sans); resize: vertical; }
 .assistantReply { margin: 0 0 12px; font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
 .messageKind { color: var(--swatch-mauve); font-size: 12px; }
 .legacyReadOnly { border-top: 1px solid var(--color-divider); padding: 10px 0; font-size: 12px; line-height: 1.6; color: var(--color-ink-secondary); }
 .workflowMessage[data-role="user"] .userExample { display: block; }
 .assistantMore { position: relative; }
-.assistantMore > summary { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border); border-radius: 5px; padding: 4px 8px; background: transparent; color: var(--color-ink-secondary); font: 500 11px/1.4 var(--font-sans); cursor: pointer; list-style: none; transition: background-color var(--duration-fast, 140ms), border-color var(--duration-fast, 140ms), color var(--duration-fast, 140ms); }
+.assistantMore > summary { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border); border-radius: 5px; padding: 4px 8px; background: transparent; color: var(--color-ink-secondary); font: 500 14px/1.4 var(--font-sans); cursor: pointer; list-style: none; transition: background-color var(--duration-fast, 140ms), border-color var(--duration-fast, 140ms), color var(--duration-fast, 140ms); }
 .assistantMore > summary::-webkit-details-marker { display: none; }
 .assistantMore[open] > summary { background: var(--color-surface); color: var(--color-ink); }
 .assistantMore > summary:hover { border-color: var(--color-border-strong); color: var(--color-ink); }
 .assistantMore > summary:active { background: var(--color-surface); }
 .assistantMore > div { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; display: grid; width: 142px; gap: 3px; border: 1px solid var(--color-border); border-radius: 7px; padding: 7px; background: var(--color-paper); box-shadow: 0 6px 22px #0000000d; }
-.assistantMore button { border: 0; border-radius: 3px; padding: 9px 10px; background: transparent; color: var(--color-ink-secondary); font: 12px var(--font-sans); text-align: left; cursor: pointer; }
+.assistantMore button { border: 0; border-radius: 3px; padding: 9px 10px; background: transparent; color: var(--color-ink-secondary); font: 14px var(--font-sans); text-align: left; cursor: pointer; }
 .assistantMore button:enabled:hover { background: var(--color-surface); color: var(--color-ink); }
 .assistantMore button:enabled:active { background: var(--color-border); }
 .assistantMore button:disabled { cursor: default; opacity: 0.45; }
@@ -1604,22 +1612,22 @@
   }
 }
 .suggestionText[data-expanded="false"] { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-.expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 11px var(--font-sans); cursor: pointer; }
+.expandSuggestion { border: 0; padding: 0; background: transparent; color: var(--color-ink-tertiary); font: 14px var(--font-sans); cursor: pointer; }
 .suggestionEvidence { margin-top: 12px; color: var(--color-ink-tertiary); font-size: 12px; line-height: 1.7; }
 .suggestionEvidence summary, .detailSection > summary, .advancedSettings > summary { cursor: pointer; }
 .suggestionEvidence small { display: block; margin-top: 8px; }
 .composerActions { justify-content: flex-end; }
 .advancedSettings { margin: 12px 0; color: var(--color-ink-secondary); font-size: 12px; }
 .advancedSettings[open] > summary { margin-bottom: 14px; }
-.detailSection > summary { color: var(--color-ink-secondary); font-size: 12px; }
+.detailSection > summary { color: var(--color-ink-secondary); font-size: 14px; }
 .detailSection[open] > summary { margin-bottom: 12px; }
 .proposalEditor { display: grid; gap: 10px; max-width: 100%; margin-top: 12px; }
 .proposalEditor label { display: grid; min-width: 0; gap: 5px; color: var(--color-ink-secondary); font-size: 12px; }
-.proposalEditor textarea, .proposalEditor input, .proposalEditor select { width: 100%; min-width: 0; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 12px/1.5 var(--font-sans); }
+.proposalEditor textarea, .proposalEditor input, .proposalEditor select { width: 100%; min-width: 0; border: 1px solid var(--color-border); border-radius: 5px; padding: 7px; background: var(--color-paper); color: var(--color-ink); font: 14px/1.5 var(--font-sans); }
 .proposalEditor textarea { resize: vertical; }
 .proposalInput { display: flex; gap: 6px; align-items: end; }
 .proposalInput label { flex: 1; }
-.proposalInput button { padding: 7px; border: 0; background: transparent; color: var(--color-ink-secondary); font-size: 12px; cursor: pointer; }
+.proposalInput button { padding: 7px; border: 0; background: transparent; color: var(--color-ink-secondary); font-size: 14px; cursor: pointer; }
 .previewValue { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .referenceConfig { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 8px; margin: 12px 0; }
 .referenceConfig strong { grid-column: 1 / -1; font-size: 12px; }
@@ -1639,7 +1647,7 @@
   border-radius: 5px;
   padding: 5px 8px;
   color: var(--color-ink-secondary);
-  font: 500 11px/1.4 var(--font-sans);
+  font: 500 14px/1.4 var(--font-sans);
   text-decoration: none;
   cursor: pointer;
   transition:

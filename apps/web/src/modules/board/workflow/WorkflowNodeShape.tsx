@@ -265,6 +265,9 @@ function WorkflowNodeFrame({
   return (
     <HTMLContainer
       className={styles.node}
+      role={exporting ? undefined : "group"}
+      aria-label={exporting ? undefined : `设计节点 ${shape.props.title}`}
+      tabIndex={exporting ? undefined : 0}
       style={exportStyle}
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
@@ -275,6 +278,12 @@ function WorkflowNodeFrame({
       data-type={shape.props.nodeType}
       data-connectable={hint ? (hint.valid ? "valid" : "invalid") : "none"}
       onDoubleClick={(event) => {
+        event.stopPropagation();
+        interaction?.details(shape.props.nodeId);
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
         event.stopPropagation();
         interaction?.details(shape.props.nodeId);
       }}

@@ -45,7 +45,7 @@
   color: var(--color-ink-tertiary);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: var(--font-bold);
   letter-spacing: var(--tracking-wider, 0.12em);
   text-decoration: none;
@@ -85,7 +85,7 @@
 }
 
 .brand strong {
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -95,7 +95,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.04em;
 }
@@ -109,7 +109,7 @@
   background: var(--color-ink);
   color: var(--color-paper);
   place-items: center;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   flex-shrink: 0;
 }
@@ -121,7 +121,7 @@
   color: var(--color-ink-tertiary);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: var(--font-bold);
   transition: color var(--duration-fast);
 }
@@ -150,7 +150,7 @@
 .kicker {
   margin: 0 0 var(--space-3);
   color: var(--color-signal);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -207,7 +207,7 @@
   color: var(--color-ink);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   font-weight: var(--font-bold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -257,7 +257,7 @@
 }
 
 .projectCount {
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -274,7 +274,7 @@
   align-items: center;
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   justify-content: center;
   text-decoration: none;
@@ -392,7 +392,7 @@
   padding: 2px var(--space-2);
   background: var(--color-paper);
   border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.08em;
   color: var(--color-ink);
@@ -484,7 +484,7 @@
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   text-align: left;
   transition: background-color var(--duration-fast);
 }
@@ -515,7 +515,7 @@
   margin-top: var(--space-2);
   justify-content: space-between;
   color: var(--color-ink-tertiary);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   letter-spacing: 0.04em;
 }
 
@@ -534,7 +534,7 @@
 
 .confirmPanel > span {
   color: var(--color-error);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -562,7 +562,7 @@
   color: var(--color-error);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }
@@ -608,7 +608,7 @@
   color: var(--color-signal);
   cursor: pointer;
   font: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-bold);
 }
 
@@ -627,7 +627,7 @@
 
 .emptyKicker {
   color: var(--color-signal);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -690,7 +690,7 @@
 
 .dialogIndex {
   color: var(--color-signal);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -712,7 +712,7 @@
 .dialog label {
   display: block;
   margin-top: var(--space-8);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -841,6 +841,14 @@
 }
 
 @media (max-width: 600px) {
+  .topbar { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); padding-block: var(--space-4); }
+  .brand { min-width: 0; }
+  .brand strong { font-size: var(--text-sm); letter-spacing: 0.04em; white-space: nowrap; }
+  .navigation { grid-column: 1 / -1; grid-row: 2; justify-self: start; gap: var(--space-6); }
+  .navLink, .navLinkActive { font-size: var(--text-base); white-space: nowrap; }
+  .account { min-width: 0; gap: var(--space-2); }
+  .account > span:first-child { display: none; }
+  .logoutButton { font-size: var(--text-base); white-space: nowrap; }
   .library {
     padding-inline: var(--space-4);
   }

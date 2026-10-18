@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "./review-accessibility";
 
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
@@ -1701,6 +1702,8 @@ test("素材弹窗支持 Escape、焦点圈定和关闭后恢复焦点", async (
   await expect(dialog).toBeVisible();
   for (let index = 0; index < 8; index++) await page.keyboard.press("Tab");
   expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  for (let index = 0; index < 8; index++) await page.keyboard.press("Shift+Tab");
+  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
@@ -1802,3 +1805,250 @@ for (const deleted of [false, true]) {
     }
   });
 }
+
+async function dragReviewBrief(page: Page, dx = 55) {
+  const brief = page.locator('[data-type="brief"]');
+  await expect(brief).toBeVisible();
+  const box = await brief.boundingBox();
+  if (!box) throw new Error("需求节点不可见");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2 + 15, { steps: 6 });
+  await page.mouse.up();
+}
+
+test("断网保留待保存数量，恢复后同一批次重试成功", async ({ page, context }) => {
+  await mockWorkflow(page);
+  let offline = true;
+  const requests: unknown[] = [];
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    requests.push(route.request().postDataJSON());
+    return offline ? route.abort("internetdisconnected") : route.fallback();
+  });
+  await page.goto(`/${PROJECT_ID}`);
+  await expect(page.locator('[data-type="brief"]')).toBeVisible();
+  await context.setOffline(true);
+  await dragReviewBrief(page);
+  await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("待保存节点数")).toContainText("1 个节点");
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+  await context.setOffline(false);
+  offline = false;
+  await page.getByRole("button", { name: "重试保存", exact: true }).click();
+  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("待保存节点数")).toHaveCount(0);
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+for (const action of ["reload", "close"] as const) {
+  test(`未保存时 ${action} 触发标准离开提示，取消后保留页面`, async ({ page }) => {
+    await mockWorkflow(page);
+    await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH"
+      ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback());
+    await page.goto(`/${PROJECT_ID}`);
+    await dragReviewBrief(page);
+    await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+    const prompt = page.waitForEvent("dialog");
+    const navigation = action === "reload" ? page.reload({ timeout: 2000 }).catch(() => undefined) : page.close({ runBeforeUnload: true });
+    const dialog = await prompt;
+    expect(dialog.type()).toBe("beforeunload");
+    await dialog.dismiss();
+    await navigation;
+    expect(page.isClosed()).toBe(false);
+    await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  });
+}
+
+test("保存失败的后退可取消，恢复后前进历史仍然可用", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: [{ id: PROJECT_ID, name: "历史导航验收", assetCount: 0, coverUrl: null, archived: false, createdAt: NOW, updatedAt: NOW }], total: 1, page: 1, hasMore: false } }));
+  let fail = true;
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH" && fail
+    ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback());
+  await page.goto("/");
+  await page.getByRole("link", { name: "打开项目 历史导航验收" }).click();
+  await dragReviewBrief(page);
+  await expect(page.getByLabel("待保存节点数")).toBeVisible();
+  await page.goBack({ timeout: 1500 }).catch(() => undefined);
+  await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(PROJECT_ID));
+  fail = false;
+  await page.goBack();
+  await expect(page).toHaveURL("/");
+  await page.goForward();
+  await expect(page).toHaveURL(new RegExp(PROJECT_ID));
+  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+});
+
+test("保存飞行中继续拖动，旧响应不覆盖新位置且串行提交", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  let release!: () => void;
+  const bodies: Array<{ positions: Array<{ nodeId: string; x: number }> }> = [];
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    bodies.push(route.request().postDataJSON());
+    if (bodies.length === 1) await new Promise<void>((resolve) => { release = resolve; });
+    return route.fallback();
+  });
+  await page.goto(`/${PROJECT_ID}`);
+  await dragReviewBrief(page);
+  await expect.poll(() => bodies.length).toBe(1);
+  await dragReviewBrief(page, 85);
+  const afterSecond = await page.locator('[data-type="brief"]').boundingBox();
+  release();
+  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  expect(bodies).toHaveLength(2);
+  const afterSave = await page.locator('[data-type="brief"]').boundingBox();
+  expect(Math.abs((afterSave?.x ?? 0) - (afterSecond?.x ?? 0))).toBeLessThan(2);
+  expect(mocked.getGraph().nodes.find((item) => item.id === "brief")?.x).toBe(bodies[1]?.positions[0]?.x);
+});
+
+for (const crossTab of [false, true]) {
+  test(`${crossTab ? "真实双标签切换" : "同标签退出重登"}后清除上一账号图片、对话与草稿`, async ({ page, context }) => {
+    await context.addCookies([{ name: "review-account", value: "a", url: "http://127.0.0.1:3000" }]);
+    await context.route("**/api/auth/logout", (route) => route.fulfill({ json: { ok: true }, headers: { "set-cookie": "review-account=; Path=/; Max-Age=0" } }));
+    await context.route("**/api/auth/login", (route) => route.request().postDataJSON()?.action === "verify"
+      ? route.fulfill({ json: { projectId: PROJECT_ID }, headers: { "set-cookie": "review-account=b; Path=/; SameSite=Lax" } })
+      : route.fulfill({ status: 401, json: { message: "未登录" } }));
+    const install = async (target: Page) => {
+      const mocked = await mockWorkflow(target);
+      const account = (cookie: string) => cookie.includes("review-account=b") ? "b" : cookie.includes("review-account=a") ? "a" : null;
+      await target.route("**/api/me", (route) => {
+        const id = account(route.request().headers().cookie ?? "");
+        return id ? route.fulfill({ json: { user: { id, email: `${id}@example.com`, name: id }, credits: { limit: 600, used: 0, remaining: 600 } } })
+          : route.fulfill({ status: 401, json: { message: "未登录" } });
+      });
+      const graphFor = (cookie: string) => account(cookie) === "b" ? { ...mocked.getGraph(),
+        nodes: [node("account-b-brief", "asset", "brief", "B 的设计需求", 40, 120, { text: "账号 B 的独立内容" })], edges: [] } : mocked.getGraph();
+      await target.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "GET"
+        ? route.fulfill({ json: graphFor(route.request().headers().cookie ?? "") }) : route.fallback());
+      await target.route(`**/api/projects/${PROJECT_ID}/workflow/sync`, (route) => route.fulfill({ json: { ...graphFor(route.request().headers().cookie ?? ""), proposals: [] } }));
+      await target.route(`**/api/projects/${PROJECT_ID}/agent-conversations*`, (route) => account(route.request().headers().cookie ?? "") === "b"
+        ? route.fulfill({ json: { items: [], nextCursor: null } }) : route.fallback());
+      await target.route("**/api/agent-conversations/*/messages*", (route) => route.fulfill({ json: { items: [{ id: "private-a-message", role: "assistant", content: "账号 A 的私有对话", status: "completed" }], nextCursor: null } }));
+    };
+    await install(page);
+    await page.goto(`/${PROJECT_ID}`);
+    await expect(page.getByText("账号 A 的私有对话", { exact: true })).toBeVisible();
+    const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    await composer.fill("账号 A 尚未发送的草稿");
+    expect(await page.locator('img[src*="asset-a"]').count()).toBeGreaterThan(0);
+    if (crossTab) {
+      const other = await context.newPage();
+      await install(other);
+      await other.goto("/auth/confirm?token_hash=review-switch");
+      await expect(other.getByText("B 的设计需求", { exact: true })).toBeVisible();
+    } else {
+      await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }));
+      await page.getByRole("link", { name: "返回项目库" }).click();
+      await expect(page).toHaveURL("/");
+      await page.reload();
+      await page.getByRole("button", { name: "退出登录", exact: true }).click();
+      await expect(page).toHaveURL(/\/login$/);
+      await page.goto("/auth/confirm?token_hash=review-switch");
+    }
+    await expect(page.getByText("B 的设计需求", { exact: true })).toBeVisible();
+    await expect(page.getByText("账号 A 的私有对话", { exact: true })).toHaveCount(0);
+    await expect(page.locator('img[src*="asset-a"]')).toHaveCount(0);
+    await expect(composer).toHaveValue("");
+  });
+}
+
+for (const viewport of REVIEW_VIEWPORTS) {
+  test(`画布完整验收 ${viewport.width}×${viewport.height}：初始比例、文字对比度与布局`, async ({ page }) => {
+    await mockWorkflow(page);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize(viewport);
+    await page.goto(`/${PROJECT_ID}`);
+    const brief = page.locator('[data-type="brief"]');
+    await expect(brief).toBeVisible();
+    expect((await brief.boundingBox())!.width / 258).toBeGreaterThanOrEqual(0.85);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await contrastFailures(page)).toEqual([]);
+    expect(await controlFontFailures(page)).toEqual([]);
+    await page.screenshot({ path: `output/playwright/review-canvas-${viewport.width}-final.png`, fullPage: true });
+    await page.getByRole("button", { name: "＋ 添加素材" }).click();
+    await page.getByRole("button", { name: "设计需求 目标、场景、必需条件" }).click();
+    await expect(page.getByRole("dialog", { name: "添加设计需求" })).toBeVisible();
+    expect(await contrastFailures(page)).toEqual([]);
+    await page.keyboard.press("Escape");
+    await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH"
+      ? route.fulfill({ status: 503, json: { message: "保存服务暂不可用" } }) : route.fallback());
+    await dragReviewBrief(page, 15);
+    await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("待保存节点数")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await contrastFailures(page)).toEqual([]);
+    await page.screenshot({ path: `output/playwright/review-canvas-error-${viewport.width}-final.png`, fullPage: true });
+  });
+}
+
+test("未保存时前进也会等待保存，失败不破坏前进目标", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }));
+  let fail = true;
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH" && fail
+    ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback());
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("link", { name: "返回项目库" }).click();
+  await expect(page).toHaveURL("/");
+  await page.goBack();
+  await dragReviewBrief(page);
+  await expect(page.getByLabel("待保存节点数")).toBeVisible();
+  await page.goForward({ timeout: 1500 }).catch(() => undefined);
+  await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(PROJECT_ID));
+  fail = false;
+  await page.goForward();
+  await expect(page).toHaveURL("/");
+});
+
+test("仅用键盘完成添加、取消、打开详情和删除确认", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  await page.goto(`/${PROJECT_ID}`);
+  const trigger = page.getByRole("button", { name: "＋ 添加素材" });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const option = page.getByRole("button", { name: "设计需求 目标、场景、必需条件" });
+  await tabTo(page, option);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "添加设计需求" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("Enter");
+  await tabTo(page, option);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog").getByRole("textbox", { name: "名称", exact: true })).toBeFocused();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.insertText("键盘操作验收");
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("textbox", { name: "内容", exact: true })).toBeFocused();
+  await page.keyboard.insertText("未执行的设计需求");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const created = mocked.getGraph().nodes.find((item) => item.title === "键盘操作验收");
+  if (!created) throw new Error("键盘添加未创建节点");
+  created.canDelete = true;
+  created.deleteDisabledReason = null;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  await tabTo(page, page.getByRole("button", { name: "适合画布" }));
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(250);
+  const frame = page.getByRole("group", { name: "设计节点 键盘操作验收", exact: true });
+  await tabTo(page, frame);
+  await page.keyboard.press("Enter");
+  const remove = page.getByRole("button", { name: "从工作流移除节点" });
+  await expect(remove).toBeEnabled();
+  await tabTo(page, remove);
+  await page.keyboard.press("Enter");
+  const confirmation = page.getByRole("dialog", { name: "确认移除节点" });
+  await expect(confirmation).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(remove).toBeFocused();
+  await page.keyboard.press("Enter");
+  await tabTo(page, confirmation.getByRole("button", { name: "确认移除", exact: true }));
+  await page.keyboard.press("Enter");
+  await expect(frame).toHaveCount(0);
+});
