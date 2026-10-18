@@ -34,6 +34,10 @@ pnpm local:start
 也可以直接双击仓库根目录的 `start-platform.cmd`。脚本会检查 Node.js、pnpm 与
 Docker，必要时启动 Docker Desktop、从 `.env.example` 创建 `.env`，并同步本地
 Supabase 地址与公钥；页面就绪后会自动打开浏览器。
+启动前会检查基础设施端口。端口被占用或 Windows 拒绝绑定（`EACCES`）时，自动探测
+替代端口并同步 `.env` 中匹配的本地连接地址：PostgreSQL 从 15432、Redis 从 16379、
+MinIO 从 19000/19001 开始查找。现有数据卷和其他配置保留；远程或不一致的连接地址
+不会自动改写，终端环境变量覆盖冲突时也会明确停止。
 
 默认每次都检查安装依赖，使用冻结锁文件、优先缓存及较低下载并发；网络不可用且
 缓存不足时会明确失败。任一步失败即停止，保留失败原因；`pnpm dev` 在当前窗口运行，
@@ -75,8 +79,8 @@ pnpm dev
 - Web：http://localhost:3000
 - API Liveness：http://localhost:3001/health/live
 - API Readiness：http://localhost:3001/health/ready
-- PostgreSQL：localhost:5432
-- Redis：localhost:6379
+- PostgreSQL：localhost:5432（发生自动避让时以 `.env` 的 `POSTGRES_PORT` 为准）
+- Redis：localhost:6379（发生自动避让时以 `.env` 的 `REDIS_PORT` 为准）
 - Supabase API：http://127.0.0.1:54321
 - 本地邮件箱：http://127.0.0.1:54324
 
@@ -165,7 +169,9 @@ Dashboard 的 Authentication → Email Templates → Magic Link 中使用：
 ## 端口冲突
 
 `pnpm infra:up` 会在启动容器前检查 PostgreSQL、Redis 和 MinIO 端口。如果端口已
-被占用，命令会指出需要修改的环境变量。修改 `.env` 中的
+被占用或系统拒绝绑定，命令会指出需要修改的环境变量，不再抛出未处理堆栈。
+Windows 一键启动会自动避让；手动启动也可先执行 `node scripts/check-ports.mjs --repair-local`。
+该模式仅用于本地开发，并保留现有数据卷。修改 `.env` 中的
 `POSTGRES_PORT` 或 `REDIS_PORT` 后，同时更新 `DATABASE_URL` 或
 `REDIS_URL`。开发容器默认只绑定 `127.0.0.1`，数据库、Redis、原图和
 缩略图不会匿名暴露到局域网。
@@ -380,6 +386,7 @@ pnpm verify:file-pipeline
 | 浏览器 | `pnpm exec playwright test --reporter=list` | 源码冻结、重启开发服务后的最终全量 101 项通过；趋势页额外连续重复 3 次通过 |
 | 文件存储 | `pnpm verify:file-pipeline` | 超长上传拒绝、去重、真实缩略图通过 |
 | 依赖 | `pnpm audit:all` | 最终补丁校验 36 项通过，依赖审计通过 |
+| 本地启动 | `pnpm test:startup` | 15 项通过；PowerShell 7 实际启动和 Windows PowerShell 5.1 重复启动通过，Web/API 均返回 200 |
 
 本地截图位于 `output/playwright/`：`review-login-before.png` / `review-login-after.png`、
 `review-projects-before.png` / `review-projects-after.png`、

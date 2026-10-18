@@ -200,6 +200,7 @@ try {
     if (-not $SkipInstall) {
       Write-Host "pnpm $($installArguments -join ' ')"
     }
+    Write-Host "node scripts/check-ports.mjs --repair-local（同步本地端口与连接地址）"
     Write-Host "pnpm infra:up"
     Write-Host "pnpm auth:start"
     Write-Host "同步 .env 中的本地 Supabase 地址与公钥"
@@ -242,6 +243,9 @@ try {
   # Avoid pnpm 11 starting another install before every subsequent run/exec.
   $env:npm_config_verify_deps_before_run = "false"
   $pnpmVerifyChanged = $true
+
+  Write-Step "检查本地端口并避让系统保留或占用端口"
+  Invoke-Native $node (Join-Path $PSScriptRoot "check-ports.mjs") "--repair-local"
 
   Write-Step "启动 PostgreSQL、Redis 与 MinIO"
   Invoke-Native $pnpm "infra:up"

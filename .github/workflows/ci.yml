@@ -43,6 +43,9 @@ jobs:
       - name: Audit production and development dependencies
         run: pnpm audit:all
 
+      - name: Test local startup port handling
+        run: pnpm test:startup
+
       - name: Lint
         run: pnpm lint
 
