@@ -175,12 +175,13 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
   await page.reload();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
+  await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ has: page.getByText("局部重绘结果 1", { exact: true }) }).dblclick();
-  await page.getByRole("button", { name: "从工作流移除节点" }).click();
-  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "从工作流移除节点" })).toBeDisabled();
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
   await page.reload();
-  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
-  expect(mocked.getGraph().edges.some((edge) => edge.sourceNodeId === "edited-1" || edge.targetNodeId === "edited-1")).toBe(false);
+  await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
+  expect(mocked.getGraph().edges.some((edge) => edge.sourceNodeId === "edited-1" || edge.targetNodeId === "edited-1")).toBe(true);
   expect(mocked.getGraph().nodes.find((item) => item.id === "source")?.payload.assetId).toBe("asset-source");
   expect(mocked.paths).toHaveLength(0);
 });

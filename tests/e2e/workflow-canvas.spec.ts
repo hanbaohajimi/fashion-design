@@ -15,6 +15,8 @@ type GraphNode = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  canDelete?: boolean;
+  deleteDisabledReason?: string | null;
 };
 type GraphEdge = {
   id: string;
@@ -346,6 +348,8 @@ test("Fig8 原卡配置预览保留位置与数量，确认修改不会执行", 
   mocked.setMessages([{ id: "fig8-reply", role: "assistant", status: "completed", content: "可以按四个候选比较。", proposal, context: null }]);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator('[data-kind="tool"]')).toHaveCount(4);
   await expect(page.locator('[data-type="generate_design"][data-status="proposed"]')).toHaveCount(1);
   await page.getByText("查看修改前后", { exact: true }).click();
@@ -362,6 +366,8 @@ test("Fig8 原卡配置预览保留位置与数量，确认修改不会执行", 
 test("Fig8 调整直接编辑参数和输入，关联原提案并覆盖旧引用", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   await composer.fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
@@ -381,6 +387,8 @@ test("Fig8 后台结果持续恢复且不阻塞用户输入，计划随刷新保
   const mocked = await mockWorkflow(page);
   mocked.setPlan({ goal: "改进通勤风衣", milestones: [{ id: "inspect", title: "比较实际候选", status: "active", completionCriteria: ["确认肩线和袖型"], evidenceRefs: ["candidate-a"] }], activeMilestoneId: "inspect", nextGoal: "确定修改范围", completionCriteria: ["设计师选定方案"] });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByLabel("工作计划", { exact: true }).locator("summary").click();
   await expect(page.getByText("当前步骤 · 比较实际候选", { exact: true })).toBeVisible();
   mocked.appendMessage({ id: "result-1", role: "assistant", status: "completed", content: "已完成本次执行，共两个候选。", origin: "execution_result", executionId: "execution-1", sourceEventId: "event-1" });
@@ -392,6 +400,8 @@ test("Fig8 后台结果持续恢复且不阻塞用户输入，计划随刷新保
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByText("已完成本次执行，共两个候选。", { exact: true })).toBeVisible();
   await expect(page.getByLabel("工作计划", { exact: true })).toBeVisible();
 });
@@ -399,6 +409,8 @@ test("Fig8 后台结果持续恢复且不阻塞用户输入，计划随刷新保
 test("Fig8 调整提案失败后重试保留原提案关联和精确输入", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await page.getByRole("button", { name: "调整", exact: true }).click();
@@ -408,6 +420,8 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
   await page.getByRole("button", { name: "提交调整建议", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("button", { name: "重试这条回复" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(3);
   expect(mocked.workflowRequests[2]).toEqual(mocked.workflowRequests[1]);
@@ -420,6 +434,8 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
 test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重新启用", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByLabel("设计上下文", { exact: true }).locator("summary").click();
   await page.getByRole("button", { name: "更正这条要求", exact: true }).click();
   await page.getByRole("textbox", { name: "更正内容", exact: true }).fill("保留深藏蓝色，避免纯黑");
@@ -431,6 +447,8 @@ test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重
   await expect(page.getByText("设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toHaveCount(0);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByText("设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。", { exact: true })).toBeVisible();
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "启用设计协作", exact: true }).click();
@@ -446,6 +464,8 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
   mocked.getGraph().nodes.push(draft, reference);
   mocked.getGraph().edges.push(edge("fig8-constraint", "constraint", draft.id, "constraint"), edge("fig8-reference", reference.id, draft.id, "reference"));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator('[data-kind="tool"]')).toHaveCount(4);
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: "fig8-manual" })));
   await page.getByText("高级设置", { exact: true }).click();
@@ -462,6 +482,8 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
 test("Fig8 跳过理由随提案保存，不触发执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请优化袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
@@ -477,6 +499,8 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   const report = canvas.locator('[data-type="evaluation"]');
   await expect(report).toBeVisible();
@@ -493,6 +517,7 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
+  await page.waitForTimeout(250);
   await page.screenshot({ path: "output/playwright/workflow-canvas-1920-verified.png" });
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -502,6 +527,8 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   const newNode = mocked.getGraph().nodes.find((item) => item.type === "edit_design");
   expect(newNode).toBeDefined();
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(canvas.locator('[data-type="edit_design"]')).toHaveCount(1);
 
   const shape = canvas.locator('[data-type="brief"]');
@@ -517,6 +544,8 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   await expect.poll(() => mocked.getGraph().layoutRevision).toBeGreaterThan(0);
   const savedPosition = mocked.getGraph().nodes.find((item) => item.id === "brief");
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   expect(mocked.getGraph().nodes.find((item) => item.id === "brief")?.x).toBe(savedPosition?.x);
 });
 
@@ -541,6 +570,8 @@ for (const { imageType, width, height, metadata } of [
     }));
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     const image = page.locator(`[data-type="${imageType}"] img`);
     const expectFittedImage = async () => {
       await expect.poll(() => image.evaluate((element) => {
@@ -570,6 +601,8 @@ for (const { imageType, width, height, metadata } of [
       await page.screenshot({ path: `output/playwright/workflow-image-${width === 1600 ? "landscape" : "portrait"}-fitted.png` });
     }
     await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     await expect(image).toBeVisible();
     await expectFittedImage();
   });
@@ -587,6 +620,8 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
     graph.edges = [edge("image-output", "dragged-image", "target", imageType === "candidate" ? "candidate" : "reference")];
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     const shape = page.locator(`[data-type="${imageType}"]`);
     const image = shape.locator("img");
     await expect(image).toBeVisible();
@@ -682,6 +717,8 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
     await dragImage(35, -30);
     const saved = { x: draggedNode.x, y: draggedNode.y };
     await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     await expect(image).toBeVisible();
     await expectWireAttached();
     await expect.poll(async () => {
@@ -697,6 +734,8 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
 test("@节点提案先以虚线预览，确认后保留分支且不自动执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByText("保持藏蓝与宽松廓形，给我两种通勤风衣方案。")).toHaveCount(0);
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   await composer.fill("请修改 @候选");
@@ -746,6 +785,8 @@ test("上传图片直接作为修改原图，已有参考连线可切换用途",
   mocked.getGraph().edges = [];
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await port(page, "upload", "output").click();
   await port(page, "edit", "input").click();
   await expect.poll(() => mocked.getGraph().edges.find((item) => item.sourceNodeId === "upload")?.targetPort).toBe("source");
@@ -763,6 +804,8 @@ test("上传图片直接作为修改原图，已有参考连线可切换用途",
   await port(page, "edit", "input").click();
   await expect.poll(() => mocked.getGraph().edges.find((item) => item.sourceNodeId === "detail")?.targetPort).toBe("reference");
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator("[data-workflow-edge]")).toHaveCount(2);
   expect(mocked.getGraph().edges.filter((item) => item.targetPort === "source")).toHaveLength(1);
   expect(mocked.getExecuteCount()).toBe(0);
@@ -780,6 +823,8 @@ test("直接拖线、点击连线、键盘连接与断开可刷新恢复", async
   if (evaluate) evaluate.status = "ready";
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await port(page, "reference", "output").hover();
   await port(page, "reference", "output").dragTo(port(page, "evaluate", "input"));
   await expect.poll(() => mocked.getGraph().edges.some((item) => item.sourceNodeId === "reference" && item.targetNodeId === "evaluate")).toBe(true);
@@ -801,6 +846,8 @@ test("直接拖线、点击连线、键盘连接与断开可刷新恢复", async
   await page.keyboard.press("Escape");
   await expect(page.getByText("选择另一端的节点 · Esc 取消")).toHaveCount(0);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator("[data-workflow-edge]")).toHaveCount(12);
   expect(mocked.getExecuteCount()).toBe(0);
 });
@@ -809,6 +856,8 @@ test("已运行工具改输入建立独立分支，系统结果来源保持只�
   const mocked = await mockWorkflow(page);
   const originalEdges = structuredClone(mocked.getGraph().edges);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
   await port(page, "candidate-a", "output").hover();
   await port(page, "candidate-a", "output").click();
@@ -822,6 +871,7 @@ test("已运行工具改输入建立独立分支，系统结果来源保持只�
   expect(mocked.getExecuteCount()).toBe(0);
   await expect(page.getByText("已建立新分支", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-workflow-edge="e6"]').waitFor();
   await selectWire(page, "e6");
   await expect(page.getByText("由工具执行维护")).toBeVisible();
@@ -833,6 +883,8 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   const appearance = (control: Locator) => control.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -902,6 +954,8 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   if (!candidate) throw new Error("候选节点不存在");
   candidate.title = longTitle;
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').first().click();
   const longReference = page.getByRole("button", { name: `＋ 引用「${longTitle}」`, exact: true });
   await expect(longReference).toBeVisible();
@@ -920,6 +974,8 @@ test("拖动输入线的素材端替换原图并清除旧蒙版，取消拖线�
   mocked.getGraph().nodes.push(edit);
   mocked.getGraph().edges.push(edge("manual-source", "candidate-a", edit.id, "source"));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await selectWire(page, "manual-source");
   await page.getByLabel("拖动更换输入素材").locator("circle").first().dragTo(port(page, "candidate-b", "output"));
   await expect.poll(() => mocked.getGraph().edges.find((item) => item.targetNodeId === edit.id)?.sourceNodeId).toBe("candidate-b");
@@ -950,6 +1006,8 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     }, savedTheme);
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
 
     const expectLightCanvas = async () => {
       await expect(page.locator("[data-workflow-edge]")).toHaveCount(11);
@@ -968,6 +1026,8 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     await page.emulateMedia({ colorScheme: "dark" });
     await expectLightCanvas();
     await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     await expectLightCanvas();
 
     const trendsPath = `/trends?from=board&boardId=${PROJECT_ID}`;
@@ -998,12 +1058,15 @@ test("固定浅色与三种宽度保持画布布局，PNG 导出包含曲线", a
   test.setTimeout(90_000);
   await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator("[data-workflow-edge]")).toHaveCount(11);
   await mkdir("output/playwright", { recursive: true });
   await expect(page.getByRole("application", { name: "tldraw" })).toHaveClass(/\btl-theme__light\b/);
   for (const width of [390, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await page.screenshot({ path: `output/playwright/workflow-light-${width}.png` });
@@ -1042,6 +1105,8 @@ test.describe("触屏连线", () => {
     mocked.getGraph().nodes = mocked.getGraph().nodes.filter((item) => item.id === "reference" || item.id === "evaluate").map((item, index) => ({ ...item, status: "ready", x: 40 + index * 380, y: 100 }));
     mocked.getGraph().edges = [];
     await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
     await port(page, "reference", "output").tap();
     await port(page, "evaluate", "input").tap();
     await expect.poll(() => mocked.getGraph().edges.length).toBe(1);
@@ -1055,6 +1120,8 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const initialSend = page.getByRole("button", { name: "发送 ↑", exact: true });
   await expect(initialSend).toBeDisabled();
   await expect(initialSend).toBeInViewport({ ratio: 1 });
@@ -1112,6 +1179,8 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
 test("候选的大图、版本、局部重绘入口和新草图保存均可从主画布到达", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').first().click();
   await page.getByRole("button", { name: "节点详情", exact: true }).click();
   await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
@@ -1173,6 +1242,8 @@ test("未执行工具可保存真实参数；历史显示来源和模型，完�
     request: { model: "test-image-model", prompt: "新版通勤风衣", negativePrompt: "避免亮面", width: 1024, height: 1024, inputNodeIds: ["constraint", "reference"], referenceInputs: [{ role: "style_ref", weight: 0.7 }] },
   }] } }));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="generate_design"]').hover();
   await page.locator('[data-type="generate_design"]').dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
@@ -1194,6 +1265,8 @@ test("未执行工具可保存真实参数；历史显示来源和模型，完�
   expect(mocked.getExecuteCount()).toBe(1);
   generate.status = "completed";
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="generate_design"]').dblclick();
   await expect(details.getByRole("button", { name: "确认并执行" })).toHaveCount(0);
   await expect(details.getByRole("textbox", { name: "执行指令" })).toBeDisabled();
@@ -1204,6 +1277,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   mocked.getContext().focusNodeIds = ["candidate-a"];
   mocked.getGraph().nodes.push(node("candidate-a-branch", "asset", "candidate", "候选 A", 1770, 390, { assetId: "asset-b" }));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   await composer.fill("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送 ↑" }).click();
@@ -1218,6 +1293,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await page.getByRole("button", { name: "跳过", exact: true }).click();
   await page.getByRole("button", { name: "确认跳过", exact: true }).click();
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(composer).toBeEnabled();
   await page.locator('[data-type="candidate"]').first().click();
   expect(mocked.contextPatches).toHaveLength(0);
@@ -1239,6 +1316,8 @@ test("普通会话可只读查看旧设计运行的简报、尝试和人工决�
     steps: [{ id: "step-one", key: "generate", ordinal: 0, title: "方案生成", instruction: "参考挺括面料", prompt: "藏蓝风衣", negativePrompt: "", sourceAssetId: null, sourceStepKey: null, tool: "generate_design", status: "succeeded", generationTaskId: "task-one", selectedAssetId: "asset-a", candidates: [], error: null, attempts: [{ id: "try-one", ordinal: 1, status: "rejected", generationTaskId: "task-old", prompt: "亮面风衣", negativePrompt: "", parentAssetId: null, candidates: [], error: "反光过强", createdAt: NOW }] }],
   } }));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "历史会话", exact: true }).click();
   await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-old");
@@ -1257,6 +1336,8 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   const mocked = await mockWorkflow(page);
   mocked.rejectRoleOnce();
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
   await page.getByRole("button", { name: /上传图片/ }).click();
   await page.locator('input[type="file"]').setInputFiles({
@@ -1267,6 +1348,7 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   expect(uploaded?.payload).toMatchObject({ fileAssetId: "sketch-file", role: "style_ref", roleSource: "default", roleInferenceState: "pending" });
   await expect(page.getByRole("complementary", { name: "设计助手与节点详情" }).getByRole("alert")).toContainText("角色识别暂不可用");
   await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="reference_image"]').dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
   await details.getByRole("button", { name: "识别参考角色" }).click();
@@ -1295,6 +1377,8 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await page.route("**/api/collections/collection-one/consistency", (route) => route.fulfill({ json: { looks: [], referenceLabel: "参考相似度", similarities: [] } }));
   await page.route("**/api/generations?*", (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 A" }).dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
   await details.getByRole("button", { name: "设为 Hero / 建立系列" }).click();
@@ -1314,6 +1398,8 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   const mocked = await mockWorkflow(page);
   mocked.getContext().state.preferences.push({ id: "prefer-silver", text: "该分支偏好银灰色", status: "active", origin: "inferred", scope: "branch", sourceQuote: "在候选 B 的两轮修改中保留银灰色", branchNodeIds: ["candidate-b"], sourceNodeIds: ["generate"] });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
   await page.getByText("设计上下文", { exact: true }).click();
@@ -1335,6 +1421,8 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   expect(mocked.contextPatches.at(-1)?.disabledPreferenceIds).toEqual(["prefer-silver"]);
   expect(mocked.getContext().preferences.some((item) => item.id === "prefer-silver")).toBe(false);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByText("设计上下文", { exact: true }).click();
   await expect(preference).toContainText("已停用");
   await expect(preference.getByRole("button", { name: "停用这条偏好" })).toHaveCount(0);
@@ -1345,6 +1433,8 @@ test("持续助手显示真实上下文，点击节点不改焦点，目标与�
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByText("设计上下文", { exact: true }).click();
   const context = page.getByLabel("设计上下文", { exact: true });
   await expect(context.getByText("秋冬通勤风衣", { exact: true }).last()).toBeVisible();
@@ -1366,6 +1456,8 @@ test("持续助手显示真实上下文，点击节点不改焦点，目标与�
   expect(mocked.contextPatches.every((patch) => typeof patch.baseRevision === "number" && typeof patch.mutationId === "string")).toBe(true);
   expect(mocked.getExecuteCount()).toBe(0);
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByText("设计上下文", { exact: true }).click();
   await expect(context.getByText("春季轻量通勤风衣", { exact: true }).last()).toBeVisible();
   await expect(context.getByRole("button", { name: "清除焦点" })).toBeVisible();
@@ -1376,10 +1468,14 @@ test("持续助手显示真实上下文，点击节点不改焦点，目标与�
 test("持续助手刷新后保留消息和待确认提案，不重复或自动执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect(page.getByRole("button", { name: "加入画布", exact: true })).toBeVisible();
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByRole("button", { name: "加入画布", exact: true })).toBeVisible();
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
@@ -1397,6 +1493,8 @@ test("项目中其他会话的待确认提案不会自动出现在当前对话�
     { type: "add_node", node: { id: "foreign-tool", kind: "tool", type: "edit_design", title: "另一会话修改", payload: {}, x: 740, y: 1050 } },
   ] });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByText("持续设计协作", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeEnabled();
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
@@ -1410,6 +1508,8 @@ test("失败的设计回复可用原请求和上下文重试，消息不重复�
   const mocked = await mockWorkflow(page);
   mocked.failMessageOnce();
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图 @候选 A");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await page.getByRole("button", { name: "重试这条回复" }).click();
@@ -1435,6 +1535,8 @@ test("持续对话的待处理回复自动更新为终态且不会重复追加",
     ], nextCursor: null } });
   });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.getByText("正在分析…")).toBeVisible({ timeout: 25_000 });
   await expect(page.getByText("藏蓝方案更贴近通勤需求。")).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
@@ -1458,6 +1560,8 @@ test("跨窗口读取到待识别参考图时会同步最终角色", async ({ pa
     return route.fulfill({ json: { ...mocked.getGraph(), proposals: [] } });
   });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   await page.locator('[data-type="reference_image"]').dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
@@ -1485,6 +1589,8 @@ test("较新的语义响应不会把已保存的节点位置回退到旧布局",
     return route.fulfill({ json: stale });
   });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const brief = page.locator('[data-type="brief"]');
   await expect(brief).toBeVisible();
   const before = await brief.boundingBox();
@@ -1499,6 +1605,8 @@ test("较新的语义响应不会把已保存的节点位置回退到旧布局",
 test("主工作流禁用自由绘图和复制快捷键，不产生图外节点", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
   const canvas = page.getByRole("application", { name: "tldraw" });
   await expect(page.locator('[data-type="brief"]')).toBeVisible();
   const shapeCount = await canvas.locator(".tl-shape").count();
@@ -1527,3 +1635,170 @@ test("主工作流禁用自由绘图和复制快捷键，不产生图外节点",
   await expect(page.locator('[data-type="brief"]')).toHaveCount(1);
   expect(mocked.getGraph().nodes).toHaveLength(graphCount);
 });
+
+test("保存失败保留批次，重试使用同一请求且成功前不显示已保存", async ({ page }) => {
+  await mockWorkflow(page);
+  let fail = true;
+  const requests: unknown[] = [];
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, async (route) => {
+    const body = route.request().postDataJSON();
+    if (body?.mode !== "layout") return route.fallback();
+    requests.push(body);
+    if (fail) return route.fulfill({ status: 503, json: { message: "保存服务暂不可用" } });
+    return route.fallback();
+  });
+  await page.goto(`/${PROJECT_ID}`);
+  const brief = page.locator('[data-type="brief"]');
+  await expect(brief).toBeVisible();
+  const box = await brief.boundingBox();
+  if (!box) throw new Error("需求节点不可见");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 70, box.y + box.height / 2 + 30, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  await expect(page.getByText("画布已保存", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "output/playwright/review-save-error-after.png" });
+  fail = false;
+  await page.getByRole("button", { name: "重试保存", exact: true }).click();
+  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+test("布局保存失败阻止站内离开，保存恢复后再进入项目库", async ({ page }) => {
+  await mockWorkflow(page);
+  let fail = true;
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    return fail ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback();
+  });
+  await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }));
+  await page.goto(`/${PROJECT_ID}`);
+  const brief = page.locator('[data-type="brief"]');
+  await expect(brief).toBeVisible();
+  const box = await brief.boundingBox();
+  if (!box) throw new Error("需求节点不可见");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 20, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole("link", { name: "返回项目库" }).click();
+  await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(PROJECT_ID));
+  fail = false;
+  await page.getByRole("link", { name: "返回项目库" }).click();
+  await expect(page).toHaveURL("/");
+});
+
+test("素材弹窗支持 Escape、焦点圈定和关闭后恢复焦点", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.goto(`/${PROJECT_ID}`);
+  const trigger = page.getByRole("button", { name: "＋ 添加素材" });
+  await trigger.click();
+  const option = page.getByRole("button", { name: "设计需求 目标、场景、必需条件" });
+  await option.click();
+  const dialog = page.getByRole("dialog", { name: "添加设计需求" });
+  await expect(dialog).toBeVisible();
+  for (let index = 0; index < 8; index++) await page.keyboard.press("Tab");
+  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("默认视图可读，查看全图、100%和窄屏保持可达", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto(`/${PROJECT_ID}`);
+  const brief = page.locator('[data-type="brief"]');
+  await expect(brief).toBeVisible();
+  expect((await brief.boundingBox())!.width / 258).toBeGreaterThanOrEqual(0.85);
+  await page.screenshot({ path: "output/playwright/review-canvas-after.png" });
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
+  await page.getByRole("button", { name: "画布原始比例" }).click();
+  for (const width of [1440, 1920, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await expect(page.getByRole("button", { name: "画布原始比例" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+});
+
+test("服务器决定节点能否移除，允许移除时先确认关联连线", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const removable = node("removable", "asset", "reference_text", "可移除备注", 40, 800, { text: "尚未执行的参考" });
+  removable.status = "ready";
+  removable.canDelete = true;
+  removable.deleteDisabledReason = null;
+  mocked.getGraph().nodes.push(removable);
+  mocked.getGraph().edges.push(edge("removable-input", removable.id, "analysis", "reference"));
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.waitForTimeout(250);
+  await page.locator('[data-type="brief"]').dblclick();
+  await expect(page.getByRole("button", { name: "从工作流移除节点" })).toBeDisabled();
+  await page.locator('[data-kind="asset"]').filter({ has: page.getByText("可移除备注", { exact: true }) }).dblclick();
+  await page.getByRole("button", { name: "从工作流移除节点" }).click();
+  const confirmation = page.getByRole("dialog", { name: "确认移除节点" });
+  await expect(confirmation).toContainText("1 条关联连线");
+  expect(mocked.getGraph().nodes.some((item) => item.id === removable.id)).toBe(true);
+  await confirmation.getByRole("button", { name: "确认移除", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  expect(mocked.getGraph().nodes.some((item) => item.id === removable.id)).toBe(false);
+  expect(mocked.getGraph().edges.some((item) => item.id === "removable-input")).toBe(false);
+});
+
+test("同账号后台认证与临时服务故障不会清空设计助手草稿", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.goto(`/${PROJECT_ID}`);
+  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  await composer.fill("保留袖口，下一步比较面料");
+  await page.route("**/api/me", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.fulfill({ status: 503, json: { message: "认证服务暂不可用" } });
+  });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await expect(composer).toHaveValue("保留袖口，下一步比较面料");
+  await page.waitForTimeout(400);
+  await expect(composer).toHaveValue("保留袖口，下一步比较面料");
+});
+
+for (const deleted of [false, true]) {
+  test(`布局 409 后读取新修订，${deleted ? "不重放已删除节点" : "重放本地拖动位置"}`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    const requests: Array<{ mutationId: string; baseLayoutRevision: number; positions: Array<{ nodeId: string; x: number; y: number }> }> = [];
+    await page.route(`**/api/projects/${PROJECT_ID}/workflow`, async (route) => {
+      if (route.request().method() !== "PATCH") return route.fallback();
+      const body = route.request().postDataJSON();
+      if (body.mode !== "layout") return route.fallback();
+      requests.push(body);
+      if (requests.length !== 1) return route.fallback();
+      mocked.getGraph().layoutRevision = 7;
+      if (deleted) {
+        mocked.getGraph().nodes = mocked.getGraph().nodes.filter((item) => item.id !== "brief");
+        mocked.getGraph().edges = mocked.getGraph().edges.filter((item) => item.sourceNodeId !== "brief");
+        mocked.getGraph().revision += 1;
+      }
+      return route.fulfill({ status: 409, json: { message: "布局修订冲突" } });
+    });
+    await page.goto(`/${PROJECT_ID}`);
+    const brief = page.locator('[data-type="brief"]');
+    await expect(brief).toBeVisible();
+    const box = await brief.boundingBox();
+    if (!box) throw new Error("需求节点不可见");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 25, { steps: 6 });
+    await page.mouse.up();
+    await expect.poll(() => requests.length).toBe(deleted ? 1 : 2);
+    await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+    if (deleted) {
+      await expect(brief).toHaveCount(0);
+    } else {
+      expect(requests[1]?.baseLayoutRevision).toBe(7);
+      expect(requests[1]?.mutationId).not.toBe(requests[0]?.mutationId);
+      expect(requests[1]?.positions).toEqual(requests[0]?.positions);
+      expect(mocked.getGraph().nodes.find((item) => item.id === "brief")?.x).toBe(requests[0]?.positions[0]?.x);
+    }
+  });
+}

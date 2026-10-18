@@ -1,5 +1,5 @@
-import type { Project } from "./project-types";
 import { ProjectCard } from "./ProjectCard";
+import type { Project } from "./project-types";
 import styles from "./projects.module.css";
 
 interface ProjectGridProps {

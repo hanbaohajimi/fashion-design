@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "../auth/AuthProvider";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -18,7 +18,9 @@ import {
   useUpdateProject,
 } from "./use-projects";
 import {
+  clearActiveBoardId,
   PROJECT_LIBRARY_TRENDS_PATH,
+  readActiveBoardId,
   writeActiveBoardId,
 } from "../trends/active-board";
 
@@ -62,6 +64,34 @@ export function ProjectLibrary() {
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
 
+  useEffect(() => {
+    const handleSearchShortcut = (event: KeyboardEvent): void => {
+      const searchInput = searchInputRef.current;
+
+      if (!searchInput) {
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+        return;
+      }
+
+      if (event.key === "Escape" && document.activeElement === searchInput) {
+        if (search) {
+          setSearch("");
+        } else {
+          searchInput.blur();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, [search]);
+
   const runCreate = async (name: string): Promise<void> => {
     setNotice(null);
     const created = await createMutation.mutateAsync({
@@ -83,6 +113,7 @@ export function ProjectLibrary() {
       });
     } catch (error) {
       setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -94,6 +125,9 @@ export function ProjectLibrary() {
         id: project.id,
         input: { archived: true },
       });
+      if (readActiveBoardId() === project.id) {
+        clearActiveBoardId();
+      }
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -119,6 +153,7 @@ export function ProjectLibrary() {
       await deleteMutation.mutateAsync(project.id);
     } catch (error) {
       setNotice(errorMessage(error));
+      throw error;
     }
   };
 
@@ -217,14 +252,19 @@ export function ProjectLibrary() {
         <Link
           className={styles.brand}
           href="/"
-          aria-label="Atelier 设计工作室首页"
+          aria-label="Atelier 设计工作室 首页"
         >
-          <span>A</span>
-          <strong>ATELIER / STUDIO</strong>
+          <strong>Atelier 设计工作室</strong>
         </Link>
-        <nav className={styles.navigation}>
+        <nav aria-label="工作区导航" className={styles.navigation}>
+          <Link aria-current="page" className={styles.navLinkActive} href="/">
+            项目库
+          </Link>
           <Link className={styles.navLink} href={PROJECT_LIBRARY_TRENDS_PATH}>
             趋势档案
+          </Link>
+          <Link className={styles.navLink} href="/fabrics">
+            面料库
           </Link>
         </nav>
         <div className={styles.account}>
@@ -245,19 +285,8 @@ export function ProjectLibrary() {
         </div>
       </header>
 
-      <section className={styles.hero}>
-        <div>
-          <p className={styles.kicker}>ATELIER INDEX · 01</p>
-          <h1>
-            项目
-            <em>库</em>
-          </h1>
-        </div>
-        <p className={styles.heroNote}>
-          每一个系列，都从一块留白开始。
-          <br />
-          在这里整理你的设计方向与资产。
-        </p>
+      <section className={styles.dashboard} aria-label="项目库">
+        <h1 className={styles.dashboardTitle}>项目库</h1>
       </section>
 
       <section className={styles.toolbar} aria-label="项目工具栏">
@@ -291,6 +320,8 @@ export function ProjectLibrary() {
           <span className={styles.srOnly}>搜索项目</span>
           <span aria-hidden="true">⌕</span>
           <input
+            aria-keyshortcuts="Control+K Meta+K"
+            maxLength={80}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="搜索项目名称"
             ref={searchInputRef}
@@ -298,7 +329,7 @@ export function ProjectLibrary() {
             value={search}
           />
         </label>
-        <span className={styles.projectCount}>
+        <span aria-live="polite" className={styles.projectCount} role="status">
           {String(total).padStart(2, "0")}{" "}
           {projectStatus === "archived" ? "ARCHIVED" : "PROJECTS"}
         </span>

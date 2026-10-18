@@ -17,19 +17,14 @@ interface ProjectCardProps {
   readonly project: Project;
 }
 
-/* Undyed material tones: unbleached calico, sage wool, ash rose, raw linen,
-   slate cotton. Read as fabric on the table, never as brand colour. */
-const PLACEHOLDER_COLORS = [
-  "#d5c1a8",
-  "#a9b7ad",
-  "#bdabae",
-  "#c8c0a2",
-  "#9ea9b8",
+/* 面料色板 - 真实材质感的配色 */
+const FABRIC_COLORS = [
+  "#e8d5c8", // 未漂白棉布
+  "#d4c4ae", // 亚麻原色
+  "#c8b8a8", // 羊毛米色
+  "#b8a898", // 卡其色
+  "#a89888", // 驼色
 ] as const;
-
-/* Bias angles so a run of uncovered cards looks like swatches cut on the
-   grain rather than one repeated texture. */
-const WEAVE_ANGLES = ["24deg", "68deg", "112deg", "156deg", "45deg"] as const;
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -37,6 +32,30 @@ function formatDate(value: string): string {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function getStyleLabel(style?: string): string {
+  const labels: Record<string, string> = {
+    minimalist: "极简",
+    "avant-garde": "先锋",
+    streetwear: "街头",
+    couture: "高定",
+    casual: "休闲",
+    formal: "正装",
+    sportswear: "运动",
+  };
+  return style ? labels[style] || style : "";
+}
+
+function getMaterialLabel(material?: string): string {
+  const labels: Record<string, string> = {
+    knit: "针织",
+    woven: "梭织",
+    leather: "皮革",
+    technical: "科技",
+    hybrid: "混合",
+  };
+  return material ? labels[material] || material : "";
 }
 
 export function ProjectCard({
@@ -49,32 +68,41 @@ export function ProjectCard({
   onRestore,
   project,
 }: ProjectCardProps) {
+  const [coverFailed, setCoverFailed] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [name, setName] = useState(project.name);
-  const placeholder = PLACEHOLDER_COLORS[index % PLACEHOLDER_COLORS.length];
+  const [renameError, setRenameError] = useState<string | null>(null);
+
+  const fabricColor = FABRIC_COLORS[index % FABRIC_COLORS.length];
   const coverStyle = {
-    "--cover-color": placeholder,
-    "--weave-angle": WEAVE_ANGLES[index % WEAVE_ANGLES.length],
-    ...(project.coverUrl
-      ? { backgroundImage: `url("${project.coverUrl}")` }
-      : {}),
+    "--cover-color": fabricColor,
+
   } as CSSProperties;
 
   const submitRename = async (): Promise<void> => {
     const trimmed = name.trim();
     const length = Array.from(trimmed).length;
 
-    if (length < 3 || length > 80 || trimmed === project.name) {
-      if (trimmed === project.name) {
-        setRenaming(false);
-      }
+    if (trimmed === project.name) {
+      setRenameError(null);
+      setRenaming(false);
       return;
     }
-
-    await onRename(project, trimmed);
-    setRenaming(false);
+    if (length < 3 || length > 80) {
+      setRenameError("项目名称需为 3–80 个字");
+      return;
+    }
+    setRenameError(null);
+    try {
+      await onRename(project, trimmed);
+      setName(trimmed);
+      setRenaming(false);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "重命名失败");
+    }
   };
 
   const runDelete = async (): Promise<void> => {
@@ -83,12 +111,17 @@ export function ProjectCard({
     }
 
     setDeletePending(true);
+    setDeleteError(null);
 
     try {
       await onDelete(project);
+      setConfirmingDelete(false);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "删除项目失败，请重试",
+      );
     } finally {
       setDeletePending(false);
-      setConfirmingDelete(false);
     }
   };
 
@@ -105,13 +138,17 @@ export function ProjectCard({
       >
         <div
           aria-label={
-            project.coverUrl ? `${project.name} 封面` : "项目封面占位布样"
+            project.coverUrl && !coverFailed ? `${project.name} 封面` : `${project.name} 暂无封面`
           }
           className={styles.projectCover}
-          data-has-cover={project.coverUrl ? "true" : undefined}
+          data-has-cover={project.coverUrl && !coverFailed ? "true" : undefined}
           role="img"
           style={coverStyle}
         >
+          {project.coverUrl && !coverFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img alt={`${project.name} 封面`} className={styles.coverImage} src={project.coverUrl} onError={() => setCoverFailed(true)} />
+          ) : <span className={styles.coverFallback}><strong>{Array.from(project.name).slice(0, 2).join("")}</strong><small>{coverFailed ? "封面暂时无法加载" : project.assetCount > 0 ? "暂无封面" : "空项目 · 开始创作"}</small></span>}
           <span className={styles.coverNumber}>
             {String(index + 1).padStart(2, "0")}
           </span>
@@ -127,6 +164,14 @@ export function ProjectCard({
           {renaming ? (
             <form
               className={styles.renameForm}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setName(project.name);
+                  setRenameError(null);
+                  setRenaming(false);
+                }
+              }}
               onSubmit={(event) => {
                 event.preventDefault();
                 void submitRename();
@@ -136,6 +181,10 @@ export function ProjectCard({
                 项目名称
               </label>
               <input
+                aria-describedby={
+                  renameError ? `rename-error-${project.id}` : undefined
+                }
+                aria-invalid={Boolean(renameError)}
                 autoFocus
                 id={`rename-${project.id}`}
                 maxLength={80}
@@ -144,6 +193,21 @@ export function ProjectCard({
                 value={name}
               />
               <button type="submit">保存</button>
+              <button
+                onClick={() => {
+                  setName(project.name);
+                  setRenameError(null);
+                  setRenaming(false);
+                }}
+                type="button"
+              >
+                取消
+              </button>
+              {renameError ? (
+                <small id={`rename-error-${project.id}`} role="alert">
+                  {renameError}
+                </small>
+              ) : null}
             </form>
           ) : (
             <h2>
@@ -153,32 +217,58 @@ export function ProjectCard({
 
           {!project.optimistic && !renaming ? (
             <details className={styles.cardMenu}>
-              <summary aria-label={`${project.name} 项目操作`}>•••</summary>
+              <summary aria-label={`${project.name} 项目操作`}>
+                <span aria-hidden="true">•••</span>
+              </summary>
               <div className={styles.menuPanel}>
-                <button onClick={() => setRenaming(true)} type="button">
+                <button
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    setName(project.name);
+                    setRenameError(null);
+                    setRenaming(true);
+                  }}
+                  type="button"
+                >
                   重命名
                 </button>
                 <button
                   aria-busy={duplicating}
                   disabled={duplicating}
-                  onClick={() => void onDuplicate(project)}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    void onDuplicate(project);
+                  }}
                   type="button"
                 >
                   {duplicating ? "复制中…" : "创建副本"}
                 </button>
                 <button
-                  onClick={() =>
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
                     void (project.archived
                       ? onRestore(project)
-                      : onArchive(project))
-                  }
+                      : onArchive(project));
+                  }}
                   type="button"
                 >
                   {project.archived ? "恢复项目" : "归档"}
                 </button>
                 <button
                   className={styles.deleteAction}
-                  onClick={() => setConfirmingDelete(true)}
+                  onClick={(event) => {
+                    event.currentTarget
+                      .closest("details")
+                      ?.removeAttribute("open");
+                    setDeleteError(null);
+                    setConfirmingDelete(true);
+                  }}
                   type="button"
                 >
                   删除
@@ -187,6 +277,37 @@ export function ProjectCard({
             </details>
           ) : null}
         </div>
+
+        {/* 时尚元数据标签 - C级修复 */}
+        {project.metadata &&
+        (project.metadata.season ||
+          project.metadata.style ||
+          project.metadata.materialType ||
+          (project.metadata.fabricCount ?? 0) > 0) ? (
+          <div className={styles.cardTags}>
+            {project.metadata.season && (
+              <span className={`${styles.tag} ${styles.tagSeason}`}>
+                {project.metadata.season}
+              </span>
+            )}
+            {project.metadata.style && (
+              <span className={`${styles.tag} ${styles.tagStyle}`}>
+                {getStyleLabel(project.metadata.style)}
+              </span>
+            )}
+            {project.metadata.materialType && (
+              <span className={`${styles.tag} ${styles.tagMaterial}`}>
+                {getMaterialLabel(project.metadata.materialType)}
+              </span>
+            )}
+            {project.metadata.fabricCount &&
+              project.metadata.fabricCount > 0 && (
+                <span className={`${styles.tag} ${styles.tagMaterial}`}>
+                  {project.metadata.fabricCount} 款面料
+                </span>
+              )}
+          </div>
+        ) : null}
 
         <div className={styles.cardMeta}>
           <span>{formatDate(project.updatedAt)}</span>
@@ -204,9 +325,10 @@ export function ProjectCard({
             <span>DISCARD · 不可撤销</span>
             <p>
               {project.assetCount > 0
-                ? `“${project.name}”含 ${project.assetCount} 项设计资产，删除后无法找回。`
-                : `确认删除“${project.name}”？`}
+                ? `"${project.name}"含 ${project.assetCount} 项设计资产，删除后无法找回。`
+                : `确认删除"${project.name}"？`}
             </p>
+            {deleteError ? <small role="alert">{deleteError}</small> : null}
             <div className={styles.confirmActions}>
               <button
                 autoFocus

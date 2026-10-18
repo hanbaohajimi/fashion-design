@@ -138,6 +138,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   } }));
 
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
   await details.getByText("来源与路径", { exact: true }).click();
@@ -157,6 +158,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBe(firstRequestId);
 
   await page.reload();
+  await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
   await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
   workspace = page.getByRole("dialog", { name: "候选资产工作台" });

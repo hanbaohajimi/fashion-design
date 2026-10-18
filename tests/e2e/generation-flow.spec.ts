@@ -765,6 +765,7 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   });
 
   await page.goto("/e2e-project");
+  await page.getByRole("button", { name: "适合画布" }).click();
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   await expect(canvas.locator('[data-type="constraint"]')).toHaveCount(1);
   await expect(canvas.locator('[data-type="reference_image"]')).toHaveCount(1);

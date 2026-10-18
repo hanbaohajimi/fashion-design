@@ -172,6 +172,7 @@ async function mockWorkspace(page: Page) {
 }
 
 async function selectNode(page: Page, title: string) {
+  await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator("[data-kind]").filter({ has: page.getByText(title, { exact: true }) }).dblclick();
   return page.getByRole("complementary", { name: "设计助手与节点详情" });
 }

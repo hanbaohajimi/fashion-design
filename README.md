@@ -325,6 +325,60 @@ Agent 修改选中的设计时会绑定来源资产，创建图片编辑任务�
 
 ## 质量检查
 
+### 本轮可靠性与安全改进
+
+项目库正式入口统一使用 `ProjectLibrary`、`ProjectGrid`、`ProjectCard`；`-redesign`
+文件只保留兼容导出。工作流中的布局保存、节点详情和素材弹窗已拆分为独立模块。
+画布首次定位需求节点，以可读比例打开；“查看全图”和“100%”可切换视图，不改动已保存位置。
+拖动后只有服务端确认且没有剩余改动时才显示“画布已保存”；失败批次保留原请求编号，
+可点击“重试保存”。站内离开会先保存，刷新或关闭时对未保存内容提示。
+可删除性由服务端返回，移除未执行节点前需要确认关联连线；执行历史保持只读。
+
+所有业务写请求必须提供与 `APP_ORIGIN` 匹配的 `Origin`，否则返回 403。
+开发环境允许同端口的 localhost、127.0.0.1 和 IPv6 回环别名；生产环境只接受配置的精确来源。
+脚本或自动化调用 API 时也需显式发送 `Origin`。只有 `TRUSTED_PROXY_ADDRESSES`
+中配置的代理地址可以提供真实客户端 IP，默认不信任转发头。
+
+上传签名绑定精确文件长度、类型和 SHA256；浏览器继续使用 PUT，Content-Length
+由浏览器根据文件自动发送。文件签名和面料上传默认分别限流 20 次/用户/分钟，可通过
+`FILE_UPLOAD_RATE_LIMIT`、`FABRIC_UPLOAD_RATE_LIMIT` 调整。过期未完成上传和失败对象每小时
+清理一轮，`UPLOAD_CLEANUP_AGE_HOURS` 默认为 24，最小为 1；READY/PROCESSING 不进入清理。
+清理删除期间持有记录锁，新签名续期通过 CAS 竞争，避免删除活跃重试。
+
+不消耗真实模型额度的完整链路回归已纳入 API 测试：
+
+```bash
+pnpm --filter @fashion/api exec vitest run src/review.pipeline.integration.spec.ts
+pnpm verify:file-pipeline
+```
+
+前者使用真实 PostgreSQL、Redis/BullMQ Worker、私有 MinIO 与可控图片适配器，验证上传、
+节点执行、生成资产归属、PNG 导出及重复任务不重复产出或计次。后者额外验证对象存储
+实际拒绝超出签名长度的上传。测试前必须应用迁移并配置独立测试基础设施。
+
+正式演示与上线仍须独立验收两项：为 `NEXT_PUBLIC_TLDRAW_LICENSE_KEY` 配置有效授权并确认
+画布正常运行；在生产 Worker 网络环境提供出口阻断证据，覆盖回环、私网、链路本地及
+云元数据地址。应用中的 DNS 检查与实际连接仍是两个步骤，不能替代出口策略，也不能
+用本地测试宣称生产环境已满足该条件。真实模型生成质量另行验收。
+
+2026-10-18 实施验证记录（独立 PostgreSQL、Redis 与 MinIO 测试环境）：
+
+| 检查 | 命令 | 结果 |
+| --- | --- | --- |
+| 静态检查 | `pnpm lint`、`pnpm typecheck` | 全工作区通过 |
+| 构建 | `pnpm build` | 7 个工作区通过 |
+| 应用测试 | `pnpm test`，最终另跑 `pnpm --filter @fashion/api test` | Web 124、Worker 95、最终 API 567 项通过 |
+| 数据库 | `pnpm db:validate`、`pnpm db:test` | schema 校验和 2 项集成测试通过 |
+| 浏览器 | `pnpm exec playwright test --reporter=list` | 全量 77 项通过；随后新增 2 项 409 场景和 1 项封面回退测试均通过 |
+| 文件存储 | `pnpm verify:file-pipeline` | 超长上传拒绝、去重、真实缩略图通过 |
+| 依赖 | `pnpm audit:all` | 补丁校验 36 项通过，审计通过；首次子进程失败后重跑成功 |
+
+本地截图位于 `output/playwright/`：`review-login-before.png` / `review-login-after.png`、
+`review-projects-before.png` / `review-projects-after.png`、
+`review-canvas-before.png` / `review-canvas-after.png`。
+异常状态截图为 `review-login-error-after.png` 和 `review-save-error-after.png`。
+浏览器截图使用可控数据；真实文件与队列链路由上述集成测试另行验证。
+
 ```bash
 pnpm audit:all
 pnpm lint
