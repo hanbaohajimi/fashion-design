@@ -66,6 +66,7 @@ export default function LoginPage() {
     <main className={styles.page}>
       <section className={styles.formPanel} aria-labelledby="auth-title">
         <div className={styles.formHeader}>
+          <span className={styles.brand}>Atelier 设计工作室</span>
           <h1 className={styles.formTitle} id="auth-title">
             登录或注册
           </h1>

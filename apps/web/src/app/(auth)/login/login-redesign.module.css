@@ -21,16 +21,25 @@
   margin-bottom: var(--space-8);
 }
 
+.brand {
+  display: block;
+  margin-bottom: var(--space-8);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  letter-spacing: var(--tracking-wide);
+}
+
 .formTitle {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: var(--font-2xl);
-  font-weight: var(--font-weight-normal);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-normal);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
 }
 
 .intro {
+  font-size: var(--text-lg);
   max-width: 30rem;
   margin: var(--space-4) 0 0;
   color: var(--text-secondary);
@@ -50,31 +59,33 @@
   display: block;
   margin-bottom: var(--space-2);
   color: var(--text-primary);
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
   letter-spacing: var(--tracking-wide);
 }
 
 .form input {
   width: 100%;
   border: 0;
-  border-bottom: 2px solid var(--border-color-default);
+  border-bottom: 2px solid var(--color-border-strong);
   border-radius: 0;
   outline: 0;
   padding: var(--space-4) 0;
   background: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: var(--font-md);
-  transition: border-color var(--duration-base) var(--ease-out);
+  font-size: var(--text-lg);
+  transition: border-color var(--duration-normal) var(--ease-standard);
 }
 
 .form input::placeholder {
-  color: var(--text-tertiary);
+  color: var(--color-ink-secondary);
 }
 
 .form input:focus {
   border-bottom-color: var(--accent-primary);
+  outline: 2px solid var(--color-signal);
+  outline-offset: 4px;
 }
 
 .form input:disabled {
@@ -91,21 +102,21 @@
   color: var(--surface-card);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--font-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--tracking-wide);
   transition:
-    background-color var(--duration-base) var(--ease-out),
-    color var(--duration-base) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-base) var(--ease-out);
+    background-color var(--duration-normal) var(--ease-standard),
+    color var(--duration-normal) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard);
 }
 
 .form button:hover:not(:disabled) {
   background: transparent;
   color: var(--text-primary);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-ui);
 }
 
 .form button:focus-visible {
@@ -118,9 +129,9 @@
 }
 
 .form button:disabled {
-  border-color: var(--border-color-subtle);
-  background: var(--border-color-subtle);
-  color: var(--text-disabled);
+  border-color: var(--color-border);
+  background: var(--color-overlay);
+  color: var(--color-ink-secondary);
   cursor: wait;
   opacity: var(--opacity-disabled);
 }
@@ -132,10 +143,10 @@
 .message {
   margin: var(--space-4) 0 0;
   padding: var(--space-4);
-  border-left: 3px solid var(--accent-tertiary);
+  border-left: 3px solid var(--color-success);
   background: var(--color-success-bg);
   color: var(--color-success);
-  font-size: var(--font-sm);
+  font-size: var(--text-base);
   line-height: var(--leading-relaxed);
 }
 
@@ -160,9 +171,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-semibold);
-  transition: border-color var(--duration-base) var(--ease-out);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  transition: border-color var(--duration-normal) var(--ease-standard);
 }
 
 .messageActions button:hover:not(:disabled) {
