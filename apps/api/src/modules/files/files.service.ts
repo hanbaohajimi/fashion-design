@@ -186,6 +186,14 @@ export class FilesService {
 
     const uploadRequired =
       file.status === FileStatus.PENDING || file.status === FileStatus.FAILED;
+    if (uploadRequired) {
+      // Refresh the lease before issuing a URL, so cleanup cannot claim an active pending upload.
+      const lease = await this.database.fileAsset.updateMany({
+        where: { id: file.id, ownerId: userId, status: FileStatus.PENDING, updatedAt: file.updatedAt },
+        data: { updatedAt: new Date() },
+      });
+      if (!lease.count) throw new ConflictException({ code: "UPLOAD_STATE_CHANGED", message: "上传状态已变化，请重新获取签名" });
+    }
     const checksumSha256 = checksumSha256Base64(file.sha256);
 
     return {
@@ -201,6 +209,7 @@ export class FilesService {
             url: await this.storage.createUploadUrl(
               file.objectKey,
               file.mimeType,
+              file.sizeBytes,
               checksumSha256,
             ),
           }
@@ -243,6 +252,13 @@ export class FilesService {
       (head.checksumSha256 !== undefined &&
         head.checksumSha256 !== expectedChecksum)
     ) {
+      // Only invalidate the exact pending upload inspected above; never delete a newer retry.
+      const invalidated = await this.database.fileAsset.updateMany({
+        where: { id: file.id, ownerId: userId, status: FileStatus.PENDING, updatedAt: file.updatedAt },
+        data: { status: FileStatus.FAILED, errorMessage: "上传后的文件大小、类型或摘要与签名请求不一致" },
+      });
+      // Failed objects are reclaimed under the cleanup row lock, without racing a fresh retry.
+      if (!invalidated.count) throw new ConflictException({ code: "UPLOAD_STATE_CHANGED", message: "上传状态已变化，请刷新后重试" });
       throw new BadRequestException({
         code: "UPLOAD_MISMATCH",
         message: "上传后的文件大小或类型与签名请求不一致",
@@ -291,7 +307,7 @@ export class FilesService {
           message: "文件状态已发生变化，请重新获取文件状态后再试",
         });
       }
-      await this.storage.delete(file.objectKey).catch(() => undefined);
+      // Reclaim under the cleanup row lock so an immediate retry cannot lose its new object.
       throw new BadRequestException({
         code: "INVALID_IMAGE_CONTENT",
         message: "文件内容不是有效图片或与声明类型不一致",

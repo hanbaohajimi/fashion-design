@@ -36,6 +36,7 @@ describe("GenerationMaskService", () => {
     expect(storage.createUploadUrl).toHaveBeenCalledWith(
       expect.stringMatching(/^temporary\/masks\/user-1\/[\da-f-]+\.png$/u),
       "image/png",
+      2048,
       "ERERERERERERERERERERERERERERERERERERERERERE=",
     );
     expect(storage.createDownloadUrl).toHaveBeenCalledWith(

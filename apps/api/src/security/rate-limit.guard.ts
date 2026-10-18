@@ -1,5 +1,6 @@
 import {
   type CanActivate,
+  BadRequestException,
   type ExecutionContext,
   HttpException,
   Inject,
@@ -14,6 +15,8 @@ import Redis from "ioredis";
 import { createHash } from "node:crypto";
 
 import type { AuthenticatedRequest } from "../modules/auth/auth.types";
+import { loginRequestSchema } from "../modules/auth/auth-request.schema";
+import { REFRESH_TOKEN_COOKIE } from "../modules/auth/auth.constants";
 
 const RATE_LIMIT_METADATA = "fashion:rate-limit";
 const RATE_LIMIT_SCRIPT = `
@@ -32,6 +35,7 @@ export interface RateLimitPolicy {
   readonly limit: number;
   readonly windowSeconds: number;
   readonly keyBy: "login" | "user";
+  readonly limitEnv?: string;
 }
 
 export interface RateLimitResult {
@@ -117,23 +121,17 @@ export class RateLimitGuard implements CanActivate {
     const http = context.switchToHttp();
     const request = http.getRequest<AuthenticatedRequest>();
     const response = http.getResponse<Response>();
-    const identity = this.resolveIdentity(policy, request);
-    const bucket = this.bucket(policy.name, identity);
-
-    let result: RateLimitResult;
-    try {
-      result = await this.store.consume(bucket, policy.windowSeconds);
-    } catch (error) {
-      throw new ServiceUnavailableException(
-        {
-          code: "RATE_LIMIT_UNAVAILABLE",
-          message: "请求保护服务暂时不可用，请稍后重试",
-        },
-        { cause: error },
-      );
-    }
-
-    if (result.count > policy.limit) {
+    const rules = policy.keyBy === "login" ? this.loginRules(request) : [{
+      name: policy.name, identity: this.resolveIdentity(policy, request),
+      limit: this.configuredLimit(policy), windowSeconds: policy.windowSeconds,
+    }];
+    for (const rule of rules) {
+      let result: RateLimitResult;
+      try { result = await this.store.consume(this.bucket(rule.name, rule.identity), rule.windowSeconds); }
+      catch (error) {
+        throw new ServiceUnavailableException({ code: "RATE_LIMIT_UNAVAILABLE", message: "请求保护服务暂时不可用，请稍后重试" }, { cause: error });
+      }
+    if (result.count > rule.limit) {
       response.setHeader(
         "Retry-After",
         String(Math.max(result.retryAfterSeconds, 1)),
@@ -146,7 +144,34 @@ export class RateLimitGuard implements CanActivate {
         429,
       );
     }
+    }
     return true;
+  }
+
+  private configuredLimit(policy: RateLimitPolicy): number {
+    const value = policy.limitEnv ? process.env[policy.limitEnv] : undefined;
+    if (value === undefined || value.trim() === "") return policy.limit;
+    const limit = Number(value);
+    if (!Number.isSafeInteger(limit) || limit < 1) throw new ServiceUnavailableException({ code: "RATE_LIMIT_CONFIGURATION_ERROR", message: "请求保护配置无效" });
+    return limit;
+  }
+
+  private loginRules(request: AuthenticatedRequest) {
+    const parsed = loginRequestSchema.safeParse(request.body);
+    if (!parsed.success) throw new BadRequestException({ code: "INVALID_REQUEST", message: "登录请求格式不正确。" });
+    const ip = request.ip ?? request.socket.remoteAddress ?? "unknown";
+    const input = parsed.data;
+    if (input.action === "send") return [
+      { name: "auth-send-email", identity: input.email, limit: 5, windowSeconds: 60 },
+      { name: "auth-send-ip", identity: ip, limit: 20, windowSeconds: 60 },
+    ];
+    if (input.action === "verify") return [
+      { name: "auth-verify-ip", identity: ip, limit: 20, windowSeconds: 60 },
+      { name: "auth-verify-token", identity: input.tokenHash, limit: 5, windowSeconds: 60 },
+    ];
+    const token = request.cookies?.[REFRESH_TOKEN_COOKIE] as unknown;
+    // The bucket helper hashes this value; neither the cookie nor the raw identity is stored or logged.
+    return [{ name: "auth-refresh", identity: typeof token === "string" && token ? token : `missing:${ip}`, limit: 30, windowSeconds: 60 }];
   }
 
   private resolveIdentity(

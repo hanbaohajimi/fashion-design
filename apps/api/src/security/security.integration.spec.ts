@@ -60,6 +60,7 @@ describe("security hardening integration", () => {
     for (let attempt = 1; attempt <= 20; attempt += 1) {
       await request(app.getHttpServer())
         .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
         .set("Cookie", "fashion_access_token=valid-token")
         .set("Idempotency-Key", `security-generation-${attempt}`)
         .send({
@@ -73,6 +74,7 @@ describe("security hardening integration", () => {
 
     const limited = await request(app.getHttpServer())
       .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "security-generation-21")
       .send({
@@ -105,5 +107,16 @@ describe("security hardening integration", () => {
       success: true,
       userId,
     });
+  });
+
+  it("缺失来源和不可信子域 multipart 上传在执行前返回 403", async () => {
+    await request(app.getHttpServer()).post("/fabrics")
+      .set("Cookie", "fashion_access_token=valid-token")
+      .field("name", "不允许上传").expect(403);
+    const rejected = await request(app.getHttpServer()).post("/fabrics")
+      .set("Cookie", "fashion_access_token=valid-token")
+      .set("Origin", "http://untrusted.localhost:3000")
+      .field("name", "不允许上传").expect(403);
+    expect(rejected.body.code).toBe("INVALID_ORIGIN");
   });
 });

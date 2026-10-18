@@ -10,11 +10,15 @@ import {
 } from "./files.service";
 import { S3FileStorage } from "./storage.service";
 import { BullThumbnailJobs } from "./thumbnail-queue.service";
+import { SecurityModule } from "../../security/security.module";
+import { UploadsCleanupService } from "./uploads-cleanup.service";
 
 @Module({
+  imports: [SecurityModule],
   controllers: [FilesController],
   providers: [
     FilesService,
+    UploadsCleanupService,
     S3FileStorage,
     BullThumbnailJobs,
     { provide: FILES_DB, useValue: prisma },

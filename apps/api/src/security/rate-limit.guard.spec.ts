@@ -10,6 +10,28 @@ import {
 } from "./rate-limit.guard";
 
 describe("RateLimitGuard", () => {
+  it("校验动作后选桶，额外 email 不能改变 refresh 限流身份", async () => {
+    const consume = vi.fn().mockResolvedValue({ count: 1, retryAfterSeconds: 60 });
+    const reflector = { getAllAndOverride: vi.fn().mockReturnValue({ keyBy: "login", name: "login", limit: 5, windowSeconds: 60 }) };
+    const request = { body: { action: "refresh", email: "bypass@example.com" }, cookies: { fashion_refresh_token: "secret-a" }, socket: { remoteAddress: "127.0.0.1" } };
+    const context = { getClass: () => class {}, getHandler: () => function login() {}, switchToHttp: () => ({ getRequest: () => request, getResponse: () => ({ setHeader: vi.fn() }) }) } as unknown as ExecutionContext;
+    const guard = new RateLimitGuard(reflector as unknown as Reflector, { consume });
+    await expect(guard.canActivate(context)).rejects.toMatchObject({ status: 400 });
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  it("同代理下不同刷新凭证使用不同摘要桶，不存储原始凭证", async () => {
+    const consume = vi.fn().mockResolvedValue({ count: 1, retryAfterSeconds: 60 });
+    const reflector = { getAllAndOverride: vi.fn().mockReturnValue({ keyBy: "login", name: "login", limit: 5, windowSeconds: 60 }) };
+    const request = { body: { action: "refresh" }, cookies: { fashion_refresh_token: "secret-a" }, socket: { remoteAddress: "127.0.0.1" } };
+    const context = { getClass: () => class {}, getHandler: () => function login() {}, switchToHttp: () => ({ getRequest: () => request, getResponse: () => ({ setHeader: vi.fn() }) }) } as unknown as ExecutionContext;
+    const guard = new RateLimitGuard(reflector as unknown as Reflector, { consume });
+    await guard.canActivate(context);
+    request.cookies.fashion_refresh_token = "secret-b";
+    await guard.canActivate(context);
+    expect(consume.mock.calls[0]?.[0]).not.toBe(consume.mock.calls[1]?.[0]);
+    expect(JSON.stringify(consume.mock.calls)).not.toContain("secret-");
+  });
   it("生成接口第 21 次返回 429、Retry-After 且不暴露 Redis key", async () => {
     let count = 0;
     const store: RateLimitStore = {
@@ -60,12 +82,13 @@ describe("RateLimitGuard", () => {
   });
 
   it("登录策略第 6 次拒绝", async () => {
-    let count = 0;
+    const counts = new Map<string, number>();
     const store: RateLimitStore = {
-      consume: vi.fn(async () => ({
-        count: ++count,
-        retryAfterSeconds: 42,
-      })),
+      consume: vi.fn(async (bucket) => {
+        const count = (counts.get(bucket) ?? 0) + 1;
+        counts.set(bucket, count);
+        return { count, retryAfterSeconds: 42 };
+      }),
     };
     const reflector = {
       getAllAndOverride: vi.fn().mockReturnValue({

@@ -15,8 +15,10 @@ import {
   Res,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 import type { Response } from "express";
 import { z } from "zod";
 
@@ -115,6 +117,8 @@ export class FabricsController {
   }
 
   @Post()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ keyBy: "user", name: "fabric-upload", limit: 20, windowSeconds: 60, limitEnv: "FABRIC_UPLOAD_RATE_LIMIT" })
   @Header("Cache-Control", PRIVATE_NO_STORE)
   @UseInterceptors(
     FileInterceptor("mainImage", {

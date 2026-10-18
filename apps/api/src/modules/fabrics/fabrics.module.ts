@@ -2,6 +2,7 @@ import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
 import { FilesModule } from "../files/files.module";
+import { SecurityModule } from "../../security/security.module";
 import { S3FileStorage } from "../files/storage.service";
 import { BullThumbnailJobs } from "../files/thumbnail-queue.service";
 import { FabricsController } from "./fabrics.controller";
@@ -13,7 +14,7 @@ import {
 } from "./fabrics.service";
 
 @Module({
-  imports: [FilesModule],
+  imports: [FilesModule, SecurityModule],
   controllers: [FabricsController],
   providers: [
     FabricsService,

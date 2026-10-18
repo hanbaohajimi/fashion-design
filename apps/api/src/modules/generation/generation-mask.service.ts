@@ -51,6 +51,7 @@ export class GenerationMaskService {
         url: await this.storage.createUploadUrl(
           objectKey,
           "image/png",
+          input.size,
           input.checksumSha256,
         ),
       },

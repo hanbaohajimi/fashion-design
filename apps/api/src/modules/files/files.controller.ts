@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Res,
+  UseGuards,
 } from "@nestjs/common";
 import type { Response } from "express";
 import { z } from "zod";
@@ -16,6 +17,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { signUploadSchema } from "./files.schemas";
 import { FilesService } from "./files.service";
+import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 
 const fileIdSchema = z.string().min(1).max(100);
 const PRIVATE_NO_STORE = "private, no-store";
@@ -38,6 +40,8 @@ export class FilesController {
   ) {}
 
   @Post("sign-upload")
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ keyBy: "user", name: "file-sign-upload", limit: 20, windowSeconds: 60, limitEnv: "FILE_UPLOAD_RATE_LIMIT" })
   @Header("Cache-Control", PRIVATE_NO_STORE)
   signUpload(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
     return this.filesService.signUpload(

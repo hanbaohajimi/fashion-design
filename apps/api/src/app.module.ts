@@ -10,6 +10,7 @@ import {
 import { AiModule } from "./modules/ai/ai.module";
 import { AgentConversationsModule } from "./modules/agent-conversations/agent-conversations.module";
 import { AuthGuard } from "./modules/auth/auth.guard";
+import { OriginGuard } from "./security/origin.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BillingModule } from "./modules/billing/billing.module";
 import { BoardElementsModule } from "./modules/board-elements/board-elements.module";
@@ -54,6 +55,10 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     {
       provide: HEALTH_DEPENDENCY_CHECKER,
       useExisting: InfrastructureHealthChecker,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: OriginGuard,
     },
     {
       provide: APP_GUARD,

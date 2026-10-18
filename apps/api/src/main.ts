@@ -14,6 +14,9 @@ async function bootstrap(): Promise<void> {
     bodyParser: false,
   });
   const port = Number(process.env.API_PORT ?? 3001);
+  // Only explicit proxy addresses are trusted; a client-supplied forwarding header is not an identity.
+  const trustedProxies = process.env.TRUSTED_PROXY_ADDRESSES?.split(",").map((value) => value.trim()).filter(Boolean);
+  if (trustedProxies?.length) app.set("trust proxy", trustedProxies);
 
   app.useBodyParser("json", { limit: "5mb" });
   app.use(cookieParser());

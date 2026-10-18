@@ -96,6 +96,7 @@ describe("FilesService", () => {
     expect(storage.createUploadUrl).toHaveBeenCalledWith(
       "originals/user-a/file-1/source",
       "image/png",
+      1024,
       checksumSha256,
     );
     expect(database.fileAsset.create).toHaveBeenCalledOnce();
@@ -340,7 +341,7 @@ describe("FilesService", () => {
     expect(failure.getResponse()).toMatchObject({ code: "UPLOAD_NOT_FOUND" });
   });
 
-  it("拒绝 MIME 伪装为图片但 magic bytes 不是图片的文件", async () => {
+  it("拒绝伪装图片并保留失败对象供锁内清理，避免删除新重试", async () => {
     database.fileAsset.findUnique.mockResolvedValue(fileRecord());
     storage.head.mockResolvedValue({
       contentLength: 1024,
@@ -356,9 +357,7 @@ describe("FilesService", () => {
     expect(failure.getResponse()).toMatchObject({
       code: "INVALID_IMAGE_CONTENT",
     });
-    expect(storage.delete).toHaveBeenCalledWith(
-      "originals/user-a/file-1/source",
-    );
+    expect(storage.delete).not.toHaveBeenCalled();
     expect(database.fileAsset.updateMany).toHaveBeenCalledWith({
       where: {
         id: "file-1",

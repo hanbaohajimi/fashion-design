@@ -102,6 +102,7 @@ describe("generation HTTP contract", () => {
   it("POST /generations 立即返回 202 和 task_id", async () => {
     const response = await request(app.getHttpServer())
       .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "generation-contract-1")
       .send({
@@ -123,6 +124,7 @@ describe("generation HTTP contract", () => {
   it("非法生成参数返回 400 且不建任务", async () => {
     const response = await request(app.getHttpServer())
       .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "generation-contract-2")
       .send({ taskType: "t2i", prompt: "" })
@@ -138,6 +140,7 @@ describe("generation HTTP contract", () => {
   it("局部重绘接收色卡颜色并规范化 HEX", async () => {
     await request(app.getHttpServer())
       .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .set("Idempotency-Key", "generation-inpaint-palette")
       .send({
@@ -175,6 +178,7 @@ describe("generation HTTP contract", () => {
     for (const [index, palette] of invalidPalettes.entries()) {
       await request(app.getHttpServer())
         .post("/generations")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
         .set("Cookie", "fashion_access_token=valid-token")
         .set("Idempotency-Key", `invalid-inpaint-palette-${index}`)
         .send({
@@ -200,6 +204,7 @@ describe("generation HTTP contract", () => {
     ]) {
       await request(app.getHttpServer())
         .post("/generations/masks/sign")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
         .set("Cookie", "fashion_access_token=valid-token")
         .send({
           checksumSha256,
@@ -219,6 +224,7 @@ describe("generation HTTP contract", () => {
 
     const response = await request(app.getHttpServer())
       .post("/generations/masks/sign")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .send({
         checksumSha256,
@@ -288,6 +294,7 @@ describe("generation HTTP contract", () => {
   it("PATCH /generations/:id/candidates/:index 持久化候选处置", async () => {
     const response = await request(app.getHttpServer())
       .patch("/generations/task-1/candidates/0")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .send({ disposition: "dismissed" })
       .expect(200);
@@ -306,6 +313,7 @@ describe("generation HTTP contract", () => {
   it("PATCH 候选处置拒绝负序号和未知状态", async () => {
     await request(app.getHttpServer())
       .patch("/generations/task-1/candidates/-1")
+      .set("Origin", process.env.APP_ORIGIN ?? "http://localhost:3000")
       .set("Cookie", "fashion_access_token=valid-token")
       .send({ disposition: "unknown" })
       .expect(400);

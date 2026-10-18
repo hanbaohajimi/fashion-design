@@ -72,6 +72,19 @@ async function main(): Promise<void> {
     if (!signed.upload) {
       throw new Error("新文件没有返回 PUT 直传签名");
     }
+    const signedHeaders = new URL(signed.upload.url).searchParams.get("X-Amz-SignedHeaders") ?? "";
+    if (!signedHeaders.split(";").includes("content-length")) throw new Error("上传签名未约束 Content-Length");
+    const oversized = Buffer.concat([original, Buffer.from([0])]);
+    // A matching checksum isolates length verification from checksum rejection.
+    const oversizedChecksum = createHash("sha256").update(oversized).digest("base64");
+    const probeKey = `temporary/length-probe/${suffix}`;
+    const lengthProbe = await apiStorage.createUploadUrl(probeKey, "image/png", original.length, oversizedChecksum);
+    const rejected = await fetch(lengthProbe, { method: "PUT", body: oversized, headers: { "Content-Type": "image/png", "x-amz-checksum-sha256": oversizedChecksum } });
+    if (rejected.ok) {
+      await apiStorage.delete(probeKey);
+      throw new Error("对象存储未拒绝超出签名长度的上传");
+    }
+    await rejected.body?.cancel();
     const putResponse = await fetch(signed.upload.url, {
       method: signed.upload.method,
       body: original,
@@ -155,6 +168,7 @@ async function main(): Promise<void> {
 
     console.log(
       JSON.stringify({
+        oversizedUploadRejected: true,
         deduplicated: true,
         originalBytes: persistedOriginal.length,
         status: ready.status,

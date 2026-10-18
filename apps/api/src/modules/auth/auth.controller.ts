@@ -15,7 +15,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { z } from "zod";
+import { loginRequestSchema } from "./auth-request.schema";
 
 import {
   ACCESS_TOKEN_COOKIE,
@@ -31,24 +31,7 @@ import { Public } from "./public.decorator";
 import { BillingService } from "../billing/billing.service";
 import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 
-const loginRequestSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("send"),
-    email: z
-      .string()
-      .trim()
-      .email()
-      .max(254)
-      .transform((email) => email.toLowerCase()),
-  }),
-  z.object({
-    action: z.literal("verify"),
-    tokenHash: z.string().min(32).max(2048),
-  }),
-  z.object({
-    action: z.literal("refresh"),
-  }),
-]);
+// Login body validation is shared with the guard, before bucket selection.
 const AUTH_CACHE_CONTROL = "private, no-store";
 
 @Controller()

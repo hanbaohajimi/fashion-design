@@ -18,6 +18,7 @@ export interface FileStorage {
   createUploadUrl(
     objectKey: string,
     mimeType: string,
+    sizeBytes: number,
     checksumSha256?: string,
   ): Promise<string>;
   createDownloadUrl(
@@ -66,6 +67,7 @@ export class S3FileStorage implements FileStorage {
   async createUploadUrl(
     objectKey: string,
     mimeType: string,
+    sizeBytes: number,
     checksumSha256?: string,
   ): Promise<string> {
     return getSignedUrl(
@@ -74,9 +76,10 @@ export class S3FileStorage implements FileStorage {
         Bucket: requiredEnvironment("S3_BUCKET"),
         ...(checksumSha256 ? { ChecksumSHA256: checksumSha256 } : {}),
         ContentType: mimeType,
+        ContentLength: sizeBytes,
         Key: objectKey,
       }),
-      { expiresIn: 10 * 60 },
+      { expiresIn: 10 * 60, signableHeaders: new Set(["content-length", "content-type"]) },
     );
   }
 
