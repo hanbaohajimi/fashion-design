@@ -1,5 +1,7 @@
 import "reflect-metadata";
 import { createHash, randomUUID } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
+import { resolve } from "node:path";
 import { prisma } from "@fashion/db";
 import { BillingService } from "@fashion/billing";
 import type { AiProviderJob } from "@fashion/ai";
@@ -22,7 +24,8 @@ import { createThumbnailProcessor } from "../../worker/src/processors/thumbnail.
 import { createGenerationProcessor } from "../../worker/src/processors/generation.processor";
 import { createExportProcessor } from "../../worker/src/processors/export.processor";
 
-it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重放不重复生成或计次", async () => {
+for (const crash of [false, true]) {
+it(`上传→真实 Redis 节点任务→Worker 产物→归属→导出，${crash ? "进程崩溃恢复" : "完成后重放"}不重复生成或计次`, async () => {
   const suffix = randomUUID();
   const redis = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
   const connection = { host: redis.hostname, port: Number(redis.port || 6379), ...(redis.password ? { password: decodeURIComponent(redis.password) } : {}), maxRetriesPerRequest: null };
@@ -37,9 +40,11 @@ it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重�
   const generationProcessor = createGenerationProcessor({ database: prisma, billing, storage, pollIntervalMs: 1,
     moderator: { moderate: async () => ({ status: "approved", categories: [] }) },
     ai: { submit: async () => { providerSubmissions++; return providerJob; }, getStatus: async () => ({ status: "completed" }),
-      getResult: async () => ({ job: providerJob, cost: providerJob.cost, images: [{ url: `data:image/png;base64,${source.toString("base64")}` }] }) },
+      getResult: async (job) => ({ job, cost: job.cost, images: [{ url: `data:image/png;base64,${source.toString("base64")}` }] }) },
   });
-  const generationWorker = new Worker<GenerationJobData>(generationQueue.name, (job) => generationProcessor(job), { connection });
+  let crashedProcess: ChildProcess | undefined;
+  const generationWorker = new Worker<GenerationJobData>(generationQueue.name, (job) => generationProcessor(job), { connection, autorun: !crash,
+    lockDuration: 500, stalledInterval: 100, maxStalledCount: 1 });
   const exportWorker = new Worker<{ exportId: string }>(exportQueue.name, (job) => createExportProcessor({ database: prisma, storage })(job.data.exportId), { connection });
   const user = await prisma.user.create({ data: { email: `review-${suffix}@example.com`, generationLimit: 20,
     ownedWorkspaces: { create: { name: "Review", projects: { create: { name: "Review pipeline" } } } } }, include: { ownedWorkspaces: { include: { projects: true } } } });
@@ -70,6 +75,27 @@ it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重�
     ] });
     const mutationId = randomUUID();
     await runtime.execute(user.id, projectId, toolId, { mutationId });
+    if (crash) {
+      crashedProcess = spawn(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), "--tsconfig", "tsconfig.json",
+        resolve("../../scripts/review-generation-crash-worker.ts"), generationQueue.name], { env: process.env, stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true });
+      const child = crashedProcess;
+      await new Promise<void>((done, reject) => {
+        const timer = setTimeout(() => reject(new Error("崩溃模拟进程未持久化远程任务")), 15_000);
+        child.once("error", (error) => { clearTimeout(timer); reject(error); });
+        child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`崩溃模拟进程提前退出 ${code}`)); });
+        child.once("message", () => { clearTimeout(timer); done(); });
+      });
+      providerSubmissions += 1;
+      const exited = new Promise<void>((done) => child.once("exit", () => done()));
+      child.kill("SIGKILL");
+      await exited;
+      const interrupted = await prisma.generationTask.findFirstOrThrow({ where: { projectId } });
+      expect(interrupted.status).toBe("RUNNING");
+      expect(interrupted.providerJob).not.toBeNull();
+      // Advance only the test row's lease; BullMQ must still recover the actual abandoned lock.
+      await prisma.generationTask.update({ where: { id: interrupted.id }, data: { updatedAt: new Date(Date.now() - 31_000) } });
+      void generationWorker.run().catch(() => undefined);
+    }
     await expect.poll(async () => {
       const failed = await generationQueue.getFailed();
       if (failed[0]) throw new Error(failed[0].failedReason);
@@ -84,6 +110,7 @@ it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重�
     await expect(files.get("different-user", signed.file.id)).rejects.toMatchObject({ status: 403 });
     await runtime.execute(user.id, projectId, toolId, { mutationId });
     const task = await prisma.generationTask.findFirstOrThrow({ where: { projectId } });
+    if (crash) expect(task.attemptCount).toBeGreaterThanOrEqual(2);
     await generationQueue.add("replay", { taskId: task.id, userId: user.id }, { jobId: `replay-${task.id}` });
     await expect.poll(async () => (await generationQueue.getJob(`replay-${task.id}`))?.getState()).toBe("completed");
     expect(await prisma.designAsset.count({ where: { generationTaskId: task.id } })).toBe(1);
@@ -99,6 +126,7 @@ it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重�
     expect((await sharp(Buffer.from(await response.arrayBuffer())).metadata()).format).toBe("png");
     await expect(exports.get("different-user", created.id)).rejects.toMatchObject({ status: 403 });
   } finally {
+    if (crashedProcess && crashedProcess.exitCode === null) crashedProcess.kill("SIGKILL");
     await Promise.all([generationWorker.close(), exportWorker.close()]);
     await generationQueue.obliterate({ force: true });
     await exportQueue.obliterate({ force: true });
@@ -110,7 +138,8 @@ it("上传→真实 Redis 节点任务→Worker 产物→归属→导出，重�
     await Promise.all([...objects].map((key) => storage.delete(key)));
     await prisma.user.delete({ where: { id: user.id } });
   }
-}, 30_000);
+}, 60_000);
+}
 
 it("错误对象标记失败并在过期后清理，READY、PROCESSING 和活跃上传保持完整", async () => {
   const user = await prisma.user.create({ data: { email: `cleanup-${randomUUID()}@example.com`,
