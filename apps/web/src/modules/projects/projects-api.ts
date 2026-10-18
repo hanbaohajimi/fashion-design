@@ -1,3 +1,4 @@
+import { privateFetch as fetch } from "../auth/private-fetch";
 import { readErrorMessage } from "../auth/auth-api";
 import type {
   Project,

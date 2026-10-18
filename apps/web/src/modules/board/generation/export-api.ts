@@ -1,3 +1,4 @@
+import { privateFetch as fetch } from "../../auth/private-fetch";
 export type ExportFormat = "jpg" | "pdf" | "png";
 export type ExportQuality = "high" | "standard";
 export type ExportStatus =

@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { SWRConfig } from "swr";
 import { useAuth } from "../auth/AuthProvider";
 import { setActiveBoardUser } from "../trends/active-board";
+import { setPrivateRequestUser } from "../auth/private-fetch";
 
 interface QueryProviderProps {
   readonly children: ReactNode;
@@ -13,7 +14,10 @@ interface QueryProviderProps {
 export function QueryProvider({ children }: QueryProviderProps) {
   const { session } = useAuth();
   const userId = session?.user.id ?? "anonymous";
-  useLayoutEffect(() => { setActiveBoardUser(session?.user.id ?? null); }, [session?.user.id]);
+  useLayoutEffect(() => {
+    setPrivateRequestUser(session?.user.id ?? null);
+    setActiveBoardUser(session?.user.id ?? null);
+  }, [session?.user.id]);
   return <UserQueryScope key={userId}>{children}</UserQueryScope>;
 }
 

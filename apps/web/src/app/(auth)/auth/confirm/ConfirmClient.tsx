@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { readErrorMessage } from "../../../../modules/auth/auth-api";
+import { announceSessionChange } from "../../../../modules/auth/AuthProvider";
 
 export function ConfirmClient() {
   const router = useRouter();
@@ -49,6 +50,7 @@ export function ConfirmClient() {
         const body = (await response.json()) as {
           readonly projectId?: string;
         };
+        announceSessionChange();
         router.replace(
           body.projectId
             ? `/${encodeURIComponent(body.projectId)}`

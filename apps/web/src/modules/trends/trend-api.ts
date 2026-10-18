@@ -1,5 +1,6 @@
 "use client";
 
+import { privateFetch as fetch } from "../auth/private-fetch";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 

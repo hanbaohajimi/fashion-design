@@ -1,3 +1,4 @@
+import { privateFetch as fetch } from "../auth/private-fetch";
 import { readErrorMessage } from "../auth/auth-api";
 
 export const MAX_IMAGE_BYTES = 50 * 1024 * 1024;

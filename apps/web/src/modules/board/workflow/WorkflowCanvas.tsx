@@ -1,5 +1,7 @@
 "use client";
 
+import { privateFetch as fetch } from "../../auth/private-fetch";
+
 import Link from "next/link";
 import type { AgentRunView } from "@fashion/shared";
 import { getWorkflowToolCatalog, getWorkflowToolContract, type WorkflowToolKey } from "@fashion/shared";

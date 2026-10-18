@@ -25,6 +25,12 @@ import {
   resetAnalyticsUser,
 } from "../../observability/analytics";
 
+export const SESSION_CHANGE_KEY = "fashion:session-change";
+export function announceSessionChange(): void {
+  try { window.localStorage.setItem(SESSION_CHANGE_KEY, crypto.randomUUID()); }
+  catch { /* Visibility/session polling remains available when storage is blocked. */ }
+}
+
 interface AuthContextValue {
   readonly error: string | null;
   readonly loading: boolean;
@@ -122,6 +128,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setSession(null);
     setError(null);
+    announceSessionChange();
     router.replace("/login");
   }, [router]);
 
@@ -149,9 +156,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
+    const handleStorage = (event: StorageEvent): void => {
+      if (event.key === SESSION_CHANGE_KEY) void loadSession();
+    };
+    window.addEventListener("storage", handleStorage);
     return () => {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [isPublicPath, loadSession]);
 

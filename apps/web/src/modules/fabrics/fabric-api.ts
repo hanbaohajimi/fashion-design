@@ -1,3 +1,4 @@
+import { privateFetch as fetch } from "../auth/private-fetch";
 import useSWRInfinite from "swr/infinite";
 
 import type { Fabric, FabricListPage, FabricListQuery } from "./fabric-types";

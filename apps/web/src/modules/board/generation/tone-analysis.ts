@@ -1,3 +1,4 @@
+import { privateFetch as fetch } from "../../auth/private-fetch";
 async function averageTone(url: string): Promise<readonly [number, number, number]> {
   const response = await fetch(url);
   if (!response.ok) throw new Error("图片不可读取");

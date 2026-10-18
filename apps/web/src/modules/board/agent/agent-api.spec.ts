@@ -86,7 +86,7 @@ describe("agent-api", () => {
     await updateWorkflowConversationContext("conversation/a", correction);
     expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(correction);
     await fetchWorkflowConversationPlan("conversation/a");
-    expect(fetchMock.mock.calls[2]).toEqual(["/api/agent-conversations/conversation%2Fa/plan", { cache: "no-store", credentials: "include" }]);
+    expect(fetchMock.mock.calls[2]).toEqual(["/api/agent-conversations/conversation%2Fa/plan", { cache: "no-store", credentials: "include", signal: expect.any(AbortSignal) }]);
   });
 
   it("上下文读取禁用缓存，更正携带项目revision、会话summaryRevision与mutationId", async () => {
@@ -95,7 +95,7 @@ describe("agent-api", () => {
     await expect(fetchWorkflowConversationContext("conversation/a")).resolves.toMatchObject({ revision: 4, summaryRevision: 7 });
     const update = { baseRevision: 4, summaryRevision: 7, mutationId: "context-edit", currentObjective: "轻量通勤风衣", focusNodeIds: [], disabledPreferenceIds: ["prefer-shine"] };
     await updateWorkflowConversationContext("conversation/a", update);
-    expect(fetchMock.mock.calls[0]).toEqual(["/api/agent-conversations/conversation%2Fa/context", { cache: "no-store", credentials: "include" }]);
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/agent-conversations/conversation%2Fa/context", { cache: "no-store", credentials: "include", signal: expect.any(AbortSignal) }]);
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/agent-conversations/conversation%2Fa/context");
     expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("PATCH");
     expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual(update);
@@ -178,11 +178,13 @@ describe("agent-api", () => {
       {
         cache: "no-store",
         credentials: "include",
+        signal: expect.any(AbortSignal),
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/agent-runs/run%2Fa", {
       cache: "no-store",
       credentials: "include",
+      signal: expect.any(AbortSignal),
     });
   });
 
@@ -323,7 +325,7 @@ describe("agent-api", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/projects/project%20a/agent-conversations?limit=50",
-      { cache: "no-store", credentials: "include" },
+      { cache: "no-store", credentials: "include", signal: expect.any(AbortSignal) },
     );
   });
 
@@ -367,7 +369,7 @@ describe("agent-api", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/agent-conversations/conversation%20a/messages?limit=50&cursor=message%2Folder",
-      { cache: "no-store", credentials: "include" },
+      { cache: "no-store", credentials: "include", signal: expect.any(AbortSignal) },
     );
   });
 
