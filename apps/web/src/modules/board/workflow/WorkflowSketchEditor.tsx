@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
-import { createPortal } from "react-dom";
+import { Button, Dialog, Input, SegmentedControl } from "../../../components/ui";
+import controls from "../../../components/ui.module.css";
 
 import {
   completeUpload,
@@ -71,8 +72,9 @@ export function WorkflowSketchEditor({ projectId, open, onClose, onCreated }: Wo
   useEffect(() => {
     if (!open) return;
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        if (event.target instanceof HTMLElement && event.target.matches("input, textarea")) return;
+        if (saving || pendingAsset) return;
         event.preventDefault();
         strokesRef.current.pop();
         setStrokeCount(strokesRef.current.length);
@@ -81,7 +83,7 @@ export function WorkflowSketchEditor({ projectId, open, onClose, onCreated }: Wo
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [onClose, open, redraw, saving]);
+  }, [open, pendingAsset, redraw, saving]);
 
   const pointFrom = (event: PointerEvent<HTMLCanvasElement>): Point => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -158,12 +160,11 @@ export function WorkflowSketchEditor({ projectId, open, onClose, onCreated }: Wo
   };
 
   if (!open) return null;
-  return createPortal(
-    <div className={styles.backdrop} onPointerDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
-      <section aria-label="绘制廓形草图" aria-modal="true" className={styles.sketchDialog} role="dialog">
+  return (
+      <Dialog label="绘制廓形草图" className={`${styles.sketchDialog} ${controls.controlSurface}`} returnFocusSelector="[data-material-trigger]" onClose={() => { if (!saving) onClose(); }}>
         <header className={styles.header}>
-          <div><span>DESIGN ASSET / 草图素材</span><h2>绘制廓形草图</h2></div>
-          <button aria-label="关闭草图编辑器" disabled={saving} onClick={onClose} type="button">关闭</button>
+          <div><span>草图素材</span><h2>绘制廓形草图</h2></div>
+          <Button aria-label="关闭草图编辑器" disabled={saving} onClick={onClose} variant="ghost">关闭</Button>
         </header>
         <div className={styles.sketchBody}>
           <div className={styles.sketchCanvasWrap}>
@@ -180,17 +181,15 @@ export function WorkflowSketchEditor({ projectId, open, onClose, onCreated }: Wo
             />
           </div>
           <aside className={styles.sketchControls}>
-            <label>素材名称<input disabled={Boolean(pendingAsset) || saving} maxLength={80} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
+            <label>素材名称<Input disabled={Boolean(pendingAsset) || saving} maxLength={80} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
             <fieldset><legend>画笔颜色</legend><div className={styles.options}>{COLORS.map((item) => <button aria-label={`选择颜色 ${item}`} aria-pressed={color === item} className={styles.colorChoice} key={item} onClick={() => setColor(item)} style={{ backgroundColor: item }} type="button" />)}</div></fieldset>
-            <fieldset><legend>笔触粗细</legend><div className={styles.options}>{BRUSHES.map((item) => <button aria-pressed={brush === item} key={item} onClick={() => setBrush(item)} type="button">{item === 3 ? "细" : item === 7 ? "中" : "粗"}</button>)}</div></fieldset>
-            <div className={styles.options}><button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={undo} type="button">撤销一笔</button><button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={clear} type="button">清空</button></div>
+            <fieldset><legend>笔触粗细</legend><SegmentedControl label="笔触粗细" value={String(brush)} onChange={(value) => setBrush(Number(value))} options={BRUSHES.map((item) => ({ value: String(item), label: item === BRUSHES[0] ? "细" : item === BRUSHES[1] ? "中" : "粗" }))} /></fieldset>
+            <div className={styles.options}><Button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={undo}>撤销一笔</Button><Button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={clear}>清空</Button></div>
             <p>草图保存后成为参考素材节点。可用鼠标、触控笔或触屏绘制。</p>
             {error ? <p className={styles.error} role="alert">{error}</p> : null}
-            <button className={styles.primary} disabled={(!pendingAsset && (!strokeCount || !title.trim())) || saving} onClick={() => void save()} type="button">{saving ? "正在保存草图…" : pendingAsset ? "重试加入工作流" : "保存到工作流"}</button>
+            <Button variant="primary" disabled={(!pendingAsset && (!strokeCount || !title.trim())) || saving} onClick={() => void save()}>{saving ? "正在保存草图…" : pendingAsset ? "重试加入工作流" : "保存到工作流"}</Button>
           </aside>
         </div>
-      </section>
-    </div>,
-    document.body,
+      </Dialog>
   );
 }

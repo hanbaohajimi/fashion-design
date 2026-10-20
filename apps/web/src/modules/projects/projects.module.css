@@ -200,7 +200,7 @@
 
 .statusFilter,
 .statusFilterActive {
-  min-height: 40px;
+  min-height: var(--control-height-primary);
   border: 0;
   padding: 0 var(--space-4);
   background: transparent;
@@ -237,7 +237,7 @@
 }
 
 .search > span {
-  font-size: 20px;
+  font-size: var(--text-xl);
   color: var(--color-ink-tertiary);
 }
 
@@ -267,7 +267,7 @@
 .primaryButton,
 .secondaryButton {
   display: inline-flex;
-  min-height: 40px;
+  min-height: var(--control-height-primary);
   border: 1px solid var(--color-ink);
   border-radius: var(--radius-lg);
   padding: 0 var(--space-5);
@@ -555,7 +555,7 @@
 }
 
 .confirmActions button {
-  min-height: 36px;
+  min-height: var(--control-height);
   border: 1px solid var(--color-error);
   border-radius: var(--radius-sm);
   background: transparent;
@@ -683,7 +683,7 @@
   width: min(100%, 560px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: clamp(24px, 5vw, 48px);
+  padding: clamp(var(--space-6), 5vw, var(--space-12));
   background: var(--color-paper);
   box-shadow: var(--shadow-modal);
 }
@@ -797,6 +797,8 @@
   }
 }
 
+
+
 @keyframes skeleton-pulse {
   0%, 100% {
     opacity: 1;
@@ -870,3 +872,28 @@
     animation: none;
   }
 }
+
+/* 内容页采用同一页边距和信息密度。 */
+.library { padding: 0 0 var(--space-16); }
+.dashboard, .toolbar, .projectGrid, .skeletonGrid, .notice, .errorState, .loadMore { width: min(calc(100% - 2 * var(--page-gutter)), var(--content-max-width)); margin-inline: auto; }
+.dashboard { padding-top: var(--space-8); padding-bottom: var(--space-5); }
+.dashboardTitle { margin: 0; font-family: var(--font-sans); font-size: var(--text-3xl); font-weight: var(--font-semibold); letter-spacing: var(--tracking-tight); }
+.toolbar { min-height: 64px; gap: var(--space-4); margin-bottom: var(--space-5); }
+.search { border-radius: var(--radius-md); min-height: var(--control-height); background: var(--color-paper); }
+.statusFilter, .statusFilterActive { min-height: var(--control-height); border-radius: var(--radius-md); font-weight: var(--font-medium); letter-spacing: 0; }
+.projectCard { border: 1px solid var(--color-border); border-radius: var(--radius-xl); overflow: visible; background: var(--color-paper); }
+.projectCover { border-radius: var(--radius-xl) var(--radius-xl) 0 0; aspect-ratio: 4 / 3; height: auto; overflow: hidden; }
+.projectCard:hover { transform: none; border-color: var(--color-border-strong); box-shadow: none; }
+.cardBody { padding: var(--space-4); }
+.cardHeading h2 { font: var(--font-semibold) var(--text-lg)/var(--leading-normal) var(--font-sans); }
+.coverNumber, .coverMark, .coverMeasure { display: none; }
+.cardMeta { font-size: var(--text-sm); }
+.menuPanel { border-radius: var(--radius-lg); box-shadow: var(--shadow-popup); }
+.dialog { border-radius: var(--radius-xl); }
+.dialog h2 { font-family: var(--font-sans); font-size: var(--text-xl); font-weight: var(--font-semibold); }
+.dialogIndex { display: none; }
+.createDialog { width: min(560px, calc(100vw - 32px)); }
+.projectSkeleton { aspect-ratio: 4 / 3; }
+.createDialog .dialog { width: 100%; border: 0; box-shadow: none; }
+.createDialog input { font-family: var(--font-sans); font-size: var(--text-base); min-height: var(--control-height); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+@media (max-width: 767px) { .toolbar { grid-template-columns: 1fr auto; } .toolbar .search { grid-row: 2; grid-column: 1 / -1; width: 100%; } .projectCount { display: none; } }

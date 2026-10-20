@@ -39,6 +39,7 @@ function taskRecord(overrides: Record<string, unknown> = {}) {
 describe("GenerationService", () => {
   const database = {
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
     workflowAttempt: { findMany: vi.fn() },
     workflowOutbox: { upsert: vi.fn() },
     designAsset: {
@@ -89,7 +90,7 @@ describe("GenerationService", () => {
       async (
         _userId: string,
         operation: (
-          transaction: { generationTask: typeof database.generationTask },
+          transaction: { generationTask: typeof database.generationTask; $queryRaw: typeof database.$queryRaw },
           quota: {
             allowed: boolean;
             limit: number;
@@ -99,7 +100,7 @@ describe("GenerationService", () => {
         ) => Promise<unknown>,
       ) =>
         operation(
-          { generationTask: database.generationTask },
+          { generationTask: database.generationTask, $queryRaw: database.$queryRaw },
           {
             allowed: true,
             limit: 100,

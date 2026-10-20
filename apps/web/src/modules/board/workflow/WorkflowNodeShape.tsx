@@ -10,7 +10,7 @@ import {
 } from "tldraw";
 
 import type { WorkflowNode } from "./workflow-api";
-import { displayNodeTitle, imageNodeSize, isImageNodeType } from "./workflow-graph";
+import { displayNodeTitle, imageNodeSize, isImageNodeType, nodeTypeLabel } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
@@ -44,25 +44,6 @@ export type WorkflowNodeShape = TLShape<typeof WORKFLOW_NODE_SHAPE_TYPE>;
  * 节点形状收到的 title 已由 workflow-graph 的 displayNodeTitle 处理过，
  * 这里只负责把工具节点标记为 tool（kind），不再重复判断哈希。
  */
-const labels: Readonly<Record<string, string>> = {
-  analyze_brief: "ANALYSIS",
-  brief: "TEXT",
-  candidate: "IMAGE",
-  constraint: "TEXT",
-  edit_design: "EDIT",
-  restore_version: "RESTORE",
-  evaluate_design: "EVALUATION",
-  evaluation: "REPORT",
-  fabric: "FABRIC",
-  generate_design: "GENERATION",
-  legacy: "HISTORY",
-  reference_image: "IMAGE",
-  reference_text: "TEXT",
-  sketch: "SKETCH",
-  swatch: "COLOR",
-  trend: "TREND",
-};
-
 export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
   static override type = WORKFLOW_NODE_SHAPE_TYPE;
   static override props: RecordProps<WorkflowNodeShape> = {
@@ -152,7 +133,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         <header className={styles.nodeHeader}>
           <span className={styles.eyebrow}>
             {kind === "asset" ? "素材" : "工具"} ·{" "}
-            {labels[nodeType] ?? nodeType.toUpperCase()}
+            {nodeTypeLabel(nodeType)}
           </span>
           <strong title={title}>{title}</strong>
         </header>
@@ -169,10 +150,10 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
           />
         ) : null}
         {summary ? <p className={styles.summary}>{summary}</p> : null}
-        {kind === "tool" && status !== "ready" && status !== "proposed" ? (
+        {kind === "tool" ? (
           <span className={styles.toolStatus}>
             <span aria-hidden="true" />
-            {status === "running"
+            {status === "ready" ? "待执行" : status === "proposed" ? "待确认" : status === "running"
               ? "执行中"
               : status === "failed"
                 ? "执行失败"
@@ -229,25 +210,12 @@ function WorkflowNodeFrame({
   const interaction = useWorkflowInteractions();
   const editor = useEditor();
   const exporting = useSvgExportContext();
+  const exportTokens = exporting ? getComputedStyle(editor.getContainer()) : null;
   const exportStyle = exporting
     ? ({
-        ...Object.fromEntries([
-          "--color-paper",
-          "--color-surface",
-          "--color-border",
-          "--color-border-strong",
-          "--color-divider",
-          "--color-ink",
-          "--color-ink-secondary",
-          "--color-ink-tertiary",
-          "--swatch-indigo",
-          "--swatch-linen",
-          "--swatch-mauve",
-          "--swatch-mauve-wash",
-        ].map((token) => [
-          token,
-          getComputedStyle(editor.getContainer()).getPropertyValue(token),
-        ])),
+        // SVG is rendered in an isolated document; carry the same design system
+        // rather than maintaining a second, incomplete list of node styles.
+        ...Object.fromEntries(Array.from(exportTokens ?? []).filter((token) => token.startsWith("--")).map((token) => [token, exportTokens?.getPropertyValue(token)])),
         // Export remounts the node; capture its final appearance, not the entry frame.
         animation: "none",
         transition: "none",

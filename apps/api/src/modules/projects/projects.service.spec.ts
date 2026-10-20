@@ -268,6 +268,12 @@ describe("ProjectsService ownership and soft deletion", () => {
         },
       },
       collections: [],
+      workflowGraph: { nodes: [
+        { id: "tool-source", kind: "tool", type: "generate_design", title: "设计", payload: { toolKey: "generate_design", toolVersion: "1", params: { referenceInputs: [{ nodeId: "ref-source" }] } }, status: "completed", x: 1, y: 2 },
+        { id: "ref-source", kind: "asset", type: "candidate", title: "结果", payload: { assetId: "asset-source", generationTaskId: "old-task", attemptId: "old-attempt", imageUrl: "/api/design-assets/asset-source/content" }, status: "completed", x: 4, y: 5 },
+        { id: "running-source", kind: "tool", type: "generate_design", title: "处理中", payload: {}, status: "running", x: 7, y: 8 },
+      ], edges: [{ id: "edge-source", sourceNodeId: "tool-source", targetNodeId: "ref-source", sourcePort: "out", targetPort: "source" }] },
+      designContext: { state: { currentObjective: "春季通勤", preferences: [] } },
       designAssets: [
         {
           archivedAt: null,
@@ -296,7 +302,15 @@ describe("ProjectsService ownership and soft deletion", () => {
       collectionLook: { createMany: vi.fn() },
       collectionLookSimilarity: { createMany: vi.fn() },
       designAsset: { createMany: designAssetCreateMany },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      workflowGraph: { create: vi.fn() },
+      workflowNode: { createMany: vi.fn() },
+      workflowEdge: { createMany: vi.fn() },
+      workflowNodeVersion: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn(async ({ data }) => ({ ...data, id: crypto.randomUUID() })), updateMany: vi.fn() },
+      projectDesignContext: { create: vi.fn() },
       project: {
+        findUnique: vi.fn().mockResolvedValue(source),
+        findFirst: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue(
           projectFixture({ id: "project-copy", name: "春季系列 副本" }),
         ),
@@ -334,6 +348,14 @@ describe("ProjectsService ownership and soft deletion", () => {
     expect(duplicatedAsset.id).not.toBe("asset-source");
     expect(duplicatedAsset.projectId).toBe("project-copy");
     expect(duplicatedAsset.rootAssetId).toBe(duplicatedAsset.id);
+    const nodes = transaction.workflowNode.createMany.mock.calls[0]?.[0].data;
+    expect(nodes).toHaveLength(3);
+    const copiedResult = nodes.find((node: { type: string }) => node.type === "candidate");
+    expect(copiedResult.payload).toMatchObject({ assetId: duplicatedAsset.id, imageUrl: `/api/design-assets/${duplicatedAsset.id}/content` });
+    expect(copiedResult.payload).not.toHaveProperty("generationTaskId");
+    expect(copiedResult.payload).not.toHaveProperty("attemptId");
+    expect(nodes.find((node: { title: string }) => node.title === "处理中").status).toBe("ready");
+    expect(transaction.workflowNodeVersion.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { origin: "project_copy" } }));
     expect(boardElementCreateMany.mock.calls[0]?.[0].data[0].record).toMatchObject({
       props: { assetId: duplicatedAsset.id },
     });

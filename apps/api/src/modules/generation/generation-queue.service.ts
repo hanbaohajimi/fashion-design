@@ -3,7 +3,7 @@ import {
   type GenerationJobData,
   type GenerationTaskEvent,
 } from "@fashion/shared";
-import { Injectable, type OnModuleDestroy } from "@nestjs/common";
+import { Injectable, Logger, type OnModuleDestroy } from "@nestjs/common";
 import { Queue, type Job } from "bullmq";
 
 import type { GenerationJobs } from "./generation.service";
@@ -11,6 +11,8 @@ import type { GenerationJobs } from "./generation.service";
 function redisConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
   return {
+    commandTimeout: 5_000,
+    maxRetriesPerRequest: 1,
     host: redisUrl.hostname,
     password: redisUrl.password || undefined,
     port: Number(redisUrl.port || 6379),
@@ -21,6 +23,11 @@ function redisConnection() {
 @Injectable()
 export class BullGenerationJobs implements GenerationJobs, OnModuleDestroy {
   private queue: Queue<GenerationJobData> | undefined;
+
+  async state(taskId: string): Promise<string> {
+    const job = await this.getQueue().getJob(taskId);
+    return job ? job.getState() : "missing";
+  }
 
   async enqueue(taskId: string, userId: string): Promise<void> {
     const queue = this.getQueue();
@@ -72,7 +79,7 @@ export class BullGenerationJobs implements GenerationJobs, OnModuleDestroy {
   private getQueue(): Queue<GenerationJobData> {
     this.queue ??= new Queue<GenerationJobData>(GENERATION_QUEUE_NAME, {
       connection: redisConnection(),
-    });
+    }).on("error", () => Logger.warn("生成队列连接异常，持久化任务将重试派发", "GenerationQueue"));
     return this.queue;
   }
 

@@ -327,6 +327,7 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   expect(mocked.proposalRequests).toHaveLength(0);
   expect(mocked.executionRequests).toHaveLength(0);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("group", { name: "工作视图" }).getByRole("button", { name: "助手", exact: true }).click();
   await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-old");
   await expect(page.getByText("历史中保留的风衣设计需求")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toHaveCount(0);

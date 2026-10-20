@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Menu } from "../../components/ui";
 import { type CSSProperties, useState } from "react";
 
 import type { Project } from "./project-types";
@@ -216,11 +217,7 @@ export function ProjectCard({
           )}
 
           {!project.optimistic && !renaming ? (
-            <details className={styles.cardMenu}>
-              <summary aria-label={`${project.name} 项目操作`}>
-                <span aria-hidden="true">•••</span>
-              </summary>
-              <div className={styles.menuPanel}>
+            <Menu className={styles.cardMenu} label={`${project.name} 项目操作`} trigger={<span aria-hidden="true">•••</span>}>
                 <button
                   onClick={(event) => {
                     event.currentTarget
@@ -273,8 +270,7 @@ export function ProjectCard({
                 >
                   删除
                 </button>
-              </div>
-            </details>
+            </Menu>
           ) : null}
         </div>
 

@@ -254,7 +254,7 @@ export class WorkflowRuntimeService {
     if (graph.revision !== input.graphRevision) throw new ConflictException("画布已变化，请重新讨论本次建议");
     const versions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision, graph.nodes, graph.edges);
     const attempts = await tx.workflowAttempt.groupBy({ by: ["toolNodeId"], where: { projectId }, _count: true });
-    const eligibility = Object.fromEntries([...versions].map(([id, version]) => [id, { nodeVersionId: version.id, attemptCount: attempts.find((row) => row.toolNodeId === id)?._count ?? 0 }]));
+    const eligibility = Object.fromEntries([...versions].map(([id, version]) => [id, { nodeVersionId: version.id, copiedSnapshot: version.origin === "project_copy" && version.baseline, attemptCount: attempts.find((row) => row.toolNodeId === id)?._count ?? 0 }]));
     const operations = compileWorkflowAction(graph, input.action, input.referencedNodeIds, eligibility);
     const parameterOperation = operations.find((operation) => operation.type === "update_node" || operation.type === "add_node" && operation.node.kind === "tool");
     const compiledParameters = parameterOperation?.type === "update_node" ? object(parameterOperation.payload).params

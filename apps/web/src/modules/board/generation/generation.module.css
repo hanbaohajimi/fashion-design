@@ -9,8 +9,8 @@
   align-items: center;
   justify-content: space-between;
   border: 1px solid var(--color-ink);
-  padding: 8px 8px 8px 14px;
-  gap: 12px;
+  padding: var(--space-2) var(--space-2) var(--space-2) 14px;
+  gap: var(--space-3);
   background: var(--color-paper);
   box-shadow: 5px 5px 0 var(--color-border);
   color: var(--color-ink);
@@ -63,12 +63,12 @@
 .candidateDock > header > div {
   display: flex;
   align-items: baseline;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   gap: 10px;
 }
 
 .candidateDock header span {
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -81,7 +81,7 @@
   display: grid;
   width: 48px;
   border-left: 1px solid var(--color-ink);
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 500;
   place-items: center;
 }
@@ -145,7 +145,7 @@
   background: var(--color-surface);
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
   transition:
     background 160ms ease,
@@ -229,7 +229,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 8px;
+  font-size: var(--text-sm);
 }
 
 .candidateMenu > div button:hover {
@@ -257,7 +257,7 @@
   background: var(--color-signal);
   color: var(--color-paper);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -305,7 +305,7 @@
 .variationControl > span,
 .inpaintControls > div:first-child > span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -325,7 +325,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -342,7 +342,7 @@
   padding: 9px 13px;
   background: var(--color-error-bg);
   color: var(--color-error);
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -356,7 +356,7 @@
   min-height: 0;
   max-height: calc(100dvh - 200px);
   overflow: auto;
-  padding: 20px;
+  padding: var(--space-5);
   background: var(--color-surface);
   color: var(--color-ink);
 }
@@ -380,28 +380,30 @@
   }
 }
 
+
+
 .designPath > header {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 .designPath > header span {
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
   letter-spacing: 0.12em;
 }
 .designPath h3 {
   margin: 5px 0;
-  font-size: 20px;
+  font-size: var(--text-xl);
 }
 .designPath p {
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
 .pathGraph {
   display: grid;
-  gap: 24px;
+  gap: var(--space-6);
   overflow-x: auto;
-  padding: 4px 0 16px;
+  padding: var(--space-1) 0 var(--space-4);
 }
 .pathRow {
   display: grid;
@@ -416,18 +418,18 @@
 .pathSources,
 .pathOutputs {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .pathSources > span,
 .pathOutputs > span {
-  font-size: 10px;
+  font-size: var(--text-sm);
   color: var(--color-ink-secondary);
 }
 .pathSources button,
 .pathOutputs button,
 .pathOperation {
   border: 1px solid var(--color-ink-disabled);
-  padding: 12px;
+  padding: var(--space-3);
   background: var(--color-paper);
   color: inherit;
   text-align: left;
@@ -445,12 +447,12 @@
   display: block;
 }
 .pathSources button small {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .pathSources button strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 .pathOperation {
@@ -476,12 +478,12 @@
 }
 .pathOperation span,
 .pathOperation small {
-  font-size: 10px;
+  font-size: var(--text-sm);
   color: var(--color-success);
 }
 .pathOperation strong {
-  font-size: 16px;
-  margin-top: 8px;
+  font-size: var(--text-lg);
+  margin-top: var(--space-2);
 }
 .pathOutputs button {
   display: flex;
@@ -495,24 +497,24 @@
   background: var(--color-surface);
 }
 .pathNotice {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   background: var(--color-warning-bg);
 }
 .pathDetails,
 .pathDecision {
   border-top: 1px solid var(--color-ink-disabled);
   margin-top: 18px;
-  padding-top: 16px;
+  padding-top: var(--space-4);
 }
 .pathDetails h4 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 .pathDetails dl > div {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
   padding: 5px 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .pathDetails dd {
   margin: 0;
@@ -522,32 +524,32 @@
   display: block;
   margin-top: 10px;
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 .pathDetails pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 .pathDetails summary,
 .pathDecision summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .pathDecision > div:first-child {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: space-between;
 }
 .pathDecision > div:first-child span {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-success);
 }
 .pathDecision label {
   display: block;
-  margin: 12px 0 6px;
-  font-size: 12px;
+  margin: var(--space-3) 0 6px;
+  font-size: var(--text-sm);
 }
 .pathDecision textarea {
   width: 100%;
@@ -559,18 +561,18 @@
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .pathDecisionActions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   margin: 10px 0;
 }
 .pathDecisionActions button,
 .designPath > [role="alert"] button {
   border: 1px solid var(--color-ink-secondary);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   background: var(--color-paper);
   color: var(--color-ink);
   cursor: pointer;
@@ -580,8 +582,8 @@
   opacity: 0.6;
 }
 .pathDecision li {
-  margin: 8px 0;
-  font-size: 12px;
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 .designPath button:focus-visible,
@@ -614,16 +616,16 @@
 
 .variationControl {
   display: grid;
-  padding: 30px 24px;
+  padding: 30px var(--space-6);
   align-content: start;
   border-left: 1px solid var(--color-ink);
   background: var(--color-border);
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .variationControl h3 {
   max-width: 12ch;
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: clamp(1.7rem, 3vw, 2.7rem);
   font-weight: 500;
   letter-spacing: -0.05em;
@@ -633,7 +635,7 @@
 .variationControl p {
   margin: 0;
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -645,7 +647,7 @@
 
 .variationControl label > span,
 .inpaintControls label > span {
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -658,18 +660,18 @@
 .variationControl small,
 .inpaintControls small {
   color: var(--color-ink-tertiary);
-  font-size: 9px;
+  font-size: var(--text-sm);
   line-height: 1.45;
 }
 
 .variationControl > button,
 .inpaintSubmit {
-  min-height: 44px;
+  min-height: var(--control-height-touch);
   border: 1px solid var(--color-ink);
   background: var(--color-signal);
   color: var(--color-paper);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -733,7 +735,7 @@
   padding: 6px 9px;
   background: var(--color-scrim);
   color: var(--color-paper);
-  font-size: 8px;
+  font-size: var(--text-sm);
   letter-spacing: 0.06em;
   pointer-events: none;
 }
@@ -750,11 +752,11 @@
 
 .inpaintControls > div:first-child {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .inpaintControls > div:first-child strong {
-  font-size: 24px;
+  font-size: var(--text-2xl);
   font-weight: 500;
   letter-spacing: -0.04em;
 }
@@ -769,7 +771,7 @@
   background: var(--color-surface);
   color: var(--color-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -793,7 +795,7 @@
 }
 
 .paletteToggle strong {
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .paletteToggle input {
@@ -847,9 +849,9 @@
 .inpaintPalette > p {
   border-top: 1px solid var(--color-border);
   margin: 0;
-  padding: 8px 10px 9px;
+  padding: var(--space-2) 10px 9px;
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: var(--text-sm);
   line-height: 1.45;
 }
 
@@ -921,7 +923,7 @@
 }
 
 .paletteMeta strong {
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .paletteMeta small {
@@ -932,7 +934,7 @@
 
 .paletteChoice b {
   color: var(--color-signal);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -948,12 +950,12 @@
 }
 
 .maskActions button {
-  min-height: 36px;
+  min-height: var(--control-height);
   border: 1px solid var(--color-ink);
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -964,7 +966,7 @@
 .inpaintControls > p {
   margin: 0;
   color: var(--color-error);
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 700;
   line-height: 1.45;
 }
@@ -972,24 +974,17 @@
 .versionTimeline {
   min-height: 0;
   overflow-y: auto;
-  padding: 26px 30px 30px;
-  background:
-    linear-gradient(
-      90deg,
-      transparent 0 78px,
-      var(--color-border) 78px 79px,
-      transparent 79px
-    ),
-    var(--color-border);
+  padding: var(--space-6);
+  background: var(--color-paper);
 }
 
 .versionTimeline > header {
   display: grid;
   align-items: end;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--color-ink);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.5fr);
-  gap: 24px;
+  gap: var(--space-6);
 }
 
 .versionTimeline > header div {
@@ -999,24 +994,23 @@
 
 .versionTimeline > header span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
 
 .versionTimeline > header h3 {
   margin: 0;
-  font-size: clamp(1.7rem, 3vw, 2.8rem);
-  font-weight: 500;
-  letter-spacing: -0.05em;
-  line-height: 1;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-snug);
 }
 
 .versionTimeline > header p,
 .versionEmpty p {
   margin: 0;
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -1032,7 +1026,7 @@
   align-items: center;
   border-bottom: 1px solid var(--color-border-strong);
   grid-template-columns: 48px 96px minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: var(--space-4);
   animation: candidate-enter 220ms ease-out both;
 }
 
@@ -1059,7 +1053,7 @@
   height: 28px;
   border: 1px solid var(--color-ink);
   background: var(--color-border);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   place-items: center;
 }
@@ -1076,7 +1070,7 @@
 .versionTimeline li img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .versionMeta {
@@ -1086,14 +1080,14 @@
 }
 
 .versionMeta strong {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .versionMeta time,
 .versionMeta small,
 .versionEnd {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .versionMeta small {
@@ -1104,14 +1098,15 @@
 .versionTimeline li > button,
 .versionMore,
 .versionEmpty button {
-  min-height: 34px;
-  border: 1px solid var(--color-ink);
-  padding: 0 13px;
+  min-height: var(--control-height);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
-  font-weight: 800;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
 }
 
 .versionTimeline li > button:hover,
@@ -1154,7 +1149,7 @@
   min-height: 300px;
   align-content: center;
   justify-items: start;
-  padding-left: 64px;
+  padding-left: var(--space-16);
   gap: 10px;
 }
 
@@ -1167,13 +1162,13 @@
   margin: 14px 0 0;
   padding: 10px 0;
   color: var(--color-error);
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
 .versionMore {
   width: 100%;
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .versionEnd {
@@ -1183,29 +1178,25 @@
 
 .collectionDrawer {
   position: fixed;
-  z-index: 2100;
-  top: 72px;
-  bottom: 80px;
-  left: calc((100vw - var(--board-agent-current-width, 400px)) / 2);
-  width: min(
-    760px,
-    calc(100vw - var(--board-agent-current-width, 400px) - 48px)
-  );
+  z-index: var(--z-modal);
+  inset: var(--space-4);
+  width: min(760px, calc(100vw - var(--space-8)));
+  height: calc(100dvh - var(--space-8));
+  margin: auto;
   overflow-y: auto;
   border: 1px solid var(--color-ink);
   border-radius: 8px;
   background: var(--color-surface);
   box-shadow: 0 24px 70px var(--color-border);
   color: var(--color-ink);
-  transform: translateX(-50%);
-  animation: collection-workspace-enter 180ms ease-out both;
+  transform: none;
   overscroll-behavior: contain;
 }
 
 .collectionTabs {
   position: sticky;
   z-index: 2;
-  top: 64px;
+  top: var(--studio-header-height);
   display: grid;
   min-height: 42px;
   border-bottom: 1px solid var(--color-ink);
@@ -1216,26 +1207,14 @@
 }
 
 .collectionTabs button {
-  border: 0;
-  border-right: 1px solid var(--color-border-strong);
-  background: transparent;
-  color: var(--color-ink-secondary);
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-weight: var(--font-medium);
 }
 
 .collectionTabs button:last-child {
   border-right: 0;
 }
 
-.collectionTabs button[aria-current="page"] {
-  background: var(--color-ink);
-  color: var(--color-paper);
-}
-
-.collectionTabs button:hover:not([aria-current="page"]) {
+.collectionTabs button:hover:enabled {
   background: var(--color-surface);
   color: var(--color-ink);
 }
@@ -1269,7 +1248,7 @@
 .collectionHero span,
 .dnaSection header span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -1288,7 +1267,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -1304,7 +1283,7 @@
   justify-content: center;
   padding: 0 9px;
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   gap: 6px;
 }
@@ -1366,7 +1345,7 @@
 }
 
 .collectionHeroFallback small {
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -1379,7 +1358,7 @@
 
 .collectionHero strong {
   max-width: none;
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 500;
   letter-spacing: -0.04em;
   line-height: 1.02;
@@ -1391,7 +1370,7 @@
 .dnaEmpty {
   margin: 0;
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -1404,7 +1383,7 @@
   background: var(--color-error-bg);
   color: var(--color-error);
   font-weight: 700;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .collectionInlineError button {
@@ -1416,7 +1395,7 @@
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -1476,7 +1455,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -1487,8 +1466,8 @@
 
 .dnaSection > div {
   display: grid;
-  padding: 10px 14px 12px;
-  gap: 8px;
+  padding: 10px 14px var(--space-3);
+  gap: var(--space-2);
 }
 
 .paletteEditor {
@@ -1522,12 +1501,12 @@
   background: transparent;
   color: var(--color-ink);
   font: inherit;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .paletteRow code {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .paletteRow button,
@@ -1538,7 +1517,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -1564,7 +1543,7 @@
 
 .dnaAdd {
   justify-self: start;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 
 .dnaTextarea {
@@ -1574,7 +1553,7 @@
 
 .dnaTextarea > span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -1588,7 +1567,7 @@
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -1623,7 +1602,7 @@
 .sourceGarmentEditor label > span,
 .lookGenerator label > span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -1653,12 +1632,12 @@
   min-width: 0;
   border: 1px solid var(--color-scrim-soft);
   border-radius: 0;
-  padding: 8px 9px;
+  padding: var(--space-2) 9px;
   outline: 0;
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .sourceGarmentEditor :is(select, input):focus,
@@ -1672,9 +1651,9 @@
   grid-column: 1 / -1;
   margin: 0;
   border-top: 1px solid var(--color-border);
-  padding: 8px 14px;
+  padding: var(--space-2) 14px;
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
 }
 
 .sourceGarmentEditor > p {
@@ -1702,7 +1681,7 @@
   color: var(--color-paper);
   cursor: pointer;
   font: inherit;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -1724,7 +1703,7 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--color-ink);
-  padding: 16px 18px;
+  padding: var(--space-4) 18px;
 }
 
 .lookLab > header > div,
@@ -1737,7 +1716,7 @@
 .consistencyOverview > header span,
 .axisSelector legend span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -1754,7 +1733,7 @@
 .consistencyOverview > header > strong {
   border: 1px solid var(--color-ink);
   padding: 7px 9px;
-  font-size: 8px;
+  font-size: var(--text-sm);
   letter-spacing: 0.08em;
 }
 
@@ -1763,13 +1742,13 @@
   border: 0;
   border-bottom: 1px solid var(--color-ink);
   margin: 0;
-  padding: 16px 18px 18px;
-  gap: 12px;
+  padding: var(--space-4) 18px 18px;
+  gap: var(--space-3);
 }
 
 .axisSelector legend {
   display: grid;
-  padding: 16px 0 0;
+  padding: var(--space-4) 0 0;
   font-size: 17px;
   font-weight: 600;
   gap: 3px;
@@ -1822,7 +1801,7 @@
 
 .axisSelector small {
   color: inherit;
-  font-size: 8px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   opacity: 0.72;
 }
@@ -1833,51 +1812,53 @@
   padding: 10px 18px;
   background: var(--color-error-bg);
   color: var(--color-error);
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
 .lookGrid {
   display: grid;
-  padding: 18px;
+  padding: var(--space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--space-4);
 }
+.lookGrid > section { grid-column: 1 / -1; }
 
 .lookGrid article {
   min-width: 0;
-  border: 1px solid var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
   background: var(--color-paper);
 }
 
 .lookGrid figure {
   position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
   aspect-ratio: 3 / 4;
   margin: 0;
-  background: var(--color-border-strong);
+  background: var(--image-stage-background);
 }
 
 .lookGrid img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .lookGrid figcaption {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
   display: flex;
-  min-height: 34px;
+  min-height: var(--control-height);
   align-items: center;
   justify-content: flex-start;
-  padding: 0 9px;
-  background: var(--color-scrim);
-  color: var(--color-paper);
-  font-size: 9px;
-  font-weight: 800;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
 }
 
 .lookPending {
@@ -1897,13 +1878,13 @@
 }
 
 .lookPending strong {
-  font-size: 11px;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
 }
 
 .lookPending span {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .consistencyOverview > p {
@@ -1911,7 +1892,7 @@
   margin: 0;
   padding: 14px 18px;
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -1921,7 +1902,7 @@
   border-bottom: 1px solid var(--color-ink);
   padding: 28px;
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .heatmapScroll {
@@ -1950,7 +1931,7 @@
 
 .heatmapScroll th {
   background: var(--color-surface);
-  font-size: 8px;
+  font-size: var(--text-sm);
   letter-spacing: 0.05em;
 }
 
@@ -1961,7 +1942,7 @@
 .heatmapScroll td {
   background: rgb(68 111 85 / var(--similarity-alpha));
   color: var(--color-success);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 800;
 }
@@ -1992,7 +1973,7 @@
   display: inline-flex;
   align-items: center;
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   gap: 5px;
 }
 
@@ -2017,7 +1998,7 @@
 .collectionSkeleton {
   display: grid;
   padding: 18px 14px;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .collectionSkeleton i {
@@ -2043,7 +2024,7 @@
 }
 
 .collectionError strong {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 500;
 }
 
@@ -2075,7 +2056,7 @@
 
 .taskTray header span,
 .taskTray header b {
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.1em;
 }
@@ -2095,7 +2076,7 @@
   border-bottom: 1px solid var(--color-border);
   padding: 7px 9px;
   grid-template-columns: 8px minmax(0, 1fr) auto auto;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .taskTray li > i {
@@ -2132,18 +2113,18 @@
 }
 
 .taskTray li strong {
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .taskTray li span,
 .taskTray time {
   color: var(--color-ink-tertiary);
-  font-size: 8px;
+  font-size: var(--text-sm);
 }
 
 .taskTray li small {
   color: var(--color-error);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 700;
   line-height: 1.35;
 }
@@ -2158,9 +2139,9 @@
   border: 1px solid var(--color-border);
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 800;
-  padding: 6px 8px;
+  padding: 6px var(--space-2);
 }
 
 .taskTray li > button:hover {
@@ -2175,7 +2156,7 @@
   display: grid;
   overflow-y: auto;
   align-items: center;
-  padding: 24px;
+  padding: var(--space-6);
   background: var(--color-scrim);
 }
 
@@ -2201,15 +2182,15 @@
 
 .exportModal > header > div {
   display: grid;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   align-content: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .exportModal > header span,
 .exportControls section > span {
   color: var(--color-ink-tertiary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -2227,7 +2208,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -2263,10 +2244,10 @@
   bottom: 12px;
   left: 12px;
   overflow: hidden;
-  padding: 8px 10px;
+  padding: var(--space-2) 10px;
   background: var(--color-scrim);
   color: var(--color-paper);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-overflow: ellipsis;
@@ -2282,7 +2263,7 @@
 
 .exportControls section {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .exportOptions {
@@ -2304,7 +2285,7 @@
   color: var(--color-ink);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 0.04em;
   text-decoration: none;
@@ -2330,7 +2311,7 @@
 .exportError p {
   margin: 0;
   color: var(--color-ink-secondary);
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -2347,17 +2328,17 @@
   border-bottom: 1px solid var(--color-border);
   padding: 14px 0;
   grid-template-columns: 1fr auto;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
 }
 
 .exportRetention span {
   color: var(--color-ink-tertiary);
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
 .exportRetention strong {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 
 .exportRetention p {
@@ -2370,7 +2351,7 @@
   min-height: 66px;
   align-items: center;
   border: 1px solid var(--color-border-strong);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   grid-template-columns: 9px minmax(0, 1fr);
   gap: 10px;
 }
@@ -2401,37 +2382,37 @@
 
 .exportProgress span,
 .exportLoading span {
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
 .exportProgress strong,
 .exportProgress small {
   color: var(--color-ink-tertiary);
-  font-size: 8px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .exportError {
   border: 1px solid var(--color-error);
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   background: var(--color-error-bg);
 }
 
 .exportError strong {
   color: var(--color-error);
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .exportError button {
   min-height: 28px;
   border: 1px solid var(--color-error);
-  margin-top: 8px;
+  margin-top: var(--space-2);
   padding: 0 10px;
   background: transparent;
   color: var(--color-error);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -2557,7 +2538,7 @@
   }
 
   .lightboxBackdrop {
-    padding: 8px;
+    padding: var(--space-2);
   }
 
   .lightbox {
@@ -2586,17 +2567,14 @@
   }
 
   .collectionDrawer {
-    top: 64px;
-    right: 60px;
-    bottom: 70px;
-    left: 12px;
-    width: auto;
+    inset: var(--space-4);
+    width: calc(100vw - var(--space-8));
     transform: none;
   }
 
   .exportBackdrop {
     align-items: start;
-    padding: 8px;
+    padding: var(--space-2);
   }
 
   .exportModal {
@@ -2615,7 +2593,7 @@
   }
 
   .exportControls {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .collectionHeader {
@@ -2660,7 +2638,7 @@
   }
 
   .lookGenerator {
-    padding: 12px;
+    padding: var(--space-3);
     grid-template-columns: 1fr;
   }
 
@@ -2674,7 +2652,7 @@
   }
 
   .versionTimeline {
-    padding: 18px 14px 24px;
+    padding: 18px 14px var(--space-6);
   }
 
   .versionTimeline > header {
@@ -2695,7 +2673,7 @@
 
   .versionTimeline li > button {
     min-height: 30px;
-    margin: 0 0 12px 44px;
+    margin: 0 0 var(--space-3) 44px;
     grid-column: 1 / -1;
   }
 
@@ -2742,3 +2720,42 @@
     animation: none;
   }
 }
+
+.exportBackdrop { z-index: var(--z-modal); padding: var(--space-4); background: var(--color-scrim-soft); }
+.exportModal { width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-paper); box-shadow: var(--shadow-modal); }
+.exportModal > header { min-height: var(--studio-header-height); border-color: var(--color-border); align-items: center; padding-right: var(--space-3); gap: var(--space-2); }
+.exportModal > header > div { flex: 1; padding: var(--space-4) var(--space-5); }
+.exportModal > header span { font-size: var(--text-sm); letter-spacing: 0; font-weight: var(--font-medium); }
+.exportModal > header strong { font: var(--font-semibold) var(--text-xl)/var(--leading-normal) var(--font-sans); }
+.exportModal > header button { min-height: var(--control-height); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); font: var(--font-medium) var(--text-base)/var(--leading-normal) var(--font-sans); }
+.exportLayout { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); min-height: 0; }
+.exportLayout > figure { min-height: 360px; background: var(--image-stage-background); border-color: var(--color-border); }
+.exportLayout > figure img { width: 100%; height: auto; max-height: 60dvh; object-fit: contain; }
+.exportControls { padding: var(--space-6); gap: var(--space-5); }
+.exportControls section > span { font-size: var(--text-sm); letter-spacing: 0; font-weight: var(--font-semibold); }
+.exportOptions { display: flex; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); }
+.exportOptions button { min-height: var(--control-height); border: 0; border-radius: var(--radius-md); font-size: var(--text-base); background: transparent; color: var(--color-ink-secondary); }
+.exportOptions button + button { border: 0; }
+.exportOptions button[aria-pressed="true"] { background: var(--color-paper); color: var(--color-ink); }
+.exportControls > label { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+.exportControls select { width: 100%; min-height: var(--control-height); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-paper); color: var(--color-ink); font: inherit; }
+.exportControls > button { min-height: var(--control-height); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-paper); color: var(--color-ink); font: inherit; cursor: pointer; }
+.exportActions :is(button,a) { min-height: var(--control-height-primary); border-radius: var(--radius-md); font-size: var(--text-base); }
+.exportProgress { border-radius: var(--radius-lg); border-color: var(--color-border); }
+.exportNote, .exportRetention p, .exportProgress small, .exportProgress strong { font-size: var(--text-sm); }
+.exportEmbedded { width: 100%; }
+.exportEmbedded .exportModal { width: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
+.collectionDrawer { z-index: var(--z-modal); background: var(--color-paper); border-color: var(--color-border); box-shadow: var(--shadow-modal); }
+.collectionContents { display: contents; }
+.collectionContents[hidden] { display: none; }
+.collectionExport { width: min(1040px, calc(100vw - var(--space-8))); }
+.collectionHeader { min-height: var(--studio-header-height); border-color: var(--color-border); padding: var(--space-3) var(--space-5); }
+.collectionHeader strong { font-size: var(--text-xl); font-weight: var(--font-semibold); }
+.collectionHeader button, .collectionTabs button { min-height: var(--control-height); border-radius: var(--radius-md); font-size: var(--text-base); }
+.inpaintControls { background: var(--color-paper); padding: var(--space-5); }
+.inpaintControls textarea, .inpaintControls select { min-height: var(--control-height); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--color-paper); color: var(--color-ink); font: var(--text-base)/var(--leading-relaxed) var(--font-sans); }
+.inpaintControls label, .inpaintControls p { font-size: var(--text-base); }
+.inpaintControls > div > span { font-size: var(--text-sm); letter-spacing: 0; }
+.inpaintSubmit, .maskActions button { min-height: var(--control-height); border-radius: var(--radius-md); font-size: var(--text-base); }
+.maskStage { background: var(--image-stage-background); }
+@media (max-width: 767px) { .exportLayout { grid-template-columns: 1fr; } .exportLayout > figure { min-height: 180px; max-height: 32dvh; } .exportLayout > figure img { max-height: 32dvh; } .exportControls { padding: var(--space-4); } .collectionHeader { flex-wrap: wrap; gap: var(--space-3); } .collectionDrawer[data-export-open="true"] { width: 100%; } }

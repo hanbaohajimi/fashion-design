@@ -8,6 +8,8 @@ import {
   prisma,
 } from "@fashion/db";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -96,7 +98,7 @@ describe("真实对象存储导出流水线", () => {
             ordinal: 1,
           },
         },
-        name: "Quiet Structure",
+        name: "静谧结构 / Quiet Structure",
         projectId,
       },
     });
@@ -177,6 +179,11 @@ describe("真实对象存储导出流水线", () => {
       width: 2_400,
     });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    if (process.env.TRIAL_E2E === "1") {
+      const directory = resolve("../../output/trial-runtime");
+      await mkdir(directory, { recursive: true });
+      await writeFile(resolve(directory, "lookbook.pdf"), pdf);
+    }
 
     for (const [index, exportJob] of created.entries()) {
       await cleanupExport(

@@ -1,6 +1,7 @@
 import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
 import sharp from "sharp";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   cleanupExport,
@@ -38,7 +39,10 @@ function exportRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("export processor", () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
   const database = {
+    $transaction: vi.fn(),
+    workflowOutbox: { upsert: vi.fn().mockResolvedValue({ id: "cleanup-event" }), update: vi.fn() },
     exportJob: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -64,6 +68,46 @@ describe("export processor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.exportJob.update.mockResolvedValue(exportRecord());
+    database.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(database));
+    database.exportJob.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("fails the entire PDF when any required Look image cannot be read", async () => {
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "Collection", dna: null,
+      looks: [{ ordinal: 1, designAsset: { url: "broken" } }] } }));
+    const processExport = createExportProcessor({ database: database as never, storage, download: async () => { throw new Error("private-storage-secret"); } });
+    await expect(processExport("export-a")).rejects.toMatchObject({ code: "EXPORT_LOOK_IMAGE_UNAVAILABLE" });
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty collection", async () => {
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "Empty", dna: null, looks: [] } }));
+    await expect(createExportProcessor({ database: database as never, storage })("export-a")).rejects.toMatchObject({ code: "EXPORT_COLLECTION_EMPTY" });
+  });
+
+  it("never removes Chinese text when the configured font is unavailable", async () => {
+    vi.stubEnv("EXPORT_PDF_FONT_PATH", "missing-trial-font.ttf");
+    const image = await source;
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "中文系列", dna: null, looks: [{ ordinal: 1, designAsset: { url: "image" } }] } }));
+    await expect(createExportProcessor({ database: database as never, storage, download: async () => image })("export-a")).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
+
+  const latinFont = ["C:/Windows/Fonts/arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"].find(existsSync);
+  it.skipIf(!latinFont)("rejects a loadable font whose glyphs cannot represent the Chinese title", async () => {
+    if (!latinFont) throw new Error("Latin font fixture is unavailable");
+    vi.stubEnv("EXPORT_PDF_FONT_PATH", latinFont);
+    const image = await source;
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "中文系列", dna: null, looks: [{ ordinal: 1, designAsset: { url: "image" } }] } }));
+    await expect(createExportProcessor({ database: database as never, storage, download: async () => image })("export-a")).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
+
+  it("refuses a renderer that no longer owns the lease", async () => {
+    database.exportJob.updateMany.mockResolvedValueOnce({ count: 0 });
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ status: ExportStatus.RUNNING }));
+    await expect(createExportProcessor({ database: database as never, storage })("export-a")).rejects.toMatchObject({ code: "EXPORT_LEASE_UNAVAILABLE" });
+    expect(storage.putTemporary).not.toHaveBeenCalled();
   });
 
   it("旧任务即使记录了 watermark=true 也输出无水印 PNG", async () => {
@@ -90,7 +134,7 @@ describe("export processor", () => {
     expect(metadata).toMatchObject({ format: "png", width: 1_600 });
     expect(corner.channels.every((channel) => channel.min > 160)).toBe(true);
     expect(storage.putTemporary).toHaveBeenCalledWith(
-      "temporary/exports/user-a/export-a.png",
+      expect.stringMatching(/^temporary\/exports\/user-a\/export-a-.*\.png$/u),
       expect.any(Buffer),
       "image/png",
     );
@@ -167,7 +211,7 @@ describe("export processor", () => {
       2,
     );
     expect(storage.putTemporary).toHaveBeenCalledWith(
-      "temporary/exports/user-a/export-a.pdf",
+      expect.stringMatching(/^temporary\/exports\/user-a\/export-a-.*\.pdf$/u),
       expect.any(Buffer),
       "application/pdf",
     );

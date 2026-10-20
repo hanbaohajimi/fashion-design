@@ -77,8 +77,15 @@ function bindingsFor(nodeId: string, edges: readonly WorkflowVersionEdge[], vers
   });
 }
 
-async function latestVersions(transaction: Prisma.TransactionClient, projectId: string): Promise<Map<string, WorkflowNodeVersion>> {
-  const rows = await transaction.workflowNodeVersion.findMany({ where: { projectId }, orderBy: { version: "desc" } });
+async function latestVersions(transaction: Prisma.TransactionClient, projectId: string, nodeIds: readonly string[]): Promise<Map<string, WorkflowNodeVersion>> {
+  if (!nodeIds.length) return new Map();
+  const rows = await transaction.$queryRaw<WorkflowNodeVersion[]>(Prisma.sql`
+    SELECT DISTINCT ON (v.node_id) v.id, v.node_id AS "nodeId", v.project_id AS "projectId", v.version,
+      v.graph_revision AS "graphRevision", v.kind, v.type, v.title, v.payload, v.input_bindings AS "inputBindings",
+      v.previous_version_id AS "previousVersionId", v.origin, v.actor_id AS "actorId", v.mutation_id AS "mutationId",
+      v.baseline, v.created_at AS "createdAt"
+    FROM workflow_node_versions v
+    WHERE v.project_id = ${projectId} AND v.node_id IN (${Prisma.join([...nodeIds])}) ORDER BY v.node_id, v.version DESC`);
   const result = new Map<string, WorkflowNodeVersion>();
   for (const row of rows) if (!result.has(row.nodeId)) result.set(row.nodeId, row);
   return result;
@@ -95,7 +102,7 @@ export async function ensureWorkflowNodeVersions(
   await transaction.$queryRaw(Prisma.sql`SELECT "project_id" FROM "workflow_graphs" WHERE "project_id" = ${projectId} FOR UPDATE`);
   const nodes: readonly WorkflowVersionNode[] = suppliedNodes ?? await transaction.workflowNode.findMany({ where: { projectId } });
   const edges: readonly WorkflowVersionEdge[] = suppliedEdges ?? await transaction.workflowEdge.findMany({ where: { projectId } });
-  const versions = await latestVersions(transaction, projectId);
+  const versions = await latestVersions(transaction, projectId, nodes.map((node) => node.id));
   for (const node of orderedNodes(nodes, edges)) {
     if (versions.has(node.id)) continue;
     const row = await transaction.workflowNodeVersion.create({ data: {

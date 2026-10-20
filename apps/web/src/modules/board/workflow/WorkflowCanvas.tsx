@@ -1,7 +1,10 @@
 "use client";
 
-import { privateFetch as fetch } from "../../auth/private-fetch";
 import Link from "next/link";
+import { Button, Dialog, SegmentedControl, Tooltip } from "../../../components/ui";
+import { STUDIO_LAYOUT, motionOptions } from "../../../components/ui-config";
+import controls from "../../../components/ui.module.css";
+import type { CSSProperties } from "react";
 import type { AgentRunView } from "@fashion/shared";
 import { getWorkflowToolCatalog, getWorkflowToolContract, type WorkflowToolKey } from "@fashion/shared";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -74,6 +77,7 @@ import { useWorkflowLayoutSave } from "./use-workflow-layout-save";
 import type { WorkflowLayoutSave } from "./workflow-layout-save";
 import { NodeDetails } from "./WorkflowNodeDetails";
 import { WorkflowMaterialEntry, WorkflowLibraryDialog } from "./WorkflowMaterialDialogs";
+import { useSerialPolling } from "../../use-serial-polling";
 
 const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 const cameraActionIds = new Set([
@@ -101,14 +105,6 @@ interface WorkflowCanvasProps {
 type AddKind = WorkflowAssetType | WorkflowToolType;
 type MenuTab = "assets" | "tools";
 type LibraryKind = "fabric" | "trend";
-
-interface LibraryItem {
-  readonly id: string;
-  readonly imageUrl: string | null;
-  readonly label: string;
-  readonly summary: string;
-  readonly sourceUrl?: string;
-}
 
 const ASSET_OPTIONS: readonly { type: WorkflowAssetType; title: string; hint: string }[] = [
   { type: "brief", title: "设计需求", hint: "目标、场景、必需条件" },
@@ -377,9 +373,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   const [menuTab, setMenuTab] = useState<MenuTab | null>(null);
   const [draftType, setDraftType] = useState<WorkflowAssetType | null>(null);
   const [libraryKind, setLibraryKind] = useState<LibraryKind | null>(null);
-  const [libraryItems, setLibraryItems] = useState<readonly LibraryItem[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [sketchOpen, setSketchOpen] = useState(false);
   const [workspaceAssetId, setWorkspaceAssetId] = useState<string | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
@@ -392,17 +387,44 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<"canvas" | "nodes" | "assistant">("canvas");
+  const [sidebarWidth, setSidebarWidth] = useState<number>(STUDIO_LAYOUT.sidebarDefault);
+  useEffect(() => {
+    const resize = () => setSidebarWidth((width) => Math.max(STUDIO_LAYOUT.sidebarMin, Math.min(width, window.innerWidth - STUDIO_LAYOUT.canvasMin)));
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  const detailDirty = useRef(false);
+  const [discardAction, setDiscardAction] = useState<(() => void) | null>(null);
+  const discardReply = useRef<((accepted: boolean) => void) | null>(null);
+  const beforeLeave = useCallback(() => {
+    if (!detailDirty.current) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      discardReply.current = (accepted) => { if (accepted) { detailDirty.current = false; resolve(); } else reject(new Error("保留未保存的参数")); };
+      setDiscardAction(() => () => undefined);
+    });
+  }, []);
+  const resizeSidebar = (width: number) => setSidebarWidth(Math.max(STUDIO_LAYOUT.sidebarMin, Math.min(STUDIO_LAYOUT.sidebarMax, window.innerWidth - STUDIO_LAYOUT.canvasMin, width)));
+  const cancelDiscard = () => {
+    discardReply.current?.(false); discardReply.current = null; setDiscardAction(null);
+    setActiveTab("details"); setSidebarOpen(true); setMobileView("assistant");
+    if (inspectedId) { setSelectedId(inspectedId); editorRef.current?.select(nodeShapeId(inspectedId)); }
+  };
+  const hasUnsavedDetails = useCallback(() => detailDirty.current, []);
+  const updateDetailDirty = useCallback((dirty: boolean) => { detailDirty.current = dirty; }, []);
   const selectNode = useCallback((id: string | null) => {
     setSelectedId(id);
   }, []);
   const openDetails = useCallback((id: string) => {
-    setSelectedId(id);
-    setInspectedId(id);
-    setActiveTab("details");
-    setSidebarOpen(true);
-    editorRef.current?.select(nodeShapeId(id));
-    requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="设计助手与节点详情"] h2')?.focus());
-  }, []);
+    const show = () => {
+      detailDirty.current = false;
+      setSelectedId(id); setInspectedId(id); setActiveTab("details"); setSidebarOpen(true); setMobileView("assistant");
+      editorRef.current?.select(nodeShapeId(id));
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-label="设计助手与节点详情"] h2')?.focus());
+    };
+    if (id !== inspectedId && detailDirty.current) setDiscardAction(() => show);
+    else { setSelectedId(id); setInspectedId(id); setActiveTab("details"); setSidebarOpen(true); setMobileView("assistant"); }
+  }, [inspectedId]);
   const pendingInputEdits = useRef(new Map<string, { planned: PlannedInputEdit; mutationId: string; baseRevision: number }>());
   const uploadRef = useRef<HTMLInputElement>(null);
   const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -440,16 +462,23 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     else if (previousRevision !== next.revision) setProposal(null);
   }, []);
 
+  const graphFlight = useRef<{ projectId: string; promise: Promise<WorkflowGraph>; signal: AbortSignal | null } | null>(null);
+  const loadGraph = useCallback((signal?: AbortSignal) => {
+    if (graphFlight.current?.projectId === projectId && !graphFlight.current.signal?.aborted) return graphFlight.current.promise;
+    const promise = fetchWorkflow(projectId, signal).finally(() => { if (graphFlight.current?.promise === promise) graphFlight.current = null; });
+    graphFlight.current = { projectId, promise, signal: signal ?? null };
+    return promise;
+  }, [projectId]);
   const reload = useCallback(async () => {
-    const next = await fetchWorkflow(projectId);
+    const next = await loadGraph();
     commitGraph(next);
-    setError(null);
     return next;
-  }, [commitGraph, projectId]);
+  }, [commitGraph, loadGraph]);
 
   useEffect(() => {
     let active = true;
-    void Promise.all([fetchWorkflow(projectId), fetchProject(projectId)]).then(
+    const controller = new AbortController();
+    void Promise.all([loadGraph(controller.signal), fetchProject(projectId)]).then(
       ([next, project]) => {
         if (!active) return;
         commitGraph(next);
@@ -462,15 +491,14 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
         setLoading(false);
       },
     );
-    return () => { active = false; };
-  }, [commitGraph, projectId]);
+    return () => { active = false; controller.abort(); };
+  }, [commitGraph, projectId, loadGraph]);
 
-  useEffect(() => {
-    if (!graph?.nodes.some((node) => node.status === "running" || node.status === "pending" ||
-      ((node.type === "reference_image" || node.type === "sketch") && node.payload.roleInferenceState === "pending" && node.payload.roleSource !== "manual"))) return;
-    const timer = window.setInterval(() => { void reload().catch(() => undefined); }, 3_000);
-    return () => window.clearInterval(timer);
-  }, [graph, reload]);
+  const sync = useSerialPolling(projectId, Boolean(graph?.nodes.some((node) => node.status === "running" || node.status === "pending" ||
+    ((node.type === "reference_image" || node.type === "sketch") && node.payload.roleInferenceState === "pending" && node.payload.roleSource !== "manual"))), 3000, async (signal) => {
+    const next = await loadGraph(signal);
+    signal.throwIfAborted(); commitGraph(next);
+  });
 
   useEffect(() => {
     const refresh = () => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); };
@@ -524,7 +552,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       }
     }
     setError(null);
-  }), (cause) => setError(cause instanceof Error ? cause.message : "节点位置保存失败"));
+  }), (cause) => setError(cause instanceof Error ? cause.message : "节点位置保存失败"), beforeLeave, hasUnsavedDetails);
   useLayoutEffect(() => { layoutQueueRef.current = layoutSave.queue; }, [layoutSave.queue]);
   const saveLayout = useCallback((positions: readonly { nodeId: string; x: number; y: number }[]) => {
     layoutSave.queue.stage(positions);
@@ -545,7 +573,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       setSelectedId(packet.planned.targetId);
       requestAnimationFrame(() => {
         editorRef.current?.select(nodeShapeId(packet.planned.targetId));
-        if (packet.planned.branched) editorRef.current?.zoomToSelection({ animation: { duration: 220 } });
+        if (packet.planned.branched) editorRef.current?.zoomToSelection(motionOptions());
       });
       setNotice(packet.planned.maskCleared ? `${packet.planned.branched ? "已建立新分支；" : ""}更换原图后，请重新框选局部区域` : packet.planned.branched ? "已建立新分支" : "连接已保存");
       setError(null);
@@ -586,7 +614,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       setDraftType(null);
       requestAnimationFrame(() => {
         editorRef.current?.select(nodeShapeId(id));
-        editorRef.current?.zoomToSelection({ animation: { duration: 220 } });
+        editorRef.current?.zoomToSelection(motionOptions());
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "节点添加失败");
@@ -609,8 +637,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       return;
     }
     if (type === "trend" || type === "fabric") {
-      setLibraryLoading(true);
-      setLibraryItems([]);
       setLibraryKind(type);
       setMenuTab(null);
       return;
@@ -653,27 +679,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     }
   };
 
-  useEffect(() => {
-    if (!libraryKind) return;
-    let active = true;
-    const url = libraryKind === "trend" ? "/api/trends?limit=30&page=1" : "/api/fabrics?limit=30&page=1&scope=all";
-    void fetch(url, { credentials: "include", cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("资料库读取失败");
-        const data = (await response.json()) as { readonly items?: readonly Record<string, unknown>[] };
-        return (data.items ?? []).map((item): LibraryItem => ({
-          id: String(item.id),
-          imageUrl: typeof item.coverImageUrl === "string" ? item.coverImageUrl : typeof item.mainImageUrl === "string" ? item.mainImageUrl : null,
-          label: libraryKind === "trend" ? String(item.title ?? "趋势") : (Array.isArray(item.tags) ? item.tags.join(" · ") : "面料参考"),
-          summary: libraryKind === "trend" ? String(item.summary ?? "") : "",
-          ...(typeof item.sourceUrl === "string" ? { sourceUrl: item.sourceUrl } : {}),
-        }));
-      })
-      .then((items) => { if (active) setLibraryItems(items); })
-      .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "资料库读取失败"); })
-      .finally(() => { if (active) setLibraryLoading(false); });
-    return () => { active = false; };
-  }, [libraryKind]);
 
   const importLegacy = async (item: LegacyBoardImport) => {
     const payload = item.payload;
@@ -718,7 +723,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   );
 
   return (
-    <main className={styles.shell} onKeyDownCapture={(event) => { if (event.key === "Tab" && !(event.target instanceof Element && event.target.closest("dialog[open]"))) event.stopPropagation(); }}>
+    <main className={styles.shell} style={{ "--studio-sidebar-width": `${sidebarWidth}px` } as CSSProperties} onKeyDownCapture={(event) => { if (event.key === "Tab" && !(event.target instanceof Element && event.target.closest("dialog[open]"))) event.stopPropagation(); }}>
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
           <Link aria-label="返回项目库" className={styles.brandIcon} href="/">◆</Link>
@@ -727,23 +732,25 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
           <span className={styles.projectName}>{projectName}</span>
           <span className={styles.workflowBadge}>设计工作流</span>
         </div>
-        <div className={styles.topActions}>
-          <span aria-live="polite" className={styles.saved} data-save-state={layoutSave.state}><span aria-hidden="true" /> {layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</span>
-          {layoutSave.pendingCount > 0 ? <span className={styles.saved} aria-label="待保存节点数">{layoutSave.pendingCount} 个节点待保存</span> : null}
-          {layoutSave.state === "error" ? <button onClick={() => void layoutSave.queue.flush().catch(() => undefined)} type="button">重试保存</button> : null}
+        <div className={`${styles.topActions} ${controls.controlSurface}`}>
+          <details className={styles.syncStatus} open={sync.error || layoutSave.state === "error" ? true : undefined}>
+            <summary className={styles.saved} data-save-state={sync.error ? "error" : layoutSave.state}><span aria-hidden="true" />{sync.error ? "同步异常" : layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</summary>
+            <div>{layoutSave.pendingCount > 0 ? <p aria-label="待保存节点数">{layoutSave.pendingCount} 个节点待保存</p> : <p>所有节点位置已保存</p>}{sync.lastSuccess ? <p>最近同步 {new Date(sync.lastSuccess).toLocaleTimeString("zh-CN")}</p> : null}{sync.error ? <p role="status">画布同步异常：{sync.error}<Button onClick={sync.retry}>重试同步</Button></p> : null}{layoutSave.state === "error" ? <Button onClick={() => void layoutSave.queue.flush().catch(() => undefined)}>重试保存</Button> : null}</div>
+          </details>
           <Link href={`/trends?from=board&boardId=${encodeURIComponent(projectId)}`}>趋势</Link>
-          <Link href="/fabrics">面料</Link>
+          <Link href={`/fabrics?from=board&boardId=${encodeURIComponent(projectId)}`}>面料</Link>
           {graph.legacyAvailable ? <button onClick={() => setHistoryOpen(true)} type="button">历史白板</button> : null}
-          <button data-export disabled={exporting} onClick={() => void exportCanvas()} type="button">{exporting ? "导出中…" : "导出 PNG"}</button>
-          {!sidebarOpen ? <button aria-label="展开设计助手" onClick={() => { setSidebarOpen(true); setActiveTab("assistant"); }} type="button">设计助手</button> : null}
+          <button data-export disabled={exporting} onClick={() => void exportCanvas()} type="button">{exporting ? "导出中…" : "导出画布 PNG"}</button>
+          {!sidebarOpen ? <button aria-label="展开设计助手" onClick={() => { setSidebarOpen(true); setActiveTab("assistant"); setMobileView("assistant"); }} type="button">设计助手</button> : null}
         </div>
       </header>
 
-      <div className={styles.workspace} data-sidebar-open={sidebarOpen ? "true" : "false"}>
+      <div className={styles.mobileViews}><SegmentedControl label="工作视图" value={mobileView} options={[{ value: "canvas", label: "画布" }, { value: "nodes", label: "节点列表" }, { value: "assistant", label: "助手" }]} onChange={(view) => { setMobileView(view); setMobileListOpen(view === "nodes"); if (view === "assistant") setSidebarOpen(true); }} /></div>
+      <div className={styles.workspace} data-mobile-view={mobileView} data-sidebar-open={sidebarOpen ? "true" : "false"}>
         <section aria-label="设计工作流画布" className={styles.canvasSection} data-mobile-list-open={mobileListOpen ? "true" : "false"}>
           <div className={styles.canvasHeading}>
             <div>
-              <span className={styles.overline}>DESIGN PATH / 设计轨迹</span>
+              <span className={styles.overline}>设计轨迹</span>
               <h1>从需求到方案的完整设计路径</h1>
               <p>素材、工具和结果逐步连接；修改会形成可回溯的分支。</p>
             </div>
@@ -768,7 +775,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             </WorkflowInteractionProvider>
             {graph.nodes.length === 0 ? (
               <div className={styles.emptyState}>
-                <span>DESIGN PATH / 01</span>
+                <span>开始创作</span>
                 <h2>从一条设计需求开始</h2>
                 <p>记录场景和目标，再把参考、工具与生成结果连成完整路径。</p>
                 <button onClick={() => handleAssetOption("brief")} type="button">添加设计需求</button>
@@ -788,17 +795,18 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             </div>
           ) : null}
 
-          <div className={styles.zoomControls}>
+          <div className={`${styles.zoomControls} ${controls.controlSurface}`}>
             <button aria-label="缩小画布" onClick={() => editorRef.current?.zoomOut()} type="button">−</button>
-            <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit({ animation: { duration: 220 } })} type="button">查看全图</button>
+            <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit(motionOptions())} type="button">查看全图</button>
             <button aria-label="画布原始比例" onClick={() => editorRef.current?.resetZoom()} type="button">100%</button>
             <button aria-label="放大画布" onClick={() => editorRef.current?.zoomIn()} type="button">＋</button>
           </div>
 
-          <div className={styles.bottomMenu}>
+          <div className={`${styles.bottomMenu} ${controls.controlSurface}`}>
             <button data-material-trigger aria-expanded={menuTab === "assets"} onClick={() => setMenuTab(menuTab === "assets" ? null : "assets")} type="button">＋ 添加素材</button>
             <span className={styles.menuDivider} />
             <button aria-expanded={menuTab === "tools"} onClick={() => setMenuTab(menuTab === "tools" ? null : "tools")} type="button">＋ 添加工具</button>
+            <Tooltip content="查看素材、连线、保存与导出操作说明"><Button aria-label="工作室帮助" variant="ghost" onClick={() => setHelpOpen(true)}>?</Button></Tooltip>
             {menuTab ? (
               <div className={styles.addPopover}>
                 <header><strong>{menuTab === "assets" ? "添加设计素材" : "添加设计工具"}</strong><button aria-label="关闭菜单" onClick={() => setMenuTab(null)} type="button">×</button></header>
@@ -816,18 +824,20 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
           {!sidebarOpen && (error || notice) ? <div aria-live="polite" className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice}`} role={error ? "alert" : "status"}>{error ?? notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
         </section>
 
-        <aside aria-label="设计助手与节点详情" className={styles.sidebar} hidden={!sidebarOpen}>
+        {sidebarOpen ? <div aria-label="调整侧栏宽度" aria-orientation="vertical" aria-valuemin={STUDIO_LAYOUT.sidebarMin} aria-valuemax={STUDIO_LAYOUT.sidebarMax} aria-valuenow={sidebarWidth} className={styles.sidebarResizer} role="separator" tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); resizeSidebar(sidebarWidth + (event.key === "ArrowLeft" ? STUDIO_LAYOUT.resizeStep : -STUDIO_LAYOUT.resizeStep)); } }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeSidebar(window.innerWidth - event.clientX); }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); }} /> : null}
+        <aside aria-label="设计助手与节点详情" className={`${styles.sidebar} ${controls.controlSurface}`} hidden={!sidebarOpen}>
           <div className={styles.sidebarHeader}>
             <h2 tabIndex={-1}>{activeTab === "details" ? "节点详情" : "设计助手"}</h2>
             <div className={styles.sidebarActions}>
               {activeTab === "details" ? <button className={styles.sidebarNavigation} onClick={() => setActiveTab("assistant")} type="button">返回对话</button> : selected ? <button className={styles.sidebarNavigation} onClick={() => openDetails(selected.id)} type="button">节点详情</button> : null}
-              <button aria-label="收起设计助手" className={styles.sidebarCollapse} onClick={() => setSidebarOpen(false)} type="button">收起</button>
+              <button aria-label="收起设计助手" className={styles.sidebarCollapse} onClick={() => { setSidebarOpen(false); setMobileView("canvas"); }} type="button">收起</button>
             </div>
           </div>
-          {activeTab === "details" ? (
+          <div className={styles.detailsMount} hidden={activeTab !== "details"}>
             <NodeDetails
               graph={graph}
               key={inspected?.id ?? "none"}
+              onDirtyChange={updateDetailDirty}
               node={inspected}
               onCreateCollection={async (nodeId, assetId) => {
                 setBusy(true);
@@ -856,20 +866,21 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
               }}
               setError={setError}
             />
-          ) : null}
+          </div>
           <div className={styles.assistantMount} hidden={activeTab !== "assistant"}>
-            <WorkflowAssistantPanel graph={graph} onConversationChange={setActiveConversationId} onGraphChange={commitGraph} onNotice={setNotice} onError={setError} onProposal={setProposal} projectId={projectId} selected={selected} onLocate={(nodeId) => { setSelectedId(nodeId); editorRef.current?.select(nodeShapeId(nodeId)); editorRef.current?.zoomToSelection({ animation: { duration: 220 } }); }} renderLegacyRuns={(conversationId) => <LegacyRunHistory conversationId={conversationId} onError={setError} />} />
+            <WorkflowAssistantPanel graph={graph} onConversationChange={setActiveConversationId} onGraphChange={commitGraph} onNotice={setNotice} onError={setError} onProposal={setProposal} projectId={projectId} selected={selected} onLocate={(nodeId) => { setSelectedId(nodeId); editorRef.current?.select(nodeShapeId(nodeId)); editorRef.current?.zoomToSelection(motionOptions()); }} renderLegacyRuns={(conversationId) => <LegacyRunHistory conversationId={conversationId} onError={setError} />} />
           </div>
           {sidebarOpen && (error || notice) ? <div aria-live="polite" className={error ? styles.errorNotice : styles.successNotice} role={error ? "alert" : "status"}>{error ?? notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
         </aside>
       </div>
 
+      {discardAction ? <Dialog label="保留未保存的参数" onClose={cancelDiscard}><div className={styles.entryDialog}><h2>参数尚未保存</h2><p>继续会放弃当前节点的修改。也可以返回，先保存参数。</p><div className={styles.dialogActions}><Button onClick={cancelDiscard}>返回编辑</Button><Button variant="danger" onClick={() => { discardReply.current?.(true); discardReply.current = null; discardAction(); setDiscardAction(null); }}>放弃修改并继续</Button></div></div></Dialog> : null}
       <input accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); }} ref={uploadRef} type="file" />
       {draftType && draftType !== "reference_image" && draftType !== "sketch" ? (
         <WorkflowMaterialEntry key={draftType} type={draftType} initialTitle={ASSET_OPTIONS.find((item) => item.type === draftType)?.title ?? "参考素材"} busy={busy} onClose={() => setDraftType(null)}
           onAdd={async (title, payload) => { await addNode("asset", draftType, title, payload); }} />
       ) : null}
-      {libraryKind ? <WorkflowLibraryDialog kind={libraryKind} items={libraryItems} loading={libraryLoading} onClose={() => setLibraryKind(null)} onAdd={async (item) => {
+      {libraryKind ? <WorkflowLibraryDialog kind={libraryKind} onClose={() => setLibraryKind(null)} onAdd={async (item) => {
         await addNode("asset", libraryKind, item.label.slice(0, 200), {
           [libraryKind === "trend" ? "trendItemId" : "fabricId"]: item.id,
           imageUrl: item.imageUrl, text: item.summary, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
@@ -877,7 +888,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
         setLibraryKind(null);
       }} /> : null}
       {historyOpen ? <LegacyBoardHistory onClose={() => setHistoryOpen(false)} onImport={importLegacy} projectId={projectId} /> : null}
-      {workspaceAssetId ? <WorkflowAssetWorkspace assetId={workspaceAssetId} onEnsureConversation={ensureConversation} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /> : null}
+      {helpOpen ? <Dialog label="工作室使用帮助" onClose={() => setHelpOpen(false)}><div className={styles.entryDialog}><h2>开始你的设计</h2><ol><li>通过“添加素材”上传参考图、绘制草图，或选择面料与趋势素材。</li><li>添加工具，将素材右侧连接点拖到工具的输入位置。</li><li>单击选择节点，打开“节点详情”设置参数，保存后确认执行。</li><li>在助手输入框描述目标，或用 @ 引用画布内容；提案需确认后才会加入画布。</li><li>画布位置会自动保存。顶部保存状态可查看同步时间并重试失败操作。</li><li>“导出画布 PNG”保存设计路径。候选图与系列在各自工作区导出交付文件，关闭窗口不会取消任务。</li></ol><Button variant="primary" onClick={() => setHelpOpen(false)}>知道了</Button></div></Dialog> : null}
+      {workspaceAssetId ? <BoardProjectContext.Provider value={projectId}><WorkflowAssetWorkspace assetId={workspaceAssetId} onEnsureConversation={ensureConversation} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /></BoardProjectContext.Provider> : null}
       <WorkflowSketchEditor onClose={() => setSketchOpen(false)} onCreated={async ({ fileAssetId, title, imageUrl }) => {
         const nodeId = await addNode("asset", "sketch", title, {
           fileAssetId,

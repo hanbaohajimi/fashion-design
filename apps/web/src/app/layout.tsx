@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
 
-import "../styles/design-system.css";
 import "./globals.css";
 import "tldraw/tldraw.css";
 

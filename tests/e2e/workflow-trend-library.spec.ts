@@ -105,6 +105,10 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
   await expect(
     page.getByRole("heading", { name: "趋势档案", exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "秋冬通勤色彩", exact: true })).toBeHidden();
+  await page.getByText("本周趋势综述", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "秋冬通勤色彩", exact: true })).toBeVisible();
+  await page.getByText("本周趋势综述", { exact: true }).click();
   await expect(
     page
       .getByRole("region", { name: "趋势筛选" })

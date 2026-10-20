@@ -19,9 +19,11 @@ export type CoordinatorInput = {
   referencedNodeIds: string[]; focusNodeIds?: string[]; trigger?: "user" | "observation";
   readPolicy?: ReadPolicy; previousPlan?: unknown;
   initialBudget?: { modelCalls: number; readRounds: number; repairUsed: boolean };
+  deadlineAt?: number;
+  signal?: AbortSignal;
   reserveBudget?: (budget: { modelCalls: number; readRounds: number; repairUsed: boolean }) => Promise<void>;
 };
-const MAX_PLANNER_CALLS = 5;
+export const MAX_PLANNER_CALLS = 5;
 const MAX_READ_ROUNDS = 3;
 
 /** Fig.8: observe/integrate -> one planner -> bounded reads -> validated action preparation. */
@@ -37,6 +39,16 @@ export class WorkflowCoordinator {
   ) {}
 
   async run(input: CoordinatorInput) {
+    if ((input.initialBudget?.modelCalls ?? 0) >= MAX_PLANNER_CALLS) throw Object.assign(new Error("本轮调用预算已用尽，请发送新请求"), { code: "WORKFLOW_BUDGET_EXHAUSTED" });
+    const deadlineAt = input.deadlineAt ?? Date.now() + 15 * 60_000;
+    const signal = AbortSignal.any([AbortSignal.timeout(Math.max(1, deadlineAt - Date.now() - 5_000)), ...(input.signal ? [input.signal] : [])]);
+    const remaining = () => {
+      signal.throwIfAborted();
+      const ms = deadlineAt - Date.now() - 5_000;
+      if (ms <= 0) throw Object.assign(new Error("设计助手处理超时，请重试"), { code: "WORKFLOW_TURN_TIMEOUT" });
+      return ms;
+    };
+    remaining();
     const built = await this.contexts.build(input.userId, input.projectId, {
       ...(input.conversationId ? { conversationId: input.conversationId } : {}), referencedNodeIds: input.referencedNodeIds,
       ...(input.focusNodeIds ? { focusNodeIds: input.focusNodeIds } : {}),
@@ -49,13 +61,16 @@ export class WorkflowCoordinator {
     const [visual, profile, versions, attempts, declined] = await Promise.all([
       this.visual.enrich(input.userId, input.projectId, built.graph.nodes, [...input.referencedNodeIds, ...built.context.focusNodeIds]),
       this.contexts.get(input.userId, input.projectId),
-      this.database.workflowNodeVersion.findMany({ where: { projectId: input.projectId }, orderBy: { version: "desc" } }),
+      built.graph.nodes.length ? this.database.$queryRaw<{ id: string; nodeId: string; origin: string; baseline: boolean }[]>(Prisma.sql`
+        SELECT DISTINCT ON (node_id) id, node_id AS "nodeId", origin, baseline FROM workflow_node_versions
+        WHERE project_id = ${input.projectId} AND node_id IN (${Prisma.join(built.graph.nodes.map((node) => node.id))})
+        ORDER BY node_id, version DESC`) : Promise.resolve([]),
       this.database.workflowAttempt.groupBy({ by: ["toolNodeId"], where: { projectId: input.projectId }, _count: true }),
       this.database.workflowProposal.findMany({ where: { projectId: input.projectId, status: "rejected", ...(input.conversationId ? { conversationId: input.conversationId } : {}) },
         orderBy: { createdAt: "desc" }, take: 30, select: { id: true, actionFingerprint: true, rejectionReason: true, evidence: true } }),
     ]);
-    const eligibility: Record<string, { nodeVersionId: string; attemptCount: number }> = {};
-    for (const version of versions) if (!eligibility[version.nodeId]) eligibility[version.nodeId] = { nodeVersionId: version.id,
+    const eligibility: Record<string, { nodeVersionId: string; attemptCount: number; copiedSnapshot: boolean }> = {};
+    for (const version of versions) if (!eligibility[version.nodeId]) eligibility[version.nodeId] = { nodeVersionId: version.id, copiedSnapshot: version.origin === "project_copy" && version.baseline,
       attemptCount: attempts.find((attempt) => attempt.toolNodeId === version.nodeId)?._count ?? 0 };
     const tools = getWorkflowToolCatalog();
     const integrated = this.integration ? await this.integration.integrate(input.userId, input.projectId, {
@@ -63,7 +78,7 @@ export class WorkflowCoordinator {
     }) : { context: built.context, slots: undefined };
     const projected = projectPlannerVisualIndex(visual.index);
     const context = { ...integrated.context, nodes: built.context.nodes.map((node) => ({ ...node, nodeVersionId: eligibility[node.id]?.nodeVersionId ?? null,
-      attemptCount: eligibility[node.id]?.attemptCount ?? 0 })),
+      attemptCount: eligibility[node.id]?.attemptCount ?? 0, copiedSnapshot: eligibility[node.id]?.copiedSnapshot ?? false })),
       inactivePreferences: profile.state.preferences.filter((item) => item.status === "inactive"),
       visualIndex: projected.index, visualSummaryCoverage: projected.coverage, visualCoverage: visual.coverage, imageBindings: visual.imageBindings,
       declinedProposals: declined.map((proposal) => ({ id: proposal.id, reason: proposal.rejectionReason,
@@ -80,11 +95,13 @@ export class WorkflowCoordinator {
     const reserve = () => input.reserveBudget?.({ modelCalls: calls, readRounds, repairUsed: repaired });
     let decision: PlannerDecision | undefined;
     for (; calls < MAX_PLANNER_CALLS;) {
+      const timeoutMs = remaining();
       calls += 1;
       await reserve();
       let parsed = false;
       try {
         decision = parsePlannerDecision(await this.model.generateJson({ schemaName: "fashion_workflow_collaboration",
+          signal, timeoutMs,
           instructions: `${WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。read只请求项目内补读，不能执行设计工具。当前计划是可修订目标，只有下一项动作可以成为待审提案。\n后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好。`,
           jsonSchema: z.toJSONSchema(plannerDecisionSchema), maxTokens: 6_000, images: attached.images,
           prompt: JSON.stringify({ request: input.request, trigger: input.trigger ?? "user", context: { ...projectedContext.context, imageBindings: attached.imageBindings, visualCoverage: attached.coverage },
@@ -95,6 +112,7 @@ export class WorkflowCoordinator {
             ...(validationError ? { correction: "仅修正所列格式或输入错误；不要增加新的设计要求。" } : {}),
           }), parse: parsePlannerDecision,
         }));
+        remaining();
         parsed = true;
         if (decision.kind === "read") {
           if (readRounds >= MAX_READ_ROUNDS || calls >= MAX_PLANNER_CALLS) throw new Error("补读预算已用尽，请根据真实已读信息回答或澄清");
@@ -102,6 +120,7 @@ export class WorkflowCoordinator {
           readRounds += 1;
           await reserve();
           for (const read of decision.reads) {
+            remaining();
             const result = await gateway.read(input.userId, input.projectId, input.conversationId, built.graph, read, input.readPolicy);
             readResults.push(result.result);
             if (result.visual) attached = mergeVisual(result.visual, attached);
@@ -136,6 +155,7 @@ export class WorkflowCoordinator {
       }
     }
     if (!decision || decision.kind === "read" || validationError) throw new Error("设计助手未在预算内形成有效回复");
+    remaining();
     return { decision, built, profile, visual: attached, eligibility, calls, readRounds, repairUsed: repaired, readResults,
       coverage: "coverage" in integrated ? integrated.coverage : built.context.coverage,
       observation: { ...projectedContext.context, imageBindings: attached.imageBindings, visualCoverage: attached.coverage },

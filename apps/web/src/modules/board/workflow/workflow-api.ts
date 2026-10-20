@@ -147,10 +147,11 @@ function graphUrl(projectId: string): string {
   return `/api/projects/${encodeURIComponent(projectId)}/workflow`;
 }
 
-export async function fetchWorkflow(projectId: string): Promise<WorkflowGraph> {
+export async function fetchWorkflow(projectId: string, signal?: AbortSignal): Promise<WorkflowGraph> {
   const response = await fetch(`${graphUrl(projectId)}/sync`, {
     cache: "no-store",
     credentials: "include",
+    signal: signal ?? null,
   });
   if (!response.ok) throw await responseError(response, "设计工作流读取失败");
   return (await response.json()) as WorkflowGraph;

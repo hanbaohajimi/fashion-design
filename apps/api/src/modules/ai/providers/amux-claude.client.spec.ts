@@ -1,7 +1,32 @@
 import { AmuxClaudeClient } from "@fashion/ai";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 describe("AmuxClaudeClient", () => {
+  it("decodes schema-declared JSON containers without changing ordinary text", async () => {
+    const schema = z.object({ checks: z.array(z.object({ text: z.string() })), note: z.string() }).strict();
+    const transport = vi.fn().mockResolvedValue({ stop_reason: "tool_use", content: [{ type: "tool_use", name: "evaluation", input: {
+      checks: JSON.stringify([{ text: "visible structure" }]), note: '["this must remain text"]',
+    } }] });
+    const client = new AmuxClaudeClient({ apiKey: () => "test", baseUrl: "https://model.test", model: "test", timeoutMs: 1000 }, transport);
+    await expect(client.generateJson({ instructions: "test", jsonSchema: z.toJSONSchema(schema), maxTokens: 100, prompt: "test", schemaName: "evaluation", parse: (value) => schema.parse(value) }))
+      .resolves.toEqual({ checks: [{ text: "visible structure" }], note: '["this must remain text"]' });
+  });
+  it("aborts the actual HTTP request when the turn is canceled", async () => {
+    const controller = new AbortController();
+    let captured: AbortSignal | null = null;
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+      captured = init.signal ?? null;
+      return new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true }));
+    }));
+    try {
+      const client = new AmuxClaudeClient({ apiKey: () => "test", baseUrl: "https://model.test", model: "test", timeoutMs: 10_000 });
+      const request = client.generateJson({ signal: controller.signal, timeoutMs: 5000, instructions: "test", jsonSchema: { type: "object" }, maxTokens: 20, prompt: "test", schemaName: "test", parse: (value) => value });
+      controller.abort(new DOMException("Turn expired", "AbortError"));
+      await expect(request).rejects.toMatchObject({ name: "AbortError" });
+      expect((captured as AbortSignal | null)?.aborted).toBe(true);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("通过 Amux Anthropic Messages 强制 Claude 工具调用返回结构化 JSON", async () => {
     const transport = vi.fn().mockResolvedValue({
       content: [

@@ -13,7 +13,7 @@ describe("design token contract", () => {
   it("requires every non-fallback variable to be defined or supplied by a component", () => {
     const contents = filesIn(resolve(process.cwd(), "src")).map((path) => ({ path, text: readFileSync(path, "utf8").replace(/\/\*[\s\S]*?\*\//gu, "") }));
     const defined = new Set(contents.flatMap(({ text }) => [...text.matchAll(/(--[\w-]+)\s*:/gu)].map((match) => match[1])));
-    const dynamic = new Set(["--cover-color", "--similarity-alpha"]);
+    const dynamic = new Set(["--cover-color", "--similarity-alpha", "--studio-sidebar-width"]);
     const missing = contents.flatMap(({ path, text }) => [...text.matchAll(/var\(\s*(--[\w-]+)\s*\)/gu)]
       .filter((match) => !defined.has(match[1]) && !dynamic.has(match[1] ?? ""))
       .map((match) => `${path}: ${match[1]}`));

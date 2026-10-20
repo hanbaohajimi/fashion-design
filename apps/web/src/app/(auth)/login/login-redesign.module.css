@@ -205,6 +205,8 @@
   }
 }
 
+
+
 /* ========================================
    ACCESSIBILITY
    ======================================== */
@@ -216,3 +218,15 @@
     transition: none;
   }
 }
+
+.page { background: var(--color-canvas); }
+.formPanel { width: min(100%, 460px); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-paper); padding: var(--space-10); }
+.formTitle { font-family: var(--font-sans); font-weight: var(--font-semibold); font-size: var(--text-3xl); }
+.brand { letter-spacing: 0; font-size: var(--text-base); }
+.intro { font-size: var(--text-base); }
+.form label { letter-spacing: 0; font-weight: var(--font-medium); margin-bottom: 0; }
+.form input { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--color-paper); font-size: var(--text-lg); }
+.form input:focus { outline: 2px solid var(--color-signal); outline-offset: 2px; }
+.form button { min-height: var(--control-height-primary); font-size: var(--text-base); letter-spacing: 0; border-radius: var(--radius-md); }
+.form button:hover:not(:disabled) { transform: none; box-shadow: none; }
+@media (max-width: 600px) { .formPanel { padding: var(--space-6); } }

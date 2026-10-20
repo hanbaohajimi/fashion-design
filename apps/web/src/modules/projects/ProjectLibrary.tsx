@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { AppHeader } from "../../components/AppHeader";
+import { Button, Skeleton } from "../../components/ui";
+import controls from "../../components/ui.module.css";
 import { useGuardedRouter as useRouter } from "../use-guarded-router";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
@@ -19,7 +22,6 @@ import {
 } from "./use-projects";
 import {
   clearActiveBoardId,
-  PROJECT_LIBRARY_TRENDS_PATH,
   readActiveBoardId,
   writeActiveBoardId,
 } from "../trends/active-board";
@@ -177,7 +179,7 @@ export function ProjectLibrary() {
         idempotencyKey,
         projectId: project.id,
       })
-      .then(() => undefined)
+      .then(() => { setNotice("已复制当前设计；历史对话和执行记录保留在原项目"); })
       .catch((error: unknown) => {
         setNotice(errorMessage(error));
       })
@@ -247,43 +249,8 @@ export function ProjectLibrary() {
   }
 
   return (
-    <main className={styles.library}>
-      <header className={styles.topbar}>
-        <Link
-          className={styles.brand}
-          href="/"
-          aria-label="Atelier 设计工作室 首页"
-        >
-          <strong>Atelier 设计工作室</strong>
-        </Link>
-        <nav aria-label="工作区导航" className={styles.navigation}>
-          <Link aria-current="page" className={styles.navLinkActive} href="/">
-            项目库
-          </Link>
-          <Link className={styles.navLink} href={PROJECT_LIBRARY_TRENDS_PATH}>
-            趋势档案
-          </Link>
-          <Link className={styles.navLink} href="/fabrics">
-            面料库
-          </Link>
-        </nav>
-        <div className={styles.account}>
-          <span>{session.user.email}</span>
-          <span className={styles.avatar} aria-hidden="true">
-            {(session.user.name ?? session.user.email)
-              .slice(0, 1)
-              .toUpperCase()}
-          </span>
-          <button
-            className={styles.logoutButton}
-            disabled={logoutPending}
-            onClick={() => void runLogout()}
-            type="button"
-          >
-            {logoutPending ? "正在退出…" : "退出登录"}
-          </button>
-        </div>
-      </header>
+    <main className={`${styles.library} ${controls.controlSurface}`}>
+      <AppHeader current="projects" account={<><span>{session.user.email}</span><Button size="small" loading={logoutPending} onClick={() => void runLogout()}>退出登录</Button></>} />
 
       <section className={styles.dashboard} aria-label="项目库">
         <h1 className={styles.dashboardTitle}>项目库</h1>
@@ -330,17 +297,12 @@ export function ProjectLibrary() {
           />
         </label>
         <span aria-live="polite" className={styles.projectCount} role="status">
-          {String(total).padStart(2, "0")}{" "}
-          {projectStatus === "archived" ? "ARCHIVED" : "PROJECTS"}
+          {total} 个{projectStatus === "archived" ? "归档项目" : "项目"}
         </span>
-        <button
-          className={styles.primaryButton}
-          onClick={() => setCreateOpen(true)}
-          type="button"
-        >
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
           <span aria-hidden="true">＋</span>
           新建项目
-        </button>
+        </Button>
       </section>
 
       {notice ? (
@@ -355,7 +317,7 @@ export function ProjectLibrary() {
       {projectsQuery.isPending ? (
         <section className={styles.skeletonGrid} aria-label="正在加载项目">
           {Array.from({ length: 6 }, (_, index) => (
-            <span key={index} />
+            <Skeleton key={index} label="正在加载项目卡片" className={styles.projectSkeleton} />
           ))}
         </section>
       ) : projectsQuery.isError ? (

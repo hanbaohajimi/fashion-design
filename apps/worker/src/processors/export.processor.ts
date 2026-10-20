@@ -1,6 +1,7 @@
-import { ExportFormat, ExportStatus, type PrismaClient } from "@fashion/db";
+import { ExportFormat, ExportStatus, appendWorkflowOutbox, type PrismaClient } from "@fashion/db";
 import { EXPORT_RETENTION_MS, PLATFORM_NAME } from "@fashion/shared";
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
 
@@ -46,15 +47,36 @@ export function createExportProcessor({
   return async (
     exportId: string,
   ): Promise<{ expiresAt: Date; objectKey: string }> => {
-    await database.exportJob.update({
-      where: { id: exportId },
+    const leaseToken = randomUUID();
+    const started = now();
+    const deadline = started.getTime() + 5 * 60_000;
+    const claimed = await database.exportJob.updateMany({
+      where: { id: exportId, OR: [{ status: ExportStatus.QUEUED }, { status: ExportStatus.FAILED },
+        { status: ExportStatus.RUNNING, OR: [{ leaseExpiresAt: { lte: started } }, { leaseExpiresAt: null, updatedAt: { lt: new Date(started.getTime() - 60_000) } }] }] },
       data: {
         errorCode: null,
         errorMessage: null,
         startedAt: now(),
         status: ExportStatus.RUNNING,
+        leaseToken,
+        leaseExpiresAt: new Date(started.getTime() + 60_000),
       },
     });
+    if (!claimed.count) {
+      const current = await database.exportJob.findUnique({ where: { id: exportId } });
+      if (current?.status === ExportStatus.SUCCEEDED && current.objectKey && current.expiresAt) return { objectKey: current.objectKey, expiresAt: current.expiresAt };
+      throw exportFailure("EXPORT_LEASE_UNAVAILABLE", "导出任务已由其他执行处理或已结束");
+    }
+    let leaseLost = false;
+    let heartbeatFlight: Promise<unknown> | undefined;
+    const heartbeat = setInterval(() => {
+      if (heartbeatFlight) return;
+      heartbeatFlight = database.exportJob.updateMany({ where: { id: exportId, leaseToken, status: ExportStatus.RUNNING },
+        data: { leaseExpiresAt: new Date(Math.min(deadline, now().getTime() + 60_000)) } })
+        .then((result) => { if (!result.count) leaseLost = true; }).catch(() => { leaseLost = true; }).finally(() => { heartbeatFlight = undefined; });
+    }, 20_000);
+    heartbeat.unref();
+    let writtenKey: string | undefined;
 
     try {
       const exportJob = await database.exportJob.findUnique({
@@ -74,13 +96,18 @@ export function createExportProcessor({
               downloadStored(stored, storage, download),
             );
       const extension = exportJob.format.toLowerCase();
-      const objectKey = `temporary/exports/${exportJob.userId}/${exportJob.id}.${extension}`;
+      if (leaseLost || now().getTime() >= deadline) throw exportFailure("EXPORT_TIMEOUT", "导出超过处理期限，请重试");
+      const objectKey = `temporary/exports/${exportJob.userId}/${exportJob.id}-${leaseToken}.${extension}`;
+      writtenKey = objectKey;
+      await database.$transaction((tx) => appendWorkflowOutbox(tx, { projectId: exportJob.projectId,
+        eventKey: `export:${exportJob.id}:${leaseToken}:cleanup`, eventType: "export.cleanup",
+        payload: { exportId: exportJob.id, objectKey } }).then((event) => tx.workflowOutbox.update({ where: { id: event.id }, data: { availableAt: new Date(now().getTime() + EXPORT_RETENTION_MS) } })));
       await storage.putTemporary(objectKey, rendered.body, rendered.mimeType);
 
       const completedAt = now();
       const expiresAt = new Date(completedAt.getTime() + EXPORT_RETENTION_MS);
-      await database.exportJob.update({
-        where: { id: exportJob.id },
+      const committed = await database.exportJob.updateMany({
+        where: { id: exportJob.id, leaseToken, status: ExportStatus.RUNNING, leaseExpiresAt: { gt: completedAt } },
         data: {
           completedAt,
           expiresAt,
@@ -89,22 +116,35 @@ export function createExportProcessor({
           objectKey,
           sizeBytes: rendered.body.byteLength,
           status: ExportStatus.SUCCEEDED,
+          leaseToken: null,
+          leaseExpiresAt: null,
         },
       });
+      if (!committed.count) throw exportFailure("EXPORT_LEASE_LOST", "导出执行已被恢复任务替代");
       return { expiresAt, objectKey };
     } catch (error) {
       const failure = toExportFailure(error);
       await database.exportJob
-        .update({
-          where: { id: exportId },
+        .updateMany({
+          where: { id: exportId, leaseToken, status: ExportStatus.RUNNING },
           data: {
             errorCode: failure.code,
             errorMessage: failure.message,
             status: ExportStatus.FAILED,
+            leaseToken: null,
+            leaseExpiresAt: null,
           },
         })
         .catch(() => undefined);
+      // Unique per-lease keys prevent an old renderer from deleting or overwriting a newer result.
+      if (writtenKey) {
+        const current = await database.exportJob.findUnique({ where: { id: exportId }, select: { objectKey: true, status: true } }).catch(() => null);
+        if (current && current.objectKey !== writtenKey) await storage.delete(writtenKey).catch(() => undefined);
+      }
       throw error;
+    } finally {
+      clearInterval(heartbeat);
+      await heartbeatFlight;
     }
   };
 }
@@ -193,6 +233,7 @@ export async function markExportFailed(
     where: {
       id: exportId,
       status: { in: [ExportStatus.QUEUED, ExportStatus.RUNNING] },
+      OR: [{ leaseToken: null }, { leaseExpiresAt: { lte: new Date() } }],
     },
     data: {
       errorCode: "EXPORT_RENDER_FAILED",
@@ -260,8 +301,10 @@ async function renderLookbook(
     throw exportFailure("EXPORT_COLLECTION_MISSING", "待导出的系列已不存在");
   }
   const collection = exportJob.collection;
-  const lookImages = await Promise.all(
-    collection.looks.map(async (look) => {
+  if (!collection.looks.length) throw exportFailure("EXPORT_COLLECTION_EMPTY", "系列尚无可导出的 Look");
+  const lookImages: Buffer[] = [];
+  for (let start = 0; start < collection.looks.length; start += 2) {
+    const images = await Promise.all(collection.looks.slice(start, start + 2).map(async (look) => {
       try {
         const source = await download(look.designAsset.url);
         return await sharp(source)
@@ -276,10 +319,11 @@ async function renderLookbook(
           .jpeg({ quality: 90 })
           .toBuffer();
       } catch {
-        return null;
+        throw exportFailure("EXPORT_LOOK_IMAGE_UNAVAILABLE", `LOOK ${look.ordinal} 图片无法读取或解码，请检查原图后重新导出`);
       }
-    }),
-  );
+    }));
+    lookImages.push(...images);
+  }
   const body = await createLookbookPdf({
     collectionName: collection.name,
     looks: collection.looks.map((look, index) => ({
@@ -317,7 +361,7 @@ async function createLookbookPdf(input: {
     margin: 42,
     size: "A4",
   });
-  const bodyFont = useCjkFont(document);
+  const bodyFont = useCjkFont(document, input.collectionName + input.looks.map((look) => look.garmentTypeLabel ?? "").join(""));
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const finished = new Promise<Buffer>((resolve, reject) => {
@@ -332,7 +376,7 @@ async function createLookbookPdf(input: {
     .text("COLLECTION / LOOKBOOK", 42, 42, { characterSpacing: 1.8 });
   document
     .fontSize(31)
-    .text(pdfDisplayText(input.collectionName, bodyFont), 42, 88, {
+    .text(input.collectionName, 42, 88, {
       width: 650,
     });
   document
@@ -353,7 +397,7 @@ async function createLookbookPdf(input: {
       .fillColor("#161616")
       .fontSize(10)
       .text(
-        `${pdfDisplayText(input.collectionName, bodyFont)} / LOOKS ${start + 1}-${Math.min(start + looksPerPage, input.looks.length)}`,
+        `${input.collectionName} / LOOKS ${start + 1}-${Math.min(start + looksPerPage, input.looks.length)}`,
         42,
         28,
       );
@@ -390,7 +434,7 @@ async function createLookbookPdf(input: {
           .font(bodyFont)
           .fillColor("#66645f")
           .fontSize(8)
-          .text(pdfDisplayText(look.garmentTypeLabel, bodyFont), x, 526, {
+          .text(look.garmentTypeLabel, x, 526, {
             align: "right",
             width,
           });
@@ -459,10 +503,10 @@ function parsePalette(value: unknown): readonly PaletteColor[] {
   });
 }
 
-function useCjkFont(document: PDFKit.PDFDocument): string {
+function useCjkFont(document: PDFKit.PDFDocument, text = ""): string {
+  const requiredCharacters = [...new Set([...text].filter((character) => (character.codePointAt(0) ?? 0) > 127))];
   const configured = process.env.EXPORT_PDF_FONT_PATH?.trim();
-  const candidates = [
-    configured,
+  const candidates = configured ? [configured] : [
     "C:/Windows/Fonts/simhei.ttf",
     "C:/Windows/Fonts/Deng.ttf",
     "C:/Windows/Fonts/msyh.ttc",
@@ -480,19 +524,23 @@ function useCjkFont(document: PDFKit.PDFDocument): string {
         document.registerFont(fontName, fontPath);
       }
       document.font(fontName);
+      // PDFKit's embedded font wraps fontkit; loading a Latin font alone is insufficient.
+      const embedded = (document as PDFKit.PDFDocument & { _font?: { font?: { hasGlyphForCodePoint?: (codePoint: number) => boolean } } })._font?.font;
+      if (requiredCharacters.some((character) => !embedded?.hasGlyphForCodePoint?.(character.codePointAt(0) ?? 0))) continue;
       return fontName;
     } catch {
       continue;
     }
   }
   document.font("Helvetica");
+  if (requiredCharacters.length) throw exportFailure("EXPORT_FONT_UNAVAILABLE", "导出字体无法完整显示所需文字，请配置支持相应字符的 EXPORT_PDF_FONT_PATH");
   return "Helvetica";
 }
 
-function pdfDisplayText(value: string, fontName: string): string {
-  return fontName !== "Helvetica"
-    ? value
-    : value.replace(/[^\u0020-\u007e]/gu, "").trim() || "COLLECTION";
+export function validateExportFont(): void {
+  const document = new PDFDocument({ autoFirstPage: false });
+  useCjkFont(document, "服装设计中文");
+  document.end();
 }
 
 function safeFileName(value: string): string {

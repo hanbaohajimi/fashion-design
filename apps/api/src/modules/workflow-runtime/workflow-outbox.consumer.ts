@@ -23,6 +23,8 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
   private miningBusy = false;
   private stopping = false;
   private lastReconcile = 0;
+  private reconcileBusy = false;
+  private reconcileCursor: string | undefined;
 
   constructor(
     @Inject(WORKFLOW_RUNTIME_DB) private readonly database: PrismaClient,
@@ -53,6 +55,7 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
     void this.drainMining().catch(() => this.logger.warn("偏好挖掘未完成，原始设计变更已保留"));
     if (Date.now() - this.lastReconcile > 15_000) {
       this.lastReconcile = Date.now();
+      void this.assistant.reapExpiredTurns().catch(() => this.logger.warn("超时会话回收等待下轮重试"));
       void this.reconcile().catch(() => this.logger.warn("执行恢复扫描未完成，下轮继续"));
     }
     if (this.queue) void this.queue.add("wake", {}, { jobId: `wake-${Math.floor(Date.now() / 10_000)}`,
@@ -64,7 +67,7 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
     return this.database.$transaction(async (tx) => {
       const filter = lane === "observation" ? Prisma.sql`"event_type" = 'execution.terminal'`
         : lane === "mining" ? Prisma.sql`"event_type" = 'workflow.semantic_changed'`
-          : Prisma.sql`"event_type" NOT IN ('execution.terminal', 'workflow.semantic_changed')`;
+          : Prisma.sql`"event_type" NOT IN ('execution.terminal', 'workflow.semantic_changed', 'generation.dispatch', 'export.dispatch', 'export.cleanup')`;
       const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
         SELECT "id" FROM "workflow_outbox"
         WHERE ${filter} AND "available_at" <= NOW()
@@ -147,16 +150,19 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
 
   /** Startup/periodic recovery also covers terminal tasks committed before attempt linking. */
   async reconcile() {
-    const attempts = await this.database.workflowAttempt.findMany({ where: { status: { in: ["submitting", "running"] } },
-      select: { projectId: true }, distinct: ["projectId"], take: 100 });
-    const executions = await this.database.workflowExecution.findMany({ where: { status: { in: ["queued", "running"] } },
-      select: { projectId: true }, distinct: ["projectId"], take: 100 });
-    for (const projectId of new Set([...attempts, ...executions].map((item) => item.projectId))) {
-      const project = await this.database.project.findUnique({ where: { id: projectId }, include: { workspace: { select: { ownerId: true } } } });
-      if (!project || project.deletedAt) continue;
-      try { await this.runtime.sync(project.workspace.ownerId, projectId); }
-      catch { this.logger.warn(`工作流 ${projectId} 的执行恢复将在下一轮重试`); }
-    }
+    if (this.reconcileBusy || this.stopping) return;
+    this.reconcileBusy = true;
+    try {
+      const projects = await this.database.project.findMany({ where: { deletedAt: null,
+        ...(this.reconcileCursor ? { id: { gt: this.reconcileCursor } } : {}),
+        OR: [{ workflowAttempts: { some: { status: { in: ["submitting", "running"] } } } }, { workflowExecutions: { some: { status: { in: ["queued", "running"] } } } }] },
+        orderBy: { id: "asc" }, take: 100, include: { workspace: { select: { ownerId: true } } } });
+      this.reconcileCursor = projects.length === 100 ? projects.at(-1)?.id : undefined;
+      for (const project of projects) {
+        try { await this.runtime.sync(project.workspace.ownerId, project.id); }
+        catch { this.logger.warn(`工作流 ${project.id} 的执行恢复将在下一轮重试`); }
+      }
+    } finally { this.reconcileBusy = false; }
   }
 
   async onModuleDestroy() {

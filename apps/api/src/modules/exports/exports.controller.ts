@@ -5,6 +5,8 @@ import {
   Get,
   Inject,
   Header,
+  Headers,
+  Query,
   HttpCode,
   Param,
   Post,
@@ -32,7 +34,8 @@ export class ExportsController {
 
   @Post()
   @HttpCode(202)
-  create(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown, @Headers("idempotency-key") key?: string) {
+    if (key !== undefined && (key.length < 8 || key.length > 200)) throw new BadRequestException("导出幂等键长度应为 8 至 200");
     const result = createExportSchema.safeParse(body);
     if (!result.success) {
       throw new BadRequestException({
@@ -40,7 +43,16 @@ export class ExportsController {
         message: result.error.issues[0]?.message ?? "导出参数不合法",
       });
     }
-    return this.exportsService.create(user.userId, result.data);
+    return this.exportsService.create(user.userId, result.data, key);
+  }
+
+  @Get()
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: unknown) {
+    const parsed = z.object({ projectId: exportIdSchema, sourceType: z.enum(["asset", "collection"]), sourceId: exportIdSchema,
+      page: z.coerce.number().int().min(1).max(10000).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) }).strict().safeParse(query);
+    if (!parsed.success) throw new BadRequestException("导出查询参数无效");
+    return this.exportsService.list(user.userId, parsed.data);
   }
 
   @Get(":id")

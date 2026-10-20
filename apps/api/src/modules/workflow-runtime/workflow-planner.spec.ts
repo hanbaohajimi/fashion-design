@@ -94,6 +94,7 @@ describe("Fig8 tool contract and action protocol", () => {
     expect(() => compileWorkflowAction(graph, { ...fork, targetNodeVersionId: "stale" }, [], { g1: { nodeVersionId: "v1", attemptCount: 1 } })).toThrow("版本");
     expect(() => compileWorkflowAction(graph, { ...fork, toolKey: "edit_design" }, [])).toThrow("工具类型");
     expect(() => compileWorkflowAction(graph, fork, [], { g1: { nodeVersionId: "v1", attemptCount: 0 } })).toThrow("真实执行");
+    expect(compileWorkflowAction(graph, fork, [], { g1: { nodeVersionId: "v1", attemptCount: 0, copiedSnapshot: true } })).toContainEqual(expect.objectContaining({ type: "add_node" }));
   });
   it("retains a target's confirmed constraint for an imported candidate but does not silently authorize a replacement constraint", () => {
     for (const type of ["configure_tool", "fork_tool"] as const) {

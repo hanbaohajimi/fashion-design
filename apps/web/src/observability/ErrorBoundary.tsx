@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import styles from "../components/feedback.module.css";
 import {
   Component,
   type ErrorInfo,
@@ -45,11 +46,11 @@ export class ErrorBoundary extends Component<
     return (
       <section
         aria-live="assertive"
-        className="core-error-boundary"
+        className={styles.card}
         data-area={this.props.area}
         role="alert"
       >
-        <span>RECOVERY / READY</span>
+        <span className={styles.brand}>Atelier 设计工作室</span>
         <strong>出现了一点问题，已自动上报</strong>
         <p>你的项目数据仍会保留，可以重新载入这一部分继续工作。</p>
         <button

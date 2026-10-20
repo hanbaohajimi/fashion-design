@@ -9,7 +9,7 @@ import { VisualContextService } from "../design-context/visual-context.service";
 import type { PatchProjectDesignContextInput } from "../design-context/design-context.schemas";
 import { WorkflowsService } from "../workflows/workflows.service";
 import { WORKFLOW_RUNTIME_DB, WorkflowRuntimeService } from "./workflow-runtime.service";
-import { WorkflowCoordinator } from "./workflow-coordinator";
+import { WorkflowCoordinator, MAX_PLANNER_CALLS } from "./workflow-coordinator";
 
 const nodeId = z.string().trim().min(1).max(128);
 export const workflowMessageSchema = z.object({
@@ -139,6 +139,18 @@ export class WorkflowAssistantService {
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}) });
     const page = rows.slice(0, input.limit);
     return { items: page.reverse().map(messageView), nextCursor: rows.length > input.limit ? page[0]?.id ?? null : null };
+  }
+
+  async reapExpiredTurns() {
+    const rows = await this.database.agentTurn.findMany({ where: { status: { in: ["running", "committing"] }, leaseExpiresAt: { lte: new Date() } },
+      orderBy: [{ leaseExpiresAt: "asc" }, { id: "asc" }], take: 100 });
+    for (const turn of rows) await this.database.$transaction(async (tx) => {
+      const expired = await tx.agentTurn.updateMany({ where: { id: turn.id, leaseToken: turn.leaseToken, status: { in: ["running", "committing"] }, leaseExpiresAt: { lte: new Date() } },
+        data: { status: "failed", error: "本轮处理超时，可以重试", leaseToken: null, leaseExpiresAt: null } });
+      if (!expired.count) return;
+      await tx.agentConversation.updateMany({ where: { id: turn.conversationId, activeTurnId: turn.leaseToken }, data: { activeTurnId: null, activeTurnStartedAt: null } });
+      await tx.agentMessage.updateMany({ where: { turnId: turn.id, status: "PENDING" }, data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试", content: "本轮处理超时，请重试。" } });
+    });
   }
 
   async send(userId: string, conversationId: string, raw: MessageInput) {
@@ -274,6 +286,7 @@ export class WorkflowAssistantService {
     const initialBudget = { modelCalls: typeof storedBudget.modelCalls === "number" ? storedBudget.modelCalls : 0,
       readRounds: typeof storedBudget.readRounds === "number" ? storedBudget.readRounds : 0, repairUsed: storedBudget.repairUsed === true };
     const result = await this.coordinatorService().run({ userId, projectId, conversationId, request: input.content, referencedNodeIds: input.referencedNodeIds,
+      deadlineAt: turnRecord.leaseExpiresAt?.getTime() ?? Date.now() + TURN_TIMEOUT_MS,
       trigger: observation ? "observation" : "user", previousPlan: previousPlan?.plan, initialBudget,
       reserveBudget: async (budget) => {
         await this.database.$transaction(async (tx) => {
@@ -344,13 +357,17 @@ export class WorkflowAssistantService {
   }
 
   private async failTurn(conversationId: string, turn: { lease: string; turnId: string }, error: unknown, messageId?: string) {
+    const record = await this.database.agentTurn.findUnique({ where: { id: turn.turnId }, select: { budget: true } });
+    const budgetExhausted = Number(object(record?.budget).modelCalls ?? 0) >= MAX_PLANNER_CALLS || error instanceof Error && "code" in error && error.code === "WORKFLOW_BUDGET_EXHAUSTED";
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || "code" in error && error.code === "WORKFLOW_TURN_TIMEOUT");
+    const code = budgetExhausted ? "WORKFLOW_BUDGET_EXHAUSTED" : timedOut ? "WORKFLOW_TURN_TIMEOUT" : "WORKFLOW_ASSISTANT_FAILED";
     return this.database.$transaction(async (tx) => {
       const claimed = await tx.agentConversation.updateMany({ where: { id: conversationId, activeTurnId: turn.lease }, data: { activeTurnId: null, activeTurnStartedAt: null } });
       const ended = await tx.agentTurn.updateMany({ where: { id: turn.turnId, leaseToken: turn.lease, status: { in: ["running", "committing"] } },
         data: { status: claimed.count ? "failed" : "superseded", error: error instanceof Error ? error.message.slice(0, 1000) : "处理失败", leaseToken: null, leaseExpiresAt: null } });
       if (messageId) {
-        if (ended.count) await tx.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { status: "FAILED", errorCode: "WORKFLOW_ASSISTANT_FAILED",
-          errorMessage: error instanceof ConflictException ? error.message : "设计助手暂时无法完成请求，可以重试", content: error instanceof ConflictException ? error.message : "本轮分析未完成，请重试。" } });
+        if (ended.count) await tx.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { status: "FAILED", errorCode: code,
+          errorMessage: budgetExhausted ? "本轮调用次数已用尽，请发送新请求" : timedOut ? "本轮处理超时，可以重试" : error instanceof ConflictException ? error.message : "设计助手暂时无法完成请求，可以重试", content: budgetExhausted ? "本轮调用次数已用尽，请发送新请求。" : error instanceof ConflictException ? error.message : "本轮分析未完成，请重试。" } });
         return tx.agentMessage.findUniqueOrThrow({ where: { id: messageId }, include: { proposal: true } });
       }
       return null;

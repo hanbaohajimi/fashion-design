@@ -1,5 +1,104 @@
 # AI 服装设计平台
 
+## 界面开发与验收
+
+应用采用 Atelier 浅色工作界面。颜色、字号、间距、控件尺寸和动效统一定义在
+`apps/web/src/styles/design-system.css`；页面使用 CSS Modules，共享交互组件位于
+`apps/web/src/components/ui.tsx`，内容页导航使用 `AppHeader`。
+新功能优先扩展这些变量与组件，不在各页面重复建立视觉规则。
+旧版 `design-tokens*.css`、`motion-enhancements.css` 和 `components.css` 不再作为全局入口。
+
+工作室桌面侧栏支持拖动或方向键调整；窄屏使用抽屉，手机使用画布、节点列表、助手分区。
+助手与详情切换保留草稿；切换节点或离开项目时，未保存的参数需要明确处理。
+会话切换、新对话和协作设置统一收进输入框底部“更多”菜单；暂停及只读状态保留该入口。
+候选图及系列中的导出是工作区子视图，选择“返回工作区”继续编辑，关闭窗口后任务仍在后台执行。
+图片与系列使用共享标签页，方向键、Home 和 End 移动焦点，Enter 或空格确认切换。
+草图、历史白板、面料管理、趋势存入和导出复用同一套对话框焦点管理。
+画布工具组的“工作室帮助”可查看操作说明，提示支持鼠标悬停、键盘聚焦和 Esc 关闭。
+
+组件状态覆盖默认、聚焦、禁用、加载、成功与失败。验证命令为
+`pnpm --filter @fashion/web test`、`pnpm test:e2e` 和 `pnpm test:e2e:real --checks`。
+工作室多尺寸截图保存在 `output/playwright/atelier/`，项目库和登录页截图保存在
+`output/playwright/review-*-final.png`。截图需检查布局、图片比例、关键操作可见性与文本对比度，
+不能仅因截图更新就视为验收通过。
+
+`pnpm test:e2e:visual` 在固定的 Debian、Chromium 145.0.7632.6 与 Noto CJK 字体环境中
+自动比较 `tests/visual/__screenshots__/` 的基线；本机与 CI 使用同一容器，不依赖主机字体。
+首次需要 Docker 下载并构建只含 Chromium 的验收镜像，之后复用构建缓存；
+可用 `pnpm test:e2e:visual --prepare` 提前准备，不启动应用。
+视觉服务使用 4400 端口，浏览器调试端口由 Docker 自动分配且只绑定本机。
+对比失败时检查 `output/playwright/visual-results/` 中的实际图与差异图，确认布局与交互后
+才执行 `pnpm test:e2e:visual --update-snapshots` 更新基线；CI 不自动更新。
+隔离真实链路另外验证系列 DNA 编辑、跨页签持续生成 Look，以及两页中文 Lookbook PDF 下载。
+
+2026-10-20 本地收尾验收：
+
+| 检查 | 实际结果 |
+| --- | --- |
+| `pnpm --filter @fashion/web test` | 27 个文件、143 条通过 |
+| `pnpm check`（由隔离启动器的 `--checks` 执行） | 启动检查、依赖审计、lint、类型、schema、测试、数据库与生产构建通过；API 583、Worker 101、Web 143、数据库 2 条通过 |
+| `pnpm test:e2e` | 首轮 103/105；修正两处测试选择器及 SDK 徽标检测后，两项补测通过；最终受影响交互另行 9/9 回归通过 |
+| `pnpm test:e2e:visual` | 13/13，19 张固定环境截图通过自动对比，已逐张人工复核 |
+| `pnpm test:e2e:real` | 1/1；真实认证、上传、执行、刷新、复制继续设计、系列扩展与后台导出通过 |
+| 中文 PDF 内容检查 | pypdf 提取中文与 Look 编号，PyMuPDF 检查 Look 页的两张图片；Poppler 逐页渲染并人工复核，两页完整 |
+
+最终交互回归使用：
+
+```bash
+pnpm exec playwright test tests/e2e/workflow-trend-library.spec.ts tests/e2e/workflow-canvas.spec.ts tests/e2e/collection-consistency-flow.spec.ts tests/e2e/generation-flow.spec.ts tests/e2e/workflow-export.spec.ts tests/e2e/version-history-flow.spec.ts --grep '趋势档案保留|趋势主题筛选|统一工作区|打开系列|帮助提示|工作流 PNG|独立面料库|候选的大图|版本'
+```
+
+基线整理前截图位于 `output/playwright/atelier-before/`，最终基线位于
+`tests/visual/__screenshots__/atelier.spec.ts/`。本次日志为
+`output/atelier-final-related-browser.log`、`output/atelier-visual-comparison.log`、
+`output/atelier-final-series-real.log`（完整门禁与文件流水线）及
+`output/atelier-final-series-recheck.log`（修正 PDF 测试依赖引用后的真实链路）。
+PDF 样本保存在 `output/playwright/real-results/`，文本检查为
+`output/atelier-pdf-verification.txt`，页面渲染为 `output/atelier-lookbook-poppler-{1,2}.png`。
+本轮未新增业务接口、数据库迁移或 npm 依赖；模型协议未改动，真实链路使用本地 Provider 替身。
+视觉用例固定字体、时间并隐藏 Next.js 开发调试层，未隐藏 SDK 授权提示；
+未使用的 SDK 远程文字字体在视觉测试中被阻断，工作流文字使用固定的 Noto 字体。
+
+| 组件或区域 | 已覆盖的状态与交互 |
+| --- | --- |
+| 按钮、表单 | 默认、悬停、可见焦点、禁用、提交中、字段错误 |
+| 菜单、分区选择 | 键盘方向键、展开与关闭、Esc、外部点击、选中状态 |
+| 对话框 | 初始字段聚焦、Tab 圈定、Esc、关闭后焦点恢复 |
+| 内容列表 | 骨架、空结果、请求失败、重试、分页、图片失败回退 |
+| 画布与详情 | 保存中、待保存、同步异常、原批次重试、草稿保留、离开保护 |
+| 助手 | 历史会话、上下文折叠、等待与失败、阅读时新消息提示、手动回到最新 |
+| 图片与系列 | 等比预览、原始比例、修改分支、版本恢复、系列保存反馈 |
+| 导出 | 最近任务恢复、排队、生成、失败重试、下载、返回工作区、后台继续 |
+
+## 试用可靠性升级与验收
+
+升级先运行 `pnpm db:deploy` 应用 `20261019000100_trial_reliability`，再重新构建并重启 API 与 Worker。
+新增迁移仅扩展导出幂等键和运行租约，不改写旧数据或已应用迁移。
+
+“创建副本”保留当前节点、连线、素材、结果、系列与项目目标，并建立独立快照基线。
+历史对话和执行记录保留在原项目；副本不会继承正在执行的任务。
+生成和导出通过数据库持久化派发，后台每 15 秒对账，Redis 记录丢失时恢复排队任务；
+无法安全恢复的生成明确报告中断，避免无期限等待或重复生成。
+
+导出窗口可以随时关闭，重新打开可从服务端查回最近任务；相同幂等键只创建一次。
+Lookbook 缺图、空系列或中文字体不可用均明确失败。Worker 启动时检查中文字体，
+Windows 自动探测系统字体，Linux 需配置 `EXPORT_PDF_FONT_PATH`，TTC 字体还可配置
+`EXPORT_PDF_FONT_FAMILY`（如 `NotoSansCJKsc-Regular`）。
+
+运行 `pnpm test:e2e:real` 启动独立的 `fashion-trial` Docker 与 Supabase 项目，
+使用 25432、26379、29000/29001、55320–55329、4300–4302 端口和独立数据卷。
+它覆盖真实登录、上传、API、数据库、队列、存储、项目复制与后台导出；仅将外部 AI
+替换为本地确定性 HTTP 服务。不会拦截平台 API，也不读取日常服务的连接配置。
+加 `--checks` 可在同一隔离环境执行 `pnpm check` 与私有文件流水线验证，
+加 `--contracts` 会在启动真实链路服务前执行原有 API 模拟浏览器测试。
+加 `--real-model-smoke` 会显式使用 `.env` 中的模型配置验证参考图编辑、透明蒙版重绘和真实助手；
+仅继承模型配置，数据库、队列和存储仍使用隔离环境。模型输出样本保存在 `output/trial-model-smoke/`。
+若已验证图片模型，仅重跑助手可使用 `--assistant-smoke`。
+结束后停止测试服务并保留隔离数据卷；日志、trace、截图和导出样本位于 `output/`。
+
+真实模型验证继续使用下文的 `verify-workflow-pipeline.ts` 与
+`verify-workflow-assistant.ts` 脚本，需显式运行并配置有效模型令牌，不在 CI 中自动调用。
+
 基于 pnpm 与 Turborepo 的 Monorepo 工程骨架。
 
 ## 工程结构

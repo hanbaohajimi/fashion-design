@@ -12,6 +12,8 @@ import { WorkflowAssistantService } from "./workflow-assistant.service";
 import { WorkflowAssistantController } from "./workflow-assistant.controller";
 import { WorkflowCoordinator } from "./workflow-coordinator";
 import { WorkflowOutboxConsumer } from "./workflow-outbox.consumer";
+import { TaskDispatchService } from "./task-dispatch.service";
+import { ExportsModule } from "../exports/exports.module";
 import { WorkflowRuntimeController } from "./workflow-runtime.controller";
 import {
   WORKFLOW_RUNTIME_DB,
@@ -28,6 +30,7 @@ import {
     WorkflowsModule,
     DesignContextModule,
     VisualContextModule,
+    ExportsModule,
   ],
   controllers: [WorkflowRuntimeController, WorkflowAssistantController],
   providers: [
@@ -35,6 +38,7 @@ import {
     WorkflowAssistantService,
     WorkflowCoordinator,
     WorkflowOutboxConsumer,
+    TaskDispatchService,
     { provide: WORKFLOW_RUNTIME_DB, useValue: prisma },
   ],
   exports: [WorkflowAssistantService],

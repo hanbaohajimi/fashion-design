@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from "@fashion/db";
+import { Prisma, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
 import {
   ConflictException,
   ForbiddenException,
@@ -229,7 +229,9 @@ export class ProjectsService {
 
   async duplicate(userId: string, projectId: string, idempotencyKey: string) {
     await this.assertOwnership(userId, projectId);
-    const source = await this.database.project.findUnique({
+    try {
+      const duplicated = await this.database.$transaction(async (transaction) => {
+    const source = await transaction.project.findUnique({
       where: { id: projectId },
       include: {
         boardElements: {
@@ -244,28 +246,32 @@ export class ProjectsService {
           },
         },
         designAssets: true,
+        workflowGraph: { include: { nodes: true, edges: true } },
+        designContext: true,
         workspace: { select: { ownerId: true } },
       },
     });
-    if (!source) {
+    if (!source || source.deletedAt) {
       throw new NotFoundException({
         code: "PROJECT_NOT_FOUND",
         message: "项目不存在",
       });
     }
-    const existing = await this.database.project.findFirst({
+    if (source.workspace.ownerId !== userId) throw new ForbiddenException("无权复制该项目");
+    const existing = await transaction.project.findFirst({
       where: { idempotencyKey, wsId: source.wsId },
     });
     if (existing && !existing.deletedAt) {
-      return toProjectResponse(existing);
+      return existing;
     }
-
-    try {
-      const duplicated = await this.database.$transaction(
-        async (transaction) => {
+    if (existing) throw new ConflictException("该幂等键已用于删除的项目");
           const assetIdMap = new Map(
             source.designAssets.map((asset) => [asset.id, randomUUID()]),
           );
+          const ids = new Map<string, string>(assetIdMap);
+          for (const item of [...source.collections, ...source.boardElements, ...(source.workflowGraph?.nodes ?? []), ...(source.workflowGraph?.edges ?? [])]) {
+            if (item.id) ids.set(item.id, randomUUID());
+          }
           const remappedCoverAssetId = source.coverAssetId
             ? (assetIdMap.get(source.coverAssetId) ?? null)
             : null;
@@ -275,8 +281,10 @@ export class ProjectsService {
               idempotencyKey,
               name: `${source.name} 副本`.slice(0, 80),
               wsId: source.wsId,
+              workflowAgentVersion: source.workflowAgentVersion,
             },
           });
+          ids.set(source.id, project.id);
           if (source.designAssets.length > 0) {
             await transaction.designAsset.createMany({
               data: source.designAssets.map((asset) => {
@@ -284,6 +292,7 @@ export class ProjectsService {
                 return {
                   archivedAt: asset.archivedAt,
                   generationTaskId: null,
+                  sourceFileId: asset.sourceFileId,
                   height: asset.height,
                   id,
                   operation: asset.operation,
@@ -315,7 +324,7 @@ export class ProjectsService {
                         stripRetiredBoardShapes(
                           source.boardSnapshot.snapshot,
                         ),
-                        assetIdMap,
+                        ids,
                       ) as Prisma.InputJsonValue),
               },
             });
@@ -326,6 +335,7 @@ export class ProjectsService {
           if (copyableBoardElements.length > 0) {
             await transaction.boardElement.createMany({
               data: copyableBoardElements.map((element) => ({
+                ...(element.id ? { id: requiredMappedId(ids, element.id) } : {}),
                 deletedAt: element.deletedAt,
                 fileAssetId: element.fileAssetId,
                 projectId: project.id,
@@ -334,7 +344,7 @@ export class ProjectsService {
                     ? Prisma.JsonNull
                     : (remapStructuredValue(
                         element.record,
-                        assetIdMap,
+                        ids,
                       ) as Prisma.InputJsonValue),
                 role: element.role,
                 roleConfidence: element.roleConfidence,
@@ -347,7 +357,7 @@ export class ProjectsService {
             });
           }
           for (const sourceCollection of source.collections) {
-            const collectionId = randomUUID();
+            const collectionId = requiredMappedId(ids, sourceCollection.id);
             await transaction.collection.create({
               data: {
                 heroAssetId: requiredMappedId(
@@ -417,6 +427,29 @@ export class ProjectsService {
               });
             }
           }
+          if (source.workflowGraph) {
+            const sourceGraph = source.workflowGraph;
+            await transaction.workflowGraph.create({ data: { projectId: project.id } });
+            const nodes = source.workflowGraph.nodes.map((node) => ({
+              id: requiredMappedId(ids, node.id), projectId: project.id, kind: node.kind, type: node.type, title: node.title,
+              payload: remapStructuredValue(node.payload, ids, true) as Prisma.InputJsonValue,
+              status: node.status === "completed" && (node.kind === "asset" || sourceGraph.edges.some((edge) => edge.sourceNodeId === node.id && sourceGraph.nodes.some((output) => output.id === edge.targetNodeId && output.status === "completed"))) ? "completed" : "ready",
+              x: node.x, y: node.y,
+            }));
+            const edges = source.workflowGraph.edges.map((edge) => ({ id: requiredMappedId(ids, edge.id), projectId: project.id,
+              sourceNodeId: requiredMappedId(ids, edge.sourceNodeId), targetNodeId: requiredMappedId(ids, edge.targetNodeId), sourcePort: edge.sourcePort, targetPort: edge.targetPort }));
+            if (nodes.length) await transaction.workflowNode.createMany({ data: nodes });
+            if (edges.length) await transaction.workflowEdge.createMany({ data: edges });
+            await ensureWorkflowNodeVersions(transaction, project.id, 0, nodes, edges);
+            await transaction.workflowNodeVersion.updateMany({ where: { projectId: project.id, baseline: true }, data: { origin: "project_copy" } });
+          }
+          if (source.designContext) {
+            const state = source.designContext.state as Record<string, Prisma.JsonValue>;
+            await transaction.projectDesignContext.create({ data: { projectId: project.id, state: {
+              version: "project-design-context/1", initialObjective: state.currentObjective ?? null, currentObjective: state.currentObjective ?? null,
+              objectiveOrigin: state.currentObjective ? "explicit" : null, objectiveSourceMessageId: null, objectiveSourceNodeIds: [], objectiveSourceQuote: null, requirements: [], preferences: [],
+            } } });
+          }
           return transaction.project.findUniqueOrThrow({
             where: { id: project.id },
             include: {
@@ -428,8 +461,7 @@ export class ProjectsService {
               },
             },
           });
-        },
-      );
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 });
       return toProjectResponse(duplicated);
     } catch (error) {
       if (
@@ -437,7 +469,7 @@ export class ProjectsService {
         error.code === "P2002"
       ) {
         const concurrent = await this.database.project.findFirst({
-          where: { idempotencyKey, wsId: source.wsId },
+          where: { idempotencyKey, workspace: { ownerId: userId } },
         });
         if (concurrent && !concurrent.deletedAt) {
           return toProjectResponse(concurrent);
@@ -519,16 +551,23 @@ function requiredMappedId(
 function remapStructuredValue(
   value: unknown,
   idMap: ReadonlyMap<string, string>,
+  stripRuntime = false,
 ): unknown {
-  if (typeof value === "string") return idMap.get(value) ?? value;
+  if (typeof value === "string") {
+    if (idMap.has(value)) return idMap.get(value);
+    return value.replace(/(\/api\/(?:design-assets|projects|collections|board-elements)\/)([^/?#]+)/gu, (match, prefix: string, id: string) => {
+      const mapped = idMap.get(decodeURIComponent(id));
+      return mapped ? `${prefix}${encodeURIComponent(mapped)}` : match;
+    });
+  }
   if (Array.isArray(value)) {
-    return value.map((item) => remapStructuredValue(item, idMap));
+    return value.map((item) => remapStructuredValue(item, idMap, stripRuntime));
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
+      Object.entries(value).filter(([key]) => !stripRuntime || !["generationTaskId", "attemptId", "executionId", "proposalId", "conversationId", "nodeVersionId", "forkedFromNodeVersionId", "error", "errorCode", "errorMessage"].includes(key)).map(([key, item]) => [
         key,
-        remapStructuredValue(item, idMap),
+        typeof item === "string" && ["text", "prompt", "negativePrompt", "summary", "description", "sourceQuote", "rationale"].includes(key) ? item : remapStructuredValue(item, idMap, stripRuntime),
       ]),
     );
   }

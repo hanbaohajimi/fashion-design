@@ -11,10 +11,11 @@ if (existsSync(rootEnvPath)) {
 }
 
 const apiOrigin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:3001";
-const proxyTimeoutMs = 720_000;
+// Allow the 15-minute assistant deadline plus a short response/commit margin.
+const proxyTimeoutMs = 15 * 60_000 + 5_000;
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: ["127.0.0.1", "host.docker.internal"],
   devIndicators: false,
   experimental: {
     proxyTimeout: proxyTimeoutMs,

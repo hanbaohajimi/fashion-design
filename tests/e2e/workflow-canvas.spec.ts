@@ -5,6 +5,140 @@ import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
 
+async function showCanvas(page: Page, width: number) {
+  if (width < 768) await page.getByRole("button", { name: "画布", exact: true }).click();
+  else if (width < 1100 && await page.getByRole("button", { name: "收起设计助手" }).isVisible()) await page.getByRole("button", { name: "收起设计助手" }).click();
+}
+async function showAssistant(page: Page, width: number) {
+  if (width < 768) await page.getByRole("button", { name: "助手", exact: true }).click();
+  else if (await page.getByRole("button", { name: "展开设计助手" }).isVisible()) await page.getByRole("button", { name: "展开设计助手" }).click();
+}
+
+test("帮助提示可键盘关闭，草图窗口圈定焦点并返回素材入口", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.goto(`/${PROJECT_ID}`);
+  const help = page.getByRole("button", { name: "工作室帮助", exact: true });
+  await help.focus();
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  const tip = await page.getByRole("tooltip").boundingBox();
+  expect(tip!.x).toBeGreaterThanOrEqual(0);
+  expect(tip!.x + tip!.width).toBeLessThanOrEqual(1280);
+  await help.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await expect(help).toBeFocused();
+  await help.press("Enter");
+  const guide = page.getByRole("dialog", { name: "工作室使用帮助" });
+  await expect(guide).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeFocused();
+  const trigger = page.getByRole("button", { name: "＋ 添加素材", exact: true });
+  await trigger.click();
+  await page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true }).click();
+  const sketch = page.getByRole("dialog", { name: "绘制廓形草图" });
+  await expect(sketch.getByRole("textbox", { name: "素材名称" })).toBeFocused();
+  for (let index = 0; index < 18; index++) {
+    await page.keyboard.press("Tab");
+    expect(await sketch.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(sketch).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
+test("阅读历史时新消息不会抢走滚动位置，点击提示后回到最新消息", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  mocked.setMessages(Array.from({ length: 12 }, (_, index) => ({
+    id: `reading-${index}`, role: "assistant", status: "completed", kind: "reply", proposal: null,
+    content: `第 ${index + 1} 条设计讨论\n${"继续比较廓形、面料与细节。".repeat(20)}`, createdAt: NOW,
+  })));
+  await page.goto(`/${PROJECT_ID}`);
+  const conversation = page.getByLabel("设计对话", { exact: true });
+  await expect(page.getByText("第 12 条设计讨论", { exact: false })).toBeVisible();
+  await conversation.evaluate((element) => { element.scrollTop = 0; element.dispatchEvent(new Event("scroll", { bubbles: true })); });
+  mocked.appendMessage({ id: "reading-latest", role: "assistant", status: "completed", kind: "reply", proposal: null, content: "新到达的设计分析", createdAt: NOW });
+  const jump = page.getByRole("button", { name: "有新消息 ↓", exact: true });
+  await expect(jump).toBeVisible();
+  expect(await conversation.evaluate((element) => element.scrollTop)).toBeLessThan(40);
+  await jump.click();
+  await expect(jump).toHaveCount(0);
+  await expect.poll(() => conversation.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(80);
+});
+
+test("工作室详情草稿在对话切换和同步后保留；侧栏支持键盘调整", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const tool = mocked.getGraph().nodes.find((node) => node.id === "generate")!;
+  tool.status = "ready";
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.locator('[data-type="generate_design"]').first().click();
+  await page.getByRole("button", { name: "节点详情", exact: true }).click();
+  const prompt = page.getByRole("textbox", { name: "执行指令", exact: true });
+  await prompt.fill("尚未保存的领口修改");
+  await page.getByRole("button", { name: "返回对话" }).click();
+  await page.getByRole("button", { name: "节点详情", exact: true }).click();
+  await expect(prompt).toHaveValue("尚未保存的领口修改");
+  await page.waitForTimeout(3200);
+  await expect(prompt).toHaveValue("尚未保存的领口修改");
+  const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
+  const before = Number(await separator.getAttribute("aria-valuenow"));
+  await separator.press("ArrowLeft");
+  await expect(separator).toHaveAttribute("aria-valuenow", String(before + 16));
+  await page.getByRole("button", { name: "返回对话" }).click();
+  await page.locator('[data-type="candidate"]').first().click();
+  await page.getByRole("button", { name: "节点详情", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "保留未保存的参数" })).toBeVisible();
+  await page.getByRole("button", { name: "返回编辑", exact: true }).click();
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toHaveValue("尚未保存的领口修改");
+});
+
+test("统一工作区在桌面、抽屉及手机视图保持操作可达", async ({ page }) => {
+  test.setTimeout(90_000);
+  await mockWorkflow(page);
+  await page.clock.setFixedTime(new Date(NOW));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/${PROJECT_ID}`);
+  await mkdir("output/playwright/atelier", { recursive: true });
+  // 683×384 also checks the CSS viewport available at 200% zoom on 1366×768.
+  for (const viewport of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }, { width: 1024, height: 768 }, { width: 390, height: 844 }, { width: 683, height: 384 }]) {
+    await page.setViewportSize(viewport);
+    await showCanvas(page, viewport.width);
+    await page.getByRole("button", { name: "适合画布" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (viewport.width >= 1100) {
+      await expect(page.locator("main > header")).toHaveCSS("height", "56px");
+      const bounds = await page.getByRole("region", { name: "设计工作流画布" }).boundingBox();
+      expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(640);
+    }
+    await page.screenshot({ path: `output/playwright/atelier/studio-${viewport.width}.png` });
+    await showAssistant(page, viewport.width);
+    await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "发送 ↑", exact: true })).toBeInViewport({ ratio: 1 });
+    const send = await page.getByRole("button", { name: "发送 ↑", exact: true }).boundingBox();
+    const license = page.getByRole("button", { name: "Get a license for production", exact: true });
+    // Canvas visibility can remove the SDK badge between two locator reads.
+    const badge = await license.evaluateAll((elements) => {
+      const element = elements.find((item) => item.checkVisibility({ checkVisibilityCSS: true }));
+      if (!element) return null;
+      const { x, y, width, height } = element.getBoundingClientRect();
+      return { x, y, width, height };
+    });
+    if (send && badge) {
+      if (badge) expect(send.x + send.width <= badge.x || send.x >= badge.x + badge.width || send.y + send.height <= badge.y || send.y >= badge.y + badge.height, "SDK 标识不能遮挡发送按钮").toBe(true);
+    }
+    await page.screenshot({ path: `output/playwright/atelier/assistant-${viewport.width}.png` });
+    const actions = page.getByText("更多", { exact: true });
+    await actions.click();
+    const actionBounds = await page.getByRole("button", { name: "暂停设计协作", exact: true }).boundingBox();
+    expect(actionBounds).not.toBeNull();
+    expect(actionBounds!.y).toBeGreaterThanOrEqual(0);
+    expect(actionBounds!.y + actionBounds!.height).toBeLessThanOrEqual(viewport.height);
+    await actions.press("Escape");
+    await expect(actions).toBeFocused();
+  }
+});
+
 type GraphNode = {
   id: string;
   kind: "asset" | "tool";
@@ -1069,18 +1203,18 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(252, 251, 248)");
+      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
-      const back = page.getByRole("link", { name: "← 返回画布", exact: true });
+      const back = page.getByRole("link", { name: "返回设计工作室", exact: true });
       await expect(back).toBeVisible();
       await expect(back).toHaveAttribute("href", `/${PROJECT_ID}`);
     }
     await page.reload();
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(252, 251, 248)");
-    await page.getByRole("link", { name: "← 返回画布", exact: true }).click();
+    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
+    await page.getByRole("link", { name: "返回设计工作室", exact: true }).click();
     await expectLightCanvas();
   });
 }
@@ -1096,14 +1230,17 @@ test("固定浅色与三种宽度保持画布布局，PNG 导出包含曲线", a
   await expect(page.getByRole("application", { name: "tldraw" })).toHaveClass(/\btl-theme__light\b/);
   for (const width of [390, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    await showCanvas(page, width);
     await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
+    await showAssistant(page, width);
     await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeVisible();
+    await showCanvas(page, width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await page.screenshot({ path: `output/playwright/workflow-light-${width}.png` });
   }
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出 PNG", exact: true }).click();
+  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const file = await download;
   await file.saveAs("output/playwright/workflow-export-with-curves.png");
   expect(await file.failure()).toBeNull();
@@ -1141,6 +1278,7 @@ test.describe("触屏连线", () => {
     await port(page, "reference", "output").tap();
     await port(page, "evaluate", "input").tap();
     await expect.poll(() => mocked.getGraph().edges.length).toBe(1);
+    await page.getByRole("button", { name: "助手", exact: true }).click();
     await expect(page.getByRole("heading", { name: "设计助手", exact: true })).toBeVisible();
     expect(mocked.getExecuteCount()).toBe(0);
   });
@@ -1153,6 +1291,7 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
+  await page.getByRole("button", { name: "助手", exact: true }).click();
   const initialSend = page.getByRole("button", { name: "发送 ↑", exact: true });
   await expect(initialSend).toBeDisabled();
   await expect(initialSend).toBeInViewport({ ratio: 1 });
@@ -1172,8 +1311,12 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.getByRole("button", { name: "关闭菜单" }).click();
 
+  await page.getByRole("button", { name: "助手", exact: true }).click();
   const more = page.getByText("更多", { exact: true });
   const moreMenu = more.locator("..");
+  await expect(page.getByText("持续设计协作", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" }).locator("..").getByText("更多", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新对话", exact: true })).toHaveCount(0);
   await more.focus();
   await more.press("Enter");
   await expect(moreMenu).toHaveAttribute("open", "");
@@ -1218,9 +1361,9 @@ test("候选的大图、版本、局部重绘入口和新草图保存均可从�
   const workspace = page.getByRole("dialog", { name: "候选资产工作台" });
   await expect(workspace).toBeVisible();
   await expect(workspace.getByRole("button", { name: "单图高清导出" })).toBeVisible();
-  await workspace.getByRole("button", { name: "版本历史" }).click();
+  await workspace.getByRole("tab", { name: "版本历史" }).click();
   await expect(workspace.getByRole("region", { name: "版本时间线" })).toBeVisible();
-  await workspace.getByRole("button", { name: "局部重绘" }).click();
+  await workspace.getByRole("tab", { name: "局部重绘" }).click();
   await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭候选工作台" }).click();
 
@@ -1419,8 +1562,8 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await details.getByRole("button", { name: "打开关联系列" }).click();
   const drawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(drawer).toBeVisible();
-  await drawer.getByRole("button", { name: "Look 扩展" }).click();
-  await expect(drawer.getByText("服装类型")).toBeVisible();
+  await drawer.getByRole("tab", { name: "Look 扩展" }).click();
+  await expect(drawer.getByRole("combobox", { name: "服装类型", exact: true })).toBeVisible();
   expect(createCalls).toBe(1);
 });
 
@@ -1526,7 +1669,7 @@ test("项目中其他会话的待确认提案不会自动出现在当前对话�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await expect(page.getByText("持续设计协作", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("对话操作", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeEnabled();
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));

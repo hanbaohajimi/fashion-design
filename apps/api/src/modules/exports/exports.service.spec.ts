@@ -32,6 +32,8 @@ function exportRecord(overrides: Record<string, unknown> = {}) {
 
 describe("ExportsService", () => {
   const database = {
+    $transaction: vi.fn(),
+    workflowOutbox: { upsert: vi.fn() },
     collection: { findUnique: vi.fn() },
     designAsset: { findUnique: vi.fn() },
     exportJob: {
@@ -54,6 +56,8 @@ describe("ExportsService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    database.$transaction.mockImplementation((operation: (tx: unknown) => unknown) => operation(database));
+    jobs.enqueue.mockResolvedValue(undefined);
     database.user.findUnique.mockResolvedValue({ id: "user-a" });
     database.designAsset.findUnique.mockResolvedValue({
       projectId: "project-a",
@@ -83,6 +87,25 @@ describe("ExportsService", () => {
     await expect(service.capabilities("user-a")).resolves.toEqual({
       downloadLinkHours: 24,
     });
+  });
+
+  it("persists dispatch before attempting Redis and remains queued when Redis is unavailable", async () => {
+    jobs.enqueue.mockRejectedValueOnce(new Error("Redis offline"));
+    const result = await service.create("user-a", { sourceType: "asset", assetId: "asset-a", format: "png", quality: "standard" });
+    expect(result.status).toBe("queued");
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ eventType: "export.dispatch" }) }));
+    expect(database.workflowOutbox.upsert.mock.invocationCallOrder[0]).toBeLessThan(jobs.enqueue.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it("replays one request key and rejects different parameters", async () => {
+    database.exportJob.findUnique.mockResolvedValueOnce(null);
+    const input = { sourceType: "asset", assetId: "asset-a", format: "png", quality: "standard" } as const;
+    await service.create("user-a", input, "request-key");
+    const created = database.exportJob.create.mock.calls[0]?.[0].data;
+    database.exportJob.findUnique.mockResolvedValue(exportRecord(created));
+    await service.create("user-a", input, "request-key");
+    expect(database.exportJob.create).toHaveBeenCalledTimes(1);
+    await expect(service.create("user-a", { ...input, format: "jpg" }, "request-key")).rejects.toThrow("该导出编号已用于不同参数");
   });
 
   it("标准单图统一使用标准尺寸且不加水印", async () => {

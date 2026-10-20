@@ -120,15 +120,8 @@ export function TrendArchive({
 
   return (
     <section aria-label="趋势资料库" className={styles.archive}>
-      <WeeklyDigestCard
-        digest={digest.data}
-        error={digest.error}
-        loading={digest.isLoading}
-        onRetry={digest.refresh}
-      />
       <section aria-label="趋势筛选" className={styles.archiveFilters}>
         <div>
-          <span className={styles.archiveOverline}>RESEARCH ARCHIVE</span>
           <h2>已采集趋势档案</h2>
           <p>
             {trends.total} 条原始来源 · 当前展示 {items.length} 条
@@ -220,6 +213,10 @@ export function TrendArchive({
           {trends.isLoadingMore ? "正在读取…" : "加载更多趋势"}
         </button>
       ) : null}
+      <details className={styles.externalSources}>
+        <summary>本周趋势综述</summary>
+        <WeeklyDigestCard digest={digest.data} error={digest.error} loading={digest.isLoading} onRetry={digest.refresh} />
+      </details>
       <TrendBoardPickerDialog
         importing={Boolean(importingId)}
         onClose={() => setPendingTrend(null)}

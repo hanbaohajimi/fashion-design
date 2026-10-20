@@ -34,7 +34,7 @@ async function main() {
   await mkdir(outputDir, { recursive: true });
   const responses: unknown[] = [];
   const model = new AmuxClaudeClient(amuxClaudeClientConfigFromEnv(), async (url, request) => {
-    const response = await fetch(url, { method: "POST", redirect: "error", signal: AbortSignal.timeout(request.timeoutMs),
+    const response = await fetch(url, { method: "POST", redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(request.timeoutMs), ...(request.signal ? [request.signal] : [])]),
       headers: { "anthropic-version": "2023-06-01", "Content-Type": "application/json", "x-api-key": request.apiKey }, body: JSON.stringify(request.body) });
     const payload: unknown = await response.json();
     // Isolated fixture output only: never persist requests, credentials, or image bytes.

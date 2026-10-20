@@ -74,8 +74,7 @@ export function VersionTimeline({
     <section className={styles.versionTimeline} aria-label="版本时间线">
       <header>
         <div>
-          <span>LINEAGE / HISTORY</span>
-          <h3>资产版本时间线</h3>
+          <h3>版本历史</h3>
         </div>
         <p>恢复会创建新版本，当前记录不会被覆盖。</p>
       </header>

@@ -9,7 +9,7 @@ function harness(responses: unknown[], declined: unknown[] = []) {
     nodes: [{ id: "brief", kind: "asset", type: "brief", title: "设计需求", payload: { text: "保留立领" }, status: "ready", x: 0, y: 0 }], edges: [] };
   const context = { nodes: graph.nodes, focusNodeIds: [], graphRevision: 4, contextRevision: 1, summaryRevision: 2,
     dialog: [{ id: "message-1", content: "旧对话的偏好" }], preferences: [{ id: "inference-1", origin: "inferred", text: "可能喜欢银色" }], trajectory: "过去的设计轨迹" };
-  const database = { $transaction: vi.fn(async () => undefined), workflowNodeVersion: { findMany: vi.fn(async () => []) },
+  const database = { $queryRaw: vi.fn(async () => []), $transaction: vi.fn(async () => undefined), workflowNodeVersion: { findMany: vi.fn(async () => []) },
     workflowAttempt: { groupBy: vi.fn(async () => []) }, workflowProposal: { findMany: vi.fn(async () => declined) }, project: { findFirst: vi.fn(async () => ({ id: "project" })) } };
   const contexts = { build: vi.fn(async () => ({ graph, context })), get: vi.fn(async () => ({ revision: 1, state: { preferences: [] } })) };
   const visual = { enrich: vi.fn(async () => ({ images: [], imageBindings: [], index: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } })) };
@@ -19,11 +19,28 @@ function harness(responses: unknown[], declined: unknown[] = []) {
     return request.parse(value);
   });
   const coordinator = new WorkflowCoordinator(database as never, {} as never, contexts as never, visual as never, { generateJson } as never);
-  return { coordinator, generateJson };
+  return { coordinator, generateJson, database };
 }
 
 describe("Fig8 bounded coordinator", () => {
   const input = { userId: "user", projectId: "project", request: "理解完整设计过程", referencedNodeIds: [] };
+  it("exposes trusted copy eligibility without inventing execution history", async () => {
+    const h = harness([reply()]);
+    h.database.$queryRaw.mockResolvedValue([{ id: "copy-version", nodeId: "brief", origin: "project_copy", baseline: true }] as never);
+    await h.coordinator.run(input);
+    const prompt = JSON.parse(h.generateJson.mock.calls[0]?.[0].prompt ?? "{}");
+    expect(prompt.context.nodes[0]).toMatchObject({ nodeVersionId: "copy-version", attemptCount: 0, copiedSnapshot: true });
+  });
+  it("reserves commit time and refuses to start an expired turn", async () => {
+    const h = harness([reply()]);
+    await expect(h.coordinator.run({ ...input, deadlineAt: Date.now() + 4000 })).rejects.toThrow("超时");
+    expect(h.generateJson).not.toHaveBeenCalled();
+  });
+  it("passes remaining time and a real cancellation signal to the model", async () => {
+    const h = harness([reply()]);
+    await h.coordinator.run({ ...input, deadlineAt: Date.now() + 10000 });
+    expect(h.generateJson.mock.calls[0]?.[0]).toMatchObject({ timeoutMs: expect.any(Number), signal: expect.any(AbortSignal) });
+  });
   it("feeds a skipped identical action back for one repair instead of failing only during commit", async () => {
     const decision = parsePlannerDecision({ kind: "propose", message: "整理目标", action: { type: "create_tool", toolKey: "analyze_brief", toolVersion: "1", title: "整理设计目标", parameters: { prompt: "保留立领" },
       inputs: [{ nodeId: "brief", port: "goal" }], newObjective: null, rationale: "根据设计目标" } });

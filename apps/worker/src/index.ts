@@ -37,6 +37,7 @@ import {
   cleanupExport,
   cleanupExpiredExports,
   createExportProcessor,
+  validateExportFont,
   markExportFailed,
 } from "./processors/export.processor";
 import { createThumbnailProcessor } from "./processors/thumbnail.processor";
@@ -265,6 +266,7 @@ const trendDigestWorker = new Worker<TrendDigestJobData>(
 );
 
 async function start(): Promise<void> {
+  validateExportFont();
   await syncTrendSchedule(
     trendDigestQueue,
     trendDigestEnabled,

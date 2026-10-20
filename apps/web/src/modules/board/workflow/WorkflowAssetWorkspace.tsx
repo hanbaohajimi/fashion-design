@@ -1,8 +1,9 @@
 "use client";
 
 import { privateFetch as fetch } from "../../auth/private-fetch";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Dialog, Button, Tabs, TabPanel } from "../../../components/ui";
+import controls from "../../../components/ui.module.css";
 
 import { ExportModal } from "../generation/ExportModal";
 import { uploadTemporaryMask } from "../generation/generation-api";
@@ -111,6 +112,9 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   const [imageError, setImageError] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const tabsId = useId();
+  const exportTrigger = useRef<HTMLButtonElement>(null);
+  const [actualSize, setActualSize] = useState(false);
   const [maskState, setMaskState] = useState<MaskCanvasState>({ coverage: 0, strokeCount: 0 });
   const [brushRatio, setBrushRatio] = useState(0.06);
   const [prompt, setPrompt] = useState("");
@@ -171,13 +175,6 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
     image.src = previewUrl;
     return () => { active = false; image.onload = null; image.onerror = null; };
   }, [assetId, open, previewUrl, projectId]);
-
-  useEffect(() => {
-    if (!open || exportOpen || submitting || pendingRestore) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [exportOpen, onClose, open, pendingRestore, submitting]);
 
   const attachRestore = async (restored: PendingRestore) => {
     setSubmitting(true);
@@ -353,43 +350,38 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   };
 
   if (!open) return null;
-  return createPortal(
-    <>
-      <div className={styles.backdrop} onPointerDown={(event) => { if (event.target === event.currentTarget && !submitting && !pendingRestore) onClose(); }}>
-        <section aria-label="候选资产工作台" aria-modal="true" className={styles.assetDialog} role="dialog">
+  return (
+    <Dialog label={exportOpen ? "导出成果" : "候选资产工作台"} className={`${styles.assetDialog} ${controls.controlSurface}`} onClose={() => { if (!submitting && !pendingRestore) onClose(); }}>
+        <section hidden={exportOpen}>
           <header className={styles.header}>
-            <div><span>DESIGN ASSET / 候选</span><h2>{source?.title ?? "候选设计"}</h2></div>
+            <div><span>候选方案</span><h2>{source?.title ?? "候选设计"}</h2></div>
             <button aria-label="关闭候选工作台" disabled={submitting || Boolean(pendingRestore)} onClick={onClose} type="button">关闭</button>
           </header>
-          <nav aria-label="候选资产操作" className={styles.tabs}>
-            <button aria-current={tab === "preview" ? "page" : undefined} disabled={submitting || Boolean(pendingToolId) || pendingPatch} onClick={() => changeTab("preview")} type="button">大图预览</button>
-            <button aria-current={tab === "inpaint" ? "page" : undefined} disabled={submitting || Boolean(pendingToolId) || pendingPatch} onClick={() => changeTab("inpaint")} type="button">局部重绘</button>
-            <button aria-current={tab === "variation" ? "page" : undefined} disabled={submitting || Boolean(pendingToolId) || pendingPatch} onClick={() => changeTab("variation")} type="button">生成变体</button>
-            <button aria-current={tab === "history" ? "page" : undefined} disabled={submitting || Boolean(pendingToolId) || pendingPatch} onClick={() => changeTab("history")} type="button">版本历史</button>
-          </nav>
+          <Tabs<Tab> id={tabsId} label="候选资产操作" value={tab} onChange={changeTab} options={[{ value: "preview", label: "大图预览" }, { value: "inpaint", label: "局部重绘" }, { value: "variation", label: "生成变体" }, { value: "history", label: "版本历史" }].map((item) => ({ ...item, value: item.value as Tab, disabled: submitting || Boolean(pendingToolId) || pendingPatch }))} />
           {graphError ? <p className={styles.notice} role="alert">{graphError} <button onClick={() => void reloadGraph().catch(() => undefined)} type="button">重试</button></p> : null}
-          {tab === "preview" ? (
+          <TabPanel tabsId={tabsId} value="preview" activeValue={tab}>
             <div className={styles.previewLayout}>
-              <figure className={styles.imageStage}>
+              <figure className={styles.imageStage} data-actual-size={actualSize}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img alt={source?.title ?? "候选设计原图"} src={previewUrl} />
               </figure>
               <aside className={styles.previewAside}>
-                <span>ORIGINAL / DETAIL</span>
+                <span>原图与设计分支</span>
+                <div className={styles.previewTools}><Button size="small" onClick={() => setActualSize(false)} aria-pressed={!actualSize}>适合窗口</Button><Button size="small" onClick={() => setActualSize(true)} aria-pressed={actualSize}>原始比例</Button></div>
                 <h3>沿这张候选继续设计</h3>
                 <p>版本恢复和局部修改会创建新的分支；当前候选与它的来源会保留在画布中。</p>
-                {dimensions ? <dl><div><dt>原图尺寸</dt><dd>{dimensions.width} × {dimensions.height}</dd></div><div><dt>工作流节点</dt><dd>{source ? source.id.slice(0, 8) : "正在读取"}</dd></div></dl> : null}
+                {dimensions ? <dl><div><dt>原图尺寸</dt><dd>{dimensions.width} × {dimensions.height}</dd></div></dl> : null}
                 {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
                 <div className={styles.actionStack}>
                   <button className={styles.primary} onClick={() => changeTab("inpaint")} type="button">创建局部修改分支</button>
                   <button onClick={() => changeTab("variation")} type="button">创建变体分支</button>
                   <button onClick={() => changeTab("history")} type="button">查看与恢复版本</button>
-                  <button onClick={() => setExportOpen(true)} type="button">单图高清导出</button>
+                  <button ref={exportTrigger} onClick={() => setExportOpen(true)} type="button">单图高清导出</button>
                 </div>
               </aside>
             </div>
-          ) : null}
-          {tab === "inpaint" ? (
+          </TabPanel>
+          <TabPanel tabsId={tabsId} value="inpaint" activeValue={tab}>
             <div aria-busy={submitting} className={generationStyles.inpaintLayout}>
               <figure className={generationStyles.maskStage}>
                 <div className={generationStyles.maskMedia} data-busy={submitting}>
@@ -402,7 +394,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 <figcaption>涂抹需要修改的区域</figcaption>
               </figure>
               <aside className={generationStyles.inpaintControls}>
-                <div><span>LOCAL EDIT / BRANCH</span><strong>选择并描述修改</strong></div>
+                <div><span>局部修改分支</span><strong>选择并描述修改</strong></div>
                 <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
                 {palettes.length ? <label><span>参考色卡 · 可选</span><select disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label> : null}
                 <label><span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
@@ -413,15 +405,15 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitInpaint()} type="button">{pendingToolId ? "重试执行当前修改节点" : submitting ? "正在处理…" : "提交局部重绘"}</button>
               </aside>
             </div>
-          ) : null}
-          {tab === "variation" ? (
+          </TabPanel>
+          <TabPanel tabsId={tabsId} value="variation" activeValue={tab}>
             <div className={styles.previewLayout}>
               <figure className={styles.imageStage}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img alt="变体来源候选" src={previewUrl} />
               </figure>
               <aside className={generationStyles.inpaintControls}>
-                <div><span>VARIATION / BRANCH</span><strong>从当前候选生成变体</strong></div>
+                <div><span>变体分支</span><strong>从当前候选生成变体</strong></div>
                 <p>原候选会保留。确认后，新变体将沿当前候选的来源建立独立分支。</p>
                 <label><span>修改方向</span><textarea aria-label="变体修改说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：探索两种更简洁的领型" value={prompt} /></label>
                 <label><span>需要保留的特征</span><textarea aria-label="变体保留特征" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPreserve(event.target.value); setActionError(null); }} placeholder="例如：保持宽松廓形、原有面料与配色" value={preserve} /></label>
@@ -431,8 +423,8 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitVariation()} type="button">{pendingToolId ? "重试执行当前变体节点" : submitting ? "正在处理…" : "确认生成变体"}</button>
               </aside>
             </div>
-          ) : null}
-          {tab === "history" ? (
+          </TabPanel>
+          <TabPanel tabsId={tabsId} value="history" activeValue={tab}>
             <div className={styles.historyBody}>
               {pendingRestore ? <p className={styles.notice} role="alert">恢复版本已创建，正在等待加入画布。{actionError ? ` ${actionError}` : ""} <button disabled={submitting} onClick={() => void attachRestore(pendingRestore).catch(() => undefined)} type="button">重试加入画布</button></p> : null}
               {!pendingRestore ? (
@@ -444,11 +436,9 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 />
               ) : null}
             </div>
-          ) : null}
+          </TabPanel>
         </section>
-      </div>
-      {exportOpen ? <ExportModal onClose={() => setExportOpen(false)} source={{ assetId, previewUrl, type: "asset" }} /> : null}
-    </>,
-    document.body,
+      {exportOpen ? <ExportModal embedded onBack={() => { setExportOpen(false); requestAnimationFrame(() => exportTrigger.current?.focus()); }} onClose={onClose} source={{ assetId, previewUrl, type: "asset" }} /> : null}
+    </Dialog>
   );
 }

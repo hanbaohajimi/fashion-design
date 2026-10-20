@@ -1,0 +1,64 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+.card {
+  width: min(100%, 480px);
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+}
+.brand {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+}
+.sessionStatus {
+  margin: var(--space-8) 0 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+}
+.sessionError {
+  color: var(--color-error);
+}
+.card h1,
+.card strong {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+}
+.card p {
+  margin: 0;
+  line-height: var(--leading-relaxed);
+  color: var(--color-ink-secondary);
+}
+.card p[data-error="true"] {
+  color: var(--color-error);
+}
+.card a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  color: var(--color-signal);
+  text-underline-offset: 4px;
+}
+.card button {
+  min-height: var(--control-height-primary);
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-signal);
+  color: var(--color-on-inverse);
+  font: inherit;
+  cursor: pointer;
+}
+.card :is(button, a):focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 3px;
+}

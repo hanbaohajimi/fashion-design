@@ -1,4 +1,7 @@
 "use client";
+import { Menu } from "../../../components/ui";
+import { STUDIO_LAYOUT } from "../../../components/ui-config";
+import { useSerialPolling } from "../../use-serial-polling";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getWorkflowToolContract, parseWorkflowToolParameters, WORKFLOW_TOOL_KEYS, type WorkflowToolKey } from "@fashion/shared";
@@ -59,9 +62,12 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
   const [historyOpen, setHistoryOpen] = useState(false);
   const [legacyRunsOpen, setLegacyRunsOpen] = useState(false);
   const activeId = useRef(conversationId);
+  const initializedMessages = useRef("");
   const contextEpoch = useRef(0);
   const pendingRequest = useRef<{ key: string; id: string } | null>(null);
   const timelineEnd = useRef<HTMLDivElement>(null);
+  const followMessages = useRef(true);
+  const [newMessages, setNewMessages] = useState(false);
   const active = conversations.find((item) => item.id === conversationId);
   const legacy = Boolean(active && active.mode !== "workflow");
   const pendingReply = messages.some((message) => message.role === "assistant" && message.status === "pending" && message.origin !== "background_analysis" && message.origin !== "execution_result");
@@ -74,6 +80,9 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
   useEffect(() => { let active = true; void fetchWorkflowToolCatalog(projectId).then((catalog) => { if (active) setAgentVersion(catalog.agentVersion); }).catch(() => undefined); return () => { active = false; }; }, [projectId]);
 
   const activateConversation = useCallback((id: string) => {
+    followMessages.current = true;
+    setNewMessages(false);
+    initializedMessages.current = "";
     contextEpoch.current += 1;
     activeId.current = id;
     setConversationId(id);
@@ -113,14 +122,14 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
 
   useEffect(() => {
     let disposed = false;
-    if (!conversationId) return;
+    if (!conversationId || !legacy) return;
     void listWorkflowMessages(conversationId).then((page) => {
       if (!disposed) { setMessages((current) => mergeMessages(page.items, current)); setCursor(page.nextCursor); setLoading(false); }
     }).catch((error: unknown) => {
       if (!disposed) { onError(error instanceof Error ? error.message : "会话消息读取失败"); setLoading(false); }
     });
     return () => { disposed = true; };
-  }, [conversationId, onError, onProposal]);
+  }, [conversationId, legacy, onError, onProposal]);
 
   const refreshContext = useCallback(async () => {
     if (!conversationId || legacy) return;
@@ -150,21 +159,19 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     return () => window.clearInterval(timer);
   }, [context?.visualCoverage?.pending, contextSaving, legacy, refreshContext]);
 
-  useEffect(() => {
-    if (!conversationId || legacy) return;
-    let disposed = false;
-    let inFlight = false;
-    const timer = window.setInterval(() => {
-      if (inFlight) return;
-      inFlight = true;
-      void listWorkflowMessages(conversationId).then((page) => {
-        if (!disposed) setMessages((current) => mergeMessages(current, page.items));
-      }).catch((error: unknown) => { if (!disposed) onError(error instanceof Error ? error.message : "消息同步失败"); }).finally(() => { inFlight = false; });
-      void fetchWorkflowConversationPlan(conversationId).then((next) => { if (!disposed) setPlan((current) => !current || next.revision >= current.revision ? next : current); }).catch(() => undefined);
-    }, 2_500);
-    void fetchWorkflowConversationPlan(conversationId).then((next) => { if (!disposed) setPlan(next); }).catch(() => undefined);
-    return () => { disposed = true; window.clearInterval(timer); };
-  }, [conversationId, legacy, onError]);
+  const messageSync = useSerialPolling(conversationId ?? "", Boolean(conversationId && !legacy), 2500, async (signal) => {
+    if (!conversationId) return;
+    try {
+      const page = await listWorkflowMessages(conversationId, undefined, signal);
+      signal.throwIfAborted(); setMessages((current) => mergeMessages(current, page.items));
+      if (initializedMessages.current !== conversationId) { initializedMessages.current = conversationId; setCursor(page.nextCursor); }
+    } finally { if (!signal.aborted) setLoading(false); }
+  });
+  const planSync = useSerialPolling(conversationId ?? "", Boolean(conversationId && !legacy), 2500, async (signal) => {
+    if (!conversationId) return;
+    const next = await fetchWorkflowConversationPlan(conversationId, signal);
+    signal.throwIfAborted(); setPlan((current) => !current || next.revision >= current.revision ? next : current);
+  });
 
   useEffect(() => {
     const pending = [...messages].reverse().find((message) => message.proposal?.status === "pending")?.proposal ?? null;
@@ -173,7 +180,12 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     if (latestContext && !pendingReply) void refreshContext().catch(() => undefined);
   }, [messages, onProposal, pendingReply, refreshContext]);
 
-  useEffect(() => { timelineEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages.length, pendingReply]);
+  const latestMessage = messages.at(-1);
+  const latestMessageKey = latestMessage ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.content.length}` : "";
+  useEffect(() => {
+    if (followMessages.current) timelineEnd.current?.scrollIntoView({ block: "nearest" });
+    else setNewMessages(true);
+  }, [latestMessageKey, pendingReply]);
 
   const createConversation = async () => {
     const created = await createAgentConversation(projectId, { mode: "workflow" });
@@ -199,6 +211,8 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     }
     const refs = [...new Set(adjustment ? adjustment.refs : [...referencedIds, ...namedRefs])].filter((id) => graph.nodes.some((node) => node.id === id));
     if (refs.length > 16) { onError("每次最多引用 16 个节点，请移除部分引用"); return; }
+    followMessages.current = true;
+    setNewMessages(false);
     setSending(true);
     onError(null);
     try {
@@ -264,22 +278,15 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
   };
 
   return <div className={styles.assistantBody}>
-    <div className={styles.assistantUtility}>
-      <span>{legacy ? "历史会话 · 只读" : "持续设计协作"}</span>
-      <details className={styles.assistantMore}><summary>更多</summary><div onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}>
-        <button onClick={() => setHistoryOpen((value) => !value)} type="button">历史会话</button>
-        <button disabled={sending} onClick={() => { setSending(true); void createConversation().catch((error: unknown) => onError(error instanceof Error ? error.message : "会话创建失败")).finally(() => setSending(false)); }} type="button">新建设计对话</button>
-        {legacy ? <button onClick={() => setLegacyRunsOpen((value) => !value)} type="button">旧设计运行</button> : null}
-        <button disabled={sending} onClick={() => { setSending(true); const version = agentVersion === 2 ? 1 : 2; void updateWorkflowAgentSettings(projectId, version).then(() => { setAgentVersion(version); onNotice(version === 2 ? "设计协作已启用" : "设计协作已暂停，历史和已有执行仍保留"); }).catch((error: unknown) => onError(error instanceof Error ? error.message : "协作设置保存失败")).finally(() => setSending(false)); }} type="button">{agentVersion === 2 ? "暂停设计协作" : "启用设计协作"}</button>
-      </div></details>
-    </div>
     {historyOpen ? <div className={styles.chatToolbar}><select aria-label="历史会话" disabled={sending} onChange={(event) => activateConversation(event.target.value)} value={conversationId}>
       {!conversationId ? <option value="">新设计对话</option> : null}
       {conversations.map((item) => <option key={item.id} value={item.id}>{item.title || "未命名对话"}{item.mode === "workflow" ? "" : " · 只读历史"}</option>)}
     </select></div> : null}
     {!legacy ? <PlanPanel plan={plan} graph={graph} onLocate={onLocate} /> : null}
     {!legacy ? <ContextPanel context={context} error={contextError} graph={graph} saving={collaborationReadOnly || contextSaving || sending || pendingReply} selected={selected} onLocate={onLocate} onUpdate={updateContext} onRetry={() => { void refreshContext().catch((error: unknown) => setContextError(error instanceof Error ? error.message : "上下文读取失败")); }} /> : null}
-    <div aria-label="设计对话" aria-live="polite" className={styles.assistantConversation} data-empty={!loading && messages.length === 0}>
+    <div aria-label="设计对话" aria-live="polite" className={styles.assistantConversation} onScroll={(event) => { const view = event.currentTarget; followMessages.current = view.scrollHeight - view.scrollTop - view.clientHeight < STUDIO_LAYOUT.followThreshold; if (followMessages.current) setNewMessages(false); }} data-empty={!loading && messages.length === 0}>
+      {messageSync.error || planSync.error ? <p role="status">协作同步异常：{messageSync.error ?? planSync.error}<button onClick={() => { messageSync.retry(); planSync.retry(); }} type="button">重试同步</button></p> : null}
+      {messageSync.lastSuccess ? <small>消息同步于 {new Date(messageSync.lastSuccess).toLocaleTimeString("zh-CN")}</small> : null}
       {loading ? <p className={styles.chatEmpty}>正在恢复设计对话…</p> : messages.length === 0 ? <p className={styles.chatEmpty}>{legacy ? "这段历史会话没有消息。" : "开始新的设计对话"}</p> : null}
       {cursor ? <button className={styles.historyAction} disabled={loading} onClick={() => { setLoading(true); void listWorkflowMessages(conversationId, cursor).then((page) => { setMessages((current) => [...page.items, ...current.filter((item) => !page.items.some((older) => older.id === item.id))]); setCursor(page.nextCursor); }).catch((error: unknown) => onError(error instanceof Error ? error.message : "历史读取失败")).finally(() => setLoading(false)); }} type="button">读取更早消息</button> : null}
       {messages.map((message) => <article className={styles.workflowMessage} data-role={message.role} data-message-id={message.id} key={message.id}>
@@ -288,19 +295,30 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
         <p className={message.role === "user" ? styles.userExample : styles.assistantReply}>{message.content}</p>
         {message.status === "pending" ? <small role="status">正在结合画布理解你的需求…</small> : null}
         {message.error ? <small role="alert">{message.error.message}</small> : null}
-        {message.role === "assistant" && message.status === "failed" && !legacy && messages.some((user) => user.id === message.replyToId && user.clientRequestId) ? <button className={styles.actionSecondary} disabled={sending || contextSaving || pendingReply} onClick={() => void retryMessage(message)} type="button">重试这条回复</button> : null}
+        {message.role === "assistant" && message.status === "failed" && message.error?.code !== "WORKFLOW_BUDGET_EXHAUSTED" && !legacy && messages.some((user) => user.id === message.replyToId && user.clientRequestId) ? <button className={styles.actionSecondary} disabled={sending || contextSaving || pendingReply} onClick={() => void retryMessage(message)} type="button">重试这条回复</button> : null}
         {message.proposal ? <ProposalReview proposal={message.proposal} graph={graph} disabled={sending || pendingReply || collaborationReadOnly} onAccept={() => { if (message.proposal) void decide(message.proposal, "accept"); }} onReject={(reason) => { if (message.proposal) void decide(message.proposal, "reject", reason); }} onAdjust={(content, refs) => { if (message.proposal) void send({ proposalId: message.proposal.id, content, refs }); }} /> : null}
       </article>)}
       <div ref={timelineEnd} />
     </div>
+    {newMessages ? <button className={styles.newMessages} onClick={() => { followMessages.current = true; setNewMessages(false); timelineEnd.current?.scrollIntoView({ block: "nearest" }); }} type="button">有新消息 ↓</button> : null}
     {legacy && legacyRunsOpen ? renderLegacyRuns(conversationId) : null}
-    {legacy ? <div className={styles.legacyReadOnly}><p>历史聊天保留为只读。新设计对话会继承项目目标和有效偏好。</p><button className={styles.actionSecondary} disabled={sending} onClick={() => { setSending(true); void createConversation().catch((error: unknown) => onError(error instanceof Error ? error.message : "会话创建失败")).finally(() => setSending(false)); }} type="button">新建设计对话</button></div> : agentVersion === 1 ? <div className={styles.legacyReadOnly}><p>设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。</p></div> : <div className={styles.composer}>
+    <div className={styles.composer}>
+      {legacy ? <div className={styles.legacyReadOnly}><p>历史聊天保留为只读。可在“更多”中新建设计对话，继承项目目标和有效偏好。</p></div> : agentVersion === 1 ? <div className={styles.legacyReadOnly}><p>设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。</p></div> : <>
       {selected && !referencedIds.includes(selected.id) ? <button className={styles.referenceAction} onClick={() => setReferencedIds((current) => [...new Set([...current, selected.id])].slice(0, 16))} type="button">＋ 引用「{displayNodeTitle(selected)}」</button> : null}
       {referencedIds.length > 0 ? <div className={styles.mentions}>{referencedIds.map((id) => <button aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`} key={id} onClick={() => { const title = graph.nodes.find((node) => node.id === id)?.title; setReferencedIds((current) => current.filter((item) => item !== id)); if (title) setPrompt((value) => value.replace(`@${title}`, "").trimStart()); }} type="button">@{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"} ×</button>)}</div> : null}
       {mentionChoices.length > 0 ? <div aria-label="引用画布节点" className={styles.mentionChoices} role="listbox">{mentionChoices.map((node) => <button aria-selected={false} key={node.id} onClick={() => { setReferencedIds((current) => [...new Set([...current, node.id])].slice(0, 16)); setPrompt((value) => value.replace(/(?:^|\s)@([^@\s]*)$/u, (match) => `${match.startsWith(" ") ? " " : ""}@${node.title} `)); }} role="option" type="button">@{node.title}<small>{node.kind === "asset" ? "素材" : "工具"}{graph.nodes.filter((item) => item.title === node.title).length > 1 ? ` · ${node.id.slice(0, 8)}` : ""}</small></button>)}</div> : null}
       <textarea aria-label="向设计助手描述下一步" disabled={loading} maxLength={MAX_AGENT_MESSAGE_LENGTH} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder={messages.length === 0 && !legacy ? "描述你的目标、讨论已有方案，或 @ 引用画布内容…助手会结合设计路径继续协作" : "讨论设计、描述修改，或 @ 引用画布节点…"} rows={3} value={prompt} />
-      <div className={styles.composerActions}><button className={styles.actionPrimary} disabled={loading || sending || contextSaving || pendingReply || !prompt.trim()} onClick={() => void send()} type="button">{sending || pendingReply ? "理解中…" : "发送 ↑"}</button></div>
-    </div>}
+      </>}
+      <div className={styles.composerActions}>
+        <Menu label="对话操作" trigger="更多" placement="top" align="start">
+          <button onClick={() => setHistoryOpen((value) => !value)} type="button">历史会话</button>
+          <button disabled={sending} onClick={() => { setSending(true); void createConversation().catch((error: unknown) => onError(error instanceof Error ? error.message : "会话创建失败")).finally(() => setSending(false)); }} type="button">新建设计对话</button>
+          {legacy ? <button onClick={() => setLegacyRunsOpen((value) => !value)} type="button">旧设计运行</button> : null}
+          <button disabled={sending} onClick={() => { setSending(true); const version = agentVersion === 2 ? 1 : 2; void updateWorkflowAgentSettings(projectId, version).then(() => { setAgentVersion(version); onNotice(version === 2 ? "设计协作已启用" : "设计协作已暂停，历史和已有执行仍保留"); }).catch((error: unknown) => onError(error instanceof Error ? error.message : "协作设置保存失败")).finally(() => setSending(false)); }} type="button">{agentVersion === 2 ? "暂停设计协作" : "启用设计协作"}</button>
+        </Menu>
+        {!legacy && agentVersion !== 1 ? <><small>Enter 发送<br />Shift + Enter 换行</small><button className={styles.actionPrimary} disabled={loading || sending || contextSaving || pendingReply || !prompt.trim()} onClick={() => void send()} type="button">{sending || pendingReply ? "理解中…" : "发送 ↑"}</button></> : null}
+      </div>
+    </div>
   </div>;
 }
 

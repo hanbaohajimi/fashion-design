@@ -17,17 +17,14 @@ export function WeeklyDigestCard({
   if (loading) {
     return (
       <section aria-busy="true" className={styles.digestCard}>
-        <span className={styles.digestIndex}>W—</span>
-        <div><span>WEEKLY SOURCE BRIEF</span><p>正在整理本周已采集来源…</p></div>
+        <div><p>正在整理本周已采集来源…</p></div>
       </section>
     );
   }
   if (error || !digest) {
     return (
       <section className={styles.digestCard} data-empty>
-        <span className={styles.digestIndex}>W—</span>
         <div>
-          <span>WEEKLY SOURCE BRIEF</span>
           <h2>本周综述尚未生成</h2>
           <p>{error?.message ?? "定期采集完成后，这里会显示基于来源条目的分析整理。"}</p>
           {error ? <button onClick={onRetry} type="button">重新读取周报</button> : null}
@@ -39,10 +36,10 @@ export function WeeklyDigestCard({
   const week = digest.period.split("-W")[1] ?? "—";
   return (
     <section className={styles.digestCard}>
-      <span className={styles.digestIndex}>W{week}</span>
+      <span className={styles.digestIndex}>第 {week} 周</span>
       <div className={styles.digestCopy}>
         <div className={styles.digestMeta}>
-          <span>WEEKLY SOURCE BRIEF · {digest.period}</span>
+          <span>来源综述 · {digest.period}</span>
           <span>{digest.itemIds.length} 条来源汇总</span>
         </div>
         <h2>{digest.theme}</h2>

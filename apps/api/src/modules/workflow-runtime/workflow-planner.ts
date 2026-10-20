@@ -148,7 +148,7 @@ export const WORKFLOW_PLANNER_INSTRUCTIONS = [
   "最终通过fashion_workflow_collaboration提交结构化结果；它是回复协议，不是画布工具，不受用户‘不要创建工具’的限制。如果渠道未提供该协议调用，必须直接返回一个符合responseSchema的JSON对象，不加Markdown或其他文字。解释内容放在message字段。",
   "输出kind=reply回答解释、总结、比较和讨论；kind=clarify澄清具体歧义；只有确需创建、修改或派生工具时输出kind=propose与action。reply/clarify/read的action必须null。不要将每次交流变成工具提案。plan是可修订的目标及阶段，不是可执行工具链。",
   "证据不足时kind=read，用reads请求项目内nodes、attempts、branch_history、dialog或images及真实ids。最多三轮补读、总计五次Planner调用，其中最多一次纠错；不能读取网址、其他项目或执行设计工具。",
-  "action仅可create_tool、configure_tool或fork_tool。configure_tool只更新ready且从未执行的工具；fork_tool从已执行工具的真实版本派生新分支。不得返回任意图或数据库操作。输入替换通过完整inputs绑定表达，与parameters一起确认。",
+  "action仅可create_tool、configure_tool或fork_tool。configure_tool只更新ready且从未执行的工具；fork_tool从已执行工具的真实版本，或copiedSnapshot=true且completed并有已保存结果的复制基线派生新分支。复制基线不代表有执行历史。不得返回任意图或数据库操作。输入替换通过完整inputs绑定表达，与parameters一起确认。",
   "parameters遵循工具目录schema、版本、数量和限制。蒙版只引用实际assetId或fileAssetId，不能生成URL、存储地址或虚构资产。referenceInputs只配置已连接reference素材；角色和权重仅为提示词引导。",
   "understanding仅记录简明的当前步骤目标、请求类型、事实证据和未决问题；plan仅保存目标、阶段状态、下一目标及完成条件。不要输出内部推理。restore_version不属于可规划工具，只能引导用户进入真实版本历史。",
   "计划状态必须反映真实进度：提出建议或等待用户确认的阶段应为active，不能写成已经应用或completed。activeMilestoneId必须引用status='active'的阶段；若所有阶段实际完成、没有活动阶段，activeMilestoneId必须为null。只有真实执行结果或已记录的人工确认支持完成状态。",
@@ -234,7 +234,7 @@ export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, exp
   return operations;
 }
 
-export type WorkflowActionEligibility = Readonly<Record<string, { readonly nodeVersionId: string; readonly attemptCount: number }>>;
+export type WorkflowActionEligibility = Readonly<Record<string, { readonly nodeVersionId: string; readonly attemptCount: number; readonly copiedSnapshot?: boolean }>>;
 
 /** Action Enablement: the host derives atomic graph mutations from a closed business-action vocabulary. */
 export function compileWorkflowAction(graph: Graph, raw: WorkflowAction, explicitNodeIds: readonly string[], eligibility: WorkflowActionEligibility = {}): Operation[] {
@@ -248,7 +248,7 @@ export function compileWorkflowAction(graph: Graph, raw: WorkflowAction, explici
     const state = eligibility[target.id];
     if (!state || action.targetNodeVersionId !== state.nodeVersionId) throw new Error("目标节点版本已变化或缺少版本证据，请重新规划");
     if (action.type === "configure_tool" && (state.attemptCount > 0 || target.status !== "ready" || graph.edges.some((edge) => edge.sourceNodeId === target.id))) throw new Error("已执行或不再可编辑的工具需要派生新分支");
-    if (action.type === "fork_tool" && state.attemptCount < 1) throw new Error("派生必须引用已有真实执行记录的工具");
+    if (action.type === "fork_tool" && state.attemptCount < 1 && !(state.copiedSnapshot && target.status === "completed" && graph.edges.some((edge) => edge.sourceNodeId === target.id && graph.nodes.some((node) => node.id === edge.targetNodeId && node.status === "completed")))) throw new Error("派生必须引用已有真实执行记录或已完成复制快照的工具");
   }
   for (const slot of contract.inputSlots) {
     const count = action.inputs.filter((input) => input.port === slot.port).length + (slot.port === "goal" && action.newObjective ? 1 : 0);

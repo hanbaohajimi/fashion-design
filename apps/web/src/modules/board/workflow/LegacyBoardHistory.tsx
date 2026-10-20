@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Dialog } from "../../../components/ui";
 import {
   createTLStore,
   defaultBindingUtils,
@@ -191,19 +192,6 @@ export function LegacyBoardHistory({
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    closeButtonRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [onClose]);
 
   useEffect(() => {
     let active = true;
@@ -284,16 +272,10 @@ export function LegacyBoardHistory({
   };
 
   return (
-    <div className={styles.backdrop}>
-      <section
-        aria-label="历史白板"
-        aria-modal="true"
-        className={styles.panel}
-        role="dialog"
-      >
+      <Dialog label="历史白板" className={styles.panel} onClose={onClose}>
         <header className={styles.header}>
           <div>
-            <span className={styles.eyebrow}>ARCHIVE / LEGACY BOARD</span>
+            <span className={styles.eyebrow}>历史设计存档</span>
             <h2>历史白板</h2>
             <p>仅供查看与引用。点击图片、便签或色卡，可加入当前工作流。</p>
           </div>
@@ -305,7 +287,7 @@ export function LegacyBoardHistory({
             >
               {exporting ? "正在导出…" : "导出 PNG"}
             </button>
-            <button onClick={onClose} ref={closeButtonRef} type="button">
+            <button autoFocus onClick={onClose} type="button">
               关闭
             </button>
           </div>
@@ -384,7 +366,6 @@ export function LegacyBoardHistory({
             {importing ? "正在加入…" : "加入当前工作流"}
           </button>
         </footer>
-      </section>
-    </div>
+      </Dialog>
   );
 }

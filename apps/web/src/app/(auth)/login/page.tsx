@@ -2,6 +2,7 @@
 
 import { type FormEvent, useRef, useState } from "react";
 
+import { Button, Input } from "../../../components/ui";
 import { readErrorMessage } from "../../../modules/auth/auth-api";
 import styles from "./login-redesign.module.css";
 
@@ -81,7 +82,7 @@ export default function LoginPage() {
           onSubmit={handleSubmit}
         >
           <label htmlFor="email">邮箱地址</label>
-          <input
+          <Input
             aria-describedby={
               error ? "login-error" : sentEmail ? "login-status" : undefined
             }
@@ -101,7 +102,7 @@ export default function LoginPage() {
             type="email"
             value={email}
           />
-          <button
+          <Button variant="primary"
             disabled={state === "sending" || state === "sent"}
             type="submit"
           >
@@ -110,7 +111,7 @@ export default function LoginPage() {
               : sentEmail
                 ? "邮件已发送"
                 : "发送登录链接"}
-          </button>
+          </Button>
         </form>
 
         {sentEmail ? (

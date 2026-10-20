@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getWorkflowToolContract, parseWorkflowToolParameters, WORKFLOW_TOOL_KEYS, WORKFLOW_REFERENCE_ROLES, type WorkflowToolKey, type AgentDesignBrief, type AgentDesignEvaluation } from "@fashion/shared";
 import { type WorkflowGraph, type WorkflowNode, type WorkflowInputPort, type WorkflowAttempt, decideWorkflowCandidate, executeWorkflowNode, fetchWorkflowNodeHistory } from "./workflow-api";
 import { displayNodeTitle, incomingEdges, outgoingEdges, lineageOf, nodeImageUrl, nodeSummary, nodeTypeLabel } from "./workflow-graph";
 import { DesignPathPanel } from "../generation/DesignPathPanel";
+import { Badge, Button } from "../../../components/ui";
 import { WorkflowDialog } from "./WorkflowDialog";
 import styles from "./workflow-canvas.module.css";
 
@@ -47,7 +48,9 @@ export function NodeDetails({
   onInferRole,
   onEnsureConversation,
   setError,
+  onDirtyChange,
 }: {
+  readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   readonly graph: WorkflowGraph;
   readonly node: WorkflowNode | null;
   readonly onCreateCollection: (nodeId: string, assetId: string) => Promise<void>;
@@ -63,6 +66,9 @@ export function NodeDetails({
 }) {
   const [decisionKind, setDecisionKind] = useState<"selected" | "rejected" | "compare">("selected");
   const [decisionReason, setDecisionReason] = useState("");
+  const [toolDirty, setToolDirty] = useState(false);
+  useEffect(() => { onDirtyChange?.(toolDirty || Boolean(decisionReason.trim())); }, [decisionReason, onDirtyChange, toolDirty]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   if (!node) return <div className={styles.sideEmpty}><span>◌</span><h3>选择画布节点</h3><p>查看来源、输入、输出与可执行操作。</p></div>;
@@ -77,6 +83,7 @@ export function NodeDetails({
     <div className={styles.detailScroll}>
       <span className={styles.overline}>{node.kind === "asset" ? "设计素材" : "设计工具"} · {nodeTypeLabel(node.type)}</span>
       <h3>{displayNodeTitle(node)}</h3>
+      <Badge tone={node.status === "failed" ? "error" : node.status === "completed" ? "success" : node.status === "running" ? "warning" : "neutral"}>{STATUS_LABELS[node.status] ?? node.status}</Badge>
       <p className={styles.detailSummary}>{nodeSummary(node) || "这个节点尚无说明。"}</p>
       {nodeImageUrl(node) ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -91,7 +98,7 @@ export function NodeDetails({
         {path && path.nodeIds.size > 1 ? <ol>{graph.nodes.filter((item) => path.nodeIds.has(item.id)).map((item) => <li key={item.id}>{displayNodeTitle(item)}</li>)}</ol> : null}
         {assetId ? <DesignPathPanel assetId={assetId} /> : null}
       </details>
-      {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={`${node.id}:${node.updatedAt}`} node={node} onEnsureConversation={onEnsureConversation} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
+      {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={node.id} onDirtyChange={setToolDirty} node={node} onEnsureConversation={onEnsureConversation} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
       {node.type === "candidate" && assetId ? <section className={styles.detailSection}><h4>候选方案</h4><button onClick={() => onOpenAsset(assetId)} type="button">打开大图、版本与局部重绘</button><h4>设计师决定</h4><select onChange={(event) => setDecisionKind(event.target.value as typeof decisionKind)} value={decisionKind}><option value="selected">选定方案</option><option value="compare">保留比较</option><option value="rejected">否决方案</option></select><textarea className={styles.decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder="记录选择或否决理由" rows={3} value={decisionReason} /><button disabled={!decisionReason.trim()} onClick={() => void decideWorkflowCandidate(projectId, node.id, assetId, decisionKind, decisionReason.trim()).then((next) => { onGraphChange(next); setDecisionReason(""); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "决定保存失败"))} type="button">保存决定</button></section> : null}
       {assetId && node.type === "candidate" ? <section className={styles.detailSection}><h4>系列</h4><button onClick={() => void onCreateCollection(node.id, assetId)} type="button">{typeof node.payload.collectionId === "string" ? "打开关联系列" : "设为 Hero / 建立系列"}</button></section> : null}
       <section className={styles.detailSection}>
@@ -143,8 +150,9 @@ function toolDraft(node: WorkflowNode): ToolDraft {
   };
 }
 
-function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEnsureConversation, projectId, setError }: {
+function ToolSettings({ onDirtyChange, graph, inputs, node, onGraphChange, onSavePayload, onEnsureConversation, projectId, setError }: {
   readonly graph: WorkflowGraph;
+  readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   readonly inputs: number;
   readonly node: WorkflowNode;
   readonly onGraphChange: (next: WorkflowGraph) => void;
@@ -156,11 +164,22 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEns
   const original = toolDraft(node);
   const [draft, setDraft] = useState<ToolDraft>(original);
   const [saving, setSaving] = useState(false);
+  const previousOriginal = useRef(JSON.stringify(original));
+  const originalSignature = JSON.stringify(original);
+  const draftSignature = JSON.stringify(draft);
+  useEffect(() => {
+    if (originalSignature !== previousOriginal.current) {
+      if (draftSignature === previousOriginal.current) setDraft(JSON.parse(originalSignature) as ToolDraft);
+      previousOriginal.current = originalSignature;
+    }
+  }, [originalSignature, draftSignature]);
   const [history, setHistory] = useState<readonly WorkflowAttempt[] | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const canEdit = node.status === "ready" && node.type !== "restore_version";
   const imageTool = node.type === "generate_design" || node.type === "edit_design";
   const dirty = draft.prompt !== original.prompt || (imageTool && (draft.negativePrompt !== original.negativePrompt || draft.width !== original.width || draft.height !== original.height || draft.quality !== original.quality || draft.count !== original.count || JSON.stringify(draft.referenceInputs) !== JSON.stringify(original.referenceInputs)));
+  useEffect(() => { onDirtyChange?.(canEdit && dirty); }, [canEdit, dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const referenceNodes = graph.nodes.filter((source) => graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === "reference" && edge.sourceNodeId === source.id) && Boolean(nodeImageUrl(source)));
 
   const save = async () => {
@@ -192,6 +211,7 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEns
     setLocalError(null);
     try {
       await onSavePayload(node.id, { ...node.payload, params: nextParams });
+      setDraft(toolDraft({ ...node, payload: { ...node.payload, params: nextParams } }));
     } catch (cause) {
       setLocalError(cause instanceof Error ? cause.message : "工具参数保存失败");
     } finally {
@@ -225,9 +245,11 @@ function ToolSettings({ graph, inputs, node, onGraphChange, onSavePayload, onEns
       </details> : null}
     </div>
     {localError ? <p className={styles.toolError} role="alert">{localError}</p> : null}
-    {canEdit ? <button disabled={!dirty || saving} onClick={() => void save()} type="button">{saving ? "正在保存…" : "保存工具参数"}</button> : null}
-    {node.type !== "restore_version" && node.status !== "completed" ? <button disabled={saving || node.status === "running" || inputs === 0 || (canEdit && dirty)} onClick={() => void execute()} type="button">{node.status === "running" ? "正在执行…" : node.status === "failed" ? "重试执行" : "确认并执行"}</button> : null}
-    {canEdit && dirty ? <p>请先保存参数，再确认执行。</p> : null}
+    <div className={styles.toolActions}>
+    {canEdit ? <Button disabled={!dirty || saving} onClick={() => void save()} type="button">{saving ? "正在保存…" : "保存工具参数"}</Button> : null}
+    {node.type !== "restore_version" && node.status !== "completed" ? <Button variant="primary" disabled={saving || node.status === "running" || inputs === 0 || (canEdit && dirty)} onClick={() => void execute()} type="button">{node.status === "running" ? "正在执行…" : node.status === "failed" ? "重试执行" : "确认并执行"}</Button> : null}
+    {canEdit && dirty ? <p>请先保存参数，再确认执行。</p> : inputs === 0 ? <p>连接所需输入后即可执行。</p> : null}
+    </div>
     <details className={styles.advancedSettings}><summary>执行记录</summary>
     <button onClick={() => void fetchWorkflowNodeHistory(projectId, node.id).then((value) => setHistory(value.items)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "执行历史读取失败"))} type="button">读取尝试记录</button>
     {history ? <ol className={styles.attemptList}>{history.length === 0 ? <li>尚无执行记录</li> : history.map((attempt) => <li key={attempt.id}>

@@ -22,5 +22,6 @@ import { S3FileStorage } from "../files/storage.service";
     { provide: EXPORT_JOBS, useExisting: BullExportJobs },
     { provide: EXPORT_STORAGE, useExisting: S3FileStorage },
   ],
+  exports: [EXPORT_JOBS, BullExportJobs],
 })
 export class ExportsModule {}

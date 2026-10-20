@@ -536,6 +536,10 @@ export class GenerationService {
           },
           select: { id: true },
         });
+        if (request.projectId) await transaction.$queryRaw(Prisma.sql`
+          INSERT INTO workflow_outbox (id, project_id, event_key, event_type, generation_task_id, payload, updated_at)
+          VALUES (${randomUUID()}, ${request.projectId}, ${`generation:${task.id}:dispatch`}, 'generation.dispatch', ${task.id},
+            ${JSON.stringify({ taskId: task.id, userId })}::jsonb, NOW()) ON CONFLICT (event_key) DO NOTHING RETURNING id`);
         return { kind: "created", taskId: task.id };
       },
     );

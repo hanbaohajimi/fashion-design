@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState, ImagePreview } from "../../../components/ui";
 
 import { createCollectionLook } from "./collection-api";
 import type {
@@ -123,15 +124,16 @@ export function LookGrid({
       ) : null}
 
       <div className={styles.lookGrid}>
+        {consistency.looks.every((look) => look.isHero) ? <EmptyState title="还没有扩展款">选择服装类型后点击“生成”，沿当前系列继续设计。</EmptyState> : null}
         {consistency.looks
           .filter((look) => !look.isHero)
           .map((look) => (
             <article key={look.assetId}>
               <figure>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <ImagePreview
                   alt={look.garmentType?.label ?? "生成的服装"}
                   src={look.thumbnailUrl ?? look.url}
+                  onRetry={onRefresh}
                 />
                 <figcaption>{look.garmentType?.label ?? "服装"}</figcaption>
               </figure>

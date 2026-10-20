@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Dialog, Tabs, TabPanel } from "../../../components/ui";
+import controls from "../../../components/ui.module.css";
 
 import {
   fetchCollection,
@@ -50,7 +51,7 @@ export function CollectionDrawer({
   const lastSaved = useRef("");
   const draftRef = useRef<CollectionDna | null>(null);
   const saveQueue = useRef(Promise.resolve());
-  const drawerRef = useRef<HTMLElement>(null);
+  const tabsId = useId();
   const exportTriggerRef = useRef<HTMLButtonElement>(null);
   const mountedRef = useRef(true);
   const collectionRequestId = useRef(0);
@@ -189,42 +190,6 @@ export function CollectionDrawer({
   }, [loadCollection, refreshConsistency]);
 
   useEffect(() => {
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    const frame = window.requestAnimationFrame(() => {
-      drawerRef.current?.focus();
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.requestAnimationFrame(() => {
-        if (
-          previouslyFocused?.isConnected &&
-          !previouslyFocused.closest("[inert]")
-        ) {
-          previouslyFocused.focus();
-        }
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (exportOpen) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        void closeAfterSave();
-        return;
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () =>
-      window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [closeAfterSave, exportOpen]);
-
-  useEffect(() => {
     draftRef.current = draft;
     if (!draft) return;
     const signature = dnaSignature(draft);
@@ -261,15 +226,13 @@ export function CollectionDrawer({
     }
   };
 
-  return createPortal(
-    <aside
-      aria-label="系列 DNA"
-      className={styles.collectionDrawer}
-      inert={exportOpen ? true : undefined}
-      ref={drawerRef}
-      role="dialog"
-      tabIndex={-1}
+  return (
+    <Dialog
+      label={exportOpen ? "导出成果" : "系列 DNA"}
+      className={`${styles.collectionDrawer} ${controls.controlSurface} ${exportOpen ? styles.collectionExport : ""}`}
+      onClose={() => void closeAfterSave()}
     >
+      <div className={styles.collectionContents} hidden={exportOpen}>
       <header className={styles.collectionHeader}>
         <div>
           <strong>{collection ? "系列" : "正在读取系列"}</strong>
@@ -295,22 +258,7 @@ export function CollectionDrawer({
       </header>
 
       {collection ? (
-        <nav aria-label="系列工作区" className={styles.collectionTabs}>
-          <button
-            aria-current={tab === "dna" ? "page" : undefined}
-            onClick={() => setTab("dna")}
-            type="button"
-          >
-            DNA 定义
-          </button>
-          <button
-            aria-current={tab === "looks" ? "page" : undefined}
-            onClick={() => setTab("looks")}
-            type="button"
-          >
-            Look 扩展
-          </button>
-        </nav>
+        <Tabs<DrawerTab> id={tabsId} label="系列工作区" className={styles.collectionTabs} value={tab} onChange={setTab} options={[{ value: "dna", label: "DNA 定义" }, { value: "looks", label: "Look 扩展" }]} />
       ) : null}
 
       {!collection && !collectionError ? (
@@ -359,8 +307,7 @@ export function CollectionDrawer({
               </button>
             </div>
           ) : null}
-          {tab === "dna" ? (
-            <>
+            <TabPanel tabsId={tabsId} value="dna" activeValue={tab} keepMounted>
               <section className={styles.collectionHero}>
                 <figure>
                   {heroImageUrl && failedHeroUrl !== heroImageUrl ? (
@@ -376,7 +323,7 @@ export function CollectionDrawer({
                       className={styles.collectionHeroFallback}
                       role="img"
                     >
-                      <span>HERO</span>
+                      <span>核心款</span>
                       <small>预览暂不可用</small>
                     </div>
                   )}
@@ -402,8 +349,9 @@ export function CollectionDrawer({
                   setDraft(next);
                 }}
               />
-            </>
-          ) : consistency && tab === "looks" ? (
+            </TabPanel>
+            <TabPanel tabsId={tabsId} value="looks" activeValue={tab} keepMounted>
+            {consistency ? (
             <LookGrid
               beforeGenerate={flushDna}
               collectionId={collectionId}
@@ -420,12 +368,15 @@ export function CollectionDrawer({
               <i />
               <i />
             </div>
-          )}
+            )}
+            </TabPanel>
         </>
       ) : null}
+      </div>
       {exportOpen && collection ? (
-        <ExportModal
-          onClose={closeExport}
+        <ExportModal embedded
+          onBack={closeExport}
+          onClose={() => void closeAfterSave()}
           source={{
             collectionId,
             name: collection.name,
@@ -434,8 +385,7 @@ export function CollectionDrawer({
           }}
         />
       ) : null}
-    </aside>,
-    document.body,
+    </Dialog>
   );
 }
 

@@ -1,8 +1,5 @@
 /* 引入统一设计系统 */
 @import "../styles/design-system.css";
-@import "../styles/motion-tokens.css";
-@import "../styles/motion-enhancements.css";
-@import "../styles/components.css";
 
 html,
 body {
@@ -60,118 +57,6 @@ textarea {
 
 a {
   color: inherit;
-}
-
-.session-status {
-  margin: 2rem 0 0;
-  color: var(--color-ink-secondary);
-  font-size: 0.875rem;
-}
-
-.session-status-error,
-.confirm-error {
-  color: var(--color-error);
-}
-
-.confirm-page {
-  display: grid;
-  min-height: 100dvh;
-  place-content: center;
-  padding: 2rem;
-  text-align: center;
-}
-
-.confirm-page h1 {
-  font-size: clamp(2.5rem, 7vw, 5rem);
-}
-
-.confirm-page a {
-  margin-top: 2rem;
-  color: var(--color-ink);
-  font-weight: 700;
-  text-underline-offset: 0.3em;
-}
-
-.global-error-page {
-  display: grid;
-  min-height: 100dvh;
-  padding: 2rem;
-  place-items: center;
-}
-
-.core-error-boundary {
-  align-content: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-ink);
-  border-top: 5px solid var(--color-error);
-  color: var(--color-ink);
-  display: grid;
-  gap: 0.85rem;
-  margin: auto;
-  max-width: 34rem;
-  min-height: 18rem;
-  padding: clamp(1.5rem, 4vw, 3rem);
-  width: min(100%, 34rem);
-}
-
-.core-error-boundary > span {
-  color: var(--color-ink-tertiary);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-}
-
-.core-error-boundary > strong {
-  font-size: clamp(1.45rem, 3vw, 2.25rem);
-  line-height: 1.15;
-}
-
-.core-error-boundary > p {
-  color: var(--color-ink-secondary);
-  line-height: 1.65;
-  margin: 0;
-}
-
-.core-error-boundary > button {
-  background: var(--color-ink);
-  border: 1px solid var(--color-ink);
-  color: var(--color-surface);
-  cursor: pointer;
-  font-weight: 800;
-  justify-self: start;
-  min-height: 2.75rem;
-  padding: 0.65rem 1.35rem;
-}
-
-.core-error-boundary > button:hover {
-  background: var(--color-error);
-  border-color: var(--color-error);
-}
-
-.core-error-boundary > button:active {
-  transform: translateY(1px);
-}
-
-.core-error-boundary > button:focus-visible {
-  outline: 3px solid var(--color-warning);
-  outline-offset: 3px;
-}
-
-.core-error-boundary > a {
-  justify-self: start;
-  color: var(--color-ink-secondary);
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-underline-offset: 0.3em;
-}
-
-.core-error-boundary > a:hover {
-  color: var(--color-error);
-}
-
-.core-error-boundary > a:focus-visible {
-  outline: 3px solid var(--color-warning);
-  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {

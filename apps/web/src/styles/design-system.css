@@ -13,6 +13,32 @@
 
 :root {
   color-scheme: light;
+  --control-height: 36px;
+  --control-height-compact: 32px;
+  --control-height-primary: 40px;
+  --control-height-touch: 44px;
+  --studio-header-height: 56px;
+  --content-max-width: 1600px;
+  --page-gutter: clamp(16px, 3vw, 48px);
+  --image-stage-background: #E5E5E5;
+
+  /* 旧组件只引用别名，所有视觉值以本文件为准。 */
+  --surface-base: var(--color-canvas);
+  --surface-elevated: var(--color-paper);
+  --surface-overlay: var(--color-surface);
+  --surface-hover: var(--color-overlay);
+  --text-tertiary: var(--color-ink-tertiary);
+  --text-disabled: var(--color-ink-disabled);
+  --text-inverse: var(--color-on-inverse);
+  --text-body-sm: 12px;
+  --text-body-md: 14px;
+  --text-body-lg: 16px;
+  --font-weight-medium: var(--font-medium);
+  --border-subtle: var(--color-border);
+  --border-strong: var(--color-border-strong);
+  --accent-muted: var(--color-signal-subtle);
+  --accent-hover: var(--color-signal-hover);
+
 
   /* ============================================================
      一、表面层级 —— 墙 / 纸 / 台
@@ -35,7 +61,7 @@
 
   --color-ink: #1F1D1A;           /* 主要文字 —— 深墨 */
   --color-ink-secondary: #5C574F; /* 次要文字 —— 说明、元数据 */
-  --color-ink-tertiary: #706A60;  /* 辅助文字，保持暖白底上的可读对比度 */
+  --color-ink-tertiary: #686259;  /* 辅助文字，在次级表面上同样满足正文对比度 */
   --color-ink-disabled: #BDB8AE;  /* 禁用 */
 
   /* ============================================================
@@ -131,8 +157,8 @@
     "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
   /* 字号 —— 基于 4px 栅格 */
-  --text-2xs: 9px;
-  --text-xs: 10px;
+  --text-2xs: 12px;
+  --text-xs: 12px;
   --text-sm: 12px;
   --text-base: 14px;
   --text-lg: 16px;
@@ -183,10 +209,10 @@
      专业工具不需要大圆角。4-10px 足够。
   */
 
-  --radius-sm: 3px;
-  --radius-md: 5px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
   --radius-lg: 8px;
-  --radius-xl: 10px;
+  --radius-xl: 12px;
   --radius-full: 999px;
 
   /* ============================================================
@@ -219,8 +245,8 @@
 
   --duration-instant: 90ms;
   --duration-fast: 140ms;
-  --duration-normal: 220ms;
-  --duration-slow: 320ms;
+  --duration-normal: 180ms;
+  --duration-slow: 180ms;
 
   /* ============================================================
      十二、层级
@@ -232,12 +258,41 @@
   --z-overlay: 300;
   --z-modal: 400;
   --z-toast: 500;
+  --z-tooltip: 600;
+  --tooltip-max-width: 280px;
 
   /* ============================================================
      十三、向后兼容映射
      ============================================================
      旧变量名继续解析到新值，避免大规模重写。
   */
+
+
+  /* 动效兼容别名：所有入口统一使用同一时长与缓动。 */
+  --dur-instant: var(--duration-instant);
+  --dur-fast: var(--duration-fast);
+  --dur-standard: var(--duration-normal);
+  --dur-enter: var(--duration-normal);
+  --dur-exit: var(--duration-fast);
+  --dur-layout: var(--duration-normal);
+  --dur-material-enter: var(--duration-normal);
+  --dur-material-hover: var(--duration-fast);
+  --dur-material-pin: var(--duration-normal);
+  --dur-ai-pulse: 900ms;
+  --dur-ai-spin: 700ms;
+  --ease-state: var(--ease-standard);
+  --ease-spring: var(--ease-enter);
+  --ease-snappy: var(--ease-standard);
+  --ease-material-drop: var(--ease-enter);
+  --ease-material-pin: var(--ease-enter);
+  --t-state: var(--duration-fast) var(--ease-standard);
+  --t-instant: var(--duration-instant) var(--ease-standard);
+  --t-enter: var(--duration-normal) var(--ease-enter);
+  --t-exit: var(--duration-fast) var(--ease-exit);
+  --t-layout: var(--duration-normal) var(--ease-standard);
+  --stagger-xs: 0ms;
+  --stagger-sm: 0ms;
+  --stagger-md: 0ms;
 
   /* Atelier 系列 */
   --atelier-canvas: var(--color-canvas);
@@ -317,6 +372,14 @@
      全局基线
      ============================================================ */
 
+@media (pointer: coarse) {
+  :root {
+    --control-height: var(--control-height-touch);
+    --control-height-compact: var(--control-height-touch);
+    --control-height-primary: var(--control-height-touch);
+  }
+}
+
 body {
   background: var(--color-canvas);
   color: var(--color-ink);
@@ -378,4 +441,8 @@ body {
   font-weight: var(--font-bold);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-instant: 0ms; --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; --dur-ai-pulse: 0ms; --dur-ai-spin: 0ms; }
 }

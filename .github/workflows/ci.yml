@@ -22,6 +22,8 @@ jobs:
       S3_HEALTHCHECK_OBJECT_KEY: .health/ready
       S3_REGION: us-east-1
       S3_SECRET_ACCESS_KEY: fashion_minio_dev_secret
+      EXPORT_PDF_FONT_PATH: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+      EXPORT_PDF_FONT_FAMILY: NotoSansCJKsc-Regular
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +41,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install export font
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
 
       - name: Audit production and development dependencies
         run: pnpm audit:all
@@ -80,6 +85,22 @@ jobs:
 
       - name: Run browser contract tests
         run: pnpm test:e2e
+
+      - name: Compare Atelier screenshots in pinned Chromium environment
+        run: pnpm test:e2e:visual
+
+      - name: Run isolated real application browser flow
+        run: pnpm test:e2e:real
+
+      - name: Save browser and application diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trial-diagnostics
+          path: |
+            output/playwright/
+            output/trial-runtime/*.log
+          retention-days: 7
 
       - name: Stop integration infrastructure
         if: always()

@@ -44,6 +44,7 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
   const graph = await mockExportWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   await expect(canvas.locator('[data-kind="asset"]')).toHaveCount(2);
   await expect(canvas.locator('[data-kind="tool"]')).toHaveCount(1);
@@ -76,7 +77,7 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
   }));
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出 PNG", exact: true }).click();
+  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(`fashion-workflow-${PROJECT_ID}.png`);
   expect(await download.failure()).toBeNull();

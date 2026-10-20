@@ -438,6 +438,10 @@ model ExportJob {
   expiresAt     DateTime?     @map("expires_at")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
+  requestKey    String?       @map("request_key")
+  requestFingerprint String?  @map("request_fingerprint")
+  leaseToken    String?       @map("lease_token")
+  leaseExpiresAt DateTime?    @map("lease_expires_at")
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   designAsset   DesignAsset?  @relation(fields: [designAssetId], references: [id], onDelete: SetNull)
@@ -447,6 +451,8 @@ model ExportJob {
   @@index([status, expiresAt])
   @@index([designAssetId])
   @@index([collectionId])
+  @@unique([userId, requestKey])
+  @@index([status, leaseExpiresAt])
   @@map("export_jobs")
 }
 

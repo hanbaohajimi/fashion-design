@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { AppHeader } from "../../components/AppHeader";
+import controls from "../../components/ui.module.css";
 
 import { resolveTrendReturnTarget } from "../../modules/trends/active-board";
 import { TrendArchive } from "../../modules/trends/TrendArchive";
@@ -33,26 +34,20 @@ function firstSearchValue(
 
 export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const query = await searchParams;
-  const returnTarget = resolveTrendReturnTarget(
+  resolveTrendReturnTarget(
     firstSearchValue(query.from),
     firstSearchValue(query.boardId),
   );
 
   return (
-    <main className={styles.trendsPage}>
+    <><AppHeader current="trends" projectId={firstSearchValue(query.from) === "board" ? firstSearchValue(query.boardId) : undefined} /><main className={`${styles.trendsPage} ${controls.controlSurface}`}>
       <div className={styles.editorialFrame}>
-        <header className={styles.pageHeader}>
-          <span>FASHION RESEARCH INDEX</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <Link href={returnTarget.href}>{returnTarget.label}</Link>
-          </div>
-        </header>
+
 
         <section className={styles.hero}>
           <h1>趋势档案</h1>
           <p>
-            <span>TREND RESEARCH ARCHIVE</span>
-            <span>/ 来源、摘要与设计参考</span>
+            <span>发现趋势，整理来源与设计参考。</span>
           </p>
         </section>
 
@@ -64,7 +59,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
           }
         />
 
-        <section className={styles.sourceLayout}>
+        <details className={styles.externalSources}><summary>外部时尚资料 · 8 个来源</summary><section className={styles.sourceLayout}>
           <nav aria-label="时尚趋势平台" className={styles.platformIndex}>
             {TREND_PLATFORMS.map((platform, index) => (
               <a
@@ -97,8 +92,8 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
             </div>
             <span className={styles.defaultPreview}>INDEX</span>
           </aside>
-        </section>
+        </section></details>
       </div>
-    </main>
+    </main></>
   );
 }

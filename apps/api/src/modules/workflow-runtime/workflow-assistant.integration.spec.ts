@@ -299,7 +299,9 @@ describe("persistent workflow collaboration", () => {
     h.model.generateJson.mockRejectedValue(new Error("ECONNREFUSED"));
     const request = { clientRequestId: "shared-budget-retry-123", content: "总结当前画布", referencedNodeIds: [] };
     for (let retry = 0; retry < 6; retry += 1) {
-      expect((await h.assistant.send(h.user.id, h.conversation.id, request)).assistantMessage.status).toBe("failed");
+      const result = await h.assistant.send(h.user.id, h.conversation.id, request);
+      expect(result.assistantMessage.status).toBe("failed");
+      if (retry >= 4) expect(result.assistantMessage.error?.code).toBe("WORKFLOW_BUDGET_EXHAUSTED");
     }
     expect(h.model.generateJson).toHaveBeenCalledTimes(5);
     expect(await prisma.agentTurn.findFirstOrThrow({ where: { conversationId: h.conversation.id } })).toMatchObject({ status: "failed", budget: { modelCalls: 5 } });

@@ -66,6 +66,7 @@ export async function createExport(
   source: ExportSource,
   format: ExportFormat,
   quality: ExportQuality,
+  requestKey?: string,
 ): Promise<ExportJob> {
   const body =
     source.type === "asset"
@@ -85,7 +86,7 @@ export async function createExport(
     method: "POST",
     body: JSON.stringify(body),
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(requestKey ? { "Idempotency-Key": requestKey } : {}) },
   });
   if (!response.ok) {
     throw await apiError(response, "导出任务创建失败");
@@ -93,10 +94,18 @@ export async function createExport(
   return (await response.json()) as ExportJob;
 }
 
-export async function fetchExportJob(exportId: string): Promise<ExportJob> {
+export async function listExportJobs(projectId: string, sourceType: "asset" | "collection", sourceId: string, signal?: AbortSignal): Promise<{ items: ExportJob[] }> {
+  const query = new URLSearchParams({ projectId, sourceType, sourceId, page: "1", limit: "20" });
+  const response = await fetch(`/api/exports?${query}`, { credentials: "include", cache: "no-store", signal: signal ?? null });
+  if (!response.ok) throw await apiError(response, "最近导出任务读取失败");
+  return response.json() as Promise<{ items: ExportJob[] }>;
+}
+
+export async function fetchExportJob(exportId: string, signal?: AbortSignal): Promise<ExportJob> {
   const response = await fetch(`/api/exports/${encodeURIComponent(exportId)}`, {
     cache: "no-store",
     credentials: "include",
+    signal: signal ?? null,
   });
   if (!response.ok) {
     throw await apiError(response, "导出状态读取失败");

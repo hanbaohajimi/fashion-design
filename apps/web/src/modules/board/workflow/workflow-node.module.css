@@ -11,7 +11,7 @@
   border: 1px solid var(--color-border);
   border-top: 2px solid var(--swatch-linen);
   border-radius: 6px;
-  padding: 12px 14px 11px;
+  padding: var(--space-3) 14px 11px;
   background: var(--color-paper);
 
   /* 明确的层次感：节点从画布浮起 */
@@ -40,6 +40,8 @@
     transform: translateY(0) scale(1);
   }
 }
+
+
 
 .node[data-kind="tool"] {
   border-top-color: var(--swatch-mauve);
@@ -78,15 +80,15 @@
 .nodeHeader {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   border-bottom: 1px solid var(--color-divider);
-  padding-bottom: 8px;
+  padding-bottom: var(--space-2);
 }
 
 /* eyebrow 类型标签：默认隐藏，只在鼠标悬停时出现 */
 .eyebrow {
   color: var(--color-ink-tertiary);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.1em;
   line-height: 1.2;
@@ -104,7 +106,7 @@
   color: var(--color-ink);
   /* 标题用衬线字体，和正文形成清晰层级 */
   font-family: var(--font-serif);
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.3;
@@ -115,9 +117,9 @@
 .summary {
   display: -webkit-box;
   overflow: hidden;
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--color-ink-secondary);
-  font-size: 14px;
+  font-size: var(--text-base);
   line-height: 1.55;
   white-space: pre-wrap;
   -webkit-box-orient: vertical;
@@ -156,10 +158,10 @@
   min-width: 0;
   overflow: hidden;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   border-bottom: 0;
   border-top: 1px solid var(--color-divider);
-  padding: 9px min(12px, 4%);
+  padding: 9px min(var(--space-3), 4%);
 }
 
 .node[data-image="true"] .eyebrow {
@@ -181,8 +183,8 @@
   flex: 0 0 22px;
   min-width: 0;
   margin: 0;
-  padding: 0 min(12px, 4%) 6px;
-  font-size: 14px;
+  padding: 0 min(var(--space-3), 4%) 6px;
+  font-size: var(--text-base);
   line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -190,10 +192,10 @@
 
 .swatch {
   flex: 1;
-  min-height: 40px;
+  min-height: var(--control-height-primary);
   border: 1px solid var(--color-divider);
   border-radius: 2px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 /* 状态徽章只在节点确实有进度时渲染（见 WorkflowNodeShape）。
@@ -208,7 +210,7 @@
   padding: 3px 6px;
   background: var(--swatch-mauve-wash);
   color: var(--swatch-mauve);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 650;
 }
 
@@ -272,19 +274,19 @@
 }
 
 .interactivePort { position: absolute; z-index: 3; top: calc(50% - 14px); width: 28px; height: 28px; display: grid; place-items: center; border: 0; padding: 0; background: transparent; cursor: crosshair; touch-action: none; pointer-events: all; }
-.interactivePort { transform: scale(var(--tl-scale, 1)); font-size: 14px; }
+.interactivePort { transform: scale(var(--tl-scale, 1)); font-size: var(--text-base); }
 .portInput { left: -14px; }
 .portOutput { right: -14px; }
 .interactivePort > span:first-child { width: 6px; height: 6px; border: 1px solid var(--color-ink-tertiary); border-radius: 50%; background: var(--color-paper); transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) var(--ease-state), box-shadow var(--dur-fast) var(--ease-state); }
 .interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.4); border-color: var(--swatch-indigo); box-shadow: 0 0 0 3px var(--swatch-indigo-wash); }
 .interactivePort:focus-visible { outline: 2px solid var(--swatch-indigo); border-radius: 50%; outline-offset: 2px; }
 .interactivePort:disabled { cursor: default; }
-.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: 4px 8px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 12px; line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
+.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: var(--space-1) var(--space-2); background: var(--color-paper); color: var(--color-ink-secondary); font-size: var(--text-sm); line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
 .interactivePort:hover .portLabel, .interactivePort:focus-visible .portLabel, .interactivePort[data-valid="true"] .portLabel { opacity: 1; transform: translateY(0); }
 .node[data-connectable="valid"] { border-color: var(--swatch-indigo); }
 .node[data-connectable="invalid"] { opacity: .55; }
-.nodeActions { position: absolute; right: 0; bottom: -34px; display: flex; gap: 8px; }
-.nodeActions button { border: 1px solid var(--color-border); border-radius: 5px; padding: 5px 12px; background: var(--color-paper); color: var(--color-ink-secondary); font: 14px/1.4 var(--font-sans); cursor: pointer; }
+.nodeActions { position: absolute; right: 0; bottom: -34px; display: flex; gap: var(--space-2); }
+.nodeActions button { border: 1px solid var(--color-border); border-radius: 5px; padding: 5px var(--space-3); background: var(--color-paper); color: var(--color-ink-secondary); font: 14px/1.4 var(--font-sans); cursor: pointer; }
 .nodeActions button:hover { color: var(--swatch-indigo); }
 @media (pointer: coarse) { .interactivePort { width: 44px; height: 44px; top: calc(50% - 22px); } .portInput { left: -22px; } .portOutput { right: -22px; } }
 
@@ -293,3 +295,10 @@
     transition: none;
   }
 }
+
+.node { animation: none; box-shadow: none; border-radius: var(--radius-lg); font-family: var(--font-sans); }
+.eyebrow { opacity: 1; font-size: var(--text-sm); font-weight: var(--font-medium); letter-spacing: 0; }
+.nodeHeader strong { font-family: var(--font-sans); font-size: var(--text-base); font-weight: var(--font-semibold); letter-spacing: 0; }
+.imageFrame { background: var(--image-stage-background); }
+.toolStatus { font-size: var(--text-sm); }
+.node[data-highlighted="true"] { box-shadow: 0 0 0 2px var(--swatch-mauve-wash); }

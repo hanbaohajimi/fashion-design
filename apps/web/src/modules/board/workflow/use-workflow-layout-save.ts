@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "reac
 import { WorkflowLayoutSave, type LayoutBatch } from "./workflow-layout-save";
 import { HISTORY_POSITION, navigationPosition, registerNavigationGuard, registerTraversalGuard } from "../../navigation";
 
-export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void>, onError: (error: unknown) => void) {
+export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void>, onError: (error: unknown) => void, beforeLeave?: () => Promise<void>, hasUnsavedDetails?: () => boolean) {
   const router = useRouter();
   const [queue] = useState(() => new WorkflowLayoutSave(async () => { throw new Error("保存服务尚未准备好"); }));
   useLayoutEffect(() => queue.setHandler(async (batch) => {
@@ -20,14 +20,15 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
     let restoring = false;
     let permitted = false;
     let traversal = 0;
-    const unregister = registerNavigationGuard(queue.flush);
+    const flushAndLeave = async () => { await queue.flush(); await beforeLeave?.(); };
+    const unregister = registerNavigationGuard(flushAndLeave);
     const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!queue.hasUnsaved()) return;
+      if (!queue.hasUnsaved() && !hasUnsavedDetails?.()) return;
       event.preventDefault();
       event.returnValue = "";
     };
     const click = (event: MouseEvent) => {
-      if (!queue.hasUnsaved() || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if ((!queue.hasUnsaved() && !hasUnsavedDetails?.()) || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
       if (!(anchor instanceof HTMLAnchorElement) || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
       const url = new URL(anchor.href, location.href);
@@ -36,14 +37,14 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
       event.stopPropagation();
       if (leaving) return;
       leaving = true;
-      void queue.flush().then(() => router.push(url.pathname + url.search + url.hash)).catch(() => undefined).finally(() => { leaving = false; });
+      void flushAndLeave().then(() => router.push(url.pathname + url.search + url.hash)).catch(() => undefined).finally(() => { leaving = false; });
     };
     const popstate = (event: PopStateEvent) => {
       if (permitted) { permitted = false; return; }
       if (restoring) {
         event.stopImmediatePropagation();
         restoring = false;
-        void queue.flush().then(() => {
+        void flushAndLeave().then(() => {
           permitted = true;
           history.go(-traversal);
         }).catch(() => { leaving = false; });
@@ -68,7 +69,7 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
       document.removeEventListener("click", click, true);
       unregisterTraversal();
     };
-  }, [queue, router]);
+  }, [beforeLeave, hasUnsavedDetails, queue, router]);
 
   return { queue, state, pendingCount };
 }

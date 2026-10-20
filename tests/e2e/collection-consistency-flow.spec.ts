@@ -487,7 +487,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
 
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(page.getByText("系列原点", { exact: true })).toBeVisible();
-  await expect(collectionDrawer).toBeFocused();
+  await expect(collectionDrawer.getByRole("button", { name: "关闭系列抽屉" })).toBeFocused();
   await collectionDrawer.getByRole("button", { name: "导出 PDF" }).click();
   const exportDialog = page.getByRole("dialog", { name: "导出成果" });
   await expect(exportDialog).toBeVisible();
@@ -501,7 +501,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   await expect(exportDialog.getByRole("link", { name: "下载 PDF" })).toHaveAttribute("href", "https://download.example/lookbook.pdf?signature=e2e");
   expect(exportRequests).toHaveLength(1);
   expect(exportRequests[0]).toMatchObject({ collectionId: "collection-e2e", format: "pdf" });
-  await exportDialog.getByRole("button", { name: "关闭导出窗口" }).click();
+  await exportDialog.getByRole("button", { name: "返回工作区" }).click();
   await expect(exportDialog).toBeHidden();
   consistencyAvailable = true;
   const sourceTypeSelect = collectionDrawer.getByRole("combobox", {
@@ -535,7 +535,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   ).toBeVisible();
   await expect(page.getByLabel("系列 DNA").getByText("已保存")).toBeVisible();
 
-  await page.getByRole("button", { name: "Look 扩展" }).click();
+  await page.getByRole("tab", { name: "Look 扩展" }).click();
   const retrySeriesState = collectionDrawer.getByRole("button", {
     name: "重新读取系列状态",
   });

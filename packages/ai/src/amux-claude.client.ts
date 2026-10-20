@@ -6,6 +6,8 @@ export interface AmuxClaudeImageInput {
 }
 
 export interface AmuxClaudeJsonRequest<T> {
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
   readonly images?: readonly AmuxClaudeImageInput[];
   readonly instructions: string;
   readonly jsonSchema: Record<string, unknown>;
@@ -27,6 +29,7 @@ export interface AmuxClaudeClientConfig {
 }
 
 export interface AmuxClaudeTransportRequest {
+  readonly signal?: AbortSignal;
   readonly apiKey: string;
   readonly body: Record<string, unknown>;
   readonly timeoutMs: number;
@@ -79,15 +82,44 @@ export class AmuxClaudeClient implements AmuxClaudeJsonClient {
     };
     const response = await this.transport(
       `${this.config.baseUrl.replace(/\/$/, "")}/messages`,
-      { apiKey, body, timeoutMs: this.config.timeoutMs },
+      { apiKey, body, timeoutMs: Math.min(this.config.timeoutMs, request.timeoutMs ?? this.config.timeoutMs), ...(request.signal ? { signal: request.signal } : {}) },
     );
     assertUsableStopReason(response);
+    const parse = (value: unknown) => request.parse(decodeSchemaContainers(value, request.jsonSchema));
     const toolInput = responseToolInput(response, request.schemaName);
     if (toolInput !== undefined) {
-      return request.parse(toolInput);
+      return parse(toolInput);
     }
-    return parseStructuredJson(responseText(response), request.parse);
+    return parseStructuredJson(responseText(response), parse);
   }
+}
+
+/** Some gateways serialize nested containers. Decode only where the declared schema requires one. */
+function decodeSchemaContainers(value: unknown, rawSchema: unknown, root: unknown = rawSchema, depth = 0): unknown {
+  if (depth > 24 || !isRecord(rawSchema)) return value;
+  let schema = rawSchema;
+  if (typeof schema.$ref === "string" && schema.$ref.startsWith("#/")) {
+    const resolved = schema.$ref.slice(2).split("/").reduce<unknown>((current, key) => isRecord(current) ? current[key.replace(/~1/gu, "/").replace(/~0/gu, "~")] : undefined, root);
+    if (!isRecord(resolved)) return value;
+    schema = resolved;
+  }
+  const alternatives = schema.anyOf ?? schema.oneOf;
+  if (Array.isArray(alternatives) && !alternatives.some((item) => isRecord(item) && item.type === "string")) {
+    const container = alternatives.find((item) => isRecord(item) && (item.type === "object" || item.type === "array"));
+    if (isRecord(container)) schema = container;
+  }
+  if (typeof value === "string" && (schema.type === "object" || schema.type === "array")) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (schema.type === "array" && Array.isArray(parsed) || schema.type === "object" && isRecord(parsed) && !Array.isArray(parsed)) value = parsed;
+    } catch { /* Non-JSON text remains invalid and is rejected by the original validator. */ }
+  }
+  if (Array.isArray(value) && schema.type === "array") return value.map((item) => decodeSchemaContainers(item, schema.items, root, depth + 1));
+  if (isRecord(value) && !Array.isArray(value) && schema.type === "object" && isRecord(schema.properties)) {
+    const properties = schema.properties;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decodeSchemaContainers(item, properties[key], root, depth + 1)]));
+  }
+  return value;
 }
 
 function assertUsableStopReason(response: unknown): void {
@@ -131,7 +163,7 @@ async function defaultTransport(
     },
     method: "POST",
     redirect: "error",
-    signal: AbortSignal.timeout(request.timeoutMs),
+    signal: AbortSignal.any([AbortSignal.timeout(request.timeoutMs), ...(request.signal ? [request.signal] : [])]),
   });
   const payload = (await response.json().catch(() => undefined)) as unknown;
   if (!response.ok) {

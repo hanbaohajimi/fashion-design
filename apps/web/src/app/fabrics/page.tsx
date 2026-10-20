@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AppHeader } from "../../components/AppHeader";
+import controls from "../../components/ui.module.css";
+import { Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { useFabrics } from "../../modules/fabrics/fabric-api";
 import { FabricVirtualGrid } from "../../modules/fabrics/FabricVirtualGrid";
@@ -20,8 +23,12 @@ const FABRIC_SCOPE_OPTIONS: readonly {
   { label: "用户上传", value: "user" },
 ];
 
-export default function FabricsPage() {
+export default function FabricsPage() { return <Suspense fallback={<main>正在加载面料库…</main>}><FabricLibrary /></Suspense>; }
+
+function FabricLibrary() {
   const [search, setSearch] = useState("");
+  const params = useSearchParams();
+  const projectId = params.get("from") === "board" ? params.get("boardId") || undefined : undefined;
   const [scope, setScope] = useState<FabricScopeFilter>("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search.trim());
@@ -59,12 +66,12 @@ export default function FabricsPage() {
   }, [search]);
 
   return (
-    <main className={styles.libraryPage} id="main-content">
+    <><AppHeader current="fabrics" projectId={projectId} /><main className={`${styles.libraryPage} ${controls.controlSurface}`}>
       <header className={styles.libraryHeader}>
         <div className={styles.libraryIdentity}>
-          <Link aria-label="返回项目库" href="/">
+          <Link aria-label="返回项目库" href={projectId ? `/${encodeURIComponent(projectId)}` : "/"}>
             <span aria-hidden="true">←</span>
-            项目库
+            {projectId ? "返回设计工作室" : "项目库"}
           </Link>
           <span aria-hidden="true" className={styles.headerDivider} />
           <div>
@@ -99,7 +106,7 @@ export default function FabricsPage() {
         </div>
       </header>
 
-      <FabricUploadPanel onUploaded={() => fabrics.refresh()} />
+      <details className={styles.uploadDisclosure}><summary>上传面料</summary><FabricUploadPanel onUploaded={() => fabrics.refresh()} /></details>
 
       <div className={styles.libraryBody}>
         <section className={styles.archivePanel} aria-label="面料列表">
@@ -165,6 +172,6 @@ export default function FabricsPage() {
           ) : null}
         </section>
       </div>
-    </main>
+    </main></>
   );
 }

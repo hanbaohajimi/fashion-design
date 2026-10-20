@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { Dialog } from "../../components/ui";
 
 import { useCreateProject, useProjects } from "../projects/use-projects";
 import styles from "./trends.module.css";
@@ -20,25 +21,18 @@ export function TrendBoardPickerDialog({
 }: TrendBoardPickerDialogProps) {
   const projectsQuery = useProjects("", "active", open);
   const createProject = useCreateProject();
+  const busy = importing || createProject.isPending;
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const projects = useMemo(
     () => projectsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [projectsQuery.data],
   );
 
-  useEffect(() => {
-    if (!open) return;
-    const frame = window.requestAnimationFrame(() =>
-      dialogRef.current?.focus(),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [open]);
-
   if (!open) return null;
 
   const createAndSelect = async (): Promise<void> => {
+    if (busy) return;
     const trimmed = name.trim();
     if (Array.from(trimmed).length < 3) {
       setError("项目名称至少需要 3 个字");
@@ -57,31 +51,20 @@ export function TrendBoardPickerDialog({
   };
 
   return (
-    <div
-      className={styles.dialogBackdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !importing) onClose();
-      }}
-    >
-      <div
-        aria-labelledby="trend-board-dialog-title"
-        aria-modal="true"
+      <Dialog
+        label="选择存入位置"
         className={styles.boardDialog}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !importing) onClose();
-        }}
-        ref={dialogRef}
-        role="dialog"
-        tabIndex={-1}
+        onClose={() => { if (!busy) onClose(); }}
+        busy={busy}
       >
         <div className={styles.dialogHeading}>
           <div>
-            <span>DESTINATION / BOARD</span>
+            <span>存入设计项目</span>
             <h2 id="trend-board-dialog-title">选择存入位置</h2>
           </div>
           <button
             aria-label="关闭"
-            disabled={importing}
+            disabled={busy}
             onClick={onClose}
             type="button"
           >
@@ -99,7 +82,7 @@ export function TrendBoardPickerDialog({
           ) : null}
           {projects.map((project) => (
             <button
-              disabled={importing}
+              disabled={busy}
               key={project.id}
               onClick={() => void onSelect(project.id)}
               type="button"
@@ -136,7 +119,6 @@ export function TrendBoardPickerDialog({
           </div>
           {error ? <p role="alert">{error}</p> : null}
         </form>
-      </div>
-    </div>
+      </Dialog>
   );
 }

@@ -1052,6 +1052,20 @@ describe("Generation processor", () => {
     }
   });
 
+  it("过期 RUNNING 租约没有 provider 句柄时明确中断，不能再次生成", async () => {
+    const fixture = await createTask(GenerationTaskStatus.RUNNING);
+    const stale = await prisma.generationTask.update({ where: { id: fixture.task.id },
+      data: { updatedAt: new Date(Date.now() - 60_000), attemptCount: 1 } });
+    const ai = successfulAi();
+    const process = createGenerationProcessor({ ai, billing: new BillingService(prisma), database: prisma, moderator: approvedModerator(), pollIntervalMs: 1 });
+    try {
+      await expect(process(fakeJob(stale))).rejects.toThrow("无法安全恢复");
+      expect(ai.submit).not.toHaveBeenCalled();
+      const task = await prisma.generationTask.findUniqueOrThrow({ where: { id: stale.id } });
+      expect(task).toMatchObject({ status: "FAILED", errorCode: "GENERATION_INTERRUPTED", attemptCount: 1 });
+    } finally { await cleanup(fixture.userId); }
+  });
+
   it("过期 RUNNING 租约可原子接管并复用 provider job", async () => {
     const fixture = await createTask(GenerationTaskStatus.RUNNING);
     const stale = await prisma.generationTask.update({

@@ -202,12 +202,13 @@ export async function createAgentConversation(
 export async function listWorkflowMessages(
   conversationId: string,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<CursorPage<WorkflowMessageView>> {
-  return (await listAgentMessages(conversationId, cursor)) as unknown as CursorPage<WorkflowMessageView>;
+  return (await listAgentMessages(conversationId, cursor, signal)) as unknown as CursorPage<WorkflowMessageView>;
 }
 
 async function workflowConversationRequest<T>(url: string, init: RequestInit | undefined, fallback: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store", credentials: "include", ...init, ...(init ? { headers: { "Content-Type": "application/json" } } : {}) });
+  const response = await fetch(url, { cache: "no-store", credentials: "include", ...init, ...(init?.body ? { headers: { "Content-Type": "application/json" } } : {}) });
   if (!response.ok) throw await apiError(response, fallback);
   return (await response.json()) as T;
 }
@@ -252,8 +253,8 @@ export interface WorkflowCollaborationPlan {
   } | null;
 }
 
-export function fetchWorkflowConversationPlan(conversationId: string): Promise<WorkflowCollaborationPlan> {
-  return workflowConversationRequest(`/api/agent-conversations/${encodeURIComponent(conversationId)}/plan`, undefined, "协作计划读取失败");
+export function fetchWorkflowConversationPlan(conversationId: string, signal?: AbortSignal): Promise<WorkflowCollaborationPlan> {
+  return workflowConversationRequest(`/api/agent-conversations/${encodeURIComponent(conversationId)}/plan`, { signal: signal ?? null }, "协作计划读取失败");
 }
 
 export interface WorkflowContextCorrection {
@@ -281,12 +282,13 @@ export function updateWorkflowConversationContext(
 export async function listAgentMessages(
   conversationId: string,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<CursorPage<AgentMessageView>> {
   const query = new URLSearchParams({ limit: "50" });
   if (cursor) query.set("cursor", cursor);
   const response = await fetch(
     `/api/agent-conversations/${encodeURIComponent(conversationId)}/messages?${query.toString()}`,
-    { cache: "no-store", credentials: "include" },
+    { cache: "no-store", credentials: "include", signal: signal ?? null },
   );
   if (!response.ok) {
     throw await apiError(response, "会话消息读取失败");

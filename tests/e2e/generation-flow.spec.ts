@@ -221,6 +221,8 @@ test("面料档案支持快捷搜索并可快速清空关键词", async ({ page 
 
   await page.goto("/fabrics");
   const search = page.getByRole("searchbox", { name: "搜索面料" });
+  // The server-rendered search box may be visible before keyboard effects hydrate.
+  await expect.poll(() => requestedSearches.length).toBeGreaterThan(0);
   await page.keyboard.press("Control+K");
   await expect(search).toBeFocused();
   await search.fill("  亚麻  ");
@@ -559,6 +561,7 @@ test("独立面料库支持点击和拖放上传，并可按原始 ID 引入工�
   });
 
   await page.goto("/fabrics");
+  await page.getByText("上传面料", { exact: true }).first().click();
   const uploadPanel = page.getByRole("region", { name: "上传面料" });
   await expect(uploadPanel).toBeVisible();
 
@@ -808,7 +811,7 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   expect(candidateDecision?.mutationId).toMatch(/^[0-9a-f-]{36}$/u);
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出 PNG" }).click();
+  await page.getByRole("button", { name: "导出画布 PNG" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("fashion-workflow-e2e-project.png");
 

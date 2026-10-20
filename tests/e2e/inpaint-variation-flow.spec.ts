@@ -126,7 +126,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await expect(page.getByRole("alert").filter({ hasText: "仅支持 JPG、PNG、WebP 或 HEIC 图片" })).toBeVisible();
   await page.getByRole("button", { name: "关闭提示" }).click();
   const workspace = await openCandidate(page);
-  await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
+  await workspace.getByRole("tab", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将领口改成窄驳领，保持原有面料");
   await expect(workspace.getByRole("combobox")).toHaveValue("");
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
@@ -165,7 +165,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   expect(mocked.mask().uploadedMaskDimensions).toEqual({ height: 1024, width: 768 });
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
   await openCandidate(page);
-  await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
+  await workspace.getByRole("tab", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将口袋改成贴袋，保持廓形");
   await workspace.getByRole("combobox").selectOption("palette");
   await workspace.getByRole("button", { name: "标记中央区域" }).click();
@@ -191,7 +191,7 @@ test("变体修改方向与保留项需显式确认，图冲突和执行失败�
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/" + PROJECT_ID);
   const workspace = await openCandidate(page);
-  await workspace.getByRole("button", { name: "生成变体", exact: true }).click();
+  await workspace.getByRole("tab", { name: "生成变体", exact: true }).click();
   expect(mocked.patchRequests).toHaveLength(0);
   expect(mocked.executions).toHaveLength(0);
   await workspace.getByRole("button", { name: "确认生成变体" }).click();
@@ -231,7 +231,7 @@ test("变体分支已提交但响应丢失时，重试认领原节点且只执�
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/" + PROJECT_ID);
   const workspace = await openCandidate(page);
-  await workspace.getByRole("button", { name: "生成变体", exact: true }).click();
+  await workspace.getByRole("tab", { name: "生成变体", exact: true }).click();
   await workspace.getByRole("textbox", { name: "变体修改说明" }).fill("探索不同的领口比例");
   await workspace.getByRole("textbox", { name: "变体保留特征" }).fill("保留短款衣长与原有面料");
   mocked.losePatchAck();

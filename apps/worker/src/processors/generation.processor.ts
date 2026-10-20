@@ -162,6 +162,18 @@ export function createGenerationProcessor({
     ) {
       return delayForActiveLease(job, task.updatedAt);
     }
+    if (task.status === GenerationTaskStatus.RUNNING && !task.providerJob) {
+      const message = "生成执行已中断且无法安全恢复，请重新发起生成";
+      await database.$transaction(async (transaction) => {
+        const ended = await transaction.generationTask.updateMany({
+          where: { id: task.id, status: GenerationTaskStatus.RUNNING, attemptCount: task.attemptCount, updatedAt: task.updatedAt },
+          data: { status: GenerationTaskStatus.FAILED, completedAt: claimedAt, errorCode: "GENERATION_INTERRUPTED", errorMessage: message },
+        });
+        if (!ended.count) throw new GenerationLeaseLostError("生成任务执行租约已变更");
+        await appendGenerationTerminalOutbox(transaction, { taskId: task.id, status: "FAILED", errorCode: "GENERATION_INTERRUPTED" });
+      });
+      throw new UnrecoverableError(message);
+    }
     const claimed = await database.generationTask.updateMany({
       where: {
         attemptCount: task.attemptCount,
