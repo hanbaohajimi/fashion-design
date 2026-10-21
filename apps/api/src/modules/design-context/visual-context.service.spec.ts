@@ -2,6 +2,7 @@ import { amuxClaudeClientConfigFromEnv, visualSummaryFingerprint } from "@fashio
 import { VISUAL_SUMMARY_SCHEMA_VERSION } from "@fashion/shared";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { VisualContextService } from "./visual-context.service";
 
 const bytes = Buffer.from("RIFF0000WEBPvisible-image");
@@ -176,5 +177,24 @@ describe("VisualContextService", () => {
     expect(result.index[0]).toMatchObject({ status: "pending", summary: null });
     expect(jobs.enqueue).toHaveBeenCalledTimes(1);
     expect(database.imageVisualSummary.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "PENDING", error: null } }));
+  });
+});
+
+
+describe("read-only visual context", () => {
+  it("can read existing images without admitting or retrying visual model work", async () => {
+    const h = setup();
+    h.addFile("a");
+    const access = { require: vi.fn().mockResolvedValue({ capabilities: { edit: false } }) };
+    const service = new VisualContextService(h.database as never, h.storage, h.jobs, access as unknown as ProjectAccessPolicy);
+    const node = { id: "reference", type: "reference_image", payload: { fileAssetId: "a" } };
+    expect((await service.enrich("user", "project", [node])).index[0]?.status).toBe("pending");
+    expect(h.database.imageVisualSummary.upsert).not.toHaveBeenCalled();
+    const model = amuxClaudeClientConfigFromEnv().model;
+    const fingerprint = visualSummaryFingerprint(bytes, model);
+    h.rows.set(fingerprint, { fingerprint, sourceKey: "thumbnails/a/1024.webp", status: "FAILED", summary: null, model, schemaVersion: VISUAL_SUMMARY_SCHEMA_VERSION, updatedAt: new Date(0) });
+    expect((await service.enrich("user", "project", [node])).index[0]?.status).toBe("failed");
+    expect(h.database.imageVisualSummary.updateMany).not.toHaveBeenCalled();
+    expect(h.jobs.enqueue).not.toHaveBeenCalled();
   });
 });

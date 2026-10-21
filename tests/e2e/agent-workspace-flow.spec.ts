@@ -149,6 +149,10 @@ async function mockWorkspace(page: Page) {
   await page.route("**/api/agent-conversations/*/context", (route) => route.fulfill({ json: {
     revision: 1, currentObjective: "通勤风衣设计", currentTask: "继续比较方案", focusNodeIds: [], requirements: [], preferences: [], nodes: [], visualCoverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [] },
   } }));
+  await page.route("**/api/agent-conversations/*/plan", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    return route.fulfill({ json: { revision: 1, plan: null } });
+  });
   await page.route("**/api/agent-conversations/*/workflow-messages", (route) => {
     const conversationId = new URL(route.request().url()).pathname.split("/").at(-2) ?? "";
     const body = route.request().postDataJSON() as { content: string; referencedNodeIds: string[] };

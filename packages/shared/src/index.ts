@@ -392,3 +392,9 @@ export type AgentAction =
         readonly width: number;
       };
     };
+
+export * from "./studio";
+
+export * from "./experiments";
+
+export * from "./fabric-details";

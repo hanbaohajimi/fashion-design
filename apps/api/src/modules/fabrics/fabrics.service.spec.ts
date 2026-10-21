@@ -82,7 +82,7 @@ describe("FabricsService", () => {
     );
   });
 
-  it("仅搜索标签", async () => {
+  it("搜索标签和面料档案，同时保留可见性限制", async () => {
     const { database, service } = setup();
     database.fabric.count.mockResolvedValue(0);
     database.fabric.findMany.mockResolvedValue([]);
@@ -97,7 +97,7 @@ describe("FabricsService", () => {
     expect(database.fabric.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          tags: { hasSome: ["轻薄"] },
+          AND: [{ OR: expect.arrayContaining([{ tags: { hasSome: ["轻薄"] } }]) }],
         }),
       }),
     );
@@ -115,6 +115,7 @@ describe("FabricsService", () => {
       mainImageUrl: "/api/fabrics/fabric-1/image",
       tags: ["轻薄", "垂坠"],
     });
+    expect(result.details).toBeNull();
     expect(result).not.toHaveProperty("attributes");
     expect(result).not.toHaveProperty("category");
     expect(result).not.toHaveProperty("name");
@@ -211,4 +212,44 @@ describe("FabricsService", () => {
       canManage: true,
     });
   });
+
+  it("结构化筛选与分页在数据库执行，标签不会冒充成分", async () => {
+    const { database, service } = setup();
+    database.fabric.count.mockResolvedValue(3);
+    database.fabric.findMany.mockResolvedValue([]);
+    const result = await service.list("user-1", { limit: 2, page: 2, scope: "user", search: "", fiber: "Cotton", category: "梭织", minWeightGsm: 120, maxWeightGsm: 180 });
+    const where = database.fabric.findMany.mock.calls[0]?.[0].where;
+    expect(where).toMatchObject({ ownerId: "user-1", scope: FabricScope.USER, status: "active", AND: [
+      { details: { path: ["category"], equals: "梭织" } },
+      { details: { path: ["_fiberKeys"], array_contains: ["cotton"] } },
+      { details: { path: ["weightGsm"], gte: 120 } },
+      { details: { path: ["weightGsm"], lte: 180 } },
+    ] });
+    expect(database.fabric.count).toHaveBeenCalledWith({ where });
+    expect(database.fabric.findMany.mock.calls[0]?.[0]).toMatchObject({ skip: 2, take: 2 });
+    expect(result).toMatchObject({ total: 3, totalPages: 2, page: 2 });
+  });
+
+  it("更新档案派生成分索引，返回来源并隐藏内部索引", async () => {
+    const { database, service } = setup();
+    const details = { name: "棉麻平纹", composition: [{ fiber: "Cotton", percent: 60 }, { fiber: "Linen", percent: 40 }], provenance: { composition: { source: "supplier" as const, note: "资料编号 A17" } } };
+    database.fabric.findUnique.mockResolvedValue(fabricRecord());
+    database.fabric.update.mockResolvedValue(fabricRecord({ details: { ...details, _fiberKeys: ["cotton", "linen"] } }));
+    const result = await service.update("user-1", "fabric-1", { details });
+    expect(database.fabric.update).toHaveBeenCalledWith(expect.objectContaining({ data: { details: { ...details, _fiberKeys: ["cotton", "linen"] } } }));
+    expect(result.details).toEqual(details);
+    expect(result.details).not.toHaveProperty("_fiberKeys");
+  });
+
+  it("仅修改标签保留档案，外部用户不可更新或读取私有规格", async () => {
+    const { database, service } = setup();
+    database.fabric.findUnique.mockResolvedValue(fabricRecord({ details: { name: "私有面料" } }));
+    database.fabric.update.mockResolvedValue(fabricRecord());
+    await service.update("user-1", "fabric-1", { tags: ["新标签"] });
+    expect(database.fabric.update.mock.calls[0]?.[0].data).toEqual({ tags: ["新标签"] });
+    await expect(service.update("other-user", "fabric-1", { details: null })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.findOne("other-user", "fabric-1")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(database.fabric.update).toHaveBeenCalledTimes(1);
+  });
+
 });

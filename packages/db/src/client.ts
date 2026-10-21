@@ -131,3 +131,5 @@ export type {
 };
 export { appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, recordWorkflowSemanticChange, workflowVersionSnapshot } from "./workflow-events.js";
 export type { WorkflowVersionNode, WorkflowVersionEdge, WorkflowVersionBinding, WorkflowVersionSnapshot } from "./workflow-events.js";
+
+export type { Style, StyleRevision, StudioDocument, StudioExperiment, WorkspaceMember, StudioMutation } from "../generated/prisma/client.js";

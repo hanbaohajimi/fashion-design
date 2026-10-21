@@ -15,6 +15,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -25,6 +26,7 @@ import {
   type DesignStepSnapshot,
   type DesignSourceSnapshot,
 } from "@fashion/shared";
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { S3FileStorage } from "../files/storage.service";
 import {
   designDecisionSchema,
@@ -77,6 +79,7 @@ export class DesignAssetsService {
     private readonly database: DesignAssetDatabase,
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
+    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async importFile(
@@ -100,7 +103,9 @@ export class DesignAssetsService {
         message: "项目不存在",
       });
     }
-    if (project.workspace.ownerId !== userId) {
+    if (this.access) {
+      await this.access.require(userId, projectId, "edit");
+    } else if (project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "PROJECT_FORBIDDEN",
         message: "无权向该项目导入图片",
@@ -544,7 +549,7 @@ export class DesignAssetsService {
     assetId: string,
     input: DesignDecisionInput,
   ): Promise<DesignDecisionView> {
-    await this.ownedAsset(userId, assetId);
+    await this.ownedAsset(userId, assetId, "edit");
     const parsed = designDecisionSchema.parse(input);
     const decision = await this.database.designAssetDecision
       .upsert({
@@ -592,8 +597,8 @@ export class DesignAssetsService {
     clientRequestId?: string,
   ): Promise<DesignAssetView> {
     const [target, current] = await Promise.all([
-      this.ownedAsset(userId, targetAssetId),
-      this.ownedAsset(userId, currentAssetId),
+      this.ownedAsset(userId, targetAssetId, "edit"),
+      this.ownedAsset(userId, currentAssetId, "edit"),
     ]);
     if (
       target.projectId !== current.projectId ||
@@ -674,6 +679,7 @@ export class DesignAssetsService {
   private async ownedAsset(
     userId: string,
     assetId: string,
+    action: ProjectAction = "read",
   ): Promise<OwnedDesignAsset> {
     const asset = await this.database.designAsset.findUnique({
       where: { id: assetId },
@@ -692,7 +698,9 @@ export class DesignAssetsService {
         message: "设计资产不存在",
       });
     }
-    if (asset.project.workspace.ownerId !== userId) {
+    if (this.access) {
+      await this.access.require(userId, asset.projectId, action);
+    } else if (asset.project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "DESIGN_ASSET_FORBIDDEN",
         message: "无权访问该设计资产",

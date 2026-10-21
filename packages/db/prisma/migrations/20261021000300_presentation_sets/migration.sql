@@ -1,0 +1,1 @@
+ALTER TYPE "StudioDocumentType" ADD VALUE 'PRESENTATION_SET';

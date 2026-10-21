@@ -69,4 +69,12 @@ describe("fabric upload", () => {
       "标签",
     );
   });
+
+  it("序列化带来源的档案且拒绝无依据的规格", () => {
+    const details = { name: "精纺羊毛", weightGsm: 210, provenance: { weightGsm: { source: "supplier" as const, note: "规格表2026A" } } };
+    const form = buildFabricUploadFormData({ file: imageFile(), tags: ["秋冬"], details });
+    expect(JSON.parse(form.get("details") as string)).toEqual(details);
+    expect(validateFabricUpload({ file: imageFile(), tags: ["秋冬"], details: { weightGsm: 210 } })).toContain("来源");
+  });
+
 });

@@ -1,7 +1,8 @@
 import { GenerationTaskStatus } from "@fashion/db";
-import { HttpStatus } from "@nestjs/common";
+import { ForbiddenException, HttpStatus } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { GenerationLimitExceededException } from "../billing/billing.errors";
 import { BullGenerationJobs } from "./generation-queue.service";
 import { GenerationService } from "./generation.service";
@@ -78,7 +79,10 @@ describe("GenerationService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    database.$transaction.mockImplementation(async (operation: (transaction: typeof database) => Promise<unknown>) => operation(database));
+    database.$transaction.mockImplementation(
+      async (operation: (transaction: typeof database) => Promise<unknown>) =>
+        operation(database),
+    );
     database.workflowAttempt.findMany.mockResolvedValue([]);
     billing.canGenerate.mockResolvedValue({
       allowed: true,
@@ -90,7 +94,10 @@ describe("GenerationService", () => {
       async (
         _userId: string,
         operation: (
-          transaction: { generationTask: typeof database.generationTask; $queryRaw: typeof database.$queryRaw },
+          transaction: {
+            generationTask: typeof database.generationTask;
+            $queryRaw: typeof database.$queryRaw;
+          },
           quota: {
             allowed: boolean;
             limit: number;
@@ -100,7 +107,10 @@ describe("GenerationService", () => {
         ) => Promise<unknown>,
       ) =>
         operation(
-          { generationTask: database.generationTask, $queryRaw: database.$queryRaw },
+          {
+            generationTask: database.generationTask,
+            $queryRaw: database.$queryRaw,
+          },
           {
             allowed: true,
             limit: 100,
@@ -123,16 +133,154 @@ describe("GenerationService", () => {
     });
   });
 
+  it("charges the project owner while separating two editors' identical request keys", async () => {
+    const access = {
+      require: vi
+        .fn()
+        .mockResolvedValue({ ownerId: "owner", capabilities: { edit: true } }),
+    };
+    const team = new GenerationService(
+      database as never,
+      jobs,
+      billing as never,
+      compiler as never,
+      storage as never,
+      access as unknown as ProjectAccessPolicy,
+    );
+    await team.createFromAgent(
+      "editor-a",
+      { ...request, projectId: "project-1" },
+      "same-key",
+      "请生成",
+    );
+    await team.createFromAgent(
+      "editor-b",
+      { ...request, projectId: "project-1" },
+      "same-key",
+      "请生成",
+    );
+    const records = database.generationTask.create.mock.calls.map(
+      ([args]) => args.data,
+    );
+    expect(records.map((item) => item.userId)).toEqual(["owner", "owner"]);
+    expect(records[0]?.id).not.toBe(records[1]?.id);
+    expect(records.map((item) => item.compiledPrompt.executionActor)).toEqual([
+      "editor-a",
+      "editor-b",
+    ]);
+    expect(billing.canGenerate).toHaveBeenCalledWith("owner");
+    expect(billing.withLockedGenerationQuota).toHaveBeenCalledWith(
+      "owner",
+      expect.any(Function),
+    );
+    expect(jobs.enqueue).toHaveBeenNthCalledWith(1, "task-1", "owner");
+  });
+
+  it("checks editor permission before an idempotency replay, quota check or compilation", async () => {
+    const access = {
+      require: vi.fn().mockRejectedValue(new ForbiddenException("revoked")),
+    };
+    const team = new GenerationService(
+      database as never,
+      jobs,
+      billing as never,
+      compiler as never,
+      storage as never,
+      access as unknown as ProjectAccessPolicy,
+    );
+    await expect(
+      team.createFromAgent(
+        "viewer",
+        { ...request, projectId: "project-1" },
+        "old-key",
+        "请生成",
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(database.generationTask.findUnique).not.toHaveBeenCalled();
+    expect(billing.canGenerate).not.toHaveBeenCalled();
+    expect(compiler.compile).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("revalidates membership when reading a task and blocks read-only cancellation", async () => {
+    const access = {
+      require: vi.fn().mockRejectedValue(new ForbiddenException("revoked")),
+    };
+    const team = new GenerationService(
+      database as never,
+      jobs,
+      billing as never,
+      compiler as never,
+      storage as never,
+      access as unknown as ProjectAccessPolicy,
+    );
+    database.generationTask.findFirst.mockResolvedValue(
+      taskRecord({ projectId: "project-1", userId: "owner" }),
+    );
+    await expect(team.get("former-editor", "task-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(team.cancel("viewer", "task-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(access.require).toHaveBeenCalledWith(
+      "former-editor",
+      "project-1",
+      "read",
+    );
+    expect(access.require).toHaveBeenCalledWith("viewer", "project-1", "edit");
+    expect(database.generationTask.updateMany).not.toHaveBeenCalled();
+    expect(jobs.cancel).not.toHaveBeenCalled();
+  });
+
+  it("keeps tasks without a project private even when the shared-project policy is installed", async () => {
+    const access = { require: vi.fn() };
+    const team = new GenerationService(
+      database as never,
+      jobs,
+      billing as never,
+      compiler as never,
+      storage as never,
+      access as unknown as ProjectAccessPolicy,
+    );
+    database.generationTask.findFirst.mockResolvedValue(
+      taskRecord({ projectId: null }),
+    );
+    await expect(team.get("other-user", "task-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(team.cancel("other-user", "task-1")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(access.require).not.toHaveBeenCalled();
+    expect(jobs.cancel).not.toHaveBeenCalled();
+  });
+
   it("writes workflow cancellation receipt before removing the queued job", async () => {
-    database.generationTask.findFirst.mockResolvedValueOnce(taskRecord()).mockResolvedValueOnce(taskRecord({ status: GenerationTaskStatus.CANCELED }));
-    database.workflowAttempt.findMany.mockResolvedValue([{ id: "attempt-1", projectId: "project-1", executionId: "execution-1" }]);
+    database.generationTask.findFirst
+      .mockResolvedValueOnce(taskRecord())
+      .mockResolvedValueOnce(
+        taskRecord({ status: GenerationTaskStatus.CANCELED }),
+      );
+    database.workflowAttempt.findMany.mockResolvedValue([
+      { id: "attempt-1", projectId: "project-1", executionId: "execution-1" },
+    ]);
     await service.cancel("user-1", "task-1");
     expect(database.$transaction).toHaveBeenCalledOnce();
-    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { eventKey: "generation:task-1:attempt-1:terminal" },
-      create: expect.objectContaining({ projectId: "project-1", eventType: "generation.terminal", executionId: "execution-1", payload: { status: "CANCELED", assetIds: [], errorCode: null } }),
-    }));
-    expect(database.workflowOutbox.upsert.mock.invocationCallOrder[0]).toBeLessThan(jobs.cancel.mock.invocationCallOrder[0] ?? 0);
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventKey: "generation:task-1:attempt-1:terminal" },
+        create: expect.objectContaining({
+          projectId: "project-1",
+          eventType: "generation.terminal",
+          executionId: "execution-1",
+          payload: { status: "CANCELED", assetIds: [], errorCode: null },
+        }),
+      }),
+    );
+    expect(
+      database.workflowOutbox.upsert.mock.invocationCallOrder[0],
+    ).toBeLessThan(jobs.cancel.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("超限时返回 429 且不建任务、不入队", async () => {

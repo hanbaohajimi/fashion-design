@@ -1,5 +1,6 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { WorkflowsModule } from "../workflows/workflows.module";
 import { AiModule } from "../ai/ai.module";
 import { DesignContextController } from "./design-context.controller";
@@ -8,7 +9,7 @@ import { InformationIntegrationService } from "./information-integration.service
 import { HiddenIntentMiner } from "./hidden-intent-miner.service";
 
 @Module({
-  imports: [WorkflowsModule, AiModule],
+  imports: [WorkflowsModule, AiModule, ProjectAccessModule],
   controllers: [DesignContextController],
   providers: [DesignContextService, InformationIntegrationService, HiddenIntentMiner, { provide: DESIGN_CONTEXT_DB, useValue: prisma }],
   exports: [DesignContextService, InformationIntegrationService, HiddenIntentMiner],

@@ -1,4 +1,6 @@
 import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
+import { ForbiddenException } from "@nestjs/common";
+import type { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExportsService } from "./exports.service";
@@ -56,7 +58,9 @@ describe("ExportsService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    database.$transaction.mockImplementation((operation: (tx: unknown) => unknown) => operation(database));
+    database.$transaction.mockImplementation(
+      (operation: (tx: unknown) => unknown) => operation(database),
+    );
     jobs.enqueue.mockResolvedValue(undefined);
     database.user.findUnique.mockResolvedValue({ id: "user-a" });
     database.designAsset.findUnique.mockResolvedValue({
@@ -91,21 +95,39 @@ describe("ExportsService", () => {
 
   it("persists dispatch before attempting Redis and remains queued when Redis is unavailable", async () => {
     jobs.enqueue.mockRejectedValueOnce(new Error("Redis offline"));
-    const result = await service.create("user-a", { sourceType: "asset", assetId: "asset-a", format: "png", quality: "standard" });
+    const result = await service.create("user-a", {
+      sourceType: "asset",
+      assetId: "asset-a",
+      format: "png",
+      quality: "standard",
+    });
     expect(result.status).toBe("queued");
-    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ eventType: "export.dispatch" }) }));
-    expect(database.workflowOutbox.upsert.mock.invocationCallOrder[0]).toBeLessThan(jobs.enqueue.mock.invocationCallOrder[0] ?? 0);
+    expect(database.workflowOutbox.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ eventType: "export.dispatch" }),
+      }),
+    );
+    expect(
+      database.workflowOutbox.upsert.mock.invocationCallOrder[0],
+    ).toBeLessThan(jobs.enqueue.mock.invocationCallOrder[0] ?? 0);
   });
 
   it("replays one request key and rejects different parameters", async () => {
     database.exportJob.findUnique.mockResolvedValueOnce(null);
-    const input = { sourceType: "asset", assetId: "asset-a", format: "png", quality: "standard" } as const;
+    const input = {
+      sourceType: "asset",
+      assetId: "asset-a",
+      format: "png",
+      quality: "standard",
+    } as const;
     await service.create("user-a", input, "request-key");
     const created = database.exportJob.create.mock.calls[0]?.[0].data;
     database.exportJob.findUnique.mockResolvedValue(exportRecord(created));
     await service.create("user-a", input, "request-key");
     expect(database.exportJob.create).toHaveBeenCalledTimes(1);
-    await expect(service.create("user-a", { ...input, format: "jpg" }, "request-key")).rejects.toThrow("该导出编号已用于不同参数");
+    await expect(
+      service.create("user-a", { ...input, format: "jpg" }, "request-key"),
+    ).rejects.toThrow("该导出编号已用于不同参数");
   });
 
   it("标准单图统一使用标准尺寸且不加水印", async () => {
@@ -168,32 +190,105 @@ describe("ExportsService", () => {
     });
   });
 
-  it("成功任务返回最长 24 小时的签名下载地址", async () => {
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+  it("成功任务返回稳定的认证下载入口且不提前签发存储链接", async () => {
     database.exportJob.findUnique.mockResolvedValue(
       exportRecord({
-        completedAt: new Date(),
-        expiresAt,
+        expiresAt: new Date(Date.now() + 86_400_000),
         fileName: "look.png",
-        mimeType: "image/png",
         objectKey: "temporary/exports/user-a/export-a.png",
-        sizeBytes: 128,
         status: ExportStatus.SUCCEEDED,
       }),
     );
-    storage.createDownloadUrl.mockResolvedValue("https://download.test/signed");
-
     const result = await service.get("user-a", "export-a");
+    expect(result.downloadUrl).toBe("/api/exports/export-a/content");
+    expect(storage.createDownloadUrl).not.toHaveBeenCalled();
+  });
 
-    expect(result.downloadUrl).toBe("https://download.test/signed");
+  it("保留期仍为24小时，每次下载仅签发最多60秒的存储地址", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        expiresAt: new Date(Date.now() + 86_400_000),
+        fileName: "look.png",
+        objectKey: "temporary/exports/user-a/export-a.png",
+        status: ExportStatus.SUCCEEDED,
+      }),
+    );
+    storage.createDownloadUrl.mockResolvedValue(
+      "https://download.test/short-signature",
+    );
+    await expect(service.downloadUrl("user-a", "export-a")).resolves.toBe(
+      "https://download.test/short-signature",
+    );
     expect(storage.createDownloadUrl).toHaveBeenCalledWith(
       "temporary/exports/user-a/export-a.png",
-      expect.any(Number),
+      60,
       "look.png",
     );
-    expect(storage.createDownloadUrl.mock.calls[0]?.[1]).toBeLessThanOrEqual(
-      86_400,
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        expiresAt: new Date(Date.now() + 5_000),
+        fileName: "look.png",
+        objectKey: "temporary/exports/user-a/export-a.png",
+        status: ExportStatus.SUCCEEDED,
+      }),
     );
+    await service.downloadUrl("user-a", "export-a");
+    const seconds = storage.createDownloadUrl.mock.calls[1]?.[1];
+    expect(seconds).toBeGreaterThan(0);
+    expect(seconds).toBeLessThanOrEqual(5);
+  });
+
+  it("已取得的认证入口在成员撤销后不能签出新下载地址", async () => {
+    const access = { require: vi.fn().mockResolvedValue({ role: "VIEWER" }) };
+    const team = new ExportsService(
+      database as never,
+      jobs,
+      storage,
+      access as unknown as ProjectAccessPolicy,
+    );
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        expiresAt: new Date(Date.now() + 86_400_000),
+        fileName: "look.png",
+        objectKey: "temporary/exports/user-a/export-a.png",
+        status: ExportStatus.SUCCEEDED,
+      }),
+    );
+    expect((await team.get("member", "export-a")).downloadUrl).toBe(
+      "/api/exports/export-a/content",
+    );
+    access.require.mockRejectedValue(new ForbiddenException("member revoked"));
+    await expect(team.downloadUrl("member", "export-a")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(access.require).toHaveBeenLastCalledWith(
+      "member",
+      "project-a",
+      "read",
+    );
+    expect(storage.createDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it("未就绪或已过期的下载入口不会签名", async () => {
+    database.exportJob.findUnique.mockResolvedValue(exportRecord());
+    await expect(
+      service.downloadUrl("user-a", "export-a"),
+    ).rejects.toMatchObject({ status: 409 });
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        expiresAt: new Date(Date.now() - 1_000),
+        status: ExportStatus.SUCCEEDED,
+        objectKey: "temporary/export-a.png",
+        fileName: "look.png",
+      }),
+    );
+    database.exportJob.update.mockResolvedValue(
+      exportRecord({ status: ExportStatus.EXPIRED }),
+    );
+    await expect(
+      service.downloadUrl("user-a", "export-a"),
+    ).rejects.toMatchObject({ status: 410 });
+    expect(storage.createDownloadUrl).not.toHaveBeenCalled();
   });
 
   it("过期后不再签名并允许重新请求", async () => {

@@ -21,7 +21,7 @@ function fixture() {
   ];
   const graph = { projectId: "project", revision: 4, nodes, edges } as unknown as Awaited<ReturnType<WorkflowsService["get"]>>;
   const database = {
-    project: { findFirst: vi.fn(async () => ({ id: "project" })) },
+    project: { findUnique: vi.fn(async () => ({ id: "project", wsId: "workspace", deletedAt: null, workspace: { ownerId: "user" } })), findFirst: vi.fn(async () => ({ id: "project" })) },
     agentConversation: { findFirst: vi.fn(async () => ({ id: "conversation" })) },
     workflowAttempt: { findMany: vi.fn(async () => [{ id: "attempt-a", toolNodeId: "tool-a", ordinal: 1, status: "completed", requestSnapshot: { request: { prompt: "冻结提示词" } }, error: null, createdAt: new Date(1) }]) },
     workflowNodeVersion: { findMany: vi.fn(async () => []) },
@@ -35,8 +35,8 @@ describe("WorkflowReadGateway", () => {
   it("拒绝越项目、越会话和不合法的补读编号", async () => {
     const { gateway, database, graph } = fixture();
     await expect(gateway.read("user", "foreign", "conversation", graph, { type: "nodes", ids: ["goal"] })).rejects.toThrow("画布不属于");
-    database.project.findFirst.mockResolvedValueOnce(null as unknown as { id: string });
-    await expect(gateway.read("user", "project", "conversation", graph, { type: "nodes", ids: ["goal"] })).rejects.toThrow("无权访问");
+    database.project.findUnique.mockResolvedValueOnce(null as never);
+    await expect(gateway.read("user", "project", "conversation", graph, { type: "nodes", ids: ["goal"] })).rejects.toThrow("项目不存在");
     await expect(gateway.read("user", "project", "conversation", graph, { type: "nodes", ids: ["foreign-node"] })).rejects.toThrow("当前项目画布");
     database.agentConversation.findFirst.mockResolvedValueOnce(null as unknown as { id: string });
     await expect(gateway.read("user", "project", "foreign-conversation", graph, { type: "dialog", ids: ["message-a"] })).rejects.toThrow("会话不属于");

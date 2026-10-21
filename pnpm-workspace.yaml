@@ -11,6 +11,8 @@ overrides:
   sharp: 0.35.5
   tar: 7.5.22
   valibot: 1.4.2
+  # Windows launch-editor escaping fix (GHSA-698v-4r3x-3vcv).
+  vite@8.1.5: 8.1.6
   # These upstream packages still pin vulnerable transitive dependencies.
   "@prisma/config>deepmerge-ts": 8.0.2
   "prisma>mysql2": 3.24.4

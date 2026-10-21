@@ -53,6 +53,8 @@ function collectionRecord(overrides: Record<string, unknown> = {}) {
 function setup() {
   const database = {
     $transaction: vi.fn(),
+    project: { findUnique: vi.fn().mockResolvedValue({ id: "project-1", wsId: "workspace-1", deletedAt: null, workspace: { ownerId: "user-1" } }) },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     collection: {
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn().mockResolvedValue(collectionRecord()),

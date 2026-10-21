@@ -737,6 +737,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             <summary className={styles.saved} data-save-state={sync.error ? "error" : layoutSave.state}><span aria-hidden="true" />{sync.error ? "同步异常" : layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</summary>
             <div>{layoutSave.pendingCount > 0 ? <p aria-label="待保存节点数">{layoutSave.pendingCount} 个节点待保存</p> : <p>所有节点位置已保存</p>}{sync.lastSuccess ? <p>最近同步 {new Date(sync.lastSuccess).toLocaleTimeString("zh-CN")}</p> : null}{sync.error ? <p role="status">画布同步异常：{sync.error}<Button onClick={sync.retry}>重试同步</Button></p> : null}{layoutSave.state === "error" ? <Button onClick={() => void layoutSave.queue.flush().catch(() => undefined)}>重试保存</Button> : null}</div>
           </details>
+          <Link href={`/${encodeURIComponent(projectId)}/studio`}>款式与交付</Link>
           <Link href={`/trends?from=board&boardId=${encodeURIComponent(projectId)}`}>趋势</Link>
           <Link href={`/fabrics?from=board&boardId=${encodeURIComponent(projectId)}`}>面料</Link>
           {graph.legacyAvailable ? <button onClick={() => setHistoryOpen(true)} type="button">历史白板</button> : null}

@@ -1,8 +1,11 @@
+import type { FabricDetails } from "@fashion/shared";
+
 export type FabricScope = "preset" | "user";
 
 export interface Fabric {
   readonly canManage: boolean;
   readonly createdAt: string;
+  readonly details?: FabricDetails | null;
   readonly id: string;
   readonly mainFileId: string;
   readonly mainImageUrl: string;
@@ -24,4 +27,9 @@ export interface FabricListQuery {
   readonly page?: number;
   readonly scope?: "all" | FabricScope;
   readonly search?: string;
+  readonly category?: string;
+  readonly fiber?: string;
+  readonly supplier?: string;
+  readonly minWeightGsm?: number;
+  readonly maxWeightGsm?: number;
 }

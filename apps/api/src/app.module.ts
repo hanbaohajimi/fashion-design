@@ -1,3 +1,5 @@
+import { StudioModule } from "./modules/studio/studio.module";
+import { ExperimentsModule } from "./modules/experiments/experiments.module";
 import { Module } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { SentryGlobalFilter, SentryModule } from "@sentry/nestjs/setup";
@@ -31,6 +33,8 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
 @Module({
   imports: [
     SentryModule.forRoot(),
+    StudioModule,
+    ExperimentsModule,
     SecurityModule,
     AiModule,
     AgentConversationsModule,

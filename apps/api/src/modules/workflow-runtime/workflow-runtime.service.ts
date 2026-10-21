@@ -1,3 +1,5 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { requireProjectFile } from "../files/project-file-access";
 import { FileStatus, Prisma, appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, type PrismaClient, type WorkflowProposal } from "@fashion/db";
 import { AmuxClaudeVlmClassifier, type AmuxClaudeImageInput, type AmuxClaudeJsonClient } from "@fashion/ai";
 import type { AgentDesignBrief, AgentDesignEvidence, VlmRoleLabel } from "@fashion/shared";
@@ -5,6 +7,7 @@ import { workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowTool
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -180,6 +183,7 @@ export class WorkflowRuntimeService {
     @Inject(DesignAssetsService) private readonly assets: DesignAssetsService,
     @Optional() @Inject(DesignContextService) private readonly contexts?: DesignContextService,
     @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async toolCatalog(userId: string, projectId: string) {
@@ -189,10 +193,12 @@ export class WorkflowRuntimeService {
   }
 
   async setAgentVersion(userId: string, projectId: string, version: 1 | 2) {
+    await this.access.require(userId, projectId, "edit");
     await this.workflows.get(userId, projectId);
     await this.database.$transaction(async (tx) => {
+      await this.access.require(userId, projectId, "edit", tx);
       await tx.agentConversation.updateMany({ where: { projectId }, data: { intentEpoch: { increment: 1 } } });
-      const changed = await tx.project.updateMany({ where: { id: projectId, deletedAt: null, archived: false, workspace: { ownerId: userId } }, data: { workflowAgentVersion: version } });
+      const changed = await tx.project.updateMany({ where: { id: projectId, deletedAt: null, archived: false }, data: { workflowAgentVersion: version } });
       if (!changed.count) throw new BadRequestException("项目不可修改");
       await tx.workflowProposal.updateMany({ where: { projectId, schemaVersion: 2, status: "pending" }, data: { status: "superseded" } });
     });
@@ -205,6 +211,7 @@ export class WorkflowRuntimeService {
     conversationId: string; graphRevision: number; contextRevision: number;
     plan: WorkflowToolPlan;
   }, transaction?: Prisma.TransactionClient): Promise<WorkflowProposal> {
+    await this.access.require(userId, projectId, "edit", transaction);
     const graph: Graph = transaction ? {
       projectId, revision: (await transaction.workflowGraph.findUnique({ where: { projectId } }))?.revision ?? 0,
       layoutRevision: 0, legacyAvailable: false,
@@ -224,6 +231,7 @@ export class WorkflowRuntimeService {
 
   /** Compatibility endpoint delegates to the same planner; a discussion never fabricates a tool. */
   async propose(userId: string, projectId: string, input: WorkflowProposalRequest): Promise<WorkflowProposalView> {
+    await this.access.require(userId, projectId, "edit");
     const replay = await this.database.workflowProposal.findUnique({ where: { projectId_mutationId: { projectId, mutationId: input.mutationId } } });
     if (replay) {
       const evidence = object(replay.evidence);
@@ -246,7 +254,8 @@ export class WorkflowRuntimeService {
   }, suppliedTransaction?: Prisma.TransactionClient): Promise<WorkflowProposal> {
     if (!suppliedTransaction) return this.database.$transaction((tx) => this.prepareAction(userId, projectId, input, tx));
     const tx = suppliedTransaction;
-    const project = await tx.project.findFirst({ where: { id: projectId, deletedAt: null, archived: false, workspace: { ownerId: userId } } });
+    await this.access.require(userId, projectId, "edit", tx);
+    const project = await tx.project.findFirst({ where: { id: projectId, deletedAt: null, archived: false } });
     if (!project) throw new NotFoundException("项目不存在或不可修改");
     if (project.workflowAgentVersion !== 2) throw new BadRequestException("当前项目已暂停新版设计协作");
     const graph: Graph = { projectId, revision: (await tx.workflowGraph.findUnique({ where: { projectId } }))?.revision ?? 0,
@@ -282,6 +291,7 @@ export class WorkflowRuntimeService {
   }
 
   async accept(userId: string, projectId: string, proposalId: string, input: WorkflowProposalDecision) {
+    await this.access.require(userId, projectId, "edit");
     const graph = await this.workflows.get(userId, projectId);
     const proposal = await this.ownedProposal(userId, projectId, proposalId);
     if (proposal.status === "accepted") return graph;
@@ -296,6 +306,7 @@ export class WorkflowRuntimeService {
   }
 
   async reject(userId: string, projectId: string, proposalId: string, input: WorkflowRejectRequest): Promise<SyncedGraph> {
+    await this.access.require(userId, projectId, "edit");
     await this.workflows.get(userId, projectId);
     const proposal = await this.ownedProposal(userId, projectId, proposalId);
     if (proposal.status === "accepted") throw new ConflictException("已接受的节点请在画布中处理");
@@ -309,6 +320,7 @@ export class WorkflowRuntimeService {
   }
 
   async execute(userId: string, projectId: string, nodeId: string, input: WorkflowExecuteRequest) {
+    await this.access.require(userId, projectId, "edit");
     let graph: Graph = await this.sync(userId, projectId);
     const node = graph.nodes.find((item) => item.id === nodeId && item.kind === "tool");
     if (!node) throw new NotFoundException("工具节点不存在");
@@ -342,9 +354,10 @@ export class WorkflowRuntimeService {
     const request = node.type === "generate_design" || node.type === "edit_design"
       ? await this.generationRequest(userId, projectId, { ...node, payload: json({ ...object(node.payload), params }) as Prisma.JsonValue }, sources, graph) : null;
     const execution = await this.database.$transaction(async (tx) => {
+      await this.access.require(userId, projectId, "edit", tx);
       let intentEpoch: number | null = null;
       if (input.conversationId) {
-        const conversation = await tx.agentConversation.findFirst({ where: { id: input.conversationId, projectId, mode: "workflow", archivedAt: null, project: { workspace: { ownerId: userId } } } });
+        const conversation = await tx.agentConversation.findFirst({ where: { id: input.conversationId, projectId, createdById: userId, mode: "workflow", archivedAt: null } });
         if (!conversation) throw new BadRequestException("执行会话不属于当前项目或已归档");
         const locked = await tx.agentConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
         intentEpoch = locked.intentEpoch;
@@ -354,7 +367,7 @@ export class WorkflowRuntimeService {
       if (current?.revision !== graph.revision) throw new ConflictException("执行前画布已变化，请重新确认输入");
       const nodeVersionId = versions.get(nodeId)?.id;
       if (!nodeVersionId) throw new ConflictException("节点版本缺失，请刷新后重试");
-      const snapshot = json({ mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
+      const snapshot = json({ executionActor: userId, mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
         inputNodeIds: sources.map((source) => source.id), inputBindings: versions.get(nodeId)?.inputBindings,
         inputSnapshot: sources.map((source) => ({ id: source.id, nodeVersionId: versions.get(source.id)?.id, type: source.type, title: source.title, payload: source.payload })),
         ...(request ? { request } : { model: process.env.AMUX_CLAUDE_MODEL }) });
@@ -470,7 +483,12 @@ export class WorkflowRuntimeService {
   }
 
   private async syncOnce(userId: string, projectId: string) {
+    const permissions = await this.access.require(userId, projectId, "read");
     let graph = await this.workflows.get(userId, projectId);
+    if (!permissions.capabilities.edit) {
+      const proposals = await this.database.workflowProposal.findMany({ where: { projectId, userId, status: { in: ["pending", "planning"] } }, orderBy: { createdAt: "desc" }, take: 10 });
+      return { ...graph, proposals: proposals.map((proposal) => this.proposalView(proposal)) };
+    }
     // A committed output is durable evidence even if updating the attempt or
     // acknowledging the graph transaction was interrupted afterwards.
     for (const output of graph.nodes.filter((node) => node.kind === "asset" && node.status === "completed")) {
@@ -487,8 +505,15 @@ export class WorkflowRuntimeService {
             await this.database.workflowAttempt.update({ where: { id: attempt.id }, data: { status: "failed", error: "分析超过恢复时限，请重新执行；旧尝试已保留。" } });
           continue;
         }
+        const execution = attempt.executionId ? await this.database.workflowExecution.findUnique({ where: { id: attempt.executionId }, select: { userId: true } }) : null;
+        const executionActor = text(snapshot.executionActor) || execution?.userId || permissions.ownerId;
+        try { await this.access.require(executionActor, projectId, "edit"); } catch (error) {
+          if (!(error instanceof ForbiddenException || error instanceof NotFoundException)) throw error;
+          await this.database.workflowAttempt.updateMany({ where: { id: attempt.id, generationTaskId: null, status: { in: ACTIVE_ATTEMPT_STATUSES } }, data: { status: "failed", error: "原执行者的编辑权限已撤销，请由有权限的成员明确重新执行。" } });
+          continue;
+        }
         const request = generationCreateRequestSchema.parse(snapshot.request);
-        const result = await this.generation.createFromAgent(userId, request, attempt.executionKey, request.prompt);
+        const result = await this.generation.createFromAgent(executionActor, request, attempt.executionKey, request.prompt);
         await this.linkTask(attempt.id, result.taskId);
         continue;
       }
@@ -599,7 +624,7 @@ export class WorkflowRuntimeService {
     const attempts = await this.database.workflowAttempt.findMany({ where: { projectId, toolNodeId: nodeId }, orderBy: { ordinal: "desc" } });
     const taskIds = attempts.flatMap((attempt) => attempt.generationTaskId ? [attempt.generationTaskId] : []);
     const tasks = taskIds.length ? await this.database.generationTask.findMany({
-      where: { id: { in: taskIds }, projectId, userId }, select: { id: true, output: true, providerJob: true },
+      where: { id: { in: taskIds }, projectId }, select: { id: true, output: true, providerJob: true },
     }) : [];
     const taskModels = new Map(tasks.map((task) => [task.id, persistedGenerationModel(task)]));
     return { items: attempts.map((attempt) => {
@@ -614,6 +639,7 @@ export class WorkflowRuntimeService {
   }
 
   async decide(userId: string, projectId: string, nodeId: string, input: WorkflowNodeDecision) {
+    await this.access.require(userId, projectId, "edit");
     const graph = await this.workflows.get(userId, projectId);
     const node = graph.nodes.find((item) => item.id === nodeId && object(item.payload).assetId === input.assetId);
     if (!node) throw new BadRequestException("决策必须绑定当前候选节点");
@@ -624,6 +650,7 @@ export class WorkflowRuntimeService {
   }
 
   async inferRole(userId: string, projectId: string, nodeId: string, input: WorkflowRoleInferenceRequest) {
+    await this.access.require(userId, projectId, "edit");
     let graph = await this.workflows.get(userId, projectId);
     const source = graph.nodes.find((node) => node.id === nodeId);
     if (!source || (source.type !== "reference_image" && source.type !== "sketch"))
@@ -639,7 +666,7 @@ export class WorkflowRuntimeService {
     if (existingRequest) assertSameRequest(existingRequest);
     if (roleResolved(source)) return graph;
     if (roleFrozen(graph, source)) throw new ConflictException("已执行路径的参考角色已冻结，请新建分支");
-    const file = await this.database.fileAsset.findFirst({ where: { id: fileAssetId, ownerId: userId, status: FileStatus.READY } });
+    const file = await requireProjectFile(this.database, this.access, userId, fileAssetId, projectId);
     if (!file?.thumbnail1024Key) throw new BadRequestException("参考图缩略图尚未就绪");
 
     const reservation = await this.database.$transaction(async (transaction) => {
@@ -737,6 +764,7 @@ export class WorkflowRuntimeService {
   }
 
   async importAsset(userId: string, projectId: string, input: { sourceNodeId: string; assetId: string; operation: "restore"; mutationId: string }) {
+    await this.access.require(userId, projectId, "edit");
     const graph = await this.workflows.get(userId, projectId);
     const source = graph.nodes.find((node) => node.id === input.sourceNodeId && node.type === "candidate");
     if (!source) throw new BadRequestException("版本恢复必须引用当前候选节点");
@@ -861,7 +889,7 @@ export class WorkflowRuntimeService {
       let maskUrl: string;
       if (mask.assetId) maskUrl = (await this.ownedAsset(userId, projectId, text(mask.assetId))).url;
       else {
-        const file = await this.database.fileAsset.findFirst({ where: { id: text(mask.fileAssetId), ownerId: userId, status: "READY" } });
+        const file = await requireProjectFile(this.database, this.access, userId, text(mask.fileAssetId), projectId);
         if (!file || !file.mimeType.startsWith("image/")) throw new BadRequestException("蒙版图片不可用或不属于当前用户");
         maskUrl = await this.storage.createDownloadUrl(file.objectKey, 60 * 60);
       }
@@ -875,9 +903,10 @@ export class WorkflowRuntimeService {
   private async resolveLegacyMask(userId: string, projectId: string, url: string) {
     const key = storageObjectKey(url);
     if (!key) throw new BadRequestException("旧蒙版必须引用当前用户的实际存储图片，请重新选择蒙版");
-    const file = await this.database.fileAsset.findFirst({ where: { objectKey: key, ownerId: userId, status: "READY" } });
+    const file = await this.database.fileAsset.findFirst({ where: { objectKey: key, status: "READY" } });
+    if (file) await requireProjectFile(this.database, this.access, userId, file.id, projectId);
     if (file) return { fileAssetId: file.id };
-    const asset = await this.database.designAsset.findFirst({ where: { url, projectId, project: { workspace: { ownerId: userId } } } });
+    const asset = await this.database.designAsset.findFirst({ where: { url, projectId, archivedAt: null } });
     if (asset) return { assetId: asset.id };
     throw new BadRequestException("旧蒙版不属于当前用户，请重新选择蒙版");
   }
@@ -925,7 +954,8 @@ export class WorkflowRuntimeService {
   private async referenceFile(userId: string, node: Node) {
     const payload = object(node.payload);
     if (payload.fabricId) {
-      const fabric = await this.database.fabric.findFirst({ where: { id: text(payload.fabricId), status: "active", OR: [{ scope: "PRESET" }, { ownerId: userId }] }, include: { mainFile: true } });
+      const fabric = await this.database.fabric.findFirst({ where: { id: text(payload.fabricId), status: "active" }, include: { mainFile: true } });
+      if (fabric?.scope !== "PRESET" && fabric) await requireProjectFile(this.database, this.access, userId, fabric.mainFileId, node.projectId);
       if (!fabric || fabric.mainFile.status !== "READY") throw new BadRequestException("面料图不可用");
       return fabric.mainFile;
     }
@@ -935,15 +965,16 @@ export class WorkflowRuntimeService {
       return trend.coverFile?.status === "READY" ? trend.coverFile : null;
     }
     if (payload.fileAssetId) {
-      const file = await this.database.fileAsset.findFirst({ where: { id: text(payload.fileAssetId), ownerId: userId, status: "READY" } });
-      if (!file) throw new BadRequestException("参考图未就绪");
+      const file = await requireProjectFile(this.database, this.access, userId, text(payload.fileAssetId), node.projectId);
+      if (!file || file.status !== FileStatus.READY) throw new BadRequestException("参考图未就绪");
       return file;
     }
     return null;
   }
 
   private async ownedAsset(userId: string, projectId: string, assetId: string) {
-    const asset = await this.database.designAsset.findFirst({ where: { id: assetId, projectId, archivedAt: null, project: { deletedAt: null, workspace: { ownerId: userId } } } });
+    await this.access.require(userId, projectId, "read");
+    const asset = await this.database.designAsset.findFirst({ where: { id: assetId, projectId, archivedAt: null } });
     if (!asset) throw new BadRequestException("设计资产不属于当前项目");
     return asset;
   }

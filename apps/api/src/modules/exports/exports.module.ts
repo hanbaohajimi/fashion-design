@@ -1,3 +1,4 @@
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
@@ -13,7 +14,7 @@ import { FilesModule } from "../files/files.module";
 import { S3FileStorage } from "../files/storage.service";
 
 @Module({
-  imports: [FilesModule],
+  imports: [FilesModule, ProjectAccessModule],
   controllers: [ExportsController],
   providers: [
     ExportsService,

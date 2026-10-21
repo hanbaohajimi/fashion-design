@@ -9,7 +9,8 @@ import { Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 import { useFabrics } from "../../modules/fabrics/fabric-api";
 import { FabricVirtualGrid } from "../../modules/fabrics/FabricVirtualGrid";
 import { FabricUploadPanel } from "../../modules/fabrics/FabricCard";
-import type { FabricScope } from "../../modules/fabrics/fabric-types";
+import { FabricStructuredFilters } from "../../modules/fabrics/FabricStructuredFilters";
+import type { FabricListQuery, FabricScope } from "../../modules/fabrics/fabric-types";
 import styles from "../../modules/fabrics/fabrics.module.css";
 
 type FabricScopeFilter = "all" | FabricScope;
@@ -27,12 +28,14 @@ export default function FabricsPage() { return <Suspense fallback={<main>正在�
 
 function FabricLibrary() {
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<FabricListQuery>({});
   const params = useSearchParams();
   const projectId = params.get("from") === "board" ? params.get("boardId") || undefined : undefined;
   const [scope, setScope] = useState<FabricScopeFilter>("all");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const fabrics = useFabrics({
+    ...filters,
     scope,
     search: deferredSearch,
   });
@@ -85,7 +88,7 @@ function FabricLibrary() {
             aria-keyshortcuts="Control+K Meta+K"
             id="fabric-search"
             onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="搜索标签…"
+            placeholder="搜索标签、面料名称、编号或供应商…"
             ref={searchInputRef}
             type="search"
             value={search}
@@ -108,6 +111,7 @@ function FabricLibrary() {
 
       <details className={styles.uploadDisclosure}><summary>上传面料</summary><FabricUploadPanel onUploaded={() => fabrics.refresh()} /></details>
 
+      <FabricStructuredFilters onApply={setFilters} />
       <div className={styles.libraryBody}>
         <section className={styles.archivePanel} aria-label="面料列表">
           <div className={styles.resultMeta}>

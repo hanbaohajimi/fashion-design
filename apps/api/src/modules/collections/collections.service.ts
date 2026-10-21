@@ -1,3 +1,5 @@
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
+import { requireProjectFile } from "../files/project-file-access";
 import {
   CollectionVariationAxis,
   DnaExtractionStatus,
@@ -8,7 +10,6 @@ import {
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -167,6 +168,7 @@ export class CollectionsService {
     private readonly generation: GenerationService,
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async createFromHero(
@@ -174,7 +176,7 @@ export class CollectionsService {
     heroAssetId: string,
     sourceGarmentType?: GarmentType,
   ): Promise<CollectionView> {
-    const hero = await this.ownedHero(userId, heroAssetId);
+    const hero = await this.ownedHero(userId, heroAssetId, "edit");
     const existing = await this.database.collection.findUnique({
       where: { heroAssetId },
       include: collectionInclude,
@@ -300,7 +302,7 @@ export class CollectionsService {
     collectionId: string,
     input: UpdateCollectionInput,
   ): Promise<CollectionView> {
-    await this.ownedCollection(userId, collectionId);
+    await this.ownedCollection(userId, collectionId, "edit");
     const source = input.sourceGarmentType;
     const updated = await this.database.collection.update({
       where: { id: collectionId },
@@ -314,10 +316,10 @@ export class CollectionsService {
   }
 
   async list(userId: string, projectId: string): Promise<CollectionView[]> {
+    await this.access.require(userId, projectId, "read");
     const collections = await this.database.collection.findMany({
       where: {
         projectId,
-        project: { workspace: { ownerId: userId } },
       },
       include: collectionInclude,
       orderBy: { updatedAt: "desc" },
@@ -342,11 +344,11 @@ export class CollectionsService {
     collectionId: string,
     input: UpdateDnaInput,
   ): Promise<DnaView> {
-    const collection = await this.ownedCollection(userId, collectionId);
+    const collection = await this.ownedCollection(userId, collectionId, "edit");
     const dna = this.requireDna(collection.dna);
     this.assertUnlocked(dna, input);
     this.assertLockableDimensions(dna, input);
-    await this.assertOwnedFileReferences(userId, input.referenceFileIds);
+    await this.assertOwnedFileReferences(userId, input.referenceFileIds, collection.projectId);
 
     const updated = await this.database.collectionDna.update({
       where: { collectionId },
@@ -508,7 +510,7 @@ export class CollectionsService {
     collectionId: string,
     designAssetId: string,
   ): Promise<CollectionLookView> {
-    await this.ownedCollection(userId, collectionId);
+    await this.ownedCollection(userId, collectionId, "edit");
     const existing = await this.database.collectionLook.findUnique({
       where: {
         collectionId_designAssetId: { collectionId, designAssetId },
@@ -539,7 +541,7 @@ export class CollectionsService {
     return updated;
   }
 
-  private async ownedHero(userId: string, heroAssetId: string) {
+  private async ownedHero(userId: string, heroAssetId: string, action: ProjectAction = "read") {
     const hero = await this.database.designAsset.findUnique({
       where: { id: heroAssetId },
       include: {
@@ -556,18 +558,14 @@ export class CollectionsService {
         message: "Hero Look 不存在",
       });
     }
-    if (hero.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "HERO_ASSET_FORBIDDEN",
-        message: "无权使用该 Hero Look",
-      });
-    }
+    await this.access.require(userId, hero.projectId, action);
     return hero;
   }
 
   private async ownedCollection(
     userId: string,
     collectionId: string,
+    action: ProjectAction = "read",
   ): Promise<CollectionRecord> {
     const collection = await this.database.collection.findUnique({
       where: { id: collectionId },
@@ -579,12 +577,7 @@ export class CollectionsService {
         message: "系列不存在",
       });
     }
-    if (collection.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "COLLECTION_FORBIDDEN",
-        message: "无权访问该系列",
-      });
-    }
+    await this.access.require(userId, collection.projectId, action);
     return collection;
   }
 
@@ -661,6 +654,7 @@ export class CollectionsService {
   private async assertOwnedFileReferences(
     userId: string,
     referenceFileIds: readonly string[] | undefined,
+    projectId: string,
   ): Promise<void> {
     if (!referenceFileIds) return;
     const uniqueIds = [...new Set(referenceFileIds)];
@@ -668,10 +662,7 @@ export class CollectionsService {
       where: { id: { in: uniqueIds }, ownerId: userId },
     });
     if (ownedCount !== uniqueIds.length) {
-      throw new BadRequestException({
-        code: "INVALID_DNA_FILE_REFERENCE",
-        message: "DNA 中包含无效或无权访问的 file_id",
-      });
+      for (const id of uniqueIds) await requireProjectFile(this.database, this.access, userId, id, projectId);
     }
   }
 

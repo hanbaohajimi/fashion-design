@@ -1,3 +1,4 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import {
   ExportFormat,
   ExportQuality,
@@ -10,9 +11,11 @@ import { EXPORT_RETENTION_MS, STANDARD_EXPORT_MAX_EDGE } from "@fashion/shared";
 import {
   ForbiddenException,
   ConflictException,
+  GoneException,
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 
@@ -23,6 +26,8 @@ import type { FileStorage } from "../files/storage.service";
 export const EXPORTS_DB = Symbol("EXPORTS_DB");
 export const EXPORT_JOBS = Symbol("EXPORT_JOBS");
 export const EXPORT_STORAGE = Symbol("EXPORT_STORAGE");
+
+const DOWNLOAD_SIGNATURE_SECONDS = 60;
 
 const MIME_BY_FORMAT = {
   [ExportFormat.JPG]: "image/jpeg",
@@ -36,6 +41,9 @@ export class ExportsService {
     @Inject(EXPORTS_DB) private readonly database: PrismaClient,
     @Inject(EXPORT_JOBS) private readonly jobs: ExportJobs,
     @Inject(EXPORT_STORAGE) private readonly storage: FileStorage,
+    @Optional()
+    @Inject(ProjectAccessPolicy)
+    private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async capabilities(userId: string) {
@@ -54,26 +62,70 @@ export class ExportsService {
     };
   }
 
-  async list(userId: string, input: { projectId: string; sourceType: "asset" | "collection"; sourceId: string; page: number; limit: number }) {
-    const where: Prisma.ExportJobWhereInput = { userId, projectId: input.projectId, project: { deletedAt: null, workspace: { ownerId: userId } },
-      ...(input.sourceType === "asset" ? { designAssetId: input.sourceId } : { collectionId: input.sourceId }) };
+  async list(
+    userId: string,
+    input: {
+      projectId: string;
+      sourceType: "asset" | "collection" | "tech_pack" | "presentation_set";
+      sourceId: string;
+      page: number;
+      limit: number;
+    },
+  ) {
+    const where: Prisma.ExportJobWhereInput = {
+      userId,
+      projectId: input.projectId,
+      project: {
+        deletedAt: null,
+        workspace: {
+          OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+        },
+      },
+      ...(input.sourceType === "asset"
+        ? { designAssetId: input.sourceId }
+        : input.sourceType === "collection"
+          ? { collectionId: input.sourceId }
+          : { studioRevisionId: input.sourceId }),
+    };
     const [rows, total] = await Promise.all([
-      this.database.exportJob.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (input.page - 1) * input.limit, take: input.limit }),
+      this.database.exportJob.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (input.page - 1) * input.limit,
+        take: input.limit,
+      }),
       this.database.exportJob.count({ where }),
     ]);
-    return { items: rows.map((row) => this.toView(row)), total, page: input.page, hasMore: input.page * input.limit < total };
+    return {
+      items: rows.map((row) => this.toView(row)),
+      total,
+      page: input.page,
+      hasMore: input.page * input.limit < total,
+    };
   }
 
   async create(userId: string, input: CreateExportInput, requestKey?: string) {
-    const fingerprint = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify(input))
+      .digest("hex");
     const replay = async () => {
       if (!requestKey) return null;
-      const previous = await this.database.exportJob.findUnique({ where: { userId_requestKey: { userId, requestKey } } });
-      if (previous && previous.requestFingerprint !== fingerprint) throw new ConflictException({ code: "IDEMPOTENCY_KEY_REUSED", message: "该导出编号已用于不同参数" });
+      const previous = await this.database.exportJob.findUnique({
+        where: { userId_requestKey: { userId, requestKey } },
+      });
+      if (previous && previous.requestFingerprint !== fingerprint)
+        throw new ConflictException({
+          code: "IDEMPOTENCY_KEY_REUSED",
+          message: "该导出编号已用于不同参数",
+        });
       return previous;
     };
     const previous = await replay();
-    if (previous) return this.toView(previous);
+    if (previous) {
+      if (this.access)
+        await this.access.require(userId, previous.projectId, "read");
+      return this.toView(previous);
+    }
     const user = await this.database.user.findUnique({
       where: { id: userId },
       select: { id: true },
@@ -87,7 +139,15 @@ export class ExportsService {
     const source =
       input.sourceType === "asset"
         ? await this.ownedAsset(userId, input.assetId)
-        : await this.ownedCollection(userId, input.collectionId);
+        : input.sourceType === "collection"
+          ? await this.ownedCollection(userId, input.collectionId)
+          : await this.ownedStudioDocument(
+              userId,
+              input.studioRevisionId,
+              input.sourceType === "tech_pack"
+                ? "TECH_PACK"
+                : "PRESENTATION_SET",
+            );
     const format = toFormat(input.format);
     const quality =
       input.quality === "high" ? ExportQuality.HIGH : ExportQuality.STANDARD;
@@ -95,26 +155,38 @@ export class ExportsService {
       quality === ExportQuality.STANDARD ? STANDARD_EXPORT_MAX_EDGE : null;
     let exportJob;
     try {
-    exportJob = await this.database.$transaction(async (tx) => {
-    const created = await tx.exportJob.create({
-      data: {
-        ...(input.sourceType === "asset"
-          ? { designAssetId: input.assetId }
-          : { collectionId: input.collectionId }),
-        format,
-        maxEdge,
-        projectId: source.projectId,
-        quality,
-        userId,
-        watermark: false,
-        ...(requestKey ? { requestKey, requestFingerprint: fingerprint } : {}),
-      },
-    });
-    await appendWorkflowOutbox(tx, { projectId: source.projectId, eventKey: `export:${created.id}:dispatch`, eventType: "export.dispatch", payload: { exportId: created.id } });
-    return created;
-    });
+      exportJob = await this.database.$transaction(async (tx) => {
+        const created = await tx.exportJob.create({
+          data: {
+            ...(input.sourceType === "asset"
+              ? { designAssetId: input.assetId }
+              : input.sourceType === "collection"
+                ? { collectionId: input.collectionId }
+                : { studioRevisionId: input.studioRevisionId }),
+            format,
+            maxEdge,
+            projectId: source.projectId,
+            quality,
+            userId,
+            watermark: false,
+            ...(requestKey
+              ? { requestKey, requestFingerprint: fingerprint }
+              : {}),
+          },
+        });
+        await appendWorkflowOutbox(tx, {
+          projectId: source.projectId,
+          eventKey: `export:${created.id}:dispatch`,
+          eventType: "export.dispatch",
+          payload: { exportId: created.id },
+        });
+        return created;
+      });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
         const concurrent = await replay();
         if (concurrent) return this.toView(concurrent);
       }
@@ -124,7 +196,7 @@ export class ExportsService {
     return this.toView(exportJob);
   }
 
-  async get(userId: string, exportId: string) {
+  private async readableJob(userId: string, exportId: string) {
     let exportJob = await this.database.exportJob.findUnique({
       where: { id: exportId },
     });
@@ -134,7 +206,9 @@ export class ExportsService {
         message: "导出任务不存在",
       });
     }
-    if (exportJob.userId !== userId) {
+    if (this.access)
+      await this.access.require(userId, exportJob.projectId, "read");
+    if (!this.access && exportJob.userId !== userId) {
       throw new ForbiddenException({
         code: "EXPORT_FORBIDDEN",
         message: "无权访问该导出任务",
@@ -152,27 +226,87 @@ export class ExportsService {
       });
     }
 
-    const remainingSeconds = exportJob.expiresAt
-      ? Math.floor((exportJob.expiresAt.getTime() - Date.now()) / 1_000)
-      : 0;
-    const downloadUrl =
+    return exportJob;
+  }
+
+  private isDownloadable(
+    exportJob: Awaited<ReturnType<ExportsService["readableJob"]>>,
+  ) {
+    return (
       exportJob.status === ExportStatus.SUCCEEDED &&
-      exportJob.objectKey &&
-      exportJob.fileName &&
-      remainingSeconds > 0
-        ? await this.storage.createDownloadUrl(
-            exportJob.objectKey,
-            Math.min(remainingSeconds, EXPORT_RETENTION_MS / 1_000),
-            exportJob.fileName,
-          )
-        : null;
+      !!exportJob.objectKey &&
+      !!exportJob.fileName &&
+      !!exportJob.expiresAt &&
+      exportJob.expiresAt.getTime() > Date.now()
+    );
+  }
+
+  async get(userId: string, exportId: string) {
+    const exportJob = await this.readableJob(userId, exportId);
     return {
       ...this.toView(exportJob),
-      downloadUrl,
+      downloadUrl: this.isDownloadable(exportJob)
+        ? "/api/exports/" + encodeURIComponent(exportJob.id) + "/content"
+        : null,
       retryAllowed:
         exportJob.status === ExportStatus.EXPIRED ||
         exportJob.status === ExportStatus.FAILED,
     };
+  }
+
+  /** Stable app URLs recheck membership on every click; object-storage URLs live at most a minute. */
+  async downloadUrl(userId: string, exportId: string): Promise<string> {
+    const exportJob = await this.readableJob(userId, exportId);
+    const remainingSeconds = exportJob.expiresAt
+      ? Math.floor((exportJob.expiresAt.getTime() - Date.now()) / 1_000)
+      : 0;
+    if (
+      exportJob.status === ExportStatus.EXPIRED ||
+      (exportJob.expiresAt && remainingSeconds <= 0)
+    ) {
+      throw new GoneException({
+        code: "EXPORT_EXPIRED",
+        message: "导出文件已过期，请重新生成",
+      });
+    }
+    if (
+      exportJob.status !== ExportStatus.SUCCEEDED ||
+      !exportJob.objectKey ||
+      !exportJob.fileName ||
+      remainingSeconds <= 0
+    ) {
+      throw new ConflictException({
+        code: "EXPORT_NOT_READY",
+        message: "导出文件尚未就绪，请等待导出完成",
+      });
+    }
+    return this.storage.createDownloadUrl(
+      exportJob.objectKey,
+      Math.min(DOWNLOAD_SIGNATURE_SECONDS, remainingSeconds),
+      exportJob.fileName,
+    );
+  }
+
+  private async ownedStudioDocument(
+    userId: string,
+    revisionId: string,
+    type: "TECH_PACK" | "PRESENTATION_SET",
+  ) {
+    const record = await this.database.studioDocument.findUnique({
+      where: { id: revisionId },
+      include: { project: { include: { workspace: true } } },
+    });
+    if (!record || record.type !== type || record.project.deletedAt)
+      throw new NotFoundException("技术包修订不存在");
+    if (record.project.workspace.ownerId !== userId) {
+      const member = await this.database.workspaceMember.findUnique({
+        where: {
+          workspaceId_userId: { workspaceId: record.project.wsId, userId },
+        },
+      });
+      if (!member) throw new ForbiddenException("无权导出技术包");
+    }
+    return { projectId: record.projectId };
   }
 
   private async ownedAsset(userId: string, assetId: string) {
@@ -194,7 +328,8 @@ export class ExportsService {
         message: "待导出的原始 Look 不存在",
       });
     }
-    if (asset.project.workspace.ownerId !== userId) {
+    if (this.access) await this.access.require(userId, asset.projectId, "read");
+    if (!this.access && asset.project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "EXPORT_ASSET_FORBIDDEN",
         message: "无权导出该 Look",
@@ -222,7 +357,9 @@ export class ExportsService {
         message: "待导出的系列不存在",
       });
     }
-    if (collection.project.workspace.ownerId !== userId) {
+    if (this.access)
+      await this.access.require(userId, collection.projectId, "read");
+    if (!this.access && collection.project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "EXPORT_COLLECTION_FORBIDDEN",
         message: "无权导出该系列",

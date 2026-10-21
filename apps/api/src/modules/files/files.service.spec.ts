@@ -49,8 +49,10 @@ describe("FilesService", () => {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     project: {
       findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   };
   const storage = {

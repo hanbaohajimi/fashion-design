@@ -21,8 +21,10 @@ const collectionExportSchema = z
   .strict();
 
 export const createExportSchema = z.discriminatedUnion("sourceType", [
+  z.object({ sourceType: z.literal("presentation_set"), studioRevisionId: z.string().min(1).max(128), format: z.literal("pdf"), quality: z.literal("standard").default("standard") }).strict(),
   assetExportSchema,
   collectionExportSchema,
+  z.object({ sourceType: z.literal("tech_pack"), studioRevisionId: z.string().min(1).max(128), format: z.literal("pdf"), quality: z.literal("standard").default("standard") }).strict(),
 ]);
 
 export type CreateExportInput = z.infer<typeof createExportSchema>;

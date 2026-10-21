@@ -1,3 +1,4 @@
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 import { SecurityModule } from "../../security/security.module";
@@ -21,7 +22,7 @@ import {
 } from "./workflow-runtime.service";
 
 @Module({
-  imports: [
+  imports: [ProjectAccessModule,
     AiModule,
     FilesModule,
     GenerationModule,

@@ -14,7 +14,7 @@ export interface TrendListResponse {
     readonly extracted: unknown;
     readonly id: string;
     readonly platform: string;
-    readonly publishedAt: Date;
+    readonly publishedAt: Date | null;
     readonly sourceUrl: string;
     readonly summary: string;
     readonly tags: readonly string[];
@@ -40,7 +40,7 @@ export class TrendsService {
     const [items, total] = await Promise.all([
       this.database.trendItem.findMany({
         where: { status: "published" },
-        orderBy: { publishedAt: "desc" },
+        orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
         take: safeLimit,
         skip,
         select: {

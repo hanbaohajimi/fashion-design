@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 
@@ -18,6 +19,8 @@ import type {
   ListProjectsInput,
   UpdateProjectInput,
 } from "./projects.schemas";
+
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 
 export const PROJECTS_DB = Symbol("PROJECTS_DB");
 
@@ -63,6 +66,7 @@ function toProjectResponse(project: ProjectRecord) {
 export class ProjectsService {
   constructor(
     @Inject(PROJECTS_DB) private readonly database: ProjectsDatabase,
+    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async list(userId: string, input: ListProjectsInput) {
@@ -70,9 +74,7 @@ export class ProjectsService {
       input.archived === "all" ? undefined : input.archived === "archived";
     const where: Prisma.ProjectWhereInput = {
       deletedAt: null,
-      workspace: {
-        ownerId: userId,
-      },
+      workspace: { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
       ...(archived === undefined ? {} : { archived }),
       ...(input.search
         ? {
@@ -87,7 +89,7 @@ export class ProjectsService {
     const statsProjectWhere: Prisma.ProjectWhereInput = {
       archived: false,
       deletedAt: null,
-      workspace: { ownerId: userId },
+      workspace: { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
     };
     const [projects, total, activeProjects, totalAssets, projectsWithAssets] =
       await Promise.all([
@@ -136,7 +138,7 @@ export class ProjectsService {
   }
 
   async get(userId: string, projectId: string) {
-    return toProjectResponse(await this.assertOwnership(userId, projectId));
+    return toProjectResponse(await this.assertOwnership(userId, projectId, false, "read"));
   }
 
   async create(
@@ -480,7 +482,7 @@ export class ProjectsService {
   }
 
   async remove(userId: string, projectId: string): Promise<void> {
-    const project = await this.assertOwnership(userId, projectId, true);
+    const project = await this.assertOwnership(userId, projectId, true, "manage");
 
     if (project.deletedAt) {
       return;
@@ -496,6 +498,7 @@ export class ProjectsService {
     userId: string,
     projectId: string,
     allowDeleted = false,
+    action: ProjectAction = "edit",
   ) {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
@@ -519,7 +522,9 @@ export class ProjectsService {
       });
     }
 
-    if (project.workspace.ownerId !== userId) {
+    if (this.access && !(allowDeleted && project.deletedAt && project.workspace.ownerId === userId)) {
+      await this.access.require(userId, projectId, action);
+    } else if (project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "PROJECT_FORBIDDEN",
         message: "无权访问该项目",

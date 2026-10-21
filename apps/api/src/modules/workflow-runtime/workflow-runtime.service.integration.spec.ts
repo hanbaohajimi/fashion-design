@@ -404,7 +404,8 @@ describe("WorkflowRuntimeService integration", () => {
         ownerId: foreign?.id ?? user.id, status: invalid === "processing" ? "PROCESSING" : "READY",
         mimeType: invalid === "not-image" ? "text/plain" : "image/png",
       } });
-      await expect(runtime.execute(user.id, project.id, toolId, { mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: 400 });
+      const expectedStatus = invalid === "missing" ? 404 : invalid === "foreign" ? 403 : 400;
+      await expect(runtime.execute(user.id, project.id, toolId, { mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: expectedStatus });
       expect(createFromAgent).not.toHaveBeenCalled();
       expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);
       expect(await prisma.designAsset.count({ where: { projectId: project.id } })).toBe(0);

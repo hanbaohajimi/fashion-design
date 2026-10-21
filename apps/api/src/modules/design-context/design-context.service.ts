@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@fashion/db";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { WorkflowsService } from "../workflows/workflows.service";
 import {
   contextContainsQuote, contextObject, contextText, graphTrajectory, projectAttempt, projectGraphRequirements, projectNode,
@@ -55,6 +56,7 @@ export class DesignContextService {
   constructor(
     @Inject(DESIGN_CONTEXT_DB) private readonly database: PrismaClient,
     @Inject(WorkflowsService) private readonly workflows: WorkflowsService,
+    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async get(userId: string, projectId: string) {
@@ -98,7 +100,8 @@ export class DesignContextService {
   /** Caller may hold the active-turn lease; this method never starts a nested transaction. */
   async patchInTransaction(userId: string, projectId: string, raw: PatchProjectDesignContextInput, transaction: Prisma.TransactionClient, suppliedGraph?: ContextGraph) {
     const input = patchProjectDesignContextSchema.parse(raw);
-    const project = await transaction.project.findFirst({ where: { id: projectId, deletedAt: null, workspace: { ownerId: userId } }, select: { id: true, archived: true } });
+    if (this.access) await this.access.require(userId, projectId, "edit", transaction);
+    const project = await transaction.project.findFirst({ where: { id: projectId, deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) }, select: { id: true, archived: true } });
     if (!project) throw new NotFoundException("项目不存在或无权访问");
     if (project.archived) throw new BadRequestException("已归档项目不能修改设计上下文");
     const storedGraph = await transaction.workflowGraph.findUnique({ where: { projectId }, select: { revision: true } });
@@ -247,6 +250,7 @@ export class DesignContextService {
   }
 
   async updateSummary(userId: string, projectId: string, conversationId: string, raw: UpdateContextSummaryInput): Promise<ContextSummaryRecord> {
+    await this.assertProject(userId, projectId, true);
     const input = updateContextSummarySchema.parse(raw);
     await this.assertConversation(userId, projectId, conversationId);
     const graph = await this.workflows.get(userId, projectId);
@@ -286,6 +290,7 @@ export class DesignContextService {
 
   /** Invoke after committing a turn. It never changes project memory, focus or task. */
   async refreshSummary(userId: string, projectId: string, conversationId: string): Promise<{ updated: boolean; summary: ContextSummaryRecord | null }> {
+    await this.assertProject(userId, projectId, true);
     await this.assertConversation(userId, projectId, conversationId);
     const previous = await this.database.agentContextSummary.findUnique({ where: { conversationId } });
     const readable = { OR: [{ role: "USER" as const }, { status: "COMPLETED" as const }] };
@@ -343,14 +348,16 @@ export class DesignContextService {
   }
 
   private async assertProject(userId: string, projectId: string, writing = false) {
-    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, workspace: { ownerId: userId } }, select: { id: true, archived: true } });
+    if (this.access) await this.access.require(userId, projectId, writing ? "edit" : "read");
+    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) }, select: { id: true, archived: true } });
     if (!project) throw new NotFoundException("项目不存在或无权访问");
     if (writing && project.archived) throw new BadRequestException("已归档项目不能修改设计上下文");
     return project;
   }
 
   private async assertConversation(userId: string, projectId: string, conversationId: string) {
-    const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId, createdById: userId, project: { deletedAt: null, workspace: { ownerId: userId } } } });
+    if (this.access) await this.access.require(userId, projectId, "read");
+    const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId, createdById: userId, project: { deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) } } });
     if (!conversation) throw new NotFoundException("会话不存在或不属于当前项目");
     return conversation;
   }

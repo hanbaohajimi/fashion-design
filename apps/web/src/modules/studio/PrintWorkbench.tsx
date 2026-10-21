@@ -1,0 +1,305 @@
+"use client";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  studioPrintPatternSchema,
+  type StudioAssetView,
+  type StudioDocumentView,
+} from "@fashion/shared";
+import { privateFetch } from "../auth/private-fetch";
+import { Button } from "../../components/ui";
+import styles from "./print-workbench.module.css";
+type Pattern = (typeof studioPrintPatternSchema)["_output"];
+export function PrintWorkbench({
+  projectId,
+  assets,
+  documents,
+  canEdit = true,
+  onRefresh,
+  onDirty,
+  beforeChange,
+}: {
+  projectId: string;
+  assets: readonly StudioAssetView[];
+  documents: readonly StudioDocumentView[];
+  canEdit?: boolean;
+  onRefresh?: () => void;
+  onDirty?: (dirty: boolean) => void;
+  beforeChange?: () => Promise<boolean>;
+}) {
+  const initial = studioPrintPatternSchema.parse({
+    name: "印花方案",
+    sourceAssetId: assets[0]?.id ?? "pending",
+    notes: "",
+  });
+  const [value, setValue] = useState<Pattern>(initial);
+  const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
+  const signature = JSON.stringify(value);
+  useEffect(() => {
+    onDirty?.(signature !== baseline);
+    return () => onDirty?.(false);
+  }, [signature, baseline, onDirty]);
+  const [editing, setEditing] = useState<StudioDocumentView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const pending = useRef<{ body: string; key: string } | null>(null);
+  const asset = assets.find((asset) => asset.id === value.sourceAssetId);
+  const update = <K extends keyof Pattern>(key: K, next: Pattern[K]) =>
+    setValue((current) => ({
+      ...current,
+      [key]: next,
+      reviewed: key === "reviewed" ? Boolean(next) : false,
+    }));
+  const save = async () => {
+    setError(null);
+    setNotice(null);
+    const parsed = studioPrintPatternSchema.safeParse(value);
+    if (!parsed.success || !asset) {
+      setError(
+        parsed.success
+          ? "请选择真实图案素材"
+          : (parsed.error.issues[0]?.message ?? "参数无效"),
+      );
+      return;
+    }
+    const content = {
+      type: "PRINT_PATTERN",
+      payload: parsed.data,
+      ...(editing
+        ? { documentId: editing.id, expectedVersion: editing.version }
+        : {}),
+    };
+    const body = JSON.stringify(content);
+    if (pending.current?.body !== body)
+      pending.current = { body, key: crypto.randomUUID() };
+    setBusy(true);
+    try {
+      const response = await privateFetch(
+        "/api/projects/" + encodeURIComponent(projectId) + "/studio/documents",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...content,
+            requestKey: pending.current?.key ?? crypto.randomUUID(),
+          }),
+        },
+      );
+      if (!response.ok) {
+        const result = (await response.json()) as { message?: string };
+        throw new Error(result.message ?? "保存失败");
+      }
+      const saved = (await response.json()) as StudioDocumentView;
+      setEditing(saved);
+      setBaseline(JSON.stringify(parsed.data));
+      onDirty?.(false);
+      pending.current = null;
+      setNotice("印花参数已保存为修订 " + saved.version);
+      onRefresh?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "印花保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={styles.panel} aria-label="印花工作台">
+      <div>
+        <p className={styles.eyebrow}>PRINT STUDIES</p>
+        <h2>观察图案的重复、尺度与节奏</h2>
+        <p>
+          原始图案保持独立，平铺预览和应用参数按修订保存。比例属于屏幕视觉设定，生产尺寸需要另行确认。
+        </p>
+      </div>
+      <div className={styles.layout}>
+        <div className={styles.preview} aria-label="图案平铺预览">
+          {asset ? (
+            <div
+              style={
+                {
+                  backgroundImage:
+                    'url("' + asset.url.replaceAll('"', "%22") + '")',
+                  backgroundSize: Math.round(value.scale * 180) + "px",
+                  backgroundPosition:
+                    value.offsetX * 100 + "px " + value.offsetY * 100 + "px",
+                  transform: "rotate(" + value.rotation + "deg)",
+                  filter: "brightness(" + value.brightness + ")",
+                } as CSSProperties
+              }
+            />
+          ) : (
+            <p>先上传或选择图案素材</p>
+          )}
+        </div>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <label>
+            方案名称
+            <input
+              required
+              disabled={!canEdit || busy}
+              value={value.name}
+              onChange={(event) => update("name", event.target.value)}
+            />
+          </label>
+          <label>
+            原始图案
+            <select
+              disabled={!canEdit || busy}
+              value={value.sourceAssetId}
+              onChange={(event) => update("sourceAssetId", event.target.value)}
+            >
+              <option value="pending">选择项目图片</option>
+              {assets.map((asset, index) => (
+                <option key={asset.id} value={asset.id}>
+                  素材 {index + 1} · {asset.id.slice(-6)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(
+            [
+              { key: "scale", label: "重复尺度", min: 0.1, max: 5, step: 0.1 },
+              { key: "rotation", label: "旋转角度", min: 0, max: 360, step: 1 },
+              {
+                key: "brightness",
+                label: "亮度",
+                min: 0.2,
+                max: 2,
+                step: 0.05,
+              },
+              {
+                key: "offsetX",
+                label: "水平位置",
+                min: -1,
+                max: 1,
+                step: 0.05,
+              },
+              {
+                key: "offsetY",
+                label: "垂直位置",
+                min: -1,
+                max: 1,
+                step: 0.05,
+              },
+            ] as const
+          ).map((control) => (
+            <label key={control.key}>
+              {control.label} · {value[control.key]}
+              <input
+                type="range"
+                disabled={!canEdit || busy}
+                min={control.min}
+                max={control.max}
+                step={control.step}
+                value={value[control.key]}
+                onChange={(event) =>
+                  update(control.key, Number(event.target.value))
+                }
+              />
+            </label>
+          ))}
+          <label>
+            生产重复宽度（cm，待确认可留空）
+            <input
+              type="number"
+              min={0.1}
+              max={1000}
+              step={0.1}
+              disabled={!canEdit || busy}
+              value={value.tileWidthCm ?? ""}
+              onChange={(event) =>
+                update(
+                  "tileWidthCm",
+                  event.target.value === ""
+                    ? undefined
+                    : Number(event.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            生产重复高度（cm，待确认可留空）
+            <input
+              type="number"
+              min={0.1}
+              max={1000}
+              step={0.1}
+              disabled={!canEdit || busy}
+              value={value.tileHeightCm ?? ""}
+              onChange={(event) =>
+                update(
+                  "tileHeightCm",
+                  event.target.value === ""
+                    ? undefined
+                    : Number(event.target.value),
+                )
+              }
+            />
+          </label>
+          <label>
+            备注
+            <textarea
+              disabled={!canEdit || busy}
+              value={value.notes}
+              onChange={(event) => update("notes", event.target.value)}
+            />
+          </label>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              disabled={!canEdit || busy}
+              checked={value.reviewed}
+              onChange={(event) => update("reviewed", event.target.checked)}
+            />
+            已人工检查重复边缘和视觉效果
+          </label>
+          {canEdit ? (
+            <Button type="submit" loading={busy} variant="primary">
+              {editing ? "保存新修订" : "保存印花方案"}
+            </Button>
+          ) : null}
+          {notice ? <p role="status">{notice}</p> : null}
+          {error ? <p role="alert">{error}</p> : null}
+        </form>
+      </div>
+      <div className={styles.saved}>
+        <h3>已保存的图案方案</h3>
+        {!documents.length ? (
+          <p>保存后可在其他设计任务中引用原始图案与应用说明。</p>
+        ) : (
+          documents.map((document) => (
+            <button
+              key={document.id}
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void (async () => {
+                  if (beforeChange && !(await beforeChange())) return;
+                  const parsed = studioPrintPatternSchema.safeParse(
+                    document.currentRevision.payload,
+                  );
+                  if (parsed.success) {
+                    setValue(parsed.data);
+                    setBaseline(JSON.stringify(parsed.data));
+                    onDirty?.(false);
+                    setEditing(document);
+                    setNotice(null);
+                    setError(null);
+                  }
+                })()
+              }
+            >
+              {document.currentRevision.payload.name} · 修订 {document.version}
+            </button>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}

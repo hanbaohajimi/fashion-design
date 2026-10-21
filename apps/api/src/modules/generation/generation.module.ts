@@ -1,3 +1,4 @@
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
@@ -25,7 +26,7 @@ import {
 } from "./generation-mask.service";
 
 @Module({
-  imports: [AiModule, BillingModule, FilesModule, SecurityModule],
+  imports: [ProjectAccessModule, AiModule, BillingModule, FilesModule, SecurityModule],
   controllers: [GenerationController],
   providers: [
     GenerationEventsService,

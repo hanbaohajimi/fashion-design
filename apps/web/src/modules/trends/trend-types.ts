@@ -23,7 +23,7 @@ export interface TrendItem {
   readonly extracted: TrendExtracted | null;
   readonly id: string;
   readonly platform: TrendPlatform | string;
-  readonly publishedAt: string;
+  readonly publishedAt: string | null;
   readonly sourceUrl: string;
   readonly status: string;
   readonly summary: string;

@@ -20,7 +20,7 @@ const MAX_IMAGE_REDIRECTS = 3;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export const TREND_SEARCH_QUERIES = [
-  "fashion trends 2026",
+  "fashion trends",
   "runway trends",
   "color trends fashion",
 ] as const;
@@ -136,7 +136,7 @@ export class TrendDigestProcessor {
   ): Promise<TrendDigestProcessResult> {
     const allResults: TrendSearchResult[] = [];
     for (const query of TREND_SEARCH_QUERIES) {
-      const results = await this.dependencies.search.search(query);
+      const results = await this.dependencies.search.search(query + " " + this.now().getUTCFullYear());
       allResults.push(...results);
     }
 
@@ -163,7 +163,7 @@ export class TrendDigestProcessor {
         const extracted = await this.dependencies.llm.summarizeArticle(article);
         const coverFileId = await this.storeCover(job, article, period);
         const data = {
-          category: "women",
+          category: "unclassified",
           coverFileId,
           curatedAt: now,
           extracted: {
@@ -173,7 +173,7 @@ export class TrendDigestProcessor {
             silhouettes: extracted.silhouettes,
           } satisfies Prisma.InputJsonObject,
           platform: trendPlatform(article.url),
-          publishedAt: article.publishedAt ?? now,
+          publishedAt: article.publishedAt ?? null,
           sourceUrl: canonicalTrendUrl(article.url),
           status: "published",
           summary: extracted.summary,

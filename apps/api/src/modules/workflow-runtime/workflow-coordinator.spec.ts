@@ -10,7 +10,7 @@ function harness(responses: unknown[], declined: unknown[] = []) {
   const context = { nodes: graph.nodes, focusNodeIds: [], graphRevision: 4, contextRevision: 1, summaryRevision: 2,
     dialog: [{ id: "message-1", content: "旧对话的偏好" }], preferences: [{ id: "inference-1", origin: "inferred", text: "可能喜欢银色" }], trajectory: "过去的设计轨迹" };
   const database = { $queryRaw: vi.fn(async () => []), $transaction: vi.fn(async () => undefined), workflowNodeVersion: { findMany: vi.fn(async () => []) },
-    workflowAttempt: { groupBy: vi.fn(async () => []) }, workflowProposal: { findMany: vi.fn(async () => declined) }, project: { findFirst: vi.fn(async () => ({ id: "project" })) } };
+    workflowAttempt: { groupBy: vi.fn(async () => []) }, workflowProposal: { findMany: vi.fn(async () => declined) }, project: { findUnique: vi.fn(async () => ({ id: "project", wsId: "workspace", deletedAt: null, workspace: { ownerId: "user" } })), findFirst: vi.fn(async () => ({ id: "project" })) } };
   const contexts = { build: vi.fn(async () => ({ graph, context })), get: vi.fn(async () => ({ revision: 1, state: { preferences: [] } })) };
   const visual = { enrich: vi.fn(async () => ({ images: [], imageBindings: [], index: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } })) };
   const generateJson = vi.fn(async (request: { parse: (value: unknown) => PlannerDecision; prompt: string }) => {

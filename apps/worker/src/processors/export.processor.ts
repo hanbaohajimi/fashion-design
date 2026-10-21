@@ -1,4 +1,12 @@
-import { ExportFormat, ExportStatus, appendWorkflowOutbox, type PrismaClient } from "@fashion/db";
+import { renderTechPackPdf } from "./tech-pack-pdf";
+import { renderPresentationPdf } from "./presentation-pdf";
+import { studioStyleSchema, studioTechPackSchema, studioPresentationSchema } from "@fashion/shared";
+import {
+  ExportFormat,
+  ExportStatus,
+  appendWorkflowOutbox,
+  type PrismaClient,
+} from "@fashion/db";
 import { EXPORT_RETENTION_MS, PLATFORM_NAME } from "@fashion/shared";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -51,8 +59,23 @@ export function createExportProcessor({
     const started = now();
     const deadline = started.getTime() + 5 * 60_000;
     const claimed = await database.exportJob.updateMany({
-      where: { id: exportId, OR: [{ status: ExportStatus.QUEUED }, { status: ExportStatus.FAILED },
-        { status: ExportStatus.RUNNING, OR: [{ leaseExpiresAt: { lte: started } }, { leaseExpiresAt: null, updatedAt: { lt: new Date(started.getTime() - 60_000) } }] }] },
+      where: {
+        id: exportId,
+        OR: [
+          { status: ExportStatus.QUEUED },
+          { status: ExportStatus.FAILED },
+          {
+            status: ExportStatus.RUNNING,
+            OR: [
+              { leaseExpiresAt: { lte: started } },
+              {
+                leaseExpiresAt: null,
+                updatedAt: { lt: new Date(started.getTime() - 60_000) },
+              },
+            ],
+          },
+        ],
+      },
       data: {
         errorCode: null,
         errorMessage: null,
@@ -63,17 +86,42 @@ export function createExportProcessor({
       },
     });
     if (!claimed.count) {
-      const current = await database.exportJob.findUnique({ where: { id: exportId } });
-      if (current?.status === ExportStatus.SUCCEEDED && current.objectKey && current.expiresAt) return { objectKey: current.objectKey, expiresAt: current.expiresAt };
-      throw exportFailure("EXPORT_LEASE_UNAVAILABLE", "导出任务已由其他执行处理或已结束");
+      const current = await database.exportJob.findUnique({
+        where: { id: exportId },
+      });
+      if (
+        current?.status === ExportStatus.SUCCEEDED &&
+        current.objectKey &&
+        current.expiresAt
+      )
+        return { objectKey: current.objectKey, expiresAt: current.expiresAt };
+      throw exportFailure(
+        "EXPORT_LEASE_UNAVAILABLE",
+        "导出任务已由其他执行处理或已结束",
+      );
     }
     let leaseLost = false;
     let heartbeatFlight: Promise<unknown> | undefined;
     const heartbeat = setInterval(() => {
       if (heartbeatFlight) return;
-      heartbeatFlight = database.exportJob.updateMany({ where: { id: exportId, leaseToken, status: ExportStatus.RUNNING },
-        data: { leaseExpiresAt: new Date(Math.min(deadline, now().getTime() + 60_000)) } })
-        .then((result) => { if (!result.count) leaseLost = true; }).catch(() => { leaseLost = true; }).finally(() => { heartbeatFlight = undefined; });
+      heartbeatFlight = database.exportJob
+        .updateMany({
+          where: { id: exportId, leaseToken, status: ExportStatus.RUNNING },
+          data: {
+            leaseExpiresAt: new Date(
+              Math.min(deadline, now().getTime() + 60_000),
+            ),
+          },
+        })
+        .then((result) => {
+          if (!result.count) leaseLost = true;
+        })
+        .catch(() => {
+          leaseLost = true;
+        })
+        .finally(() => {
+          heartbeatFlight = undefined;
+        });
     }, 20_000);
     heartbeat.unref();
     let writtenKey: string | undefined;
@@ -87,8 +135,14 @@ export function createExportProcessor({
         throw exportFailure("EXPORT_NOT_FOUND", "导出任务不存在或已被清理");
       }
 
-      const rendered =
-        exportJob.format === ExportFormat.PDF
+      const rendered = exportJob.studioRevisionId
+        ? await renderStudioTechPack(
+            exportJob.studioRevisionId,
+            exportJob.projectId,
+            database,
+            (stored) => downloadStored(stored, storage, download),
+          )
+        : exportJob.format === ExportFormat.PDF
           ? await renderLookbook(exportJob, (stored) =>
               downloadStored(stored, storage, download),
             )
@@ -96,18 +150,36 @@ export function createExportProcessor({
               downloadStored(stored, storage, download),
             );
       const extension = exportJob.format.toLowerCase();
-      if (leaseLost || now().getTime() >= deadline) throw exportFailure("EXPORT_TIMEOUT", "导出超过处理期限，请重试");
+      if (leaseLost || now().getTime() >= deadline)
+        throw exportFailure("EXPORT_TIMEOUT", "导出超过处理期限，请重试");
       const objectKey = `temporary/exports/${exportJob.userId}/${exportJob.id}-${leaseToken}.${extension}`;
       writtenKey = objectKey;
-      await database.$transaction((tx) => appendWorkflowOutbox(tx, { projectId: exportJob.projectId,
-        eventKey: `export:${exportJob.id}:${leaseToken}:cleanup`, eventType: "export.cleanup",
-        payload: { exportId: exportJob.id, objectKey } }).then((event) => tx.workflowOutbox.update({ where: { id: event.id }, data: { availableAt: new Date(now().getTime() + EXPORT_RETENTION_MS) } })));
+      await database.$transaction((tx) =>
+        appendWorkflowOutbox(tx, {
+          projectId: exportJob.projectId,
+          eventKey: `export:${exportJob.id}:${leaseToken}:cleanup`,
+          eventType: "export.cleanup",
+          payload: { exportId: exportJob.id, objectKey },
+        }).then((event) =>
+          tx.workflowOutbox.update({
+            where: { id: event.id },
+            data: {
+              availableAt: new Date(now().getTime() + EXPORT_RETENTION_MS),
+            },
+          }),
+        ),
+      );
       await storage.putTemporary(objectKey, rendered.body, rendered.mimeType);
 
       const completedAt = now();
       const expiresAt = new Date(completedAt.getTime() + EXPORT_RETENTION_MS);
       const committed = await database.exportJob.updateMany({
-        where: { id: exportJob.id, leaseToken, status: ExportStatus.RUNNING, leaseExpiresAt: { gt: completedAt } },
+        where: {
+          id: exportJob.id,
+          leaseToken,
+          status: ExportStatus.RUNNING,
+          leaseExpiresAt: { gt: completedAt },
+        },
         data: {
           completedAt,
           expiresAt,
@@ -120,7 +192,8 @@ export function createExportProcessor({
           leaseExpiresAt: null,
         },
       });
-      if (!committed.count) throw exportFailure("EXPORT_LEASE_LOST", "导出执行已被恢复任务替代");
+      if (!committed.count)
+        throw exportFailure("EXPORT_LEASE_LOST", "导出执行已被恢复任务替代");
       return { expiresAt, objectKey };
     } catch (error) {
       const failure = toExportFailure(error);
@@ -138,8 +211,14 @@ export function createExportProcessor({
         .catch(() => undefined);
       // Unique per-lease keys prevent an old renderer from deleting or overwriting a newer result.
       if (writtenKey) {
-        const current = await database.exportJob.findUnique({ where: { id: exportId }, select: { objectKey: true, status: true } }).catch(() => null);
-        if (current && current.objectKey !== writtenKey) await storage.delete(writtenKey).catch(() => undefined);
+        const current = await database.exportJob
+          .findUnique({
+            where: { id: exportId },
+            select: { objectKey: true, status: true },
+          })
+          .catch(() => null);
+        if (current && current.objectKey !== writtenKey)
+          await storage.delete(writtenKey).catch(() => undefined);
       }
       throw error;
     } finally {
@@ -243,6 +322,73 @@ export async function markExportFailed(
   });
 }
 
+async function renderStudioTechPack(
+  revisionId: string,
+  projectId: string,
+  database: PrismaClient,
+  download: (url: string) => Promise<Buffer>,
+) {
+  const revision = await database.studioDocument.findUnique({
+    where: { id: revisionId },
+    include: { styleRevision: { include: { style: true } } },
+  });
+  if (
+    !revision ||
+    !["TECH_PACK", "PRESENTATION_SET"].includes(revision.type) ||
+    !revision.styleRevision ||
+    revision.projectId !== projectId ||
+    revision.styleRevision.style.projectId !== projectId
+  ) {
+    throw exportFailure("TECH_PACK_NOT_FOUND", "技术包修订或款式已不存在");
+  }
+  const presentation = revision.type === "PRESENTATION_SET";
+  const payload = presentation ? studioPresentationSchema.parse(revision.payload) : studioTechPackSchema.parse(revision.payload);
+  if (payload.styleRevisionId !== revision.styleRevision.id) {
+    throw exportFailure(
+      "TECH_PACK_REVISION_MISMATCH",
+      "技术包绑定的款式修订不一致",
+    );
+  }
+  // Historical exports use the immutable style snapshot, even after the style is renamed.
+  const style = studioStyleSchema.parse(revision.styleRevision.payload);
+  const items = "items" in payload ? payload.items : payload.views;
+  const ids = [...new Set(items.map((view) => view.assetId))];
+  const assets = await database.designAsset.findMany({
+    where: { id: { in: ids }, projectId: revision.projectId },
+  });
+  if (assets.length !== ids.length) {
+    throw exportFailure("TECH_PACK_IMAGE_MISSING", "技术包引用的图片不可用");
+  }
+  const images = await Promise.all(
+    assets.map(async (asset) => {
+      try {
+        return { id: asset.id, body: await download(asset.url) };
+      } catch {
+        throw exportFailure(
+          "TECH_PACK_IMAGE_UNAVAILABLE",
+          "技术包视图图片无法读取，请检查原图后重新导出",
+        );
+      }
+    }),
+  );
+  const body = await (presentation ? renderPresentationPdf : renderTechPackPdf)(
+    {
+      payload,
+      revision: revision.revision,
+      styleCode: style.code,
+      styleName: style.name,
+      images,
+    },
+    useCjkFont,
+  );
+  return {
+    body,
+    fileName:
+      safeFileName(style.code) + (presentation ? "-presentation-r" : "-tech-pack-r") + revision.revision + ".pdf",
+    mimeType: "application/pdf",
+  };
+}
+
 async function renderImage(
   exportJob: {
     readonly designAsset: { readonly url: string } | null;
@@ -301,27 +447,33 @@ async function renderLookbook(
     throw exportFailure("EXPORT_COLLECTION_MISSING", "待导出的系列已不存在");
   }
   const collection = exportJob.collection;
-  if (!collection.looks.length) throw exportFailure("EXPORT_COLLECTION_EMPTY", "系列尚无可导出的 Look");
+  if (!collection.looks.length)
+    throw exportFailure("EXPORT_COLLECTION_EMPTY", "系列尚无可导出的 Look");
   const lookImages: Buffer[] = [];
   for (let start = 0; start < collection.looks.length; start += 2) {
-    const images = await Promise.all(collection.looks.slice(start, start + 2).map(async (look) => {
-      try {
-        const source = await download(look.designAsset.url);
-        return await sharp(source)
-          .rotate()
-          .resize({
-            fit: "inside",
-            height: 1_600,
-            width: 1_200,
-            withoutEnlargement: true,
-          })
-          .flatten({ background: "#f5f2eb" })
-          .jpeg({ quality: 90 })
-          .toBuffer();
-      } catch {
-        throw exportFailure("EXPORT_LOOK_IMAGE_UNAVAILABLE", `LOOK ${look.ordinal} 图片无法读取或解码，请检查原图后重新导出`);
-      }
-    }));
+    const images = await Promise.all(
+      collection.looks.slice(start, start + 2).map(async (look) => {
+        try {
+          const source = await download(look.designAsset.url);
+          return await sharp(source)
+            .rotate()
+            .resize({
+              fit: "inside",
+              height: 1_600,
+              width: 1_200,
+              withoutEnlargement: true,
+            })
+            .flatten({ background: "#f5f2eb" })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+        } catch {
+          throw exportFailure(
+            "EXPORT_LOOK_IMAGE_UNAVAILABLE",
+            `LOOK ${look.ordinal} 图片无法读取或解码，请检查原图后重新导出`,
+          );
+        }
+      }),
+    );
     lookImages.push(...images);
   }
   const body = await createLookbookPdf({
@@ -361,7 +513,11 @@ async function createLookbookPdf(input: {
     margin: 42,
     size: "A4",
   });
-  const bodyFont = useCjkFont(document, input.collectionName + input.looks.map((look) => look.garmentTypeLabel ?? "").join(""));
+  const bodyFont = useCjkFont(
+    document,
+    input.collectionName +
+      input.looks.map((look) => look.garmentTypeLabel ?? "").join(""),
+  );
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const finished = new Promise<Buffer>((resolve, reject) => {
@@ -374,11 +530,9 @@ async function createLookbookPdf(input: {
     .fillColor("#161616")
     .fontSize(10)
     .text("COLLECTION / LOOKBOOK", 42, 42, { characterSpacing: 1.8 });
-  document
-    .fontSize(31)
-    .text(input.collectionName, 42, 88, {
-      width: 650,
-    });
+  document.fontSize(31).text(input.collectionName, 42, 88, {
+    width: 650,
+  });
   document
     .fillColor("#66645f")
     .fontSize(10)
@@ -504,15 +658,21 @@ function parsePalette(value: unknown): readonly PaletteColor[] {
 }
 
 function useCjkFont(document: PDFKit.PDFDocument, text = ""): string {
-  const requiredCharacters = [...new Set([...text].filter((character) => (character.codePointAt(0) ?? 0) > 127))];
+  const requiredCharacters = [
+    ...new Set(
+      [...text].filter((character) => (character.codePointAt(0) ?? 0) > 127),
+    ),
+  ];
   const configured = process.env.EXPORT_PDF_FONT_PATH?.trim();
-  const candidates = configured ? [configured] : [
-    "C:/Windows/Fonts/simhei.ttf",
-    "C:/Windows/Fonts/Deng.ttf",
-    "C:/Windows/Fonts/msyh.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-  ].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = configured
+    ? [configured]
+    : [
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/Deng.ttf",
+        "C:/Windows/Fonts/msyh.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+      ].filter((candidate): candidate is string => Boolean(candidate));
   for (const [index, fontPath] of candidates.entries()) {
     if (!existsSync(fontPath)) continue;
     const fontName = `LookbookCJK${index}`;
@@ -525,15 +685,31 @@ function useCjkFont(document: PDFKit.PDFDocument, text = ""): string {
       }
       document.font(fontName);
       // PDFKit's embedded font wraps fontkit; loading a Latin font alone is insufficient.
-      const embedded = (document as PDFKit.PDFDocument & { _font?: { font?: { hasGlyphForCodePoint?: (codePoint: number) => boolean } } })._font?.font;
-      if (requiredCharacters.some((character) => !embedded?.hasGlyphForCodePoint?.(character.codePointAt(0) ?? 0))) continue;
+      const embedded = (
+        document as PDFKit.PDFDocument & {
+          _font?: {
+            font?: { hasGlyphForCodePoint?: (codePoint: number) => boolean };
+          };
+        }
+      )._font?.font;
+      if (
+        requiredCharacters.some(
+          (character) =>
+            !embedded?.hasGlyphForCodePoint?.(character.codePointAt(0) ?? 0),
+        )
+      )
+        continue;
       return fontName;
     } catch {
       continue;
     }
   }
   document.font("Helvetica");
-  if (requiredCharacters.length) throw exportFailure("EXPORT_FONT_UNAVAILABLE", "导出字体无法完整显示所需文字，请配置支持相应字符的 EXPORT_PDF_FONT_PATH");
+  if (requiredCharacters.length)
+    throw exportFailure(
+      "EXPORT_FONT_UNAVAILABLE",
+      "导出字体无法完整显示所需文字，请配置支持相应字符的 EXPORT_PDF_FONT_PATH",
+    );
   return "Helvetica";
 }
 

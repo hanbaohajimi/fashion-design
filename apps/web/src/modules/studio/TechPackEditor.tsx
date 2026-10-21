@@ -1,0 +1,699 @@
+"use client";
+
+import { useState } from "react";
+import {
+  studioPublishIssues,
+  type StudioTechPack,
+  type StudioDocumentView,
+  type StudioSummary,
+} from "@fashion/shared";
+import {
+  Badge,
+  Button,
+  Field,
+  Input,
+  Notice,
+  Select,
+  Textarea,
+} from "../../components/ui";
+import { saveStudioDocument, techPackExportUrl } from "./studio-api";
+import { SaveBar } from "./studio-ui";
+import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
+import { BomTable, PomTable } from "./TechPackTables";
+import { AssetAnchor } from "./AssetAnchor";
+import { TechPackExportButton } from "./TechPackExportButton";
+import styles from "./studio.module.css";
+
+export function TechPackEditor(
+  props: StudioPanelProps & { readonly data: StudioSummary },
+) {
+  const [id, setId] = useState<string | null>(null);
+  const [draftVersion, setDraftVersion] = useState(0);
+  const existing = props.data.techPacks.find((item) => item.id === id);
+  return (
+    <div className={styles.section}>
+      <div className={styles.recordHeader}>
+        <div>
+          <h2>技术包</h2>
+          <p className={styles.muted}>
+            把视图、工艺和人工规格整理为可复核、可导出的版本。
+          </p>
+        </div>
+        <Button
+          disabled={!props.canEdit}
+          onClick={() =>
+            void (async () => {
+              if (await props.beforeChange()) {
+                setId(null);
+                setDraftVersion((current) => current + 1);
+              }
+            })()
+          }
+        >
+          新建技术包
+        </Button>
+      </div>
+      <div className={styles.split}>
+        <aside className={styles.rail}>
+          {props.data.techPacks.map((item) => (
+            <Button
+              key={item.id}
+              aria-pressed={id === item.id}
+              onClick={() =>
+                void (async () => {
+                  if (await props.beforeChange()) setId(item.id);
+                })()
+              }
+            >
+              <strong>{item.currentRevision.payload.name}</strong>
+              <small>
+                r{item.currentRevision.revision} ·{" "}
+                {(item.currentRevision.payload as StudioTechPack).status ===
+                "PUBLISHED"
+                  ? "已发布"
+                  : "草稿"}
+              </small>
+            </Button>
+          ))}
+        </aside>
+        <TechPackForm
+          key={
+            (existing?.id ?? "new") +
+            ":" +
+            (existing?.version ?? 0) +
+            ":" +
+            draftVersion
+          }
+          {...props}
+          existing={existing}
+          onCreated={setId}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TechPackForm({
+  projectId,
+  data,
+  existing,
+  canEdit,
+  onDirty,
+  onSaved,
+  beforeChange,
+  onCreated,
+}: StudioPanelProps & {
+  readonly data: StudioSummary;
+  readonly existing: StudioDocumentView | undefined;
+  readonly onCreated: (id: string) => void;
+}) {
+  const firstRevision = data.styles[0]?.currentRevision;
+  const initial: StudioTechPack = existing
+    ? (existing.currentRevision.payload as StudioTechPack)
+    : {
+        name: "",
+        styleRevisionId: firstRevision?.id ?? "",
+        status: "DRAFT",
+        views: firstRevision?.payload.views ?? [],
+        annotations: [],
+        bom: [],
+        pom: [],
+        colors: [],
+        constructionNotes: "",
+        reviewConfirmed: false,
+      };
+  const form = useStudioForm(initial, onDirty);
+  const { draft, setDraft } = form;
+  const [viewsChanged, setViewsChanged] = useState(false);
+  const disabled = !canEdit || form.busy;
+  const update = <K extends keyof StudioTechPack>(
+    key: K,
+    value: StudioTechPack[K],
+  ) =>
+    setDraft((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "reviewConfirmed" ? {} : { reviewConfirmed: false }),
+      status: "DRAFT",
+    }));
+  const save = async (publish = false) => {
+    const payload = {
+      ...draft,
+      status: publish ? ("PUBLISHED" as const) : ("DRAFT" as const),
+    };
+    if (publish) {
+      const issues = studioPublishIssues(payload);
+      if (issues.length) {
+        form.setError(issues.join("；"));
+        return;
+      }
+    }
+    let id = "";
+    if (
+      await form.submit(async (key) => {
+        const result = await saveStudioDocument(
+          projectId,
+          { type: "TECH_PACK", payload },
+          key + (publish ? "-publish" : "-draft"),
+          existing,
+        );
+        id = result.id;
+      })
+    ) {
+      await onSaved();
+      onCreated(id);
+    }
+  };
+  return (
+    <form
+      className={styles.form}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <div className={styles.recordHeader}>
+        <h3>{existing ? initial.name : "技术包草稿"}</h3>
+        <Badge>{draft.status === "PUBLISHED" ? "已发布" : "草稿"}</Badge>
+      </div>
+      {form.error ? (
+        <Notice tone="error">
+          {form.error}
+          {form.conflict ? (
+            <Button
+              onClick={() =>
+                void (async () => {
+                  if (await beforeChange()) await onSaved();
+                })()
+              }
+            >
+              重新载入
+            </Button>
+          ) : null}
+        </Notice>
+      ) : null}
+      {viewsChanged ? (
+        <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
+      ) : null}
+      <fieldset disabled={disabled} className={styles.form}>
+        <div className={styles.formGrid}>
+          <Field label="技术包名称">
+            <Input
+              value={draft.name}
+              required
+              maxLength={120}
+              onChange={(event) => update("name", event.target.value)}
+            />
+          </Field>
+          <Field label="对应款式修订">
+            <Select
+              required
+              value={draft.styleRevisionId}
+              onChange={(event) => {
+                const revision = data.styles
+                  .flatMap((style) => style.revisions)
+                  .find((item) => item.id === event.target.value);
+                setDraft((current) => ({
+                  ...current,
+                  styleRevisionId: event.target.value,
+                  views:
+                    revision?.payload.views.map((view) => ({
+                      ...view,
+                      reviewed: false,
+                    })) ?? [],
+                  annotations: [],
+                  status: "DRAFT",
+                  reviewConfirmed: false,
+                }));
+              }}
+            >
+              <option value="">选择已保存的款式修订</option>
+              {data.styles.flatMap((style) =>
+                style.revisions.map((revision) => (
+                  <option value={revision.id} key={revision.id}>
+                    {style.code} · {revision.payload.name} · r
+                    {revision.revision}
+                  </option>
+                )),
+              )}
+            </Select>
+          </Field>
+        </div>
+        <section className={styles.section}>
+          <div className={styles.recordHeader}>
+            <h3>视图与来源</h3>
+            <Button
+              disabled={!data.assets.length || draft.views.length >= 20}
+              onClick={() =>
+                update("views", [
+                  ...draft.views,
+                  {
+                    kind: "detail",
+                    assetId: data.assets[0]?.id ?? "",
+                    label: "",
+                    reviewed: false,
+                  },
+                ])
+              }
+            >
+              添加视图
+            </Button>
+          </div>
+          {draft.views.map((view, index) => (
+            <div className={styles.record} key={index}>
+              <div className={styles.formGrid}>
+                <Field label="类型">
+                  <Select
+                    value={view.kind}
+                    onChange={(event) =>
+                      update(
+                        "views",
+                        draft.views.map((item, at) =>
+                          at === index
+                            ? {
+                                ...item,
+                                kind: event.target.value as typeof view.kind,
+                                reviewed: false,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="front">正面</option>
+                    <option value="back">背面</option>
+                    <option value="detail">细节</option>
+                  </Select>
+                </Field>
+                <Field label="关联图片">
+                  <Select
+                    value={view.assetId}
+                    onChange={(event) => {
+                      const oldAsset = view.assetId;
+                      setViewsChanged(true);
+                      setDraft((current) => ({
+                        ...current,
+                        status: "DRAFT",
+                        reviewConfirmed: false,
+                        views: current.views.map((item, at) =>
+                          at === index
+                            ? {
+                                ...item,
+                                assetId: event.target.value,
+                                reviewed: false,
+                              }
+                            : item,
+                        ),
+                        annotations: current.annotations.map((item) =>
+                          item.assetId === oldAsset
+                            ? {
+                                ...item,
+                                assetId: event.target.value,
+                                reviewed: false,
+                              }
+                            : item,
+                        ),
+                      }));
+                    }}
+                  >
+                    {data.assets.map((asset) => (
+                      <option value={asset.id} key={asset.id}>
+                        {asset.id.slice(0, 12)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="视图说明">
+                  <Input
+                    value={view.label}
+                    maxLength={2000}
+                    onChange={(event) =>
+                      update(
+                        "views",
+                        draft.views.map((item, at) =>
+                          at === index
+                            ? {
+                                ...item,
+                                label: event.target.value,
+                                reviewed: false,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+              </div>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={view.reviewed}
+                  onChange={(event) =>
+                    update(
+                      "views",
+                      draft.views.map((item, at) =>
+                        at === index
+                          ? { ...item, reviewed: event.target.checked }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                已人工复核此视图，确认图中结构
+              </label>
+              <div className={styles.toolbar}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    const remaining = draft.views.filter(
+                      (_, at) => at !== index,
+                    );
+                    if (
+                      draft.annotations.some(
+                        (item) => item.assetId === view.assetId,
+                      ) &&
+                      !remaining.some((item) => item.assetId === view.assetId)
+                    ) {
+                      form.setError(
+                        "此视图仍有工艺标注，请先重新关联或移除标注。",
+                      );
+                      return;
+                    }
+                    update("views", remaining);
+                  }}
+                >
+                  移除视图
+                </Button>
+              </div>
+            </div>
+          ))}
+        </section>
+        <section className={styles.section}>
+          <div className={styles.recordHeader}>
+            <h3>工艺锚点标注</h3>
+            <Button
+              disabled={!draft.views.length || draft.annotations.length >= 100}
+              onClick={() =>
+                update("annotations", [
+                  ...draft.annotations,
+                  {
+                    assetId: draft.views[0]?.assetId ?? "",
+                    x: 0.5,
+                    y: 0.5,
+                    text: "",
+                    reviewed: false,
+                  },
+                ])
+              }
+            >
+              添加标注
+            </Button>
+          </div>
+          {draft.annotations.map((annotation, index) => (
+            <article className={styles.record} key={index}>
+              <Field label="标注图片">
+                <Select
+                  value={annotation.assetId}
+                  onChange={(event) =>
+                    update(
+                      "annotations",
+                      draft.annotations.map((item, at) =>
+                        at === index
+                          ? {
+                              ...item,
+                              assetId: event.target.value,
+                              reviewed: false,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                >
+                  {data.assets
+                    .filter((asset) =>
+                      draft.views.some((view) => view.assetId === asset.id),
+                    )
+                    .map((asset) => (
+                      <option value={asset.id} key={asset.id}>
+                        {asset.id.slice(0, 12)}
+                      </option>
+                    ))}
+                </Select>
+              </Field>
+              <AssetAnchor
+                label={"工艺标注 " + (index + 1) + " 定位"}
+                url={
+                  data.assets.find((asset) => asset.id === annotation.assetId)
+                    ?.url ?? ""
+                }
+                x={annotation.x}
+                y={annotation.y}
+                onPoint={(x, y) =>
+                  update(
+                    "annotations",
+                    draft.annotations.map((item, at) =>
+                      at === index ? { ...item, x, y, reviewed: false } : item,
+                    ),
+                  )
+                }
+              />
+              <Field label="工艺说明">
+                <Input
+                  maxLength={120}
+                  required
+                  value={annotation.text}
+                  onChange={(event) =>
+                    update(
+                      "annotations",
+                      draft.annotations.map((item, at) =>
+                        at === index
+                          ? {
+                              ...item,
+                              text: event.target.value,
+                              reviewed: false,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={annotation.reviewed}
+                  onChange={(event) =>
+                    update(
+                      "annotations",
+                      draft.annotations.map((item, at) =>
+                        at === index
+                          ? { ...item, reviewed: event.target.checked }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                已复核工艺标注
+              </label>
+              <Button
+                size="small"
+                onClick={() =>
+                  update(
+                    "annotations",
+                    draft.annotations.filter((_, at) => at !== index),
+                  )
+                }
+              >
+                移除标注
+              </Button>
+            </article>
+          ))}
+        </section>
+        <BomTable
+          rows={draft.bom}
+          disabled={disabled}
+          onChange={(rows) => update("bom", rows)}
+        />
+        <PomTable
+          rows={draft.pom}
+          disabled={disabled}
+          onChange={(rows) => update("pom", rows)}
+        />
+        <section className={styles.stack}>
+          <div className={styles.recordHeader}>
+            <h3>配色</h3>
+            <Button
+              disabled={draft.colors.length >= 30}
+              onClick={() =>
+                update("colors", [
+                  ...draft.colors,
+                  { name: "", hex: "#5a5149", reviewed: false },
+                ])
+              }
+            >
+              添加配色
+            </Button>
+          </div>
+          {draft.colors.map((color, index) => (
+            <div className={styles.row} key={index}>
+              <Field label="色名">
+                <Input
+                  required
+                  value={color.name}
+                  onChange={(event) =>
+                    update(
+                      "colors",
+                      draft.colors.map((item, at) =>
+                        at === index
+                          ? {
+                              ...item,
+                              name: event.target.value,
+                              reviewed: false,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+              <Field label="色值">
+                <Input
+                  type="color"
+                  value={color.hex}
+                  onChange={(event) =>
+                    update(
+                      "colors",
+                      draft.colors.map((item, at) =>
+                        at === index
+                          ? {
+                              ...item,
+                              hex: event.target.value,
+                              reviewed: false,
+                            }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+              </Field>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={color.reviewed}
+                  onChange={(event) =>
+                    update(
+                      "colors",
+                      draft.colors.map((item, at) =>
+                        at === index
+                          ? { ...item, reviewed: event.target.checked }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                已复核
+              </label>
+              <Button
+                onClick={() =>
+                  update(
+                    "colors",
+                    draft.colors.filter((_, at) => at !== index),
+                  )
+                }
+              >
+                移除
+              </Button>
+            </div>
+          ))}
+        </section>
+        <Field label="工艺与交接说明">
+          <Textarea
+            rows={5}
+            maxLength={2000}
+            value={draft.constructionNotes}
+            onChange={(event) =>
+              update("constructionNotes", event.target.value)
+            }
+          />
+        </Field>
+      </fieldset>
+      <label className={styles.check}>
+        <input
+          type="checkbox"
+          checked={draft.reviewConfirmed}
+          disabled={form.busy || (!data.capabilities.review && !canEdit)}
+          onChange={(event) => update("reviewConfirmed", event.target.checked)}
+        />
+        我已人工复核本次资料的视图、材料、尺寸及工艺。
+      </label>
+      <div className={styles.note}>
+        未知尺寸、用量与公差请留空。正式发布需要正背视图、材料、尺寸和配色均完成复核。AI
+        建议的尺寸或用量需要替换为已确认资料。
+      </div>
+      <SaveBar
+        busy={form.busy}
+        dirty={form.dirty || !existing}
+        canEdit={canEdit}
+      >
+        <Button
+          variant="secondary"
+          loading={form.busy}
+          disabled={!data.capabilities.review || (!canEdit && !existing)}
+          onClick={() => void save(true)}
+        >
+          复核并发布
+        </Button>
+        {existing ? (
+          <TechPackExportButton
+            projectId={projectId}
+            revisionId={existing.currentRevision.id}
+          />
+        ) : null}
+      </SaveBar>
+      {existing ? (
+        <details className={styles.record}>
+          <summary>查看和导出历史修订</summary>
+          {existing.revisions.map((revision) => (
+            <article className={styles.record} key={revision.id}>
+              <div className={styles.recordHeader}>
+                <strong>
+                  r{revision.revision} · {revision.payload.name}
+                </strong>
+                <Badge>
+                  {(revision.payload as StudioTechPack).status === "PUBLISHED"
+                    ? "已发布"
+                    : "草稿"}
+                </Badge>
+              </div>
+              <small>
+                {new Date(revision.createdAt).toLocaleString("zh-CN")}
+              </small>
+              <a
+                href={techPackExportUrl(projectId, revision.id)}
+                className={styles.link}
+                target="_blank"
+                rel="noreferrer"
+              >
+                打开此修订的打印版
+              </a>
+              {canEdit ? (
+                <Button
+                  size="small"
+                  onClick={() =>
+                    setDraft({
+                      ...(revision.payload as StudioTechPack),
+                      status: "DRAFT",
+                      reviewConfirmed: false,
+                    })
+                  }
+                >
+                  以此修订继续编辑
+                </Button>
+              ) : null}
+            </article>
+          ))}
+        </details>
+      ) : null}
+    </form>
+  );
+}

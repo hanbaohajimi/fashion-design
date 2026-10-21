@@ -39,10 +39,17 @@ function exportRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("export processor", () => {
-  afterEach(() => { vi.unstubAllEnvs(); });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   const database = {
+    studioDocument: { findUnique: vi.fn() },
+    designAsset: { findMany: vi.fn() },
     $transaction: vi.fn(),
-    workflowOutbox: { upsert: vi.fn().mockResolvedValue({ id: "cleanup-event" }), update: vi.fn() },
+    workflowOutbox: {
+      upsert: vi.fn().mockResolvedValue({ id: "cleanup-event" }),
+      update: vi.fn(),
+    },
     exportJob: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -68,45 +75,115 @@ describe("export processor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     database.exportJob.update.mockResolvedValue(exportRecord());
-    database.$transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(database));
+    database.$transaction.mockImplementation((fn: (tx: unknown) => unknown) =>
+      fn(database),
+    );
     database.exportJob.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("fails the entire PDF when any required Look image cannot be read", async () => {
-    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "Collection", dna: null,
-      looks: [{ ordinal: 1, designAsset: { url: "broken" } }] } }));
-    const processExport = createExportProcessor({ database: database as never, storage, download: async () => { throw new Error("private-storage-secret"); } });
-    await expect(processExport("export-a")).rejects.toMatchObject({ code: "EXPORT_LOOK_IMAGE_UNAVAILABLE" });
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        collection: {
+          name: "Collection",
+          dna: null,
+          looks: [{ ordinal: 1, designAsset: { url: "broken" } }],
+        },
+      }),
+    );
+    const processExport = createExportProcessor({
+      database: database as never,
+      storage,
+      download: async () => {
+        throw new Error("private-storage-secret");
+      },
+    });
+    await expect(processExport("export-a")).rejects.toMatchObject({
+      code: "EXPORT_LOOK_IMAGE_UNAVAILABLE",
+    });
     expect(storage.putTemporary).not.toHaveBeenCalled();
   });
 
   it("rejects an empty collection", async () => {
-    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "Empty", dna: null, looks: [] } }));
-    await expect(createExportProcessor({ database: database as never, storage })("export-a")).rejects.toMatchObject({ code: "EXPORT_COLLECTION_EMPTY" });
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        collection: { name: "Empty", dna: null, looks: [] },
+      }),
+    );
+    await expect(
+      createExportProcessor({ database: database as never, storage })(
+        "export-a",
+      ),
+    ).rejects.toMatchObject({ code: "EXPORT_COLLECTION_EMPTY" });
   });
 
   it("never removes Chinese text when the configured font is unavailable", async () => {
     vi.stubEnv("EXPORT_PDF_FONT_PATH", "missing-trial-font.ttf");
     const image = await source;
-    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "中文系列", dna: null, looks: [{ ordinal: 1, designAsset: { url: "image" } }] } }));
-    await expect(createExportProcessor({ database: database as never, storage, download: async () => image })("export-a")).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        collection: {
+          name: "中文系列",
+          dna: null,
+          looks: [{ ordinal: 1, designAsset: { url: "image" } }],
+        },
+      }),
+    );
+    await expect(
+      createExportProcessor({
+        database: database as never,
+        storage,
+        download: async () => image,
+      })("export-a"),
+    ).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
     expect(storage.putTemporary).not.toHaveBeenCalled();
   });
 
-  const latinFont = ["C:/Windows/Fonts/arial.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"].find(existsSync);
-  it.skipIf(!latinFont)("rejects a loadable font whose glyphs cannot represent the Chinese title", async () => {
-    if (!latinFont) throw new Error("Latin font fixture is unavailable");
-    vi.stubEnv("EXPORT_PDF_FONT_PATH", latinFont);
-    const image = await source;
-    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, collection: { name: "中文系列", dna: null, looks: [{ ordinal: 1, designAsset: { url: "image" } }] } }));
-    await expect(createExportProcessor({ database: database as never, storage, download: async () => image })("export-a")).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
-    expect(storage.putTemporary).not.toHaveBeenCalled();
-  });
+  const latinFont = [
+    "C:/Windows/Fonts/arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+  ].find(existsSync);
+  it.skipIf(!latinFont)(
+    "rejects a loadable font whose glyphs cannot represent the Chinese title",
+    async () => {
+      if (!latinFont) throw new Error("Latin font fixture is unavailable");
+      vi.stubEnv("EXPORT_PDF_FONT_PATH", latinFont);
+      const image = await source;
+      database.exportJob.findUnique.mockResolvedValue(
+        exportRecord({
+          format: ExportFormat.PDF,
+          collection: {
+            name: "中文系列",
+            dna: null,
+            looks: [{ ordinal: 1, designAsset: { url: "image" } }],
+          },
+        }),
+      );
+      await expect(
+        createExportProcessor({
+          database: database as never,
+          storage,
+          download: async () => image,
+        })("export-a"),
+      ).rejects.toMatchObject({ code: "EXPORT_FONT_UNAVAILABLE" });
+      expect(storage.putTemporary).not.toHaveBeenCalled();
+    },
+  );
 
   it("refuses a renderer that no longer owns the lease", async () => {
     database.exportJob.updateMany.mockResolvedValueOnce({ count: 0 });
-    database.exportJob.findUnique.mockResolvedValue(exportRecord({ status: ExportStatus.RUNNING }));
-    await expect(createExportProcessor({ database: database as never, storage })("export-a")).rejects.toMatchObject({ code: "EXPORT_LEASE_UNAVAILABLE" });
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({ status: ExportStatus.RUNNING }),
+    );
+    await expect(
+      createExportProcessor({ database: database as never, storage })(
+        "export-a",
+      ),
+    ).rejects.toMatchObject({ code: "EXPORT_LEASE_UNAVAILABLE" });
     expect(storage.putTemporary).not.toHaveBeenCalled();
   });
 
@@ -217,6 +294,145 @@ describe("export processor", () => {
     );
   });
 
+  function techPackRevision(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "pack-revision",
+      projectId: "project-a",
+      type: "TECH_PACK",
+      revision: 2,
+      payload: {
+        name: "技术包",
+        styleRevisionId: "style-revision",
+        views: [{ kind: "front", assetId: "front", label: "正面" }],
+      },
+      styleRevision: {
+        id: "style-revision",
+        payload: {
+          name: "旧款式名称",
+          code: "ARCHIVE-001",
+          category: "外套",
+          sourceAssetId: "front",
+        },
+        style: {
+          projectId: "project-a",
+          code: "RENAMED-002",
+          name: "已改名款式",
+        },
+      },
+      ...overrides,
+    };
+  }
+
+  it("exports the historical style snapshot rather than the renamed current style", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        studioRevisionId: "pack-revision",
+      }),
+    );
+    database.studioDocument.findUnique.mockResolvedValue(techPackRevision());
+    database.designAsset.findMany.mockResolvedValue([
+      { id: "front", url: "https://asset.test/front.png" },
+    ]);
+    await createExportProcessor({
+      database: database as never,
+      storage,
+      download: async () => source,
+    })("export-a");
+    expect(database.exportJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fileName: "ARCHIVE-001-tech-pack-r2.pdf",
+          status: ExportStatus.SUCCEEDED,
+        }),
+      }),
+    );
+    const output = storage.putTemporary.mock.calls[0]?.[1] as Buffer;
+    expect(output.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("renders a presentation set as a presentation PDF using the frozen style snapshot", async () => {
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ format: ExportFormat.PDF, studioRevisionId: "presentation-revision" }));
+    database.studioDocument.findUnique.mockResolvedValue(techPackRevision({ type: "PRESENTATION_SET", payload: { name: "商品展示包", styleRevisionId: "style-revision", status: "READY", items: [{ kind: "front", assetId: "front", reviewed: true }] } }));
+    database.designAsset.findMany.mockResolvedValue([{ id: "front", url: "https://asset.test/front.png" }]);
+    await createExportProcessor({ database: database as never, storage, download: async () => source })("export-a");
+    expect(database.exportJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ fileName: "ARCHIVE-001-presentation-r2.pdf", status: ExportStatus.SUCCEEDED }) }));
+    const output = storage.putTemporary.mock.calls[0]?.[1] as Buffer;
+    expect(output.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(output.toString("latin1").match(/\/Type\s*\/Page\b/gu)).toHaveLength(2);
+  });
+
+  it("rejects a technical package linked to another project before downloading images", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        studioRevisionId: "pack-revision",
+      }),
+    );
+    database.studioDocument.findUnique.mockResolvedValue(
+      techPackRevision({ projectId: "project-b" }),
+    );
+    const download = vi.fn();
+    await expect(
+      createExportProcessor({ database: database as never, storage, download })(
+        "export-a",
+      ),
+    ).rejects.toMatchObject({ code: "TECH_PACK_NOT_FOUND" });
+    expect(download).not.toHaveBeenCalled();
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
+
+  it("rejects a technical package whose payload disagrees with its immutable style link", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        studioRevisionId: "pack-revision",
+      }),
+    );
+    database.studioDocument.findUnique.mockResolvedValue(
+      techPackRevision({
+        payload: { name: "技术包", styleRevisionId: "other-revision" },
+      }),
+    );
+    await expect(
+      createExportProcessor({ database: database as never, storage })(
+        "export-a",
+      ),
+    ).rejects.toMatchObject({ code: "TECH_PACK_REVISION_MISMATCH" });
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
+
+  it("records a safe actionable image error without storage credentials", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        format: ExportFormat.PDF,
+        studioRevisionId: "pack-revision",
+      }),
+    );
+    database.studioDocument.findUnique.mockResolvedValue(techPackRevision());
+    database.designAsset.findMany.mockResolvedValue([
+      { id: "front", url: "https://asset.test/front.png" },
+    ]);
+    const download = vi
+      .fn()
+      .mockRejectedValue(new Error("private-storage-credential"));
+    await expect(
+      createExportProcessor({ database: database as never, storage, download })(
+        "export-a",
+      ),
+    ).rejects.toMatchObject({ code: "TECH_PACK_IMAGE_UNAVAILABLE" });
+    expect(database.exportJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          errorCode: "TECH_PACK_IMAGE_UNAVAILABLE",
+          errorMessage: expect.not.stringContaining(
+            "private-storage-credential",
+          ),
+        }),
+      }),
+    );
+    expect(storage.putTemporary).not.toHaveBeenCalled();
+  });
   it("清理任务删除临时对象并标记过期", async () => {
     database.exportJob.findUnique.mockResolvedValue({
       expiresAt: new Date("2026-07-28T07:00:00.000Z"),

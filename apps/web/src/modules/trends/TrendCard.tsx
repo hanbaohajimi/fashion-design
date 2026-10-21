@@ -38,6 +38,7 @@ const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   styling: "造型",
   sustainability: "可持续",
   women: "女装",
+  unclassified: "未分类",
 };
 
 export function platformLabel(platform: string): string {
@@ -48,7 +49,8 @@ export function trendCategoryLabel(category: string): string {
   return CATEGORY_LABELS[category.toLowerCase()] ?? category;
 }
 
-function publishedDate(value: string): string {
+function publishedDate(value: string | null): string {
+  if (!value) return "发布日期未知";
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? "发布日期未知"
@@ -105,7 +107,7 @@ export function TrendCard({
           <a href={trend.sourceUrl} rel="noreferrer" target="_blank">
             <span aria-hidden="true">▧</span> 查看原文 - {platform}
           </a>
-          <time dateTime={trend.publishedAt}>
+          <time dateTime={trend.publishedAt ?? undefined}>
             {publishedDate(trend.publishedAt)}
           </time>
         </div>

@@ -1,5 +1,62 @@
 # AI 服装设计平台
 
+## 设计工作室（2026-10-21）
+
+在项目画布顶部选择“款式与交付”，进入 `/[projectId]/studio`。
+工作室沿用现有项目、生成额度、私有存储和异步任务。
+
+- 任务入口：草图效果图、多参考组合、改色、细节改款和需求梳理，直接建立并运行对应工作流。
+- 款式档案：稳定款式编号、不可变修订、正背/细节视图、2–4 款比较；候选详情可直接保存为款式。
+- 色料实验：同母图颜色、面料、部件或展示方案组合，单批最多 12 项；先存草稿，再显式提交，逐项保留失败和重试记录。
+- 面料档案：成分比例、克重、幅宽、供应商、报价及来源，支持条件筛选；AI 外观描述不能充当物性或报价依据。
+- 品牌与系列：品牌规则及认可案例按修订加入画布；本人可从其他仍有访问权的项目复用品牌文字规则，认可案例在当前项目重新选择。系列位置绑定明确款式修订。
+- 印花工作台：循环、缩放、旋转、亮度和偏移预览，保存参数修订；屏幕预览不代表生产尺寸或真实服装贴合效果。
+- 技术包：手工维护视图、定位标注、BOM、POM、公差和配色；通过人工复核后发布，后台输出绑定修订的中文 PDF。
+- 样衣与评审：按技术包修订建立打样轮次，问题锚定本轮照片，记录责任人、处理依据与复核状态；评论和评审保留原记录。
+- 商品展示：展示候选沿用实验任务生成，人工选图组成绑定款式修订的展示组，逐图核对后标记可交付，并输出 PDF 或下载原图。
+- 趋势简报：保留原文、已知发布日期、抓取时间与摘要，设计探索方向单独填写；缺失日期显示未知，不生成虚构热度。
+
+工作区成员采用所有者、编辑、评审、只读四种角色。只有所有者管理成员；编辑负责设计写入，
+评审负责发布和复核，只读不会触发新的图片或视觉分析任务。成员的助手对话仍保持个人归属。
+新增成员需先注册账号；本轮未接入真实外发邮件邀请。
+
+升级运行 `pnpm db:deploy`，应用 `20261021000100_design_studio`、
+`20261021000200_trend_unknown_dates`、`20261021000300_presentation_sets`，
+随后构建并重启 API、Web 与 Worker。迁移保留旧项目。
+生成和导出都使用服务端幂等与持久化恢复；没有接纳的实验项可以单独重试，已成功的项不会重复生成。
+
+当前图片模型结果仍需人工检查。蒙版和额外面料参考同时输入尚未得到接口支持；
+真实合体性、尺寸、物性、生产级色准和印花匹配均不由生成图验证。测试不自动调用付费模型。
+
+### 本轮验收记录
+
+| 检查 | 2026-10-21 实际结果 |
+| --- | --- |
+| `pnpm check` | 通过：启动检查、依赖审计、lint、类型、schema、完整测试、数据库检查、生产构建 |
+| 应用测试 | API 79 文件 / 650 条；Web 38 文件 / 182 条；Worker 17 文件 / 114 条，全部通过 |
+| 数据库测试 | 2 条通过；34 个迁移全部已应用 |
+| 工作室浏览器流程 | 款式保存与比较、实验草稿与显式提交、展示包复核与 PDF、离开保护，4 条通过 |
+| 完整浏览器回归 | 生产版本首轮 108/109 通过；唯一失败为面料快捷键焦点断言，调整测试就绪等待后连续 3 次通过 |
+| 助手测试契约补测 | 补齐明确的 GET plan 空态 fixture 后，相关 5 条通过 |
+| PDF 内容与排版 | 技术包及商品展示包正常/长内容共 35 页，渲染检查无越界或乱码 |
+
+完整门禁日志：`output/studio-check-final.log`。浏览器回归日志：
+`output/studio-browser-final.log`；新页面截图：
+`output/playwright/studio-experiments-final-desktop.png` 与
+`output/playwright/studio-presentation-final-mobile.png`。PDF 样本位于
+`output/pdf/tech-pack-qa.pdf`、`output/pdf/presentation-qa.pdf`。
+
+浏览器流程使用 API fixture 和确定性示例图片；真实持久化测试覆盖 PostgreSQL、
+BullMQ、Worker、MinIO、认证下载、撤权、幂等和派发恢复，不调用付费模型。
+界面示例图片与测试结果不能替代真实模型效果验收。
+
+最终定向补测命令（完整浏览器首轮与补测分别保留在上述日志中）：
+
+```bash
+pnpm exec playwright test tests/e2e/generation-flow.spec.ts --grep "面料档案支持快捷搜索" --repeat-each=3 --output=output/playwright/studio-final-fabric-results --reporter=list
+pnpm exec playwright test tests/e2e/agent-workspace-flow.spec.ts --output=output/playwright/studio-final-agent-results --reporter=list
+```
+
 ## 界面开发与验收
 
 应用采用 Atelier 浅色工作界面。颜色、字号、间距、控件尺寸和动效统一定义在
@@ -55,7 +112,7 @@ pnpm exec playwright test tests/e2e/workflow-trend-library.spec.ts tests/e2e/wor
 `output/atelier-final-series-recheck.log`（修正 PDF 测试依赖引用后的真实链路）。
 PDF 样本保存在 `output/playwright/real-results/`，文本检查为
 `output/atelier-pdf-verification.txt`，页面渲染为 `output/atelier-lookbook-poppler-{1,2}.png`。
-本轮未新增业务接口、数据库迁移或 npm 依赖；模型协议未改动，真实链路使用本地 Provider 替身。
+2026-10-20 的界面验收未新增业务接口、数据库迁移或 npm 依赖；模型协议未改动，真实链路使用本地 Provider 替身。
 视觉用例固定字体、时间并隐藏 Next.js 开发调试层，未隐藏 SDK 授权提示；
 未使用的 SDK 远程文字字体在视觉测试中被阻断，工作流文字使用固定的 Noto 字体。
 

@@ -56,17 +56,19 @@ function parseFabricBody(body: unknown): unknown {
     return body;
   }
   const value = body as Record<string, unknown>;
-  if (typeof value.tags !== "string") {
-    return value;
+  const parsed = { ...value };
+  for (const field of ["tags", "details"]) {
+    if (typeof parsed[field] !== "string") continue;
+    try {
+      parsed[field] = JSON.parse(parsed[field] as string) as unknown;
+    } catch {
+      throw new BadRequestException({
+        code: "FABRIC_JSON_INVALID",
+        message: field + " 必须是有效的 JSON",
+      });
+    }
   }
-  try {
-    return { ...value, tags: JSON.parse(value.tags) as unknown };
-  } catch {
-    throw new BadRequestException({
-      code: "TAGS_JSON_INVALID",
-      message: "tags 必须是有效的 JSON",
-    });
-  }
+  return parsed;
 }
 
 @Controller("fabrics")

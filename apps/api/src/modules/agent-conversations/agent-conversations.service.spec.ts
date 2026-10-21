@@ -1,7 +1,8 @@
 import { AgentMessageRole, AgentMessageStatus, Prisma } from "@fashion/db";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
+import type { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { AgentConversationsService } from "./agent-conversations.service";
 
 const now = new Date("2026-08-05T08:00:00.000Z");
@@ -51,7 +52,7 @@ function messageFixture(
   };
 }
 
-function createHarness() {
+function createHarness(access?: ProjectAccessPolicy) {
   const userMessage = messageFixture(AgentMessageRole.USER);
   const pendingMessage = messageFixture(AgentMessageRole.ASSISTANT);
   const database = {
@@ -129,6 +130,8 @@ function createHarness() {
       generation as never,
       storage as never,
       runs as never,
+      undefined,
+      access,
     ),
     storage,
   };
@@ -137,9 +140,17 @@ function createHarness() {
 describe("AgentConversationsService", () => {
   it("returns 410 for new legacy plans without model calls, reservation or image reads", async () => {
     const harness = createHarness();
-    await expect(harness.service.createPlan("user-a", "conversation-a", {
-      content: "设计一件风衣", clientRequestId: "new-plan", fileAssetIds: [], shapeIds: [],
-    })).rejects.toMatchObject({ status: 410, response: { code: "LEGACY_AGENT_PLAN_RETIRED" } });
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计一件风衣",
+        clientRequestId: "new-plan",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).rejects.toMatchObject({
+      status: 410,
+      response: { code: "LEGACY_AGENT_PLAN_RETIRED" },
+    });
     expect(harness.runs.findReservation).toHaveBeenCalledOnce();
     expect(harness.runs.reserve).not.toHaveBeenCalled();
     expect(harness.model.generateJson).not.toHaveBeenCalled();
@@ -149,11 +160,23 @@ describe("AgentConversationsService", () => {
 
   it("replays an existing plan before checking references that have since been deleted", async () => {
     const harness = createHarness();
-    harness.runs.findReservation.mockResolvedValue({ id: "run-a", status: "ready", revision: 1, steps: [] } as never);
-    harness.database.boardElement.findMany.mockRejectedValue(new Error("deleted reference"));
-    await expect(harness.service.createPlan("user-a", "conversation-a", {
-      content: "设计风衣", clientRequestId: "old-plan", fileAssetIds: [], shapeIds: ["deleted-shape"],
-    })).resolves.toMatchObject({ id: "run-a", status: "ready" });
+    harness.runs.findReservation.mockResolvedValue({
+      id: "run-a",
+      status: "ready",
+      revision: 1,
+      steps: [],
+    } as never);
+    harness.database.boardElement.findMany.mockRejectedValue(
+      new Error("deleted reference"),
+    );
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "old-plan",
+        fileAssetIds: [],
+        shapeIds: ["deleted-shape"],
+      }),
+    ).resolves.toMatchObject({ id: "run-a", status: "ready" });
     expect(harness.runs.reserve).not.toHaveBeenCalled();
     expect(harness.database.boardElement.findMany).not.toHaveBeenCalled();
     expect(harness.model.generateJson).not.toHaveBeenCalled();
@@ -161,27 +184,52 @@ describe("AgentConversationsService", () => {
 
   it("keeps archived historic plan replays readable and lists existing runs", async () => {
     const harness = createHarness();
-    harness.database.agentConversation.findUnique.mockResolvedValue({ ...conversationFixture(), archivedAt: now } as never);
-    harness.runs.findReservation.mockResolvedValue({ id: "run-a", status: "running" } as never);
-    await expect(harness.service.createPlan("user-a", "conversation-a", {
-      content: "设计风衣", clientRequestId: "old-plan", fileAssetIds: [], shapeIds: [],
-    })).resolves.toMatchObject({ id: "run-a", status: "running" });
-    await expect(harness.service.plans("user-a", "conversation-a")).resolves.toEqual({ items: [] });
+    harness.database.agentConversation.findUnique.mockResolvedValue({
+      ...conversationFixture(),
+      archivedAt: now,
+    } as never);
+    harness.runs.findReservation.mockResolvedValue({
+      id: "run-a",
+      status: "running",
+    } as never);
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "old-plan",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).resolves.toMatchObject({ id: "run-a", status: "running" });
+    await expect(
+      harness.service.plans("user-a", "conversation-a"),
+    ).resolves.toEqual({ items: [] });
     expect(harness.runs.list).toHaveBeenCalledWith("user-a", "conversation-a");
     expect(harness.runs.reserve).not.toHaveBeenCalled();
   });
 
   it("preserves the historic request fingerprint and ownership checks", async () => {
     const harness = createHarness();
-    harness.runs.findReservation.mockRejectedValue(new BadRequestException("旧请求内容不匹配"));
-    await expect(harness.service.createPlan("user-a", "conversation-a", {
-      content: "更改旧请求", clientRequestId: "old-plan", fileAssetIds: [], shapeIds: [],
-    })).rejects.toBeInstanceOf(BadRequestException);
+    harness.runs.findReservation.mockRejectedValue(
+      new BadRequestException("旧请求内容不匹配"),
+    );
+    await expect(
+      harness.service.createPlan("user-a", "conversation-a", {
+        content: "更改旧请求",
+        clientRequestId: "old-plan",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(harness.runs.reserve).not.toHaveBeenCalled();
     const foreign = createHarness();
-    await expect(foreign.service.createPlan("user-b", "conversation-a", {
-      content: "设计风衣", clientRequestId: "old-plan", fileAssetIds: [], shapeIds: [],
-    })).rejects.toMatchObject({ status: 403 });
+    await expect(
+      foreign.service.createPlan("user-b", "conversation-a", {
+        content: "设计风衣",
+        clientRequestId: "old-plan",
+        fileAssetIds: [],
+        shapeIds: [],
+      }),
+    ).rejects.toMatchObject({ status: 403 });
     expect(foreign.runs.findReservation).not.toHaveBeenCalled();
   });
 
@@ -887,5 +935,73 @@ describe("AgentConversationsService", () => {
         role: AgentMessageRole.ASSISTANT,
       }),
     });
+  });
+});
+
+describe("team conversation authorization", () => {
+  const input = {
+    content: "设计风衣",
+    clientRequestId: "new-member-turn",
+    fileAssetIds: [],
+    shapeIds: [],
+  };
+  it("lets an editor keep a personal conversation in a shared project", async () => {
+    const access = { require: vi.fn().mockResolvedValue({ role: "EDITOR" }) };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    h.database.agentConversation.findUnique.mockResolvedValue({
+      ...conversationFixture(),
+      createdById: "editor",
+    });
+    await expect(
+      h.service.messages("editor", "conversation-a", { limit: 20 }),
+    ).resolves.toEqual({ items: [], nextCursor: null });
+    expect(access.require).toHaveBeenCalledWith("editor", "project-a", "read");
+    await expect(
+      h.service.messages("someone-else", "conversation-a", { limit: 20 }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+  it("rejects a revoked member before reading messages or invoking a model", async () => {
+    const access = {
+      require: vi
+        .fn()
+        .mockRejectedValue(new ForbiddenException("membership revoked")),
+    };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    h.database.agentConversation.findUnique.mockResolvedValue({
+      ...conversationFixture(),
+      createdById: "editor",
+    });
+    await expect(
+      h.service.messages("editor", "conversation-a", { limit: 20 }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.service.send("editor", "conversation-a", input),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.database.agentMessage.findMany).not.toHaveBeenCalled();
+    expect(h.database.agentMessage.updateMany).not.toHaveBeenCalled();
+    expect(h.model.generateJson).not.toHaveBeenCalled();
+  });
+  it("does not let a viewer create or mutate a conversation", async () => {
+    const access = {
+      require: vi.fn(
+        async (_user: string, _project: string, action: string) => {
+          if (action === "edit") throw new ForbiddenException("read only");
+          return { role: "VIEWER" };
+        },
+      ),
+    };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    await expect(
+      h.service.create("user-a", "project-a", {}),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.service.send("user-a", "conversation-a", input),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.service.update("user-a", "conversation-a", { title: "changed" }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.database.agentConversation.create).not.toHaveBeenCalled();
+    expect(h.database.agentConversation.update).not.toHaveBeenCalled();
+    expect(h.model.generateJson).not.toHaveBeenCalled();
   });
 });

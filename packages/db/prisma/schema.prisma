@@ -28,6 +28,12 @@ model User {
   auditLogs          AuditLog[]
   designDecisions    DesignAssetDecision[]
   ownedWorkspaces    Workspace[]
+  workspaceMemberships WorkspaceMember[]
+  styleRevisions StyleRevision[]
+  studioDocuments StudioDocument[] @relation("StudioDocumentOwner")
+  createdStudioDocuments StudioDocument[] @relation("StudioDocumentAuthor")
+  studioMutations StudioMutation[]
+  studioExperiments StudioExperiment[]
 
   @@map("users")
 }
@@ -227,6 +233,9 @@ model DesignAsset {
   similarityRight     CollectionLookSimilarity[] @relation("SimilarityRightAsset")
   exportJobs          ExportJob[]
 
+  styleRevisions StyleRevision[]
+  studioExperiments StudioExperiment[]
+
   designStep DesignStep?           @relation("StepOutputAsset")
   decisions  DesignAssetDecision[]
 
@@ -285,6 +294,7 @@ model Fabric {
   scope      FabricScope
   ownerId    String?     @map("owner_id")
   mainFileId String      @map("main_file_id")
+  details Json? @map("details")
   tags       String[]
   status     String      @default("active")
   createdAt  DateTime    @default(now()) @map("created_at")
@@ -304,7 +314,7 @@ model TrendItem {
   summary     String
   platform    String
   sourceUrl   String     @unique @map("source_url")
-  publishedAt DateTime   @map("published_at")
+  publishedAt DateTime?  @map("published_at")
   coverFileId String?    @map("cover_file_id")
   category    String
   tags        String[]   @default([])
@@ -353,6 +363,7 @@ model Workspace {
   createdAt DateTime  @default(now()) @map("created_at")
   owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   projects  Project[]
+  members WorkspaceMember[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -389,6 +400,10 @@ model Project {
   workflowOutbox WorkflowOutbox[]
   agentTurns AgentTurn[]
   agentPlanRevisions AgentPlanRevision[]
+  styles Style[]
+  studioDocuments StudioDocument[]
+  studioMutations StudioMutation[]
+  studioExperiments StudioExperiment[]
 
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
@@ -406,6 +421,7 @@ model Collection {
   updatedAt              DateTime                   @updatedAt @map("updated_at")
   project                Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   heroAsset              DesignAsset                @relation("CollectionHero", fields: [heroAssetId], references: [id], onDelete: Restrict)
+  studioDocuments StudioDocument[]
   dna                    CollectionDna?
   generationTasks        GenerationTask[]
   looks                  CollectionLook[]
@@ -420,6 +436,7 @@ model ExportJob {
   id            String        @id @default(cuid(2))
   userId        String        @map("user_id")
   projectId     String        @map("project_id")
+  studioRevisionId String? @map("studio_revision_id")
   designAssetId String?       @map("design_asset_id")
   collectionId  String?       @map("collection_id")
   format        ExportFormat
@@ -1017,4 +1034,134 @@ model ImageVisualSummary {
   @@index([status, updatedAt])
   @@index([sourceKey, model, schemaVersion, updatedAt(sort: Desc)], map: "image_visual_summary_source_lookup_idx")
   @@map("image_visual_summaries")
+}
+
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  REVIEWER
+  VIEWER
+}
+
+enum StyleStatus {
+  DESIGNING
+  REVIEW
+  APPROVED
+  SAMPLING
+  ARCHIVED
+}
+
+enum StudioDocumentType {
+  PRESENTATION_SET
+  BRAND_PROFILE
+  COLLECTION_SLOT
+  TECH_PACK
+  SAMPLE_ROUND
+  PRINT_PATTERN
+  COMMENT
+  REVIEW
+}
+
+model WorkspaceMember {
+  id String @id @default(cuid(2))
+  workspaceId String @map("workspace_id")
+  userId String @map("user_id")
+  role WorkspaceRole
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Style {
+  id String @id @default(cuid(2))
+  projectId String @map("project_id")
+  code String
+  name String
+  category String
+  season String
+  status StyleStatus @default(DESIGNING)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisions StyleRevision[]
+  @@unique([projectId, code])
+  @@index([projectId, updatedAt])
+  @@map("styles")
+}
+
+model StyleRevision {
+  id String @id @default(cuid(2))
+  styleId String @map("style_id")
+  revision Int
+  sourceAssetId String @map("source_asset_id")
+  createdBy String @map("created_by")
+  payload Json
+  createdAt DateTime @default(now()) @map("created_at")
+  style Style @relation(fields: [styleId], references: [id], onDelete: Cascade)
+  sourceAsset DesignAsset @relation(fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  author User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  documents StudioDocument[]
+  @@unique([styleId, revision])
+  @@map("style_revisions")
+}
+
+model StudioDocument {
+  id String @id @default(cuid(2))
+  documentId String @map("document_id")
+  projectId String @map("project_id")
+  ownerId String @map("owner_id")
+  createdById String? @map("created_by_id")
+  type StudioDocumentType
+  revision Int
+  payload Json
+  collectionId String? @map("collection_id")
+  styleRevisionId String? @map("style_revision_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner User @relation("StudioDocumentOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  author User? @relation("StudioDocumentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  collection Collection? @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  styleRevision StyleRevision? @relation(fields: [styleRevisionId], references: [id], onDelete: Restrict)
+  @@unique([documentId, revision])
+  @@index([projectId, type, createdAt])
+  @@map("studio_documents")
+}
+
+model StudioMutation {
+  id String @id @default(cuid(2))
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  result Json
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([projectId, userId, requestKey])
+  @@map("studio_mutations")
+}
+
+model StudioExperiment {
+  id String @id @default(cuid(2))
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  sourceAssetId String @map("source_asset_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  version Int @default(1)
+  items Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceAsset DesignAsset @relation(fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  @@unique([userId, requestKey])
+  @@index([projectId, createdAt])
+  @@map("studio_experiments")
 }

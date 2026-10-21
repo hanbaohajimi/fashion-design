@@ -1,3 +1,5 @@
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
+import { requireProjectFile } from "../files/project-file-access";
 import {
   FabricScope,
   Prisma,
@@ -79,12 +81,13 @@ const toolOutputType: Record<string, string> = {
 export class WorkflowsService {
   constructor(
     @Inject(WORKFLOWS_DB) private readonly database: WorkflowDatabase,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database as unknown as ConstructorParameters<typeof ProjectAccessPolicy>[0]),
   ) {}
 
   async get(userId: string, projectId: string): Promise<WorkflowGraphResult> {
     const project = await this.assertProject(projectId, userId);
     const graph = await this.readGraph(projectId);
-    return project.archived ? { ...graph, nodes: graph.nodes.map((node) => ({ ...node, canDelete: false, deleteDisabledReason: "项目已归档，请先恢复项目" })) } : graph;
+    return project.archived || !project.canEdit ? { ...graph, nodes: graph.nodes.map((node) => ({ ...node, canDelete: false, deleteDisabledReason: project.archived ? "项目已归档，请先恢复项目" : "当前角色仅可查看项目" })) } : graph;
   }
 
   async patch(
@@ -92,9 +95,9 @@ export class WorkflowsService {
     projectId: string,
     input: WorkflowPatchInput,
   ): Promise<WorkflowGraphResult> {
-    const project = await this.assertProject(projectId, userId);
+    const project = await this.assertProject(projectId, userId, undefined, "edit");
     if (project.archived) throw archivedProject();
-    return this.applyPatch(projectId, project.ownerId, input, false);
+    return this.applyPatch(projectId, userId, input, false);
   }
 
   /** Internal writes still use the same graph validation, CAS and mutation-id contract. */
@@ -135,6 +138,7 @@ export class WorkflowsService {
 
     try {
       const commit = async (transaction: WorkflowTransaction) => {
+        if (!system) await this.access.require(ownerId, projectId, "edit", transaction);
         // Match the Coordinator's lock order: conversation, context, graph.
         const acceptanceCandidate = proposalId ? await transaction.workflowProposal.findFirst({ where: { id: proposalId, projectId, status: "pending" } }) : null;
         let acceptanceIntentEpoch: number | null = null;
@@ -637,6 +641,9 @@ export class WorkflowsService {
               select: { ownerId: true },
             });
             valid = file?.ownerId === ownerId;
+            if (file && !valid) {
+              try { await requireProjectFile(transaction, this.access, ownerId, id, projectId); valid = true; } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) valid = false; else throw error; }
+            }
             break;
           }
           case "trendItemId": {
@@ -650,7 +657,7 @@ export class WorkflowsService {
           case "fabricId": {
             const fabric = await transaction.fabric.findUnique({
               where: { id },
-              select: { ownerId: true, scope: true, status: true },
+              select: { ownerId: true, scope: true, status: true, mainFileId: true },
             });
             valid = Boolean(
               fabric &&
@@ -658,6 +665,9 @@ export class WorkflowsService {
               (fabric.scope === FabricScope.PRESET ||
                 fabric.ownerId === ownerId),
             );
+            if (fabric?.status === "active" && !valid) {
+              try { await requireProjectFile(transaction, this.access, ownerId, fabric.mainFileId, projectId); valid = true; } catch (error) { if (!(error instanceof ForbiddenException || error instanceof NotFoundException)) throw error; }
+            }
             break;
           }
           case "boardElementId": {
@@ -697,7 +707,8 @@ export class WorkflowsService {
     projectId: string,
     userId?: string,
     transaction?: WorkflowTransaction,
-  ): Promise<{ readonly archived: boolean; readonly ownerId: string }> {
+    action: ProjectAction = "read",
+  ): Promise<{ readonly archived: boolean; readonly ownerId: string; readonly canEdit: boolean }> {
     const project = await (transaction ?? this.database).project.findUnique({
       where: { id: projectId },
       select: {
@@ -712,13 +723,8 @@ export class WorkflowsService {
         message: "项目不存在",
       });
     }
-    if (userId && project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权访问该项目工作流",
-      });
-    }
-    return { archived: project.archived, ownerId: project.workspace.ownerId };
+    const permission = userId ? await this.access.require(userId, projectId, action, transaction) : null;
+    return { archived: project.archived, ownerId: project.workspace.ownerId, canEdit: permission?.capabilities.edit ?? true };
   }
 
   private async readGraph(projectId: string, suppliedTransaction?: WorkflowTransaction): Promise<WorkflowGraphResult> {

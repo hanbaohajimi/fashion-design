@@ -12,8 +12,10 @@ import {
   type VisualContextIndexEntry,
   type VisualSummarySource,
 } from "@fashion/shared";
-import { ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { requireProjectFile } from "../files/project-file-access";
 import { S3FileStorage, type FileStorage } from "../files/storage.service";
 import { BullVisualSummaryJobs } from "./visual-summary-queue.service";
 
@@ -45,6 +47,7 @@ export class VisualContextService {
     @Inject(VISUAL_CONTEXT_DB) private readonly database: VisualDatabase,
     @Inject(S3FileStorage) private readonly storage: Pick<FileStorage, "readPrefix">,
     @Inject(BullVisualSummaryJobs) private readonly jobs: Pick<BullVisualSummaryJobs, "enqueue">,
+    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async enrich(userId: string, projectId: string, nodes: readonly VisualContextNode[],
@@ -52,7 +55,9 @@ export class VisualContextService {
     const project = await this.database.project.findUnique({ where: { id: projectId },
       select: { deletedAt: true, workspace: { select: { ownerId: true } } } });
     if (!project || project.deletedAt) throw new NotFoundException("项目不存在");
-    if (project.workspace.ownerId !== userId) throw new ForbiddenException("无权读取项目图片");
+    const permission = this.access ? await this.access.require(userId, projectId, "read") : null;
+    if (!this.access && project.workspace.ownerId !== userId) throw new ForbiddenException("无权读取项目图片");
+    const canSchedule = permission?.capabilities.edit ?? true;
 
     const model = amuxClaudeClientConfigFromEnv().model;
     const sources = new Map<string, Source>();
@@ -85,6 +90,7 @@ export class VisualContextService {
             where: { sourceKey: resolved.sourceKey, model, schemaVersion: VISUAL_SUMMARY_SCHEMA_VERSION },
             orderBy: { updatedAt: "desc" },
           });
+          if (!row && !canSchedule) return { ...identity, status: "pending" as const, error: "视觉摘要尚未就绪，请由编辑成员发起分析" };
           if (!row) {
             const bytes = await load(resolved.sourceKey);
             const fingerprint = visualSummaryFingerprint(bytes, model);
@@ -99,6 +105,7 @@ export class VisualContextService {
           if (row.status === "READY" && parsed.success) return {
             ...identity, status: "ready" as const, summary: parsed.data,
           };
+          if (!canSchedule) return { ...identity, status: row.status === "FAILED" ? "failed" as const : "pending" as const, error: row.status === "FAILED" ? "视觉摘要分析失败，请由编辑成员重试" : null };
           if (row.status === "FAILED") {
             if (Date.now() - row.updatedAt.getTime() < FAILED_SUMMARY_RETRY_COOLDOWN_MS) {
               return { ...identity, status: "failed" as const, error: "视觉摘要分析失败，稍后将重试" };
@@ -180,7 +187,7 @@ export class VisualContextService {
     if (assetId) {
       const asset = await this.database.designAsset.findUnique({ where: { id: assetId }, include: { sourceFile: true } });
       if (!asset || asset.projectId !== projectId || asset.archivedAt) return null;
-      if (asset.sourceFile && asset.sourceFile.ownerId === userId) return this.fileSource(asset.sourceFile, asset.id);
+      if (asset.sourceFile && (asset.sourceFile.ownerId === userId || this.access)) return this.fileSource(asset.sourceFile, asset.id);
       const sourceKey = visualSummarySourceKey(asset.thumbnailUrl);
       return sourceKey ? { source: { kind: "asset", id: asset.id }, sourceKey,
         assetId: asset.id, fileAssetId: null } : { notReady: true };
@@ -188,8 +195,11 @@ export class VisualContextService {
     const fabricId = stringField(payload, "fabricId");
     if (fabricId) {
       const fabric = await this.database.fabric.findUnique({ where: { id: fabricId }, include: { mainFile: true } });
-      if (!fabric || fabric.status !== "active" ||
-        (fabric.scope !== FabricScope.PRESET && fabric.ownerId !== userId)) return null;
+      if (!fabric || fabric.status !== "active") return null;
+      if (fabric.scope !== FabricScope.PRESET && fabric.ownerId !== userId) {
+        if (!this.access) return null;
+        try { await requireProjectFile(this.database, this.access, userId, fabric.mainFile.id, projectId); } catch { return null; }
+      }
       return this.fileSource(fabric.mainFile, null);
     }
     const trendItemId = stringField(payload, "trendItemId");
@@ -206,6 +216,9 @@ export class VisualContextService {
       fileId = element.fileAssetId;
     }
     if (!fileId) return null;
+    if (this.access) {
+      try { return this.fileSource(await requireProjectFile(this.database, this.access, userId, fileId, projectId), null); } catch { return null; }
+    }
     const file = await this.database.fileAsset.findUnique({ where: { id: fileId } });
     return file && file.ownerId === userId ? this.fileSource(file, null) : null;
   }

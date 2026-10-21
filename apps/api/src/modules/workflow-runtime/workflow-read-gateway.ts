@@ -1,3 +1,4 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import type { PrismaClient } from "@fashion/db";
 import { BadRequestException } from "@nestjs/common";
 import { contextObject, projectAttempt, projectNode, relatedNodeIds, safeContextText } from "../design-context/design-context.projector";
@@ -94,15 +95,14 @@ export class WorkflowReadGateway {
   private characters = 0;
   private readonly dialogOffsets = new Map<string, number>();
   private readonly historyProgress = new Map<string, HistoryState>();
-  constructor(private readonly database: PrismaClient, private readonly visual: VisualContextService) {}
+  constructor(private readonly database: PrismaClient, private readonly visual: VisualContextService, private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database)) {}
 
   async read(userId: string, projectId: string, conversationId: string | undefined, graph: Graph,
     request: WorkflowRead, policy: ReadPolicy = {}): Promise<{ result: unknown; visual?: VisualContextResult }> {
     const parsed = workflowReadSchema.safeParse(request);
     if (!parsed.success) throw new BadRequestException("补读仅接受合法类型和最多16个本地编号");
     if (graph.projectId !== projectId) throw new BadRequestException("补读画布不属于当前项目");
-    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, workspace: { ownerId: userId } }, select: { id: true } });
-    if (!project) throw new BadRequestException("补读项目不存在或无权访问");
+    await this.access.require(userId, projectId, "read");
     const ids = [...new Set(parsed.data.ids)];
     const remaining = Math.max(0, Math.min(MAX_REQUEST_CHARACTERS, MAX_READ_CHARACTERS - this.characters));
     if (!remaining) return { result: { type: request.type, ids, unavailable: true, reason: "补读字符预算已用尽", remainingCharacters: 0 } };

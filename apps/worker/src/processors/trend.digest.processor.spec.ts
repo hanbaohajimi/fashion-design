@@ -104,7 +104,7 @@ describe("TrendDigestProcessor", () => {
     const output = await processor.process(job as never);
 
     expect(search.search.mock.calls.map(([query]) => query)).toEqual(
-      TREND_SEARCH_QUERIES,
+      TREND_SEARCH_QUERIES.map((query) => query + " 2026"),
     );
     expect(llm.summarizeArticle).toHaveBeenCalledTimes(2);
     expect(database.trendItem.upsert).toHaveBeenCalledTimes(2);
@@ -112,7 +112,7 @@ describe("TrendDigestProcessor", () => {
       expect.objectContaining({
         where: { sourceUrl: "https://www.vogue.com/article/fluid-layers" },
         create: expect.objectContaining({
-          category: "women",
+          category: "unclassified",
           coverFileId: "cover-a",
           platform: "vogue",
           tags: ["轻盈叠穿"],
@@ -186,6 +186,35 @@ describe("TrendDigestProcessor", () => {
     );
     expect(job.log).toHaveBeenCalledWith(
       expect.stringContaining("封面处理失败"),
+    );
+  });
+
+  it("随当前年份查询，缺失发布日期保持未知而非伪造抓取时间", async () => {
+    search.search.mockResolvedValueOnce([
+      {
+        title: "未知发布日期",
+        snippet: "Trend report",
+        url: "https://wwd.com/fashion-news/trends/unknown-date",
+      },
+    ]);
+    const processor = new TrendDigestProcessor({
+      covers,
+      database: database as never,
+      llm,
+      now: () => new Date("2027-02-02T08:00:00Z"),
+      search,
+    });
+    await processor.process(job as never);
+    expect(search.search.mock.calls.map(([query]) => query)).toEqual(
+      TREND_SEARCH_QUERIES.map((query) => query + " 2027"),
+    );
+    expect(database.trendItem.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          publishedAt: null,
+          category: "unclassified",
+        }),
+      }),
     );
   });
 
@@ -326,7 +355,11 @@ describe("trend providers", () => {
         upsert: vi.fn().mockResolvedValue({ id: "cover-a" }),
       },
     };
-    const visualSummaryJobs = { enqueue: vi.fn().mockRejectedValue(new Error("analysis queue unavailable")) };
+    const visualSummaryJobs = {
+      enqueue: vi
+        .fn()
+        .mockRejectedValue(new Error("analysis queue unavailable")),
+    };
     const service = new S3TrendCoverService({
       database: database as never,
       download: vi.fn().mockResolvedValue(input),
@@ -349,7 +382,10 @@ describe("trend providers", () => {
       expect.any(Buffer),
       "image/webp",
     );
-    expect(visualSummaryJobs.enqueue).toHaveBeenCalledWith({ kind: "file", id: "cover-a" });
+    expect(visualSummaryJobs.enqueue).toHaveBeenCalledWith({
+      kind: "file",
+      id: "cover-a",
+    });
     expect(database.fileAsset.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({

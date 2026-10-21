@@ -370,6 +370,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 <div className={styles.previewTools}><Button size="small" onClick={() => setActualSize(false)} aria-pressed={!actualSize}>适合窗口</Button><Button size="small" onClick={() => setActualSize(true)} aria-pressed={actualSize}>原始比例</Button></div>
                 <h3>沿这张候选继续设计</h3>
                 <p>版本恢复和局部修改会创建新的分支；当前候选与它的来源会保留在画布中。</p>
+                <a href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}>比较并保存为款式</a>
                 {dimensions ? <dl><div><dt>原图尺寸</dt><dd>{dimensions.width} × {dimensions.height}</dd></div></dl> : null}
                 {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
                 <div className={styles.actionStack}>

@@ -1,0 +1,225 @@
+.panel {
+  display: grid;
+  gap: 28px;
+  color: var(--color-text, #25231f);
+}
+.heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+.heading h2 {
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.3;
+  margin: 4px 0 12px;
+  max-width: 680px;
+}
+.heading p {
+  max-width: 720px;
+  line-height: 1.7;
+  color: var(--color-text-secondary, #656157);
+}
+.heading > span {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+.form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  padding: 24px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #ddd8ce);
+  border-radius: 12px;
+}
+.form label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.form input,
+.form select,
+.form textarea {
+  font: inherit;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #d4cfc4);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
+  color: inherit;
+}
+.form textarea {
+  resize: vertical;
+  min-height: 76px;
+  line-height: 1.6;
+}
+.form small,
+.form p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+  color: var(--color-text-secondary, #656157);
+  margin: 0;
+}
+.wide {
+  grid-column: 1/-1;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.form fieldset {
+  border: 1px solid var(--color-border, #ddd8ce);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.form legend {
+  font-size: 13px;
+}
+.fabrics {
+  display: grid;
+  gap: 8px;
+  max-height: 200px;
+  overflow: auto;
+}
+.fabrics label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fabrics input {
+  min-height: 18px;
+  width: 18px;
+}
+.batch {
+  display: grid;
+  gap: 18px;
+  border-top: 1px solid var(--color-border, #ddd8ce);
+  padding-top: 24px;
+}
+.batchHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+.batchHeading h3 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.batchHeading small {
+  line-height: 1.7;
+}
+.matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+.item {
+  overflow: hidden;
+  border: 1px solid var(--color-border, #ddd8ce);
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+}
+.preview {
+  aspect-ratio: 4/5;
+  background: var(--color-surface-muted, #eeebe5);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+.preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.itemBody {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+.itemBody h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.itemBody p {
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.itemBody a {
+  font-size: 13px;
+  color: inherit;
+  text-underline-offset: 4px;
+}
+.itemBody details {
+  font-size: 12px;
+}
+.state {
+  font-size: 11px;
+  color: var(--color-text-secondary, #656157);
+}
+.color {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.color i {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #0002;
+  border-radius: 50%;
+}
+.error {
+  padding: 12px 16px;
+  color: #8b3029;
+  background: #fff4f1;
+  border: 1px solid #e6c6be;
+  border-radius: 6px;
+}
+.empty,
+.skeleton {
+  padding: 40px;
+  border: 1px dashed var(--color-border, #d4cfc4);
+  text-align: center;
+  line-height: 1.7;
+}
+.form :focus-visible,
+.itemBody a:focus-visible {
+  outline: 2px solid var(--color-accent, #4d6254);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .form {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .heading,
+  .batchHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .matrix {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .itemBody a {
+    transition: opacity 0.15s;
+  }
+  .itemBody a:hover {
+    opacity: 0.7;
+  }
+}

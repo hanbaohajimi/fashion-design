@@ -1,6 +1,7 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { AgentMessageRole, AgentMessageStatus, Prisma, appendWorkflowOutbox, type PrismaClient } from "@fashion/db";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { AMUX_CLAUDE_CLIENT } from "../ai/ai.tokens";
@@ -48,13 +49,15 @@ export class WorkflowAssistantService {
     @Inject(VisualContextService) private readonly visual: VisualContextService,
     @Inject(AMUX_CLAUDE_CLIENT) private readonly model: AmuxClaudeJsonClient,
     @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   private async conversation(userId: string, id: string, write = false) {
     const conversation = await this.database.agentConversation.findFirst({ where: {
-      id, createdById: userId, project: { deletedAt: null, workspace: { ownerId: userId } },
+      id, createdById: userId, project: { deletedAt: null },
     } });
     if (!conversation) throw new NotFoundException("设计会话不存在");
+    await this.access.require(userId, conversation.projectId, write ? "edit" : "read");
     if (conversation.mode !== "workflow") throw new BadRequestException("历史会话仅供查看，请新建设计协作会话");
     if (write && conversation.archivedAt) throw new BadRequestException("已归档会话不能继续修改");
     if (write) {
@@ -229,8 +232,9 @@ export class WorkflowAssistantService {
     if (!execution?.conversationId) return "completed";
     const conversationId = execution.conversationId;
     const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId: execution.projectId, createdById: execution.userId,
-      project: { deletedAt: null, workspace: { ownerId: execution.userId } } } });
+      project: { deletedAt: null } } });
     if (!conversation) return "completed";
+    try { await this.access.require(execution.userId, execution.projectId, "edit"); } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) return "superseded"; throw error; }
     const lease = randomUUID();
     const reserved = await this.database.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM agent_conversations WHERE id = ${conversationId} FOR UPDATE`;

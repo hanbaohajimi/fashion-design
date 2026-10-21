@@ -1,3 +1,4 @@
+import { fabricDetailsSchema, type FabricDetails } from "@fashion/shared";
 import { privateFetch as fetch } from "../auth/private-fetch";
 import useSWRInfinite from "swr/infinite";
 
@@ -15,6 +16,7 @@ const FABRIC_IMAGE_TYPES = new Set([
 
 export interface FabricUploadInput {
   readonly file: File | null;
+  readonly details?: FabricDetails | null;
   readonly tags: readonly string[];
 }
 
@@ -23,7 +25,7 @@ export function normalizeFabricTags(tags: readonly string[]): string[] {
 }
 
 export function parseFabricTags(value: string): string[] {
-  return normalizeFabricTags(value.split(/[,，\n#]+/u));
+  return normalizeFabricTags(value.split(/[,，、\n#]+/u));
 }
 
 export function validateFabricUpload(input: FabricUploadInput): string | null {
@@ -38,6 +40,10 @@ export function validateFabricUpload(input: FabricUploadInput): string | null {
   if (tags.length === 0) return "请至少添加一个标签";
   if (tags.length > 12) return "标签不能超过 12 个";
   if (tags.some((tag) => tag.length > 30)) return "单个标签不能超过 30 个字";
+  if (input.details !== undefined && input.details !== null) {
+    const result = fabricDetailsSchema.safeParse(input.details);
+    if (!result.success) return result.error.issues[0]?.message ?? "面料档案内容无效";
+  }
   return null;
 }
 
@@ -50,6 +56,7 @@ export function buildFabricUploadFormData(input: FabricUploadInput): FormData {
   const formData = new FormData();
   formData.set("mainImage", file);
   formData.set("tags", JSON.stringify(normalizeFabricTags(input.tags)));
+  if (input.details !== undefined) formData.set("details", JSON.stringify(input.details));
   return formData;
 }
 
@@ -66,7 +73,8 @@ export async function fetchFabric(fabricId: string): Promise<Fabric> {
 export async function updateFabric(
   fabricId: string,
   input: {
-    readonly tags: readonly string[];
+    readonly tags?: readonly string[];
+    readonly details?: FabricDetails | null;
   },
 ): Promise<Fabric> {
   const response = await fetch(`/api/fabrics/${encodeURIComponent(fabricId)}`, {
@@ -137,6 +145,10 @@ export function useFabrics(query: FabricListQuery) {
         scope: query.scope ?? "all",
       });
       if (query.search?.trim()) params.set("search", query.search.trim());
+      for (const field of ["category", "fiber", "supplier", "minWeightGsm", "maxWeightGsm"] as const) {
+        const value = query[field];
+        if (value !== undefined && value !== "") params.set(field, String(value));
+      }
       return `/api/fabrics?${params.toString()}`;
     },
     fetchFabricPage,

@@ -1,3 +1,4 @@
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
@@ -14,7 +15,7 @@ import { SecurityModule } from "../../security/security.module";
 import { UploadsCleanupService } from "./uploads-cleanup.service";
 
 @Module({
-  imports: [SecurityModule],
+  imports: [ProjectAccessModule, SecurityModule],
   controllers: [FilesController],
   providers: [
     FilesService,
@@ -25,6 +26,6 @@ import { UploadsCleanupService } from "./uploads-cleanup.service";
     { provide: FILE_STORAGE, useExisting: S3FileStorage },
     { provide: THUMBNAIL_JOBS, useExisting: BullThumbnailJobs },
   ],
-  exports: [BullThumbnailJobs, S3FileStorage],
+  exports: [FilesService, BullThumbnailJobs, S3FileStorage],
 })
 export class FilesModule {}

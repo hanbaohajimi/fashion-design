@@ -1,3 +1,5 @@
+import { FilesService } from "../files/files.service";
+import { fabricDetailsSchema, type FabricDetails } from "@fashion/shared";
 import {
   FabricScope,
   FileStatus,
@@ -54,6 +56,7 @@ export interface FabricImageUpload {
 export interface FabricView {
   readonly canManage: boolean;
   readonly createdAt: Date;
+  readonly details: FabricDetails | null;
   readonly id: string;
   readonly mainFileId: string;
   readonly mainImageUrl: string;
@@ -77,6 +80,7 @@ export class FabricsService {
     @Inject(FABRICS_STORAGE) private readonly storage: FabricStorage,
     @Inject(FABRICS_THUMBNAIL_JOBS)
     private readonly thumbnailJobs: ThumbnailJobs,
+    @Inject(FilesService) private readonly files?: FilesService,
   ) {}
 
   async list(userId: string, input: ListFabricsInput): Promise<FabricListView> {
@@ -92,13 +96,19 @@ export class FabricsService {
                 { ownerId: userId, scope: FabricScope.USER },
               ],
             };
+    const filters: Prisma.FabricWhereInput[] = [];
+    if (searchTerms.length > 0) filters.push({ OR: [
+      { tags: { hasSome: [...searchTerms] } },
+      ...["name", "code", "supplier"].map((field) => ({ details: { path: [field], string_contains: input.search.trim() } })),
+    ] });
+    if (input.category) filters.push({ details: { path: ["category"], equals: input.category } });
+    if (input.supplier) filters.push({ details: { path: ["supplier"], string_contains: input.supplier } });
+    if (input.fiber) filters.push({ details: { path: ["_fiberKeys"], array_contains: [input.fiber.toLocaleLowerCase()] } });
+    if (input.minWeightGsm !== undefined) filters.push({ details: { path: ["weightGsm"], gte: input.minWeightGsm } });
+    if (input.maxWeightGsm !== undefined) filters.push({ details: { path: ["weightGsm"], lte: input.maxWeightGsm } });
     const where: Prisma.FabricWhereInput = {
       ...visibility,
-      ...(searchTerms.length > 0
-        ? {
-            tags: { hasSome: [...searchTerms] },
-          }
-        : {}),
+      ...(filters.length ? { AND: filters } : {}),
       status: "active",
     };
     const skip = (input.page - 1) * input.limit;
@@ -124,7 +134,7 @@ export class FabricsService {
 
   async findOne(userId: string, fabricId: string): Promise<FabricView> {
     const record = await this.findRecord(fabricId);
-    this.assertReadable(userId, record);
+    await this.assertReadable(userId, record);
     return this.toView(record, userId);
   }
 
@@ -137,6 +147,7 @@ export class FabricsService {
     const created = await this.database.fabric.create({
       data: {
         mainFileId,
+        ...(input.details !== undefined ? { details: serializeFabricDetails(input.details) } : {}),
         ownerId: userId,
         scope: FabricScope.USER,
         tags: input.tags,
@@ -154,7 +165,8 @@ export class FabricsService {
     const existing = await this.findRecord(fabricId);
     this.assertMutable(userId, existing);
     const data: Prisma.FabricUpdateInput = {
-      tags: input.tags,
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
+      ...(input.details !== undefined ? { details: serializeFabricDetails(input.details) } : {}),
     };
     const updated = await this.database.fabric.update({
       data,
@@ -196,8 +208,9 @@ export class FabricsService {
     return record;
   }
 
-  private assertReadable(userId: string, record: FabricRecord): void {
+  private async assertReadable(userId: string, record: FabricRecord): Promise<void> {
     if (record.scope === FabricScope.USER && record.ownerId !== userId) {
+      if (this.files) { await this.files.assertReadable(userId, record.mainFileId); return; }
       throw new ForbiddenException({
         code: "FABRIC_FORBIDDEN",
         message: "无权访问该面料",
@@ -364,6 +377,7 @@ export class FabricsService {
     return {
       canManage: this.canManage(userId, record),
       createdAt: record.createdAt,
+      details: readFabricDetails(record.details),
       id: record.id,
       mainFileId: record.mainFileId,
       mainImageUrl: `/api/fabrics/${encodeURIComponent(record.id)}/image`,
@@ -403,4 +417,18 @@ function fabricSearchTerms(search: string): readonly string[] {
   return [
     ...new Set([normalized, ...(FABRIC_SEARCH_ALIASES[normalized] ?? [])]),
   ];
+}
+
+function serializeFabricDetails(details: FabricDetails | null): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (details === null) return Prisma.DbNull;
+  const parsed = fabricDetailsSchema.parse(details);
+  return { ...parsed, _fiberKeys: [...new Set((parsed.composition ?? []).map((item) => item.fiber.toLocaleLowerCase()))] } as Prisma.InputJsonObject;
+}
+
+function readFabricDetails(value: unknown): FabricDetails | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { _fiberKeys: _index, ...details } = value as Record<string, unknown>;
+  void _index;
+  const result = fabricDetailsSchema.safeParse(details);
+  return result.success ? result.data : null;
 }

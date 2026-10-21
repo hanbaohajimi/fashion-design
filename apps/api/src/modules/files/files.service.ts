@@ -1,3 +1,5 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { requireProjectFile } from "./project-file-access";
 import { FileStatus, Prisma, type PrismaClient } from "@fashion/db";
 import {
   BadRequestException,
@@ -88,6 +90,7 @@ export class FilesService {
     @Inject(FILES_DB) private readonly database: FilesDatabase,
     @Inject(FILE_STORAGE) private readonly storage: FileStorage,
     @Inject(THUMBNAIL_JOBS) private readonly thumbnailJobs: ThumbnailJobs,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database as unknown as ConstructorParameters<typeof ProjectAccessPolicy>[0]),
   ) {}
 
   async signUpload(userId: string, input: SignUploadInput) {
@@ -351,8 +354,12 @@ export class FilesService {
     return this.reconcileThumbnailJob(userId, processing);
   }
 
+  async assertReadable(userId: string, fileId: string, projectId?: string) {
+    return requireProjectFile(this.database, this.access, userId, fileId, projectId);
+  }
+
   async get(userId: string, fileId: string) {
-    return this.toResponse(await this.assertFileOwnership(userId, fileId));
+    return this.toResponse(await requireProjectFile(this.database, this.access, userId, fileId));
   }
 
   async thumbnailUrl(
@@ -360,7 +367,7 @@ export class FilesService {
     fileId: string,
     size: "256" | "1024",
   ): Promise<string> {
-    const file = await this.assertFileOwnership(userId, fileId);
+    const file = await requireProjectFile(this.database, this.access, userId, fileId);
     const objectKey =
       size === "1024" ? file.thumbnail1024Key : file.thumbnail256Key;
     if (!objectKey) {
@@ -376,25 +383,7 @@ export class FilesService {
     userId: string,
     projectId: string,
   ): Promise<void> {
-    const project = await this.database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        deletedAt: true,
-        workspace: { select: { ownerId: true } },
-      },
-    });
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
-    }
-    if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权向该项目上传文件",
-      });
-    }
+    await this.access.require(userId, projectId, "edit");
   }
 
   private async assertFileOwnership(userId: string, fileId: string) {

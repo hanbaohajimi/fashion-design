@@ -1,3 +1,4 @@
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import {
   CollectionVariationAxis,
   GenerationTaskStatus,
@@ -14,6 +15,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
@@ -130,6 +132,7 @@ export class GenerationService {
     private readonly compiler: ContextCompilerService,
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
+    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async create(
@@ -218,6 +221,12 @@ export class GenerationService {
     compilerOptions: ContextCompilerOptions = {},
     frozenCompiled?: CompiledGenInput,
   ): Promise<{ taskId: string }> {
+    const executionActor = userId;
+    if (request.projectId && this.access) {
+      const permission = await this.access.require(userId, request.projectId, "edit");
+      userId = permission.ownerId;
+      if (executionActor !== userId) idempotencyKey = executionActor + ":" + idempotencyKey;
+    }
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
@@ -408,6 +417,7 @@ export class GenerationService {
       presentationPolicy,
       request,
       requestFingerprint,
+      executionActor,
     };
     const generationInputs = compiledPrompt.fabricInputs ?? [];
     const stepSnapshot: DesignStepSnapshot = {
@@ -646,7 +656,7 @@ export class GenerationService {
 
   async get(userId: string, taskId: string): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, userId },
+      where: { id: taskId, ...(this.access ? {} : { userId }) },
     });
     if (!task) {
       throw new NotFoundException({
@@ -654,6 +664,8 @@ export class GenerationService {
         message: "生成任务不存在",
       });
     }
+    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"read");
+    else if(task.userId!==userId) throw new ForbiddenException("无权读取该任务");
     return this.toView(task);
   }
 
@@ -661,6 +673,7 @@ export class GenerationService {
     userId: string,
     query: GenerationListQuery,
   ): Promise<GenerationTaskListView> {
+    if(this.access) userId=(await this.access.require(userId,query.projectId,"read")).ownerId;
     const cursor = query.cursor
       ? await this.database.generationTask.findFirst({
           where: {
@@ -711,7 +724,7 @@ export class GenerationService {
 
   async cancel(userId: string, taskId: string): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, userId },
+      where: { id: taskId, ...(this.access ? {} : { userId }) },
     });
     if (!task) {
       throw new NotFoundException({
@@ -720,6 +733,9 @@ export class GenerationService {
       });
     }
 
+    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"edit");
+    else if(task.userId!==userId) throw new ForbiddenException("无权修改该任务");
+    userId=task.userId;
     if (
       task.status === GenerationTaskStatus.QUEUED ||
       task.status === GenerationTaskStatus.RUNNING
@@ -770,7 +786,7 @@ export class GenerationService {
     disposition: "adopted" | "dismissed",
   ): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, userId },
+      where: { id: taskId, ...(this.access ? {} : { userId }) },
     });
     if (!task) {
       throw new NotFoundException({
@@ -778,6 +794,9 @@ export class GenerationService {
         message: "生成任务不存在",
       });
     }
+    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"edit");
+    else if(task.userId!==userId) throw new ForbiddenException("无权修改该任务");
+    userId=task.userId;
     const output = jsonObject(task.output);
     if (
       !output ||

@@ -221,10 +221,13 @@ test("面料档案支持快捷搜索并可快速清空关键词", async ({ page 
 
   await page.goto("/fabrics");
   const search = page.getByRole("searchbox", { name: "搜索面料" });
-  // The server-rendered search box may be visible before keyboard effects hydrate.
+  // The initial fetch can precede the keyboard effect; retry the real shortcut
+  // within a bounded window instead of assuming the first request means ready.
   await expect.poll(() => requestedSearches.length).toBeGreaterThan(0);
-  await page.keyboard.press("Control+K");
-  await expect(search).toBeFocused();
+  await expect(async () => {
+    await page.keyboard.press("Control+K");
+    await expect(search).toBeFocused({ timeout: 250 });
+  }).toPass({ timeout: 5000 });
   await search.fill("  亚麻  ");
   await expect.poll(() => requestedSearches).toContain("亚麻");
   await expect(page.getByText("没有匹配“亚麻”的面料。")).toBeVisible();

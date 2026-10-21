@@ -79,10 +79,12 @@ it(`上传→真实 Redis 节点任务→Worker 产物→归属→导出，${cra
       crashedProcess = spawn(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), "--tsconfig", "tsconfig.json",
         resolve("../../scripts/review-generation-crash-worker.ts"), generationQueue.name], { env: process.env, stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true });
       const child = crashedProcess;
+      let crashOutput = "";
+      child.stderr?.on("data", (chunk: Buffer) => { crashOutput += chunk.toString("utf8"); });
       await new Promise<void>((done, reject) => {
         const timer = setTimeout(() => reject(new Error("崩溃模拟进程未持久化远程任务")), 15_000);
         child.once("error", (error) => { clearTimeout(timer); reject(error); });
-        child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`崩溃模拟进程提前退出 ${code}`)); });
+        child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`崩溃模拟进程提前退出 ${code}: ${crashOutput}`)); });
         child.once("message", () => { clearTimeout(timer); done(); });
       });
       providerSubmissions += 1;
@@ -121,7 +123,10 @@ it(`上传→真实 Redis 节点任务→Worker 产物→归属→导出，${cra
     await expect.poll(async () => (await exports.get(user.id, created.id)).status, { timeout: 10_000 }).toBe("succeeded");
     const exported = await exports.get(user.id, created.id);
     if (!exported.downloadUrl) throw new Error("导出未返回下载地址");
-    const response = await fetch(exported.downloadUrl);
+    expect(exported.downloadUrl).toBe(`/api/exports/${created.id}/content`);
+    const signedDownload = await exports.downloadUrl(user.id, created.id);
+    expect(new URL(signedDownload).searchParams.get("X-Amz-Expires")).toBe("60");
+    const response = await fetch(signedDownload);
     expect(response.ok).toBe(true);
     expect((await sharp(Buffer.from(await response.arrayBuffer())).metadata()).format).toBe("png");
     await expect(exports.get("different-user", created.id)).rejects.toMatchObject({ status: 403 });

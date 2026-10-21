@@ -25,6 +25,11 @@ import { z } from "zod";
 
 import { AMUX_CLAUDE_CLIENT, type AmuxClaudeJsonClient } from "../ai/ai.tokens";
 import { S3FileStorage } from "../files/storage.service";
+import { requireProjectFile } from "../files/project-file-access";
+import {
+  ProjectAccessPolicy,
+  type ProjectAction,
+} from "../studio/project-access.policy";
 import { GenerationService } from "../generation/generation.service";
 import { RETIRED_BOARD_SHAPE_TYPE } from "../boards/boards.schemas";
 import { AgentRunsService } from "../agent-runs/agent-runs.service";
@@ -206,8 +211,12 @@ export class AgentConversationsService {
     @Optional()
     @Inject(AgentRunsService)
     private readonly runs?: AgentRunsService,
-    @Optional() @Inject(WorkflowAssistantService)
+    @Optional()
+    @Inject(WorkflowAssistantService)
     private readonly assistant?: WorkflowAssistantService,
+    @Optional()
+    @Inject(ProjectAccessPolicy)
+    private readonly access?: ProjectAccessPolicy,
   ) {}
 
   async plans(userId: string, conversationId: string) {
@@ -225,12 +234,18 @@ export class AgentConversationsService {
     const existing = await runs.findReservation(userId, conversationId, {
       clientRequestId: input.clientRequestId,
       intent: input.content,
-      contextSnapshot: { requestContext: { fileAssetIds: input.fileAssetIds, shapeIds: input.shapeIds } },
+      contextSnapshot: {
+        requestContext: {
+          fileAssetIds: input.fileAssetIds,
+          shapeIds: input.shapeIds,
+        },
+      },
     });
     if (existing) return existing;
     throw new GoneException({
       code: "LEGACY_AGENT_PLAN_RETIRED",
-      message: "旧版多步计划已停止创建。请使用持续设计助手 workflow-messages 入口；已有计划和执行历史仍可查看与继续。",
+      message:
+        "旧版多步计划已停止创建。请使用持续设计助手 workflow-messages 入口；已有计划和执行历史仍可查看与继续。",
     });
   }
 
@@ -268,7 +283,7 @@ export class AgentConversationsService {
     projectId: string,
     input: CreateAgentConversationInput,
   ): Promise<AgentConversationSummary> {
-    await this.assertProjectOwnership(userId, projectId);
+    await this.assertProjectOwnership(userId, projectId, "edit");
     return toConversation(
       await this.database.agentConversation.create({
         data: {
@@ -286,7 +301,7 @@ export class AgentConversationsService {
     conversationId: string,
     input: UpdateAgentConversationInput,
   ): Promise<AgentConversationSummary> {
-    await this.assertConversationOwnership(userId, conversationId);
+    await this.assertConversationOwnership(userId, conversationId, "edit");
     return toConversation(
       await this.database.agentConversation.update({
         where: { id: conversationId },
@@ -305,8 +320,12 @@ export class AgentConversationsService {
     conversationId: string,
     input: ListAgentMessagesInput,
   ) {
-    const conversation = await this.assertConversationOwnership(userId, conversationId);
-    if (conversation.mode === "workflow" && this.assistant) return this.assistant.messages(userId, conversationId, input);
+    const conversation = await this.assertConversationOwnership(
+      userId,
+      conversationId,
+    );
+    if (conversation.mode === "workflow" && this.assistant)
+      return this.assistant.messages(userId, conversationId, input);
     await this.database.agentMessage.updateMany({
       where: {
         conversationId,
@@ -344,6 +363,7 @@ export class AgentConversationsService {
     const conversation = await this.assertConversationOwnership(
       userId,
       conversationId,
+      "edit",
     );
     if (conversation.archivedAt) {
       throw new BadRequestException({
@@ -355,7 +375,7 @@ export class AgentConversationsService {
       where: {
         id: generationTaskId,
         projectId: conversation.projectId,
-        userId,
+        ...(this.access ? {} : { userId }),
       },
     });
     if (!task) {
@@ -403,8 +423,10 @@ export class AgentConversationsService {
     const conversation = await this.assertConversationOwnership(
       userId,
       conversationId,
+      "edit",
     );
-    if (conversation.mode === "workflow") throw new BadRequestException("请使用持续设计助手消息入口");
+    if (conversation.mode === "workflow")
+      throw new BadRequestException("请使用持续设计助手消息入口");
     if (conversation.archivedAt) {
       throw new BadRequestException({
         code: "AGENT_CONVERSATION_ARCHIVED",
@@ -466,6 +488,8 @@ export class AgentConversationsService {
           context.designAssetIds,
         ),
       ]);
+      if (this.access)
+        await this.access.require(userId, conversation.projectId, "edit");
       const decision = await this.model.generateJson({
         images: imageContext.images,
         instructions: agentInstructions,
@@ -477,6 +501,8 @@ export class AgentConversationsService {
         schemaName: "fashion_agent_decision",
       });
 
+      if (this.access)
+        await this.access.require(userId, conversation.projectId, "edit");
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
         const sourceAssetId = decision.generation.sourceAssetId ?? null;
@@ -738,7 +764,16 @@ export class AgentConversationsService {
         message: `图片上下文不能超过 ${AGENT_IMAGE_LIMIT} 项`,
       });
     }
-    if (fileAssetIds.length > 0) {
+    if (fileAssetIds.length > 0 && this.access) {
+      for (const id of fileAssetIds)
+        await requireProjectFile(
+          this.database,
+          this.access,
+          userId,
+          id,
+          projectId,
+        );
+    } else if (fileAssetIds.length > 0) {
       const owned = await this.database.fileAsset.count({
         where: { id: { in: fileAssetIds }, ownerId: userId },
       });
@@ -830,12 +865,23 @@ export class AgentConversationsService {
         designAssetUrls: new Map<string, string>(),
       };
     }
+    if (this.access) {
+      await this.access.require(userId, projectId, "edit");
+      for (const id of fileAssetIds)
+        await requireProjectFile(
+          this.database,
+          this.access,
+          userId,
+          id,
+          projectId,
+        );
+    }
     const [files, designAssets] = await Promise.all([
       fileAssetIds.length
         ? this.database.fileAsset.findMany({
             where: {
               id: { in: [...fileAssetIds] },
-              ownerId: userId,
+              ...(this.access ? {} : { ownerId: userId }),
               status: FileStatus.READY,
             },
             select: {
@@ -854,7 +900,9 @@ export class AgentConversationsService {
               archivedAt: null,
               id: { in: [...designAssetIds] },
               projectId,
-              project: { workspace: { ownerId: userId } },
+              ...(this.access
+                ? {}
+                : { project: { workspace: { ownerId: userId } } }),
             },
             select: {
               height: true,
@@ -952,7 +1000,11 @@ export class AgentConversationsService {
     };
   }
 
-  private async assertProjectOwnership(userId: string, projectId: string) {
+  private async assertProjectOwnership(
+    userId: string,
+    projectId: string,
+    action: ProjectAction = "read",
+  ) {
     const project = await this.database.project.findUnique({
       where: { id: projectId },
       select: {
@@ -967,7 +1019,8 @@ export class AgentConversationsService {
         message: "项目不存在",
       });
     }
-    if (project.workspace.ownerId !== userId) {
+    if (this.access) await this.access.require(userId, projectId, action);
+    else if (project.workspace.ownerId !== userId) {
       throw new ForbiddenException({
         code: "PROJECT_FORBIDDEN",
         message: "无权访问该项目",
@@ -979,6 +1032,7 @@ export class AgentConversationsService {
   private async assertConversationOwnership(
     userId: string,
     conversationId: string,
+    action: ProjectAction = "read",
   ) {
     const conversation = await this.database.agentConversation.findUnique({
       where: { id: conversationId },
@@ -997,9 +1051,11 @@ export class AgentConversationsService {
         message: "会话不存在",
       });
     }
+    if (this.access)
+      await this.access.require(userId, conversation.projectId, action);
     if (
       conversation.createdById !== userId ||
-      conversation.project.workspace.ownerId !== userId
+      (!this.access && conversation.project.workspace.ownerId !== userId)
     ) {
       throw new ForbiddenException({
         code: "AGENT_CONVERSATION_FORBIDDEN",

@@ -1,3 +1,4 @@
+import { ProjectAccessModule } from "../studio/project-access.module";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
@@ -14,7 +15,7 @@ import {
 import { AmuxClaudeDnaExtractor } from "./dna-extractor";
 
 @Module({
-  imports: [AiModule, FilesModule, GenerationModule, SecurityModule],
+  imports: [ProjectAccessModule, AiModule, FilesModule, GenerationModule, SecurityModule],
   controllers: [CollectionsController],
   providers: [
     CollectionsService,
