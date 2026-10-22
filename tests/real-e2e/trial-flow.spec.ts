@@ -130,7 +130,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   await page.getByRole("button", { name: "返回工作区", exact: true }).click();
   await page.getByRole("button", { name: "关闭候选工作台", exact: true }).click();
   const admittedCollection = page.waitForResponse((response) => response.url().endsWith("/api/collections") && response.request().method() === "POST");
-  await page.getByRole("button", { name: "设为 Hero / 建立系列", exact: true }).click();
+  await page.getByRole("button", { name: "设为主推款并建立系列", exact: true }).click();
   const collection = await (await admittedCollection).json() as { id: string; name: string };
   const series = page.getByRole("dialog", { name: "系列 DNA", exact: true });
   await expect(series).toBeVisible();
