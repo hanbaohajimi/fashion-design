@@ -1140,11 +1140,20 @@
 
 .libraryPage { max-width: var(--content-max-width); margin: auto; padding-inline: var(--page-gutter); }
 .libraryHeader { position: static; background: transparent; backdrop-filter: none; padding-block: var(--space-6); min-height: 96px; }
-.libraryIdentity h1 { font-family: var(--font-sans); font-size: var(--text-3xl); font-weight: var(--font-semibold); }
+.libraryIdentity h1 { font-family: var(--font-sans); font-size: 28px; font-weight: var(--font-semibold); }
 .libraryIdentity > a, .headerDivider { display: none; }
 .libraryIdentity > div > span { font-size: var(--text-sm); }
 .searchWrap input { border-radius: var(--radius-md); height: var(--control-height-primary); }
-.uploadDisclosure { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); background: var(--color-paper); border-radius: var(--radius-lg); }
+.uploadDisclosure, .specDisclosure { min-width: 0; margin: 0; padding: 0 var(--space-3); border: 1px solid var(--color-border); background: var(--color-paper); border-radius: var(--radius-md); }
+.uploadDisclosure > summary, .specDisclosure > summary { min-height: 44px; display: flex; align-items: center; gap: var(--space-2); list-style: none; }
+.uploadDisclosure > summary::before, .specDisclosure > summary::before { content: "›"; display: inline-block; font-size: 18px; }
+.uploadDisclosure[open] > summary::before, .specDisclosure[open] > summary::before { transform: rotate(90deg); }
+.libraryTools details[open] { padding-bottom: var(--space-3); }
+.libraryTools { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.libraryTools details[open] { flex-basis: 100%; }
+.specDisclosure > summary { cursor: pointer; color: var(--color-ink-secondary); font-size: var(--text-base); overflow-wrap: anywhere; }
+.librarySkeletons { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--space-4); }
+.librarySkeleton { aspect-ratio: 4/5; }
 .uploadDisclosure > summary { cursor: pointer; color: var(--color-ink-secondary); font-size: var(--text-base); }
 .uploadDisclosure[open] > summary { margin-bottom: var(--space-4); }
 @media (max-width: 767px) { .libraryHeader { flex-wrap: wrap; gap: var(--space-4); } .searchWrap { width: 100%; } }
@@ -1171,7 +1180,7 @@
   padding: var(--space-3);
   color: var(--color-ink-secondary);
   background: var(--color-surface);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   line-height: 1.6;
 }
 
@@ -1237,11 +1246,12 @@
 }
 
 .structuredFilters {
-  margin-bottom: var(--space-5);
-  border-block: 1px solid var(--color-border);
+  margin: var(--space-4) 0 0;
+  border-top: 1px solid var(--color-border);
   padding-block: var(--space-4);
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
+.structuredFilters :is(label > span, input, button) { font-size: var(--text-base); }
 
 .filterActions {
   display: flex;

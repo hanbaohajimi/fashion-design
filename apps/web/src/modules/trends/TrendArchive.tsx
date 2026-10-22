@@ -14,6 +14,8 @@ import { TrendCard, trendCategoryLabel } from "./TrendCard";
 import type { TrendItem } from "./trend-types";
 import { WeeklyDigestCard } from "./WeeklyDigestCard";
 import styles from "./trends.module.css";
+import { Skeleton } from "../../components/ui";
+import { userFacingError } from "../../components/user-facing-error";
 
 export function TrendArchive({
   projectId,
@@ -122,9 +124,8 @@ export function TrendArchive({
     <section aria-label="趋势资料库" className={styles.archive}>
       <section aria-label="趋势筛选" className={styles.archiveFilters}>
         <div>
-          <h2>已采集趋势档案</h2>
           <p>
-            {trends.total} 条原始来源 · 当前展示 {items.length} 条
+            {trends.total} 条来源 · 当前展示 {items.length} 条
           </p>
         </div>
         <label className={styles.archiveSearch}>
@@ -158,7 +159,7 @@ export function TrendArchive({
       </section>
       {error ? (
         <p className={styles.archiveError} role="alert">
-          {error}
+          {userFacingError(error, "趋势加入工作流失败，请重试")}
         </p>
       ) : null}
       {notice ? (
@@ -172,10 +173,10 @@ export function TrendArchive({
         </p>
       ) : null}
       {trends.isLoading ? (
-        <p className={styles.archiveState}>正在读取趋势档案…</p>
+        <div className={styles.archiveGrid} role="status" aria-label="正在读取趋势档案">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} label="正在加载趋势" className={styles.archiveSkeleton} />)}</div>
       ) : trends.error ? (
         <div className={styles.archiveState}>
-          <p role="alert">{trends.error.message}</p>
+          <p role="alert">{userFacingError(trends.error, "趋势暂时无法加载，请重试")}</p>
           <button onClick={trends.refresh} type="button">
             重新加载档案
           </button>

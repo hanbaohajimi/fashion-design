@@ -19,7 +19,6 @@
 
 .coverImage { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .coverFallback { display: grid; height: 100%; place-content: center; gap: var(--space-3); color: var(--color-ink); text-align: center; }
-.coverFallback strong { font-family: var(--font-serif); font-size: var(--text-3xl); font-weight: var(--font-normal); }
 .coverFallback small { font-size: var(--text-sm); }
 
 /* ==================== 顶部导航栏 ==================== */
@@ -348,27 +347,14 @@
   aspect-ratio: 4 / 3;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background-color: var(--cover-color, var(--color-overlay));
+  background-color: var(--color-surface);
   background-position: center;
   background-size: cover;
   transition: border-color var(--duration-fast);
 }
 
-/*
- * 空项目封面：用织物斜纹图案代替纯色块，
- * 和真实的面料小样排列在桌面的视觉感一致。
- * 每张卡片的斜纹方向由 --weave-angle 控制，
- * 一排卡片像不同裁片摊在裁台上，而非色板展示。
- */
 .projectCover:not([data-has-cover="true"]) {
-  background-image: repeating-linear-gradient(
-    var(--weave-angle, 28deg),
-    transparent 0,
-    transparent 4px,
-    rgba(31, 29, 26, 0.055) 4px,
-    rgba(31, 29, 26, 0.055) 5px
-  );
-  background-color: var(--cover-color, var(--color-surface));
+  background: var(--color-surface);
 }
 
 .projectCover::before,
@@ -379,30 +365,6 @@
 .projectCard:hover .projectCover,
 .projectOpen:focus-visible .projectCover {
   border-color: var(--color-signal);
-}
-
-.coverMeasure {
-  display: none;
-}
-
-.coverNumber {
-  position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  padding: 2px var(--space-2);
-  background: var(--color-paper);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: var(--font-bold);
-  letter-spacing: 0.08em;
-  color: var(--color-ink);
-  /* 小标签用等宽字体，像制版纸上的编号 */
-  font-family: var(--font-mono);
-  font-style: normal;
-}
-
-.coverMark {
-  display: none;
 }
 
 /* ==================== 卡片内容 ==================== */
@@ -877,7 +839,7 @@
 .library { padding: 0 0 var(--space-16); }
 .dashboard, .toolbar, .projectGrid, .skeletonGrid, .notice, .errorState, .loadMore { width: min(calc(100% - 2 * var(--page-gutter)), var(--content-max-width)); margin-inline: auto; }
 .dashboard { padding-top: var(--space-8); padding-bottom: var(--space-5); }
-.dashboardTitle { margin: 0; font-family: var(--font-sans); font-size: var(--text-3xl); font-weight: var(--font-semibold); letter-spacing: var(--tracking-tight); }
+.dashboardTitle { margin: 0; font-family: var(--font-sans); font-size: 28px; font-weight: var(--font-semibold); letter-spacing: var(--tracking-tight); }
 .toolbar { min-height: 64px; gap: var(--space-4); margin-bottom: var(--space-5); }
 .search { border-radius: var(--radius-md); min-height: var(--control-height); background: var(--color-paper); }
 .statusFilter, .statusFilterActive { min-height: var(--control-height); border-radius: var(--radius-md); font-weight: var(--font-medium); letter-spacing: 0; }
@@ -886,7 +848,7 @@
 .projectCard:hover { transform: none; border-color: var(--color-border-strong); box-shadow: none; }
 .cardBody { padding: var(--space-4); }
 .cardHeading h2 { font: var(--font-semibold) var(--text-lg)/var(--leading-normal) var(--font-sans); }
-.coverNumber, .coverMark, .coverMeasure { display: none; }
+.coverFallback > span { font-size: 28px; font-family: var(--font-sans); color: var(--color-ink-tertiary); }
 .cardMeta { font-size: var(--text-sm); }
 .menuPanel { border-radius: var(--radius-lg); box-shadow: var(--shadow-popup); }
 .dialog { border-radius: var(--radius-xl); }

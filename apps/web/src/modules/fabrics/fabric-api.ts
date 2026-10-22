@@ -1,6 +1,7 @@
 import { fabricDetailsSchema, type FabricDetails } from "@fashion/shared";
 import { privateFetch as fetch } from "../auth/private-fetch";
 import useSWRInfinite from "swr/infinite";
+import { useAuth } from "../auth/AuthProvider";
 
 import type { Fabric, FabricListPage, FabricListQuery } from "./fabric-types";
 
@@ -136,8 +137,10 @@ async function fetchFabricPage(url: string): Promise<FabricListPage> {
 }
 
 export function useFabrics(query: FabricListQuery) {
+  const { session, loading, error: authError, refresh: refreshAuth } = useAuth();
   const result = useSWRInfinite<FabricListPage>(
     (pageIndex, previousPage) => {
+      if (!session) return null;
       if (previousPage && pageIndex >= previousPage.totalPages) return null;
       const params = new URLSearchParams({
         limit: String(query.limit ?? PAGE_SIZE),
@@ -163,15 +166,15 @@ export function useFabrics(query: FabricListQuery) {
   const hasMore = Boolean(lastPage && lastPage.page < lastPage.totalPages);
 
   return {
-    error: result.error instanceof Error ? result.error : null,
+    error: result.error instanceof Error ? result.error : !session && authError ? new Error(authError) : null,
     hasMore,
-    isLoading: result.isLoading,
+    isLoading: loading || (!session && !authError) || result.isLoading,
     isLoadingMore: result.isValidating && Boolean(result.data?.length),
     items,
     loadMore: () => {
       if (hasMore && !result.isValidating) void result.setSize(result.size + 1);
     },
-    refresh: () => void result.mutate(),
+    refresh: () => { if (!session) void refreshAuth(); else void result.mutate(); },
     total: result.data?.[0]?.total ?? 0,
   };
 }

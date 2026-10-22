@@ -10,6 +10,9 @@ import {
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
 import { Button } from "../../components/ui";
+import { TaskFeedback } from "../../components/TaskFeedback";
+import { isTaskActive } from "../../components/task-feedback-state";
+import { userFacingError } from "../../components/user-facing-error";
 import styles from "./experiments.module.css";
 
 interface FabricOption {
@@ -95,6 +98,7 @@ export function ExperimentPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [viewingItemId, setViewingItemId] = useState<string | null>(null);
   const signature = JSON.stringify({
     mode,
     sourceAssetId,
@@ -272,10 +276,9 @@ export function ExperimentPanel({
     <section aria-label="设计实验室" className={styles.panel}>
       <div className={styles.heading}>
         <div>
-          <p className={styles.eyebrow}>DESIGN EXPLORATIONS</p>
-          <h2>把一种设计，展开成值得比较的方案</h2>
+          <h2>色料与改款实验</h2>
           <p>
-            试色、材质探索、部件改款和商品展示沿用同一母图。每项结果保留来源和修改要求。
+            选择母图，比较不同配色、面料或细节。
           </p>
         </div>
         <span>{styleRecords.length} 个款式可继续发展</span>
@@ -426,7 +429,7 @@ export function ExperimentPanel({
       )}
       {error ? (
         <p className={styles.error} role="alert">
-          {error}
+          {userFacingError(error, "实验暂时无法完成，请重试")}
         </p>
       ) : null}
       {notice ? <p role="status">{notice}</p> : null}
@@ -508,7 +511,10 @@ export function ExperimentPanel({
                       alt={item.title}
                     />
                   ) : (
-                    <span>{stateLabel[item.status]}</span>
+                    viewingItemId === item.id && isTaskActive(item.status) ? <TaskFeedback
+                      taskId={`${projectId}:${item.id}:${item.attempt}`} status={item.status} compact
+                      operation={batch.mode === "material" ? "material" : batch.mode === "color" ? "color" : "edit"}
+                    /> : <span>{stateLabel[item.status]}</span>
                   )}
                 </div>
                 <div className={styles.itemBody}>
@@ -523,7 +529,8 @@ export function ExperimentPanel({
                       {item.color.hex}
                     </span>
                   ) : null}
-                  {item.error ? <p role="status">{item.error}</p> : null}
+                  {item.error ? <p role="status">{userFacingError(item.error, "此方案未完成，可重试失败项")}</p> : null}
+                  {isTaskActive(item.status) ? <Button size="small" aria-pressed={viewingItemId === item.id} onClick={() => setViewingItemId(viewingItemId === item.id ? null : item.id)}>{viewingItemId === item.id ? "收起生成状态" : "查看生成状态"}</Button> : null}
                   <details>
                     <summary>修改要求与来源</summary>
                     <p>{item.prompt}</p>

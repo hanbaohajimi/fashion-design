@@ -150,6 +150,7 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
   await expect(projectSearch).toBeFocused();
   await page.keyboard.press("Escape");
 
+  await page.getByText("logout@example.com", { exact: true }).click();
   await page.getByRole("button", { name: "退出登录" }).click();
 
   await expect.poll(() => logoutRequestCount).toBe(1);

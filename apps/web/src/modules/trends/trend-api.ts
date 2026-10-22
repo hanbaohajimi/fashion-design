@@ -3,6 +3,9 @@
 import { privateFetch as fetch } from "../auth/private-fetch";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
+import { useAuth } from "../auth/AuthProvider";
 
 import { readErrorMessage } from "../auth/auth-api";
 import type {
@@ -59,8 +62,11 @@ async function requestJson<T>(
 }
 
 export function useTrends() {
+  const { session, loading, error: authError, refresh: refreshAuth } = useAuth();
   const query = useSWRInfinite<TrendListPage>(
     (pageIndex, previousPage) => {
+      // Never start an anonymous request against a cache that is about to be replaced.
+      if (!session) return null;
       if (previousPage && !previousPage.hasMore) return null;
       return `/api/trends?limit=60&page=${pageIndex + 1}`;
     },
@@ -69,10 +75,11 @@ export function useTrends() {
   );
   const items = query.data?.flatMap((page) => page.items) ?? [];
   const lastPage = query.data?.at(-1);
+  useEffect(() => { if (query.error) Sentry.captureException(query.error, { tags: { area: "trends" } }); }, [query.error]);
   return {
-    error: query.error instanceof Error ? query.error : null,
+    error: query.error instanceof Error ? query.error : !session && authError ? new Error(authError) : null,
     hasMore: Boolean(lastPage?.hasMore),
-    isLoading: query.isLoading,
+    isLoading: loading || (!session && !authError) || query.isLoading,
     isLoadingMore: query.isValidating && Boolean(query.data?.length),
     items,
     loadMore: () => {
@@ -80,22 +87,24 @@ export function useTrends() {
         void query.setSize(query.size + 1);
       }
     },
-    refresh: () => void query.mutate(),
+    refresh: () => { if (!session) void refreshAuth(); else void query.mutate(); },
     total: query.data?.[0]?.total ?? 0,
   };
 }
 
 export function useCurrentTrendDigest() {
+  const { session, loading, error: authError, refresh: refreshAuth } = useAuth();
   const query = useSWR<TrendDigest | null>(
-    "/api/trends/digest/current",
+    session ? "/api/trends/digest/current" : null,
     fetchCurrentTrendDigest,
     { revalidateOnFocus: false },
   );
+  useEffect(() => { if (query.error) Sentry.captureException(query.error, { tags: { area: "trend-digest" } }); }, [query.error]);
   return {
     data: query.data ?? null,
-    error: query.error instanceof Error ? query.error : null,
-    isLoading: query.isLoading,
-    refresh: () => void query.mutate(),
+    error: query.error instanceof Error ? query.error : !session && authError ? new Error(authError) : null,
+    isLoading: loading || (!session && !authError) || query.isLoading,
+    refresh: () => { if (!session) void refreshAuth(); else void query.mutate(); },
   };
 }
 

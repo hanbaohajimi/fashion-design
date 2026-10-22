@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Menu } from "../../components/ui";
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 
 import type { Project } from "./project-types";
 import styles from "./projects.module.css";
@@ -17,15 +17,6 @@ interface ProjectCardProps {
   readonly onRestore: (project: Project) => Promise<void>;
   readonly project: Project;
 }
-
-/* 面料色板 - 真实材质感的配色 */
-const FABRIC_COLORS = [
-  "#e8d5c8", // 未漂白棉布
-  "#d4c4ae", // 亚麻原色
-  "#c8b8a8", // 羊毛米色
-  "#b8a898", // 卡其色
-  "#a89888", // 驼色
-] as const;
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -61,7 +52,6 @@ function getMaterialLabel(material?: string): string {
 
 export function ProjectCard({
   duplicating,
-  index,
   onArchive,
   onDelete,
   onDuplicate,
@@ -76,12 +66,6 @@ export function ProjectCard({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [name, setName] = useState(project.name);
   const [renameError, setRenameError] = useState<string | null>(null);
-
-  const fabricColor = FABRIC_COLORS[index % FABRIC_COLORS.length];
-  const coverStyle = {
-    "--cover-color": fabricColor,
-
-  } as CSSProperties;
 
   const submitRename = async (): Promise<void> => {
     const trimmed = name.trim();
@@ -144,19 +128,11 @@ export function ProjectCard({
           className={styles.projectCover}
           data-has-cover={project.coverUrl && !coverFailed ? "true" : undefined}
           role="img"
-          style={coverStyle}
         >
           {project.coverUrl && !coverFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img alt={`${project.name} 封面`} className={styles.coverImage} src={project.coverUrl} onError={() => setCoverFailed(true)} />
-          ) : <span className={styles.coverFallback}><strong>{Array.from(project.name).slice(0, 2).join("")}</strong><small>{coverFailed ? "封面暂时无法加载" : project.assetCount > 0 ? "暂无封面" : "空项目 · 开始创作"}</small></span>}
-          <span className={styles.coverNumber}>
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          <span aria-hidden="true" className={styles.coverMeasure}>
-            {project.assetCount > 0 ? `${project.assetCount} PCS` : "UNCUT"}
-          </span>
-          <span className={styles.coverMark}>FD</span>
+          ) : <span className={styles.coverFallback}><span aria-hidden="true">▱</span><small>{coverFailed ? "封面暂时无法加载" : "暂无封面"}</small></span>}
         </div>
       </Link>
 

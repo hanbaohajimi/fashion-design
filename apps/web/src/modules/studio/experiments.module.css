@@ -153,21 +153,21 @@
   line-height: 1.5;
 }
 .itemBody p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .itemBody a {
-  font-size: 13px;
+  font-size: 14px;
   color: inherit;
   text-underline-offset: 4px;
 }
 .itemBody details {
-  font-size: 12px;
+  font-size: 14px;
 }
 .state {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-secondary, #656157);
 }
 .color {

@@ -1,0 +1,129 @@
+.feedback {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px 0;
+  color: var(--color-ink);
+}
+.feedbackContent {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.feedbackContent strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.feedbackContent p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.feedbackContent small {
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.feedbackContent i {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-signal);
+}
+.feedback[data-state="complete"] i {
+  background: var(--color-success);
+}
+.feedback[data-state="failed"] i {
+  background: var(--color-error);
+}
+.feedback[data-state="unknown"] i,
+.feedback[data-state="idle"] i {
+  background: var(--color-ink-tertiary);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.painting {
+  width: min(100%, 240px);
+}
+.swatch {
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+  border-radius: 2px;
+}
+.swatch img,
+.swatch video,
+.paper {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--color-surface);
+}
+.paintingControls {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.paintingControls button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.paintingControls button:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+.feedback[data-compact="true"] {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+.feedback[data-compact="true"]:not(:has(.painting)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.painting[data-compact="true"] {
+  width: 80px;
+}
+.painting[data-compact="true"] .paintingControls {
+  flex-wrap: wrap;
+}
+@media (max-width: 767px) {
+  .feedback {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+  .feedback:not(:has(.painting)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .painting,
+  .painting[data-compact="true"] {
+    width: 64px;
+  }
+  .paintingControls {
+    flex-wrap: wrap;
+  }
+  .paintingControls button {
+    min-height: 44px;
+  }
+}

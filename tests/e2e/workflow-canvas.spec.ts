@@ -21,8 +21,9 @@ test("帮助提示可键盘关闭，草图窗口圈定焦点并返回素材入�
   await help.focus();
   await expect(page.getByRole("tooltip")).toBeVisible();
   const tip = await page.getByRole("tooltip").boundingBox();
-  expect(tip!.x).toBeGreaterThanOrEqual(0);
-  expect(tip!.x + tip!.width).toBeLessThanOrEqual(1280);
+  if (!tip) throw new Error("工作室帮助提示未显示");
+  expect(tip.x).toBeGreaterThanOrEqual(0);
+  expect(tip.x + tip.width).toBeLessThanOrEqual(1280);
   await help.press("Escape");
   await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(help).toBeFocused();
@@ -66,7 +67,8 @@ test("阅读历史时新消息不会抢走滚动位置，点击提示后回到�
 
 test("工作室详情草稿在对话切换和同步后保留；侧栏支持键盘调整", async ({ page }) => {
   const mocked = await mockWorkflow(page);
-  const tool = mocked.getGraph().nodes.find((node) => node.id === "generate")!;
+  const tool = mocked.getGraph().nodes.find((node) => node.id === "generate");
+  if (!tool) throw new Error("测试图缺少生成工具");
   tool.status = "ready";
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
@@ -131,9 +133,9 @@ test("统一工作区在桌面、抽屉及手机视图保持操作可达", async
     const actions = page.getByText("更多", { exact: true });
     await actions.click();
     const actionBounds = await page.getByRole("button", { name: "暂停设计协作", exact: true }).boundingBox();
-    expect(actionBounds).not.toBeNull();
-    expect(actionBounds!.y).toBeGreaterThanOrEqual(0);
-    expect(actionBounds!.y + actionBounds!.height).toBeLessThanOrEqual(viewport.height);
+    if (!actionBounds) throw new Error("协作操作菜单未显示");
+    expect(actionBounds.y).toBeGreaterThanOrEqual(0);
+    expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(viewport.height);
     await actions.press("Escape");
     await expect(actions).toBeFocused();
   }
@@ -1206,7 +1208,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
       await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
-      const back = page.getByRole("link", { name: "返回设计工作室", exact: true });
+      const back = page.getByRole("link", { name: "返回设计画布", exact: true });
       await expect(back).toBeVisible();
       await expect(back).toHaveAttribute("href", `/${PROJECT_ID}`);
     }
@@ -1214,7 +1216,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
     await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
-    await page.getByRole("link", { name: "返回设计工作室", exact: true }).click();
+    await page.getByRole("link", { name: "返回设计画布", exact: true }).click();
     await expectLightCanvas();
   });
 }
@@ -1555,7 +1557,7 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 A" }).dblclick();
   const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
-  await details.getByRole("button", { name: "设为 Hero / 建立系列" }).click();
+  await details.getByRole("button", { name: "设为主推款并建立系列" }).click();
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.id === "candidate-a")?.payload.collectionId).toBe("collection-one");
   await page.getByRole("button", { name: "关闭系列抽屉" }).click();
   await expect(details.getByRole("button", { name: "打开关联系列" })).toBeVisible();
@@ -1888,7 +1890,9 @@ test("默认视图可读，查看全图、100%和窄屏保持可达", async ({ p
   await page.goto(`/${PROJECT_ID}`);
   const brief = page.locator('[data-type="brief"]');
   await expect(brief).toBeVisible();
-  expect((await brief.boundingBox())!.width / 258).toBeGreaterThanOrEqual(0.85);
+  const briefBounds = await brief.boundingBox();
+  if (!briefBounds) throw new Error("设计需求节点未显示");
+  expect(briefBounds.width / 258).toBeGreaterThanOrEqual(0.85);
   await page.screenshot({ path: "output/playwright/review-canvas-after.png" });
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2117,6 +2121,7 @@ for (const crossTab of [false, true]) {
       await page.getByRole("link", { name: "返回项目库" }).click();
       await expect(page).toHaveURL("/");
       await page.reload();
+      await page.getByText("a@example.com", { exact: true }).click();
       await page.getByRole("button", { name: "退出登录", exact: true }).click();
       await expect(page).toHaveURL(/\/login$/);
       await page.goto("/auth/confirm?token_hash=review-switch");
@@ -2136,7 +2141,9 @@ for (const viewport of REVIEW_VIEWPORTS) {
     await page.goto(`/${PROJECT_ID}`);
     const brief = page.locator('[data-type="brief"]');
     await expect(brief).toBeVisible();
-    expect((await brief.boundingBox())!.width / 258).toBeGreaterThanOrEqual(0.85);
+    const briefBounds = await brief.boundingBox();
+    if (!briefBounds) throw new Error("设计需求节点未显示");
+    expect(briefBounds.width / 258).toBeGreaterThanOrEqual(0.85);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await contrastFailures(page)).toEqual([]);
     expect(await controlFontFailures(page)).toEqual([]);

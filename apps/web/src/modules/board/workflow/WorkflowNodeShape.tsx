@@ -13,6 +13,7 @@ import type { WorkflowNode } from "./workflow-api";
 import { displayNodeTitle, imageNodeSize, isImageNodeType, nodeTypeLabel } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
+import { taskState } from "../../../components/task-feedback-state";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
 
 export const WORKFLOW_NODE_SHAPE_TYPE = "fashion-workflow-node";
@@ -153,11 +154,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         {kind === "tool" ? (
           <span className={styles.toolStatus}>
             <span aria-hidden="true" />
-            {status === "ready" ? "待执行" : status === "proposed" ? "待确认" : status === "running"
-              ? "执行中"
-              : status === "failed"
-                ? "执行失败"
-                : "已完成"}
+            {taskState(status).label}
           </span>
         ) : null}
         {kind === "asset" ? (

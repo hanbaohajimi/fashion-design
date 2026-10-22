@@ -59,6 +59,10 @@
 .button:active:enabled {
   transform: translateY(1px);
 }
+.button[aria-busy="true"] { cursor: progress; opacity: 0.8; }
+.busyMark { font-weight: 700; letter-spacing: 1px; animation: busy-pulse 1.2s ease-in-out infinite; }
+@keyframes busy-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .busyMark { animation: none; } }
 .iconButton {
   width: var(--control-height);
   padding: 0;

@@ -6,6 +6,9 @@ import { type WorkflowGraph, type WorkflowNode, type WorkflowInputPort, type Wor
 import { displayNodeTitle, incomingEdges, outgoingEdges, lineageOf, nodeImageUrl, nodeSummary, nodeTypeLabel } from "./workflow-graph";
 import { DesignPathPanel } from "../generation/DesignPathPanel";
 import { Badge, Button } from "../../../components/ui";
+import { TaskFeedback } from "../../../components/TaskFeedback";
+import { isTaskActive, taskState } from "../../../components/task-feedback-state";
+import { userFacingError } from "../../../components/user-facing-error";
 import { WorkflowDialog } from "./WorkflowDialog";
 import styles from "./workflow-canvas.module.css";
 
@@ -23,16 +26,6 @@ const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
   goal: "设计目标",
   reference: "参考素材",
   source: "原图",
-};
-
-/* 节点状态面向设计师表达，不暴露 API 的 ready / proposed 字面量 */
-const STATUS_LABELS: Readonly<Record<string, string>> = {
-  completed: "已完成",
-  failed: "执行失败",
-  proposed: "待确认",
-  ready: "就绪",
-  running: "执行中",
-  succeeded: "已完成",
 };
 
 export function NodeDetails({
@@ -75,16 +68,19 @@ export function NodeDetails({
   const assetId = typeof node.payload.assetId === "string" ? node.payload.assetId : null;
   const inputs = incomingEdges(graph, node.id);
   const outputs = outgoingEdges(graph, node.id);
+  const state = taskState(node.status);
+  const summary = nodeSummary(node);
+  const nodeError = typeof node.payload.error === "string" ? node.payload.error : null;
   const brief = node.type === "constraint" && node.payload.brief && typeof node.payload.brief === "object"
     ? node.payload.brief as AgentDesignBrief : null;
   const report = node.type === "evaluation" && node.payload.report && typeof node.payload.report === "object"
     ? node.payload.report as { readonly evaluations?: readonly AgentDesignEvaluation[] } : null;
   return (
     <div className={styles.detailScroll}>
-      <span className={styles.overline}>{node.kind === "asset" ? "设计素材" : "设计工具"} · {nodeTypeLabel(node.type)}</span>
+      {nodeTypeLabel(node.type) !== displayNodeTitle(node) ? <span className={styles.overline}>{nodeTypeLabel(node.type)}</span> : null}
       <h3>{displayNodeTitle(node)}</h3>
-      <Badge tone={node.status === "failed" ? "error" : node.status === "completed" ? "success" : node.status === "running" ? "warning" : "neutral"}>{STATUS_LABELS[node.status] ?? node.status}</Badge>
-      <p className={styles.detailSummary}>{nodeSummary(node) || "这个节点尚无说明。"}</p>
+      {node.kind === "tool" && (isTaskActive(node.status) || state.state === "failed") ? <TaskFeedback taskId={`${projectId}:${node.id}`} status={node.status} updatedAt={node.updatedAt} error={nodeError} operation={node.type === "edit_design" ? "edit" : node.type === "generate_design" ? "generate" : "analysis"} /> : node.kind === "tool" || state.state === "unknown" ? <Badge tone={state.state === "complete" ? "success" : "neutral"}>{state.label}</Badge> : null}
+      {summary && summary !== node.title ? <p className={styles.detailSummary}>{summary}</p> : null}
       {nodeImageUrl(node) ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img alt={node.title} className={styles.detailImage} src={nodeImageUrl(node)} />
@@ -93,14 +89,14 @@ export function NodeDetails({
       {brief ? <section className={styles.detailSection}><h4>设计约束</h4>{brief.constraints.map((constraint) => <div className={styles.constraintRow} key={constraint.id}><span>{constraint.priority === "must" ? "必须" : "偏好"} · {constraint.origin === "explicit" ? "明确提出" : "解释性建议"}</span><p>{constraint.requirement}</p><small>{constraint.verification === "visual" ? "可由图像判断" : "需实测或规格确认"}</small></div>)}{brief.unknowns.length > 0 ? <p>待确认：{brief.unknowns.join("；")}</p> : null}</section> : null}
       {report?.evaluations ? <section className={styles.detailSection}><h4>逐候选评估</h4>{report.evaluations.map((evaluation) => <div className={styles.constraintRow} key={evaluation.assetId}><strong>{graph.nodes.find((item) => item.payload.assetId === evaluation.assetId)?.title ?? "候选方案"}</strong><p>{evaluation.summary}</p>{evaluation.checks.map((check) => <p key={check.constraintId}>{check.status === "met" ? "✓ 符合" : check.status === "concern" ? "! 存疑" : "? 无法判断"} · {check.observation}</p>)}</div>)}</section> : null}
       <details className={styles.detailSection}><summary>来源与路径</summary>
-        <div className={styles.detailMeta}><span>状态</span><strong>{STATUS_LABELS[node.status] ?? node.status}</strong><span>输入</span><strong>{inputs.length}</strong><span>输出</span><strong>{outputs.length}</strong></div>
+        <div className={styles.detailMeta}><span>输入</span><strong>{inputs.length}</strong><span>输出</span><strong>{outputs.length}</strong></div>
         {inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} · {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>)}
         {path && path.nodeIds.size > 1 ? <ol>{graph.nodes.filter((item) => path.nodeIds.has(item.id)).map((item) => <li key={item.id}>{displayNodeTitle(item)}</li>)}</ol> : null}
         {assetId ? <DesignPathPanel assetId={assetId} /> : null}
       </details>
       {node.kind === "tool" ? <ToolSettings graph={graph} inputs={inputs.length} key={node.id} onDirtyChange={setToolDirty} node={node} onEnsureConversation={onEnsureConversation} onGraphChange={onGraphChange} onSavePayload={onSavePayload} projectId={projectId} setError={setError} /> : null}
       {node.type === "candidate" && assetId ? <section className={styles.detailSection}><h4>候选方案</h4><button onClick={() => onOpenAsset(assetId)} type="button">打开大图、版本与局部重绘</button><h4>设计师决定</h4><select onChange={(event) => setDecisionKind(event.target.value as typeof decisionKind)} value={decisionKind}><option value="selected">选定方案</option><option value="compare">保留比较</option><option value="rejected">否决方案</option></select><textarea className={styles.decisionReason} onChange={(event) => setDecisionReason(event.target.value)} placeholder="记录选择或否决理由" rows={3} value={decisionReason} /><button disabled={!decisionReason.trim()} onClick={() => void decideWorkflowCandidate(projectId, node.id, assetId, decisionKind, decisionReason.trim()).then((next) => { onGraphChange(next); setDecisionReason(""); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "决定保存失败"))} type="button">保存决定</button></section> : null}
-      {assetId && node.type === "candidate" ? <section className={styles.detailSection}><h4>系列</h4><button onClick={() => void onCreateCollection(node.id, assetId)} type="button">{typeof node.payload.collectionId === "string" ? "打开关联系列" : "设为 Hero / 建立系列"}</button></section> : null}
+      {assetId && node.type === "candidate" ? <section className={styles.detailSection}><h4>系列</h4><button onClick={() => void onCreateCollection(node.id, assetId)} type="button">{typeof node.payload.collectionId === "string" ? "打开关联系列" : "设为主推款并建立系列"}</button></section> : null}
       <section className={styles.detailSection}>
         <button className={styles.dangerButton} disabled={node.canDelete !== true} onClick={() => setConfirmingDelete(true)} type="button">从工作流移除节点</button>
         {node.canDelete !== true ? <p>{node.deleteDisabledReason ?? "当前节点不可移除，请刷新以读取最新权限。"}</p> : null}
@@ -244,23 +240,23 @@ function ToolSettings({ onDirtyChange, graph, inputs, node, onGraphChange, onSav
         {referenceNodes.length ? <><p>参考作用与强度仅为提示词引导，不能保证模型精确控制。</p>{referenceNodes.map((reference) => { const current = draft.referenceInputs.find((entry) => entry.nodeId === reference.id) ?? { nodeId: reference.id, role: typeof reference.payload.role === "string" ? reference.payload.role : "style_ref", weight: 0.7 }; const update = (value: Partial<typeof current>) => setDraft({ ...draft, referenceInputs: [...draft.referenceInputs.filter((entry) => entry.nodeId !== reference.id), { ...current, ...value }] }); return <div className={styles.referenceConfig} key={reference.id}><strong>{displayNodeTitle(reference)}</strong><label>参考作用<select aria-label={`参考作用 ${reference.title}`} disabled={!canEdit || saving} value={current.role} onChange={(event) => update({ role: event.target.value })}>{WORKFLOW_REFERENCE_ROLES.map((role) => <option key={role} value={role}>{REFERENCE_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role}</option>)}</select></label><label>参考强度<input aria-label={`参考强度 ${reference.title}`} disabled={!canEdit || saving} type="number" min={0} max={1} step={0.1} value={current.weight} onChange={(event) => update({ weight: Number(event.target.value) })} /></label></div>; })}</> : null}
       </details> : null}
     </div>
-    {localError ? <p className={styles.toolError} role="alert">{localError}</p> : null}
+    {localError ? <p className={styles.toolError} role="alert">{userFacingError(localError, "工具参数暂时无法保存，请重试")}</p> : null}
     <div className={styles.toolActions}>
     {canEdit ? <Button disabled={!dirty || saving} onClick={() => void save()} type="button">{saving ? "正在保存…" : "保存工具参数"}</Button> : null}
-    {node.type !== "restore_version" && node.status !== "completed" ? <Button variant="primary" disabled={saving || node.status === "running" || inputs === 0 || (canEdit && dirty)} onClick={() => void execute()} type="button">{node.status === "running" ? "正在执行…" : node.status === "failed" ? "重试执行" : "确认并执行"}</Button> : null}
+    {node.type !== "restore_version" && ["ready", "failed"].includes(node.status) ? <Button variant="primary" disabled={saving || inputs === 0 || (canEdit && dirty)} onClick={() => void execute()} type="button">{node.status === "failed" ? "重试执行" : "确认并执行"}</Button> : null}
     {canEdit && dirty ? <p>请先保存参数，再确认执行。</p> : inputs === 0 ? <p>连接所需输入后即可执行。</p> : null}
     </div>
     <details className={styles.advancedSettings}><summary>执行记录</summary>
     <button onClick={() => void fetchWorkflowNodeHistory(projectId, node.id).then((value) => setHistory(value.items)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "执行历史读取失败"))} type="button">读取尝试记录</button>
     {history ? <ol className={styles.attemptList}>{history.length === 0 ? <li>尚无执行记录</li> : history.map((attempt) => <li key={attempt.id}>
-      <strong>第 {attempt.ordinal} 次 · {attempt.status}</strong><span>{new Date(attempt.createdAt).toLocaleString("zh-CN")}</span>
+      <strong>第 {attempt.ordinal} 次 · {taskState(attempt.status).label}</strong><span>{new Date(attempt.createdAt).toLocaleString("zh-CN")}</span>
       <p>模型：{typeof attempt.request.model === "string" ? attempt.request.model : "历史记录未提供"}</p>
       <p>指令：{typeof attempt.request.prompt === "string" ? attempt.request.prompt : typeof (attempt.request.params as Record<string, unknown> | undefined)?.prompt === "string" ? String((attempt.request.params as Record<string, unknown>).prompt) : "未记录"}</p>
       {typeof attempt.request.negativePrompt === "string" && attempt.request.negativePrompt ? <p>排除内容：{attempt.request.negativePrompt}</p> : null}
       {typeof attempt.request.width === "number" && typeof attempt.request.height === "number" ? <p>尺寸：{attempt.request.width} × {attempt.request.height}</p> : null}
       {Array.isArray(attempt.request.inputNodeIds) ? <p>来源：{attempt.request.inputNodeIds.map((id: unknown) => graph.nodes.find((item) => item.id === id)?.title ?? String(id)).join("、") || "无"}</p> : null}
       {Array.isArray(attempt.request.referenceInputs) && attempt.request.referenceInputs.length > 0 ? <p>参考角色：{attempt.request.referenceInputs.map((item: unknown) => { const ref = item as Record<string, unknown>; return `${String(ref.role ?? "参考")} · 权重 ${String(ref.weight ?? "—")}`; }).join("；")}</p> : null}
-      {attempt.error ? <p>{attempt.error}</p> : null}
+      {attempt.error ? <p>{userFacingError(attempt.error, "本次执行失败，可以重试")}</p> : null}
     </li>)}</ol> : null}
     </details>
   </section>;

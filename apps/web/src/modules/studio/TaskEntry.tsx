@@ -38,34 +38,37 @@ export interface TaskDraft {
   assetIds: string[];
   brandId: string;
 }
-const TASKS: readonly { kind: TaskKind; name: string; description: string }[] =
-  [
-    {
-      kind: "sketch",
-      name: "草图变效果图",
-      description: "保留草图结构，明确材质与呈现方式。",
-    },
-    {
-      kind: "combine",
-      name: "组合多张参考",
-      description: "指定一张母图，并加入廓形或风格参考。",
-    },
-    {
-      kind: "color",
-      name: "保留版型修改颜色",
-      description: "说明要改变的色彩和必须保留的细节。",
-    },
-    {
-      kind: "detail",
-      name: "服装细节改款",
-      description: "围绕领型、袖型、口袋或门襟建立修改分支。",
-    },
-    {
-      kind: "brief",
-      name: "梳理新的设计任务",
-      description: "整理目标、保留项、变化项和未知项。",
-    },
-  ];
+const TASKS = [
+  {
+    kind: "sketch",
+    name: "草图变效果图",
+    description: "保留草图结构，明确材质与呈现方式。",
+  },
+  {
+    kind: "combine",
+    name: "组合多张参考",
+    description: "指定一张母图，并加入廓形或风格参考。",
+  },
+  {
+    kind: "color",
+    name: "保留版型修改颜色",
+    description: "说明要改变的色彩和必须保留的细节。",
+  },
+  {
+    kind: "detail",
+    name: "服装细节改款",
+    description: "围绕领型、袖型、口袋或门襟建立修改分支。",
+  },
+  {
+    kind: "brief",
+    name: "梳理新的设计任务",
+    description: "整理目标、保留项、变化项和未知项。",
+  },
+] as const satisfies readonly {
+  kind: TaskKind;
+  name: string;
+  description: string;
+}[];
 
 export function compileStudioTask(
   draft: TaskDraft,
@@ -243,6 +246,25 @@ export function TaskEntry(
       (asset) => !props.data.assets.some((item) => item.id === asset.id),
     ),
   ];
+  const currentTask =
+    TASKS.find((task) => task.kind === draft.kind) ?? TASKS[0];
+  const chooseTask = (kind: TaskKind) =>
+    setDraft((current) => ({
+      ...current,
+      kind,
+      assetIds:
+        kind === "combine" || kind === "brief"
+          ? current.assetIds
+          : current.assetIds.slice(0, 1),
+    }));
+  const submitLabel =
+    draft.kind === "brief"
+      ? "分析设计需求"
+      : draft.kind === "sketch"
+        ? "生成效果图"
+        : draft.kind === "color"
+          ? "生成配色方案"
+          : "生成改款方案";
   const start = async () => {
     const succeeded = await form.submit(async (key) => {
       const graph = await fetchWorkflow(props.projectId);
@@ -338,138 +360,149 @@ export function TaskEntry(
   };
   return (
     <form
-      className={styles.section}
+      className={styles.taskWorkspace}
+      aria-label="开始设计任务"
       onSubmit={(event) => {
         event.preventDefault();
         void start();
       }}
     >
-      <div>
-        <h2>开始一项设计任务</h2>
-        <p className={styles.muted}>
-          选择目标，填写这次的改变和保留要求，系统建立并运行对应工作流。
-        </p>
-      </div>
-      {form.error ? <Notice tone="error">{form.error}</Notice> : null}
-      <div className={styles.taskList}>
+      <div className={styles.taskList} aria-label="设计任务类型列表">
         {TASKS.map((task) => (
           <button
             aria-pressed={draft.kind === task.kind}
             className={styles.task}
             key={task.kind}
             type="button"
-            onClick={() =>
-              setDraft((current) => ({
-                ...current,
-                kind: task.kind,
-                assetIds:
-                  task.kind === "combine" || task.kind === "brief"
-                    ? current.assetIds
-                    : current.assetIds.slice(0, 1),
-              }))
-            }
+            disabled={form.busy || uploading}
+            onClick={() => chooseTask(task.kind)}
           >
             <strong>{task.name}</strong>
-            <span className={styles.muted}>{task.description}</span>
           </button>
         ))}
       </div>
-      <fieldset
-        className={styles.form}
-        disabled={!props.canEdit || form.busy || uploading}
-      >
-        <Field label="本次任务">
-          <Textarea
-            rows={4}
-            value={draft.prompt}
-            maxLength={3000}
-            required
-            minLength={3}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                prompt: event.target.value,
-              }))
-            }
-            placeholder="例如：将夹克草图呈现为棉尼龙材质效果图，采用灰绿色。"
-          />
-        </Field>
-        <Field label="必须保留" hint="例如：短衣长、落肩、双贴袋、原有扣数。">
-          <Textarea
-            rows={2}
-            value={draft.preserve}
-            maxLength={1000}
-            required={draft.kind !== "brief"}
-            minLength={draft.kind !== "brief" ? 3 : undefined}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                preserve: event.target.value,
-              }))
-            }
-          />
-        </Field>
-        <Field label="采用品牌资料">
+      <div className={styles.taskContent}>
+        <label className={styles.mobileTask}>
+          任务类型
           <Select
-            value={draft.brandId}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                brandId: event.target.value,
-              }))
-            }
+            aria-label="任务类型"
+            value={draft.kind}
+            disabled={form.busy || uploading}
+            onChange={(event) => chooseTask(event.target.value as TaskKind)}
           >
-            <option value="">本次不关联品牌</option>
-            {props.data.brandProfiles.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.currentRevision.payload.name} · r
-                {item.currentRevision.revision}
+            {TASKS.map((task) => (
+              <option key={task.kind} value={task.kind}>
+                {task.name}
               </option>
             ))}
           </Select>
-        </Field>
-        <Field
-          label="上传草图或参考图"
-          hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
+        </label>
+        <div className={styles.taskHeading}>
+          <h2>{currentTask.name}</h2>
+          <p className={styles.muted}>{currentTask.description}</p>
+        </div>
+        {form.error ? <Notice tone="error">{form.error}</Notice> : null}
+        <fieldset
+          className={styles.form}
+          disabled={!props.canEdit || form.busy || uploading}
         >
-          <Input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void upload(file);
-              event.target.value = "";
-            }}
-          />
-        </Field>
-        <AssetPicker
-          assets={assets}
-          selected={draft.assetIds}
-          max={draft.kind === "combine" || draft.kind === "brief" ? 12 : 1}
-          label={
-            draft.kind === "brief" ? "可选设计参考" : "第一张为母图，其余为参考"
-          }
-          onChange={(ids) =>
-            setDraft((current) => ({ ...current, assetIds: ids }))
-          }
-        />
-      </fieldset>
-      <div className={styles.note}>
-        {draft.kind === "brief"
-          ? "将建立需求分析任务，本步骤不生成图片。"
-          : "将发起一次图片生成任务，成功后按现有额度规则计次。结果保留来源、修改要求和使用的品牌资料修订。"}
-        图像中的尺寸和面料物性仍需人工确认。
-      </div>
-      <div className={styles.actions}>
-        <Button
-          type="submit"
-          variant="primary"
-          loading={form.busy || uploading}
-          disabled={!props.canEdit}
-        >
-          建立并运行任务
-        </Button>
-        <small className={styles.muted}>完成后在画布查看进度和结果。</small>
+          <Field
+            label="上传草图或参考图"
+            hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
+          >
+            <Input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = "";
+              }}
+            />
+          </Field>
+          {assets.length > 0 ? (
+            <AssetPicker
+              assets={assets}
+              selected={draft.assetIds}
+              max={draft.kind === "combine" || draft.kind === "brief" ? 12 : 1}
+              label={
+                draft.kind === "brief"
+                  ? "可选设计参考"
+                  : "第一张为母图，其余为参考"
+              }
+              onChange={(ids) =>
+                setDraft((current) => ({ ...current, assetIds: ids }))
+              }
+            />
+          ) : null}
+          <Field label="本次任务">
+            <Textarea
+              rows={4}
+              value={draft.prompt}
+              maxLength={3000}
+              required
+              minLength={3}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  prompt: event.target.value,
+                }))
+              }
+              placeholder="例如：将夹克草图呈现为棉尼龙材质效果图，采用灰绿色。"
+            />
+          </Field>
+          <Field label="必须保留" hint="例如：短衣长、落肩、双贴袋、原有扣数。">
+            <Textarea
+              rows={2}
+              value={draft.preserve}
+              maxLength={1000}
+              required={draft.kind !== "brief"}
+              minLength={draft.kind !== "brief" ? 3 : undefined}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  preserve: event.target.value,
+                }))
+              }
+            />
+          </Field>
+          <Field label="采用品牌资料">
+            <Select
+              value={draft.brandId}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  brandId: event.target.value,
+                }))
+              }
+            >
+              <option value="">本次不关联品牌</option>
+              {props.data.brandProfiles.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.currentRevision.payload.name} · r
+                  {item.currentRevision.revision}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </fieldset>
+        <div className={styles.note}>
+          {draft.kind === "brief"
+            ? "将建立需求分析任务，本步骤不生成图片。"
+            : "将发起一次图片生成任务，成功后按现有额度规则计次。结果保留来源、修改要求和使用的品牌资料修订。"}
+          图像中的尺寸和面料物性仍需人工确认。
+        </div>
+        <div className={styles.actions}>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={form.busy || uploading}
+            disabled={!props.canEdit}
+          >
+            {form.busy ? "正在提交…" : uploading ? "正在上传…" : submitLabel}
+          </Button>
+          <small className={styles.muted}>完成后在画布查看进度和结果。</small>
+        </div>
       </div>
     </form>
   );

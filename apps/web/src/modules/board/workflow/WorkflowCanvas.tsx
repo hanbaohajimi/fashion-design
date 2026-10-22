@@ -32,6 +32,8 @@ import { BoardProjectContext } from "../board-context";
 import { CollectionDrawer } from "../generation/CollectionDrawer";
 import { createCollection } from "../generation/collection-api";
 import { GenerationWorkspace } from "../generation/GenerationWorkspace";
+import { userFacingError } from "../../../components/user-facing-error";
+import { BoardSkeleton } from "../BoardSkeleton";
 import {
   completeUpload,
   putOriginal,
@@ -713,11 +715,11 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     } finally { setExporting(false); }
   };
 
-  if (loading) return <main className={styles.loading}>正在展开设计工作流…</main>;
+  if (loading) return <BoardSkeleton />;
   if (!graph) return (
     <main className={styles.loadError}>
       <h1>设计工作流暂时无法打开</h1>
-      <p>{error}</p>
+      <p role="alert">{userFacingError(error, "设计画布暂时无法加载，请重试")}</p>
       <button onClick={() => { setLoading(true); void reload().then(() => setLoading(false), () => setLoading(false)); }} type="button">重新加载</button>
     </main>
   );
@@ -822,7 +824,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
               </div>
             ) : null}
           </div>
-          {!sidebarOpen && (error || notice) ? <div aria-live="polite" className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice}`} role={error ? "alert" : "status"}>{error ?? notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
+          {!sidebarOpen && (error || notice) ? <div aria-live="polite" className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice}`} role={error ? "alert" : "status"}>{error ? userFacingError(error) : notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
         </section>
 
         {sidebarOpen ? <div aria-label="调整侧栏宽度" aria-orientation="vertical" aria-valuemin={STUDIO_LAYOUT.sidebarMin} aria-valuemax={STUDIO_LAYOUT.sidebarMax} aria-valuenow={sidebarWidth} className={styles.sidebarResizer} role="separator" tabIndex={0} onKeyDown={(event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); resizeSidebar(sidebarWidth + (event.key === "ArrowLeft" ? STUDIO_LAYOUT.resizeStep : -STUDIO_LAYOUT.resizeStep)); } }} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizeSidebar(window.innerWidth - event.clientX); }} onPointerUp={(event) => { event.currentTarget.releasePointerCapture(event.pointerId); }} /> : null}
@@ -871,7 +873,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
           <div className={styles.assistantMount} hidden={activeTab !== "assistant"}>
             <WorkflowAssistantPanel graph={graph} onConversationChange={setActiveConversationId} onGraphChange={commitGraph} onNotice={setNotice} onError={setError} onProposal={setProposal} projectId={projectId} selected={selected} onLocate={(nodeId) => { setSelectedId(nodeId); editorRef.current?.select(nodeShapeId(nodeId)); editorRef.current?.zoomToSelection(motionOptions()); }} renderLegacyRuns={(conversationId) => <LegacyRunHistory conversationId={conversationId} onError={setError} />} />
           </div>
-          {sidebarOpen && (error || notice) ? <div aria-live="polite" className={error ? styles.errorNotice : styles.successNotice} role={error ? "alert" : "status"}>{error ?? notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
+          {sidebarOpen && (error || notice) ? <div aria-live="polite" className={error ? styles.errorNotice : styles.successNotice} role={error ? "alert" : "status"}>{error ? userFacingError(error) : notice}<button aria-label="关闭提示" onClick={() => { setError(null); setNotice(null); }} type="button">×</button></div> : null}
         </aside>
       </div>
 

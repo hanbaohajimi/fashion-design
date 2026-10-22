@@ -173,8 +173,7 @@ export function TrendBriefPanel({
   return (
     <section className={styles.panel}>
       <div>
-        <p className={styles.eyebrow}>SOURCE TO DIRECTION</p>
-        <h2>把趋势资料变成有依据的设计任务</h2>
+        <h2>趋势简报</h2>
         <p>
           选择来源，填写本轮目标和探索方向。品牌规则、原始链接和未知项会一同保存到画布。
         </p>

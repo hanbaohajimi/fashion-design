@@ -46,9 +46,6 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
 
         <section className={styles.hero}>
           <h1>趋势档案</h1>
-          <p>
-            <span>发现趋势，整理来源与设计参考。</span>
-          </p>
         </section>
 
         <TrendArchive
@@ -76,22 +73,10 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
                 <span aria-hidden="true" className={styles.externalArrow}>
                   ↗
                 </span>
-                <span aria-hidden="true" className={styles.hoverPreview}>
-                  {platform.name}
-                </span>
               </a>
             ))}
           </nav>
 
-          <aside aria-hidden="true" className={styles.previewField}>
-            <div className={styles.previewMeta}>
-              <span>EXTERNAL</span>
-              <span>FASHION</span>
-              <span>SOURCES</span>
-              <b>01—08</b>
-            </div>
-            <span className={styles.defaultPreview}>INDEX</span>
-          </aside>
         </section></details>
       </div>
     </main></>

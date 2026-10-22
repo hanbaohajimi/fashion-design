@@ -7,7 +7,7 @@ export function BoardSkeleton() {
       <div className={styles.skeletonRail} />
       <div className={styles.skeletonCardOne} />
       <div className={styles.skeletonCardTwo} />
-      <p>正在重建画布与语义元素…</p>
+      <p role="status">正在加载设计画布…</p>
     </main>
   );
 }

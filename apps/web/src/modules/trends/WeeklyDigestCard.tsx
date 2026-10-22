@@ -1,5 +1,6 @@
 import type { TrendDigest } from "./trend-types";
 import styles from "./trends.module.css";
+import { userFacingError } from "../../components/user-facing-error";
 
 interface WeeklyDigestCardProps {
   readonly digest: TrendDigest | null;
@@ -26,7 +27,7 @@ export function WeeklyDigestCard({
       <section className={styles.digestCard} data-empty>
         <div>
           <h2>本周综述尚未生成</h2>
-          <p>{error?.message ?? "定期采集完成后，这里会显示基于来源条目的分析整理。"}</p>
+          <p>{error ? userFacingError(error, "本周综述暂时无法加载，请重试") : "采集完成后，这里会显示来源综述。"}</p>
           {error ? <button onClick={onRetry} type="button">重新读取周报</button> : null}
         </div>
       </section>

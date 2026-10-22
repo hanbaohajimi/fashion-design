@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AppHeader } from "../../components/AppHeader";
 import { Button, Skeleton } from "../../components/ui";
 import controls from "../../components/ui.module.css";
+import { userFacingError } from "../../components/user-facing-error";
 import { useGuardedRouter as useRouter } from "../use-guarded-router";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
@@ -27,7 +28,7 @@ import {
 } from "../trends/active-board";
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "操作失败，请稍后重试";
+  return userFacingError(error, "操作失败，请稍后重试");
 }
 
 export function ProjectLibrary() {
@@ -35,7 +36,6 @@ export function ProjectLibrary() {
   const {
     error: authError,
     loading: authLoading,
-    logout,
     refresh: refreshAuth,
     session,
   } = useAuth();
@@ -44,7 +44,6 @@ export function ProjectLibrary() {
     useState<ProjectStatusFilter>("active");
   const [createOpen, setCreateOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [logoutPending, setLogoutPending] = useState(false);
   const [duplicatingProjectIds, setDuplicatingProjectIds] = useState<
     ReadonlySet<string>
   >(() => new Set());
@@ -197,22 +196,6 @@ export function ProjectLibrary() {
     return flight;
   };
 
-  const runLogout = async (): Promise<void> => {
-    if (logoutPending) {
-      return;
-    }
-
-    setNotice(null);
-    setLogoutPending(true);
-
-    try {
-      await logout();
-    } catch (error) {
-      setNotice(errorMessage(error));
-      setLogoutPending(false);
-    }
-  };
-
   if (authLoading) {
     return (
       <main className={styles.statePage}>
@@ -226,7 +209,6 @@ export function ProjectLibrary() {
     return (
       <main className={styles.statePage}>
         <section className={styles.stateCard}>
-          <span>SESSION / INTERRUPTED</span>
           <h1>暂时无法打开项目库</h1>
           <p role="alert">
             {authError ?? "登录状态已失效，请重新登录后继续。"}
@@ -250,7 +232,7 @@ export function ProjectLibrary() {
 
   return (
     <main className={`${styles.library} ${controls.controlSurface}`}>
-      <AppHeader current="projects" account={<><span>{session.user.email}</span><Button size="small" loading={logoutPending} onClick={() => void runLogout()}>退出登录</Button></>} />
+      <AppHeader current="projects" />
 
       <section className={styles.dashboard} aria-label="项目库">
         <h1 className={styles.dashboardTitle}>项目库</h1>

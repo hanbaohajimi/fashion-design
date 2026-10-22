@@ -412,8 +412,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20rem;
   align-items: end;
-  gap: 1.5rem;
-  margin: 3rem 0 1.75rem;
+  gap: 1rem;
+  margin: 0 0 1.5rem;
 }
 .archiveFilters h2 {
   margin: 0.6rem 0;
@@ -610,6 +610,7 @@
   color: var(--trend-muted);
   font-size: 0.9rem;
 }
+.archiveSkeleton { aspect-ratio: 4 / 3; min-height: 180px; }
 .archiveNotice,
 .archiveError {
   padding: 1rem;
@@ -762,7 +763,7 @@
 .trendsPage { background: var(--color-canvas); padding: 0 var(--page-gutter) var(--space-16); }
 .editorialFrame { max-width: var(--content-max-width); }
 .hero { width: 100%; min-height: 0; display: block; padding: var(--space-8) 0 var(--space-6); }
-.hero h1 { font: var(--font-semibold) var(--text-3xl)/var(--leading-snug) var(--font-sans); letter-spacing: var(--tracking-tight); }
+.hero h1 { font: var(--font-semibold) 28px/var(--leading-snug) var(--font-sans); letter-spacing: var(--tracking-tight); }
 .hero p { margin-top: var(--space-3); font-size: var(--text-base); letter-spacing: 0; white-space: normal; font-weight: var(--font-normal); }
 .externalSources { margin-top: var(--space-8); border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
 .externalSources > summary { cursor: pointer; color: var(--color-ink-secondary); font-size: var(--text-base); }

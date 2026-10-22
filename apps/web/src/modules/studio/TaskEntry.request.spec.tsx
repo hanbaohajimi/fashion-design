@@ -61,9 +61,9 @@ it("sends a valid independent UUID and reuses it when the execute response is lo
     target: { value: "保留短衣长与双口袋" },
   });
   fireEvent.click(screen.getByRole("button", { name: "选择图片 1" }));
-  fireEvent.click(screen.getByRole("button", { name: "建立并运行任务" }));
+  fireEvent.click(screen.getByRole("button", { name: "生成效果图" }));
   await screen.findByText("执行响应丢失");
-  fireEvent.click(screen.getByRole("button", { name: "建立并运行任务" }));
+  fireEvent.click(screen.getByRole("button", { name: "生成效果图" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/project-1"));
   expect(fetcher).toHaveBeenCalledTimes(2);
   const bodies = fetcher.mock.calls.map(([, options]) =>

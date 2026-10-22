@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppHeader } from "../../components/AppHeader";
 import controls from "../../components/ui.module.css";
+import { Skeleton } from "../../components/ui";
+import { userFacingError } from "../../components/user-facing-error";
 import { Suspense, useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { useFabrics } from "../../modules/fabrics/fabric-api";
@@ -29,6 +31,7 @@ export default function FabricsPage() { return <Suspense fallback={<main>正在�
 function FabricLibrary() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<FabricListQuery>({});
+  const hasFilters = Object.keys(filters).length > 0;
   const params = useSearchParams();
   const projectId = params.get("from") === "board" ? params.get("boardId") || undefined : undefined;
   const [scope, setScope] = useState<FabricScopeFilter>("all");
@@ -72,9 +75,9 @@ function FabricLibrary() {
     <><AppHeader current="fabrics" projectId={projectId} /><main className={`${styles.libraryPage} ${controls.controlSurface}`}>
       <header className={styles.libraryHeader}>
         <div className={styles.libraryIdentity}>
-          <Link aria-label="返回项目库" href={projectId ? `/${encodeURIComponent(projectId)}` : "/"}>
+          <Link aria-label={projectId ? "返回设计画布" : "返回项目库"} href={projectId ? `/${encodeURIComponent(projectId)}` : "/"}>
             <span aria-hidden="true">←</span>
-            {projectId ? "返回设计工作室" : "项目库"}
+            {projectId ? "返回设计画布" : "项目库"}
           </Link>
           <span aria-hidden="true" className={styles.headerDivider} />
           <div>
@@ -109,9 +112,10 @@ function FabricLibrary() {
         </div>
       </header>
 
+      <div className={styles.libraryTools}>
       <details className={styles.uploadDisclosure}><summary>上传面料</summary><FabricUploadPanel onUploaded={() => fabrics.refresh()} /></details>
-
       <FabricStructuredFilters onApply={setFilters} />
+      </div>
       <div className={styles.libraryBody}>
         <section className={styles.archivePanel} aria-label="面料列表">
           <div className={styles.resultMeta}>
@@ -130,16 +134,14 @@ function FabricLibrary() {
             <p aria-live="polite" role="status">
               {deferredSearch
                 ? `“${deferredSearch}”找到 ${fabrics.total} 项`
-                : "拖拽面料图片可添加到白板"}
+                : projectId ? "拖拽面料图片可添加到设计画布" : "选择面料查看图片与规格"}
             </p>
           </div>
           {fabrics.isLoading ? (
-            <div className={styles.libraryState}>
-              <p>正在读取面料档案…</p>
-            </div>
+            <div className={styles.librarySkeletons} aria-label="正在读取面料档案" role="status">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} label="正在加载面料" className={styles.librarySkeleton} />)}</div>
           ) : fabrics.error ? (
             <div className={styles.libraryState} data-error>
-              <p>{fabrics.error.message}</p>
+              <p role="alert">{userFacingError(fabrics.error, "面料暂时无法加载，请重试")}</p>
               <button onClick={fabrics.refresh} type="button">
                 重新加载
               </button>
@@ -149,7 +151,7 @@ function FabricLibrary() {
               <p>
                 {deferredSearch
                   ? `没有匹配“${deferredSearch}”的面料。`
-                  : "面料档案还是空的，可先上传第一块面料。"}
+                  : hasFilters ? "没有符合当前规格的面料，可调整或重置筛选。" : "面料档案还是空的，可先上传第一块面料。"}
               </p>
               {deferredSearch ? (
                 <button

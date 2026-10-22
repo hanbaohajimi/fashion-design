@@ -1,7 +1,7 @@
 .shell {
   max-width: 1440px;
   margin: 0 auto;
-  padding: var(--space-8);
+  padding: var(--space-5) var(--space-8);
   font-family: var(--font-sans);
   color: var(--atelier-ink);
 }
@@ -10,10 +10,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-6);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-5);
 }
 .header h1 {
-  font-size: var(--text-3xl);
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: -0.04em;
   margin: var(--space-2) 0;
@@ -27,7 +27,7 @@
 }
 .muted {
   color: var(--atelier-muted);
-  font-size: var(--text-body-sm);
+  font-size: var(--text-base);
   line-height: 1.7;
 }
 .toolbar {
@@ -37,7 +37,7 @@
   gap: var(--space-3);
 }
 .body {
-  padding: var(--space-8) 0;
+  padding: var(--space-5) 0;
 }
 .section {
   display: grid;
@@ -248,14 +248,14 @@
 }
 .taskList {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
+  align-content: start;
+  gap: var(--space-2);
 }
 .task {
-  padding: var(--space-5);
-  border: 1px solid var(--atelier-rule);
+  padding: var(--space-3);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: var(--atelier-paper);
+  background: transparent;
   text-align: left;
   color: var(--atelier-ink);
   cursor: pointer;
@@ -332,6 +332,18 @@
 .tabs {
   overflow-x: auto;
 }
+.workspaceNavigation { display: grid; gap: var(--space-3); }
+.workspaceNavigation > [role="group"] { width: fit-content; }
+.desktopTabs { min-width: 0; }
+.mobileFunction, .mobileTask { display: none; }
+.taskWorkspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--space-8); align-items: start; }
+.taskContent { display: grid; gap: var(--space-5); min-width: 0; }
+.taskHeading h2 { margin: 0 0 var(--space-2); }
+.taskHeading p { margin: 0; }
+.taskContent > fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.taskContent .previewGrid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); max-height: 200px; overflow-y: auto; }
+.taskContent .assetImage { height: 100px; }
+.taskContent .actions { position: static; }
 .tabPanel:focus {
   outline: none;
 }
@@ -406,6 +418,9 @@
   .body {
     padding-top: var(--space-5);
   }
+  .desktopTabs, .taskList { display: none; }
+  .mobileFunction, .mobileTask { display: grid; gap: var(--space-2); font-size: var(--text-base); }
+  .taskWorkspace { grid-template-columns: 1fr; gap: var(--space-4); }
   .summary {
     gap: var(--space-6);
   }
@@ -416,6 +431,8 @@
     max-width: none;
   }
   .header,
+  .workspaceNavigation,
+  .taskList,
   .tabs,
   .rail,
   .actions,

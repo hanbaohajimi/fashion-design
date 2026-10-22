@@ -17,7 +17,8 @@ const FIELDS = [
 export function FabricStructuredFilters({ onApply }: { readonly onApply: (query: StructuredQuery) => void }) {
   const [values, setValues] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
-  return <form className={styles.structuredFilters} aria-label="按面料规格筛选" onSubmit={(event) => {
+  const [applied, setApplied] = useState<string[]>([]);
+  return <details className={styles.specDisclosure}><summary>规格筛选{applied.length ? ` · ${applied.join("、")}` : ""}</summary><form className={styles.structuredFilters} aria-label="按面料规格筛选" onSubmit={(event) => {
     event.preventDefault();
     const min = values.minWeightGsm.trim() ? Number(values.minWeightGsm) : undefined;
     const max = values.maxWeightGsm.trim() ? Number(values.maxWeightGsm) : undefined;
@@ -31,6 +32,8 @@ export function FabricStructuredFilters({ onApply }: { readonly onApply: (query:
     if (min !== undefined) query.minWeightGsm = min;
     if (max !== undefined) query.maxWeightGsm = max;
     onApply(query);
+    setApplied(FIELDS.filter(({ key }) => query[key] !== undefined).map(({ key, label }) => `${label}：${query[key]}`));
+    event.currentTarget.closest("details")?.removeAttribute("open");
   }}>
     {FIELDS.map(({ key, label, placeholder }) => <label key={key}>
       <span>{label}</span>
@@ -40,9 +43,9 @@ export function FabricStructuredFilters({ onApply }: { readonly onApply: (query:
     </label>)}
     <div className={styles.filterActions}>
       <button type="submit">应用筛选</button>
-      <button type="button" onClick={() => { setValues(EMPTY); setError(null); onApply({}); }}>重置</button>
+      <button type="button" onClick={() => { setValues(EMPTY); setApplied([]); setError(null); onApply({}); }}>重置</button>
       <span>仅筛选已填写的规格，图片标签不会作为成分或克重依据。</span>
     </div>
     {error ? <p role="alert" className={styles.filterError}>{error}</p> : null}
-  </form>;
+  </form></details>;
 }

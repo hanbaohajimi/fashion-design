@@ -106,8 +106,7 @@ export function PrintWorkbench({
   return (
     <section className={styles.panel} aria-label="印花工作台">
       <div>
-        <p className={styles.eyebrow}>PRINT STUDIES</p>
-        <h2>观察图案的重复、尺度与节奏</h2>
+        <h2>印花方案</h2>
         <p>
           原始图案保持独立，平铺预览和应用参数按修订保存。比例属于屏幕视觉设定，生产尺寸需要另行确认。
         </p>

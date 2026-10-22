@@ -11,6 +11,8 @@ import {
   Skeleton,
   Tabs,
   TabPanel,
+  Select,
+  SegmentedControl,
 } from "../../components/ui";
 import { AppHeader } from "../../components/AppHeader";
 import { fetchProject } from "../projects/projects-api";
@@ -54,6 +56,19 @@ const TABS: readonly { value: Tab; label: string }[] = [
   { value: "samples", label: "样衣反馈" },
   { value: "team", label: "团队评审" },
 ];
+const GROUPS = [
+  {
+    value: "design",
+    label: "设计",
+    tabs: ["tasks", "styles", "experiments", "patterns", "presentation"],
+  },
+  {
+    value: "delivery",
+    label: "开发交付",
+    tabs: ["planning", "tech", "samples", "team"],
+  },
+  { value: "project", label: "项目资料", tabs: ["trends", "brand"] },
+] as const;
 const ROLE_LABELS = {
   OWNER: "所有者",
   EDITOR: "编辑",
@@ -125,8 +140,19 @@ export function StudioWorkspace({
     if (tab !== next && (await guard.confirmLeave())) {
       setDirty(false);
       setTab(next);
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", next);
+      if (next !== "styles") url.searchParams.delete("assetId");
+      window.history.replaceState(window.history.state, "", url);
     }
   };
+  const group =
+    GROUPS.find((item) => (item.tabs as readonly string[]).includes(tab)) ??
+    GROUPS[0];
+  const visibleTabs = group.tabs.flatMap((value) => {
+    const item = TABS.find((entry) => entry.value === value);
+    return item ? [item] : [];
+  });
   const props = {
     projectId,
     canEdit: data?.capabilities.edit ?? false,
@@ -136,15 +162,12 @@ export function StudioWorkspace({
   };
   return (
     <>
-      <AppHeader current="projects" projectId={projectId} />
+      <AppHeader current="projects" projectId={projectId} hideProjectReturn />
       <main id="main-content" className={styles.shell}>
         <header className={styles.header}>
           <div>
-            <span className={styles.eyebrow}>ATELIER / DESIGN STUDIO</span>
-            <h1>{name} · 设计工作室</h1>
-            <p className={styles.muted}>
-              从设计实验、款式定稿，到技术资料与样衣反馈。
-            </p>
+            <h1>{name}</h1>
+            <span className={styles.muted}>款式与交付</span>
           </div>
           <div className={styles.toolbar}>
             {data ? <Badge>{ROLE_LABELS[data.role]}</Badge> : null}
@@ -179,14 +202,43 @@ export function StudioWorkspace({
           </div>
         ) : data ? (
           <>
-            <Tabs
-              id={tabsId}
-              className={styles.tabs}
-              label="设计工作室功能"
-              value={tab}
-              options={TABS}
-              onChange={(next) => void changeTab(next)}
-            />
+            <div className={styles.workspaceNavigation}>
+              <SegmentedControl
+                label="工作室功能分组"
+                value={group.value}
+                options={GROUPS.map(({ value, label }) => ({ value, label }))}
+                onChange={(value) => {
+                  const next = GROUPS.find((item) => item.value === value);
+                  if (next) void changeTab(next.tabs[0]);
+                }}
+              />
+              <div className={styles.desktopTabs}>
+                <Tabs
+                  id={tabsId}
+                  className={styles.tabs}
+                  label="设计工作室功能"
+                  value={tab}
+                  options={visibleTabs}
+                  onChange={(next) => void changeTab(next)}
+                />
+              </div>
+              <label className={styles.mobileFunction}>
+                当前功能
+                <Select
+                  aria-label="当前功能"
+                  value={tab}
+                  onChange={(event) =>
+                    void changeTab(event.target.value as Tab)
+                  }
+                >
+                  {visibleTabs.map((item) => (
+                    <option value={item.value} key={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            </div>
             <div className={styles.body} key={panelVersion}>
               <TabPanel tabsId={tabsId} value="trends" activeValue={tab}>
                 <TrendBriefPanel

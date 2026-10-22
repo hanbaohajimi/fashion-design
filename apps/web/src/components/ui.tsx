@@ -18,6 +18,7 @@ import {
 import styles from "./ui.module.css";
 import { UI_TIMING } from "./ui-config";
 import { createPortal } from "react-dom";
+import { userFacingError } from "./user-facing-error";
 
 export function Button({
   variant = "secondary",
@@ -33,6 +34,12 @@ export function Button({
   readonly size?: "default" | "small";
   readonly loading?: boolean;
 }) {
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setWaiting(true), UI_TIMING.busyFeedback);
+    return () => { clearTimeout(timer); setWaiting(false); };
+  }, [loading]);
   return (
     <button
       {...props}
@@ -44,6 +51,7 @@ export function Button({
       type={type}
     >
       {children}
+      {loading && waiting ? <span aria-hidden="true" className={styles.busyMark}>···</span> : null}
     </button>
   );
 }
@@ -137,7 +145,7 @@ export function Notice({
       data-tone={tone}
       role={tone === "error" ? "alert" : "status"}
     >
-      <div>{children}</div>
+      <div>{tone === "error" && typeof children === "string" ? userFacingError(children) : children}</div>
       {onClose ? (
         <IconButton label="关闭提示" onClick={onClose} variant="ghost">
           ×

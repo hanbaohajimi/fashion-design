@@ -1,6 +1,7 @@
 "use client";
 import { Menu } from "../../../components/ui";
 import { STUDIO_LAYOUT } from "../../../components/ui-config";
+import { userFacingError } from "../../../components/user-facing-error";
 import { useSerialPolling } from "../../use-serial-polling";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -285,16 +286,15 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     {!legacy ? <PlanPanel plan={plan} graph={graph} onLocate={onLocate} /> : null}
     {!legacy ? <ContextPanel context={context} error={contextError} graph={graph} saving={collaborationReadOnly || contextSaving || sending || pendingReply} selected={selected} onLocate={onLocate} onUpdate={updateContext} onRetry={() => { void refreshContext().catch((error: unknown) => setContextError(error instanceof Error ? error.message : "上下文读取失败")); }} /> : null}
     <div aria-label="设计对话" aria-live="polite" className={styles.assistantConversation} onScroll={(event) => { const view = event.currentTarget; followMessages.current = view.scrollHeight - view.scrollTop - view.clientHeight < STUDIO_LAYOUT.followThreshold; if (followMessages.current) setNewMessages(false); }} data-empty={!loading && messages.length === 0}>
-      {messageSync.error || planSync.error ? <p role="status">协作同步异常：{messageSync.error ?? planSync.error}<button onClick={() => { messageSync.retry(); planSync.retry(); }} type="button">重试同步</button></p> : null}
-      {messageSync.lastSuccess ? <small>消息同步于 {new Date(messageSync.lastSuccess).toLocaleTimeString("zh-CN")}</small> : null}
+      {messageSync.error || planSync.error ? <p role="status">{userFacingError(messageSync.error ?? planSync.error, "设计对话暂时无法同步")}<button onClick={() => { messageSync.retry(); planSync.retry(); }} type="button">重试同步</button></p> : null}
       {loading ? <p className={styles.chatEmpty}>正在恢复设计对话…</p> : messages.length === 0 ? <p className={styles.chatEmpty}>{legacy ? "这段历史会话没有消息。" : "开始新的设计对话"}</p> : null}
       {cursor ? <button className={styles.historyAction} disabled={loading} onClick={() => { setLoading(true); void listWorkflowMessages(conversationId, cursor).then((page) => { setMessages((current) => [...page.items, ...current.filter((item) => !page.items.some((older) => older.id === item.id))]); setCursor(page.nextCursor); }).catch((error: unknown) => onError(error instanceof Error ? error.message : "历史读取失败")).finally(() => setLoading(false)); }} type="button">读取更早消息</button> : null}
       {messages.map((message) => <article className={styles.workflowMessage} data-role={message.role} data-message-id={message.id} key={message.id}>
         {message.kind === "clarify" ? <span className={styles.messageKind}>需要补充</span> : null}
         {message.origin === "execution_result" ? <span className={styles.messageKind}>执行回执</span> : message.origin === "background_analysis" ? <span className={styles.messageKind}>结果分析 · 可继续输入</span> : null}
         <p className={message.role === "user" ? styles.userExample : styles.assistantReply}>{message.content}</p>
-        {message.status === "pending" ? <small role="status">正在结合画布理解你的需求…</small> : null}
-        {message.error ? <small role="alert">{message.error.message}</small> : null}
+        {message.status === "pending" ? <small role="status">正在分析设计需求…</small> : null}
+        {message.error ? <small role="alert">{userFacingError(message.error.message, "本轮处理未完成，可以重试")}</small> : null}
         {message.role === "assistant" && message.status === "failed" && message.error?.code !== "WORKFLOW_BUDGET_EXHAUSTED" && !legacy && messages.some((user) => user.id === message.replyToId && user.clientRequestId) ? <button className={styles.actionSecondary} disabled={sending || contextSaving || pendingReply} onClick={() => void retryMessage(message)} type="button">重试这条回复</button> : null}
         {message.proposal ? <ProposalReview proposal={message.proposal} graph={graph} disabled={sending || pendingReply || collaborationReadOnly} onAccept={() => { if (message.proposal) void decide(message.proposal, "accept"); }} onReject={(reason) => { if (message.proposal) void decide(message.proposal, "reject", reason); }} onAdjust={(content, refs) => { if (message.proposal) void send({ proposalId: message.proposal.id, content, refs }); }} /> : null}
       </article>)}
@@ -307,7 +307,7 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
       {selected && !referencedIds.includes(selected.id) ? <button className={styles.referenceAction} onClick={() => setReferencedIds((current) => [...new Set([...current, selected.id])].slice(0, 16))} type="button">＋ 引用「{displayNodeTitle(selected)}」</button> : null}
       {referencedIds.length > 0 ? <div className={styles.mentions}>{referencedIds.map((id) => <button aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`} key={id} onClick={() => { const title = graph.nodes.find((node) => node.id === id)?.title; setReferencedIds((current) => current.filter((item) => item !== id)); if (title) setPrompt((value) => value.replace(`@${title}`, "").trimStart()); }} type="button">@{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"} ×</button>)}</div> : null}
       {mentionChoices.length > 0 ? <div aria-label="引用画布节点" className={styles.mentionChoices} role="listbox">{mentionChoices.map((node) => <button aria-selected={false} key={node.id} onClick={() => { setReferencedIds((current) => [...new Set([...current, node.id])].slice(0, 16)); setPrompt((value) => value.replace(/(?:^|\s)@([^@\s]*)$/u, (match) => `${match.startsWith(" ") ? " " : ""}@${node.title} `)); }} role="option" type="button">@{node.title}<small>{node.kind === "asset" ? "素材" : "工具"}{graph.nodes.filter((item) => item.title === node.title).length > 1 ? ` · ${node.id.slice(0, 8)}` : ""}</small></button>)}</div> : null}
-      <textarea aria-label="向设计助手描述下一步" disabled={loading} maxLength={MAX_AGENT_MESSAGE_LENGTH} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder={messages.length === 0 && !legacy ? "描述你的目标、讨论已有方案，或 @ 引用画布内容…助手会结合设计路径继续协作" : "讨论设计、描述修改，或 @ 引用画布节点…"} rows={3} value={prompt} />
+      <textarea aria-label="向设计助手描述下一步" disabled={loading} maxLength={MAX_AGENT_MESSAGE_LENGTH} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder="描述设计要求，输入 @ 引用素材" rows={3} value={prompt} />
       </>}
       <div className={styles.composerActions}>
         <Menu label="对话操作" trigger="更多" placement="top" align="start">
@@ -428,7 +428,7 @@ function ContextPanel({ context, error, graph, saving, selected, onLocate, onUpd
   return <details aria-label="设计上下文" className={styles.designContext}>
     <summary><span>设计上下文</span><small>{context?.currentObjective || (error ? "读取失败" : "项目目标与当前焦点")}</small></summary>
     <div className={styles.contextContents}>
-      {error ? <p role="alert">{error}<button className={styles.actionSecondary} onClick={onRetry} type="button">重新读取</button></p> : !context ? <p>开始设计对话后，查看项目目标、焦点与实际使用的参考。</p> : <>
+      {error ? <p role="alert">{userFacingError(error, "设计上下文暂时无法读取")}<button className={styles.actionSecondary} onClick={onRetry} type="button">重新读取</button></p> : !context ? <p>开始设计对话后，查看项目目标、焦点与实际使用的参考。</p> : <>
         <section><h3>项目目标</h3>{editingGoal ? <form onSubmit={(event) => { event.preventDefault(); if (goalDraft.trim()) void onUpdate({ currentObjective: goalDraft.trim() }).then((saved) => { if (saved) setEditingGoal(false); }); }}><textarea aria-label="更正项目目标" maxLength={4000} onChange={(event) => setGoalDraft(event.target.value)} rows={3} value={goalDraft} /><button className={styles.actionPrimary} disabled={saving || !goalDraft.trim()} type="submit">保存目标</button><button className={styles.actionQuiet} onClick={() => setEditingGoal(false)} type="button">取消</button></form> : <><p>{context.currentObjective || "尚未明确项目目标"}</p><button className={styles.actionSecondary} disabled={saving} onClick={() => { setGoalDraft(context.currentObjective ?? ""); setEditingGoal(true); }} type="button">更正项目目标</button></>}</section>
         <section><h3>当前任务</h3><p>{context.currentTask || "尚未确定下一步任务"}</p></section>
         <section><h3>当前焦点</h3>{focus.length ? <>{focus.map((id) => <button className={styles.nodeLink} disabled={!graph.nodes.some((node) => node.id === id)} key={id} onClick={() => onLocate(id)} type="button">{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"}</button>)}<button className={styles.actionQuiet} disabled={saving} onClick={() => void onUpdate({ focusNodeIds: [] })} type="button">清除焦点</button></> : <p>整个项目</p>}{selected && !focus.includes(selected.id) ? <button className={styles.actionSecondary} disabled={saving} onClick={() => void onUpdate({ focusNodeIds: [selected.id] })} type="button">将「{displayNodeTitle(selected)}」设为焦点</button> : null}<small>查看节点不会改变助手焦点。</small></section>

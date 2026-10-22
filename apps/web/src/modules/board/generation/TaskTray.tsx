@@ -4,13 +4,14 @@ import { useState } from "react";
 
 import { useGenerationWorkspace } from "./GenerationWorkspace";
 import styles from "./generation.module.css";
+import { userFacingError } from "../../../components/user-facing-error";
 
 const STATUS_LABEL = {
   canceled: "已取消",
   failed: "失败",
   moderation_failed: "内容审核未通过",
   queued: "排队中",
-  running: "创作中",
+  running: "生成中",
   succeeded: "已完成",
 } as const;
 
@@ -31,7 +32,7 @@ export function TaskTray() {
   return (
     <aside className={styles.taskTray} aria-label="任务托盘">
       <header>
-        <span>TASK / TRAY</span>
+        <span>生成任务</span>
         <b>{active.length} 进行中</b>
       </header>
       <ol>
@@ -44,10 +45,10 @@ export function TaskTray() {
             <i aria-hidden="true" />
             <div aria-atomic="true" aria-live="polite">
               <strong>{task.prompt}</strong>
-              <span>{task.error ?? STATUS_LABEL[task.status]}</span>
+              <span>{task.error ? userFacingError(task.error, "生成失败，请重试") : STATUS_LABEL[task.status]}</span>
               {(task.status === "queued" || task.status === "running") &&
               task.connection === "polling" ? (
-                <small>实时连接中断 · 轮询同步</small>
+                <small>连接暂时不稳定，正在更新任务状态</small>
               ) : null}
             </div>
             <time dateTime={task.updatedAt}>

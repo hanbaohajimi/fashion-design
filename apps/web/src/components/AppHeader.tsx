@@ -10,10 +10,12 @@ export function AppHeader({
   current,
   projectId,
   account,
+  hideProjectReturn = false,
 }: {
   readonly current: "projects" | "fabrics" | "trends";
   readonly projectId?: string | undefined;
   readonly account?: ReactNode;
+  readonly hideProjectReturn?: boolean;
 }) {
   const context = projectId
     ? `?from=board&boardId=${encodeURIComponent(projectId)}`
@@ -51,12 +53,12 @@ export function AppHeader({
         </Link>
       </nav>
       <div className={styles.account}>
-        {projectId ? (
+        {projectId && !hideProjectReturn ? (
           <Link
             className={styles.returnLink}
             href={`/${encodeURIComponent(projectId)}`}
           >
-            返回设计工作室
+            返回设计画布
           </Link>
         ) : null}
         {account ?? <Account />}
@@ -72,8 +74,7 @@ function Account() {
   if (!session) return null;
   return (
     <div>
-      <Menu label={session.user.name ?? session.user.email}>
-        <span className={styles.email}>{session.user.email}</span>
+      <Menu label={session.user.email}>
         <Button
           loading={pending}
           onClick={() => {

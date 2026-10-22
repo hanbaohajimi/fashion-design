@@ -8,7 +8,11 @@ export const STUDIO_LAYOUT = {
   followThreshold: 80,
 } as const;
 
-export const UI_TIMING = { tooltipOpen: 180, tooltipClose: 120 } as const;
+export const UI_TIMING = { tooltipOpen: 180, tooltipClose: 120, busyFeedback: 300, paintingDelay: 2000, staleTask: 60_000 } as const;
+
+/** Source reuse must be cleared before enabling these media in a production deployment. */
+export const PAINTING_LOADERS_ENABLED = process.env.NEXT_PUBLIC_PAINTING_LOADERS === "true" ||
+  (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_PAINTING_LOADERS !== "false");
 
 /** JS interactions read the same motion tokens as CSS and honor reduced motion. */
 export function motionDuration(token: "fast" | "normal" = "normal"): number {

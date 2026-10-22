@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button, Dialog, ImagePreview, Notice } from "../../components/ui";
 import { HISTORY_POSITION, navigationPosition, registerNavigationGuard, registerTraversalGuard } from "../navigation";
 import styles from "./studio.module.css";
+import { userFacingError } from "../../components/user-facing-error";
 
 export interface StudioAsset { readonly id: string; readonly url: string; readonly thumbnailUrl: string | null }
-export function errorMessage(error: unknown): string { return error instanceof Error ? error.message : "操作失败，请重试"; }
+export function errorMessage(error: unknown): string { return userFacingError(error); }
 
 export function AssetPicker({ assets, selected, onChange, max = 1, label = "选择设计图片", disabled = false }: {
   readonly assets: readonly StudioAsset[]; readonly selected: readonly string[]; readonly onChange: (ids: string[]) => void;
@@ -18,7 +19,7 @@ export function AssetPicker({ assets, selected, onChange, max = 1, label = "选�
     if (selected.includes(asset.id)) { onChange(selected.filter((id) => id !== asset.id)); setLimit(false); }
     else if (selected.length < max) { onChange([...selected, asset.id]); setLimit(false); }
     else setLimit(true);
-  }} type="button"><span className={styles.assetImage}><ImagePreview src={asset.thumbnailUrl ?? asset.url} alt={"设计图片 " + (index + 1)} /></span><span className={styles.assetLabel}>{asset.id.slice(0, 12)}</span></button>)}</div> : <p className={styles.note}>还没有设计图片。先从任务入口上传草图或在画布生成候选。</p>}{limit ? <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice> : null}</div>;
+  }} type="button"><span className={styles.assetImage}><ImagePreview src={asset.thumbnailUrl ?? asset.url} alt={"设计图片 " + (index + 1)} /></span><span className={styles.assetLabel}>图片 {index + 1}</span></button>)}</div> : <p className={styles.note}>还没有设计图片。先从任务入口上传草图或在画布生成候选。</p>}{limit ? <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice> : null}</div>;
 }
 
 export function SaveBar({ busy, dirty, canEdit = true, children }: { readonly busy: boolean; readonly dirty: boolean; readonly canEdit?: boolean; readonly children?: ReactNode }) {
