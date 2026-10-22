@@ -15,7 +15,7 @@ const processor = createGenerationProcessor({ database: prisma, billing: new Bil
     submit: async () => ({ provider: "mock", providerJobId: queueName, model: "mock/review", taskType: "t2i", submittedAt: new Date().toISOString(),
       cost: { credits: 1, rawCost: 0, currency: "USD", billableMegapixels: 1, estimated: true } }),
     getStatus: async () => {
-      process.send?.({ type: "provider-persisted" });
+      process.send?.({ type: "provider-persisted", pid: process.pid });
       return new Promise<never>(() => undefined);
     },
     getResult: async () => { throw new Error("Crash fixture must never produce a result"); },

@@ -76,8 +76,12 @@ it(`上传→真实 Redis 节点任务→Worker 产物→归属→导出，${cra
     const mutationId = randomUUID();
     await runtime.execute(user.id, projectId, toolId, { mutationId });
     if (crash) {
-      crashedProcess = spawn(process.execPath, [resolve("node_modules/tsx/dist/cli.mjs"), "--tsconfig", "tsconfig.json",
-        resolve("../../scripts/review-generation-crash-worker.ts"), generationQueue.name], { env: process.env, stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true });
+      // Load TypeScript in the spawned process so SIGKILL reaches the worker, not a CLI wrapper.
+      crashedProcess = spawn(process.execPath, ["--import", "tsx",
+        resolve("../../scripts/review-generation-crash-worker.ts"), generationQueue.name], {
+        env: { ...process.env, NODE_PATH: resolve("node_modules"), TSX_TSCONFIG_PATH: resolve("tsconfig.json") },
+        stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true,
+      });
       const child = crashedProcess;
       let crashOutput = "";
       child.stderr?.on("data", (chunk: Buffer) => { crashOutput += chunk.toString("utf8"); });
@@ -85,7 +89,12 @@ it(`上传→真实 Redis 节点任务→Worker 产物→归属→导出，${cra
         const timer = setTimeout(() => reject(new Error("崩溃模拟进程未持久化远程任务")), 15_000);
         child.once("error", (error) => { clearTimeout(timer); reject(error); });
         child.once("exit", (code) => { clearTimeout(timer); reject(new Error(`崩溃模拟进程提前退出 ${code}: ${crashOutput}`)); });
-        child.once("message", () => { clearTimeout(timer); done(); });
+        child.once("message", (message: unknown) => {
+          clearTimeout(timer);
+          if (!message || typeof message !== "object" || !("type" in message) || message.type !== "provider-persisted" || !("pid" in message) || message.pid !== child.pid) {
+            reject(new Error("崩溃模拟消息必须来自被终止的 Worker 进程"));
+          } else done();
+        });
       });
       providerSubmissions += 1;
       const exited = new Promise<void>((done) => child.once("exit", () => done()));
