@@ -175,7 +175,7 @@ describe("persistent workflow collaboration", () => {
     expect(updated.edges).toHaveLength(6);
     expect(h.generation.createFromAgent).not.toHaveBeenCalled();
     const messages = await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 });
-    expect(messages.items.at(-1)?.proposal?.status).toBe("accepted");
+    expect(messages.items.find((item) => item.id === result.assistantMessage.id)?.proposal?.status).toBe("accepted");
   });
 
   it("corrects a project goal across conversations while preserving history and invalidating older proposals", async () => {
@@ -363,7 +363,7 @@ describe("persistent workflow collaboration", () => {
     const expired = new Date(Date.now() - 16 * 60_000);
     await prisma.agentConversation.update({ where: { id: h.conversation.id }, data: { activeTurnStartedAt: expired } });
     await prisma.agentMessage.updateMany({ where: { conversationId: h.conversation.id, status: "PENDING" }, data: { updatedAt: expired } });
-    expect((await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 })).items.at(-1)?.status).toBe("failed");
+    expect((await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 })).items.find((item) => item.role === "assistant")?.status).toBe("failed");
     finish({ ...reply, objectiveUpdate: { text: "银色外套", sourceQuote: "项目目标改成银色外套" } });
     expect((await running).assistantMessage.status).toBe("failed");
     expect((await contexts.get(h.user.id, h.project.id)).state.currentObjective).toBe("设计藏蓝色立领风衣");
