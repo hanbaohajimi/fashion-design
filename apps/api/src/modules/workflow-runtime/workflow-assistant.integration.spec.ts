@@ -286,7 +286,8 @@ describe("persistent workflow collaboration", () => {
     await vi.waitFor(() => expect(resolvers).toHaveLength(2));
     resolvers[0]?.(reply);
     await older;
-    expect((await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 })).items.at(-1)?.status).toBe("pending");
+    // Both rows can share the transaction timestamp; UUID ordering does not identify the reply.
+    expect((await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 })).items.find((item) => item.role === "assistant")?.status).toBe("pending");
     expect(await prisma.agentTurn.findFirstOrThrow({ where: { conversationId: h.conversation.id } })).toMatchObject({ status: "running", budget: { modelCalls: 2 } });
     resolvers[1]?.(reply);
     expect((await retried).assistantMessage.status).toBe("completed");

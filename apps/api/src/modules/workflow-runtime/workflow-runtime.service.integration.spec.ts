@@ -560,7 +560,7 @@ describe("WorkflowRuntimeService integration", () => {
         }
       }),
     };
-    const createFromAgent = vi.fn(async (
+    const createTask = async (
       _userId: string,
       request: { projectId: string; taskType: string; parentAssetId?: string; prompt: string; shapeIds?: readonly string[] },
       executionKey: string,
@@ -597,6 +597,15 @@ describe("WorkflowRuntimeService integration", () => {
         },
       });
       return { taskId: task.id };
+    };
+    // Match GenerationService's idempotency when execution and recovery submit the same key concurrently.
+    const tasksByExecutionKey = new Map<string, ReturnType<typeof createTask>>();
+    const createFromAgent = vi.fn((...args: Parameters<typeof createTask>) => {
+      const existing = tasksByExecutionKey.get(args[2]);
+      if (existing) return existing;
+      const pending = createTask(...args);
+      tasksByExecutionKey.set(args[2], pending);
+      return pending;
     });
     const generation = {
       createFromAgent,
@@ -880,10 +889,12 @@ describe("WorkflowRuntimeService integration", () => {
         runtime.execute(user.id, project.id, concurrentToolId, { mutationId: crypto.randomUUID() }),
         runtime.execute(user.id, project.id, concurrentToolId, { mutationId: crypto.randomUUID() }),
       ]);
-      expect(concurrent.filter((item) => item.status === "fulfilled")).toHaveLength(1);
-      expect(concurrent.filter((item) => item.status === "rejected")).toHaveLength(1);
+      expect(concurrent.some((item) => item.status === "fulfilled")).toBe(true);
+      for (const item of concurrent) if (item.status === "rejected") expect(item.reason).toMatchObject({ status: 409 });
+      expect(await prisma.workflowExecution.count({ where: { projectId: project.id, toolNodeId: concurrentToolId } })).toBe(1);
       expect((await runtime.history(user.id, project.id, concurrentToolId)).items).toHaveLength(2);
-      expect(createFromAgent).toHaveBeenCalledTimes(5);
+      expect(new Set(createFromAgent.mock.calls.map((call) => call[2])).size).toBe(5);
+      expect(await prisma.generationTask.count({ where: { projectId: project.id } })).toBe(5);
 
       graph = await workflows.get(user.id, project.id);
       const retryToolId = crypto.randomUUID();
