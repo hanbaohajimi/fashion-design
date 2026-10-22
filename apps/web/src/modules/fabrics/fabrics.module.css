@@ -410,7 +410,7 @@
   z-index: 2;
   top: 10px;
   right: 10px;
-  min-height: 32px;
+  min-height: var(--control-height);
   border: 1px solid var(--color-paper);
   border-radius: 8px;
   padding: 0 11px;
@@ -418,7 +418,7 @@
   box-shadow: 0 6px 20px var(--color-border);
   color: var(--text-primary, var(--color-ink));
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 700;
   opacity: 0;
   transform: translateY(-3px);
