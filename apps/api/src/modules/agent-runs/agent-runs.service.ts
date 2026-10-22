@@ -24,6 +24,7 @@ import { randomUUID } from "node:crypto";
 
 import { AMUX_CLAUDE_CLIENT, type AmuxClaudeJsonClient } from "../ai/ai.tokens";
 import { S3FileStorage } from "../files/storage.service";
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { ContextCompilerService } from "../generation/compiler/context-compiler.service";
 import type { CompiledGenInput } from "../generation/compiler/compiler.types";
 import { GenerationService } from "../generation/generation.service";
@@ -61,6 +62,8 @@ type RunsDatabase = Pick<
   | "designAsset"
   | "designAssetDecision"
   | "generationTask"
+  | "project"
+  | "workspaceMember"
 >;
 const runInclude = {
   steps: {
@@ -99,6 +102,7 @@ export class AgentRunsService {
     @Optional()
     @Inject(S3FileStorage)
     private readonly storage?: S3FileStorage,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async findReservation(
@@ -267,7 +271,8 @@ export class AgentRunsService {
     userId: string,
     conversationId: string,
   ): Promise<{ items: AgentRunView[] }> {
-    await this.ownedConversation(userId, conversationId);
+    const conversation = await this.ownedConversation(userId, conversationId, "read");
+    const { capabilities } = await this.access.require(userId, conversation.projectId, "read");
     const runs = await this.database.agentRun.findMany({
       where: { userId, conversationId },
       include: runInclude,
@@ -276,14 +281,14 @@ export class AgentRunsService {
     });
     const items: AgentRunView[] = [];
     for (const run of runs)
-      items.push(await this.toView(await this.reconcile(run)));
+      items.push(await this.toView(capabilities.edit ? await this.reconcile(run) : run));
     return { items };
   }
 
   async get(userId: string, runId: string): Promise<AgentRunView> {
-    return this.toView(
-      await this.reconcile(await this.ownedRun(userId, runId)),
-    );
+    const run = await this.ownedRun(userId, runId, "read");
+    const { capabilities } = await this.access.require(userId, run.projectId, "read");
+    return this.toView(capabilities.edit ? await this.reconcile(run) : run);
   }
 
   async createDomainAction(
@@ -1563,13 +1568,15 @@ export class AgentRunsService {
     return this.ownedRun(run.userId, run.id);
   }
 
-  private taskFor(run: RunRecord, attempt: AttemptRecord) {
+  private async taskFor(run: RunRecord, attempt: AttemptRecord) {
+    const { ownerId } = await this.access.require(run.userId, run.projectId, "read");
+    const executionKey = run.userId === ownerId ? attempt.executionKey : `${run.userId}:${attempt.executionKey}`;
     return this.database.generationTask.findFirst({
       where: {
         id:
           attempt.generationTaskId ??
-          agentAttemptTaskId(run.userId, attempt.executionKey),
-        userId: run.userId,
+          agentAttemptTaskId(ownerId, executionKey),
+        userId: ownerId,
         projectId: run.projectId,
       },
     });
@@ -1630,7 +1637,7 @@ export class AgentRunsService {
       });
   }
 
-  private async ownedConversation(userId: string, conversationId: string) {
+  private async ownedConversation(userId: string, conversationId: string, action: ProjectAction = "edit") {
     const conversation = await this.database.agentConversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -1644,10 +1651,8 @@ export class AgentRunsService {
         code: "AGENT_CONVERSATION_NOT_FOUND",
         message: "会话不存在",
       });
-    if (
-      conversation.createdById !== userId ||
-      conversation.project.workspace.ownerId !== userId
-    )
+    await this.access.require(userId, conversation.projectId, action);
+    if (conversation.createdById !== userId)
       throw new ForbiddenException({
         code: "AGENT_CONVERSATION_FORBIDDEN",
         message: "无权访问该会话",
@@ -1655,7 +1660,7 @@ export class AgentRunsService {
     return conversation;
   }
 
-  private async ownedRun(userId: string, runId: string): Promise<RunRecord> {
+  private async ownedRun(userId: string, runId: string, action: ProjectAction = "edit"): Promise<RunRecord> {
     const run = await this.database.agentRun.findUnique({
       where: { id: runId },
       include: runInclude,
@@ -1670,7 +1675,7 @@ export class AgentRunsService {
         code: "AGENT_RUN_FORBIDDEN",
         message: "无权访问该计划",
       });
-    await this.ownedConversation(userId, run.conversationId);
+    await this.ownedConversation(userId, run.conversationId, action);
     return run;
   }
 
@@ -1679,12 +1684,13 @@ export class AgentRunsService {
     projectId: string,
     assetId: string,
   ) {
+    await this.access.require(userId, projectId, "read");
     const asset = await this.database.designAsset.findFirst({
       where: {
         id: assetId,
         projectId,
         archivedAt: null,
-        project: { deletedAt: null, workspace: { ownerId: userId } },
+        project: { deletedAt: null },
       },
     });
     if (!asset)

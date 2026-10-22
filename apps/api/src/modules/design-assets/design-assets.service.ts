@@ -11,11 +11,9 @@ import {
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
-  Optional,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -28,6 +26,7 @@ import {
 } from "@fashion/shared";
 import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { S3FileStorage } from "../files/storage.service";
+import { requireProjectFile } from "../files/project-file-access";
 import {
   designDecisionSchema,
   designStepSnapshotSchema,
@@ -38,7 +37,7 @@ export const DESIGN_ASSETS_DB = Symbol("DESIGN_ASSETS_DB");
 
 type DesignAssetDatabase = Pick<
   PrismaClient,
-  "designAsset" | "designAssetDecision" | "fileAsset" | "project"
+  "designAsset" | "designAssetDecision" | "fileAsset" | "project" | "workspaceMember"
 > & Partial<Pick<PrismaClient, "workflowNode" | "workflowEdge" | "workflowAttempt" | "workflowNodeVersion" | "workflowExecution">>;
 
 interface OwnedDesignAsset extends DesignAsset {
@@ -79,7 +78,7 @@ export class DesignAssetsService {
     private readonly database: DesignAssetDatabase,
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
-    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async importFile(
@@ -87,42 +86,8 @@ export class DesignAssetsService {
     projectId: string,
     fileId: string,
   ): Promise<DesignAssetView> {
-    const [project, file] = await Promise.all([
-      this.database.project.findUnique({
-        where: { id: projectId },
-        select: {
-          deletedAt: true,
-          workspace: { select: { ownerId: true } },
-        },
-      }),
-      this.database.fileAsset.findUnique({ where: { id: fileId } }),
-    ]);
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
-    }
-    if (this.access) {
-      await this.access.require(userId, projectId, "edit");
-    } else if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权向该项目导入图片",
-      });
-    }
-    if (!file) {
-      throw new NotFoundException({
-        code: "FILE_NOT_FOUND",
-        message: "上传图片不存在",
-      });
-    }
-    if (file.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "FILE_FORBIDDEN",
-        message: "无权使用该上传图片",
-      });
-    }
+    await this.access.require(userId, projectId, "edit");
+    const file = await requireProjectFile(this.database, this.access, userId, fileId, projectId);
     if (file.status !== FileStatus.READY) {
       throw new BadRequestException({
         code: "FILE_NOT_READY",
@@ -214,7 +179,7 @@ export class DesignAssetsService {
     }
 
     const records = await this.database.designAsset.findMany({
-      where: { rootAssetId: asset.rootAssetId },
+      where: { rootAssetId: asset.rootAssetId, projectId: asset.projectId },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -698,14 +663,7 @@ export class DesignAssetsService {
         message: "设计资产不存在",
       });
     }
-    if (this.access) {
-      await this.access.require(userId, asset.projectId, action);
-    } else if (asset.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "DESIGN_ASSET_FORBIDDEN",
-        message: "无权访问该设计资产",
-      });
-    }
+    await this.access.require(userId, asset.projectId, action);
     return asset;
   }
 

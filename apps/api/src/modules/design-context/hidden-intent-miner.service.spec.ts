@@ -16,7 +16,7 @@ function fixture() {
     patch: vi.fn(async () => ({})), patchInTransaction: vi.fn(async () => ({})),
   };
   const database = {
-    project: { findFirst: vi.fn(async () => ({ id: "project" })) },
+    project: { findUnique: vi.fn().mockResolvedValue({ id: "project", archived: false, deletedAt: null, workspace: { ownerId: "user" } }), findFirst: vi.fn(async () => ({ id: "project" })) },
     workflowGraph: { findUnique: vi.fn(async () => ({ revision: 3 })), updateMany: vi.fn(async () => ({ count: 1 })) },
     workflowNodeVersion: { findMany: vi.fn(async () => versions) },
     workflowExecution: { findFirst: vi.fn(async () => ({ status: "succeeded", toolNodeId: "tool-a", nodeVersionId: "v3" as string | null })) },

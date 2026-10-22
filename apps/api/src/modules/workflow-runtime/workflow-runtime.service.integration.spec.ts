@@ -387,24 +387,33 @@ describe("WorkflowRuntimeService integration", () => {
     if (!project) throw new Error("test project missing");
     const foreign = invalid === "foreign" ? await prisma.user.create({ data: { email: `workflow-other-${crypto.randomUUID()}@example.com` } }) : null;
     const file = await prisma.fileAsset.create({ data: {
-      ownerId: user.id, originalName: "garment.png", mimeType: "image/png", sizeBytes: 12,
+      ownerId: foreign?.id ?? user.id, originalName: "garment.png", mimeType: "image/png", sizeBytes: 12,
       sha256: crypto.randomUUID(), objectKey: `workflow-invalid-upload/${crypto.randomUUID()}.png`, status: "READY",
     } });
     const imageId = crypto.randomUUID(), toolId = crypto.randomUUID();
     const createFromAgent = vi.fn();
     const runtime = new WorkflowRuntimeService(prisma, workflows, { createFromAgent } as never, {} as never, {} as never, new DesignAssetsService(prisma, {} as never));
     try {
-      await workflows.patch(user.id, project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0, operations: [
+      const patch: Parameters<WorkflowsService["patch"]>[2] = { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: 0, operations: [
         { type: "add_node", node: { id: imageId, kind: "asset", type: "reference_image", title: "上传服装", payload: { fileAssetId: file.id }, x: 0, y: 0 } },
         { type: "add_node", node: { id: toolId, kind: "tool", type: "edit_design", title: "修改上传图片", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "收窄袖口" } }, x: 400, y: 0 } },
         { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: imageId, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
-      ] });
+      ] };
+      if (foreign) {
+        // A foreign file must be rejected before its reference is persisted as sharing authority.
+        await expect(workflows.patch(user.id, project.id, patch)).rejects.toMatchObject({ status: 400 });
+        expect(createFromAgent).not.toHaveBeenCalled();
+        expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);
+        expect(await prisma.designAsset.count({ where: { projectId: project.id } })).toBe(0);
+        return;
+      }
+      await workflows.patch(user.id, project.id, patch);
       if (invalid === "missing") await prisma.fileAsset.delete({ where: { id: file.id } });
       else await prisma.fileAsset.update({ where: { id: file.id }, data: {
-        ownerId: foreign?.id ?? user.id, status: invalid === "processing" ? "PROCESSING" : "READY",
+        ownerId: user.id, status: invalid === "processing" ? "PROCESSING" : "READY",
         mimeType: invalid === "not-image" ? "text/plain" : "image/png",
       } });
-      const expectedStatus = invalid === "missing" ? 404 : invalid === "foreign" ? 403 : 400;
+      const expectedStatus = invalid === "missing" ? 404 : 400;
       await expect(runtime.execute(user.id, project.id, toolId, { mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: expectedStatus });
       expect(createFromAgent).not.toHaveBeenCalled();
       expect(await prisma.workflowAttempt.count({ where: { projectId: project.id } })).toBe(0);

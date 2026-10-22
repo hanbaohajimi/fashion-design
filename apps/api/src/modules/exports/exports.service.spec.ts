@@ -34,6 +34,8 @@ function exportRecord(overrides: Record<string, unknown> = {}) {
 
 describe("ExportsService", () => {
   const database = {
+    project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
     workflowOutbox: { upsert: vi.fn() },
     collection: { findUnique: vi.fn() },

@@ -1,5 +1,6 @@
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
+import { ProjectAccessModule } from "../studio/project-access.module";
 
 import { BoardElementsController } from "./board-elements.controller";
 import {
@@ -10,6 +11,7 @@ import {
 import { BullVlmInferenceJobs } from "./vlm-inference-queue.service";
 
 @Module({
+  imports: [ProjectAccessModule],
   controllers: [BoardElementsController],
   providers: [
     BoardElementsService,

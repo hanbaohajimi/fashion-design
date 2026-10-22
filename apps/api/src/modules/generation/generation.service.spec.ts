@@ -39,6 +39,8 @@ function taskRecord(overrides: Record<string, unknown> = {}) {
 
 describe("GenerationService", () => {
   const database = {
+    project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-1" } }) },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
     workflowAttempt: { findMany: vi.fn() },
@@ -95,6 +97,8 @@ describe("GenerationService", () => {
         _userId: string,
         operation: (
           transaction: {
+            project: typeof database.project;
+            workspaceMember: typeof database.workspaceMember;
             generationTask: typeof database.generationTask;
             $queryRaw: typeof database.$queryRaw;
           },
@@ -108,6 +112,8 @@ describe("GenerationService", () => {
       ) =>
         operation(
           {
+            project: database.project,
+            workspaceMember: database.workspaceMember,
             generationTask: database.generationTask,
             $queryRaw: database.$queryRaw,
           },
@@ -168,6 +174,8 @@ describe("GenerationService", () => {
       "editor-a",
       "editor-b",
     ]);
+    expect(compiler.compile).toHaveBeenCalledWith("editor-a", "project-1", request.prompt, undefined, { modelCalls: "skip" });
+    expect(compiler.compile).toHaveBeenCalledWith("editor-b", "project-1", request.prompt, undefined, { modelCalls: "skip" });
     expect(billing.canGenerate).toHaveBeenCalledWith("owner");
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledWith(
       "owner",
@@ -199,6 +207,16 @@ describe("GenerationService", () => {
     expect(database.generationTask.findUnique).not.toHaveBeenCalled();
     expect(billing.canGenerate).not.toHaveBeenCalled();
     expect(compiler.compile).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("拒绝编译期间已撤销编辑权限的生成请求，不落库或入队", async () => {
+    const access = { require: vi.fn()
+      .mockResolvedValueOnce({ ownerId: "owner" })
+      .mockRejectedValue(new ForbiddenException("revoked during compilation")) };
+    const team = new GenerationService(database as never, jobs, billing as never, compiler as never, storage as never, access as unknown as ProjectAccessPolicy);
+    await expect(team.createFromAgent("editor", { ...request, projectId: "project-1" }, "new-key", "请生成")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(database.generationTask.create).not.toHaveBeenCalled();
     expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 

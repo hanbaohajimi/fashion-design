@@ -9,13 +9,11 @@ import {
 } from "@fashion/db";
 import { EXPORT_RETENTION_MS, STANDARD_EXPORT_MAX_EDGE } from "@fashion/shared";
 import {
-  ForbiddenException,
   ConflictException,
   GoneException,
   Inject,
   Injectable,
   NotFoundException,
-  Optional,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
 
@@ -41,9 +39,8 @@ export class ExportsService {
     @Inject(EXPORTS_DB) private readonly database: PrismaClient,
     @Inject(EXPORT_JOBS) private readonly jobs: ExportJobs,
     @Inject(EXPORT_STORAGE) private readonly storage: FileStorage,
-    @Optional()
     @Inject(ProjectAccessPolicy)
-    private readonly access?: ProjectAccessPolicy,
+    private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async capabilities(userId: string) {
@@ -72,15 +69,9 @@ export class ExportsService {
       limit: number;
     },
   ) {
+    await this.access.require(userId, input.projectId, "read");
     const where: Prisma.ExportJobWhereInput = {
-      userId,
       projectId: input.projectId,
-      project: {
-        deletedAt: null,
-        workspace: {
-          OR: [{ ownerId: userId }, { members: { some: { userId } } }],
-        },
-      },
       ...(input.sourceType === "asset"
         ? { designAssetId: input.sourceId }
         : input.sourceType === "collection"
@@ -122,8 +113,7 @@ export class ExportsService {
     };
     const previous = await replay();
     if (previous) {
-      if (this.access)
-        await this.access.require(userId, previous.projectId, "read");
+      await this.access.require(userId, previous.projectId, "read");
       return this.toView(previous);
     }
     const user = await this.database.user.findUnique({
@@ -156,6 +146,7 @@ export class ExportsService {
     let exportJob;
     try {
       exportJob = await this.database.$transaction(async (tx) => {
+        await this.access.require(userId, source.projectId, "read", tx);
         const created = await tx.exportJob.create({
           data: {
             ...(input.sourceType === "asset"
@@ -188,7 +179,10 @@ export class ExportsService {
         error.code === "P2002"
       ) {
         const concurrent = await replay();
-        if (concurrent) return this.toView(concurrent);
+        if (concurrent) {
+          await this.access.require(userId, concurrent.projectId, "read");
+          return this.toView(concurrent);
+        }
       }
       throw error;
     }
@@ -206,14 +200,7 @@ export class ExportsService {
         message: "导出任务不存在",
       });
     }
-    if (this.access)
-      await this.access.require(userId, exportJob.projectId, "read");
-    if (!this.access && exportJob.userId !== userId) {
-      throw new ForbiddenException({
-        code: "EXPORT_FORBIDDEN",
-        message: "无权访问该导出任务",
-      });
-    }
+    await this.access.require(userId, exportJob.projectId, "read");
 
     if (
       exportJob.status === ExportStatus.SUCCEEDED &&
@@ -298,14 +285,7 @@ export class ExportsService {
     });
     if (!record || record.type !== type || record.project.deletedAt)
       throw new NotFoundException("技术包修订不存在");
-    if (record.project.workspace.ownerId !== userId) {
-      const member = await this.database.workspaceMember.findUnique({
-        where: {
-          workspaceId_userId: { workspaceId: record.project.wsId, userId },
-        },
-      });
-      if (!member) throw new ForbiddenException("无权导出技术包");
-    }
+    await this.access.require(userId, record.projectId, "read");
     return { projectId: record.projectId };
   }
 
@@ -328,13 +308,7 @@ export class ExportsService {
         message: "待导出的原始 Look 不存在",
       });
     }
-    if (this.access) await this.access.require(userId, asset.projectId, "read");
-    if (!this.access && asset.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "EXPORT_ASSET_FORBIDDEN",
-        message: "无权导出该 Look",
-      });
-    }
+    await this.access.require(userId, asset.projectId, "read");
     return asset;
   }
 
@@ -357,14 +331,7 @@ export class ExportsService {
         message: "待导出的系列不存在",
       });
     }
-    if (this.access)
-      await this.access.require(userId, collection.projectId, "read");
-    if (!this.access && collection.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "EXPORT_COLLECTION_FORBIDDEN",
-        message: "无权导出该系列",
-      });
-    }
+    await this.access.require(userId, collection.projectId, "read");
     return collection;
   }
 

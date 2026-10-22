@@ -1,23 +1,20 @@
 import type { PrismaClient } from "@fashion/db";
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { randomUUID } from "node:crypto";
 
 import { S3FileStorage } from "../files/storage.service";
 
 export const GENERATION_MASK_DB = Symbol("GENERATION_MASK_DB");
-type MaskDatabase = Pick<PrismaClient, "project">;
+type MaskDatabase = Pick<PrismaClient, "project" | "workspaceMember">;
 const MASK_DOWNLOAD_TTL_SECONDS = 30 * 60;
 
 @Injectable()
 export class GenerationMaskService {
   constructor(
-    @Inject(GENERATION_MASK_DB) private readonly database: MaskDatabase,
+    @Inject(GENERATION_MASK_DB) database: MaskDatabase,
     @Inject(S3FileStorage) private readonly storage: S3FileStorage,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async sign(
@@ -30,7 +27,7 @@ export class GenerationMaskService {
       readonly size: number;
     },
   ) {
-    await this.assertProjectOwnership(userId, input.projectId);
+    await this.access.require(userId, input.projectId, "edit");
     const maskId = randomUUID();
     const objectKey = `temporary/masks/${userId}/${maskId}.png`;
     return {
@@ -58,28 +55,4 @@ export class GenerationMaskService {
     };
   }
 
-  private async assertProjectOwnership(
-    userId: string,
-    projectId: string,
-  ): Promise<void> {
-    const project = await this.database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        deletedAt: true,
-        workspace: { select: { ownerId: true } },
-      },
-    });
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
-    }
-    if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权为该项目上传临时掩码",
-      });
-    }
-  }
 }

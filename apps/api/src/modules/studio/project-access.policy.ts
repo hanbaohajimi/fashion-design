@@ -22,6 +22,7 @@ export type StudioDatabase = Pick<
   | "user"
 >;
 export type ProjectAction = "read" | "edit" | "review" | "manage";
+export type ProjectAccessDatabase = Pick<PrismaClient, "project" | "workspaceMember">;
 export function studioCapabilities(role: StudioRole) {
   return {
     edit: role === "OWNER" || role === "EDITOR",
@@ -31,12 +32,18 @@ export function studioCapabilities(role: StudioRole) {
 }
 @Injectable()
 export class ProjectAccessPolicy {
-  constructor(@Inject(STUDIO_DB) private readonly database: StudioDatabase) {}
+  constructor(@Inject(STUDIO_DB) private readonly database: ProjectAccessDatabase) {}
+  readableWhere(userId: string): Prisma.ProjectWhereInput {
+    return {
+      deletedAt: null,
+      workspace: { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+    };
+  }
   async require(
     userId: string,
     projectId: string,
     action: ProjectAction = "read",
-    transaction?: Prisma.TransactionClient,
+    transaction?: ProjectAccessDatabase,
   ) {
     const database = transaction ?? this.database;
     const project = await database.project.findUnique({
@@ -45,6 +52,7 @@ export class ProjectAccessPolicy {
         id: true,
         wsId: true,
         deletedAt: true,
+        archived: true,
         workspace: { select: { ownerId: true } },
       },
     });
@@ -81,6 +89,7 @@ export class ProjectAccessPolicy {
       ownerId: project.workspace.ownerId,
       role,
       capabilities,
+      archived: project.archived,
     };
   }
 }

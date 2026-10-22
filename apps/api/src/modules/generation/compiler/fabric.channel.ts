@@ -1,6 +1,8 @@
 import { FabricScope, FileStatus, type PrismaClient } from "@fashion/db";
 
 import { S3FileStorage } from "../../files/storage.service";
+import { requireProjectFile } from "../../files/project-file-access";
+import type { ProjectAccessPolicy } from "../../studio/project-access.policy";
 import type {
   CompileResult,
   CompilerBoardElement,
@@ -12,7 +14,7 @@ import type {
 const DEFAULT_FABRIC_WEIGHT = 0.7;
 const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
 
-type FabricChannelDatabase = Pick<PrismaClient, "fabric">;
+type FabricChannelDatabase = Pick<PrismaClient, "fabric" | "fileAsset" | "project">;
 
 interface FabricElement {
   readonly element: CompilerBoardElement;
@@ -25,6 +27,8 @@ export class FabricChannel implements CompilerChannel {
     private readonly database: FabricChannelDatabase,
     private readonly userId: string,
     private readonly storage: Pick<S3FileStorage, "createDownloadUrl">,
+    private readonly access?: ProjectAccessPolicy,
+    private readonly projectId?: string,
   ) {}
 
   async compile(
@@ -44,15 +48,18 @@ export class FabricChannel implements CompilerChannel {
     const fabricIds = [...new Set(fabricElements.map((item) => item.fabricId))];
     const fabrics = await this.database.fabric.findMany({
       where: {
-        OR: [
+        ...(!(this.projectId && this.access) ? { OR: [
           { scope: FabricScope.PRESET },
           { ownerId: this.userId, scope: FabricScope.USER },
-        ],
+        ] } : {}),
         id: { in: fabricIds },
         status: { in: ["active", "archived"] },
       },
       select: {
         id: true,
+        ownerId: true,
+        scope: true,
+        mainFileId: true,
         mainFile: {
           select: {
             objectKey: true,
@@ -71,6 +78,8 @@ export class FabricChannel implements CompilerChannel {
     for (const item of fabricElements) {
       const fabric = fabricById.get(item.fabricId);
       if (!fabric) continue;
+      if (fabric.scope !== FabricScope.PRESET && fabric.ownerId !== this.userId && this.access && this.projectId)
+        await requireProjectFile(this.database, this.access, this.userId, fabric.mainFileId, this.projectId);
       const tags = cleanTags(fabric.tags);
       if (tags.length > 0) prompts.push(`fabric tags: ${tags.join(", ")}`);
       fabricInputs.push({

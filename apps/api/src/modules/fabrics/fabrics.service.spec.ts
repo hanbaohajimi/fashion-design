@@ -3,6 +3,7 @@ import { ForbiddenException } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FabricsService } from "./fabrics.service";
+import type { FilesService } from "../files/files.service";
 
 function fabricRecord(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,7 +24,7 @@ function fabricRecord(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function setup() {
+function setup(files?: Pick<FilesService, "assertReadable">) {
   const database = {
     fabric: {
       count: vi.fn(),
@@ -49,6 +50,7 @@ function setup() {
       database as never,
       storage as never,
       thumbnailJobs,
+      files as FilesService | undefined,
     ),
     storage,
   };
@@ -57,6 +59,29 @@ function setup() {
 describe("FabricsService", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.unstubAllEnvs());
+
+  it("签发共享面料图片前等待授权，撤销共享后拒绝且不再签名", async () => {
+    let grantAccess: () => void = () => { throw new Error("Missing authorization callback"); };
+    const files = { assertReadable: vi.fn().mockReturnValue(new Promise<void>((resolve) => { grantAccess = resolve; })) };
+    const h = setup(files);
+    h.database.fabric.findUnique.mockResolvedValue(fabricRecord());
+    h.storage.createDownloadUrl.mockResolvedValue("https://private.test/signed");
+    const pending = h.service.imageUrl("member", "fabric-1");
+    await vi.waitFor(() => expect(files.assertReadable).toHaveBeenCalledWith("member", "file-1"));
+    expect(h.storage.createDownloadUrl).not.toHaveBeenCalled();
+    grantAccess();
+    await expect(pending).resolves.toBe("https://private.test/signed");
+    files.assertReadable.mockRejectedValue(new ForbiddenException("成员已撤销"));
+    await expect(h.service.imageUrl("member", "fabric-1")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.storage.createDownloadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("陌生用户不能直接通过图片入口读取私人面料", async () => {
+    const h = setup();
+    h.database.fabric.findUnique.mockResolvedValue(fabricRecord());
+    await expect(h.service.imageUrl("outsider", "fabric-1")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.storage.createDownloadUrl).not.toHaveBeenCalled();
+  });
 
   it("all 列表只查询预置面料和当前用户面料", async () => {
     const { database, service } = setup();

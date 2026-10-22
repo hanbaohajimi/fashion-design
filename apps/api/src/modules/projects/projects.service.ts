@@ -1,11 +1,9 @@
 import { Prisma, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
 import {
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
-  Optional,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 
@@ -26,7 +24,7 @@ export const PROJECTS_DB = Symbol("PROJECTS_DB");
 
 type ProjectsDatabase = Pick<
   PrismaClient,
-  "$transaction" | "designAsset" | "project" | "workspace"
+  "$transaction" | "designAsset" | "project" | "workspace" | "workspaceMember"
 >;
 
 interface ProjectRecord {
@@ -66,15 +64,14 @@ function toProjectResponse(project: ProjectRecord) {
 export class ProjectsService {
   constructor(
     @Inject(PROJECTS_DB) private readonly database: ProjectsDatabase,
-    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async list(userId: string, input: ListProjectsInput) {
     const archived =
       input.archived === "all" ? undefined : input.archived === "archived";
     const where: Prisma.ProjectWhereInput = {
-      deletedAt: null,
-      workspace: { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      ...this.access.readableWhere(userId),
       ...(archived === undefined ? {} : { archived }),
       ...(input.search
         ? {
@@ -88,8 +85,7 @@ export class ProjectsService {
     const skip = (input.page - 1) * input.limit;
     const statsProjectWhere: Prisma.ProjectWhereInput = {
       archived: false,
-      deletedAt: null,
-      workspace: { OR: [{ ownerId: userId }, { members: { some: { userId } } }] },
+      ...this.access.readableWhere(userId),
     };
     const [projects, total, activeProjects, totalAssets, projectsWithAssets] =
       await Promise.all([
@@ -230,7 +226,7 @@ export class ProjectsService {
   }
 
   async duplicate(userId: string, projectId: string, idempotencyKey: string) {
-    await this.assertOwnership(userId, projectId);
+    const authorizedSource = await this.assertOwnership(userId, projectId);
     try {
       const duplicated = await this.database.$transaction(async (transaction) => {
     const source = await transaction.project.findUnique({
@@ -259,7 +255,7 @@ export class ProjectsService {
         message: "项目不存在",
       });
     }
-    if (source.workspace.ownerId !== userId) throw new ForbiddenException("无权复制该项目");
+    await this.access.require(userId, projectId, "edit", transaction);
     const existing = await transaction.project.findFirst({
       where: { idempotencyKey, wsId: source.wsId },
     });
@@ -471,7 +467,7 @@ export class ProjectsService {
         error.code === "P2002"
       ) {
         const concurrent = await this.database.project.findFirst({
-          where: { idempotencyKey, workspace: { ownerId: userId } },
+          where: { idempotencyKey, wsId: authorizedSource.wsId, deletedAt: null },
         });
         if (concurrent && !concurrent.deletedAt) {
           return toProjectResponse(concurrent);
@@ -522,13 +518,8 @@ export class ProjectsService {
       });
     }
 
-    if (this.access && !(allowDeleted && project.deletedAt && project.workspace.ownerId === userId)) {
+    if (!(allowDeleted && project.deletedAt && project.workspace.ownerId === userId)) {
       await this.access.require(userId, projectId, action);
-    } else if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权访问该项目",
-      });
     }
 
     if (project.deletedAt && !allowDeleted) {

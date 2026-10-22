@@ -23,6 +23,7 @@ function projectFixture(overrides: Record<string, unknown> = {}) {
 describe("ProjectsService ownership and soft deletion", () => {
   it("returns the real design asset count and falls back to the latest asset as cover", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       designAsset: { count: vi.fn().mockResolvedValue(3) },
       project: {
         count: vi.fn().mockResolvedValue(1),
@@ -70,6 +71,7 @@ describe("ProjectsService ownership and soft deletion", () => {
 
   it("returns an owned project detail for the board header", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       designAsset: { count: vi.fn().mockResolvedValue(0) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
@@ -89,6 +91,7 @@ describe("ProjectsService ownership and soft deletion", () => {
 
   it("returns 403 when user A tries to update user B's project", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           ...projectFixture({ id: "project-b", wsId: "workspace-b" }),
@@ -118,6 +121,7 @@ describe("ProjectsService ownership and soft deletion", () => {
     const storedProject = projectFixture();
     let deletedAt: Date | null = null;
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       designAsset: { count: vi.fn().mockResolvedValue(0) },
       project: {
         count: vi.fn().mockImplementation(() =>
@@ -169,6 +173,7 @@ describe("ProjectsService ownership and soft deletion", () => {
 
   it("does not allow a soft-deleted project to be updated", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           ...projectFixture({ deletedAt: now }),
@@ -189,6 +194,7 @@ describe("ProjectsService ownership and soft deletion", () => {
   it("returns the existing project when an idempotency key is retried", async () => {
     const existing = projectFixture();
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         create: vi.fn(),
         findFirst: vi.fn().mockResolvedValue(existing),
@@ -322,6 +328,7 @@ describe("ProjectsService ownership and soft deletion", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),

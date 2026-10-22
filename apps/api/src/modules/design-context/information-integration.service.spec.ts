@@ -10,7 +10,7 @@ function fixture() {
   const built = { graph, context } as unknown as Awaited<ReturnType<DesignContextService["build"]>>;
   const versions: NodeVersionFact[] = [{ id: "v1", projectId: "project", nodeId: "tool-a", version: 1, graphRevision: 1, kind: "tool", type: "generate", title: "方案", payload: { params: { prompt: "灰色" }, url: "https://private.example/secret" }, inputBindings: [], previousVersionId: null, origin: "baseline", baseline: true, createdAt: new Date(1) }, { id: "v2", projectId: "project", nodeId: "tool-a", version: 2, graphRevision: 2, kind: "tool", type: "generate", title: "方案", payload: { params: { prompt: "银色" } }, inputBindings: [], previousVersionId: "v1", origin: "user", baseline: false, createdAt: new Date(2) }];
   const database = {
-    project: { findFirst: vi.fn(async () => ({ id: "project" })) }, agentConversation: { findFirst: vi.fn(async () => ({ id: "conversation" })) },
+    project: { findUnique: vi.fn().mockResolvedValue({ id: "project", archived: false, deletedAt: null, workspace: { ownerId: "user" } }), findFirst: vi.fn(async () => ({ id: "project" })) }, agentConversation: { findFirst: vi.fn(async () => ({ id: "conversation" })) },
     workflowNodeVersion: { findMany: vi.fn<(query?: unknown) => Promise<NodeVersionFact[]>>().mockResolvedValue(versions), count: vi.fn(async () => 2) },
     workflowMutation: { findMany: vi.fn(async () => [{ id: "m1", mutationId: "mutation", origin: "user", baseRevision: 1, resultRevision: 2, beforeSnapshot: { nodes: [{ id: "tool-a" }], edges: [] }, afterSnapshot: { nodes: [{ id: "tool-a" }], edges: [] }, createdAt: new Date(2) }]), count: vi.fn(async () => 1) },
     workflowProposal: { findMany: vi.fn(async () => [{ id: "p1", status: "rejected", rejectionReason: null, actionFingerprint: "action-1", createdAt: new Date(1), updatedAt: new Date(2) }]) },
@@ -41,7 +41,7 @@ describe("InformationIntegrationService", () => {
     const { service, built, database } = fixture();
     database.agentConversation.findFirst.mockResolvedValueOnce(null as unknown as { id: string });
     await expect(service.integrate("user", "project", { built, conversationId: "foreign" })).rejects.toThrow("会话不存在");
-    database.project.findFirst.mockResolvedValueOnce(null as unknown as { id: string });
+    database.project.findUnique.mockResolvedValueOnce(null as unknown as { id: string });
     await expect(service.integrate("user", "project", { built })).rejects.toThrow("项目不存在");
     expect(database.workflowNodeVersion.findMany).not.toHaveBeenCalled();
   });

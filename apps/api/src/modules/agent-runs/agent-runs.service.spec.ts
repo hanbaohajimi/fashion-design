@@ -223,6 +223,8 @@ function harness(initialSpecs = specs) {
     return runs.find((run) => matches(run, query ?? where));
   }
   const database = {
+    project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     agentConversation: {
       findUnique: vi.fn().mockResolvedValue({
         id: "conversation-a",
@@ -889,6 +891,49 @@ describe("Agent plan schema", () => {
 });
 
 describe("AgentRunsService", () => {
+  it("共享项目编辑者可执行自己的计划，不能读取他人的私人计划", async () => {
+    const h = harness();
+    h.database.project.findUnique.mockResolvedValue({ deletedAt: null, workspace: { ownerId: "owner" } });
+    h.database.workspaceMember.findUnique.mockResolvedValue({ role: "EDITOR" });
+    await expect(h.service.execute("user-a", "run-a", 1)).resolves.toHaveProperty("status", "running");
+    expect(h.generation.createFromAgent).toHaveBeenCalledWith("user-a", expect.objectContaining({ projectId: "project-a" }), expect.any(String), expect.any(String), expect.any(Object));
+    await expect(h.service.get("other-editor", "run-a")).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("按拥有者计费的共享生成任务可在绑定丢失后恢复，不重复生成", async () => {
+    const h = harness();
+    h.database.project.findUnique.mockResolvedValue({ deletedAt: null, workspace: { ownerId: "owner" } });
+    h.database.workspaceMember.findUnique.mockResolvedValue({ role: "EDITOR" });
+    h.generation.createFromAgent.mockImplementation(async (actor, input, key) => h.submit("owner", input, `${actor}:${key}`));
+    const running = await h.service.execute("user-a", "run-a", 1);
+    const taskId = required(running.steps[0]?.generationTaskId);
+    required(h.steps[0]).generationTaskId = null;
+    required(h.attempts[0]).generationTaskId = null;
+    h.finish(taskId, "shared-result");
+    const recovered = await h.service.get("user-a", "run-a");
+    expect(recovered.status).toBe("waiting_review");
+    expect(recovered.steps[0]?.generationTaskId).toBe(taskId);
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["REVIEWER", "VIEWER"])("降级为 %s 后读取计划不恢复队列，写操作被拒绝", async (role) => {
+    const h = harness();
+    await h.service.execute("user-a", "run-a", 1);
+    h.database.project.findUnique.mockResolvedValue({ deletedAt: null, workspace: { ownerId: "owner" } });
+    h.database.workspaceMember.findUnique.mockResolvedValue({ role });
+    h.generation.resumeQueuedTask.mockClear();
+    h.generation.createFromAgent.mockClear();
+    h.database.agentRun.updateMany.mockClear();
+    await expect(h.service.get("user-a", "run-a")).resolves.toHaveProperty("id", "run-a");
+    await expect(h.service.list("user-a", "conversation-a")).resolves.toHaveProperty("items");
+    await expect(h.service.cancel("user-a", "run-a", 2)).rejects.toMatchObject({ status: 403 });
+    expect(h.generation.resumeQueuedTask).not.toHaveBeenCalled();
+    expect(h.generation.createFromAgent).not.toHaveBeenCalled();
+    expect(h.database.agentRun.updateMany).not.toHaveBeenCalled();
+    h.database.workspaceMember.findUnique.mockResolvedValue(null);
+    await expect(h.service.get("user-a", "run-a")).rejects.toMatchObject({ status: 403 });
+  });
+
   it("adds, removes and reorders only unexecuted nodes while preserving IDs for retained keys", async () => {
     const base = required(specs[0]);
     const other = { ...base, key: "other", title: "平行参考方案" };

@@ -17,7 +17,7 @@ export type BillingDatabase = Pick<
 export type BillingQueryClient = Pick<PrismaClient, "$queryRaw">;
 export type LockedGenerationQuotaTransaction = Pick<
   Prisma.TransactionClient,
-  "$queryRaw" | "generationTask"
+  "$queryRaw" | "generationTask" | "project" | "workspaceMember"
 >;
 
 interface LockedGenerationQuota {

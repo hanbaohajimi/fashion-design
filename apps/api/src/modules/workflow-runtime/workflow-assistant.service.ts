@@ -134,8 +134,9 @@ export class WorkflowAssistantService {
   }
 
   async messages(userId: string, conversationId: string, input: { cursor?: string | undefined; limit: number }) {
-    await this.conversation(userId, conversationId);
-    await this.database.agentMessage.updateMany({ where: { conversationId, status: "PENDING", updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } },
+    const conversation = await this.conversation(userId, conversationId);
+    const { capabilities } = await this.access.require(userId, conversation.projectId, "read");
+    if (capabilities.edit) await this.database.agentMessage.updateMany({ where: { conversationId, status: "PENDING", updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } },
       data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试", content: "本轮处理超时，请重试。" } });
     const rows = await this.database.agentMessage.findMany({ where: { conversationId }, include: { proposal: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: input.limit + 1,

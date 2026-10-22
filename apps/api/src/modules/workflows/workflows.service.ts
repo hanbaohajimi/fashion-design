@@ -642,7 +642,7 @@ export class WorkflowsService {
             });
             valid = file?.ownerId === ownerId;
             if (file && !valid) {
-              try { await requireProjectFile(transaction, this.access, ownerId, id, projectId); valid = true; } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) valid = false; else throw error; }
+              try { await requireProjectFile(transaction, this.access, ownerId, id, projectId, transaction); valid = true; } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) valid = false; else throw error; }
             }
             break;
           }
@@ -666,7 +666,7 @@ export class WorkflowsService {
                 fabric.ownerId === ownerId),
             );
             if (fabric?.status === "active" && !valid) {
-              try { await requireProjectFile(transaction, this.access, ownerId, fabric.mainFileId, projectId); valid = true; } catch (error) { if (!(error instanceof ForbiddenException || error instanceof NotFoundException)) throw error; }
+              try { await requireProjectFile(transaction, this.access, ownerId, fabric.mainFileId, projectId, transaction); valid = true; } catch (error) { if (!(error instanceof ForbiddenException || error instanceof NotFoundException)) throw error; }
             }
             break;
           }

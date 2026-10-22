@@ -187,7 +187,7 @@ export class FabricsService {
 
   async imageUrl(userId: string, fabricId: string): Promise<string> {
     const record = await this.findRecord(fabricId, true);
-    this.assertReadable(userId, record);
+    await this.assertReadable(userId, record);
     return this.storage.createDownloadUrl(record.mainFile.objectKey, 60);
   }
 

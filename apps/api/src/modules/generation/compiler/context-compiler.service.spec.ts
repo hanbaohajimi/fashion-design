@@ -23,6 +23,7 @@ function element(
 
 describe("ContextCompilerService", () => {
   const database = {
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     designAsset: {
       findFirst: vi.fn(),
     },
@@ -322,6 +323,8 @@ describe("ContextCompilerService", () => {
     database.fabric.findMany.mockResolvedValue([
       {
         id: "fabric-1",
+        scope: "USER",
+        ownerId: "user-1",
         mainFile: {
           objectKey: "users/user-1/fabric.webp",
           status: FileStatus.READY,
@@ -498,7 +501,6 @@ describe("ContextCompilerService", () => {
         archivedAt: null,
         id: "asset-1",
         projectId: "project-1",
-        project: { workspace: { ownerId: "user-1" } },
       },
       select: { url: true },
     });

@@ -19,12 +19,13 @@ import {
 import { GenerationService } from "../generation/generation.service";
 import type { GenerationCreateRequest } from "../generation/generation.schemas";
 import { S3FileStorage } from "../files/storage.service";
+import { requireProjectFile } from "../files/project-file-access";
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 
 export const EXPERIMENTS_DB = Symbol("EXPERIMENTS_DB");
 type Database = Pick<
   PrismaClient,
-  "studioExperiment" | "designAsset" | "fabric" | "generationTask"
+  "studioExperiment" | "designAsset" | "fabric" | "generationTask" | "fileAsset" | "project"
 >;
 interface FrozenFabric {
   id: string;
@@ -130,12 +131,15 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
       where: {
         id: { in: input.fabricIds },
         status: "active",
-        OR: [{ scope: "PRESET" }, { scope: "USER", ownerId: userId }],
       },
       include: { mainFile: true },
     });
     if (fabrics.length !== input.fabricIds.length)
       throw new BadRequestException("部分面料不存在或无权使用");
+    for (const fabric of fabrics) {
+      if (fabric.scope !== "PRESET" && fabric.ownerId !== userId)
+        await requireProjectFile(this.db, this.access, userId, fabric.mainFileId, projectId);
+    }
     const items: Item[] = experimentCombinations(input).map(
       ({ color, fabricId, variation }, i) => {
         const record = fabrics.find((fabric) => fabric.id === fabricId);

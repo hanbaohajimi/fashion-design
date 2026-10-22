@@ -4,6 +4,7 @@ import { ConflictException, Inject, Injectable, Logger, Optional } from "@nestjs
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { AMUX_CLAUDE_CLIENT } from "../ai/ai.tokens";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { contextContainsQuote, contextObject, contextText, safeContextText } from "./design-context.projector";
 import { DESIGN_CONTEXT_DB, DesignContextService } from "./design-context.service";
 import { projectVersionInputs, semanticVersionChanges, versionParent, versionPredecessorIds, type NodeVersionFact } from "./information-integration.projector";
@@ -25,14 +26,15 @@ export class HiddenIntentMiner {
     @Inject(DESIGN_CONTEXT_DB) private readonly database: PrismaClient,
     @Inject(DesignContextService) private readonly contexts: DesignContextService,
     @Optional() @Inject(AMUX_CLAUDE_CLIENT) private readonly model?: AmuxClaudeJsonClient,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async processChanges(userId: string, projectId: string, trigger: IntentMiningTrigger = {}): Promise<IntentMiningResult> {
     const skipped = (reason: string): IntentMiningResult => ({ status: "skipped", createdPreferenceIds: [], evidenceVersionIds: [], reason });
     try {
       if (!this.model) return skipped("model_unavailable");
-      const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, archived: false, workspace: { ownerId: userId } }, select: { id: true } });
-      if (!project) return skipped("project_unavailable");
+      const permission = await this.access.require(userId, projectId, "edit");
+      if (permission.archived) return skipped("project_unavailable");
       const foreground = await this.database.agentTurn.findFirst({ where: { projectId, userId, trigger: "user", status: { in: ["running", "committing"] }, leaseExpiresAt: { gt: new Date() } }, select: { id: true } });
       if (foreground) return skipped("foreground_user_turn_has_priority");
       let anchorNodeId: string | null = null;

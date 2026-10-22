@@ -27,6 +27,7 @@ function element(overrides: Record<string, unknown> = {}) {
 describe("BoardElementsService", () => {
   it("returns 403 when user A accesses user B's project", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           deletedAt: null,
@@ -51,6 +52,7 @@ describe("BoardElementsService", () => {
       roleInferenceState: RoleInferenceState.FAILED,
     });
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: {
         findUnique: vi
           .fn()
@@ -95,6 +97,7 @@ describe("BoardElementsService", () => {
       ),
     );
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: { upsert },
       project: {
         findUnique: vi.fn().mockResolvedValue({
@@ -160,6 +163,7 @@ describe("BoardElementsService", () => {
     });
     const upsert = vi.fn().mockResolvedValue(bound);
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: { upsert },
       fileAsset: {
         findUnique: vi.fn().mockResolvedValue({ ownerId: "user-a" }),
@@ -218,6 +222,7 @@ describe("BoardElementsService", () => {
 
   it("rejects a sketch record that does not match the route shape", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: { upsert: vi.fn() },
       fileAsset: {
         findUnique: vi.fn().mockResolvedValue({ ownerId: "user-a" }),
@@ -261,6 +266,7 @@ describe("BoardElementsService", () => {
       roleSource: RoleSource.MANUAL,
     });
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: { findUnique: vi.fn().mockResolvedValue(manual) },
       fileAsset: {
         findUnique: vi.fn().mockResolvedValue({ ownerId: "user-a" }),
@@ -292,6 +298,7 @@ describe("BoardElementsService", () => {
     const updateMany = vi.fn();
     const upsert = vi.fn();
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: {
         findUnique: vi.fn().mockResolvedValue(inferred),
         updateMany,
@@ -330,6 +337,7 @@ describe("BoardElementsService", () => {
       roleSource: RoleSource.MANUAL,
     });
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: {
         findUnique: vi
           .fn()

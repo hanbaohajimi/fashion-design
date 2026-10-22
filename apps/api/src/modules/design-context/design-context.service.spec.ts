@@ -27,7 +27,7 @@ function fixture() {
   const messages: Array<{ id: string; role: string; kind: string | null; status: string; content: string; context: unknown; createdAt: Date }> = [{ id: "user-current", role: "USER", kind: null, status: "COMPLETED", content: "请保留藏蓝色，只修改袖口", context: { referencedNodeIds: ["candidate-a"] }, createdAt: new Date("2026-10-15T08:01:00Z") }];
   const attempts: Array<{ id: string; toolNodeId: string; ordinal: number; status: string; error: string | null; createdAt: Date; requestSnapshot: unknown }> = [{ id: "attempt-a", toolNodeId: "generator-a", ordinal: 1, status: "completed", error: null, createdAt: new Date("2026-10-15T08:00:00Z"), requestSnapshot: { graphRevision: 3, inputNodeIds: ["goal"], request: { prompt: "原冻结提示词", negativePrompt: "禁止红色", referenceImageUrl: "https://private.example/frozen?token=secret" }, inputSnapshot: [{ id: "goal", type: "brief", title: "旧目标", payload: { text: "原冻结输入", url: "https://private.example/source" } }] } }];
   const db = {
-    project: { findFirst: vi.fn(async () => ({ id: "project", archived: false })) },
+    project: { findUnique: vi.fn().mockResolvedValue({ id: "project", archived: false, deletedAt: null, workspace: { ownerId: "user" } }), findFirst: vi.fn(async () => ({ id: "project", archived: false })) },
     workflowGraph: { findUnique: vi.fn(async () => ({ revision: 7 })), updateMany: vi.fn(async () => ({ count: 1 })) },
     projectDesignContext: {
       findUnique: vi.fn(async () => current),

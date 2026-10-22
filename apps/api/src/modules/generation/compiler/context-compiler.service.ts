@@ -1,7 +1,6 @@
 import { FileStatus, type PrismaClient, type Prisma } from "@fashion/db";
 import type { DesignSourceSnapshot } from "@fashion/shared";
 import {
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -21,13 +20,14 @@ import { compilePaletteColor } from "./palette-channel";
 import { TrendChannel } from "./trend.channel";
 import { RETIRED_BOARD_SHAPE_TYPE } from "../../boards/boards.schemas";
 import { S3FileStorage } from "../../files/storage.service";
+import { ProjectAccessPolicy } from "../../studio/project-access.policy";
 
 export const COMPILER_DB = Symbol("COMPILER_DB");
 export const CONTEXT_MODEL = Symbol("CONTEXT_MODEL");
 
 type CompilerDatabase = Pick<
   PrismaClient,
-  "designAsset" | "fabric" | "project" | "trendItem"
+  "designAsset" | "fabric" | "project" | "trendItem" | "workspaceMember" | "fileAsset"
 >;
 type BoardElement = {
   fileAsset: {
@@ -157,6 +157,7 @@ export class ContextCompilerService {
     @Inject(CONTEXT_MODEL) private readonly model: ContextModelGateway,
     @Inject(S3FileStorage)
     private readonly storage: Pick<S3FileStorage, "createDownloadUrl">,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async compile(
@@ -188,7 +189,7 @@ export class ContextCompilerService {
         }),
     );
     const channels = [
-      new FabricChannel(this.database, userId, this.storage),
+      new FabricChannel(this.database, userId, this.storage, this.access, projectId),
       new TrendChannel(this.database, this.storage),
     ] as const satisfies readonly CompilerChannel[];
     const [structuredFabric, structuredTrend] = await Promise.all([
@@ -387,6 +388,7 @@ export class ContextCompilerService {
     projectId: string,
     shapeIds?: readonly string[],
   ): Promise<BoardElement[]> {
+    await this.access.require(userId, projectId, "read");
     const project = await this.database.project.findUnique({
       where: { id: projectId },
       select: {
@@ -422,12 +424,6 @@ export class ContextCompilerService {
       throw new NotFoundException({
         code: "PROJECT_NOT_FOUND",
         message: "项目不存在",
-      });
-    }
-    if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权使用该项目编译生成上下文",
       });
     }
     return project.boardElements;
@@ -483,11 +479,11 @@ export class ContextCompilerService {
 
   private async resolveElementImageUrl(
     element: BoardElement,
-    userId: string,
+    _userId: string,
     projectId: string | undefined,
   ): Promise<string | null> {
     if (
-      element.fileAsset?.ownerId === userId &&
+      element.fileAsset &&
       element.fileAsset.status === FileStatus.READY
     ) {
       return this.storage.createDownloadUrl(
@@ -505,7 +501,6 @@ export class ContextCompilerService {
           archivedAt: null,
           id: assetId,
           projectId,
-          project: { workspace: { ownerId: userId } },
         },
         select: { url: true },
       });
@@ -515,6 +510,7 @@ export class ContextCompilerService {
           ? this.storage.createDownloadUrl(objectKey, REFERENCE_URL_TTL_SECONDS)
           : safeRemoteUrl(asset.url);
       }
+      return null;
     }
 
     return safeRemoteUrl(props.url);

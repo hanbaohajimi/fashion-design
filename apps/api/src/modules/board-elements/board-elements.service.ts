@@ -6,7 +6,6 @@ import {
 } from "@fashion/db";
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -17,13 +16,15 @@ import type {
   SetElementRolesInput,
 } from "./board-elements.schemas";
 import type { VlmInferenceJobs } from "./vlm-inference-queue.service";
+import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
+import { requireProjectFile } from "../files/project-file-access";
 
 export const BOARD_ELEMENTS_DB = Symbol("BOARD_ELEMENTS_DB");
 export const VLM_INFERENCE_JOBS = Symbol("VLM_INFERENCE_JOBS");
 
 type BoardElementsDatabase = Pick<
   PrismaClient,
-  "boardElement" | "fileAsset" | "project"
+  "boardElement" | "fileAsset" | "project" | "workspaceMember"
 >;
 type ElementRecord = NonNullable<
   Awaited<ReturnType<BoardElementsDatabase["boardElement"]["findUnique"]>>
@@ -36,6 +37,7 @@ export class BoardElementsService {
     private readonly database: BoardElementsDatabase,
     @Inject(VLM_INFERENCE_JOBS)
     private readonly inferenceJobs: VlmInferenceJobs,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async registerInference(
@@ -45,7 +47,7 @@ export class BoardElementsService {
     fileId: string,
   ) {
     await this.assertProjectOwnership(userId, projectId);
-    await this.assertFileOwnership(userId, fileId);
+    await requireProjectFile(this.database, this.access, userId, fileId, projectId);
     const current = await this.database.boardElement.findUnique({
       where: { projectId_shapeId: { projectId, shapeId } },
     });
@@ -147,7 +149,7 @@ export class BoardElementsService {
   }
 
   async getRole(userId: string, projectId: string, shapeId: string) {
-    await this.assertProjectOwnership(userId, projectId);
+    await this.assertProjectOwnership(userId, projectId, "read");
     const element = await this.database.boardElement.findUnique({
       where: { projectId_shapeId: { projectId, shapeId } },
     });
@@ -167,7 +169,7 @@ export class BoardElementsService {
     input: BindSketchReferenceInput,
   ) {
     await this.assertProjectOwnership(userId, projectId);
-    await this.assertFileOwnership(userId, input.fileId);
+    await requireProjectFile(this.database, this.access, userId, input.fileId, projectId);
     const meta = input.record.meta;
     const sketchMeta =
       meta && !Array.isArray(meta) && typeof meta === "object"
@@ -269,48 +271,9 @@ export class BoardElementsService {
   private async assertProjectOwnership(
     userId: string,
     projectId: string,
+    action: ProjectAction = "edit",
   ): Promise<void> {
-    const project = await this.database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        deletedAt: true,
-        workspace: { select: { ownerId: true } },
-      },
-    });
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
-    }
-    if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权修改该项目的元素角色",
-      });
-    }
-  }
-
-  private async assertFileOwnership(
-    userId: string,
-    fileId: string,
-  ): Promise<void> {
-    const file = await this.database.fileAsset.findUnique({
-      where: { id: fileId },
-      select: { ownerId: true },
-    });
-    if (!file) {
-      throw new NotFoundException({
-        code: "FILE_NOT_FOUND",
-        message: "文件不存在",
-      });
-    }
-    if (file.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "FILE_FORBIDDEN",
-        message: "无权为该文件推断角色",
-      });
-    }
+    await this.access.require(userId, projectId, action);
   }
 
   private toRoleResponse(element: ElementRecord) {

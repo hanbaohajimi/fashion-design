@@ -5,6 +5,7 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -15,6 +16,8 @@ import {
 } from "@nestjs/common";
 
 import { S3FileStorage } from "../files/storage.service";
+import { requireProjectFile } from "../files/project-file-access";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import {
   isRetiredBoardShapeRecord,
   isRetiredBoardShapeType,
@@ -32,6 +35,10 @@ type BoardsDatabase = Pick<
   | "boardSnapshot"
   | "project"
   | "trendItem"
+  | "workspaceMember"
+  | "fileAsset"
+  | "designAsset"
+  | "fabric"
 >;
 
 type TrendCoverStorage = Pick<S3FileStorage, "createDownloadUrl">;
@@ -79,10 +86,11 @@ export class BoardsService {
     @Optional()
     @Inject(S3FileStorage)
     private readonly storage?: TrendCoverStorage,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async get(userId: string, projectId: string): Promise<BoardLoadResult> {
-    await this.assertOwnership(userId, projectId);
+    await this.access.require(userId, projectId, "read");
     const [snapshot, elements] = await Promise.all([
       this.database.boardSnapshot.findUnique({
         where: { projectId },
@@ -131,6 +139,8 @@ export class BoardsService {
     ) as Prisma.InputJsonValue;
 
     const result = await this.database.$transaction(async (transaction) => {
+      await this.access.require(userId, projectId, "edit", transaction);
+      await this.validateReferences(userId, projectId, [sanitizedSnapshot, ...input.patches.flatMap((patch) => patch.deleted ? [] : [patch.record])], transaction);
       const currentSnapshot = await transaction.boardSnapshot.findUnique({
         where: { projectId },
         select: { revision: true },
@@ -240,6 +250,7 @@ export class BoardsService {
           },
           create: {
             projectId,
+            fileAssetId: boardFileId(patch.record),
             record: patch.record as Prisma.InputJsonValue,
             role: patch.role,
             roleInferenceState: toInferenceState(patch.roleInferenceState),
@@ -255,6 +266,7 @@ export class BoardsService {
           },
           update: {
             deletedAt: null,
+            fileAssetId: boardFileId(patch.record),
             record: patch.record as Prisma.InputJsonValue,
             shapeType: patch.shapeType,
             ...(patch.roleSource === "manual"
@@ -288,6 +300,7 @@ export class BoardsService {
     await this.assertWritable(userId, projectId);
 
     return this.database.$transaction(async (transaction) => {
+      await this.access.require(userId, projectId, "edit", transaction);
       const trend = await transaction.trendItem.findUnique({
         where: { id: input.trendItemId },
         select: {
@@ -331,6 +344,7 @@ export class BoardsService {
       const inserted = await transaction.boardElement.createMany({
         data: elements.map((element) => ({
           projectId,
+          fileAssetId: boardFileId(element.record),
           record: element.record,
           role: element.role,
           roleInferenceState: RoleInferenceState.READY,
@@ -378,43 +392,11 @@ export class BoardsService {
     );
   }
 
-  private async assertOwnership(
-    userId: string,
-    projectId: string,
-  ): Promise<boolean> {
-    const project = await this.database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        archived: true,
-        deletedAt: true,
-        workspace: {
-          select: { ownerId: true },
-        },
-      },
-    });
-
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
-    }
-
-    if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权访问该项目画布",
-      });
-    }
-
-    return project.archived;
-  }
-
   private async assertWritable(
     userId: string,
     projectId: string,
   ): Promise<void> {
-    const archived = await this.assertOwnership(userId, projectId);
+    const { archived } = await this.access.require(userId, projectId, "edit");
 
     if (archived) {
       throw new NotFoundException({
@@ -423,6 +405,52 @@ export class BoardsService {
       });
     }
   }
+
+  private async validateReferences(userId: string, projectId: string, values: unknown[], transaction: Prisma.TransactionClient) {
+    const references = new Map<string, { kind: string; id: string }>();
+    const pending = [...values];
+    while (pending.length) {
+      const value = pending.pop();
+      if (!value || typeof value !== "object") continue;
+      const record = value as Record<string, unknown>;
+      const props = record.props;
+      if (props && typeof props === "object" && !Array.isArray(props)) {
+        for (const kind of ["fileId", "assetId", "fabricId"]) {
+          const id = (props as Record<string, unknown>)[kind];
+          if (typeof id === "string" && id) references.set(`${kind}:${id}`, { kind, id });
+        }
+      }
+      pending.push(...Object.values(record));
+    }
+    // Validate against persisted references before writing any new sharing relationship.
+    for (const { kind, id } of references.values()) {
+      if (kind === "assetId") {
+        const asset = await transaction.designAsset.findFirst({ where: { id, projectId, archivedAt: null }, select: { id: true } });
+        if (!asset) throw new BadRequestException({ code: "ASSET_PROJECT_MISMATCH", message: "设计资产不属于当前项目" });
+      } else if (kind === "fabricId") {
+        const fabric = await transaction.fabric.findUnique({ where: { id } });
+        if (!fabric) throw new NotFoundException("面料不存在");
+        if (fabric.scope !== "PRESET" && fabric.ownerId !== userId)
+          await requireProjectFile(transaction, this.access, userId, fabric.mainFileId, projectId, transaction);
+      } else {
+        try {
+          await requireProjectFile(transaction, this.access, userId, id, projectId, transaction);
+        } catch (error) {
+          if (!(error instanceof ForbiddenException)) throw error;
+          const trend = await transaction.trendItem.findFirst({ where: { coverFileId: id, status: "published" }, select: { id: true } });
+          if (!trend) throw error;
+        }
+      }
+    }
+  }
+}
+
+function boardFileId(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const props = (value as Record<string, unknown>).props;
+  if (!props || typeof props !== "object" || Array.isArray(props)) return null;
+  const fileId = (props as Record<string, unknown>).fileId;
+  return typeof fileId === "string" && fileId ? fileId : null;
 }
 
 interface TrendRecord {

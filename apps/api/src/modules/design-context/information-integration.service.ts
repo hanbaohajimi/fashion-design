@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@fashion/db";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { contextObject, contextText, relatedNodeIds, safeContextText } from "./design-context.projector";
 import { DESIGN_CONTEXT_DB, DesignContextService, type DesignContextSnapshot } from "./design-context.service";
 import { compareVersionTime, projectVersionEpisodes, semanticVersionChanges, versionPredecessorIds } from "./information-integration.projector";
@@ -53,12 +54,12 @@ export class InformationIntegrationService {
   constructor(
     @Inject(DESIGN_CONTEXT_DB) private readonly database: PrismaClient,
     @Inject(DesignContextService) private readonly contexts: DesignContextService,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async integrate(userId: string, projectId: string, options: IntegrationOptions = {}) {
-    // Even a supplied snapshot is checked against ownership. Never trust caller-provided graph identity.
-    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, workspace: { ownerId: userId } }, select: { id: true } });
-    if (!project) throw new NotFoundException("项目不存在或无权访问");
+    // Even a supplied snapshot must pass current project access checks.
+    await this.access.require(userId, projectId, "read");
     if (options.conversationId) {
       const conversation = await this.database.agentConversation.findFirst({ where: { id: options.conversationId, projectId, createdById: userId }, select: { id: true } });
       if (!conversation) throw new NotFoundException("会话不存在或不属于当前项目");

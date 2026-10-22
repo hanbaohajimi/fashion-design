@@ -56,6 +56,7 @@ function createHarness(access?: ProjectAccessPolicy) {
   const userMessage = messageFixture(AgentMessageRole.USER);
   const pendingMessage = messageFixture(AgentMessageRole.ASSISTANT);
   const database = {
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(async (callback: (transaction: unknown) => unknown) =>
       callback({
         agentConversation: { update: vi.fn().mockResolvedValue(undefined) },
@@ -92,6 +93,10 @@ function createHarness(access?: ProjectAccessPolicy) {
       findMany: vi.fn().mockResolvedValue([]),
     },
     fileAsset: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
+        const files = await database.fileAsset.findMany();
+        return files.find((file: { id: string }) => file.id === where.id) ?? null;
+      }),
       count: vi.fn().mockResolvedValue(0),
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -138,6 +143,13 @@ function createHarness(access?: ProjectAccessPolicy) {
 }
 
 describe("AgentConversationsService", () => {
+  it.each(["REVIEWER", "VIEWER"])("%s 读取历史消息不触发超时写入或生成恢复", async (role) => {
+    const access = { require: vi.fn().mockResolvedValue({ role, capabilities: { edit: false } }) };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    await expect(h.service.messages("user-a", "conversation-a", { limit: 20 })).resolves.toMatchObject({ items: [] });
+    expect(h.database.agentMessage.updateMany).not.toHaveBeenCalled();
+    expect(h.generation.createFromAgent).not.toHaveBeenCalled();
+  });
   it("returns 410 for new legacy plans without model calls, reservation or image reads", async () => {
     const harness = createHarness();
     await expect(
@@ -435,6 +447,7 @@ describe("AgentConversationsService", () => {
       harness.database.fileAsset.findMany.mockResolvedValue(
         files.map((file) => ({
           ...file,
+          ownerId: "user-a",
           mimeType: "image/png",
           sizeBytes: 3,
           thumbnail1024Key: `thumbnail-${file.objectKey}`,
@@ -548,7 +561,6 @@ describe("AgentConversationsService", () => {
         archivedAt: null,
         id: { in: ["asset-pink"] },
         projectId: "project-a",
-        project: { workspace: { ownerId: "user-a" } },
       },
       select: {
         height: true,
@@ -614,6 +626,8 @@ describe("AgentConversationsService", () => {
     harness.database.fabric.findMany.mockResolvedValue([
       {
         id: "fabric-a",
+        scope: "USER",
+        ownerId: "user-a",
         tags: ["精纺羊毛", "挺括"],
       },
     ]);
@@ -925,7 +939,6 @@ describe("AgentConversationsService", () => {
       where: {
         id: "task-inpaint",
         projectId: "project-a",
-        userId: "user-a",
       },
     });
     expect(createMessage).toHaveBeenCalledWith({
@@ -946,7 +959,7 @@ describe("team conversation authorization", () => {
     shapeIds: [],
   };
   it("lets an editor keep a personal conversation in a shared project", async () => {
-    const access = { require: vi.fn().mockResolvedValue({ role: "EDITOR" }) };
+    const access = { require: vi.fn().mockResolvedValue({ role: "EDITOR", capabilities: { edit: true } }) };
     const h = createHarness(access as unknown as ProjectAccessPolicy);
     h.database.agentConversation.findUnique.mockResolvedValue({
       ...conversationFixture(),

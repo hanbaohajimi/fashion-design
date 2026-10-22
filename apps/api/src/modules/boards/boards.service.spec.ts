@@ -42,6 +42,7 @@ describe("BoardsService ownership and semantic rows", () => {
 
   it("returns 403 when user A tries to load user B's board", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           deletedAt: null,
@@ -58,6 +59,7 @@ describe("BoardsService ownership and semantic rows", () => {
 
   it("allows archived projects to be read but rejects writes", async () => {
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi
           .fn()
@@ -95,6 +97,7 @@ describe("BoardsService ownership and semantic rows", () => {
   it("returns row-level role data beside the snapshot", async () => {
     const updatedAt = new Date("2026-07-27T08:00:00.000Z");
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -163,6 +166,7 @@ describe("BoardsService ownership and semantic rows", () => {
       typeName: "shape",
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       boardElement: {
         findMany: vi.fn().mockResolvedValue([
           {
@@ -221,6 +225,7 @@ describe("BoardsService ownership and semantic rows", () => {
       .mockResolvedValueOnce({ revision: 4 })
       .mockResolvedValueOnce({ revision: 5 });
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         upsert: boardElementUpsert,
       },
@@ -230,6 +235,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -269,6 +275,7 @@ describe("BoardsService ownership and semantic rows", () => {
       .mockResolvedValueOnce({ revision: 8, updatedAt: savedAt });
     const boardSnapshotUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         upsert: vi.fn(),
       },
@@ -278,6 +285,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -329,6 +337,7 @@ describe("BoardsService ownership and semantic rows", () => {
       updatedAt: savedAt,
     });
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: { upsert: boardElementUpsert },
       boardSnapshot: {
         create: boardSnapshotCreate,
@@ -336,6 +345,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -391,6 +401,7 @@ describe("BoardsService ownership and semantic rows", () => {
       updatedAt: savedAt,
     });
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         upsert: vi.fn(),
       },
@@ -400,6 +411,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -440,6 +452,7 @@ describe("BoardsService ownership and semantic rows", () => {
 
   it("imports note, horizontal swatches and image with traceable metadata", async () => {
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         createMany: vi.fn().mockResolvedValue({ count: 4 }),
         findMany: vi.fn().mockResolvedValue([]),
@@ -459,6 +472,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -531,6 +545,7 @@ describe("BoardsService ownership and semantic rows", () => {
 
   it("moves an imported trend group away from existing board bounds", async () => {
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         createMany: vi.fn().mockResolvedValue({ count: 1 }),
         findMany: vi.fn().mockResolvedValue([
@@ -556,6 +571,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -581,6 +597,7 @@ describe("BoardsService ownership and semantic rows", () => {
 
   it("rolls back concurrent duplicate imports and returns an already-exists conflict", async () => {
     const transaction = {
+      project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-a" } }) },
       boardElement: {
         createMany: vi.fn().mockResolvedValue({ count: 0 }),
         findMany: vi.fn().mockResolvedValue([]),
@@ -598,6 +615,7 @@ describe("BoardsService ownership and semantic rows", () => {
       },
     };
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       $transaction: vi.fn(
         async (operation: (client: typeof transaction) => unknown) =>
           operation(transaction),
@@ -628,6 +646,7 @@ describe("BoardsService ownership and semantic rows", () => {
   it("checks board ownership before reading a trend", async () => {
     const trendItemFindUnique = vi.fn();
     const database = {
+      workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
       project: {
         findUnique: vi.fn().mockResolvedValue({
           deletedAt: null,

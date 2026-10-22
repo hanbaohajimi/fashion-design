@@ -99,6 +99,7 @@ type AgentDatabase = Pick<
   | "fileAsset"
   | "generationTask"
   | "project"
+  | "workspaceMember"
 >;
 
 interface AgentCanvasElementContext {
@@ -214,9 +215,8 @@ export class AgentConversationsService {
     @Optional()
     @Inject(WorkflowAssistantService)
     private readonly assistant?: WorkflowAssistantService,
-    @Optional()
     @Inject(ProjectAccessPolicy)
-    private readonly access?: ProjectAccessPolicy,
+    private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async plans(userId: string, conversationId: string) {
@@ -326,7 +326,8 @@ export class AgentConversationsService {
     );
     if (conversation.mode === "workflow" && this.assistant)
       return this.assistant.messages(userId, conversationId, input);
-    await this.database.agentMessage.updateMany({
+    const { capabilities } = await this.access.require(userId, conversation.projectId, "read");
+    if (capabilities.edit) await this.database.agentMessage.updateMany({
       where: {
         conversationId,
         status: AgentMessageStatus.PENDING,
@@ -375,7 +376,6 @@ export class AgentConversationsService {
       where: {
         id: generationTaskId,
         projectId: conversation.projectId,
-        ...(this.access ? {} : { userId }),
       },
     });
     if (!task) {
@@ -488,8 +488,7 @@ export class AgentConversationsService {
           context.designAssetIds,
         ),
       ]);
-      if (this.access)
-        await this.access.require(userId, conversation.projectId, "edit");
+      await this.access.require(userId, conversation.projectId, "edit");
       const decision = await this.model.generateJson({
         images: imageContext.images,
         instructions: agentInstructions,
@@ -501,8 +500,7 @@ export class AgentConversationsService {
         schemaName: "fashion_agent_decision",
       });
 
-      if (this.access)
-        await this.access.require(userId, conversation.projectId, "edit");
+      await this.access.require(userId, conversation.projectId, "edit");
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
         const sourceAssetId = decision.generation.sourceAssetId ?? null;
@@ -764,26 +762,8 @@ export class AgentConversationsService {
         message: `图片上下文不能超过 ${AGENT_IMAGE_LIMIT} 项`,
       });
     }
-    if (fileAssetIds.length > 0 && this.access) {
-      for (const id of fileAssetIds)
-        await requireProjectFile(
-          this.database,
-          this.access,
-          userId,
-          id,
-          projectId,
-        );
-    } else if (fileAssetIds.length > 0) {
-      const owned = await this.database.fileAsset.count({
-        where: { id: { in: fileAssetIds }, ownerId: userId },
-      });
-      if (owned !== fileAssetIds.length) {
-        throw new BadRequestException({
-          code: "INVALID_AGENT_FILES",
-          message: "部分图片不可访问",
-        });
-      }
-    }
+    for (const id of fileAssetIds)
+      await requireProjectFile(this.database, this.access, userId, id, projectId);
     const fabricIds = elements.flatMap((element) => {
       const props = propsOf(element.record);
       return typeof props.fabricId === "string" && props.fabricId.trim()
@@ -792,10 +772,14 @@ export class AgentConversationsService {
     });
     const fabrics = fabricIds.length
       ? await this.database.fabric.findMany({
-          where: { id: { in: [...new Set(fabricIds)] }, ownerId: userId },
-          select: { id: true, tags: true },
+          where: { id: { in: [...new Set(fabricIds)] } },
+          select: { id: true, tags: true, scope: true, ownerId: true, mainFileId: true },
         })
       : [];
+    for (const fabric of fabrics) {
+      if (fabric.scope !== "PRESET" && fabric.ownerId !== userId)
+        await requireProjectFile(this.database, this.access, userId, fabric.mainFileId, projectId);
+    }
     const fabricById = new Map(fabrics.map((fabric) => [fabric.id, fabric]));
     const fileImageIndex = new Map(
       fileAssetIds.map((id, index) => [id, index] as const),
@@ -865,23 +849,14 @@ export class AgentConversationsService {
         designAssetUrls: new Map<string, string>(),
       };
     }
-    if (this.access) {
-      await this.access.require(userId, projectId, "edit");
-      for (const id of fileAssetIds)
-        await requireProjectFile(
-          this.database,
-          this.access,
-          userId,
-          id,
-          projectId,
-        );
-    }
+    await this.access.require(userId, projectId, "edit");
+    for (const id of fileAssetIds)
+      await requireProjectFile(this.database, this.access, userId, id, projectId);
     const [files, designAssets] = await Promise.all([
       fileAssetIds.length
         ? this.database.fileAsset.findMany({
             where: {
               id: { in: [...fileAssetIds] },
-              ...(this.access ? {} : { ownerId: userId }),
               status: FileStatus.READY,
             },
             select: {
@@ -900,9 +875,6 @@ export class AgentConversationsService {
               archivedAt: null,
               id: { in: [...designAssetIds] },
               projectId,
-              ...(this.access
-                ? {}
-                : { project: { workspace: { ownerId: userId } } }),
             },
             select: {
               height: true,
@@ -1019,13 +991,7 @@ export class AgentConversationsService {
         message: "项目不存在",
       });
     }
-    if (this.access) await this.access.require(userId, projectId, action);
-    else if (project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "PROJECT_FORBIDDEN",
-        message: "无权访问该项目",
-      });
-    }
+    await this.access.require(userId, projectId, action);
     return project;
   }
 
@@ -1051,12 +1017,8 @@ export class AgentConversationsService {
         message: "会话不存在",
       });
     }
-    if (this.access)
-      await this.access.require(userId, conversation.projectId, action);
-    if (
-      conversation.createdById !== userId ||
-      (!this.access && conversation.project.workspace.ownerId !== userId)
-    ) {
+    await this.access.require(userId, conversation.projectId, action);
+    if (conversation.createdById !== userId) {
       throw new ForbiddenException({
         code: "AGENT_CONVERSATION_FORBIDDEN",
         message: "无权访问该会话",

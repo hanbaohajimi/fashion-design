@@ -12,7 +12,7 @@ import {
   type VisualContextIndexEntry,
   type VisualSummarySource,
 } from "@fashion/shared";
-import { ForbiddenException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { requireProjectFile } from "../files/project-file-access";
@@ -21,7 +21,7 @@ import { BullVisualSummaryJobs } from "./visual-summary-queue.service";
 
 export const VISUAL_CONTEXT_DB = Symbol("VISUAL_CONTEXT_DB");
 type VisualDatabase = Pick<PrismaClient,
-  "project" | "designAsset" | "fileAsset" | "fabric" | "trendItem" | "boardElement" | "imageVisualSummary">;
+  "project" | "designAsset" | "fileAsset" | "fabric" | "trendItem" | "boardElement" | "imageVisualSummary" | "workspaceMember">;
 export interface VisualContextNode { readonly id: string; readonly type: string; readonly payload: unknown; }
 interface Source {
   readonly source: VisualSummarySource;
@@ -47,7 +47,7 @@ export class VisualContextService {
     @Inject(VISUAL_CONTEXT_DB) private readonly database: VisualDatabase,
     @Inject(S3FileStorage) private readonly storage: Pick<FileStorage, "readPrefix">,
     @Inject(BullVisualSummaryJobs) private readonly jobs: Pick<BullVisualSummaryJobs, "enqueue">,
-    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async enrich(userId: string, projectId: string, nodes: readonly VisualContextNode[],
@@ -55,9 +55,8 @@ export class VisualContextService {
     const project = await this.database.project.findUnique({ where: { id: projectId },
       select: { deletedAt: true, workspace: { select: { ownerId: true } } } });
     if (!project || project.deletedAt) throw new NotFoundException("项目不存在");
-    const permission = this.access ? await this.access.require(userId, projectId, "read") : null;
-    if (!this.access && project.workspace.ownerId !== userId) throw new ForbiddenException("无权读取项目图片");
-    const canSchedule = permission?.capabilities.edit ?? true;
+    const permission = await this.access.require(userId, projectId, "read");
+    const canSchedule = permission.capabilities.edit;
 
     const model = amuxClaudeClientConfigFromEnv().model;
     const sources = new Map<string, Source>();
@@ -187,7 +186,7 @@ export class VisualContextService {
     if (assetId) {
       const asset = await this.database.designAsset.findUnique({ where: { id: assetId }, include: { sourceFile: true } });
       if (!asset || asset.projectId !== projectId || asset.archivedAt) return null;
-      if (asset.sourceFile && (asset.sourceFile.ownerId === userId || this.access)) return this.fileSource(asset.sourceFile, asset.id);
+      if (asset.sourceFile) return this.fileSource(asset.sourceFile, asset.id);
       const sourceKey = visualSummarySourceKey(asset.thumbnailUrl);
       return sourceKey ? { source: { kind: "asset", id: asset.id }, sourceKey,
         assetId: asset.id, fileAssetId: null } : { notReady: true };
@@ -197,7 +196,6 @@ export class VisualContextService {
       const fabric = await this.database.fabric.findUnique({ where: { id: fabricId }, include: { mainFile: true } });
       if (!fabric || fabric.status !== "active") return null;
       if (fabric.scope !== FabricScope.PRESET && fabric.ownerId !== userId) {
-        if (!this.access) return null;
         try { await requireProjectFile(this.database, this.access, userId, fabric.mainFile.id, projectId); } catch { return null; }
       }
       return this.fileSource(fabric.mainFile, null);
@@ -216,11 +214,7 @@ export class VisualContextService {
       fileId = element.fileAssetId;
     }
     if (!fileId) return null;
-    if (this.access) {
-      try { return this.fileSource(await requireProjectFile(this.database, this.access, userId, fileId, projectId), null); } catch { return null; }
-    }
-    const file = await this.database.fileAsset.findUnique({ where: { id: fileId } });
-    return file && file.ownerId === userId ? this.fileSource(file, null) : null;
+    try { return this.fileSource(await requireProjectFile(this.database, this.access, userId, fileId, projectId), null); } catch { return null; }
   }
 
   private fileSource(file: { id: string; status: string; thumbnail1024Key: string | null }, assetId: string | null): Source | { notReady: true } {

@@ -15,7 +15,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  Optional,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
@@ -75,7 +74,7 @@ interface PresentationPolicy {
   readonly version: typeof PRESENTATION_POLICY_VERSION;
 }
 
-type GenerationDatabase = Pick<PrismaClient, "$transaction" | "designAsset" | "generationTask">;
+type GenerationDatabase = Pick<PrismaClient, "$transaction" | "designAsset" | "generationTask" | "project" | "workspaceMember">;
 
 export interface GenerationJobs {
   enqueue(taskId: string, userId: string): Promise<void>;
@@ -132,7 +131,7 @@ export class GenerationService {
     private readonly compiler: ContextCompilerService,
     @Inject(S3FileStorage)
     private readonly storage: S3FileStorage,
-    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async create(
@@ -171,21 +170,22 @@ export class GenerationService {
   async resumeQueuedTask(userId: string, taskId: string): Promise<void> {
     const task = await this.database.generationTask.findUnique({
       where: { id: taskId },
-      select: { id: true, userId: true, status: true },
+      select: { id: true, userId: true, status: true, projectId: true },
     });
     if (!task)
       throw new NotFoundException({
         code: "TASK_NOT_FOUND",
         message: "生成任务不存在",
       });
-    if (task.userId !== userId)
+    if (task.projectId) await this.access.require(userId, task.projectId, "edit");
+    else if (task.userId !== userId)
       throw new ForbiddenException({
         code: "TASK_FORBIDDEN",
         message: "无权访问生成任务",
       });
     if (task.status !== GenerationTaskStatus.QUEUED) return;
     try {
-      await this.jobs.enqueue(task.id, userId);
+      await this.jobs.enqueue(task.id, task.userId);
     } catch (error) {
       throw new ServiceUnavailableException(
         {
@@ -222,7 +222,7 @@ export class GenerationService {
     frozenCompiled?: CompiledGenInput,
   ): Promise<{ taskId: string }> {
     const executionActor = userId;
-    if (request.projectId && this.access) {
+    if (request.projectId) {
       const permission = await this.access.require(userId, request.projectId, "edit");
       userId = permission.ownerId;
       if (executionActor !== userId) idempotencyKey = executionActor + ":" + idempotencyKey;
@@ -234,14 +234,14 @@ export class GenerationService {
       frozenCompiled ??
       (compilerOptions.modelCalls
         ? await this.compiler.compile(
-            userId,
+            executionActor,
             request.projectId,
             request.prompt,
             request.shapeIds,
             compilerOptions,
           )
         : await this.compiler.compile(
-            userId,
+            executionActor,
             request.projectId,
             request.prompt,
             request.shapeIds,
@@ -275,7 +275,7 @@ export class GenerationService {
       throw new GenerationLimitExceededException();
     }
     const parentAsset = await this.assertParentAsset(
-      userId,
+      executionActor,
       request.projectId,
       request.parentAssetId,
     );
@@ -469,6 +469,7 @@ export class GenerationService {
     const admission = await this.billingService.withLockedGenerationQuota(
       userId,
       async (transaction, quota): Promise<GenerationAdmission> => {
+        if (request.projectId) await this.access.require(executionActor, request.projectId, "edit", transaction);
         const concurrent = await transaction.generationTask.findUnique({
           where: { id: taskId },
           select: {
@@ -639,12 +640,7 @@ export class GenerationService {
         message: "父资产不存在",
       });
     }
-    if (parent.project.workspace.ownerId !== userId) {
-      throw new ForbiddenException({
-        code: "DESIGN_ASSET_FORBIDDEN",
-        message: "无权使用该父资产",
-      });
-    }
+    await this.access.require(userId, projectId, "edit");
     if (parent.projectId !== projectId) {
       throw new BadRequestException({
         code: "ASSET_PROJECT_MISMATCH",
@@ -656,7 +652,7 @@ export class GenerationService {
 
   async get(userId: string, taskId: string): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, ...(this.access ? {} : { userId }) },
+      where: { id: taskId },
     });
     if (!task) {
       throw new NotFoundException({
@@ -664,7 +660,7 @@ export class GenerationService {
         message: "生成任务不存在",
       });
     }
-    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"read");
+    if(task.projectId) await this.access.require(userId,task.projectId,"read");
     else if(task.userId!==userId) throw new ForbiddenException("无权读取该任务");
     return this.toView(task);
   }
@@ -673,7 +669,7 @@ export class GenerationService {
     userId: string,
     query: GenerationListQuery,
   ): Promise<GenerationTaskListView> {
-    if(this.access) userId=(await this.access.require(userId,query.projectId,"read")).ownerId;
+    userId=(await this.access.require(userId,query.projectId,"read")).ownerId;
     const cursor = query.cursor
       ? await this.database.generationTask.findFirst({
           where: {
@@ -724,7 +720,7 @@ export class GenerationService {
 
   async cancel(userId: string, taskId: string): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, ...(this.access ? {} : { userId }) },
+      where: { id: taskId },
     });
     if (!task) {
       throw new NotFoundException({
@@ -733,7 +729,7 @@ export class GenerationService {
       });
     }
 
-    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"edit");
+    if(task.projectId) await this.access.require(userId,task.projectId,"edit");
     else if(task.userId!==userId) throw new ForbiddenException("无权修改该任务");
     userId=task.userId;
     if (
@@ -786,7 +782,7 @@ export class GenerationService {
     disposition: "adopted" | "dismissed",
   ): Promise<GenerationTaskView> {
     const task = await this.database.generationTask.findFirst({
-      where: { id: taskId, ...(this.access ? {} : { userId }) },
+      where: { id: taskId },
     });
     if (!task) {
       throw new NotFoundException({
@@ -794,7 +790,7 @@ export class GenerationService {
         message: "生成任务不存在",
       });
     }
-    if(this.access && task.projectId) await this.access.require(userId,task.projectId,"edit");
+    if(task.projectId) await this.access.require(userId,task.projectId,"edit");
     else if(task.userId!==userId) throw new ForbiddenException("无权修改该任务");
     userId=task.userId;
     const output = jsonObject(task.output);

@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from "@fashion/db";
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { WorkflowsService } from "../workflows/workflows.service";
@@ -56,7 +56,7 @@ export class DesignContextService {
   constructor(
     @Inject(DESIGN_CONTEXT_DB) private readonly database: PrismaClient,
     @Inject(WorkflowsService) private readonly workflows: WorkflowsService,
-    @Optional() @Inject(ProjectAccessPolicy) private readonly access?: ProjectAccessPolicy,
+    @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
   async get(userId: string, projectId: string) {
@@ -100,8 +100,8 @@ export class DesignContextService {
   /** Caller may hold the active-turn lease; this method never starts a nested transaction. */
   async patchInTransaction(userId: string, projectId: string, raw: PatchProjectDesignContextInput, transaction: Prisma.TransactionClient, suppliedGraph?: ContextGraph) {
     const input = patchProjectDesignContextSchema.parse(raw);
-    if (this.access) await this.access.require(userId, projectId, "edit", transaction);
-    const project = await transaction.project.findFirst({ where: { id: projectId, deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) }, select: { id: true, archived: true } });
+    await this.access.require(userId, projectId, "edit", transaction);
+    const project = await transaction.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { id: true, archived: true } });
     if (!project) throw new NotFoundException("项目不存在或无权访问");
     if (project.archived) throw new BadRequestException("已归档项目不能修改设计上下文");
     const storedGraph = await transaction.workflowGraph.findUnique({ where: { projectId }, select: { revision: true } });
@@ -348,16 +348,16 @@ export class DesignContextService {
   }
 
   private async assertProject(userId: string, projectId: string, writing = false) {
-    if (this.access) await this.access.require(userId, projectId, writing ? "edit" : "read");
-    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) }, select: { id: true, archived: true } });
+    await this.access.require(userId, projectId, writing ? "edit" : "read");
+    const project = await this.database.project.findFirst({ where: { id: projectId, deletedAt: null }, select: { id: true, archived: true } });
     if (!project) throw new NotFoundException("项目不存在或无权访问");
     if (writing && project.archived) throw new BadRequestException("已归档项目不能修改设计上下文");
     return project;
   }
 
   private async assertConversation(userId: string, projectId: string, conversationId: string) {
-    if (this.access) await this.access.require(userId, projectId, "read");
-    const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId, createdById: userId, project: { deletedAt: null, ...(this.access ? {} : { workspace: { ownerId: userId } }) } } });
+    await this.access.require(userId, projectId, "read");
+    const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId, createdById: userId, project: { deletedAt: null } } });
     if (!conversation) throw new NotFoundException("会话不存在或不属于当前项目");
     return conversation;
   }

@@ -29,6 +29,8 @@ function asset(id: string, overrides: Record<string, unknown> = {}) {
 }
 function harness(records: ReturnType<typeof asset>[]) {
   const database = {
+    project: { findUnique: vi.fn().mockResolvedValue({ id: "project-a", deletedAt: null, workspace: { ownerId: "user-a" } }) },
+    workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     designAsset: {
       findUnique: vi.fn(
         async ({ where }: { where: { id: string } }) =>

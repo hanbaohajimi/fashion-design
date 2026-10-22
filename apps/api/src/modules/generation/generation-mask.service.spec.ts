@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GenerationMaskService } from "./generation-mask.service";
 
 describe("GenerationMaskService", () => {
-  const database = { project: { findUnique: vi.fn() } };
+  const database = { project: { findUnique: vi.fn() }, workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) } };
   const storage = {
     createDownloadUrl: vi.fn(),
     createUploadUrl: vi.fn(),
