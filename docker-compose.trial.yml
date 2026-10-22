@@ -1,6 +1,8 @@
-# Used only with an explicit isolated project and trial port environment.
+# Reuse the verified local build for both server and client in the isolated project.
 services:
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: fashion-trial-minio:local
+    pull_policy: never
   minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: fashion-trial-minio:local
+    pull_policy: never

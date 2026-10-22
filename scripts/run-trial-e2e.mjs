@@ -53,6 +53,7 @@ let infraStarted = false;
 let authStarted = false;
 try {
   await run("docker", ["info", "--format", "{{.ServerVersion}}"]);
+  await run("docker", [...compose, "build", "minio"]);
   infraStarted = true;
   await run("docker", [...compose, "up", "-d", "--wait", "--no-build", "postgres", "redis", "minio"]);
   await run("docker", [...compose, "run", "--rm", "minio-init"]);
