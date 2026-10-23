@@ -51,8 +51,9 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
   await expect(canvas.locator('[data-type="constraint"]')).toBeVisible();
   await expect(canvas.locator('[data-workflow-edge]')).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
+  // 类别色条位于卡片左侧（贯穿整卡高度），不再是一条 2px 顶边线。
   const readBorderColor = (kind: "tool" | "asset") => canvas.locator(`[data-kind="${kind}"]`).first().evaluate((element) => {
-    const channels = getComputedStyle(element).borderTopColor.match(/\d+/gu);
+    const channels = getComputedStyle(element).borderLeftColor.match(/\d+/gu);
     if (!channels || channels.length < 3) throw new Error("Node border color is unavailable");
     return { r: Number(channels[0]), g: Number(channels[1]), b: Number(channels[2]) };
   });
@@ -66,7 +67,7 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
     const titleBox = await card.locator("strong").boundingBox();
     const summaryBox = await card.locator("p").boundingBox();
     if (!cardBox || !titleBox || !summaryBox) throw new Error(`${node.id} text boxes are unavailable`);
-    const zoom = cardBox.width / 258;
+    const zoom = cardBox.width / 300;
     return {
       id: node.id,
       x: node.x,

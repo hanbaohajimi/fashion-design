@@ -56,6 +56,7 @@ import {
 import {
   displayNodeTitle,
   lineageOf,
+  nodeDepths,
   nodeImageUrl,
   nodeSize,
   nodeSummary,
@@ -146,7 +147,8 @@ function projectEdge(
   graph: WorkflowGraph,
   edge: WorkflowGraph["edges"][number],
   highlighted: ReadonlySet<string> | null,
-  proposed = false,
+  proposed: boolean,
+  depths: ReadonlyMap<string, number>,
 ): void {
   const source = graph.nodes.find((node) => node.id === edge.sourceNodeId);
   const target = graph.nodes.find((node) => node.id === edge.targetNodeId);
@@ -164,8 +166,10 @@ function projectEdge(
     endX: endX - x,
     endY: endY - y,
     detourY: endX < x ? Math.max(sourcePosition.y + sourceSize.h, targetPosition.y + targetSize.h) + 48 - y : 0,
+    enterIndex: Math.min(depths.get(edge.targetNodeId) ?? 0, 6),
     highlighted: highlighted?.has(edge.id) ?? false,
     proposed,
+    running: source.status === "running",
     editable: source.kind === "asset" && target.type !== "restore_version",
     label: source.kind === "tool" ? "结果来源" : PORT_LABELS[edge.targetPort],
   };
@@ -226,6 +230,8 @@ function WorkflowProjection({
   useEffect(() => {
     editor.store.mergeRemoteChanges(() => {
       const active = new Set<TLShapeId>();
+      // 入场错峰按图的 BFS 深度排：上游先落、下游后落，读图顺序与视觉顺序一致。
+      const depths = nodeDepths(projectedGraph);
       for (const node of projectedGraph.nodes) {
         const id = nodeShapeId(node.id);
         active.add(id);
@@ -236,6 +242,7 @@ function WorkflowProjection({
           : { width: 0, height: 0 };
         const size = nodeSize(node, loadedImage);
         const props = {
+          enterIndex: Math.min(depths.get(node.id) ?? 0, 6),
           h: size.h,
           highlighted: node.status === "proposed" || (lineage?.nodeIds.has(node.id) ?? false),
           imageUrl,
@@ -274,7 +281,7 @@ function WorkflowProjection({
       }
       for (const edge of projectedGraph.edges) {
         active.add(edgeShapeId(edge.id));
-        projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id));
+        projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id), depths);
       }
       const stale = editor.getCurrentPageShapes()
         .filter((shape) =>
@@ -311,7 +318,7 @@ function WorkflowProjection({
     editor.store.mergeRemoteChanges(() => {
       for (const edge of projectedGraph.edges) {
         if (resized.has(edge.sourceNodeId) || resized.has(edge.targetNodeId))
-          projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id));
+          projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id), nodeDepths(projectedGraph));
       }
     });
   }, { scope: "document" }), [editor, projectedGraph, lineage, proposedEdges]);
@@ -342,7 +349,7 @@ function WorkflowProjection({
       }
       if (moved.length === 0) return;
       editor.store.mergeRemoteChanges(() => {
-        for (const edge of projectedGraph.edges) projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id));
+        for (const edge of projectedGraph.edges) projectEdge(editor, projectedGraph, edge, lineage?.edgeIds ?? null, proposedEdges.some((item) => item.id === edge.id), nodeDepths(projectedGraph));
       });
       onLayout(moved);
     }, { scope: "document", source: "user" }),
@@ -731,7 +738,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
         <section aria-label="设计工作流画布" className={styles.canvasSection} data-mobile-list-open={mobileListOpen ? "true" : "false"}>
           <div className={styles.canvasHeading}>
             <div>
-              <span className={styles.overline}>设计轨迹</span>
+              {/* 画布不需要一个标签告诉用户"这是画布"。标题保留给辅助技术。 */}
               <h1>从需求到方案的完整设计路径</h1>
               <p>素材、工具和结果逐步连接；修改会形成可回溯的分支。</p>
             </div>
@@ -778,18 +785,18 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             </div>
           ) : null}
 
-          <div className={`${styles.zoomControls} ${controls.controlSurface}`}>
-            <button aria-label="缩小画布" onClick={() => editorRef.current?.zoomOut()} type="button">−</button>
-            <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit(motionOptions())} type="button">查看全图</button>
-            <button aria-label="画布原始比例" onClick={() => editorRef.current?.resetZoom()} type="button">100%</button>
-            <button aria-label="放大画布" onClick={() => editorRef.current?.zoomIn()} type="button">＋</button>
-          </div>
-
           <div className={`${styles.bottomMenu} ${controls.controlSurface}`}>
             <button data-material-trigger aria-expanded={menuTab === "assets"} onClick={() => setMenuTab(menuTab === "assets" ? null : "assets")} type="button">＋ 添加素材</button>
             <span className={styles.menuDivider} />
             <button aria-expanded={menuTab === "tools"} onClick={() => setMenuTab(menuTab === "tools" ? null : "tools")} type="button">＋ 添加工具</button>
             <Tooltip content="查看素材、连线、保存与导出操作说明"><Button aria-label="工作室帮助" variant="ghost" onClick={() => setHelpOpen(true)}>?</Button></Tooltip>
+            {/* 缩放并入主控制条：一个低频操作不该和主操作平分视觉权重。 */}
+            <div className={styles.zoomControls}>
+              <button aria-label="缩小画布" onClick={() => editorRef.current?.zoomOut()} type="button">−</button>
+              <button aria-label="适合画布" onClick={() => editorRef.current?.zoomToFit(motionOptions())} type="button">查看全图</button>
+              <button aria-label="画布原始比例" onClick={() => editorRef.current?.resetZoom()} type="button">100%</button>
+              <button aria-label="放大画布" onClick={() => editorRef.current?.zoomIn()} type="button">＋</button>
+            </div>
             {menuTab ? (
               <div className={styles.addPopover}>
                 <header><strong>{menuTab === "assets" ? "添加设计素材" : "添加设计工具"}</strong><button aria-label="关闭菜单" onClick={() => setMenuTab(null)} type="button">×</button></header>

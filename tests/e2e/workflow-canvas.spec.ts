@@ -931,12 +931,22 @@ async function selectWire(page: Page, id: string) {
     const b = await path.boundingBox();
     return a && b ? Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.width - b.width) : Infinity;
   }).toBeLessThan(0.1);
+  // 连线可能从节点背后穿过：沿曲线采样，取第一个真正能命中连线自身的点。
   const point = await path.evaluate((element) => {
     const curve = element as SVGPathElement;
-    const middle = curve.getPointAtLength(curve.getTotalLength() * 0.55);
     const transform = curve.getScreenCTM();
     if (!transform) throw new Error("连接未投影到屏幕");
-    return { x: middle.x * transform.a + middle.y * transform.c + transform.e, y: middle.x * transform.b + middle.y * transform.d + transform.f };
+    const toScreen = (length: number) => {
+      const local = curve.getPointAtLength(length);
+      return { x: local.x * transform.a + local.y * transform.c + transform.e, y: local.x * transform.b + local.y * transform.d + transform.f };
+    };
+    const total = curve.getTotalLength();
+    for (const ratio of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+      const candidate = toScreen(total * ratio);
+      const hit = document.elementFromPoint(candidate.x, candidate.y);
+      if (hit === curve || (hit instanceof SVGElement && hit.parentElement?.closest("[data-workflow-edge]") === curve.closest("[data-workflow-edge]"))) return candidate;
+    }
+    return toScreen(total * 0.55);
   });
   await page.mouse.click(point.x, point.y);
   await expect(page.getByLabel("连接操作")).toBeVisible();
@@ -1892,7 +1902,8 @@ test("默认视图可读，查看全图、100%和窄屏保持可达", async ({ p
   await expect(brief).toBeVisible();
   const briefBounds = await brief.boundingBox();
   if (!briefBounds) throw new Error("设计需求节点未显示");
-  expect(briefBounds.width / 258).toBeGreaterThanOrEqual(0.85);
+  // 该用例固定在 1366 宽，走标准档（300px）。
+  expect(briefBounds.width / 300).toBeGreaterThanOrEqual(0.85);
   await page.screenshot({ path: "output/playwright/review-canvas-after.png" });
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2143,7 +2154,8 @@ for (const viewport of REVIEW_VIEWPORTS) {
     await expect(brief).toBeVisible();
     const briefBounds = await brief.boundingBox();
     if (!briefBounds) throw new Error("设计需求节点未显示");
-    expect(briefBounds.width / 258).toBeGreaterThanOrEqual(0.85);
+    // 窄视口走紧凑档（258px 宽），桌面走标准档（300px 宽）。
+    expect(briefBounds.width / (viewport.width < 768 ? 258 : 300)).toBeGreaterThanOrEqual(0.85);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await contrastFailures(page)).toEqual([]);
     expect(await controlFontFailures(page)).toEqual([]);

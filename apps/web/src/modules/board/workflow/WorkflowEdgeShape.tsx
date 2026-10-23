@@ -9,7 +9,8 @@ import {
   type RecordProps,
   type TLShape,
 } from "tldraw";
-import { curvePath } from "./workflow-curve";
+import type { CSSProperties } from "react";
+import { curveLength, curvePath } from "./workflow-curve";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
 import styles from "./workflow-connections.module.css";
 
@@ -25,6 +26,10 @@ declare module "tldraw" {
       proposed: boolean;
       editable: boolean;
       label: string;
+      /** 源节点正在运行：连线显示流动光点。 */
+      running: boolean;
+      /** BFS 深度，用于生长动画错峰。 */
+      enterIndex: number;
     };
   }
 }
@@ -42,6 +47,12 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
     shape.props.endY,
     shape.props.detourY,
   );
+  // 生长动画需要真实弧长，否则短边会被拉成虚线、长边迟迟画不完
+  const length = curveLength(
+    shape.props.endX,
+    shape.props.endY,
+    shape.props.detourY,
+  );
   return (
     <SVGContainer
       className={styles.edge}
@@ -49,6 +60,13 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
       data-selected={selected ? "true" : "false"}
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-proposed={shape.props.proposed ? "true" : "false"}
+      data-running={shape.props.running ? "true" : "false"}
+      style={
+        {
+          "--edge-length": String(length),
+          "--edge-enter-index": String(shape.props.enterIndex),
+        } as CSSProperties
+      }
     >
       <g
         onPointerDown={(event) => {
@@ -61,9 +79,12 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
           <title>{shape.props.label}</title>
         </path>
         <path className={styles.edgeLine} d={curve.d} />
+        {/* 流动光点：独立一条 path，避免与生长动画的 dash 互相干扰 */}
+        <path className={styles.edgeFlow} d={curve.d} />
+        {/* 8px 实心三角：1px 描线箭头在米色底上几乎不可见 */}
         <path
-          className={styles.edgeDirection}
-          d={`M ${shape.props.endX - 5} ${shape.props.endY - 2.5} L ${shape.props.endX} ${shape.props.endY} L ${shape.props.endX - 5} ${shape.props.endY + 2.5}`}
+          className={styles.edgeArrow}
+          d={`M ${shape.props.endX} ${shape.props.endY} L ${shape.props.endX - 8} ${shape.props.endY - 4.5} L ${shape.props.endX - 8} ${shape.props.endY + 4.5} Z`}
         />
         {selected && shape.props.editable ? (
           <g
@@ -96,10 +117,12 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
     endX: T.number,
     endY: T.number,
     detourY: T.number,
+    enterIndex: T.number,
     highlighted: T.boolean,
     proposed: T.boolean,
     editable: T.boolean,
     label: T.string,
+    running: T.boolean,
   };
   override getDefaultProps(): WorkflowEdgeShape["props"] {
     return {
@@ -107,10 +130,12 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
       endX: 120,
       endY: 0,
       detourY: 0,
+      enterIndex: 0,
       highlighted: false,
       proposed: false,
       editable: true,
       label: "参考素材",
+      running: false,
     };
   }
   override getGeometry(shape: WorkflowEdgeShape) {
@@ -160,10 +185,10 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
       <g
         fill="none"
         stroke={color}
-        strokeWidth={shape.props.highlighted ? 1.75 : 1.25}
+        strokeWidth={shape.props.highlighted ? 2 : 1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
-        opacity={shape.props.highlighted ? 1 : 0.65}
+        opacity={shape.props.highlighted ? 1 : 0.72}
       >
         <path
           d={
@@ -171,8 +196,12 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
           }
           strokeDasharray={shape.props.proposed ? "4 5" : undefined}
         />
+        {/* 与画布一致的实心三角箭头。流动光点不导出：静态图里它只会变成一串散点。 */}
         <path
-          d={`M ${shape.props.endX - 5} ${shape.props.endY - 2.5} L ${shape.props.endX} ${shape.props.endY} L ${shape.props.endX - 5} ${shape.props.endY + 2.5}`}
+          d={`M ${shape.props.endX} ${shape.props.endY} L ${shape.props.endX - 8} ${shape.props.endY - 4.5} L ${shape.props.endX - 8} ${shape.props.endY + 4.5} Z`}
+          fill={color}
+          stroke="none"
+          opacity={0.8}
         />
       </g>
     );

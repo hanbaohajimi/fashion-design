@@ -1,48 +1,77 @@
+/* 连线 = 工序，不是电线。
+   默认状态下安静（墨色细线 + 实心箭头），
+   有事情发生时才表达：生长、流动、选中加粗。 */
+
 .edge {
   overflow: visible;
   color: var(--color-ink-tertiary);
-  /* 入场动效 */
-  animation: edgeEnter var(--dur-enter) var(--ease-enter) backwards;
 }
 
-@keyframes edgeEnter {
+/* 生长入场：从源节点出发画到目标节点。
+   弧长由 WorkflowEdgeShape 按采样点算好后通过 --edge-length 传入。 */
+@keyframes edgeDraw {
   from {
-    opacity: 0;
+    stroke-dashoffset: var(--edge-length, 400);
   }
   to {
-    opacity: 1;
-  }
-}
-
-.edgeLine,
-.edgeDirection {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.58;
-  pointer-events: none;
-  vector-effect: non-scaling-stroke;
-  transition: stroke-width var(--dur-fast) var(--ease-state),
-              opacity var(--dur-fast) var(--ease-state);
-}
-
-/* 数据流动效果：虚线移动动画 */
-.edge[data-highlighted="true"] .edgeLine::after,
-.edge[data-selected="true"] .edgeLine::after {
-  content: '';
-  animation: flowData 1.2s linear infinite;
-}
-
-@keyframes flowData {
-  from {
     stroke-dashoffset: 0;
   }
+}
+
+.edgeLine {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.72;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: var(--edge-length, 400);
+  stroke-dashoffset: var(--edge-length, 400);
+  animation: edgeDraw 320ms var(--ease-enter) forwards;
+  animation-delay: calc(var(--edge-enter-index, 0) * 45ms + 180ms);
+  transition:
+    stroke-width var(--dur-fast) var(--ease-state),
+    stroke var(--dur-fast) var(--ease-state),
+    opacity var(--dur-fast) var(--ease-state);
+}
+
+/* 流动光点：独立一条 path。
+   旧实现把动画挂在本元素的 ::after 上——SVG 不支持伪元素，那段动画从未生效。 */
+.edgeFlow {
+  fill: none;
+  stroke: var(--swatch-indigo);
+  stroke-width: 2;
+  stroke-dasharray: 2 14;
+  stroke-linecap: round;
+  opacity: 0;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+  transition: opacity var(--dur-standard) var(--ease-state);
+}
+
+@keyframes edgeFlowMove {
   to {
-    stroke-dashoffset: 20;
+    stroke-dashoffset: -32;
   }
 }
+
+.edge[data-running="true"] .edgeFlow,
+.edge[data-highlighted="true"] .edgeFlow,
+.edge[data-selected="true"] .edgeFlow {
+  opacity: 0.85;
+  animation: edgeFlowMove 1.6s linear infinite;
+}
+
+.edgeArrow {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0.8;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-state);
+}
+
 .edgeHit {
   fill: none;
   stroke: transparent;
@@ -51,27 +80,36 @@
   cursor: pointer;
   vector-effect: non-scaling-stroke;
 }
+
 .edge[data-highlighted="true"],
 .edge[data-selected="true"],
 .edge:hover {
   color: var(--swatch-indigo);
 }
+
 .edge[data-highlighted="true"] .edgeLine,
 .edge[data-selected="true"] .edgeLine,
 .edge:hover .edgeLine {
-  stroke-width: 1.75;
+  stroke-width: 2;
   opacity: 1;
 }
-.edge[data-selected="true"] .edgeDirection,
-.edge:hover .edgeDirection {
+
+.edge[data-selected="true"] .edgeArrow,
+.edge:hover .edgeArrow {
   opacity: 1;
 }
+
+/* 提案中的连线：虚线表示"尚未确认"，不参与生长动画 */
 .edge[data-proposed="true"] .edgeLine {
   stroke-dasharray: 4 5;
+  stroke-dashoffset: 0;
+  animation: none;
 }
+
 .edge[data-proposed="true"] .edgeHit {
   pointer-events: none;
 }
+
 .reconnectHandle {
   fill: var(--color-paper);
   stroke: var(--swatch-indigo);
@@ -79,6 +117,7 @@
   pointer-events: none;
   cursor: grab;
 }
+
 .preview {
   position: absolute;
   inset: 0;
@@ -88,6 +127,7 @@
   overflow: visible;
   pointer-events: none;
 }
+
 .preview path {
   fill: none;
   stroke: var(--swatch-indigo);
@@ -95,6 +135,7 @@
   stroke-linecap: round;
   stroke-dasharray: 4 5;
 }
+
 .connectionHint,
 .edgeToolbar {
   position: absolute;
@@ -107,14 +148,13 @@
   align-items: center;
   gap: 16px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 10px 16px;
   background: var(--color-paper);
   color: var(--color-ink-secondary);
-  box-shadow: 0 4px 18px #0000000a;
+  box-shadow: var(--shadow-material-1);
   font: 12px/1.5 var(--font-sans);
   pointer-events: auto;
-  /* 入场动效：从底部滑入 */
   animation: slideUpFade var(--dur-enter) var(--ease-enter) backwards;
 }
 
@@ -128,9 +168,11 @@
     transform: translateX(-50%) translateY(0);
   }
 }
+
 .connectionHint {
   pointer-events: none;
 }
+
 .edgeToolbar button {
   border: 0;
   padding: 4px 0;
@@ -139,10 +181,27 @@
   white-space: nowrap;
   cursor: pointer;
 }
+
 .edgeToolbar button:hover {
   color: var(--swatch-indigo);
 }
+
 .edgeToolbar button:focus-visible {
   outline: 2px solid var(--swatch-indigo);
   outline-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edgeLine {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .edgeFlow {
+    display: none;
+  }
+  .connectionHint,
+  .edgeToolbar {
+    animation: none;
+  }
 }

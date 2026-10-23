@@ -10,7 +10,7 @@ import {
 } from "tldraw";
 
 import type { WorkflowNode } from "./workflow-api";
-import { displayNodeTitle, imageNodeSize, isImageNodeType, nodeTypeLabel } from "./workflow-graph";
+import { displayNodeTitle, imageNodeSize, isImageNodeType, nodeTypeEyebrow } from "./workflow-graph";
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
 import { taskState } from "../../../components/task-feedback-state";
@@ -35,6 +35,8 @@ declare module "tldraw" {
       status: string;
       highlighted: boolean;
       muted: boolean;
+      /** 节点在图中的 BFS 深度，用于入场错峰（上游先落、下游后落）。 */
+      enterIndex: number;
     };
   }
 }
@@ -48,6 +50,7 @@ export type WorkflowNodeShape = TLShape<typeof WORKFLOW_NODE_SHAPE_TYPE>;
 export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
   static override type = WORKFLOW_NODE_SHAPE_TYPE;
   static override props: RecordProps<WorkflowNodeShape> = {
+    enterIndex: T.number,
     h: T.number,
     highlighted: T.boolean,
     imageUrl: T.string,
@@ -66,6 +69,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
 
   override getDefaultProps(): WorkflowNodeShape["props"] {
     return {
+      enterIndex: 0,
       h: 212,
       highlighted: false,
       imageUrl: "",
@@ -133,8 +137,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         )}
         <header className={styles.nodeHeader}>
           <span className={styles.eyebrow}>
-            {kind === "asset" ? "素材" : "工具"} ·{" "}
-            {nodeTypeLabel(nodeType)}
+            {nodeTypeEyebrow(kind, nodeType)}
           </span>
           <strong title={title}>{title}</strong>
         </header>
@@ -168,7 +171,8 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
 
   override getIndicatorPath(shape: WorkflowNodeShape): Path2D {
     const path = new Path2D();
-    path.roundRect(0, 0, shape.props.w, shape.props.h, 12);
+    // 与 CSS 的 border-radius 保持一致，选中描边才不会与卡片边缘错位
+    path.roundRect(0, 0, shape.props.w, shape.props.h, 10);
     return path;
   }
 }
@@ -233,7 +237,11 @@ function WorkflowNodeFrame({
       role={exporting ? undefined : "group"}
       aria-label={exporting ? undefined : `设计节点 ${shape.props.title}`}
       tabIndex={exporting ? undefined : 0}
-      style={exportStyle}
+      style={
+        exporting
+          ? exportStyle
+          : ({ "--enter-index": String(shape.props.enterIndex) } as CSSProperties)
+      }
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
       data-compact={!exporting && compact ? "true" : "false"}

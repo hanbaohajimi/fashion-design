@@ -37,18 +37,30 @@ function validImageDimensions(dimensions: ImageDimensions): dimensions is { widt
     typeof dimensions.height === "number" && Number.isFinite(dimensions.height) && dimensions.height > 0;
 }
 
+/**
+ * 工作台尺寸档位。图片节点是"作品"，必须成为画布上的主角；
+ * 工具节点是"过程"，刻意比素材矮，用高度差表达工具服务于素材。
+ * 窄视口（触屏单列视图）回退到紧凑档，否则节点会撑满整屏。
+ */
+function compactLayout(): boolean {
+  return typeof window !== "undefined" && window.innerWidth < 768;
+}
+
 /** 等比展示完整图片；尺寸只包含原比例图片、58px 标题栏与边框。 */
 export function imageNodeSize(dimensions: ImageDimensions, hasSummary = false) {
   const aspect = validImageDimensions(dimensions) ? dimensions.width / dimensions.height : 1;
   const captionHeight = 60 + (hasSummary ? 22 : 0);
-  const maxImageHeight = 340 - captionHeight;
-  let width = aspect > 1 ? 320 : 256;
+  const compact = compactLayout();
+  const maxImageHeight = (compact ? 340 : 460) - captionHeight;
+  let width = aspect > 1 ? (compact ? 320 : 400) : compact ? 256 : 340;
   let height = width / aspect;
   if (height > maxImageHeight) {
     width *= maxImageHeight / height;
     height = maxImageHeight;
   }
-  return { w: width + 2, h: height + captionHeight };
+  // 左侧 3px 类别色条 + 右侧 1px 边框 = 4px。图片只占内容盒，
+  // 少算这 2px 会让图片框比原图比例宽出一点，贴合测试与肉眼都能看出来。
+  return { w: width + 4, h: height + captionHeight };
 }
 
 /** 图片优先使用已加载的实际尺寸，兼容历史节点没有宽高元数据的情况。 */
@@ -69,12 +81,15 @@ export function nodeSize(
       Boolean(nodeSummary({ type: node.type, ...("title" in node && typeof node.title === "string" ? { title: node.title } : {}), payload })),
     );
   }
+  const compact = compactLayout();
+  const width = compact ? 258 : 300;
   if (node.type === "evaluation" || node.type === "constraint") {
-    return { h: 196, w: 258 };
+    return compact ? { h: 196, w: width } : { h: node.type === "evaluation" ? 220 : 200, w: width };
   }
-  // 色卡是纯色块，不需要文字节点的高度
-  if (node.type === "swatch") return { h: 148, w: 258 };
-  return { h: node.kind === "tool" ? 186 : 172, w: 258 };
+  // 色卡是纯色块，做成正方形样本，像布料小样
+  if (node.type === "swatch") return compact ? { h: 148, w: width } : { h: 236, w: 236 };
+  // 工具节点比素材矮一档：过程不该抢作品的视觉高度
+  return { h: compact ? (node.kind === "tool" ? 186 : 172) : node.kind === "tool" ? 168 : 200, w: width };
 }
 
 export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
@@ -116,6 +131,36 @@ const NODE_TYPE_TITLES: Readonly<Record<string, string>> = {
 /** 节点类型的中文名，供界面标签使用。 */
 export function nodeTypeLabel(type: string): string {
   return NODE_TYPE_TITLES[type] ?? type;
+}
+
+/** 等宽大写类别词，构成节点卡片上"技术感"的第一层编码。 */
+const NODE_TYPE_CODES: Readonly<Record<string, string>> = {
+  analyze_brief: "TOOL",
+  brief: "BRIEF",
+  candidate: "RESULT",
+  constraint: "CONSTRAINT",
+  edit_design: "TOOL",
+  evaluate_design: "TOOL",
+  evaluation: "REVIEW",
+  fabric: "FABRIC",
+  generate_design: "TOOL",
+  legacy: "ARCHIVE",
+  reference_image: "REFERENCE",
+  reference_text: "REFERENCE",
+  restore_version: "TOOL",
+  sketch: "SKETCH",
+  swatch: "SWATCH",
+  trend: "TREND",
+};
+
+/**
+ * 节点类型标签：等宽大写英文 + 中文类型名。
+ * 英文负责扫视时快速分类，中文负责准确表意——两者同时在场，
+ * 既不依赖 hover，也不牺牲可读性。
+ */
+export function nodeTypeEyebrow(kind: "asset" | "tool", type: string): string {
+  const code = NODE_TYPE_CODES[type] ?? (kind === "tool" ? "TOOL" : "MATERIAL");
+  return `${code} · ${nodeTypeLabel(type)}`;
 }
 
 /** 纯哈希 / 十六进制串，以及超长无分隔的紧凑串，都是机器生成的 id。 */
@@ -205,6 +250,45 @@ export function nodeImageUrl(node: Pick<WorkflowNode, "payload">): string {
     return `/api/files/${encodeURIComponent(node.payload.fileAssetId)}/thumbnail/1024`;
   }
   return "";
+}
+
+/**
+ * 计算每个节点到根（无入边的节点）的 BFS 深度。
+ * 用作入场动画的错峰序号：上游先落、下游后落。
+ * 环状结构不会死循环——只在深度严格变小时继续扩散。
+ */
+export function nodeDepths(graph: WorkflowGraph): Map<string, number> {
+  const incoming = new Map<string, number>();
+  for (const node of graph.nodes) incoming.set(node.id, 0);
+  for (const edge of graph.edges) {
+    if (incoming.has(edge.targetNodeId)) incoming.set(edge.targetNodeId, (incoming.get(edge.targetNodeId) ?? 0) + 1);
+  }
+  const depths = new Map<string, number>();
+  const queue: string[] = [];
+  for (const node of graph.nodes) {
+    if ((incoming.get(node.id) ?? 0) === 0) {
+      depths.set(node.id, 0);
+      queue.push(node.id);
+    }
+  }
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    const depth = depths.get(current) ?? 0;
+    for (const edge of graph.edges) {
+      if (edge.sourceNodeId !== current) continue;
+      const next = depths.get(edge.targetNodeId);
+      if (next !== undefined && next <= depth + 1) continue;
+      depths.set(edge.targetNodeId, depth + 1);
+      queue.push(edge.targetNodeId);
+    }
+  }
+  // 纯环或孤岛：没有根可达，就按声明顺序给一个递增序，至少保证有节奏
+  let fallback = 0;
+  for (const node of graph.nodes) {
+    if (!depths.has(node.id)) depths.set(node.id, Math.min(fallback++, 6));
+  }
+  return depths;
 }
 
 export function lineageOf(

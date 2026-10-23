@@ -165,13 +165,22 @@
   grid-template-columns: minmax(0, 1fr) clamp(330px, 24%, 400px);
 }
 
+/* 工作台表面分三层：
+   1) 120px 重点阵 —— 提供尺度参照，缩放时知道自己在第几层；
+   2) 24px 细点阵 —— 暗示"这是工作面"；
+   3) 径向暗角 —— 把视线收拢到中心，消除"空而无焦点"。
+   三层都必须是耳语，任何一层变重都会变成噪音。 */
 .canvasSection {
   position: relative;
   min-width: 0;
   overflow: hidden;
-  background-color: var(--color-canvas);
-  background-image: radial-gradient(rgb(66 62 55 / 11%) 0.7px, transparent 0.7px);
-  background-size: 28px 28px;
+  background-color: var(--color-studio-canvas);
+  background-image:
+    radial-gradient(rgb(66 62 55 / 20%) 1px, transparent 1px),
+    radial-gradient(rgb(66 62 55 / 10%) 0.8px, transparent 0.8px),
+    radial-gradient(ellipse 75% 60% at 50% 45%, transparent 55%, rgb(43 35 28 / 7%) 100%);
+  background-size: 120px 120px, 24px 24px, 100% 100%;
+  background-position: center center, center center, center center;
 }
 
 /* 画布角落：一个极弱的定位标签。
@@ -186,6 +195,7 @@
   pointer-events: none;
 }
 
+/* 给素材对话框与节点详情使用的类型标签（画布角落的 "设计轨迹" 标签已移除）。 */
 .overline {
   color: var(--color-ink-tertiary);
   font-size: var(--text-sm);
@@ -208,12 +218,12 @@
   white-space: nowrap;
 }
 
+/* tldraw 自己会画背景层；这里保持透明，让 .canvasSection 的点阵与暗角透上来。
+   否则会叠加两套网格，密度翻倍成摩尔纹。 */
 .canvas {
   position: absolute;
   inset: 50px 0 0;
-  background-color: var(--color-canvas);
-  background-image: radial-gradient(rgb(66 62 55 / 11%) 0.7px, transparent 0.7px);
-  background-size: 28px 28px;
+  background: transparent;
 }
 
 .canvas :global(.tl-background),
@@ -239,18 +249,27 @@
 
 .emptyState > span {
   color: var(--color-signal);
-  font-size: var(--text-sm);
-  font-weight: 750;
-  letter-spacing: 0.14em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 .emptyState h2 {
-  margin: 11px 0 6px;
-  font-size: 23px;
-  letter-spacing: -0.045em;
+  margin: 12px 0 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-divider);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 .emptyState p {
+  margin-top: 14px;
   color: var(--color-ink-secondary);
   font-size: var(--text-base);
   line-height: 1.7;
@@ -260,46 +279,48 @@
 .entryDialog > button {
   border: 0;
   border-radius: var(--radius-md);
-  margin-top: 14px;
-  padding: 10px var(--space-4);
-  background: var(--color-signal);
-  color: white;
+  margin-top: 18px;
+  padding: 11px var(--space-5);
+  background: var(--color-ink-strong);
+  color: var(--color-on-inverse);
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
 }
 
+.emptyState button:hover,
+.entryDialog > button:hover {
+  background: var(--color-inverse-hover);
+}
+
+/* 缩放组并入底部控制条后，只保留一段分隔与紧凑按钮。
+   独立悬浮的 zoom dock 已经移除——三个权重相同的浮层会互相打架。 */
 .zoomControls {
-  position: absolute;
-  z-index: 4;
-  right: 22px;
-  bottom: 72px;
   display: flex;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-paper);
-  box-shadow: var(--shadow-sm);
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--color-divider);
 }
 
 .zoomControls button {
-  min-width: 34px;
-  height: 36px;
+  min-width: 32px;
+  height: 32px;
   border: 0;
-  border-right: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 700;
-}
-
-.zoomControls button:last-child {
-  border-right: 0;
+  font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-state),
+              color var(--dur-fast) var(--ease-state);
 }
 
 .zoomControls button:hover {
   background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .bottomMenu {
@@ -313,10 +334,11 @@
   align-items: center;
   gap: var(--space-1);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-1) 6px;
+  border-radius: 14px;
+  padding: 5px 6px;
   background: var(--color-paper);
-  box-shadow: var(--shadow-card);
+  /* 与节点共用同一套材质阴影语言 */
+  box-shadow: var(--shadow-material-2);
   transform: translateX(-50%);
   white-space: nowrap;
   /* 入场：从底部滑入并淡入 */
@@ -337,19 +359,37 @@
 .bottomMenu > button {
   border: 0;
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  min-height: 36px;
+  padding: 8px 13px;
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
   transition: background var(--dur-fast) var(--ease-state),
+              color var(--dur-fast) var(--ease-state),
               transform var(--dur-instant) var(--ease-snappy);
 }
 
 .bottomMenu > button:hover,
 .bottomMenu > button[aria-expanded="true"] {
   background: var(--color-surface);
+}
+
+/* 主操作：画面里唯一的深色实底。其余按钮一律 ghost，
+   层级靠"只有一个是实的"来表达，而不是靠颜色深浅。 */
+.bottomMenu > button[data-material-trigger] {
+  min-height: 40px;
+  padding: 9px 18px;
+  background: var(--color-ink-strong);
+  color: var(--color-on-inverse);
+  font-weight: 600;
+}
+
+.bottomMenu > button[data-material-trigger]:hover,
+.bottomMenu > button[data-material-trigger][aria-expanded="true"] {
+  background: var(--color-inverse-hover);
+  color: var(--color-on-inverse);
 }
 
 .bottomMenu > button:active {
@@ -1468,9 +1508,54 @@
     transform: translateX(-50%);
   }
 
+  /* 390px 下整条控制条必须塞进视口：压缩内边距，并只收起 ± 两枚按钮
+     （触屏用双指缩放），保留"查看全图"与"100%"——定位画布仍需要它们。 */
+  .bottomMenu {
+    gap: 0;
+    padding: 4px;
+  }
+
+  .zoomControls button[aria-label="缩小画布"],
+  .zoomControls button[aria-label="放大画布"] {
+    display: none;
+  }
+
+  /* 帮助入口在窄屏让位给画布定位：它不属于主路径，且顶部菜单仍可触达说明。 */
+  .bottomMenu > button[aria-label="工作室帮助"] {
+    display: none;
+  }
+
+  /* tldraw 的试用徽标固定在左下角，会盖住并入主控制条后的缩放按钮。
+     窄屏把它抬到控制条之上，并让它不拦截指针事件。 */
+  .canvas :global(.tl-watermark_SEE-LICENSE) {
+    top: 8px !important;
+    left: 8px !important;
+    right: auto !important;
+    bottom: auto !important;
+    pointer-events: none !important;
+  }
+
+  .bottomMenu > button {
+    padding: 8px 9px;
+  }
+
+  .bottomMenu > button[data-material-trigger] {
+    padding: 9px 11px;
+  }
+
+  .menuDivider {
+    margin-inline: 2px;
+  }
+
   .zoomControls {
-    right: 10px;
-    bottom: 67px;
+    margin-left: 4px;
+    padding-left: 4px;
+    gap: 0;
+  }
+
+  .zoomControls button {
+    min-width: 28px;
+    padding-inline: 5px;
   }
 
   .canvasSection[data-mobile-list-open="true"] .zoomControls {
@@ -1860,7 +1945,6 @@
 .topActions > button, .topActions > a { display: inline-flex; align-items: center; min-height: var(--control-height); font-size: var(--text-base); }
 .workspace { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--studio-sidebar-width); }
 .canvasHeading { top: var(--space-4); left: var(--space-4); }
-.canvasHeading .overline { font-weight: var(--font-medium); letter-spacing: 0; }
 .sidebar { width: auto; min-width: 0; max-width: none; min-height: 0; overflow: hidden; border-left: 1px solid var(--color-border); }
 .sidebarHeader { min-height: var(--studio-header-height); padding: var(--space-3) var(--space-4); }
 .sidebarHeader h2 { font-size: var(--text-lg); font-weight: var(--font-semibold); }
@@ -1936,7 +2020,6 @@
  .workspace[data-mobile-view="assistant"] .assistantBody { padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom)); }
  .sidebarHeader h2 { display: block; }
  .bottomMenu { bottom: var(--space-3); }
- .zoomControls { bottom: 76px; }
  .addPopover { width: min(340px, calc(100vw - 32px)); }
 }
 @media (max-width: 767px) and (max-height: 600px) {

@@ -33,16 +33,18 @@ describe("workflow graph", () => {
     expect(nodeSummary({ ...fabric, payload: { text: "棉麻、斜纹", description: "柔软透气" } })).toBe("柔软透气");
     expect(nodeSummary({ ...fabric, payload: { text: "棉麻混纺，适合春夏" } })).toBe("棉麻混纺，适合春夏");
     expect(nodeSize({ ...fabric, payload: { imageUrl: "/fabric.jpg", text: "柔软透气", width: 1600, height: 900 } })).toEqual(imageNodeSize({ width: 1600, height: 900 }, true));
-    expect(nodeSize({ ...fabric, payload: {} })).toEqual({ w: 258, h: 172 });
+    expect(nodeSize({ ...fabric, payload: {} })).toEqual({ w: 300, h: 200 });
   });
 
   it("fits landscape, portrait and square images without reserving a portrait frame", () => {
     for (const [width, height] of [[1920, 1080], [768, 1024], [900, 900], [10000, 100], [100, 10000]] as const) {
       const size = imageNodeSize({ width, height });
       // The caption and border occupy 60 px; the remaining box keeps the photo ratio.
-      expect((size.w - 2) / (size.h - 60)).toBeCloseTo(width / height, 8);
-      expect(size.w).toBeLessThanOrEqual(322);
-      expect(size.h).toBeLessThanOrEqual(340);
+      expect((size.w - 4) / (size.h - 60)).toBeCloseTo(width / height, 8);
+      // jsdom 的 innerWidth 为 1024，走桌面档：宽度上限 400 + 4px 边框，高度上限 460。
+      // 窄视口（< 768）的紧凑档在 e2e 的 390px 用例里覆盖。
+      expect(size.w).toBeLessThanOrEqual(404);
+      expect(size.h).toBeLessThanOrEqual(460);
       expect(size.w).toBeGreaterThan(2);
       expect(size.h).toBeGreaterThan(60);
     }
@@ -60,10 +62,14 @@ describe("workflow graph", () => {
     const plain = imageNodeSize({ width: 1920, height: 1080 });
     expect(nodeSize(image)).toEqual({ w: plain.w, h: plain.h + 22 });
     const portraitWithSummary = imageNodeSize({ width: 768, height: 1024 }, true);
-    expect(portraitWithSummary.h).toBe(340);
-    expect((portraitWithSummary.w - 2) / (portraitWithSummary.h - 82)).toBeCloseTo(768 / 1024, 8);
+    expect(portraitWithSummary.h).toBe(460);
+    expect((portraitWithSummary.w - 4) / (portraitWithSummary.h - 82)).toBeCloseTo(768 / 1024, 8);
     expect(imageNodeSize({ width: Number.NaN, height: Number.POSITIVE_INFINITY })).toEqual(imageNodeSize({ width: 1, height: 1 }));
-    expect(nodeSize(node("brief", "asset", "brief"))).toEqual({ w: 258, h: 172 });
+    expect(nodeSize(node("brief", "asset", "brief"))).toEqual({ w: 300, h: 200 });
+    // 工具节点刻意比素材矮一档：过程不该抢作品的视觉高度。
+    expect(nodeSize(node("tool", "tool", "generate_design")).h).toBeLessThan(
+      nodeSize(node("brief", "asset", "brief")).h,
+    );
   });
 
   it("previews configuration on the existing card and replaces its inputs without changing saved graph", () => {

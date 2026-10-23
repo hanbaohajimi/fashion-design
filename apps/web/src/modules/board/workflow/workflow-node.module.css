@@ -1,3 +1,7 @@
+/* 节点 = 台面上的样片。
+   类别靠三重编码同时表达：左侧色条（位置）、染料色（颜色）、等宽大写标签（字形）。
+   任何一条单独存在都不够——必须三条同时在场，扫视时才能在不 hover 的情况下分类。 */
+
 .node {
   position: relative;
   pointer-events: auto;
@@ -7,33 +11,55 @@
   flex-direction: column;
   overflow: visible;
 
-  /* 顶部 2px 细色线，取代粗彩条：类型标识的内置语法，不是贴上去的装饰 */
+  /* 类别色条贯穿整卡高度，而不是顶部 2px 的一条短线 */
   border: 1px solid var(--color-border);
-  border-top: 2px solid var(--swatch-linen);
-  border-radius: 6px;
-  padding: var(--space-3) 14px 11px;
+  border-left: 3px solid var(--cat-color, var(--swatch-linen));
+  border-radius: 10px;
+  padding: 18px 18px 14px;
   background: var(--color-paper);
 
-  /* 明确的层次感：节点从画布浮起 */
+  /* 三层材质阴影：纸片被放在台面上 */
   box-shadow: var(--shadow-material-1);
 
   color: var(--color-ink);
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-sans);
   transition:
-    box-shadow var(--duration-fast, 140ms) var(--ease-standard),
-    opacity var(--duration-fast, 140ms) var(--ease-standard),
-    border-color var(--duration-fast, 140ms) var(--ease-standard);
+    box-shadow var(--dur-standard) var(--ease-state),
+    opacity var(--dur-standard) var(--ease-state),
+    border-color var(--dur-fast) var(--ease-state);
 
-  /* 入场动效：自然落下 */
-  animation: nodeEnter var(--dur-material-enter) var(--ease-material-drop) backwards;
+  /* 入场：按 BFS 深度错峰落下，上游先落、下游后落 */
+  animation: nodeEnter var(--dur-enter) var(--ease-enter) backwards;
+  animation-delay: calc(var(--enter-index, 0) * 45ms);
 }
 
-.node[data-compact="true"] .summary { visibility: hidden; }
+/* ── 类别色 ─────────────────────────────────────────────── */
+.node[data-kind="tool"] {
+  --cat-color: var(--swatch-mauve);
+}
+
+.node[data-type="candidate"],
+.node[data-type="reference_image"],
+.node[data-type="sketch"] {
+  --cat-color: var(--swatch-indigo);
+}
+
+.node[data-type="evaluation"] {
+  --cat-color: var(--swatch-madder);
+}
+
+.node[data-type="fabric"] {
+  --cat-color: var(--swatch-turmeric);
+}
+
+.node[data-type="constraint"] {
+  --cat-color: var(--swatch-sage);
+}
 
 @keyframes nodeEnter {
   from {
     opacity: 0;
-    transform: translateY(-12px) scale(0.94);
+    transform: translateY(10px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -41,64 +67,61 @@
   }
 }
 
+/* 缩小到 85% 以下：英文类别词与摘要让位给色条与标题，
+   保证在全图视图下仍能靠颜色和轮廓读图。 */
+.node[data-compact="true"] .summary { visibility: hidden; }
+.node[data-compact="true"] .eyebrow { font-size: 9px; letter-spacing: 0.08em; }
 
-
-.node[data-kind="tool"] {
-  border-top-color: var(--swatch-mauve);
-}
-
-.node[data-type="candidate"],
-.node[data-type="reference_image"],
-.node[data-type="sketch"] {
-  border-top-color: var(--swatch-indigo);
-}
-
-.node[data-type="evaluation"] {
-  border-top-color: var(--swatch-madder);
+/* ── 交互态 ─────────────────────────────────────────────── */
+/* 只靠阴影加深表达"拿起"。不用 translateY：节点 DOM 位移后连线端点不会跟随，
+   悬停时端口与连线会脱开。 */
+.node:hover {
+  box-shadow: var(--shadow-material-2);
 }
 
 .node[data-highlighted="true"] {
-  border-color: var(--swatch-mauve);
-  border-top-color: var(--swatch-mauve);
+  border-color: var(--swatch-indigo);
+  border-left-color: var(--swatch-indigo);
   box-shadow:
-    0 0 0 3px var(--swatch-mauve-wash),
-    0 2px 8px rgba(31, 29, 26, 0.10);
+    0 0 0 3px var(--swatch-indigo-wash),
+    var(--shadow-material-2);
   /* 高亮不改变几何位置，保持节点、端口和连线使用同一画布坐标。 */
 }
 
 .node[data-muted="true"] {
   border-style: dashed;
   background: var(--color-surface);
+  /* 联动高亮时靠虚线与次级底色退后，不用降低不透明度：
+     透明度会同时压暗文字，把正文对比度拉到 4.5:1 以下。 */
 }
 
 .node[data-status="proposed"] {
   border: 1px dashed var(--swatch-mauve);
-  border-top: 2px dashed var(--swatch-mauve);
+  border-left: 3px dashed var(--swatch-mauve);
   background: var(--color-paper);
 }
 
+/* ── 头部 ───────────────────────────────────────────────── */
 .nodeHeader {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 6px;
   border-bottom: 1px solid var(--color-divider);
   padding-bottom: var(--space-2);
 }
 
-/* eyebrow 类型标签：默认隐藏，只在鼠标悬停时出现 */
+/* 类别标签常驻可见。它曾经只在 hover 时出现，导致三种节点在没有鼠标时完全无法区分。 */
 .eyebrow {
+  overflow: hidden;
   color: var(--color-ink-tertiary);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   line-height: 1.2;
+  text-overflow: ellipsis;
   text-transform: uppercase;
-  opacity: 0;
-  transition: opacity var(--duration-fast, 140ms);
-}
-
-.node:hover .eyebrow {
-  opacity: 1;
+  white-space: nowrap;
 }
 
 .nodeHeader strong {
@@ -106,9 +129,9 @@
   color: var(--color-ink);
   /* 标题用衬线字体，和正文形成清晰层级 */
   font-family: var(--font-serif);
-  font-size: var(--text-base);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -119,14 +142,15 @@
   overflow: hidden;
   margin: var(--space-2) 0 0;
   color: var(--color-ink-secondary);
-  font-size: var(--text-base);
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.6;
   white-space: pre-wrap;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
-/* 图片帧尺寸跟随图片比例，不再用固定竖版高度承载横图。 */
+/* ── 图片：作品区 ───────────────────────────────────────── */
+/* 尺寸跟随图片比例，不再用固定竖版高度承载横图。 */
 .imageFrame {
   position: relative;
   flex: 1;
@@ -134,14 +158,18 @@
   overflow: hidden;
   border-radius: 0;
   margin-top: 0;
-  background: var(--color-surface);
+  background: var(--image-stage-background);
+  /* 图片像被压进纸里，而不是浮在卡面上 */
+  box-shadow: inset 0 0 0 1px rgba(31, 29, 26, 0.06);
 }
 
 .imageFrame img {
   display: block;
   width: 100%;
   height: 100%;
-  /* contain 保留完整图片轮廓，不裁切服装细节 */
+  /* contain 保留完整图片轮廓，不裁切服装细节——这是已经固化的产品决定，
+     节点尺寸本身按图片比例生成，所以 contain 与 cover 在正常路径下渲染一致。
+     视觉上的"主角感"来自放大的节点尺寸，不靠裁切。 */
   object-fit: contain;
   object-position: center;
 }
@@ -158,22 +186,24 @@
   min-width: 0;
   overflow: hidden;
   justify-content: center;
-  gap: var(--space-1);
+  gap: 3px;
   border-bottom: 0;
   border-top: 1px solid var(--color-divider);
-  padding: 9px min(var(--space-3), 4%);
+  padding: 8px 14px;
+}
+
+.node[data-image="true"] .nodeHeader strong {
+  font-size: 19px;
+  letter-spacing: -0.02em;
 }
 
 .node[data-image="true"] .eyebrow {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   opacity: 1;
 }
 
 .node[data-image="true"] .imageFrame {
   order: 1;
-  border-radius: 5px 5px 0 0;
+  border-radius: 9px 9px 0 0;
   margin-top: 0;
 }
 
@@ -183,8 +213,8 @@
   flex: 0 0 22px;
   min-width: 0;
   margin: 0;
-  padding: 0 min(var(--space-3), 4%) 6px;
-  font-size: var(--text-base);
+  padding: 0 14px 6px;
+  font-size: 12px;
   line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -194,7 +224,7 @@
   flex: 1;
   min-height: var(--control-height-primary);
   border: 1px solid var(--color-divider);
-  border-radius: 2px;
+  border-radius: 4px;
   margin-top: var(--space-2);
 }
 
@@ -205,13 +235,15 @@
   width: fit-content;
   align-items: center;
   gap: 5px;
-  border-radius: 2px;
+  border-radius: 3px;
   margin-top: 10px;
-  padding: 3px 6px;
+  padding: 3px 7px;
   background: var(--swatch-mauve-wash);
   color: var(--swatch-mauve);
-  font-size: var(--text-sm);
-  font-weight: 650;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .toolStatus > span {
@@ -219,7 +251,7 @@
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  /* 状态指示器脉冲 */
+  /* 状态指示器脉冲 —— 只在运行中才有意义 */
   animation: statusPulse var(--dur-ai-pulse) ease-in-out infinite;
 }
 
@@ -234,6 +266,28 @@
   }
 }
 
+.node[data-status="ready"] .toolStatus > span,
+.node[data-status="proposed"] .toolStatus > span {
+  animation: none;
+}
+
+/* 完成落定：容器类变化时，芯片轻轻"定住"一次。
+   这是唯一的一次性反馈——不要在这里加持续发光。 */
+.node[data-status="completed"] .toolStatus {
+  animation: statusSettle var(--dur-standard) var(--ease-spring);
+}
+
+@keyframes statusSettle {
+  0% {
+    transform: scale(0.94);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .node[data-status="failed"] .toolStatus {
   background: var(--color-error-bg);
   color: var(--color-error);
@@ -243,19 +297,21 @@
   animation: none;
 }
 
-/* 连接端口：常态透明，只在节点悬停或交互时显影 */
+/* ── 端口：黄铜环 ───────────────────────────────────────── */
+/* 6px 实心圆点在米色底上几乎不可见；11px 双环在缩小时仍可辨识，
+   也给了连线一个真实的"接点"感。 */
 .inputPort,
 .outputPort {
   position: absolute;
   z-index: 1;
-  top: calc(50% - 3px);
-  width: 6px;
-  height: 6px;
+  top: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
   border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   background: var(--color-paper);
   opacity: 0;
-  transition: opacity var(--duration-fast, 140ms);
+  transition: opacity var(--dur-fast);
 }
 
 .node:hover .inputPort,
@@ -266,19 +322,30 @@
 }
 
 .inputPort {
-  left: -4px;
+  left: -6px;
 }
 
 .outputPort {
-  right: -4px;
+  right: -6px;
 }
 
 .interactivePort { position: absolute; z-index: 3; top: calc(50% - 14px); width: 28px; height: 28px; display: grid; place-items: center; border: 0; padding: 0; background: transparent; cursor: crosshair; touch-action: none; pointer-events: all; }
 .interactivePort { transform: scale(var(--tl-scale, 1)); font-size: var(--text-base); }
 .portInput { left: -14px; }
 .portOutput { right: -14px; }
-.interactivePort > span:first-child { width: 6px; height: 6px; border: 1px solid var(--color-ink-tertiary); border-radius: 50%; background: var(--color-paper); transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) var(--ease-state), box-shadow var(--dur-fast) var(--ease-state); }
-.interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.4); border-color: var(--swatch-indigo); box-shadow: 0 0 0 3px var(--swatch-indigo-wash); }
+.interactivePort > span:first-child {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--color-ink-tertiary);
+  border-radius: 50%;
+  background: var(--color-paper);
+  /* 内环留白制造双环（黄铜环）效果 */
+  box-shadow: inset 0 0 0 2px var(--color-paper);
+  opacity: 0.45;
+  transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) var(--ease-state), box-shadow var(--dur-fast) var(--ease-state), opacity var(--dur-fast);
+}
+.node:hover .interactivePort > span:first-child { opacity: 1; }
+.interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.35); opacity: 1; border-color: var(--swatch-indigo); box-shadow: inset 0 0 0 2px var(--color-paper), 0 0 0 3px var(--swatch-indigo-wash); }
 .interactivePort:focus-visible { outline: 2px solid var(--swatch-indigo); border-radius: 50%; outline-offset: 2px; }
 .interactivePort:disabled { cursor: default; }
 .portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: var(--space-1) var(--space-2); background: var(--color-paper); color: var(--color-ink-secondary); font-size: var(--text-sm); line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
@@ -290,15 +357,14 @@
 .nodeActions button:hover { color: var(--swatch-indigo); }
 @media (pointer: coarse) { .interactivePort { width: 44px; height: 44px; top: calc(50% - 22px); } .portInput { left: -22px; } .portOutput { right: -22px; } }
 
+/* ── 无障碍降级 ─────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .node {
     transition: none;
+    animation: none;
+  }
+  .toolStatus > span,
+  .node[data-status="completed"] .toolStatus {
+    animation: none;
   }
 }
-
-.node { animation: none; box-shadow: none; border-radius: var(--radius-lg); font-family: var(--font-sans); }
-.eyebrow { opacity: 1; font-size: var(--text-sm); font-weight: var(--font-medium); letter-spacing: 0; }
-.nodeHeader strong { font-family: var(--font-sans); font-size: var(--text-base); font-weight: var(--font-semibold); letter-spacing: 0; }
-.imageFrame { background: var(--image-stage-background); }
-.toolStatus { font-size: var(--text-sm); }
-.node[data-highlighted="true"] { box-shadow: 0 0 0 2px var(--swatch-mauve-wash); }
