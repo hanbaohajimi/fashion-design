@@ -53,7 +53,19 @@ let infraStarted = false;
 let authStarted = false;
 try {
   await run("docker", ["info", "--format", "{{.ServerVersion}}"]);
-  await run("docker", [...compose, "build", "minio"]);
+  if (process.argv.includes("--reuse-verified-minio")) {
+    if (process.arch !== "x64") throw new Error("现有镜像复用校验仅支持 amd64，请运行默认构建");
+    const hashes = await run("docker", ["run", "--rm", "--entrypoint", "sha256sum", "fashion-trial-minio:local", "/usr/local/bin/minio", "/usr/local/bin/mc"], { capture: true });
+    const expected = [
+      "53e2a2cb16c5366ea6fbbc479c19ddb4c6a0948273e752f740fb1fbf27bb817c  /usr/local/bin/minio",
+      "ac90da87a35641be5a0ac75d49de5161ddb47d629b5ba01261b0ae9e00aea15f  /usr/local/bin/mc",
+    ];
+    if (hashes.trim().split(/\r?\n/u).some((line, index) => line !== expected[index]) || hashes.trim().split(/\r?\n/u).length !== 2)
+      throw new Error("现有 MinIO 镜像未通过锁定的二进制校验，请运行默认构建");
+    process.stdout.write("Reusing MinIO image after verifying both pinned binary hashes.\n");
+  } else {
+    await run("docker", [...compose, "build", "minio"]);
+  }
   infraStarted = true;
   await run("docker", [...compose, "up", "-d", "--wait", "--no-build", "postgres", "redis", "minio"]);
   await run("docker", [...compose, "run", "--rm", "minio-init"]);
