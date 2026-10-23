@@ -40,8 +40,8 @@
 - 截图：`output/playwright/editable-sketch.png`；固定交付截图和录屏：output/playwright/migration-proof/editable-sketch.png、output/playwright/migration-proof/editable-sketch.webm。
 - 真实链路：`pnpm test:e2e:real --reuse-verified-minio`，验证真实认证、数据库、队列、Worker 和存储；模型使用本地验收 Provider，不代表外部模型质量验收。
 - `--reuse-verified-minio` 仅在两个二进制均通过固定 SHA-256 校验时跳过下载，默认构建行为保持原样。
-- 当前网络会阻塞远程字体加载，截图验收使用 `PW_TEST_SCREENSHOT_NO_FONTS_READY=1` 避免等待外部字体。
-- `pnpm check` 的依赖审计被既有 `@sentry/nextjs` 公告 GHSA-mchm-gjx6-7h55 阻断，后续检查单独执行；未修改审计规则。
+- 当前网络可能阻塞远程字体加载，截图验收可使用 `PW_TEST_SCREENSHOT_NO_FONTS_READY=1` 避免等待外部字体。
+- 初次验收时 `pnpm check` 被 Sentry 安全公告阻断；后续将 Sentry 升至 10.75.2、Next.js 与 eslint-config-next 升至 16.4.1、DOMPurify 升至 3.4.17，依赖审计已通过，未放宽审计规则。
 
 自由基线在仓库外的 free-smoke 归档目录按历史锁文件离线安装，构建内部包，并在独立端口 4400 通过 3 项浏览器冒烟（助手终态同步、便签展开、桌面和窄屏白板交互）。仅调整该临时副本的开发端口，未改动自由分支。Windows tar 对部分历史中文文档路径报告提取错误；应用源码、锁文件与测试正常提取。
 
