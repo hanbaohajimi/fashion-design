@@ -7,8 +7,8 @@ on:
 jobs:
   quality:
     name: quality + integration + browser contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       API_INTERNAL_URL: http://127.0.0.1:3001
       APP_ORIGIN: http://localhost:3000
@@ -42,8 +42,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure official Ubuntu mirrors
+        run: |
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
+          printf '%s\n' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-security-mirrors.txt
+          sudo tee /etc/apt/apt.conf.d/80-ci-network >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+
+      - name: Restore export font
+        id: export-font
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fashion-ci/fonts
+          key: ubuntu-24.04-noto-cjk-regular-v1
+
       - name: Install export font
-        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+        timeout-minutes: 5
+        run: |
+          font_cache="$HOME/.cache/fashion-ci/fonts/NotoSansCJK-Regular.ttc"
+          if [ ! -s "$font_cache" ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+            mkdir -p "$(dirname "$font_cache")"
+            cp "$EXPORT_PDF_FONT_PATH" "$font_cache"
+          fi
+          sudo install -D -m 644 "$font_cache" "$EXPORT_PDF_FONT_PATH"
+          test -s "$EXPORT_PDF_FONT_PATH"
 
       - name: Audit production and development dependencies
         run: pnpm audit:all
@@ -80,8 +107,19 @@ jobs:
       - name: Build production artifacts
         run: pnpm build
 
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ubuntu-24.04-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}-headless
+
       - name: Install Playwright browser
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Run browser contract tests
         run: pnpm test:e2e
