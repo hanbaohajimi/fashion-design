@@ -20,7 +20,8 @@
   --studio-header-height: 56px;
   --content-max-width: 1600px;
   --page-gutter: clamp(16px, 3vw, 48px);
-  --image-stage-background: #E5E5E5;
+  /* 图像台底：暖灰而非冷灰。冷灰在暖调纸面上发脏，是图片显廉价的直接原因。 */
+  --image-stage-background: #EAE5DB;
 
   /* 旧组件只引用别名，所有视觉值以本文件为准。 */
   --surface-base: var(--color-canvas);
@@ -53,6 +54,12 @@
   --color-surface: #E9E6DF;     /* 台：次级表面、分组背景 */
   --color-overlay: #DEDAD1;     /* 叠层：悬停、选中底 */
 
+  /* 工作室画布专用表面 —— 只给设计工作台用。
+     全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
+     因此工作台另开一档更深、更暖的"木台"底色，让节点真正浮起来。 */
+  --color-studio-canvas: #EFEBE3;
+  --color-studio-canvas-edge: #E4DFD5;
+
   /* ============================================================
      二、文字层级 —— 墨
      ============================================================
@@ -82,9 +89,9 @@
      线是结构，不是装饰。宁可少用。
   */
 
-  --color-border: rgba(31, 29, 26, 0.14);
+  --color-border: rgba(31, 29, 26, 0.16);
   --color-border-strong: rgba(31, 29, 26, 0.28);
-  --color-divider: rgba(31, 29, 26, 0.07);
+  --color-divider: rgba(31, 29, 26, 0.09);
 
   /* 遮罩层 —— 模态背景、聚焦遮罩，需要足够暗以隔离内容 */
   --color-scrim: rgba(31, 29, 26, 0.72);
@@ -98,6 +105,11 @@
   --color-inverse: #26241F;
   --color-inverse-hover: #14120F;
   --color-on-inverse: #FCFBF8;
+
+  /* 视觉锚 —— 画面里唯一的深色。用于主操作、空状态主按钮等"重量级"物件。
+     没有深色锚的浅色界面会显得没有重心，所有元素重量相同。 */
+  --color-ink-strong: #16130F;
+  --color-walnut: #2B231C;
 
   /* ============================================================
      五、语义状态
@@ -226,10 +238,22 @@
   --shadow-hairline: 0 0 0 1px var(--color-border);
   --shadow-ui: 0 1px 2px rgba(31, 29, 26, 0.05);
 
-  /* 画布素材专用 —— 模拟纸张 / 卡纸的物理厚度 */
-  --shadow-material-1: 0 1px 3px rgba(31, 29, 26, 0.10);
-  --shadow-material-2: 0 3px 10px rgba(31, 29, 26, 0.12);
-  --shadow-material-3: 0 8px 24px rgba(31, 29, 26, 0.16);
+  /* 画布素材专用 —— 模拟纸张 / 卡纸的物理厚度。
+     三层叠加：接触阴影（贴住台面）+ 近距投影（厚度）+ 远距环境影（离台高度）。
+     单一阴影会让纸片看起来像贴纸；三层才有"被放在桌上"的重量。
+     基色统一 31,29,26（暖墨），不用纯黑——纯黑阴影会让米色底发灰。 */
+  --shadow-material-1:
+    0 1px 1px rgba(31, 29, 26, 0.04),
+    0 2px 6px rgba(31, 29, 26, 0.06),
+    0 8px 18px -8px rgba(31, 29, 26, 0.10);
+  --shadow-material-2:
+    0 1px 2px rgba(31, 29, 26, 0.05),
+    0 6px 16px -4px rgba(31, 29, 26, 0.12),
+    0 18px 40px -12px rgba(31, 29, 26, 0.16);
+  --shadow-material-3:
+    0 2px 4px rgba(31, 29, 26, 0.06),
+    0 14px 32px -6px rgba(31, 29, 26, 0.18),
+    0 32px 64px -24px rgba(31, 29, 26, 0.22);
 
   /* 浮层 */
   --shadow-popup: 0 4px 16px rgba(31, 29, 26, 0.12);
