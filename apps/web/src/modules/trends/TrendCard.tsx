@@ -76,6 +76,8 @@ export function TrendCard({
 
   return (
     <article
+      draggable={!disabled && !importing}
+      onDragStart={event => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-fashion-trend", JSON.stringify({ trendItemId: trend.id, title: trend.title, imageUrl: trend.coverImageUrl, text: trend.summary })); }}
       className={styles.trendCard}
       data-has-cover={trend.coverImageUrl ? "true" : "false"}
     >

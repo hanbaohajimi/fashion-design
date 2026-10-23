@@ -1,195 +1,490 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
-import { Button, Dialog, Input, SegmentedControl } from "../../../components/ui";
-import controls from "../../../components/ui.module.css";
-
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { sketchDocumentSchema, type SketchDocumentV1 } from "@fashion/shared";
+import { Button, Dialog, Input } from "../../../components/ui";
+import { useAuth } from "../../auth/AuthProvider";
 import {
   completeUpload,
   putOriginal,
   signImageUpload,
   waitForThumbnail,
 } from "../file-upload-api";
+import { splitStrokeByEraser } from "./sketch-eraser";
+import type { WorkflowNode } from "./workflow-api";
 import styles from "./workflow-asset-workspace.module.css";
 
-interface Point { readonly x: number; readonly y: number }
-interface Stroke {
-  readonly color: string;
-  readonly width: number;
-  readonly points: Point[];
+export interface SketchAsset {
+  fileAssetId: string;
+  title: string;
+  imageUrl?: string;
+  sketchDocument: SketchDocumentV1;
 }
-
-export interface WorkflowSketchEditorProps {
-  readonly projectId: string;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly onCreated: (asset: { fileAssetId: string; title: string; imageUrl?: string }) => Promise<void> | void;
+interface Props {
+  projectId: string;
+  open: boolean;
+  node?: WorkflowNode | null;
+  onClose: () => void;
+  onCreated: (asset: SketchAsset) => Promise<void> | void;
 }
+const blank = (): SketchDocumentV1 => ({
+  version: 1,
+  width: 640,
+  height: 860,
+  strokes: [],
+});
 
-const SIZE = 900;
-const COLORS = ["#243441", "#415f8c", "#a66a50"] as const;
-const BRUSHES = [3, 7, 13] as const;
-
-export function WorkflowSketchEditor({ projectId, open, onClose, onCreated }: WorkflowSketchEditorProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const strokesRef = useRef<Stroke[]>([]);
-  const activePointerRef = useRef<number | null>(null);
-  const [strokeCount, setStrokeCount] = useState(0);
-  const [title, setTitle] = useState("廓形草图");
-  const [color, setColor] = useState<string>(COLORS[0]);
-  const [brush, setBrush] = useState<number>(BRUSHES[1]);
-  const [saving, setSaving] = useState(false);
+export function WorkflowSketchEditor({
+  projectId,
+  open,
+  node,
+  onClose,
+  onCreated,
+}: Props) {
+  const auth = useAuth();
+  const [owner] = useState(auth.session?.user.id);
+  const key = `fashion-sketch:${owner ?? "anonymous"}:${projectId}:${node?.id ?? "new"}`;
+  const initial = () => {
+    const parsed = sketchDocumentSchema.safeParse(node?.payload.sketchDocument);
+    return parsed.success
+      ? parsed.data
+      : {
+          ...blank(),
+          width:
+            typeof node?.payload.width === "number" ? node.payload.width : 640,
+          height:
+            typeof node?.payload.height === "number"
+              ? node.payload.height
+              : 860,
+          ...(typeof node?.payload.fileAssetId === "string"
+            ? { baseFileAssetId: node.payload.fileAssetId }
+            : {}),
+        };
+  };
+  const [restored] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const value = JSON.parse(raw);
+        const parsed = sketchDocumentSchema.safeParse(value.document);
+        if (parsed.success)
+          return { document: parsed.data, title: String(value.title) };
+      }
+    } catch {
+      /* Start with the server document when storage is unavailable. */
+    }
+    return null;
+  });
+  const [doc, setDoc] = useState<SketchDocumentV1>(
+    () => restored?.document ?? initial(),
+  );
+  const [title, setTitle] = useState(
+    restored?.title ?? node?.title ?? "廓形草图",
+  );
+  const [color, setColor] = useState("#45423D");
+  const [brush, setBrush] = useState(1.05);
+  const [eraser, setEraser] = useState(false);
+  const [radius, setRadius] = useState(14);
+  const [zoom, setZoom] = useState(0.65);
   const [error, setError] = useState<string | null>(null);
-  const [pendingAsset, setPendingAsset] = useState<{ fileAssetId: string; title: string; imageUrl?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState<SketchAsset | null>(null);
+  const [dirty, setDirty] = useState(Boolean(restored));
+  const [closing, setClosing] = useState(false);
+  const [undo, setUndo] = useState<SketchDocumentV1[]>([]);
+  const [redo, setRedo] = useState<SketchDocumentV1[]>([]);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const base = useRef<HTMLImageElement | null>(null);
+  const active = useRef<{ id: number; x: number; y: number } | null>(null);
+  const [loadedBase, setLoadedBase] = useState<string | null>(null);
+  const baseReady = !doc.baseFileAssetId || loadedBase === doc.baseFileAssetId;
 
-  const redraw = useCallback(() => {
-    const context = canvasRef.current?.getContext("2d");
-    if (!context) return;
-    context.fillStyle = "#fffdf8";
-    context.fillRect(0, 0, SIZE, SIZE);
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    for (const stroke of strokesRef.current) {
+  useEffect(() => {
+    if (!dirty || !owner || auth.session?.user.id !== owner) return;
+    try {
+      localStorage.setItem(key, JSON.stringify({ title, document: doc }));
+    } catch {
+      queueMicrotask(() => setError("本地草稿空间不足，请保持窗口打开并保存"));
+    }
+  }, [dirty, doc, key, title, owner, auth.session?.user.id]);
+  useEffect(() => {
+    base.current = null;
+    if (!doc.baseFileAssetId) return;
+    const baseId = doc.baseFileAssetId;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      base.current = img;
+      if (!restored && !node?.payload.sketchDocument && !node?.payload.width) setDoc(current => ({ ...current, width: img.naturalWidth, height: img.naturalHeight }));
+      setLoadedBase(baseId);
+    };
+    img.onerror = () => setError("草图底图读取失败，请重新打开后重试");
+    img.src = `/api/files/${encodeURIComponent(doc.baseFileAssetId)}/thumbnail/1024`;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [doc.baseFileAssetId, restored, node?.payload.sketchDocument, node?.payload.width]);
+  useEffect(() => {
+    const ctx = canvas.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fffdf8";
+    ctx.fillRect(0, 0, doc.width, doc.height);
+    if (base.current) ctx.drawImage(base.current, 0, 0, doc.width, doc.height);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const stroke of doc.strokes) {
+      ctx.strokeStyle = stroke.color;
+      ctx.fillStyle = stroke.color;
+      ctx.globalAlpha = stroke.opacity;
       const first = stroke.points[0];
       if (!first) continue;
-      context.strokeStyle = stroke.color;
-      context.fillStyle = stroke.color;
-      context.lineWidth = stroke.width;
       if (stroke.points.length === 1) {
-        context.beginPath();
-        context.arc(first.x, first.y, stroke.width / 2, 0, Math.PI * 2);
-        context.fill();
-        continue;
+        ctx.beginPath();
+        ctx.arc(first.x, first.y, stroke.width / 2, 0, Math.PI * 2);
+        ctx.fill();
       }
-      context.beginPath();
-      context.moveTo(first.x, first.y);
-      for (const point of stroke.points.slice(1)) context.lineTo(point.x, point.y);
-      context.stroke();
+      stroke.points.slice(1).forEach((point, index) => {
+        const previous = stroke.points[index];
+        if (!previous) return;
+        ctx.lineWidth = stroke.width * (0.5 + point.pressure);
+        ctx.beginPath();
+        ctx.moveTo(previous.x, previous.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+      });
     }
-  }, []);
-
-  useEffect(() => { if (open) redraw(); }, [open, redraw]);
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
-        if (event.target instanceof HTMLElement && event.target.matches("input, textarea")) return;
-        if (saving || pendingAsset) return;
-        event.preventDefault();
-        strokesRef.current.pop();
-        setStrokeCount(strokesRef.current.length);
-        redraw();
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [open, pendingAsset, redraw, saving]);
-
-  const pointFrom = (event: PointerEvent<HTMLCanvasElement>): Point => {
+    ctx.globalAlpha = 1;
+  }, [doc, baseReady]);
+  const change = (next: SketchDocumentV1) => {
+    setDoc(next);
+    setDirty(true);
+    setPending(null);
+  };
+  const history = (forward: boolean) => {
+    const stack = forward ? redo : undo;
+    const previous = stack.at(-1);
+    if (!previous || saving || pending) return;
+    if (forward) {
+      setRedo(stack.slice(0, -1));
+      setUndo([...undo, doc]);
+    } else {
+      setUndo(stack.slice(0, -1));
+      setRedo([...redo, doc]);
+    }
+    change(previous);
+  };
+  const point = (event: PointerEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
-      x: Math.max(0, Math.min(SIZE, (event.clientX - bounds.left) * SIZE / bounds.width)),
-      y: Math.max(0, Math.min(SIZE, (event.clientY - bounds.top) * SIZE / bounds.height)),
+      x: Math.max(
+        0,
+        Math.min(
+          doc.width,
+          ((event.clientX - bounds.left) * doc.width) / bounds.width,
+        ),
+      ),
+      y: Math.max(
+        0,
+        Math.min(
+          doc.height,
+          ((event.clientY - bounds.top) * doc.height) / bounds.height,
+        ),
+      ),
+      pressure: event.pointerType === "pen" ? event.pressure : 0.5,
     };
   };
-  const pointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (saving || pendingAsset) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    activePointerRef.current = event.pointerId;
-    strokesRef.current.push({ color, width: brush, points: [pointFrom(event)] });
-    setStrokeCount(strokesRef.current.length);
-    setError(null);
-    redraw();
-  };
-  const pointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (activePointerRef.current !== event.pointerId) return;
-    event.preventDefault();
-    strokesRef.current.at(-1)?.points.push(pointFrom(event));
-    redraw();
-  };
-  const pointerEnd = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (activePointerRef.current !== event.pointerId) return;
-    activePointerRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-  const undo = () => {
-    strokesRef.current.pop();
-    setStrokeCount(strokesRef.current.length);
-    redraw();
-  };
-  const clear = () => {
-    strokesRef.current = [];
-    setStrokeCount(0);
-    redraw();
-  };
-
+  const eraseAt = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ) =>
+    change({
+      ...doc,
+      strokes: doc.strokes.flatMap((stroke) =>
+        splitStrokeByEraser(
+          stroke.points.map((p) => ({ ...p, z: p.pressure })),
+          from,
+          to,
+          radius / zoom,
+        ).map((points, index) => ({
+          ...stroke,
+          id: `${stroke.id}-${index}`,
+          points: points.map((p) => ({ x: p.x, y: p.y, pressure: p.z ?? 0.5 })),
+        })),
+      ),
+    });
   const save = async () => {
-    if (!pendingAsset && (!canvasRef.current || !strokeCount || !title.trim())) return;
     setSaving(true);
     setError(null);
     try {
-      let asset = pendingAsset;
+      const document = sketchDocumentSchema.parse(doc);
+      let asset = pending;
       if (!asset) {
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvasRef.current?.toBlob((value) => value ? resolve(value) : reject(new Error("草图导出失败")), "image/png");
-        });
-        const file = new File([blob], `${title.trim().slice(0, 80)}.png`, { type: "image/png" });
+        const blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.current?.toBlob(
+            (value) =>
+              value ? resolve(value) : reject(new Error("草图导出失败")),
+            "image/png",
+          ),
+        );
+        const file = new File([blob], "sketch.png", { type: "image/png" });
         const signed = await signImageUpload(projectId, file);
         const processing = signed.upload
-          ? await putOriginal(signed.upload, file).then(() => completeUpload(signed.file.id))
+          ? await putOriginal(signed.upload, file).then(() =>
+              completeUpload(signed.file.id),
+            )
           : signed.file;
         const ready = await waitForThumbnail(signed.file.id, processing);
-        const imageUrl = ready.thumbnail1024Url ?? ready.thumbnail256Url;
         asset = {
           fileAssetId: ready.id,
           title: title.trim(),
-          ...(imageUrl ? { imageUrl } : {}),
+          imageUrl: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
+          sketchDocument: document,
         };
-        setPendingAsset(asset);
+        setPending(asset);
       }
       await onCreated(asset);
-      setPendingAsset(null);
-      clear();
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* Saved remotely. */
+      }
+      setDirty(false);
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "草图保存失败，请重试");
+      setError(cause instanceof Error ? cause.message : "草图保存失败");
     } finally {
       setSaving(false);
     }
   };
-
   if (!open) return null;
+  const close = () => {
+    if (!saving) {
+      if (dirty) setClosing(true);
+      else onClose();
+    }
+  };
   return (
-      <Dialog label="绘制廓形草图" className={`${styles.sketchDialog} ${controls.controlSurface}`} returnFocusSelector="[data-material-trigger]" onClose={() => { if (!saving) onClose(); }}>
-        <header className={styles.header}>
-          <div><span>草图素材</span><h2>绘制廓形草图</h2></div>
-          <Button aria-label="关闭草图编辑器" disabled={saving} onClick={onClose} variant="ghost">关闭</Button>
-        </header>
-        <div className={styles.sketchBody}>
-          <div className={styles.sketchCanvasWrap}>
-            <canvas
-              aria-label="廓形草图画布"
-              className={styles.sketchCanvas}
-              height={SIZE}
-              onPointerCancel={pointerEnd}
-              onPointerDown={pointerDown}
-              onPointerMove={pointerMove}
-              onPointerUp={pointerEnd}
-              ref={canvasRef}
-              width={SIZE}
-            />
-          </div>
-          <aside className={styles.sketchControls}>
-            <label>素材名称<Input disabled={Boolean(pendingAsset) || saving} maxLength={80} onChange={(event) => setTitle(event.target.value)} value={title} /></label>
-            <fieldset><legend>画笔颜色</legend><div className={styles.options}>{COLORS.map((item) => <button aria-label={`选择颜色 ${item}`} aria-pressed={color === item} className={styles.colorChoice} key={item} onClick={() => setColor(item)} style={{ backgroundColor: item }} type="button" />)}</div></fieldset>
-            <fieldset><legend>笔触粗细</legend><SegmentedControl label="笔触粗细" value={String(brush)} onChange={(value) => setBrush(Number(value))} options={BRUSHES.map((item) => ({ value: String(item), label: item === BRUSHES[0] ? "细" : item === BRUSHES[1] ? "中" : "粗" }))} /></fieldset>
-            <div className={styles.options}><Button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={undo}>撤销一笔</Button><Button disabled={!strokeCount || saving || Boolean(pendingAsset)} onClick={clear}>清空</Button></div>
-            <p>草图保存后成为参考素材节点。可用鼠标、触控笔或触屏绘制。</p>
-            {error ? <p className={styles.error} role="alert">{error}</p> : null}
-            <Button variant="primary" disabled={(!pendingAsset && (!strokeCount || !title.trim())) || saving} onClick={() => void save()}>{saving ? "正在保存草图…" : pendingAsset ? "重试加入工作流" : "保存到工作流"}</Button>
-          </aside>
+    <Dialog
+      label="绘制廓形草图"
+      className={styles.sketchDialog}
+      returnFocusSelector="[data-material-trigger]"
+      onClose={close}
+    >
+      <header className={styles.header}>
+        <div><h2>廓形草图</h2></div>
+        <Button disabled={saving} onClick={close}>
+          关闭
+        </Button>
+      </header>
+      <div
+        className={styles.sketchBody}
+        onKeyDown={(event) => {
+          if (
+            !(
+              event.target instanceof HTMLElement &&
+              event.target.matches("input,textarea")
+            ) &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "z"
+          ) {
+            event.preventDefault();
+            history(event.shiftKey);
+          }
+        }}
+      >
+        <div
+          className={styles.sketchCanvasWrap}
+          style={{ overflow: "auto", maxHeight: "65vh" }}
+        >
+          <canvas
+            aria-label="廓形草图画布"
+            ref={canvas}
+            width={doc.width}
+            height={doc.height}
+            style={{
+              width: 640 * zoom,
+              maxWidth: "none",
+              height: "auto",
+              touchAction: "none",
+            }}
+            onPointerDown={(event) => {
+              if (saving || pending) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const p = point(event);
+              active.current = { id: event.pointerId, ...p };
+              setUndo([...undo, doc]);
+              setRedo([]);
+              if (eraser) eraseAt(p, p);
+              else
+                change({
+                  ...doc,
+                  strokes: [
+                    ...doc.strokes,
+                    {
+                      id: crypto.randomUUID(),
+                      color,
+                      width: brush,
+                      opacity: 0.76,
+                      points: [p],
+                    },
+                  ],
+                });
+            }}
+            onPointerMove={(event) => {
+              if (active.current?.id !== event.pointerId) return;
+              const p = point(event);
+              if (eraser) eraseAt(active.current, p);
+              else
+                change({
+                  ...doc,
+                  strokes: doc.strokes.map((stroke, index) =>
+                    index === doc.strokes.length - 1
+                      ? { ...stroke, points: [...stroke.points, p] }
+                      : stroke,
+                  ),
+                });
+              active.current = { id: event.pointerId, ...p };
+            }}
+            onPointerUp={() => {
+              active.current = null;
+            }}
+            onPointerCancel={() => {
+              active.current = null;
+            }}
+          />
         </div>
-      </Dialog>
+        <aside className={styles.sketchControls}>
+          <label>
+            素材名称
+            <Input
+              autoFocus
+              aria-label="素材名称"
+              maxLength={80}
+              value={title}
+              disabled={saving || Boolean(pending)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setDirty(true);
+              }}
+            />
+          </label>
+          <Button aria-pressed={!eraser} onClick={() => setEraser(false)}>
+            石墨铅笔
+          </Button>
+          <Button aria-pressed={eraser} onClick={() => setEraser(true)}>
+            局部橡皮
+          </Button>
+          <label>
+            画笔颜色
+            <select value={color} onChange={(e) => setColor(e.target.value)}>
+              {["#45423D", "#706B63", "#243441", "#415f8c", "#a66a50"].map(
+                (c) => (
+                  <option key={c}>{c}</option>
+                ),
+              )}
+            </select>
+          </label>
+          <label>
+            笔触粗细
+            <select
+              value={brush}
+              onChange={(e) => setBrush(Number(e.target.value))}
+            >
+              {[0.42, 1.05, 2.1, 7, 13].map((n) => (
+                <option key={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            橡皮大小
+            <select
+              value={radius}
+              onChange={(e) => setRadius(Number(e.target.value))}
+            >
+              {[8, 14, 24].map((n) => (
+                <option key={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <Button
+              disabled={!undo.length || saving || Boolean(pending)}
+              onClick={() => history(false)}
+            >
+              撤销
+            </Button>
+            <Button
+              disabled={!redo.length || saving || Boolean(pending)}
+              onClick={() => history(true)}
+            >
+              重做
+            </Button>
+            <Button
+              disabled={saving || Boolean(pending)}
+              onClick={() => {
+                setUndo([...undo, doc]);
+                setRedo([]);
+                change({ ...doc, strokes: [] });
+              }}
+            >
+              清空
+            </Button>
+          </div>
+          <label>
+            缩放
+            <input
+              aria-label="草图缩放"
+              type="range"
+              min={0.25}
+              max={3}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+            />
+          </label>
+          <Button onClick={() => setZoom(0.65)}>适配纸张</Button>
+          {doc.baseFileAssetId ? (
+            <p>底图保持原样，橡皮只擦除新增笔画。</p>
+          ) : null}
+          {node && node.canEditPayload !== true ? (
+            <p>保存为新草图，原执行记录保持完整。</p>
+          ) : null}
+          {error ? <p role="alert">{error}</p> : null}
+          <Button
+            disabled={
+              saving ||
+              !baseReady ||
+              !title.trim() ||
+              (!doc.strokes.length && !doc.baseFileAssetId)
+            }
+            onClick={() => void save()}
+          >
+            {saving ? "正在保存…" : pending ? "重试加入工作流" : "保存到工作流"}
+          </Button>
+          {closing ? (
+            <div role="alert">
+              <p>草图尚未保存</p>
+              <Button onClick={() => setClosing(false)}>继续编辑</Button>
+              <Button onClick={onClose}>保留草稿并关闭</Button>
+              <Button
+                onClick={() => {
+                  try {
+                    localStorage.removeItem(key);
+                  } catch {
+                    /* Storage unavailable. */
+                  }
+                  onClose();
+                }}
+              >
+                放弃
+              </Button>
+            </div>
+          ) : null}
+        </aside>
+      </div>
+    </Dialog>
   );
 }

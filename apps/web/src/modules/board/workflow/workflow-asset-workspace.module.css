@@ -386,3 +386,9 @@
 .actionStack button.primary { border-color: var(--color-signal); }
 .backdrop { z-index: var(--z-modal); }
 @media (max-width: 767px) { .previewLayout { grid-template-columns: 1fr; } .imageStage img { max-height: 55dvh; } .previewAside { padding: var(--space-4); } .tabs { overflow: auto; padding-inline: var(--space-2); gap: 0; } .tabs button { white-space: nowrap; padding-inline: var(--space-2); } }
+
+/* Keep the expanded sketch controls usable on laptop-height viewports. */
+.sketchControls { gap: var(--space-2); padding: var(--space-4); max-height: calc(100dvh - 150px); overflow-y: auto; }
+.sketchControls select { min-height: 32px; font: inherit; }
+.sketchCanvasWrap { align-content: start; }
+@media (max-width: 820px) { .sketchControls { max-height: none; } }

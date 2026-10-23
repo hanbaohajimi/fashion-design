@@ -42,6 +42,8 @@ export interface WorkflowNode {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly canDelete?: boolean;
+  readonly canEditPayload?: boolean;
+  readonly canForkPayload?: boolean;
   readonly deleteDisabledReason?: string | null;
 }
 

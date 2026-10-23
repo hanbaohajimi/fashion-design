@@ -2232,3 +2232,45 @@ test("仅用键盘完成添加、取消、打开详情和删除确认", async ({
   await page.keyboard.press("Enter");
   await expect(frame).toHaveCount(0);
 });
+
+
+test.describe("自由白板功能迁移", () => {
+  test("草图保存后重开笔画，历史引用另存分支", async ({ browser }, testInfo) => {
+    const context = await browser.newContext({ baseURL: "http://127.0.0.1:3000", recordVideo: { dir: testInfo.outputPath("videos") } });
+    const page = await context.newPage();
+    const mocked = await mockWorkflow(page);
+    await page.goto(`/${PROJECT_ID}`);
+    await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
+    await page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "绘制廓形草图" });
+    const draw = async () => {
+      const bounds = await dialog.getByLabel("廓形草图画布").boundingBox();
+      if (!bounds) throw new Error("草图画布不可见");
+      await page.mouse.move(bounds.x + 60, bounds.y + 60);
+      await page.mouse.down();
+      await page.mouse.move(bounds.x + 180, bounds.y + 180, { steps: 10 });
+      await page.mouse.up();
+    };
+    await draw();
+    await dialog.getByRole("button", { name: "撤销", exact: true }).click();
+    await dialog.getByRole("button", { name: "重做", exact: true }).click();
+    await dialog.getByRole("button", { name: "保存到工作流", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    const created = mocked.getGraph().nodes.find(item => item.type === "sketch");
+    if (!created) throw new Error("草图没有保存");
+    expect(created.payload.sketchDocument).toMatchObject({ version: 1, width: 640, height: 860 });
+    const original = JSON.stringify(created.payload.sketchDocument);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "＋ 添加素材", exact: true })).toBeVisible();
+    await page.evaluate(id => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: id })), created.id);
+    await expect(dialog.getByRole("button", { name: "保存到工作流", exact: true })).toBeEnabled();
+    await draw();
+    await mkdir("output/playwright", { recursive: true });
+    await page.screenshot({ path: "output/playwright/editable-sketch.png" });
+    await dialog.getByRole("button", { name: "保存到工作流", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(JSON.stringify(created.payload.sketchDocument)).toBe(original);
+    expect(mocked.getGraph().nodes.some(item => item.payload.sourceNodeId === created.id)).toBe(true);
+    await context.close();
+  });
+});

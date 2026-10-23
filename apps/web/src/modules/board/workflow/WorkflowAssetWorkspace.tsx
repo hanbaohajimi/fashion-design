@@ -1,4 +1,5 @@
 "use client";
+import { readSwatchColors } from "@fashion/shared";
 
 import { privateFetch as fetch } from "../../auth/private-fetch";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -71,9 +72,8 @@ function sourceFor(graph: WorkflowGraph | null, assetId: string): WorkflowNode |
 function graphPalettes(graph: WorkflowGraph | null): Array<{ id: string; title: string; colors: GenerationPaletteColor[] }> {
   return (graph?.nodes ?? []).flatMap((node) => {
     if (node.type !== "swatch") return [];
-    const color = node.payload.color;
-    if (typeof color !== "string" || !/^#[\da-f]{6}$/i.test(color)) return [];
-    return [{ id: node.id, title: node.title, colors: [{ hex: color.toUpperCase(), name: node.title.slice(0, 48) }] }];
+    const colors = readSwatchColors(node.payload, node.title);
+    return colors.length ? [{ id: node.id, title: node.title, colors }] : [];
   });
 }
 

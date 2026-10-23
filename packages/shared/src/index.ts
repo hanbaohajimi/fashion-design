@@ -398,3 +398,5 @@ export * from "./studio";
 export * from "./experiments";
 
 export * from "./fabric-details";
+
+export * from "./sketch-document";

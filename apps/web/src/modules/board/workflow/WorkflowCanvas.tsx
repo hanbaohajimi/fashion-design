@@ -1,4 +1,7 @@
 "use client";
+import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
+import { readSwatchColors } from "@fashion/shared";
+import { WorkflowImageInputs } from "./WorkflowImageInputs";
 
 import Link from "next/link";
 import { Button, Dialog, SegmentedControl, Tooltip } from "../../../components/ui";
@@ -34,13 +37,6 @@ import { createCollection } from "../generation/collection-api";
 import { GenerationWorkspace } from "../generation/GenerationWorkspace";
 import { userFacingError } from "../../../components/user-facing-error";
 import { BoardSkeleton } from "../BoardSkeleton";
-import {
-  completeUpload,
-  putOriginal,
-  signImageUpload,
-  validateImage,
-  waitForThumbnail,
-} from "../file-upload-api";
 import { LegacyBoardHistory, type LegacyBoardImport } from "./LegacyBoardHistory";
 import { WorkflowAssetWorkspace } from "./WorkflowAssetWorkspace";
 import { WorkflowSketchEditor } from "./WorkflowSketchEditor";
@@ -245,7 +241,7 @@ function WorkflowProjection({
           imageUrl,
           imageWidth: loadedImage.width,
           imageHeight: loadedImage.height,
-          color: typeof node.payload.color === "string" ? node.payload.color : "",
+          color: node.type === "swatch" && readSwatchColors(node.payload, node.title).length > 1 ? `linear-gradient(90deg, ${readSwatchColors(node.payload, node.title).map((c, i, all) => `${c.hex} ${i * 100 / all.length}% ${(i + 1) * 100 / all.length}%`).join(", ")})` : typeof node.payload.color === "string" ? node.payload.color : "",
           kind: node.kind,
           muted: node.status !== "proposed" && Boolean(lineage && !lineage.nodeIds.has(node.id)),
           nodeId: node.id,
@@ -378,6 +374,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [sketchOpen, setSketchOpen] = useState(false);
+  const [editingSwatch, setEditingSwatch] = useState<WorkflowNode | null>(null);
+  const [editingSketch, setEditingSketch] = useState<WorkflowNode | null>(null);
   const [workspaceAssetId, setWorkspaceAssetId] = useState<string | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"assistant" | "details">("assistant");
@@ -418,6 +416,10 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     setSelectedId(id);
   }, []);
   const openDetails = useCallback((id: string) => {
+    const target = graphRef.current?.nodes.find(node => node.id === id);
+    if (target && ["sketch", "swatch"].includes(target.type) && target.canForkPayload === false && !target.canEditPayload) { setError(target.deleteDisabledReason ?? "当前项目不可编辑"); return; }
+    if (target?.type === "swatch") { setEditingSwatch(target); return; }
+    if (target?.type === "sketch") { setEditingSketch(target); setSketchOpen(true); return; }
     const show = () => {
       detailDirty.current = false;
       setSelectedId(id); setInspectedId(id); setActiveTab("details"); setSidebarOpen(true); setMobileView("assistant");
@@ -428,7 +430,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     else { setSelectedId(id); setInspectedId(id); setActiveTab("details"); setSidebarOpen(true); setMobileView("assistant"); }
   }, [inspectedId]);
   const pendingInputEdits = useRef(new Map<string, { planned: PlannedInputEdit; mutationId: string; baseRevision: number }>());
-  const uploadRef = useRef<HTMLInputElement>(null);
+  const pendingCreates = useRef(new Map<string, { id: string; operations: WorkflowOperation[] }>());
   const mutationQueue = useRef<Promise<unknown>>(Promise.resolve());
   const layoutQueueRef = useRef<WorkflowLayoutSave | null>(null);
   const ensureConversation = async (): Promise<string> => {
@@ -514,23 +516,28 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     return queued;
   }, []);
 
+  const mutationPackets = useRef(new Map<string, { mutationId: string; baseRevision: number }>());
   const mutate = useCallback((operations: readonly WorkflowOperation[]) =>
     enqueue(async () => {
       const current = graphRef.current;
       if (!current) throw new Error("工作流仍在加载");
+      const key = JSON.stringify(operations);
+      const packet = mutationPackets.current.get(key) ?? { mutationId: crypto.randomUUID(), baseRevision: current.revision };
+      mutationPackets.current.set(key, packet);
       try {
         const next = await patchWorkflow(projectId, {
-          baseRevision: current.revision,
+          baseRevision: packet.baseRevision,
           mode: "semantic",
-          mutationId: crypto.randomUUID(),
+          mutationId: packet.mutationId,
           operations,
         });
         commitGraph(next);
+        mutationPackets.current.delete(key);
         setNotice("设计路径已保存");
         setError(null);
         return next;
       } catch (cause) {
-        if (cause instanceof WorkflowApiError && cause.status === 409) await reload();
+        if (cause instanceof WorkflowApiError && cause.status === 409) { mutationPackets.current.delete(key); await reload(); }
         throw cause;
       }
     }), [commitGraph, enqueue, projectId, reload]);
@@ -594,23 +601,28 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     type: AddKind,
     title: string,
     payload: Readonly<Record<string, unknown>>,
+    point?: { x: number; y: number },
   ) => {
     const current = graphRef.current;
     if (!current) throw new Error("工作流尚未加载完成，请稍后再试");
     const selectedNode = current.nodes.find((node) => node.id === selectedId);
     const viewport = editorRef.current?.getViewportPageBounds();
-    const x = selectedNode
+    const x = point ? point.x : selectedNode
       ? selectedNode.x + (editorRef.current ? graphNodeSize(editorRef.current, selectedNode).w : nodeSize(selectedNode).w) + 130
       : (viewport?.center.x ?? 320) - 130;
-    const y = selectedNode ? selectedNode.y + (selectedNode.kind === kind ? 240 : 0) : (viewport?.center.y ?? 240) - 105;
-    const id = crypto.randomUUID();
-    const operations: WorkflowOperation[] = [{
+    const y = point ? point.y : selectedNode ? selectedNode.y + (selectedNode.kind === kind ? 240 : 0) : (viewport?.center.y ?? 240) - 105;
+    const createKey = JSON.stringify({ kind, type, payload, title });
+    const previous = pendingCreates.current.get(createKey);
+    const id = previous?.id ?? crypto.randomUUID();
+    const operations: WorkflowOperation[] = previous?.operations ?? [{
       node: { id, kind, type, title: title.trim(), payload, x, y },
       type: "add_node",
     }];
+    pendingCreates.current.set(createKey, { id, operations });
     setBusy(true);
     try {
       await mutate(operations);
+      pendingCreates.current.delete(createKey);
       setSelectedId(id);
       setMenuTab(null);
       setDraftType(null);
@@ -629,13 +641,13 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 
   const handleAssetOption = (type: WorkflowAssetType) => {
     if (type === "sketch") {
-      setSketchOpen(true);
+      setEditingSketch(null); setSketchOpen(true);
       setMenuTab(null);
       return;
     }
     if (type === "reference_image") {
       setDraftType(type);
-      uploadRef.current?.click();
+      window.dispatchEvent(new Event("fashion:upload-images"));
       return;
     }
     if (type === "trend" || type === "fabric") {
@@ -646,41 +658,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
     setDraftType(type);
     setMenuTab(null);
   };
-
-  const handleUpload = async (file: File) => {
-    const validation = validateImage(file);
-    if (validation) { setError(validation); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      const signed = await signImageUpload(projectId, file);
-      const processing = signed.upload
-        ? await putOriginal(signed.upload, file).then(() => completeUpload(signed.file.id))
-        : signed.file;
-      const ready = await waitForThumbnail(signed.file.id, processing);
-      const nodeId = await addNode("asset", "reference_image", file.name, {
-        fileAssetId: ready.id,
-        width: ready.width,
-        height: ready.height,
-        imageUrl: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
-        sourceName: file.name,
-        role: "style_ref",
-        roleSource: "default",
-        roleInferenceState: "pending",
-      });
-      try {
-        commitGraph(await inferWorkflowNodeRole(projectId, nodeId));
-      } catch (cause) {
-        setError(`图片已加入工作流；角色识别暂不可用，可在节点详情重试或手动选择。${cause instanceof Error ? ` ${cause.message}` : ""}`);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "素材上传失败");
-    } finally {
-      setBusy(false);
-      if (uploadRef.current) uploadRef.current.value = "";
-    }
-  };
-
 
   const importLegacy = async (item: LegacyBoardImport) => {
     const payload = item.payload;
@@ -739,6 +716,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             <summary className={styles.saved} data-save-state={sync.error ? "error" : layoutSave.state}><span aria-hidden="true" />{sync.error ? "同步异常" : layoutSave.state === "error" ? "画布未保存" : layoutSave.state === "dirty" ? "有未保存的位置" : layoutSave.state === "saving" ? "正在保存画布…" : busy ? "正在处理" : "画布已保存"}</summary>
             <div>{layoutSave.pendingCount > 0 ? <p aria-label="待保存节点数">{layoutSave.pendingCount} 个节点待保存</p> : <p>所有节点位置已保存</p>}{sync.lastSuccess ? <p>最近同步 {new Date(sync.lastSuccess).toLocaleTimeString("zh-CN")}</p> : null}{sync.error ? <p role="status">画布同步异常：{sync.error}<Button onClick={sync.retry}>重试同步</Button></p> : null}{layoutSave.state === "error" ? <Button onClick={() => void layoutSave.queue.flush().catch(() => undefined)}>重试保存</Button> : null}</div>
           </details>
+          <WorkflowProjectPanels projectId={projectId} graph={graph} onGraph={commitGraph} onLocate={openDetails} onCollection={setCollectionId} />
           <Link href={`/${encodeURIComponent(projectId)}/studio`}>款式与交付</Link>
           <Link href={`/trends?from=board&boardId=${encodeURIComponent(projectId)}`}>趋势</Link>
           <Link href={`/fabrics?from=board&boardId=${encodeURIComponent(projectId)}`}>面料</Link>
@@ -762,7 +740,8 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
             </button>
           </div>
 
-          <div className={styles.canvas} data-mobile-list-open={mobileListOpen ? "true" : "false"} onPasteCapture={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+          <div className={styles.canvas} data-mobile-list-open={mobileListOpen ? "true" : "false"}>
+            <WorkflowImageInputs projectId={projectId} editor={() => editorRef.current} onAdd={async (type, title, payload, point) => { const id = await addNode("asset", type, title, payload, point); if (type === "reference_image") { try { commitGraph(await inferWorkflowNodeRole(projectId, id)); } catch { setError("图片已加入工作流；角色识别暂不可用，可在节点详情重试或手动选择。"); } } }}>
             <WorkflowInteractionProvider graph={graph} editorRef={editorRef} onEdit={editInput} onDetails={openDetails}>
             <Tldraw hideUi locale="zh-cn" options={{ createTextOnCanvasDoubleClick: false }} overrides={workflowUiOverrides} shapeUtils={[WorkflowNodeShapeUtil, WorkflowEdgeShapeUtil]} store={store} {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}>
               <WorkflowProjection
@@ -776,6 +755,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
               <WorkflowConnectionOverlay graph={graph} />
             </Tldraw>
             </WorkflowInteractionProvider>
+            </WorkflowImageInputs>
             {graph.nodes.length === 0 ? (
               <div className={styles.emptyState}>
                 <span>开始创作</span>
@@ -878,7 +858,6 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       </div>
 
       {discardAction ? <Dialog label="保留未保存的参数" onClose={cancelDiscard}><div className={styles.entryDialog}><h2>参数尚未保存</h2><p>继续会放弃当前节点的修改。也可以返回，先保存参数。</p><div className={styles.dialogActions}><Button onClick={cancelDiscard}>返回编辑</Button><Button variant="danger" onClick={() => { discardReply.current?.(true); discardReply.current = null; discardAction(); setDiscardAction(null); }}>放弃修改并继续</Button></div></div></Dialog> : null}
-      <input accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); }} ref={uploadRef} type="file" />
       {draftType && draftType !== "reference_image" && draftType !== "sketch" ? (
         <WorkflowMaterialEntry key={draftType} type={draftType} initialTitle={ASSET_OPTIONS.find((item) => item.type === draftType)?.title ?? "参考素材"} busy={busy} onClose={() => setDraftType(null)}
           onAdd={async (title, payload) => { await addNode("asset", draftType, title, payload); }} />
@@ -893,18 +872,19 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
       {historyOpen ? <LegacyBoardHistory onClose={() => setHistoryOpen(false)} onImport={importLegacy} projectId={projectId} /> : null}
       {helpOpen ? <Dialog label="工作室使用帮助" onClose={() => setHelpOpen(false)}><div className={styles.entryDialog}><h2>开始你的设计</h2><ol><li>通过“添加素材”上传参考图、绘制草图，或选择面料与趋势素材。</li><li>添加工具，将素材右侧连接点拖到工具的输入位置。</li><li>单击选择节点，打开“节点详情”设置参数，保存后确认执行。</li><li>在助手输入框描述目标，或用 @ 引用画布内容；提案需确认后才会加入画布。</li><li>画布位置会自动保存。顶部保存状态可查看同步时间并重试失败操作。</li><li>“导出画布 PNG”保存设计路径。候选图与系列在各自工作区导出交付文件，关闭窗口不会取消任务。</li></ol><Button variant="primary" onClick={() => setHelpOpen(false)}>知道了</Button></div></Dialog> : null}
       {workspaceAssetId ? <BoardProjectContext.Provider value={projectId}><WorkflowAssetWorkspace assetId={workspaceAssetId} onEnsureConversation={ensureConversation} onClose={() => setWorkspaceAssetId(null)} onGraphRefresh={() => { void reload().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "工作流刷新失败")); }} open projectId={projectId} /></BoardProjectContext.Provider> : null}
-      <WorkflowSketchEditor onClose={() => setSketchOpen(false)} onCreated={async ({ fileAssetId, title, imageUrl }) => {
-        const nodeId = await addNode("asset", "sketch", title, {
-          fileAssetId,
-          ...(imageUrl ? { imageUrl } : {}),
-          source: "designer_sketch",
-          role: "silhouette_ref",
-          roleSource: "default",
-          roleInferenceState: "pending",
-        });
-        try { commitGraph(await inferWorkflowNodeRole(projectId, nodeId)); }
-        catch (cause) { setError(`草图已保存；角色识别暂不可用，可在节点详情重试。${cause instanceof Error ? ` ${cause.message}` : ""}`); }
-      }} open={sketchOpen} projectId={projectId} />
+      {editingSwatch ? <WorkflowMaterialEntry key={editingSwatch.id} type="swatch" initialTitle={editingSwatch.title} initialPayload={editingSwatch.payload} busy={busy} onClose={() => setEditingSwatch(null)} onAdd={async (title, payload) => {
+        if (editingSwatch.canEditPayload === true) await mutate([{ type: "update_node", nodeId: editingSwatch.id, title, payload: { ...editingSwatch.payload, ...payload } }]);
+        else await addNode("asset", "swatch", title, { ...payload, sourceNodeId: editingSwatch.id });
+        setEditingSwatch(null);
+      }} /> : null}
+      {sketchOpen ? <WorkflowSketchEditor key={editingSketch?.id ?? "new"} node={editingSketch} onClose={() => { setSketchOpen(false); setEditingSketch(null); }} onCreated={async ({ title, ...asset }) => {
+        if (editingSketch?.canEditPayload === true) {
+          await mutate([{ type: "update_node", nodeId: editingSketch.id, title, payload: { ...editingSketch.payload, ...asset } }]);
+        } else {
+          const id = await addNode("asset", "sketch", title, { ...asset, source: "designer_sketch", role: "silhouette_ref", roleSource: "default", roleInferenceState: "pending", ...(editingSketch ? { sourceNodeId: editingSketch.id } : {}) });
+          try { commitGraph(await inferWorkflowNodeRole(projectId, id)); } catch { setNotice("草图已保存，可在节点详情重试角色识别"); }
+        }
+      }} open projectId={projectId} /> : null}
       {collectionId ? <BoardProjectContext.Provider value={projectId}><GenerationWorkspace><CollectionDrawer collectionId={collectionId} onClose={() => setCollectionId(null)} /></GenerationWorkspace></BoardProjectContext.Provider> : null}
     </main>
   );

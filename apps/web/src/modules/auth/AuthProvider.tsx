@@ -54,6 +54,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname);
+  const draftOwner = useRef<string | null>(null);
+  useEffect(() => {
+    const id = session?.user.id ?? null;
+    if (draftOwner.current && draftOwner.current !== id) {
+      try { for (const key of Object.keys(localStorage)) if (key.startsWith(`fashion-sketch:${draftOwner.current}:`)) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
+    }
+    draftOwner.current = id;
+  }, [session?.user.id]);
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const flight = useRef<Promise<void> | null>(null);
@@ -126,6 +134,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       );
     }
 
+    try { for (const key of Object.keys(localStorage)) if (key.startsWith("fashion-sketch:")) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
     setSession(null);
     setError(null);
     announceSessionChange();

@@ -1,3 +1,4 @@
+import { sketchDocumentSchema, swatchColorsSchema } from "@fashion/shared";
 import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { requireProjectFile } from "../files/project-file-access";
 import {
@@ -87,7 +88,7 @@ export class WorkflowsService {
   async get(userId: string, projectId: string): Promise<WorkflowGraphResult> {
     const project = await this.assertProject(projectId, userId);
     const graph = await this.readGraph(projectId);
-    return project.archived || !project.canEdit ? { ...graph, nodes: graph.nodes.map((node) => ({ ...node, canDelete: false, deleteDisabledReason: project.archived ? "项目已归档，请先恢复项目" : "当前角色仅可查看项目" })) } : graph;
+    return project.archived || !project.canEdit ? { ...graph, nodes: graph.nodes.map((node) => ({ ...node, canDelete: false, canEditPayload: false, canForkPayload: false, deleteDisabledReason: project.archived ? "项目已归档，请先恢复项目" : "当前角色仅可查看项目" })) } : graph;
   }
 
   async patch(
@@ -603,6 +604,12 @@ export class WorkflowsService {
     nodes: ReadonlyMap<string, GraphNode>,
   ): Promise<void> {
     for (const node of nodes.values()) {
+      if (node.type === "sketch" && node.payload.sketchDocument !== undefined) {
+        const parsed = sketchDocumentSchema.safeParse(node.payload.sketchDocument);
+        if (!parsed.success) throw invalidGraph("草图笔画格式无效或超过大小限制");
+        if (parsed.data.baseFileAssetId) await requireProjectFile(transaction, this.access, ownerId, parsed.data.baseFileAssetId, projectId, transaction);
+      }
+      if (node.type === "swatch" && node.payload.colors !== undefined && !swatchColorsSchema.safeParse(node.payload.colors).success) throw invalidGraph("色卡必须包含 1–12 个有效颜色");
       if (node.kind === "tool") {
         if (
           node.payload.toolKey !== node.type ||
@@ -619,6 +626,7 @@ export class WorkflowsService {
         "boardElementId",
         "generationTaskId",
         "collectionId",
+        "sourceNodeId",
       ] as const;
       for (const key of references) {
         const id = node.payload[key];
@@ -627,6 +635,11 @@ export class WorkflowsService {
           throw invalidGraph(`${key} 必须是有效 ID`);
         let valid = false;
         switch (key) {
+          case "sourceNodeId": {
+            const source = await transaction.workflowNode.findUnique({ where: { id }, select: { projectId: true } });
+            valid = source?.projectId === projectId;
+            break;
+          }
           case "assetId": {
             const asset = await transaction.designAsset.findUnique({
               where: { id },
@@ -762,7 +775,7 @@ export class WorkflowsService {
           edge.sourceNodeId === node.id && nodes.some((target) => target.id === edge.targetNodeId && target.status !== "ready"));
         const deleteDisabledReason = node.status !== "ready" ? "已执行或正在处理的节点需要保留历史路径"
           : frozen ? "该素材已被执行工具引用，需要保留历史路径" : null;
-        return { ...node, canDelete: deleteDisabledReason === null, deleteDisabledReason };
+        return { ...node, canDelete: deleteDisabledReason === null, canEditPayload: deleteDisabledReason === null, canForkPayload: node.kind === "asset" && ["sketch", "swatch"].includes(node.type), deleteDisabledReason };
       }),
       edges,
       legacyAvailable: Boolean(snapshot || legacyElement),

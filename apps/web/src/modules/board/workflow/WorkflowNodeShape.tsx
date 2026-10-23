@@ -143,11 +143,11 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
             <WorkflowNodeImage key={imageUrl} shape={shape} title={title} />
           </div>
         ) : null}
-        {nodeType === "swatch" && /^#[0-9A-Fa-f]{6}$/u.test(color) ? (
+        {nodeType === "swatch" && (/^#[0-9A-Fa-f]{6}$/u.test(color) || color.startsWith("linear-gradient(")) ? (
           <div
             aria-label={`色彩 ${color.toUpperCase()}`}
             className={styles.swatch}
-            style={{ backgroundColor: color }}
+            style={{ background: color }}
           />
         ) : null}
         {summary ? <p className={styles.summary}>{summary}</p> : null}

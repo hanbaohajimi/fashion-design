@@ -1,5 +1,6 @@
 "use client";
 
+import { readSwatchColors } from "@fashion/shared";
 import { useEffect, useState } from "react";
 import { privateFetch } from "../../auth/private-fetch";
 import type { WorkflowAssetType } from "./workflow-api";
@@ -15,27 +16,28 @@ interface LibraryItem {
   readonly sourceUrl?: string;
 }
 
-export function WorkflowMaterialEntry({ type, initialTitle, busy, onAdd, onClose }: {
+export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy, onAdd, onClose }: {
   readonly type: WorkflowAssetType;
   readonly initialTitle: string;
+  readonly initialPayload?: Readonly<Record<string, unknown>>;
   readonly busy: boolean;
   readonly onAdd: (title: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
   readonly onClose: () => void;
 }) {
   const [title, setTitle] = useState(initialTitle);
-  const [text, setText] = useState("");
-  const [color, setColor] = useState("#40536D");
+  const [text, setText] = useState(typeof initialPayload?.text === "string" ? initialPayload.text : "");
+  const [colors, setColors] = useState(() => initialPayload ? readSwatchColors(initialPayload, initialTitle) : [{ hex: "#40536D", name: "色彩 1" }]);
   const [error, setError] = useState<string | null>(null);
   return <WorkflowDialog label={`添加${initialTitle}`} onClose={onClose} returnFocusSelector="[data-material-trigger]">
     <form className={styles.entryDialog} onSubmit={(event) => {
       event.preventDefault();
       if (!title.trim() || busy) return;
-      void onAdd(title.trim(), { text: text.trim(), ...(type === "swatch" ? { color } : {}) }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "素材保存失败"));
+      void onAdd(title.trim(), { text: text.trim(), ...(type === "swatch" ? { color: colors[0]?.hex, colors } : {}) }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "素材保存失败"));
     }}>
       <header><span className={styles.overline}>添加设计素材</span><button aria-label="关闭" onClick={onClose} type="button">×</button></header>
       <h2>{initialTitle}</h2>
       <label>名称<input autoFocus maxLength={200} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
-      {type === "swatch" ? <label>色号<input onChange={(event) => setColor(event.target.value)} type="color" value={color} /></label> : null}
+      {type === "swatch" ? <fieldset><legend>色卡（最多12色）</legend>{colors.map((color, index) => <div key={index}><input aria-label={`色号 ${index + 1}`} type="color" value={color.hex} onChange={e => setColors(colors.map((c, i) => i === index ? { ...c, hex: e.target.value } : c))} /><input aria-label={`颜色名称 ${index + 1}`} maxLength={48} required value={color.name} onChange={e => setColors(colors.map((c, i) => i === index ? { ...c, name: e.target.value } : c))} /><button type="button" disabled={index === 0} onClick={() => { const next = [...colors]; const previous = next[index - 1]; const current = next[index]; if (previous && current) { next[index - 1] = current; next[index] = previous; setColors(next); } }}>上移</button><button type="button" disabled={colors.length === 1} onClick={() => setColors(colors.filter((_, i) => i !== index))}>删除</button></div>)}<button type="button" disabled={colors.length >= 12} onClick={() => setColors([...colors, { hex: "#40536D", name: `色彩 ${colors.length + 1}` }])}>添加颜色</button></fieldset> : null}
       <label>内容<textarea maxLength={4000} onChange={(event) => setText(event.target.value)} placeholder="写下设计目标、场景或参考说明…" rows={5} value={text} /></label>
       {error ? <p role="alert">{error}</p> : null}
       <button disabled={busy} type="submit">加入工作流</button>
