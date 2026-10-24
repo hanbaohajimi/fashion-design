@@ -398,6 +398,19 @@
   top: 50%;
   transform: translate(-50%, -50%);
   z-index: 420;
+  /* 首次引导入场：稀有频率，spatial + preventing-jarring-change 目的 */
+  animation: emptyGuideEnter 400ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
+}
+
+@keyframes emptyGuideEnter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 12px)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 .emptyBoardGuide > span {
@@ -443,6 +456,20 @@
   font-weight: 800;
   padding: 12px 16px;
   width: 100%;
+  transition: transform 160ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.emptyBoardGuide button:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emptyBoardGuide {
+    animation: none;
+  }
+  .emptyBoardGuide button:active {
+    transform: none;
+  }
 }
 
 .uploadTray {

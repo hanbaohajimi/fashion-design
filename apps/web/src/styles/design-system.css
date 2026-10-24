@@ -18,10 +18,18 @@
   --control-height-primary: 40px;
   --control-height-touch: 44px;
   --studio-header-height: 56px;
+  --app-header-height: 56px;
+  --workspace-nav-width: 216px;
+  --inspector-width: 320px;
+  --editor-header-height: 64px;
+  --text-page-title: 32px;
+  --text-module-title: 24px;
+  --text-section-title: 20px;
+  --upload-preview-height: 200px;
   --content-max-width: 1600px;
-  --page-gutter: clamp(16px, 3vw, 48px);
+  --page-gutter: 32px;
   /* 图像台底：暖灰而非冷灰。冷灰在暖调纸面上发脏，是图片显廉价的直接原因。 */
-  --image-stage-background: #EAE5DB;
+  --image-stage-background: #eae5db;
 
   /* 旧组件只引用别名，所有视觉值以本文件为准。 */
   --surface-base: var(--color-canvas);
@@ -40,7 +48,6 @@
   --accent-muted: var(--color-signal-subtle);
   --accent-hover: var(--color-signal-hover);
 
-
   /* ============================================================
      一、表面层级 —— 墙 / 纸 / 台
      ============================================================
@@ -49,16 +56,16 @@
      面板是"纸"，最亮，浮动在墙之上。
   */
 
-  --color-canvas: #F1EFEA;      /* 墙：画布底，略深于面板 */
-  --color-paper: #FCFBF8;       /* 纸：面板、工具栏、卡片 */
-  --color-surface: #E9E6DF;     /* 台：次级表面、分组背景 */
-  --color-overlay: #DEDAD1;     /* 叠层：悬停、选中底 */
+  --color-canvas: #f1efea; /* 墙：画布底，略深于面板 */
+  --color-paper: #fcfbf8; /* 纸：面板、工具栏、卡片 */
+  --color-surface: #e9e6df; /* 台：次级表面、分组背景 */
+  --color-overlay: #dedad1; /* 叠层：悬停、选中底 */
 
   /* 工作室画布专用表面 —— 只给设计工作台用。
      全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
      因此工作台另开一档更深、更暖的"木台"底色，让节点真正浮起来。 */
-  --color-studio-canvas: #EFEBE3;
-  --color-studio-canvas-edge: #E4DFD5;
+  --color-studio-canvas: #efebe3;
+  --color-studio-canvas-edge: #e4dfd5;
 
   /* ============================================================
      二、文字层级 —— 墨
@@ -66,10 +73,10 @@
      不用纯黑。纯黑在浅色底上过于尖锐，长时间阅读疲劳。
   */
 
-  --color-ink: #1F1D1A;           /* 主要文字 —— 深墨 */
-  --color-ink-secondary: #5C574F; /* 次要文字 —— 说明、元数据 */
-  --color-ink-tertiary: #686259;  /* 辅助文字，在次级表面上同样满足正文对比度 */
-  --color-ink-disabled: #BDB8AE;  /* 禁用 */
+  --color-ink: #1f1d1a; /* 主要文字 —— 深墨 */
+  --color-ink-secondary: #5c574f; /* 次要文字 —— 说明、元数据 */
+  --color-ink-tertiary: #686259; /* 辅助文字，在次级表面上同样满足正文对比度 */
+  --color-ink-disabled: #bdb8ae; /* 禁用 */
 
   /* ============================================================
      三、强调色 —— 染料
@@ -78,8 +85,8 @@
      比科技橙更沉，接近真实织物与材料的颜色。
   */
 
-  --color-signal: #B0452A;
-  --color-signal-hover: #98381F;
+  --color-signal: #b0452a;
+  --color-signal-hover: #98381f;
   --color-signal-subtle: rgba(176, 69, 42, 0.08);
   --color-signal-wash: rgba(176, 69, 42, 0.04);
 
@@ -102,24 +109,26 @@
   --color-canvas-dot: rgba(31, 29, 26, 0.16);
 
   /* 反色层 —— 深色按钮、选中态、深色提示条 */
-  --color-inverse: #26241F;
-  --color-inverse-hover: #14120F;
-  --color-on-inverse: #FCFBF8;
+  --color-inverse: #26241f;
+  --color-inverse-hover: #14120f;
+  --color-on-inverse: #fcfbf8;
 
   /* 视觉锚 —— 画面里唯一的深色。用于主操作、空状态主按钮等"重量级"物件。
      没有深色锚的浅色界面会显得没有重心，所有元素重量相同。 */
-  --color-ink-strong: #16130F;
-  --color-walnut: #2B231C;
+  --color-ink-strong: #16130f;
+  --color-walnut: #2b231c;
 
   /* ============================================================
      五、语义状态
      ============================================================ */
 
-  --color-success: #4A6B57;
+  --color-success: #4a6b57;
   --color-success-bg: rgba(74, 107, 87, 0.08);
-  --color-warning: #9C6B3C;
+  --color-warning: #9c6b3c;
+  /* §5.6: generated 600 shade of the existing warning ramp, 5.17:1 on its tint. */
+  --color-warning-ink: #8c5831;
   --color-warning-bg: rgba(156, 107, 60, 0.08);
-  --color-error: #A33A22;
+  --color-error: #a33a22;
   --color-error-bg: rgba(163, 58, 34, 0.08);
 
   /* ============================================================
@@ -131,26 +140,26 @@
   */
 
   /* 羊毛 —— 廓形参考 */
-  --swatch-wool: #8C9199;
-  --swatch-wool-wash: #E4E6E9;
+  --swatch-wool: #8c9199;
+  --swatch-wool-wash: #e4e6e9;
   /* 亚麻 —— 面料参考 */
-  --swatch-linen: #B09A78;
-  --swatch-linen-wash: #EDE5D8;
+  --swatch-linen: #b09a78;
+  --swatch-linen-wash: #ede5d8;
   /* 茜草 —— 风格参考 */
-  --swatch-madder: #A85846;
-  --swatch-madder-wash: #F0DDD6;
+  --swatch-madder: #a85846;
+  --swatch-madder-wash: #f0ddd6;
   /* 靛蓝 —— 细节参考 */
-  --swatch-indigo: #55647A;
-  --swatch-indigo-wash: #DDE1E8;
+  --swatch-indigo: #55647a;
+  --swatch-indigo-wash: #dde1e8;
   /* 姜黄 —— 色卡 */
-  --swatch-turmeric: #C29B3E;
-  --swatch-turmeric-wash: #F2E7CB;
+  --swatch-turmeric: #c29b3e;
+  --swatch-turmeric-wash: #f2e7cb;
   /* 鼠尾草 —— 备注 */
-  --swatch-sage: #8A927F;
-  --swatch-sage-wash: #E5E8E0;
+  --swatch-sage: #8a927f;
+  --swatch-sage-wash: #e5e8e0;
   /* 紫草 —— 二级强调 */
-  --swatch-mauve: #68586F;
-  --swatch-mauve-wash: #E6E0E9;
+  --swatch-mauve: #68586f;
+  --swatch-mauve-wash: #e6e0e9;
 
   /* ============================================================
      七、字体
@@ -160,11 +169,11 @@
   */
 
   --font-serif:
-    "Palatino Linotype", Palatino, "Book Antiqua",
-    "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+    "Palatino Linotype", Palatino, "Book Antiqua", "Songti SC", "Noto Serif SC",
+    "Source Han Serif SC", serif;
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans SC", -apple-system, system-ui, sans-serif;
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans SC", -apple-system, system-ui, sans-serif;
   --font-mono:
     "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
@@ -243,16 +252,13 @@
      单一阴影会让纸片看起来像贴纸；三层才有"被放在桌上"的重量。
      基色统一 31,29,26（暖墨），不用纯黑——纯黑阴影会让米色底发灰。 */
   --shadow-material-1:
-    0 1px 1px rgba(31, 29, 26, 0.04),
-    0 2px 6px rgba(31, 29, 26, 0.06),
-    0 8px 18px -8px rgba(31, 29, 26, 0.10);
+    0 1px 1px rgba(31, 29, 26, 0.04), 0 2px 6px rgba(31, 29, 26, 0.06),
+    0 8px 18px -8px rgba(31, 29, 26, 0.1);
   --shadow-material-2:
-    0 1px 2px rgba(31, 29, 26, 0.05),
-    0 6px 16px -4px rgba(31, 29, 26, 0.12),
+    0 1px 2px rgba(31, 29, 26, 0.05), 0 6px 16px -4px rgba(31, 29, 26, 0.12),
     0 18px 40px -12px rgba(31, 29, 26, 0.16);
   --shadow-material-3:
-    0 2px 4px rgba(31, 29, 26, 0.06),
-    0 14px 32px -6px rgba(31, 29, 26, 0.18),
+    0 2px 4px rgba(31, 29, 26, 0.06), 0 14px 32px -6px rgba(31, 29, 26, 0.18),
     0 32px 64px -24px rgba(31, 29, 26, 0.22);
 
   /* 浮层 */
@@ -264,12 +270,17 @@
      ============================================================ */
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 进入：强 ease-out，与 design-tokens.css 的 --ease-out 保持一致 */
+  --ease-enter: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* 保留当前实际生效的兼容曲线，避免尾部别名覆盖另一条定义。 */
+  --ease-in-out: var(--ease-enter);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   --duration-instant: 90ms;
   --duration-fast: 140ms;
   --duration-normal: 180ms;
+  --duration-result: 280ms;
   --duration-slow: 180ms;
 
   /* ============================================================
@@ -290,7 +301,6 @@
      ============================================================
      旧变量名继续解析到新值，避免大规模重写。
   */
-
 
   /* 动效兼容别名：所有入口统一使用同一时长与缓动。 */
   --dur-instant: var(--duration-instant);
@@ -364,9 +374,6 @@
   --shadow-sm: var(--shadow-ui);
   --shadow-card: var(--shadow-material-1);
 
-  /* ease 别名 */
-  --ease-in-out: var(--ease-enter);
-
   /* opacity */
   --opacity-disabled: 0.4;
 
@@ -376,20 +383,17 @@
   /* ── fabrics.module.css 使用的旧 token ──────────────────────────────────
      这些 token 来自之前的设计系统版本，用 fallback 方式保持兼容，
      同时让面料库直接继承样衣间的颜色。 */
-  --surface-paper:   var(--color-canvas);   /* 面料库页面底色 */
-  --surface-card:    var(--color-paper);    /* 面料卡片背景 */
-  --text-primary:    var(--color-ink);
-  --text-secondary:  var(--color-ink-secondary);
-  --text-muted:      var(--color-ink-tertiary);
-  --border-light:    var(--color-border);
-  --border-hover:    var(--color-border-strong);
-  --border-primary:  var(--color-ink);      /* 强边框（按钮描边等） */
-  --accent-primary:  var(--color-signal);
+  --surface-paper: var(--color-canvas); /* 面料库页面底色 */
+  --surface-card: var(--color-paper); /* 面料卡片背景 */
+  --text-primary: var(--color-ink);
+  --text-secondary: var(--color-ink-secondary);
+  --text-muted: var(--color-ink-tertiary);
+  --border-light: var(--color-border);
+  --border-hover: var(--color-border-strong);
+  --border-primary: var(--color-ink); /* 强边框（按钮描边等） */
+  --accent-primary: var(--color-signal);
   --accent-secondary: var(--color-signal-hover);
   --transition-base: var(--duration-normal);
-  /* 遮罩层颜色 */
-  --color-scrim:      rgba(31, 29, 26, 0.72);
-  --color-scrim-soft: rgba(31, 29, 26, 0.48);
 }
 
 /* ============================================================
@@ -401,6 +405,17 @@
     --control-height: var(--control-height-touch);
     --control-height-compact: var(--control-height-touch);
     --control-height-primary: var(--control-height-touch);
+  }
+}
+
+@media (min-width: 1600px) {
+  :root {
+    --page-gutter: 48px;
+  }
+}
+@media (max-width: 767px) {
+  :root {
+    --page-gutter: 16px;
   }
 }
 
@@ -468,5 +483,13 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --duration-instant: 0ms; --duration-fast: 0ms; --duration-normal: 0ms; --duration-slow: 0ms; --dur-ai-pulse: 0ms; --dur-ai-spin: 0ms; }
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-result: 0ms;
+    --dur-ai-pulse: 0ms;
+    --dur-ai-spin: 0ms;
+  }
 }

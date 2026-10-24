@@ -75,6 +75,16 @@ export class StudioService {
     @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy,
   ) {}
 
+  async creativeSummary(userId: string, projectId: string) {
+    await this.access.require(userId, projectId, "read");
+    const [styles, assets, packs] = await Promise.all([
+      this.database.style.count({ where: { projectId } }),
+      this.database.designAsset.count({ where: { projectId, archivedAt: null } }),
+      this.database.studioDocument.count({ where: { projectId, type: "TECH_PACK" } }),
+    ]);
+    return { styles, assets, packs };
+  }
+
   private async assets(projectId: string): Promise<StudioAssetView[]> {
     const rows = await this.database.designAsset.findMany({
       where: { projectId },

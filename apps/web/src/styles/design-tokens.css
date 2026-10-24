@@ -156,27 +156,41 @@
 
   /* ==================== 动效系统 ==================== */
 
-  /* 缓动函数 */
+  /* 缓动函数 —— 遵循 Emil Kowalski 动效哲学 */
+  /* ease-out: 进入/退出场景；强 ease-out 让 UI 起手即落定 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* ease-in-out: 屏幕内移动/形变；对称曲线避免起手或收尾偏慢 */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* drawer 专用 iOS 风格曲线 */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* hover/颜色切换：内置 ease 已足够 */
   --ease-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --ease-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
   --ease-accelerate: cubic-bezier(0.4, 0.0, 1, 1);
   --ease-sharp: cubic-bezier(0.4, 0.0, 0.6, 1);
-  --ease-in-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 进入/退出统一走 ease-out，旧引用保留别名 */
+  --ease-enter: var(--ease-out);
 
-  /* 时长 */
+  /* 时长 —— UI 动画保持在 300ms 以内 */
   --duration-instant: 100ms;
   --duration-fast: 200ms;
   --duration-normal: 300ms;
   --duration-slow: 400ms;
   --duration-slower: 600ms;
 
-  /* 常用组合 */
-  --transition-base: all var(--duration-fast) var(--ease-standard);
-  --transition-smooth: all var(--duration-normal) var(--ease-standard);
+  /* 常用组合 —— 显式声明属性，避免 transition: all */
+  --transition-base: color var(--duration-fast) var(--ease-standard),
+                     background-color var(--duration-fast) var(--ease-standard),
+                     border-color var(--duration-fast) var(--ease-standard),
+                     box-shadow var(--duration-fast) var(--ease-standard);
+  --transition-smooth: color var(--duration-normal) var(--ease-standard),
+                       background-color var(--duration-normal) var(--ease-standard),
+                       border-color var(--duration-normal) var(--ease-standard),
+                       box-shadow var(--duration-normal) var(--ease-standard);
   --transition-color: color var(--duration-fast) var(--ease-standard),
                       background-color var(--duration-fast) var(--ease-standard),
                       border-color var(--duration-fast) var(--ease-standard);
-  --transition-transform: transform var(--duration-normal) var(--ease-in-out);
+  --transition-transform: transform var(--duration-normal) var(--ease-out);
 
   /* ==================== Z-index 层级 ==================== */
 

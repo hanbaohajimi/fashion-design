@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useContext, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useEditor, useValue } from "tldraw";
 
 import { ErrorBoundary } from "../../observability/ErrorBoundary";
@@ -51,7 +52,6 @@ export function BoardActionPanels({
     null,
   );
   const [exportingCanvas, setExportingCanvas] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
   const collectionFileInput = useRef<HTMLInputElement>(null);
   const collectionsQuery = useQuery({
     queryFn: () => listCollections(projectId),
@@ -104,11 +104,12 @@ export function BoardActionPanels({
     if (exportingCanvas) return;
     const shapeIds = editor.getCurrentPageShapes().map((shape) => shape.id);
     if (shapeIds.length === 0) {
-      setExportError("画布为空，请先添加内容后再导出");
+      toast.error("画布为空", {
+        description: "请先添加内容后再导出",
+      });
       return;
     }
 
-    setExportError(null);
     setExportingCanvas(true);
     try {
       const rendered = await editor.toImage(shapeIds, {
@@ -127,9 +128,9 @@ export function BoardActionPanels({
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
       onExportMenuOpenChange(false);
     } catch (error) {
-      setExportError(
-        error instanceof Error ? error.message : "画布导出失败，请稍后重试",
-      );
+      toast.error("导出失败", {
+        description: error instanceof Error ? error.message : "画布导出失败，请稍后重试",
+      });
     } finally {
       setExportingCanvas(false);
     }
@@ -466,7 +467,6 @@ export function BoardActionPanels({
                   ? "下载整个画布"
                   : "画布暂无内容"}
             </button>
-            {exportError ? <p role="alert">{exportError}</p> : null}
           </div>
         </section>
       ) : null}

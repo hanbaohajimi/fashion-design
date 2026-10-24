@@ -7,7 +7,7 @@
   color: var(--color-ink);
 }
 .card {
-  width: min(100%, 480px);
+  width: min(100%, 440px);
   display: grid;
   gap: var(--space-4);
   padding: var(--space-8);
@@ -30,7 +30,7 @@
 .card h1,
 .card strong {
   margin: 0;
-  font-size: var(--text-2xl);
+  font-size: var(--text-module-title);
   font-weight: var(--font-semibold);
 }
 .card p {

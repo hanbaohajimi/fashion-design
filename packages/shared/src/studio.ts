@@ -454,3 +454,5 @@ export interface StudioSummary {
   collections: { id: string; name: string }[];
   assets: StudioAssetView[];
 }
+/** Homepage facts without loading private images or full revision histories. */
+export interface StudioCreativeSummary { styles: number; assets: number; packs: number }

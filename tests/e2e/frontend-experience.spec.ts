@@ -207,7 +207,7 @@ test("认证暂时不可用时显示恢复入口，不把失败显示为空档�
   ).toBeVisible();
 });
 
-test("工作室分组保留旧链接、未保存保护与手机功能入口", async ({ page }) => {
+test("工作室侧栏保留旧链接、未保存保护与手机全部功能入口", async ({ page }) => {
   await mockWorkspace(page);
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/experience/studio?tab=tasks");
@@ -217,13 +217,13 @@ test("工作室分组保留旧链接、未保存保护与手机功能入口", as
   await page
     .getByRole("textbox", { name: "本次任务", exact: true })
     .fill("尚未保存的风衣要求");
-  await page.getByRole("button", { name: "开发交付", exact: true }).click();
+  await page.getByRole("tab", { name: "系列规划", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toHaveValue("尚未保存的风衣要求");
-  await page.getByRole("button", { name: "开发交付", exact: true }).click();
+  await page.getByRole("tab", { name: "系列规划", exact: true }).click();
   await guard.getByRole("button", { name: "丢弃并离开", exact: true }).click();
   await expect(page).toHaveURL(/tab=planning/);
   await expect(
@@ -234,6 +234,9 @@ test("工作室分组保留旧链接、未保存保护与手机功能入口", as
     page.getByRole("tab", { name: "系列规划", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByLabel("当前功能", { exact: true }).locator("option"),
+  ).toHaveCount(11);
   await page.getByLabel("当前功能", { exact: true }).selectOption("tech");
   await expect(page).toHaveURL(/tab=tech/);
   await expect(
@@ -244,19 +247,32 @@ test("工作室分组保留旧链接、未保存保护与手机功能入口", as
 test("面料规格默认收起，应用后显示条件摘要，空结果可重置", async ({ page }) => {
   await mockWorkspace(page);
   const mediaRequests: string[] = [];
-  page.on("request", (request) => { if (/painting-loaders|p5\.brush|p5\.min/u.test(request.url())) mediaRequests.push(request.url()); });
+  page.on("request", (request) => {
+    if (/painting-loaders|p5\.brush|p5\.min/u.test(request.url()))
+      mediaRequests.push(request.url());
+  });
   await page.goto("/fabrics");
-  await expect(page.getByText("面料档案还是空的", { exact: false })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "成分", exact: true })).toBeHidden();
+  await expect(
+    page.getByText("面料档案还是空的", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "成分", exact: true }),
+  ).toBeHidden();
   await page.getByText("规格筛选", { exact: true }).click();
   await page.getByRole("textbox", { name: "成分", exact: true }).fill("棉");
   await page.getByRole("button", { name: "应用筛选", exact: true }).click();
-  const summary = page.locator("summary").filter({ hasText: "规格筛选 · 成分：棉" });
+  const summary = page
+    .locator("summary")
+    .filter({ hasText: "规格筛选 · 成分：棉" });
   await expect(summary).toBeVisible();
-  await expect(page.getByText("没有符合当前规格的面料", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("没有符合当前规格的面料", { exact: false }),
+  ).toBeVisible();
   await summary.click();
   await page.getByRole("button", { name: "重置", exact: true }).click();
-  await expect(page.getByText("面料档案还是空的", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("面料档案还是空的", { exact: false }),
+  ).toBeVisible();
   expect(mediaRequests).toEqual([]);
 });
 

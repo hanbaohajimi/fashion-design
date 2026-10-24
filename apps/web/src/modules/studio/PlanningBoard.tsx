@@ -1,5 +1,7 @@
 "use client";
 
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为真实款式位置与当前编辑对象；状态统计和历史为次级。保存为主操作，网格不引入排序行为。 */
+
 import { useState } from "react";
 import type {
   StudioDocumentInput,
@@ -10,6 +12,7 @@ import {
   Button,
   Field,
   Input,
+  ImagePreview,
   Notice,
   Select,
   Textarea,
@@ -35,7 +38,7 @@ const states = {
 export function PlanningBoard(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
-  const [id, setId] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(props.data.slots[0]?.id ?? null);
   const [draftVersion, setDraftVersion] = useState(0);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,11 +108,13 @@ export function PlanningBoard(
         </div>
       ) : null}
       <div className={styles.split}>
-        <aside className={styles.rail}>
+        <aside className={styles.planningGrid} aria-label="系列款式位置">
           {props.data.slots.map((slot) => {
             const payload = slot.currentRevision.payload as Slot;
             return (
-              <Button
+              <button
+                type="button"
+                className={styles.planningCard}
                 key={slot.id}
                 aria-pressed={id === slot.id}
                 onClick={() =>
@@ -118,11 +123,24 @@ export function PlanningBoard(
                   })()
                 }
               >
+                <span className={styles.assetImage}>
+                  <ImagePreview
+                    retryable={false}
+                    src={
+                      props.data.styles
+                        .flatMap((style) => style.revisions)
+                        .find(
+                          (revision) => revision.id === payload.styleRevisionId,
+                        )?.views[0]?.url
+                    }
+                    alt={payload.styleRevisionId ? "计划款式" : "待补款式位置"}
+                  />
+                </span>
                 <strong>{payload.name}</strong>
                 <small>
                   {roles[payload.role]} · {states[payload.status]}
                 </small>
-              </Button>
+              </button>
             );
           })}
         </aside>

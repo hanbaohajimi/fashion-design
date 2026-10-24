@@ -364,7 +364,12 @@ export class ExportsService {
       mimeType: exportJob.mimeType ?? MIME_BY_FORMAT[exportJob.format],
       quality: exportJob.quality.toLowerCase(),
       sizeBytes: exportJob.sizeBytes,
-      status: exportJob.status.toLowerCase(),
+      status: (
+        exportJob.status === ExportStatus.SUCCEEDED &&
+        exportJob.expiresAt && exportJob.expiresAt.getTime() <= Date.now()
+          ? ExportStatus.EXPIRED
+          : exportJob.status
+      ).toLowerCase(),
     };
   }
 }

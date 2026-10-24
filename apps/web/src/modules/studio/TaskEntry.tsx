@@ -1,14 +1,17 @@
 "use client";
 
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为本次任务与母图；任务类型和品牌为次级。唯一主操作提交当前任务，使用共享控件与 24/16/8px 间距。 */
+
 import { useRef, useState } from "react";
 import type { StudioSummary } from "@fashion/shared";
 import {
   Button,
   Field,
-  Input,
   Notice,
   Select,
   Textarea,
+  UploadInput,
+  Menu,
 } from "../../components/ui";
 import {
   fetchWorkflow,
@@ -367,51 +370,36 @@ export function TaskEntry(
         void start();
       }}
     >
-      <div className={styles.taskList} aria-label="设计任务类型列表">
-        {TASKS.map((task) => (
-          <button
-            aria-pressed={draft.kind === task.kind}
-            className={styles.task}
-            key={task.kind}
-            type="button"
-            disabled={form.busy || uploading}
-            onClick={() => chooseTask(task.kind)}
-          >
-            <strong>{task.name}</strong>
-          </button>
-        ))}
-      </div>
       <div className={styles.taskContent}>
-        <label className={styles.mobileTask}>
-          任务类型
-          <Select
-            aria-label="任务类型"
-            value={draft.kind}
-            disabled={form.busy || uploading}
-            onChange={(event) => chooseTask(event.target.value as TaskKind)}
-          >
-            {TASKS.map((task) => (
-              <option key={task.kind} value={task.kind}>
-                {task.name}
-              </option>
-            ))}
-          </Select>
-        </label>
         <div className={styles.taskHeading}>
-          <h2>{currentTask.name}</h2>
-          <p className={styles.muted}>{currentTask.description}</p>
+          <div>
+            <h2>{currentTask.name}</h2>
+            <p className={styles.muted}>{currentTask.description}</p>
+          </div>
+          <Menu label="选择任务类型" trigger="切换任务类型">
+            {TASKS.map((task) => (
+              <button
+                type="button"
+                key={task.kind}
+                disabled={form.busy || uploading}
+                aria-pressed={draft.kind === task.kind}
+                onClick={() => chooseTask(task.kind)}
+              >
+                {task.name}
+              </button>
+            ))}
+          </Menu>
         </div>
         {form.error ? <Notice tone="error">{form.error}</Notice> : null}
         <fieldset
           className={styles.form}
           disabled={!props.canEdit || form.busy || uploading}
         >
-          <Field
-            label="上传草图或参考图"
-            hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
-          >
-            <Input
-              type="file"
+          <div className={styles.taskSource}>
+            <UploadInput
+              aria-label="上传草图或参考图"
+              label="上传草图或参考图"
+              hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -419,72 +407,80 @@ export function TaskEntry(
                 event.target.value = "";
               }}
             />
-          </Field>
-          {assets.length > 0 ? (
-            <AssetPicker
-              assets={assets}
-              selected={draft.assetIds}
-              max={draft.kind === "combine" || draft.kind === "brief" ? 12 : 1}
-              label={
-                draft.kind === "brief"
-                  ? "可选设计参考"
-                  : "第一张为母图，其余为参考"
-              }
-              onChange={(ids) =>
-                setDraft((current) => ({ ...current, assetIds: ids }))
-              }
-            />
-          ) : null}
-          <Field label="本次任务">
-            <Textarea
-              rows={4}
-              value={draft.prompt}
-              maxLength={3000}
-              required
-              minLength={3}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  prompt: event.target.value,
-                }))
-              }
-              placeholder="例如：将夹克草图呈现为棉尼龙材质效果图，采用灰绿色。"
-            />
-          </Field>
-          <Field label="必须保留" hint="例如：短衣长、落肩、双贴袋、原有扣数。">
-            <Textarea
-              rows={2}
-              value={draft.preserve}
-              maxLength={1000}
-              required={draft.kind !== "brief"}
-              minLength={draft.kind !== "brief" ? 3 : undefined}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  preserve: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="采用品牌资料">
-            <Select
-              value={draft.brandId}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  brandId: event.target.value,
-                }))
-              }
+            {assets.length > 0 ? (
+              <AssetPicker
+                compact
+                assets={assets}
+                selected={draft.assetIds}
+                max={
+                  draft.kind === "combine" || draft.kind === "brief" ? 12 : 1
+                }
+                label={
+                  draft.kind === "brief"
+                    ? "可选设计参考"
+                    : "第一张为母图，其余为参考"
+                }
+                onChange={(ids) =>
+                  setDraft((current) => ({ ...current, assetIds: ids }))
+                }
+              />
+            ) : null}
+          </div>
+          <div className={styles.taskBrief}>
+            <Field label="本次任务">
+              <Textarea
+                rows={4}
+                value={draft.prompt}
+                maxLength={3000}
+                required
+                minLength={3}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    prompt: event.target.value,
+                  }))
+                }
+                placeholder="例如：将夹克草图呈现为棉尼龙材质效果图，采用灰绿色。"
+              />
+            </Field>
+            <Field
+              label="必须保留"
+              hint="例如：短衣长、落肩、双贴袋、原有扣数。"
             >
-              <option value="">本次不关联品牌</option>
-              {props.data.brandProfiles.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.currentRevision.payload.name} · r
-                  {item.currentRevision.revision}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              <Textarea
+                rows={2}
+                value={draft.preserve}
+                maxLength={1000}
+                required={draft.kind !== "brief"}
+                minLength={draft.kind !== "brief" ? 3 : undefined}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    preserve: event.target.value,
+                  }))
+                }
+              />
+            </Field>
+            <Field label="采用品牌资料">
+              <Select
+                value={draft.brandId}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    brandId: event.target.value,
+                  }))
+                }
+              >
+                <option value="">本次不关联品牌</option>
+                {props.data.brandProfiles.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.currentRevision.payload.name} · r
+                    {item.currentRevision.revision}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
         </fieldset>
         <div className={styles.note}>
           {draft.kind === "brief"

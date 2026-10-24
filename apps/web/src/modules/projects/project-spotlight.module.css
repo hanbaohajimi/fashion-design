@@ -1,0 +1,115 @@
+.spotlight {
+  margin: 0 auto var(--space-6);
+  width: min(calc(100% - 2 * var(--page-gutter)), var(--content-max-width));
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) 1.2fr;
+  min-height: 240px;
+  background: var(--color-paper);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+.visual {
+  background: var(--image-stage-background);
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.visual img {
+  width: 100%;
+  height: 248px;
+  object-fit: contain;
+}
+.copy {
+  padding: var(--space-6);
+  align-self: center;
+}
+.eyebrow {
+  color: var(--color-signal);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+.copy h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-page-title);
+  line-height: 1.3;
+  margin: 12px 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.copy p {
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.primary {
+  display: inline-flex;
+  gap: 32px;
+  padding: 12px 18px;
+  border-radius: 6px;
+  background: var(--color-signal);
+  color: var(--color-on-inverse);
+  text-decoration: none;
+  margin-top: 8px;
+  transition: transform var(--duration-fast);
+}
+.primary:active {
+  transform: translateY(1px);
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  font-size: var(--text-xs);
+  margin-top: var(--space-4);
+}
+.links a {
+  color: var(--color-ink-secondary);
+  text-underline-offset: 4px;
+}
+.copy a:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 4px;
+}
+.paper {
+  padding: 28px;
+  display: grid;
+  gap: var(--space-5);
+  font-family: var(--font-serif);
+  color: var(--color-ink-secondary);
+  font-size: 16px;
+}
+.paper i {
+  display: block;
+  width: 120px;
+  height: 90px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 70% 30% 55% 45%;
+  background: var(--color-signal-wash);
+  transform: rotate(-12deg);
+}
+@media (max-width: 700px) {
+  .spotlight {
+    grid-template-columns: 1fr;
+  }
+  .visual {
+    min-height: 170px;
+  }
+  .visual img {
+    height: 210px;
+  }
+  .paper {
+    gap: 10px;
+  }
+  .paper i {
+    height: 45px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary {
+    transition: none;
+  }
+  .primary:active {
+    transform: none;
+  }
+}

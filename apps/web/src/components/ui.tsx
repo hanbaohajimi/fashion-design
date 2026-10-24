@@ -38,7 +38,10 @@ export function Button({
   useEffect(() => {
     if (!loading) return;
     const timer = setTimeout(() => setWaiting(true), UI_TIMING.busyFeedback);
-    return () => { clearTimeout(timer); setWaiting(false); };
+    return () => {
+      clearTimeout(timer);
+      setWaiting(false);
+    };
   }, [loading]);
   return (
     <button
@@ -51,7 +54,11 @@ export function Button({
       type={type}
     >
       {children}
-      {loading && waiting ? <span aria-hidden="true" className={styles.busyMark}>···</span> : null}
+      {loading && waiting ? (
+        <span aria-hidden="true" className={styles.busyMark}>
+          ···
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -145,7 +152,11 @@ export function Notice({
       data-tone={tone}
       role={tone === "error" ? "alert" : "status"}
     >
-      <div>{tone === "error" && typeof children === "string" ? userFacingError(children) : children}</div>
+      <div>
+        {tone === "error" && typeof children === "string"
+          ? userFacingError(children)
+          : children}
+      </div>
       {onClose ? (
         <IconButton label="关闭提示" onClick={onClose} variant="ghost">
           ×
@@ -171,21 +182,92 @@ export function EmptyState({
     </section>
   );
 }
-export function ImagePreview({ src, alt, onRetry }: {
+export function UploadInput({
+  label = "选择图片",
+  hint,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & {
+  readonly label?: string;
+  readonly hint?: string;
+}) {
+  const [fileName, setFileName] = useState("");
+  return (
+    <span className={styles.uploadField}>
+      <label className={styles.uploadTrigger}>
+        <input
+          {...props}
+          type="file"
+          onChange={(event) => {
+            setFileName(event.currentTarget.files?.[0]?.name ?? "");
+            props.onChange?.(event);
+          }}
+        />
+        <span aria-hidden="true">＋</span>
+        <span>{label}</span>
+      </label>
+      {fileName ? (
+        <span className={styles.uploadFile} role="status">
+          {fileName}
+        </span>
+      ) : hint ? (
+        <span className={styles.uploadHint}>{hint}</span>
+      ) : null}
+    </span>
+  );
+}
+
+export function ImagePreview({
+  src,
+  alt,
+  onRetry,
+  fit = "contain",
+  retryable = true,
+}: {
   readonly src: string | undefined;
   readonly alt: string;
   readonly onRetry?: () => Promise<unknown>;
+  readonly fit?: "contain" | "cover";
+  readonly retryable?: boolean;
 }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
-  return !src || failedSource === src ? <div className={styles.imageFallback}>
-    <span aria-label={alt} role="img">图片暂时无法加载</span>
-    <Button loading={retrying} size="small" onClick={() => { setRetrying(true); void Promise.resolve().then(() => onRetry?.()).then(() => { setFailedSource(null); setAttempt((current) => current + 1); }).catch(() => undefined).finally(() => setRetrying(false)); }}>重试预览</Button>
-  </div> : (
+  return !src || failedSource === src ? (
+    <div className={styles.imageFallback}>
+      <span aria-label={alt} role="img">
+        {src ? "图片暂时无法加载" : "尚未选择图片"}
+      </span>
+      {src && retryable ? (
+        <Button
+          loading={retrying}
+          size="small"
+          onClick={() => {
+            setRetrying(true);
+            void Promise.resolve()
+              .then(() => onRetry?.())
+              .then(() => {
+                setFailedSource(null);
+                setAttempt((current) => current + 1);
+              })
+              .catch(() => undefined)
+              .finally(() => setRetrying(false));
+          }}
+        >
+          重试预览
+        </Button>
+      ) : null}
+    </div>
+  ) : (
     // Signed private images retain their original URL and aspect ratio.
     // eslint-disable-next-line @next/next/no-img-element
-    <img alt={alt} key={`${src}:${attempt}`} onError={() => setFailedSource(src)} src={src} />
+    <img
+      alt={alt}
+      loading="lazy"
+      key={`${src}:${attempt}`}
+      onError={() => setFailedSource(src)}
+      src={src}
+      style={{ objectFit: fit }}
+    />
   );
 }
 
@@ -249,7 +331,14 @@ export function SegmentedControl<T extends string>({
 }
 
 /** Manual activation avoids starting expensive panels while navigating their labels. */
-export function Tabs<T extends string>({ id, label, value, options, onChange, className = "" }: {
+export function Tabs<T extends string>({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+  className = "",
+}: {
   readonly id: string;
   readonly label: string;
   readonly value: T;
@@ -258,20 +347,68 @@ export function Tabs<T extends string>({ id, label, value, options, onChange, cl
   readonly className?: string | undefined;
 }) {
   const [focused, setFocused] = useState<T | null>(null);
-  return <div aria-label={label} className={`${styles.tabs} ${className}`} role="tablist" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(null); }}>
-    {options.map((option) => <button aria-controls={`${id}-panel-${option.value}`} aria-selected={value === option.value} disabled={option.disabled} id={`${id}-tab-${option.value}`} key={option.value} onClick={() => onChange(option.value)} onKeyDown={(event) => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const items = options.filter((item) => !item.disabled);
-      const index = items.findIndex((item) => item.value === option.value);
-      const next = event.key === "Home" ? items[0] : event.key === "End" ? items.at(-1) : items[(index + (event.key === "ArrowRight" ? 1 : -1) + items.length) % items.length];
-      if (next) { setFocused(next.value); document.getElementById(`${id}-tab-${next.value}`)?.focus(); }
-    }} role="tab" tabIndex={(focused ?? value) === option.value ? 0 : -1} type="button">{option.label}</button>)}
-  </div>;
+  return (
+    <div
+      aria-label={label}
+      className={`${styles.tabs} ${className}`}
+      role="tablist"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setFocused(null);
+      }}
+    >
+      {options.map((option) => (
+        <button
+          aria-controls={`${id}-panel-${option.value}`}
+          aria-selected={value === option.value}
+          disabled={option.disabled}
+          id={`${id}-tab-${option.value}`}
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            const items = options.filter((item) => !item.disabled);
+            const index = items.findIndex(
+              (item) => item.value === option.value,
+            );
+            const next =
+              event.key === "Home"
+                ? items[0]
+                : event.key === "End"
+                  ? items.at(-1)
+                  : items[
+                      (index +
+                        (event.key === "ArrowRight" ? 1 : -1) +
+                        items.length) %
+                        items.length
+                    ];
+            if (next) {
+              setFocused(next.value);
+              document.getElementById(`${id}-tab-${next.value}`)?.focus();
+            }
+          }}
+          role="tab"
+          tabIndex={(focused ?? value) === option.value ? 0 : -1}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-export function TabPanel<T extends string>({ tabsId, value, activeValue, children, className = "", keepMounted = false }: {
+export function TabPanel<T extends string>({
+  tabsId,
+  value,
+  activeValue,
+  children,
+  className = "",
+  keepMounted = false,
+}: {
   readonly tabsId: string;
   readonly value: T;
   readonly activeValue: T;
@@ -280,10 +417,24 @@ export function TabPanel<T extends string>({ tabsId, value, activeValue, childre
   readonly keepMounted?: boolean;
 }) {
   const active = value === activeValue;
-  return <div aria-labelledby={`${tabsId}-tab-${value}`} className={`${styles.tabPanel} ${className}`} hidden={!active} id={`${tabsId}-panel-${value}`} role="tabpanel" tabIndex={0}>{active || keepMounted ? children : null}</div>;
+  return (
+    <div
+      aria-labelledby={`${tabsId}-tab-${value}`}
+      className={`${styles.tabPanel} ${className}`}
+      hidden={!active}
+      id={`${tabsId}-panel-${value}`}
+      role="tabpanel"
+      tabIndex={0}
+    >
+      {active || keepMounted ? children : null}
+    </div>
+  );
 }
 
-export function Tooltip({ children, content }: {
+export function Tooltip({
+  children,
+  content,
+}: {
   readonly children: ReactElement<{ "aria-describedby"?: string }>;
   readonly content: string;
 }) {
@@ -292,27 +443,91 @@ export function Tooltip({ children, content }: {
   const tip = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
-  const clearTimer = () => { if (timer.current) clearTimeout(timer.current); };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const clearTimer = () => {
+    if (timer.current) clearTimeout(timer.current);
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       if (!anchor || !tip.current) return;
       const trigger = anchor.getBoundingClientRect();
       const box = tip.current.getBoundingClientRect();
-      const gap = parseFloat(getComputedStyle(tip.current).getPropertyValue("--space-2")) || 0;
+      const gap =
+        parseFloat(
+          getComputedStyle(tip.current).getPropertyValue("--space-2"),
+        ) || 0;
       tip.current.style.left = `${Math.max(gap, Math.min(trigger.left + (trigger.width - box.width) / 2, innerWidth - box.width - gap))}px`;
       tip.current.style.top = `${trigger.top >= box.height + gap ? trigger.top - box.height - gap : trigger.bottom + gap}px`;
     };
     place();
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
-    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [anchor, open]);
-  return <span className={styles.tooltipAnchor} ref={setAnchor} onFocus={() => { clearTimer(); setOpen(true); }} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { clearTimer(); setOpen(false); } }} onPointerEnter={() => { clearTimer(); timer.current = setTimeout(() => setOpen(true), UI_TIMING.tooltipOpen); }} onPointerLeave={() => { clearTimer(); if (!anchor?.contains(document.activeElement)) timer.current = setTimeout(() => setOpen(false), UI_TIMING.tooltipClose); }} onKeyDown={(event) => { if (event.key === "Escape" && open) { event.stopPropagation(); clearTimer(); setOpen(false); } }}>
-    {cloneElement(children, { "aria-describedby": [children.props["aria-describedby"], id].filter(Boolean).join(" ") })}
-    {anchor ? createPortal(<span className={styles.tooltip} hidden={!open} id={id} ref={tip} role="tooltip">{content}</span>, anchor.closest("dialog[open]") ?? document.body) : null}
-  </span>;
+  return (
+    <span
+      className={styles.tooltipAnchor}
+      ref={setAnchor}
+      onFocus={() => {
+        clearTimer();
+        setOpen(true);
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          clearTimer();
+          setOpen(false);
+        }
+      }}
+      onPointerEnter={() => {
+        clearTimer();
+        timer.current = setTimeout(() => setOpen(true), UI_TIMING.tooltipOpen);
+      }}
+      onPointerLeave={() => {
+        clearTimer();
+        if (!anchor?.contains(document.activeElement))
+          timer.current = setTimeout(
+            () => setOpen(false),
+            UI_TIMING.tooltipClose,
+          );
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.stopPropagation();
+          clearTimer();
+          setOpen(false);
+        }
+      }}
+    >
+      {cloneElement(children, {
+        "aria-describedby": [children.props["aria-describedby"], id]
+          .filter(Boolean)
+          .join(" "),
+      })}
+      {anchor
+        ? createPortal(
+            <span
+              className={styles.tooltip}
+              hidden={!open}
+              id={id}
+              ref={tip}
+              role="tooltip"
+            >
+              {content}
+            </span>,
+            anchor.closest("dialog[open]") ?? document.body,
+          )
+        : null}
+    </span>
+  );
 }
 
 /** Native disclosure keeps the trigger available without implementing a second focus system. */
@@ -385,14 +600,33 @@ export function Menu({
 }
 
 /** A view inside an existing dialog: shares the native modal's focus boundary. */
-export function DialogView({ children, className = "" }: { readonly children: ReactNode; readonly className?: string | undefined }) {
+export function DialogView({
+  children,
+  className = "",
+}: {
+  readonly children: ReactNode;
+  readonly className?: string | undefined;
+}) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const previous = document.activeElement;
     ref.current?.focus();
-    return () => { requestAnimationFrame(() => { if (previous instanceof HTMLElement && previous.isConnected && !previous.closest("[inert],[hidden]")) previous.focus(); }); };
+    return () => {
+      requestAnimationFrame(() => {
+        if (
+          previous instanceof HTMLElement &&
+          previous.isConnected &&
+          !previous.closest("[inert],[hidden]")
+        )
+          previous.focus();
+      });
+    };
   }, []);
-  return <section className={className} ref={ref} tabIndex={-1}>{children}</section>;
+  return (
+    <section className={className} ref={ref} tabIndex={-1}>
+      {children}
+    </section>
+  );
 }
 
 export function Dialog({
@@ -421,8 +655,11 @@ export function Dialog({
     dialog?.showModal();
     (
       dialog?.querySelector<HTMLElement>("[autofocus]") ??
-      dialog?.querySelector<HTMLElement>("input:not(:disabled),textarea:not(:disabled),select:not(:disabled)") ??
-      dialog?.querySelector<HTMLElement>("button:not(:disabled)") ?? dialog
+      dialog?.querySelector<HTMLElement>(
+        "input:not(:disabled),textarea:not(:disabled),select:not(:disabled)",
+      ) ??
+      dialog?.querySelector<HTMLElement>("button:not(:disabled)") ??
+      dialog
     )?.focus();
     return () => {
       dialog?.close();
@@ -459,11 +696,28 @@ export function Dialog({
         if (event.key !== "Tab") return;
         event.stopPropagation();
         const dialog = event.currentTarget;
-        const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),textarea:not(:disabled),select:not(:disabled),summary,[tabindex]:not([tabindex="-1"])')).filter((element) => element.getClientRects().length > 0 && !element.closest("[inert]"));
+        const items = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),textarea:not(:disabled),select:not(:disabled),summary,[tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter(
+          (element) =>
+            element.getClientRects().length > 0 && !element.closest("[inert]"),
+        );
         const first = items[0];
         const last = items.at(-1);
-        if (!first || !last) { event.preventDefault(); dialog.focus(); return; }
-        if (!dialog.contains(document.activeElement) || document.activeElement === dialog || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        if (!first || !last) {
+          event.preventDefault();
+          dialog.focus();
+          return;
+        }
+        if (
+          !dialog.contains(document.activeElement) ||
+          document.activeElement === dialog ||
+          (event.shiftKey
+            ? document.activeElement === first
+            : document.activeElement === last)
+        ) {
           event.preventDefault();
           (event.shiftKey ? last : first).focus();
         }

@@ -14,6 +14,8 @@ import { displayNodeTitle, imageNodeSize, isImageNodeType, nodeTypeEyebrow } fro
 import styles from "./workflow-node.module.css";
 import { type CSSProperties, type ReactNode } from "react";
 import { taskState } from "../../../components/task-feedback-state";
+import { consumeResultArrival } from "./result-arrivals";
+import { motionDuration } from "../../../components/ui-config";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
 
 export const WORKFLOW_NODE_SHAPE_TYPE = "fashion-workflow-node";
@@ -185,6 +187,9 @@ function WorkflowNodeImage({ shape, title }: { shape: WorkflowNodeShape; title: 
     // eslint-disable-next-line @next/next/no-img-element
     <img alt={title} draggable={false} src={shape.props.imageUrl} onLoad={(event) => {
       if (exporting || !isImageNodeType(shape.props.nodeType)) return;
+      if (consumeResultArrival(shape.props.nodeId) && document.visibilityState === "visible" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        event.currentTarget.animate?.([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: motionDuration("result"), easing: "cubic-bezier(.16,1,.3,1)" });
+      }
       const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
       if (!width || !height) return;
       const current = editor.getShape<WorkflowNodeShape>(shape.id);

@@ -41,6 +41,7 @@ export function TechPackExportButton(props: {
   projectId: string;
   revisionId: string;
   sourceType?: "tech_pack" | "presentation_set";
+  primary?: boolean;
 }) {
   return (
     <RevisionExport
@@ -59,10 +60,12 @@ function RevisionExport({
   projectId,
   revisionId,
   sourceType = "tech_pack",
+  primary = false,
 }: {
   projectId: string;
   revisionId: string;
   sourceType?: "tech_pack" | "presentation_set";
+  primary?: boolean;
 }) {
   const [task, setTask] = useState<ExportTask | null>(null);
   const [restoring, setRestoring] = useState(true);
@@ -177,6 +180,7 @@ function RevisionExport({
   return (
     <div>
       <Button
+        variant={primary ? "primary" : "secondary"}
         loading={busy || restoring}
         disabled={waiting}
         onClick={() => {
@@ -209,13 +213,13 @@ function RevisionExport({
         <p role="alert">
           {error}
           {!waiting ? (
-            <button
+            <Button
               type="button"
               disabled={busy || restoring}
               onClick={() => void submit()}
             >
               重试导出
-            </button>
+            </Button>
           ) : null}
         </p>
       ) : null}

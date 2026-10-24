@@ -1,5 +1,7 @@
 "use client";
 
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前修订的设计图与资料；对象切换和历史为次级。保存为主操作，比较在独立弹窗完成。 */
+
 import { useState } from "react";
 import type {
   StudioStyleInput,
@@ -9,6 +11,7 @@ import type {
 import {
   Badge,
   Button,
+  Dialog,
   EmptyState,
   Field,
   ImagePreview,
@@ -45,10 +48,14 @@ export function StyleLibrary(
   props: StudioPanelProps & {
     readonly data: StudioSummary;
     readonly initialAssetId?: string | undefined;
+    readonly onExplore?: (assetId: string) => void;
   },
 ) {
   const [draftVersion, setDraftVersion] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    props.initialAssetId ? null : (props.data.styles[0]?.id ?? null),
+  );
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [comparison, setComparison] = useState<string[]>([]);
   const [adoptedId, setAdoptedId] = useState(props.initialAssetId ?? "");
   const selected = props.data.styles.find((style) => style.id === selectedId);
@@ -65,107 +72,121 @@ export function StyleLibrary(
         <div>
           <h2>款式档案</h2>
           <p className={styles.muted}>
-            让选中的方案成为可持续修订、交接的款式。
+            让选中的方案成为可持续修订、交接的款式。共{" "}
+            {props.data.styles.length} 款档案。
           </p>
         </div>
-        {props.canEdit ? (
-          <Button onClick={() => void selectStyle(null)}>新建款式</Button>
-        ) : null}
-      </div>
-      <div className={styles.summary}>
-        <div>
-          <strong>{props.data.styles.length}</strong>
-          <small>已建立款式</small>
-        </div>
-        <div>
-          <strong>
-            {
-              props.data.styles.filter((item) => item.status === "APPROVED")
-                .length
-            }
-          </strong>
-          <small>已定稿</small>
-        </div>
-        <div>
-          <strong>
-            {
-              props.data.styles.filter((item) => item.status === "SAMPLING")
-                .length
-            }
-          </strong>
-          <small>打样中</small>
+        <div className={styles.toolbar}>
+          <Button onClick={() => setComparisonOpen(true)}>
+            比较候选并选款（选择 2–4 张）
+          </Button>
+          {props.canEdit ? (
+            <Button onClick={() => void selectStyle(null)}>新建款式</Button>
+          ) : null}
         </div>
       </div>
-      <details className={styles.record}>
-        <summary>比较候选并选款（选择 2–4 张）</summary>
-        <AssetPicker
-          assets={props.data.assets}
-          selected={comparison}
-          onChange={setComparison}
-          max={4}
+      {comparisonOpen ? (
+        <Dialog
+          className={styles.dialog}
           label="候选比较"
-        />
-        {comparison.length >= 2 ? (
-          <div className={styles.compare}>
-            {comparison.map((id, index) => {
-              const asset = props.data.assets.find((item) => item.id === id);
-              return asset ? (
-                <article key={id}>
-                  <span className={styles.assetImage}>
+          onClose={() => setComparisonOpen(false)}
+        >
+          <div className={styles.progressDialog}>
+            <div className={styles.recordHeader}>
+              <h2>比较候选并选款</h2>
+              <Button onClick={() => setComparisonOpen(false)}>关闭</Button>
+            </div>
+            <AssetPicker
+              assets={props.data.assets}
+              selected={comparison}
+              onChange={setComparison}
+              max={4}
+              label="候选比较"
+            />
+            {comparison.length >= 2 ? (
+              <div className={styles.compare}>
+                {comparison.map((id, index) => {
+                  const asset = props.data.assets.find(
+                    (item) => item.id === id,
+                  );
+                  return asset ? (
+                    <article key={id}>
+                      <span className={styles.assetImage}>
+                        <ImagePreview
+                          alt={"候选方案 " + (index + 1)}
+                          src={asset.url}
+                        />
+                      </span>
+                      <strong>方案 {index + 1}</strong>
+                      <small className={styles.muted}>{id.slice(0, 12)}</small>
+                      <Button
+                        disabled={!props.canEdit}
+                        onClick={() =>
+                          void (async () => {
+                            if (await props.beforeChange()) {
+                              setSelectedId(null);
+                              setDraftVersion((current) => current + 1);
+                              setAdoptedId(id);
+                              setComparisonOpen(false);
+                            }
+                          })()
+                        }
+                      >
+                        采用为新款式
+                      </Button>
+                    </article>
+                  ) : null;
+                })}
+              </div>
+            ) : (
+              <p className={styles.muted}>
+                至少选择两张即可并排比较。采用理由会作为款式首次修订说明保存。
+              </p>
+            )}
+          </div>
+        </Dialog>
+      ) : null}
+      <div className={styles.split}>
+        {props.data.styles.length > 1 ? (
+          <details className={styles.objectChooser}>
+            <summary>切换款式 · {selected?.name ?? "建立新款式"}</summary>
+            <aside
+              className={`${styles.rail} ${styles.styleRail}`}
+              aria-label="已有款式"
+            >
+              {props.data.styles.map((style) => (
+                <Button
+                  aria-pressed={selectedId === style.id}
+                  key={style.id}
+                  onClick={() => void selectStyle(style.id)}
+                >
+                  <span className={styles.styleThumbnail}>
                     <ImagePreview
-                      alt={"候选方案 " + (index + 1)}
-                      src={asset.url}
+                      retryable={false}
+                      src={
+                        style.currentRevision.views[0]?.thumbnailUrl ??
+                        style.currentRevision.views[0]?.url
+                      }
+                      alt=""
                     />
                   </span>
-                  <strong>方案 {index + 1}</strong>
-                  <small className={styles.muted}>{id.slice(0, 12)}</small>
-                  <Button
-                    disabled={!props.canEdit}
-                    onClick={() =>
-                      void (async () => {
-                        if (await props.beforeChange()) {
-                          setSelectedId(null);
-                          setDraftVersion((current) => current + 1);
-                          setAdoptedId(id);
-                        }
-                      })()
-                    }
-                  >
-                    采用为新款式
-                  </Button>
-                </article>
-              ) : null;
-            })}
-          </div>
-        ) : (
-          <p className={styles.muted}>
-            至少选择两张即可并排比较。采用理由会作为款式首次修订说明保存。
-          </p>
-        )}
-      </details>
-      <div className={styles.split}>
-        <aside className={styles.rail} aria-label="已有款式">
-          {props.data.styles.map((style) => (
-            <Button
-              aria-pressed={selectedId === style.id}
-              key={style.id}
-              onClick={() => void selectStyle(style.id)}
-            >
-              <strong>
-                {style.code} · {style.name}
-              </strong>
-              <small>
-                {STATUS_LABELS[style.status]} · r
-                {style.currentRevision.revision}
-              </small>
-            </Button>
-          ))}
-          {!props.data.styles.length ? (
-            <p className={styles.muted}>
-              还没有款式。选择一张已有候选保存第一款。
-            </p>
-          ) : null}
-        </aside>
+                  <strong>
+                    {style.code} · {style.name}
+                  </strong>
+                  <small>
+                    {STATUS_LABELS[style.status]} · r
+                    {style.currentRevision.revision}
+                  </small>
+                </Button>
+              ))}
+              {!props.data.styles.length ? (
+                <p className={styles.muted}>
+                  还没有款式。选择一张已有候选保存第一款。
+                </p>
+              ) : null}
+            </aside>
+          </details>
+        ) : null}
         {props.canEdit || selected ? (
           <StyleEditor
             key={
@@ -188,6 +209,20 @@ export function StyleLibrary(
           </EmptyState>
         )}
       </div>
+      {selected && props.onExplore ? (
+        <div className={styles.toolbar}>
+          <span>
+            沿用「{selected.name}」r{selected.currentRevision.revision} 的母图
+          </span>
+          <Button
+            onClick={() =>
+              props.onExplore?.(selected.currentRevision.payload.sourceAssetId)
+            }
+          >
+            以此款式探索色料
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -281,6 +316,24 @@ function StyleEditor({
       ) : null}
       {form.saved ? <Notice tone="success">款式修订已保存。</Notice> : null}
       <fieldset disabled={!canEdit || form.busy} className={styles.form}>
+        <div className={styles.recordVisual}>
+          <span className={styles.assetImage}>
+            <ImagePreview
+              src={
+                data.assets.find((asset) => asset.id === draft.sourceAssetId)
+                  ?.url
+              }
+              alt="当前款式主设计图"
+            />
+          </span>
+          <AssetPicker
+            compact
+            assets={data.assets}
+            selected={draft.sourceAssetId ? [draft.sourceAssetId] : []}
+            onChange={(ids) => update("sourceAssetId", ids[0] ?? "")}
+            label="主设计图（必选）"
+          />
+        </div>
         <div className={styles.formGrid}>
           <Field label="款号">
             <Input
@@ -351,12 +404,7 @@ function StyleEditor({
             maxLength={2000}
           />
         </Field>
-        <AssetPicker
-          assets={data.assets}
-          selected={draft.sourceAssetId ? [draft.sourceAssetId] : []}
-          onChange={(ids) => update("sourceAssetId", ids[0] ?? "")}
-          label="主设计图（必选）"
-        />
+
         <div className={styles.section}>
           <h3>视图资料</h3>
           {draft.views.map((view, index) => (

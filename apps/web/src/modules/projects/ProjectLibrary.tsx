@@ -12,6 +12,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { EmptyState } from "./EmptyState";
 import { ProjectGrid } from "./ProjectGrid";
+import { ProjectSpotlight } from "./ProjectSpotlight";
 import type { Project, ProjectStatusFilter } from "./project-types";
 import styles from "./projects.module.css";
 import {
@@ -178,7 +179,9 @@ export function ProjectLibrary() {
         idempotencyKey,
         projectId: project.id,
       })
-      .then(() => { setNotice("已复制当前设计；历史对话和执行记录保留在原项目"); })
+      .then(() => {
+        setNotice("已复制当前设计；历史对话和执行记录保留在原项目");
+      })
       .catch((error: unknown) => {
         setNotice(errorMessage(error));
       })
@@ -281,11 +284,19 @@ export function ProjectLibrary() {
         <span aria-live="polite" className={styles.projectCount} role="status">
           {total} 个{projectStatus === "archived" ? "归档项目" : "项目"}
         </span>
-        <Button variant="primary" onClick={() => setCreateOpen(true)}>
+        <Button variant="secondary" onClick={() => setCreateOpen(true)}>
           <span aria-hidden="true">＋</span>
           新建项目
         </Button>
       </section>
+
+      {!deferredSearch &&
+      projectStatus === "active" &&
+      !projectsQuery.isError &&
+      !projectsQuery.isPending &&
+      projects.length ? (
+        <ProjectSpotlight projects={projects} userId={session.user.id} />
+      ) : null}
 
       {notice ? (
         <div className={styles.notice} role="alert">
@@ -299,7 +310,11 @@ export function ProjectLibrary() {
       {projectsQuery.isPending ? (
         <section className={styles.skeletonGrid} aria-label="正在加载项目">
           {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} label="正在加载项目卡片" className={styles.projectSkeleton} />
+            <Skeleton
+              key={index}
+              label="正在加载项目卡片"
+              className={styles.projectSkeleton}
+            />
           ))}
         </section>
       ) : projectsQuery.isError ? (

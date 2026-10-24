@@ -30,6 +30,10 @@ export class StudioController {
   ) {
     return this.studio.brandLibrary(user.userId, projectId);
   }
+  @Get("creative-summary")
+  creativeSummary(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string) {
+    return this.studio.creativeSummary(user.userId, projectId);
+  }
   @Post("brands/import")
   importBrand(
     @CurrentUser() user: AuthenticatedUser,

@@ -41,6 +41,8 @@ describe("ExportsService", () => {
     collection: { findUnique: vi.fn() },
     designAsset: { findUnique: vi.fn() },
     exportJob: {
+      findMany: vi.fn(),
+      count: vi.fn(),
       create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -93,6 +95,21 @@ describe("ExportsService", () => {
     await expect(service.capabilities("user-a")).resolves.toEqual({
       downloadLinkHours: 24,
     });
+  });
+
+  it("后台尚未清理时，历史列表仍按实际期限展示已过期导出", async () => {
+    database.exportJob.findMany.mockResolvedValue([
+      exportRecord({ id: "expired", status: ExportStatus.SUCCEEDED, expiresAt: new Date(Date.now() - 1_000) }),
+      exportRecord({ id: "available", status: ExportStatus.SUCCEEDED, expiresAt: new Date(Date.now() + 60_000) }),
+      exportRecord({ id: "failed", status: ExportStatus.FAILED, expiresAt: new Date(0) }),
+    ]);
+    database.exportJob.count.mockResolvedValue(3);
+    const result = await service.list("user-a", {
+      projectId: "project-a", sourceType: "asset", sourceId: "asset-a", page: 1, limit: 20,
+    });
+    expect(result.items.map((item) => item.status)).toEqual(["expired", "succeeded", "failed"]);
+    expect(database.exportJob.update).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
   it("persists dispatch before attempting Redis and remains queued when Redis is unavailable", async () => {

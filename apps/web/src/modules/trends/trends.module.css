@@ -1,6 +1,5 @@
 .trendsPage {
   min-height: 100dvh;
-  padding: 0 clamp(1.25rem, 3.75vw, 4.5rem) clamp(4.5rem, 8vw, 8rem);
   overflow: hidden;
   background-color: var(--color-paper);
   background-image: linear-gradient(
@@ -31,7 +30,7 @@
 .pageHeader span,
 .pageHeader a {
   font-size: var(--text-sm);
-  font-weight: 800;
+  font-weight: var(--font-semibold);
   letter-spacing: 0.16em;
   line-height: 1;
   text-decoration: none;
@@ -57,13 +56,7 @@
 }
 
 .hero {
-  display: grid;
-  width: 62%;
-  min-height: clamp(22rem, 36vw, 36rem);
-  padding: clamp(4.5rem, 8vw, 9rem) clamp(1.5rem, 4vw, 4rem)
-    clamp(3.75rem, 6vw, 6.5rem) 0;
   align-items: end;
-  grid-template-columns: minmax(0, 1fr) auto;
   gap: clamp(2rem, 4vw, 5rem);
 }
 
@@ -72,7 +65,6 @@
   font-family: var(--font-serif);
   font-size: clamp(3.5rem, 5vw, 6rem);
   font-weight: 400;
-  letter-spacing: -0.04em;
   line-height: 0.92;
   text-wrap: balance;
 }
@@ -81,17 +73,11 @@
   display: grid;
   margin: 0 0 0.35rem;
   color: var(--color-ink-secondary);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.12em;
   line-height: 1.65;
-  white-space: nowrap;
 }
 
 .sourceLayout {
   position: relative;
-  display: grid;
-  border-top: 1px solid var(--color-border-strong);
   grid-template-columns: 62% 38%;
 }
 
@@ -102,8 +88,6 @@
 
 .sourceRow {
   display: grid;
-  min-height: clamp(5.25rem, 6vw, 6.25rem);
-  padding: 0 clamp(0.25rem, 1vw, 1rem);
   align-items: center;
   border-bottom: 1px solid var(--trend-divider);
   color: var(--trend-ink);
@@ -126,9 +110,6 @@
 
 .sourceName {
   overflow: hidden;
-  font-family: var(--type-editorial, Georgia, "Songti SC", serif);
-  font-size: clamp(2rem, 2.8vw, 3.375rem);
-  font-weight: 400;
   letter-spacing: -0.035em;
   line-height: 1;
   text-overflow: ellipsis;
@@ -222,7 +203,7 @@
 .previewMeta b {
   margin-top: 0.75rem;
   color: var(--trend-accent);
-  font-weight: 800;
+  font-weight: var(--font-semibold);
 }
 
 .defaultPreview {
@@ -268,8 +249,6 @@
     left: calc(66% + 2rem);
   }
 }
-
-
 
 @media (max-width: 880px) {
   .hero {
@@ -350,9 +329,6 @@
 }
 
 .hero {
-  width: 100%;
-  min-height: 15rem;
-  padding: 3rem 0 2.5rem;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
@@ -475,11 +451,16 @@
   min-width: 0;
   border: 1px solid var(--color-border);
   background: var(--color-paper);
-  animation: card-in 400ms var(--ease-enter, cubic-bezier(0.16,1,0.3,1)) both;
+  animation: card-in var(--duration-normal)
+    var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }
 /* Stagger: each card in the 3-column grid enters slightly after the previous */
-.trendCard:nth-child(3n + 2) { animation-delay: var(--stagger-sm, 60ms); }
-.trendCard:nth-child(3n + 3) { animation-delay: calc(var(--stagger-sm, 60ms) * 2); }
+.trendCard:nth-child(3n + 2) {
+  animation-delay: var(--stagger-sm, 60ms);
+}
+.trendCard:nth-child(3n + 3) {
+  animation-delay: calc(var(--stagger-sm, 60ms) * 2);
+}
 
 @keyframes card-in {
   from {
@@ -610,7 +591,10 @@
   color: var(--trend-muted);
   font-size: 0.9rem;
 }
-.archiveSkeleton { aspect-ratio: 4 / 3; min-height: 180px; }
+.archiveSkeleton {
+  aspect-ratio: 4 / 3;
+  min-height: 180px;
+}
 .archiveNotice,
 .archiveError {
   padding: 1rem;
@@ -760,18 +744,107 @@
   }
 }
 
-.trendsPage { background: var(--color-canvas); padding: 0 var(--page-gutter) var(--space-16); }
-.editorialFrame { max-width: var(--content-max-width); }
-.hero { width: 100%; min-height: 0; display: block; padding: var(--space-8) 0 var(--space-6); }
-.hero h1 { font: var(--font-semibold) 28px/var(--leading-snug) var(--font-sans); letter-spacing: var(--tracking-tight); }
-.hero p { margin-top: var(--space-3); font-size: var(--text-base); letter-spacing: 0; white-space: normal; font-weight: var(--font-normal); }
-.externalSources { margin-top: var(--space-8); border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
-.externalSources > summary { cursor: pointer; color: var(--color-ink-secondary); font-size: var(--text-base); }
-.sourceLayout { margin-top: var(--space-4); display: block; border-top: 0; }
-.platformIndex { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--space-2) var(--space-6); }
-.sourceRow { min-height: var(--control-height-touch); padding: var(--space-3); border-radius: var(--radius-md); }
-.sourceName { font-size: var(--text-base); font-family: var(--font-sans); font-weight: var(--font-medium); }
-.previewField, .hoverPreview { display: none; }
-@media (max-width: 767px) { .platformIndex { grid-template-columns: 1fr; } }
+.trendsPage {
+  background: var(--color-canvas);
+  padding: 0 var(--page-gutter) var(--space-16);
+}
+.editorialFrame {
+  max-width: var(--content-max-width);
+}
+.hero {
+  width: 100%;
+  min-height: 0;
+  display: block;
+  padding: var(--space-6) 0 var(--space-4);
+}
+.hero h1 {
+  font: var(--font-semibold) var(--text-page-title)/var(--leading-snug)
+    var(--font-sans);
+  letter-spacing: var(--tracking-tight);
+}
+.hero p {
+  margin-top: var(--space-3);
+  font-size: var(--text-base);
+  letter-spacing: 0;
+  white-space: normal;
+  font-weight: var(--font-normal);
+}
+.externalSources {
+  margin-top: var(--space-8);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+.externalSources > summary {
+  cursor: pointer;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+}
+.sourceLayout {
+  margin-top: var(--space-4);
+  display: block;
+  border-top: 0;
+}
+.platformIndex {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-6);
+}
+.sourceRow {
+  min-height: var(--control-height-touch);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+}
+.sourceName {
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  font-weight: var(--font-medium);
+}
+.previewField,
+.hoverPreview {
+  display: none;
+}
+@media (max-width: 767px) {
+  .platformIndex {
+    grid-template-columns: 1fr;
+  }
+}
 
-.trendsPage :is(button, input, select, summary) { font-size: var(--text-base); }
+.trendsPage :is(button, input, select, summary) {
+  font-size: var(--text-base);
+}
+@media (min-width: 1000px) {
+  .archiveGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .archiveGrid > article:first-child {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+  }
+  .archiveGrid > article:first-child .cardVisual {
+    aspect-ratio: auto;
+    height: auto;
+    min-height: 360px;
+  }
+  .archiveGrid > article:first-child .cardVisual img {
+    position: absolute;
+    inset: 0;
+  }
+}
+.trendCard {
+  transition: box-shadow var(--duration-fast);
+}
+.trendCard:focus-within {
+  box-shadow: 0 0 0 2px var(--color-signal);
+}
+@media (hover: hover) {
+  .trendCard:hover {
+    box-shadow: var(--shadow-material-1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trendCard {
+    transition: none;
+    animation: none;
+  }
+}

@@ -1,5 +1,7 @@
 # 新时尚 AI 设计工作台 - 视觉设计系统 V2
 
+> 历史设计资料：以下深色方案已不用于当前运行时。现行规范以 `design-system.css` 和 `doc/全系统界面优化实施-2026-10-24.md` 为准，请勿据此重新引入旧主题。
+
 ## 设计理念
 
 **定位：** 面向专业服装设计师的高端 AI 设计工具  
@@ -14,27 +16,27 @@
 
 ```css
 /* 背景层级 */
---surface-base: #0A0A0B;        /* 深黑背景，主画布 */
---surface-elevated: #1A1A1C;    /* 卡片、面板 */
---surface-overlay: #2A2A2C;     /* 浮层、弹窗 */
+--surface-base: #0a0a0b; /* 深黑背景，主画布 */
+--surface-elevated: #1a1a1c; /* 卡片、面板 */
+--surface-overlay: #2a2a2c; /* 浮层、弹窗 */
 
 /* 文字颜色 */
---text-primary: #FAFAFA;        /* 主要文字 */
---text-secondary: #A8A8A8;      /* 次要文字 */
---text-tertiary: #6B6B6B;       /* 辅助文字 */
---text-disabled: #4A4A4A;       /* 禁用状态 */
+--text-primary: #fafafa; /* 主要文字 */
+--text-secondary: #a8a8a8; /* 次要文字 */
+--text-tertiary: #6b6b6b; /* 辅助文字 */
+--text-disabled: #4a4a4a; /* 禁用状态 */
 
 /* 强调色 - 温暖橙红 */
---accent-primary: #E9522C;      /* 主强调色 */
---accent-hover: #FF6B42;        /* 悬停状态 */
---accent-pressed: #D44520;      /* 按下状态 */
---accent-muted: rgba(233, 82, 44, 0.12);  /* 淡化背景 */
+--accent-primary: #e9522c; /* 主强调色 */
+--accent-hover: #ff6b42; /* 悬停状态 */
+--accent-pressed: #d44520; /* 按下状态 */
+--accent-muted: rgba(233, 82, 44, 0.12); /* 淡化背景 */
 
 /* 语义色 */
---status-success: #4CAF50;
---status-warning: #FF9800;
---status-error: #F44336;
---status-info: #2196F3;
+--status-success: #4caf50;
+--status-warning: #ff9800;
+--status-error: #f44336;
+--status-info: #2196f3;
 
 /* 边框和分割线 */
 --border-subtle: rgba(255, 255, 255, 0.08);
@@ -46,12 +48,12 @@
 
 ```css
 /* 节点类型配色 */
---node-brief: #3B82F6;          /* 设计需求 - 蓝色 */
---node-reference: #8B5CF6;      /* 参考素材 - 紫色 */
---node-tool: #F59E0B;           /* 工具操作 - 橙色 */
---node-result: #10B981;         /* 候选结果 - 绿色 */
---node-constraint: #06B6D4;     /* 设计约束 - 青色 */
---node-evaluation: #EC4899;     /* 评估报告 - 粉色 */
+--node-brief: #3b82f6; /* 设计需求 - 蓝色 */
+--node-reference: #8b5cf6; /* 参考素材 - 紫色 */
+--node-tool: #f59e0b; /* 工具操作 - 橙色 */
+--node-result: #10b981; /* 候选结果 - 绿色 */
+--node-constraint: #06b6d4; /* 设计约束 - 青色 */
+--node-evaluation: #ec4899; /* 评估报告 - 粉色 */
 ```
 
 ---
@@ -65,7 +67,9 @@
 --font-serif: Georgia, "Songti SC", "Noto Serif SC", serif;
 
 /* 无衬线字体 - 用于界面、正文、数据 */
---font-sans: "Inter", "PingFang SC", "Microsoft YaHei", -apple-system, system-ui, sans-serif;
+--font-sans:
+  "Inter", "PingFang SC", "Microsoft YaHei", -apple-system, system-ui,
+  sans-serif;
 
 /* 等宽字体 - 用于代码、数据 */
 --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
@@ -75,27 +79,27 @@
 
 ```css
 /* Display - 大标题 */
---text-display-lg: 48px / 1.1 / 600;    /* 页面主标题 */
---text-display-md: 36px / 1.2 / 600;    /* 区块标题 */
---text-display-sm: 28px / 1.2 / 600;    /* 小标题 */
+--text-display-lg: 48px / 1.1 / 600; /* 页面主标题 */
+--text-display-md: 36px / 1.2 / 600; /* 区块标题 */
+--text-display-sm: 28px / 1.2 / 600; /* 小标题 */
 
 /* Heading - 标题 */
---text-heading-lg: 24px / 1.3 / 600;    /* 一级标题 */
---text-heading-md: 20px / 1.4 / 600;    /* 二级标题 */
---text-heading-sm: 18px / 1.4 / 600;    /* 三级标题 */
+--text-heading-lg: 24px / 1.3 / 600; /* 一级标题 */
+--text-heading-md: 20px / 1.4 / 600; /* 二级标题 */
+--text-heading-sm: 18px / 1.4 / 600; /* 三级标题 */
 
 /* Body - 正文 */
---text-body-lg: 16px / 1.6 / 400;       /* 大正文 */
---text-body-md: 14px / 1.6 / 400;       /* 标准正文 */
---text-body-sm: 13px / 1.5 / 400;       /* 小正文 */
+--text-body-lg: 16px / 1.6 / 400; /* 大正文 */
+--text-body-md: 14px / 1.6 / 400; /* 标准正文 */
+--text-body-sm: 13px / 1.5 / 400; /* 小正文 */
 
 /* Label - 标签 */
---text-label-lg: 14px / 1.4 / 500;      /* 大标签 */
---text-label-md: 12px / 1.4 / 500;      /* 标准标签 */
---text-label-sm: 11px / 1.4 / 500;      /* 小标签 */
+--text-label-lg: 14px / 1.4 / 500; /* 大标签 */
+--text-label-md: 12px / 1.4 / 500; /* 标准标签 */
+--text-label-sm: 11px / 1.4 / 500; /* 小标签 */
 
 /* Caption - 说明文字 */
---text-caption: 12px / 1.5 / 400;       /* 辅助说明 */
+--text-caption: 12px / 1.5 / 400; /* 辅助说明 */
 ```
 
 ---
@@ -118,18 +122,18 @@
 --space-24: 96px;
 
 /* 组件内部间距 */
---padding-xs: var(--space-2);    /* 8px */
---padding-sm: var(--space-3);    /* 12px */
---padding-md: var(--space-4);    /* 16px */
---padding-lg: var(--space-6);    /* 24px */
---padding-xl: var(--space-8);    /* 32px */
+--padding-xs: var(--space-2); /* 8px */
+--padding-sm: var(--space-3); /* 12px */
+--padding-md: var(--space-4); /* 16px */
+--padding-lg: var(--space-6); /* 24px */
+--padding-xl: var(--space-8); /* 32px */
 
 /* 组件间间距 */
---gap-xs: var(--space-2);        /* 8px */
---gap-sm: var(--space-4);        /* 16px */
---gap-md: var(--space-6);        /* 24px */
---gap-lg: var(--space-8);        /* 32px */
---gap-xl: var(--space-12);       /* 48px */
+--gap-xs: var(--space-2); /* 8px */
+--gap-sm: var(--space-4); /* 16px */
+--gap-md: var(--space-6); /* 24px */
+--gap-lg: var(--space-8); /* 32px */
+--gap-xl: var(--space-12); /* 48px */
 ```
 
 ---
@@ -137,10 +141,10 @@
 ## 圆角系统
 
 ```css
---radius-sm: 4px;      /* 小元素 */
---radius-md: 8px;      /* 卡片、按钮 */
---radius-lg: 12px;     /* 大卡片 */
---radius-xl: 16px;     /* 容器 */
+--radius-sm: 4px; /* 小元素 */
+--radius-md: 8px; /* 卡片、按钮 */
+--radius-lg: 12px; /* 大卡片 */
+--radius-xl: 16px; /* 容器 */
 --radius-full: 9999px; /* 圆形、药丸 */
 ```
 
@@ -151,12 +155,12 @@
 ```css
 /* 卡片阴影 - 柔和不刺眼 */
 --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
---shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 
-             0 2px 4px -1px rgba(0, 0, 0, 0.3);
---shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 
-             0 4px 6px -2px rgba(0, 0, 0, 0.3);
---shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 
-             0 10px 10px -5px rgba(0, 0, 0, 0.3);
+--shadow-md:
+  0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+--shadow-lg:
+  0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+--shadow-xl:
+  0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 
 /* 发光效果 - 仅用于强调 */
 --glow-accent: 0 0 20px rgba(233, 82, 44, 0.3);
@@ -169,10 +173,10 @@
 
 ```css
 /* 缓动函数 */
---ease-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
---ease-decelerate: cubic-bezier(0.0, 0.0, 0.2, 1);
---ease-accelerate: cubic-bezier(0.4, 0.0, 1, 1);
---ease-sharp: cubic-bezier(0.4, 0.0, 0.6, 1);
+--ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+--ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+--ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+--ease-sharp: cubic-bezier(0.4, 0, 0.6, 1);
 
 /* 时长 */
 --duration-instant: 100ms;
@@ -184,9 +188,10 @@
 /* 常用组合 */
 --transition-base: all var(--duration-fast) var(--ease-standard);
 --transition-smooth: all var(--duration-normal) var(--ease-standard);
---transition-color: color var(--duration-fast) var(--ease-standard),
-                    background-color var(--duration-fast) var(--ease-standard),
-                    border-color var(--duration-fast) var(--ease-standard);
+--transition-color:
+  color var(--duration-fast) var(--ease-standard),
+  background-color var(--duration-fast) var(--ease-standard),
+  border-color var(--duration-fast) var(--ease-standard);
 ```
 
 ---
@@ -384,11 +389,11 @@
 ❌ 拥挤的卡片堆叠  
 ❌ 弱层级的排版  
 ❌ 通用 SaaS 模板感  
-❌ 过于鲜艳的配色  
+❌ 过于鲜艳的配色
 
 ✅ 深色优雅背景  
 ✅ 清晰的视觉层级  
 ✅ 充足的留白空间  
 ✅ 专业的时尚美学  
 ✅ 精致的交互动效  
-✅ 强烈的品牌识别  
+✅ 强烈的品牌识别

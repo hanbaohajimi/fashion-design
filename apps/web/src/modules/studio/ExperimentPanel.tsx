@@ -1,5 +1,6 @@
 "use client";
-import Image from "next/image";
+
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为稳定结果矩阵；320px 配置区提供母图与参数。保存计划为主操作，显式提交才启动生成。 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   experimentCreateSchema,
@@ -9,7 +10,7 @@ import {
   type StudioStyleView,
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
-import { Button } from "../../components/ui";
+import { Button, ImagePreview, Select, Textarea } from "../../components/ui";
 import { TaskFeedback } from "../../components/TaskFeedback";
 import { isTaskActive } from "../../components/task-feedback-state";
 import { userFacingError } from "../../components/user-facing-error";
@@ -66,6 +67,7 @@ export function ExperimentPanel({
   onRefresh,
   onDirty,
   initialMode = "color",
+  initialSourceAssetId,
 }: {
   projectId: string;
   assets: readonly StudioAssetView[];
@@ -74,11 +76,16 @@ export function ExperimentPanel({
   onRefresh?: () => void;
   onDirty?: (dirty: boolean) => void;
   initialMode?: ExperimentCreateInput["mode"];
+  initialSourceAssetId?: string;
 }) {
   const base =
     "/api/projects/" + encodeURIComponent(projectId) + "/experiments";
   const [mode, setMode] = useState<ExperimentCreateInput["mode"]>(initialMode);
-  const [sourceAssetId, setSource] = useState(assets[0]?.id ?? "");
+  const [sourceAssetId, setSource] = useState(
+    initialSourceAssetId
+      ? (assets.find((asset) => asset.id === initialSourceAssetId)?.id ?? "")
+      : (assets[0]?.id ?? ""),
+  );
   const [prompt, setPrompt] = useState("保持原设计，仅完成指定的视觉修改");
   const [preserve, setPreserve] = useState(
     "保持廓形、领型、口袋、门襟、标识和服装主体结构",
@@ -241,6 +248,7 @@ export function ExperimentPanel({
   const act = async (
     batch: ExperimentView,
     action: "submit" | "retry" | "cancel",
+    selectedIds?: readonly string[],
   ) => {
     const states =
       action === "submit"
@@ -249,7 +257,11 @@ export function ExperimentPanel({
           ? ["failed", "not_admitted"]
           : ["draft", "dispatching", "queued", "running"];
     const itemIds = batch.items
-      .filter((item) => states.includes(item.status))
+      .filter(
+        (item) =>
+          states.includes(item.status) &&
+          (!selectedIds || selectedIds.includes(item.id)),
+      )
       .map((item) => item.id);
     if (!itemIds.length) return;
     setBusy(true);
@@ -277,287 +289,344 @@ export function ExperimentPanel({
       <div className={styles.heading}>
         <div>
           <h2>色料与改款实验</h2>
-          <p>
-            选择母图，比较不同配色、面料或细节。
-          </p>
+          <p>选择母图，比较不同配色、面料或细节。</p>
         </div>
         <span>{styleRecords.length} 个款式可继续发展</span>
       </div>
-      {!canEdit ? (
-        <p role="status">当前角色可查看实验结果，提交生成需要编辑权限。</p>
-      ) : (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void makeDraft();
-          }}
-        >
-          <fieldset className={styles.form} disabled={busy || loading}>
-            <label>
-              实验类型
-              <select
-                value={mode}
-                onChange={(event) => {
-                  const value = event.target
-                    .value as ExperimentCreateInput["mode"];
-                  setMode(value);
-                  if (value === "presentation")
-                    setVariations(
-                      "白色背景，服装平铺商品摄影\n简洁室内陈列场景，保持服装细节",
-                    );
-                  if (value === "detail")
-                    setVariations("修改为立领\n修改为翻领");
-                }}
-              >
-                <option value="color">批量配色</option>
-                <option value="material">配色与面料组合</option>
-                <option value="detail">领型、袖型与细节改款</option>
-                <option value="presentation">商品展示素材</option>
-              </select>
-            </label>
-            <label>
-              母图
-              <select
-                required
-                value={sourceAssetId}
-                onChange={(event) => setSource(event.target.value)}
-              >
-                <option value="">选择项目中的真实图片</option>
-                {assets.map((asset, index) => (
-                  <option key={asset.id} value={asset.id}>
-                    图片 {index + 1} · {asset.id.slice(-8)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.wide}>
-              本轮目标
-              <textarea
-                required
-                value={prompt}
-                maxLength={2000}
-                onChange={(event) => setPrompt(event.target.value)}
-              />
-            </label>
-            <label className={styles.wide}>
-              明确保留的内容
-              <textarea
-                required
-                value={preserve}
-                maxLength={1000}
-                onChange={(event) => setPreserve(event.target.value)}
-              />
-            </label>
-            {mode === "color" || mode === "material" ? (
-              <label>
-                配色，每行“名称 #HEX”
-                <textarea
-                  value={colorText}
-                  onChange={(event) => setColorText(event.target.value)}
-                  rows={4}
-                />
-                <small>最多6色；视觉色值需要结合实物和色样复核。</small>
-              </label>
-            ) : (
-              <label className={styles.wide}>
-                修改方案，每行一种
-                <textarea
-                  value={variations}
-                  onChange={(event) => setVariations(event.target.value)}
-                  rows={4}
-                />
-                <small>
-                  最多6个具体方案；展示图用于视觉表达，不能验证合体性。
-                </small>
-              </label>
-            )}
-            {mode === "material" ? (
-              <fieldset>
-                <legend>面料参考，最多4种</legend>
-                <div className={styles.fabrics}>
-                  {fabrics.map((fabric) => (
-                    <label key={fabric.id}>
-                      <input
-                        type="checkbox"
-                        checked={fabricIds.includes(fabric.id)}
-                        onChange={(event) =>
-                          setFabricIds((current) =>
-                            event.target.checked
-                              ? [...current, fabric.id]
-                              : current.filter((id) => id !== fabric.id),
-                          )
-                        }
-                      />
-                      <span>
-                        {fabric.details?.name ||
-                          fabric.tags.join(" / ") ||
-                          "未命名面料"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {!fabrics.length ? <p>先在面料库上传小样和规格。</p> : null}
-              </fieldset>
-            ) : null}
-            <p className={styles.wide}>
-              每批最多12个组合；每项一个生成任务，按现有成功任务规则计次。提交时逐项接纳，额度不足项会保留为未接纳。精确局部换料尚未开放，材质实验会影响整张图。
-            </p>
-            <div className={styles.actions}>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={busy}
-                disabled={!assets.length}
-              >
-                保存实验计划
-              </Button>
-              <Button
-                onClick={() => {
-                  setError(null);
-                  void refresh().catch((cause) =>
-                    setError(
-                      cause instanceof Error ? cause.message : "更新失败",
-                    ),
-                  );
-                }}
-              >
-                刷新结果
-              </Button>
-            </div>
-          </fieldset>
-        </form>
-      )}
-      {error ? (
-        <p className={styles.error} role="alert">
-          {userFacingError(error, "实验暂时无法完成，请重试")}
-        </p>
-      ) : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {loading ? (
-        <div className={styles.skeleton} role="status">
-          正在读取实验计划…
-        </div>
-      ) : !batches.length ? (
-        <div className={styles.empty}>
-          从一张图片开始，保存第一组配色或面料实验。
-        </div>
-      ) : null}
-      {batches.map((batch) => (
-        <section
-          key={batch.id}
-          className={styles.batch}
-          aria-label={"实验 " + batch.id.slice(-6)}
-        >
-          <div className={styles.batchHeading}>
-            <div>
-              <h3>
-                {batch.mode === "presentation"
-                  ? "展示素材"
-                  : batch.mode === "detail"
-                    ? "细节改款"
-                    : "色料实验"}{" "}
-                · {batch.items.length} 个方案
-              </h3>
-              <small>保留要求：{batch.preserve}</small>
-            </div>
-            {canEdit ? (
-              <div className={styles.actions}>
-                <Button
-                  loading={busy}
-                  disabled={
-                    !batch.items.some((item) => item.status === "draft")
-                  }
-                  onClick={() => void act(batch, "submit")}
-                >
-                  提交待执行方案
-                </Button>
-                <Button
-                  disabled={
-                    busy ||
-                    !batch.items.some((item) =>
-                      ["failed", "not_admitted"].includes(item.status),
-                    )
-                  }
-                  onClick={() => void act(batch, "retry")}
-                >
-                  仅重试失败项
-                </Button>
-                <Button
-                  disabled={
-                    busy ||
-                    !batch.items.some((item) =>
-                      ["draft", "queued", "running", "dispatching"].includes(
-                        item.status,
-                      ),
-                    )
-                  }
-                  onClick={() => void act(batch, "cancel")}
-                >
-                  取消待完成项
-                </Button>
-              </div>
-            ) : null}
-          </div>
-          <div className={styles.matrix}>
-            {batch.items.map((item) => (
-              <article key={item.id} className={styles.item}>
-                <div className={styles.preview}>
-                  {item.assets[0] ? (
-                    <Image
-                      unoptimized
-                      width={1024}
-                      height={1280}
-                      src={item.assets[0].thumbnailUrl ?? item.assets[0].url}
-                      alt={item.title}
-                    />
-                  ) : (
-                    viewingItemId === item.id && isTaskActive(item.status) ? <TaskFeedback
-                      taskId={`${projectId}:${item.id}:${item.attempt}`} status={item.status} compact
-                      operation={batch.mode === "material" ? "material" : batch.mode === "color" ? "color" : "edit"}
-                    /> : <span>{stateLabel[item.status]}</span>
-                  )}
-                </div>
-                <div className={styles.itemBody}>
-                  <span className={styles.state}>
-                    {stateLabel[item.status]}
-                    {item.attempt ? " · 重试 " + item.attempt : ""}
-                  </span>
-                  <h4>{item.title}</h4>
-                  {item.color ? (
-                    <span className={styles.color}>
-                      <i style={{ background: item.color.hex }} />
-                      {item.color.hex}
-                    </span>
-                  ) : null}
-                  {item.error ? <p role="status">{userFacingError(item.error, "此方案未完成，可重试失败项")}</p> : null}
-                  {isTaskActive(item.status) ? <Button size="small" aria-pressed={viewingItemId === item.id} onClick={() => setViewingItemId(viewingItemId === item.id ? null : item.id)}>{viewingItemId === item.id ? "收起生成状态" : "查看生成状态"}</Button> : null}
-                  <details>
-                    <summary>修改要求与来源</summary>
-                    <p>{item.prompt}</p>
-                    <small>母图：{batch.sourceAssetId}</small>
-                    {item.fabric ? (
-                      <p>面料快照：{item.fabric.tags.join(" / ")}</p>
-                    ) : null}
-                  </details>
-                  {item.assets.map((asset) => (
-                    <a
-                      key={asset.id}
-                      href={
-                        "/" +
-                        encodeURIComponent(projectId) +
-                        "/studio?tab=styles&assetId=" +
-                        encodeURIComponent(asset.id)
+      <div className={styles.workspace}>
+        <div className={styles.configuration}>
+          {!canEdit ? (
+            <p role="status">当前角色可查看实验结果，提交生成需要编辑权限。</p>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void makeDraft();
+              }}
+            >
+              <fieldset className={styles.form} disabled={busy || loading}>
+                <label>
+                  实验类型
+                  <Select
+                    value={mode}
+                    onChange={(event) => {
+                      const value = event.target
+                        .value as ExperimentCreateInput["mode"];
+                      setMode(value);
+                      if (value === "presentation")
+                        setVariations(
+                          "白色背景，服装平铺商品摄影\n简洁室内陈列场景，保持服装细节",
+                        );
+                      if (value === "detail")
+                        setVariations("修改为立领\n修改为翻领");
+                    }}
+                  >
+                    <option value="color">批量配色</option>
+                    <option value="material">配色与面料组合</option>
+                    <option value="detail">领型、袖型与细节改款</option>
+                    <option value="presentation">商品展示素材</option>
+                  </Select>
+                </label>
+                <label>
+                  母图
+                  <Select
+                    required
+                    value={sourceAssetId}
+                    onChange={(event) => setSource(event.target.value)}
+                  >
+                    <option value="">选择项目中的真实图片</option>
+                    {assets.map((asset, index) => (
+                      <option key={asset.id} value={asset.id}>
+                        图片 {index + 1} · {asset.id.slice(-8)}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                {assets.find((asset) => asset.id === sourceAssetId) ? (
+                  <div className={styles.sourcePreview}>
+                    <ImagePreview
+                      src={
+                        assets.find((asset) => asset.id === sourceAssetId)?.url
                       }
-                    >
-                      比较并保存为款式
-                    </a>
-                  ))}
+                      alt="本次实验母图"
+                    />
+                  </div>
+                ) : null}
+                <label className={styles.wide}>
+                  本轮目标
+                  <Textarea
+                    required
+                    value={prompt}
+                    maxLength={2000}
+                    onChange={(event) => setPrompt(event.target.value)}
+                  />
+                </label>
+                <label className={styles.wide}>
+                  明确保留的内容
+                  <Textarea
+                    required
+                    value={preserve}
+                    maxLength={1000}
+                    onChange={(event) => setPreserve(event.target.value)}
+                  />
+                </label>
+                {mode === "color" || mode === "material" ? (
+                  <label>
+                    配色，每行“名称 #HEX”
+                    <Textarea
+                      value={colorText}
+                      onChange={(event) => setColorText(event.target.value)}
+                      rows={4}
+                    />
+                    <small>最多6色；视觉色值需要结合实物和色样复核。</small>
+                  </label>
+                ) : (
+                  <label className={styles.wide}>
+                    修改方案，每行一种
+                    <Textarea
+                      value={variations}
+                      onChange={(event) => setVariations(event.target.value)}
+                      rows={4}
+                    />
+                    <small>
+                      最多6个具体方案；展示图用于视觉表达，不能验证合体性。
+                    </small>
+                  </label>
+                )}
+                {mode === "material" ? (
+                  <fieldset>
+                    <legend>面料参考，最多4种</legend>
+                    <div className={styles.fabrics}>
+                      {fabrics.map((fabric) => (
+                        <label key={fabric.id}>
+                          <input
+                            type="checkbox"
+                            checked={fabricIds.includes(fabric.id)}
+                            onChange={(event) =>
+                              setFabricIds((current) =>
+                                event.target.checked
+                                  ? [...current, fabric.id]
+                                  : current.filter((id) => id !== fabric.id),
+                              )
+                            }
+                          />
+                          <span>
+                            {fabric.details?.name ||
+                              fabric.tags.join(" / ") ||
+                              "未命名面料"}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {!fabrics.length ? <p>先在面料库上传小样和规格。</p> : null}
+                  </fieldset>
+                ) : null}
+                <p className={styles.wide}>
+                  每批最多12个组合；每项一个生成任务，按现有成功任务规则计次。提交时逐项接纳，额度不足项会保留为未接纳。精确局部换料尚未开放，材质实验会影响整张图。
+                </p>
+                <div className={styles.actions}>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    loading={busy}
+                    disabled={!assets.length}
+                  >
+                    保存实验计划
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setError(null);
+                      void refresh().catch((cause) =>
+                        setError(
+                          cause instanceof Error ? cause.message : "更新失败",
+                        ),
+                      );
+                    }}
+                  >
+                    刷新结果
+                  </Button>
                 </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
+              </fieldset>
+            </form>
+          )}
+        </div>
+        <div className={styles.results} aria-label="实验计划与结果">
+          {error ? (
+            <p className={styles.error} role="alert">
+              {userFacingError(error, "实验暂时无法完成，请重试")}
+            </p>
+          ) : null}
+          {notice ? <p role="status">{notice}</p> : null}
+          {loading ? (
+            <div className={styles.skeleton} role="status">
+              正在读取实验计划…
+            </div>
+          ) : !batches.length ? (
+            <div className={styles.empty}>
+              从一张图片开始，保存第一组配色或面料实验。
+            </div>
+          ) : null}
+          {batches.map((batch) => (
+            <section
+              key={batch.id}
+              className={styles.batch}
+              aria-label={"实验 " + batch.id.slice(-6)}
+            >
+              <div className={styles.batchHeading}>
+                <div>
+                  <h3>
+                    {batch.mode === "presentation"
+                      ? "展示素材"
+                      : batch.mode === "detail"
+                        ? "细节改款"
+                        : "色料实验"}{" "}
+                    · {batch.items.length} 个方案
+                  </h3>
+                  <small>保留要求：{batch.preserve}</small>
+                </div>
+                {canEdit ? (
+                  <div className={styles.actions}>
+                    <Button
+                      loading={busy}
+                      disabled={
+                        !batch.items.some((item) => item.status === "draft")
+                      }
+                      onClick={() => void act(batch, "submit")}
+                    >
+                      提交待执行方案
+                    </Button>
+                    <Button
+                      disabled={
+                        busy ||
+                        !batch.items.some((item) =>
+                          ["failed", "not_admitted"].includes(item.status),
+                        )
+                      }
+                      onClick={() => void act(batch, "retry")}
+                    >
+                      仅重试失败项
+                    </Button>
+                    <Button
+                      disabled={
+                        busy ||
+                        !batch.items.some((item) =>
+                          [
+                            "draft",
+                            "queued",
+                            "running",
+                            "dispatching",
+                          ].includes(item.status),
+                        )
+                      }
+                      onClick={() => void act(batch, "cancel")}
+                    >
+                      取消待完成项
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div className={styles.matrix}>
+                {batch.items.map((item) => (
+                  <article key={item.id} className={styles.item}>
+                    <div className={styles.preview}>
+                      {item.assets[0] ? (
+                        <ImagePreview
+                          src={
+                            item.assets[0].thumbnailUrl ?? item.assets[0].url
+                          }
+                          alt={item.title}
+                        />
+                      ) : viewingItemId === item.id &&
+                        isTaskActive(item.status) ? (
+                        <TaskFeedback
+                          taskId={`${projectId}:${item.id}:${item.attempt}`}
+                          status={item.status}
+                          compact
+                          operation={
+                            batch.mode === "material"
+                              ? "material"
+                              : batch.mode === "color"
+                                ? "color"
+                                : "edit"
+                          }
+                        />
+                      ) : (
+                        <span>{stateLabel[item.status]}</span>
+                      )}
+                    </div>
+                    <div className={styles.itemBody}>
+                      <span className={styles.state}>
+                        {stateLabel[item.status]}
+                        {item.attempt ? " · 重试 " + item.attempt : ""}
+                      </span>
+                      <h4>{item.title}</h4>
+                      {item.color ? (
+                        <span className={styles.color}>
+                          <i style={{ background: item.color.hex }} />
+                          {item.color.hex}
+                        </span>
+                      ) : null}
+                      {item.error ? (
+                        <p role="status">
+                          {userFacingError(
+                            item.error,
+                            "此方案未完成，可重试失败项",
+                          )}
+                        </p>
+                      ) : null}
+                      {canEdit &&
+                      ["failed", "not_admitted"].includes(item.status) ? (
+                        <Button
+                          disabled={busy}
+                          onClick={() => void act(batch, "retry", [item.id])}
+                        >
+                          重试此方案
+                        </Button>
+                      ) : null}
+                      {isTaskActive(item.status) ? (
+                        <Button
+                          size="small"
+                          aria-pressed={viewingItemId === item.id}
+                          onClick={() =>
+                            setViewingItemId(
+                              viewingItemId === item.id ? null : item.id,
+                            )
+                          }
+                        >
+                          {viewingItemId === item.id
+                            ? "收起生成状态"
+                            : "查看生成状态"}
+                        </Button>
+                      ) : null}
+                      <details>
+                        <summary>修改要求与来源</summary>
+                        <p>{item.prompt}</p>
+                        <small>母图：{batch.sourceAssetId}</small>
+                        {item.fabric ? (
+                          <p>面料快照：{item.fabric.tags.join(" / ")}</p>
+                        ) : null}
+                      </details>
+                      {item.assets.map((asset) => (
+                        <a
+                          key={asset.id}
+                          href={
+                            "/" +
+                            encodeURIComponent(projectId) +
+                            "/studio?tab=styles&assetId=" +
+                            encodeURIComponent(asset.id)
+                          }
+                        >
+                          比较并保存为款式
+                        </a>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

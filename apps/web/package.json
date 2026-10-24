@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fashion/shared": "workspace:*",
+    "@number-flow/react": "^0.6.2",
     "@sentry/nextjs": "10.75.2",
     "@tanstack/react-query": "^5.101.4",
     "next": "16.4.1",
@@ -19,8 +20,10 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
+    "react-virtuoso": "^4.18.19",
     "react-window": "2.2.7",
     "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.8",
     "swr": "2.3.6",
     "tldraw": "^5.2.5"
   },

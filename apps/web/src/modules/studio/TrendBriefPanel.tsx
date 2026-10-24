@@ -1,4 +1,6 @@
 "use client";
+
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为简报编辑；来源选择与品牌为次级。存入工作流为唯一主操作，不触发图片生成。 */
 import { useEffect, useRef, useState } from "react";
 import { studioBrandSchema, type StudioDocumentView } from "@fashion/shared";
 import type { TrendItem, TrendListPage } from "../trends/trend-types";
@@ -8,7 +10,13 @@ import {
   patchWorkflow,
   type WorkflowOperation,
 } from "../board/workflow/workflow-api";
-import { Button } from "../../components/ui";
+import {
+  Button,
+  Input,
+  Select,
+  Textarea,
+  ImagePreview,
+} from "../../components/ui";
 import styles from "./trend-brief.module.css";
 export function buildTrendBrief(
   goal: string,
@@ -199,6 +207,16 @@ export function TrendBriefPanel({
                   )
                 }
               />
+              {article.coverImageUrl ? (
+                <span className={styles.sourceImage}>
+                  <ImagePreview
+                    retryable={false}
+                    src={article.coverImageUrl}
+                    alt=""
+                    fit="cover"
+                  />
+                </span>
+              ) : null}
               <span>
                 <strong>{article.title}</strong>
                 <small>
@@ -225,7 +243,7 @@ export function TrendBriefPanel({
         >
           <label>
             设计任务
-            <input
+            <Input
               required
               disabled={!canEdit || busy}
               value={goal}
@@ -236,7 +254,7 @@ export function TrendBriefPanel({
           </label>
           <label>
             采用的品牌资料
-            <select
+            <Select
               disabled={!canEdit || busy}
               value={brandId}
               onChange={(event) => setBrandId(event.target.value)}
@@ -247,11 +265,11 @@ export function TrendBriefPanel({
                   {brand.currentRevision.payload.name} · 修订 {brand.version}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             本轮探索方向，每行一个
-            <textarea
+            <Textarea
               disabled={!canEdit || busy}
               value={directions}
               rows={5}

@@ -89,7 +89,6 @@ it("invalidates anchor review when a linked view image changes", async () => {
     ],
   });
   render(<TechPackEditor {...values} />);
-  fireEvent.click(screen.getByRole("button", { name: /褶线夹克技术资料/ }));
   await screen.findByDisplayValue("双针线");
   fireEvent.change(screen.getByLabelText("关联图片"), {
     target: { value: "asset-back" },

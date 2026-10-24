@@ -225,6 +225,7 @@ test("旧白板只读展示并导入图片、便签和色卡，旧数据始终�
   await expect(page.getByRole("region", { name: "设计工作流画布" })).toBeVisible();
   expect(mocked.boardMethods).toEqual([]);
 
+  await page.getByText("资料与更多", { exact: true }).click();
   await page.getByRole("button", { name: "历史白板" }).click();
   const history = page.getByRole("dialog", { name: "历史白板" });
   await expect(history).toBeVisible();
@@ -278,6 +279,7 @@ test("历史白板可导出包含旧素材的 PNG，导出过程不修改旧快�
 }) => {
   const mocked = await mockLegacyWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByText("资料与更多", { exact: true }).click();
   await page.getByRole("button", { name: "历史白板" }).click();
   const history = page.getByRole("dialog", { name: "历史白板" });
   await expect(history.locator('[data-shape-id="shape:legacy-image"]')).toBeVisible();

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
+
+import { useId, useState } from "react";
 import {
   studioPublishIssues,
   type StudioTechPack,
@@ -27,7 +29,9 @@ import styles from "./studio.module.css";
 export function TechPackEditor(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
-  const [id, setId] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(
+    props.data.techPacks[0]?.id ?? null,
+  );
   const [draftVersion, setDraftVersion] = useState(0);
   const existing = props.data.techPacks.find((item) => item.id === id);
   return (
@@ -54,28 +58,35 @@ export function TechPackEditor(
         </Button>
       </div>
       <div className={styles.split}>
-        <aside className={styles.rail}>
-          {props.data.techPacks.map((item) => (
-            <Button
-              key={item.id}
-              aria-pressed={id === item.id}
-              onClick={() =>
-                void (async () => {
-                  if (await props.beforeChange()) setId(item.id);
-                })()
-              }
-            >
-              <strong>{item.currentRevision.payload.name}</strong>
-              <small>
-                r{item.currentRevision.revision} ·{" "}
-                {(item.currentRevision.payload as StudioTechPack).status ===
-                "PUBLISHED"
-                  ? "已发布"
-                  : "草稿"}
-              </small>
-            </Button>
-          ))}
-        </aside>
+        {props.data.techPacks.length > 1 ? (
+          <details className={styles.objectChooser}>
+            <summary>
+              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
+            </summary>
+            <aside className={styles.rail}>
+              {props.data.techPacks.map((item) => (
+                <Button
+                  key={item.id}
+                  aria-pressed={id === item.id}
+                  onClick={() =>
+                    void (async () => {
+                      if (await props.beforeChange()) setId(item.id);
+                    })()
+                  }
+                >
+                  <strong>{item.currentRevision.payload.name}</strong>
+                  <small>
+                    r{item.currentRevision.revision} ·{" "}
+                    {(item.currentRevision.payload as StudioTechPack).status ===
+                    "PUBLISHED"
+                      ? "已发布"
+                      : "草稿"}
+                  </small>
+                </Button>
+              ))}
+            </aside>
+          </details>
+        ) : null}
         <TechPackForm
           key={
             (existing?.id ?? "new") +
@@ -108,6 +119,7 @@ function TechPackForm({
   readonly onCreated: (id: string) => void;
 }) {
   const firstRevision = data.styles[0]?.currentRevision;
+  const chapterId = useId();
   const initial: StudioTechPack = existing
     ? (existing.currentRevision.payload as StudioTechPack)
     : {
@@ -195,8 +207,23 @@ function TechPackForm({
       {viewsChanged ? (
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
+      <nav className={styles.chapterNavigation} aria-label="技术包章节">
+        {[
+          ["basics", "基本资料"],
+          ["views", "视图来源"],
+          ["annotations", "工艺标注"],
+          ["bom", "BOM"],
+          ["pom", "POM"],
+          ["colors", "配色"],
+          ["review", "复核发布"],
+        ].map(([value, label]) => (
+          <a key={value} href={`#${chapterId}-${value}`}>
+            {label}
+          </a>
+        ))}
+      </nav>
       <fieldset disabled={disabled} className={styles.form}>
-        <div className={styles.formGrid}>
+        <div id={`${chapterId}-basics`} className={styles.formGrid}>
           <Field label="技术包名称">
             <Input
               value={draft.name}
@@ -239,7 +266,7 @@ function TechPackForm({
             </Select>
           </Field>
         </div>
-        <section className={styles.section}>
+        <section id={`${chapterId}-views`} className={styles.section}>
           <div className={styles.recordHeader}>
             <h3>视图与来源</h3>
             <Button
@@ -388,7 +415,7 @@ function TechPackForm({
             </div>
           ))}
         </section>
-        <section className={styles.section}>
+        <section id={`${chapterId}-annotations`} className={styles.section}>
           <div className={styles.recordHeader}>
             <h3>工艺锚点标注</h3>
             <Button
@@ -509,17 +536,21 @@ function TechPackForm({
             </article>
           ))}
         </section>
-        <BomTable
-          rows={draft.bom}
-          disabled={disabled}
-          onChange={(rows) => update("bom", rows)}
-        />
-        <PomTable
-          rows={draft.pom}
-          disabled={disabled}
-          onChange={(rows) => update("pom", rows)}
-        />
-        <section className={styles.stack}>
+        <div id={`${chapterId}-bom`}>
+          <BomTable
+            rows={draft.bom}
+            disabled={disabled}
+            onChange={(rows) => update("bom", rows)}
+          />
+        </div>
+        <div id={`${chapterId}-pom`}>
+          <PomTable
+            rows={draft.pom}
+            disabled={disabled}
+            onChange={(rows) => update("pom", rows)}
+          />
+        </div>
+        <section id={`${chapterId}-colors`} className={styles.stack}>
           <div className={styles.recordHeader}>
             <h3>配色</h3>
             <Button
@@ -617,7 +648,7 @@ function TechPackForm({
           />
         </Field>
       </fieldset>
-      <label className={styles.check}>
+      <label id={`${chapterId}-review`} className={styles.check}>
         <input
           type="checkbox"
           checked={draft.reviewConfirmed}

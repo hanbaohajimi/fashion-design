@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
+import { CreativeContinuity } from "../modules/projects/CreativeContinuity";
 
 import "./globals.css";
 import "tldraw/tldraw.css";
@@ -40,9 +42,22 @@ export default function RootLayout({ children }: RootLayoutProps) {
         </a>
         <div className="app-root" id="main-content" tabIndex={-1}>
           <AuthProvider>
+            <CreativeContinuity />
             <QueryProvider>{children}</QueryProvider>
           </AuthProvider>
         </div>
+        {/* ask-sonner: 全局唯一 Toaster，挂在 body 末尾，跟随系统亮暗色 */}
+        <Toaster
+          theme="system"
+          position="bottom-right"
+          richColors
+          toastOptions={{
+            style: {
+              fontFamily: "var(--font-sans)",
+              fontSize: "var(--text-sm, 13px)",
+            },
+          }}
+        />
       </body>
     </html>
   );

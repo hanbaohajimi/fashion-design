@@ -275,10 +275,13 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
 }) => {
   const mocked = await mockStudio(page);
   await openTab(page, "styles");
-  const comparison = page.locator("details").filter({
-    has: page.locator("summary").filter({ hasText: "比较候选并选款" }),
+  await page
+    .getByRole("button", { name: "比较候选并选款（选择 2–4 张）" })
+    .click();
+  const comparison = page.getByRole("dialog", {
+    name: "候选比较",
+    exact: true,
   });
-  await comparison.locator("summary").click();
   await comparison
     .getByRole("button", { name: "选择图片 1", exact: true })
     .click();
@@ -321,6 +324,7 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
     page.getByRole("heading", { name: "城市褶线夹克", exact: true }),
   ).toBeVisible();
   await page.reload();
+  await page.locator("summary").filter({ hasText: "切换款式" }).click();
   await page
     .getByRole("complementary", { name: "已有款式" })
     .getByRole("button", { name: /SS-028-JK02/ })

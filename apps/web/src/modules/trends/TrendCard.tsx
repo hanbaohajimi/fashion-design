@@ -1,5 +1,6 @@
 "use client";
 
+import { ImagePreview } from "../../components/ui";
 import { ColorStrip } from "./ColorStrip";
 import type { TrendItem } from "./trend-types";
 import styles from "./trends.module.css";
@@ -77,15 +78,24 @@ export function TrendCard({
   return (
     <article
       draggable={!disabled && !importing}
-      onDragStart={event => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-fashion-trend", JSON.stringify({ trendItemId: trend.id, title: trend.title, imageUrl: trend.coverImageUrl, text: trend.summary })); }}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData(
+          "application/x-fashion-trend",
+          JSON.stringify({
+            trendItemId: trend.id,
+            title: trend.title,
+            imageUrl: trend.coverImageUrl,
+            text: trend.summary,
+          }),
+        );
+      }}
       className={styles.trendCard}
       data-has-cover={trend.coverImageUrl ? "true" : "false"}
     >
       <div className={styles.cardVisual}>
         {trend.coverImageUrl ? (
-          // Authenticated same-origin image endpoints may redirect to a private signed URL.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img alt="" loading="lazy" src={trend.coverImageUrl} />
+          <ImagePreview alt="" src={trend.coverImageUrl} fit="cover" />
         ) : (
           <div
             aria-label="暂无代表图"

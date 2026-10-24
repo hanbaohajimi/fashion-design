@@ -167,10 +167,10 @@
 }
 
 /* ─── Mount tool drop animation ──────────────────────────────────────────── */
+/* 从 scale(0.9) 起手而非 scale(0.15) —— 真实物体不会从虚无中出现 */
 @keyframes mount-drop {
-  0%   { transform: scale(0.15) rotate(-25deg); opacity: 0; }
-  55%  { transform: scale(1.22) rotate(6deg);   opacity: 1; }
-  75%  { transform: scale(0.91) rotate(-2deg); }
+  0%   { transform: scale(0.9) rotate(-12deg);  opacity: 0; }
+  55%  { transform: scale(1.04) rotate(3deg);   opacity: 1; }
   100% { transform: scale(1)    rotate(0deg);   opacity: 1; }
 }
 

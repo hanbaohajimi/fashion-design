@@ -1,5 +1,7 @@
 "use client";
 
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前轮次照片、锚点与问题；轮次切换和历史为次级。保存为主操作，照片坐标保持原值。 */
+
 import { useState } from "react";
 import type {
   StudioDocumentInput,
@@ -14,6 +16,7 @@ import {
   Notice,
   Select,
   Textarea,
+  UploadInput,
 } from "../../components/ui";
 import {
   completeUpload,
@@ -48,7 +51,9 @@ const states = {
 export function SampleRounds(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
-  const [id, setId] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(
+    props.data.samples[0]?.id ?? null,
+  );
   const [draftVersion, setDraftVersion] = useState(0);
   const [seed, setSeed] = useState<Sample | null>(null);
   const existing = props.data.samples.find((item) => item.id === id);
@@ -99,35 +104,43 @@ export function SampleRounds(
         </Button>
       </div>
       <div className={styles.split}>
-        <aside className={styles.rail}>
-          {props.data.samples.map((item) => {
-            const sample = item.currentRevision.payload as Sample;
-            return (
-              <Button
-                key={item.id}
-                aria-pressed={id === item.id}
-                onClick={() =>
-                  void (async () => {
-                    if (await props.beforeChange()) {
-                      setId(item.id);
-                      setSeed(null);
+        {props.data.samples.length > 1 ? (
+          <details className={styles.objectChooser}>
+            <summary>
+              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
+            </summary>
+            <aside className={styles.rail}>
+              {props.data.samples.map((item) => {
+                const sample = item.currentRevision.payload as Sample;
+                return (
+                  <Button
+                    key={item.id}
+                    aria-pressed={id === item.id}
+                    onClick={() =>
+                      void (async () => {
+                        if (await props.beforeChange()) {
+                          setId(item.id);
+                          setSeed(null);
+                        }
+                      })()
                     }
-                  })()
-                }
-              >
-                <strong>{sample.name}</strong>
-                <small>
-                  第 {sample.round} 轮 ·{" "}
-                  {
-                    sample.issues.filter((issue) => issue.status !== "VERIFIED")
-                      .length
-                  }{" "}
-                  个待复核问题
-                </small>
-              </Button>
-            );
-          })}
-        </aside>
+                  >
+                    <strong>{sample.name}</strong>
+                    <small>
+                      第 {sample.round} 轮 ·{" "}
+                      {
+                        sample.issues.filter(
+                          (issue) => issue.status !== "VERIFIED",
+                        ).length
+                      }{" "}
+                      个待复核问题
+                    </small>
+                  </Button>
+                );
+              })}
+            </aside>
+          </details>
+        ) : null}
         <SampleEditor
           key={
             (existing?.id ?? "new") +
@@ -353,8 +366,8 @@ function SampleEditor({
           </Select>
         </Field>
         <Field label="上传样衣照片">
-          <Input
-            type="file"
+          <UploadInput
+            label="上传样衣照片"
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             disabled={draft.photoAssetIds.length >= 30}
             onChange={(event) => {
@@ -410,7 +423,7 @@ function SampleEditor({
           </div>
           {draft.issues.map((issue, index) => (
             <fieldset
-              className={styles.record}
+              className={`${styles.record} ${styles.issueRecord}`}
               disabled={
                 issue.status === "VERIFIED" && !data.capabilities.review
               }
@@ -462,6 +475,7 @@ function SampleEditor({
                 </Field>
               </div>
               <AssetAnchor
+                className={styles.issuePhoto}
                 url={
                   assets.find((asset) => asset.id === issue.assetId)?.url ?? ""
                 }

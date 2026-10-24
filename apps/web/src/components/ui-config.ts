@@ -15,7 +15,7 @@ export const PAINTING_LOADERS_ENABLED = process.env.NEXT_PUBLIC_PAINTING_LOADERS
   (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_PAINTING_LOADERS !== "false");
 
 /** JS interactions read the same motion tokens as CSS and honor reduced motion. */
-export function motionDuration(token: "fast" | "normal" = "normal"): number {
+export function motionDuration(token: "fast" | "normal" | "result" = "normal"): number {
   if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
   const raw = getComputedStyle(document.documentElement).getPropertyValue(`--duration-${token}`).trim();
   const value = Number.parseFloat(raw);

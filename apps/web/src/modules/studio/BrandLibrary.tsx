@@ -1,5 +1,7 @@
 "use client";
 
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前品牌摘要与分组字段；共享库和历史为次级。保存为主操作，参考图使用完整预览。 */
+
 import { useRef, useState } from "react";
 import type {
   StudioDocumentInput,
@@ -43,7 +45,9 @@ const lines = (value: string) =>
 export function BrandLibrary(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
-  const [id, setId] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(
+    props.data.brandProfiles[0]?.id ?? null,
+  );
   const [draftVersion, setDraftVersion] = useState(0);
   const [library, setLibrary] = useState<StudioDocumentView[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -136,22 +140,29 @@ export function BrandLibrary(
         </section>
       ) : null}
       <div className={styles.split}>
-        <aside className={styles.rail} aria-label="品牌列表">
-          {props.data.brandProfiles.map((item) => (
-            <Button
-              aria-pressed={id === item.id}
-              key={item.id}
-              onClick={() =>
-                void (async () => {
-                  if (await props.beforeChange()) setId(item.id);
-                })()
-              }
-            >
-              <strong>{item.currentRevision.payload.name}</strong>
-              <small>r{item.currentRevision.revision}</small>
-            </Button>
-          ))}
-        </aside>
+        {props.data.brandProfiles.length > 1 ? (
+          <details className={styles.objectChooser}>
+            <summary>
+              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
+            </summary>
+            <aside className={styles.rail} aria-label="品牌列表">
+              {props.data.brandProfiles.map((item) => (
+                <Button
+                  aria-pressed={id === item.id}
+                  key={item.id}
+                  onClick={() =>
+                    void (async () => {
+                      if (await props.beforeChange()) setId(item.id);
+                    })()
+                  }
+                >
+                  <strong>{item.currentRevision.payload.name}</strong>
+                  <small>r{item.currentRevision.revision}</small>
+                </Button>
+              ))}
+            </aside>
+          </details>
+        ) : null}
         <BrandEditor
           key={
             (existing?.id ?? "new") +
@@ -324,6 +335,24 @@ function BrandEditor({
           品牌规则与认可案例已加入画布，继续连入需要使用的任务。
         </Notice>
       ) : null}
+      {existing ? (
+        <section className={styles.brandSummary} aria-label="当前品牌修订摘要">
+          <div>
+            <strong>{draft.name}</strong>
+            <p className={styles.muted}>
+              {draft.silhouettes.join(" · ") || "尚未填写常用廓形"}
+            </p>
+          </div>
+          <div className={styles.brandColors}>
+            {draft.colors.map((color, index) => (
+              <span key={index}>
+                <i style={{ background: color.hex }} />
+                {color.name || color.hex}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <fieldset disabled={!canEdit || form.busy} className={styles.form}>
         <Field label="品牌名称">
           <Input
@@ -416,6 +445,7 @@ function BrandEditor({
           />
         </Field>
         <AssetPicker
+          compact
           assets={data.assets}
           selected={draft.referenceAssetIds}
           max={12}

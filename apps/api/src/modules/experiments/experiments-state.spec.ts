@@ -11,12 +11,18 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExperimentsService } from "./experiments.service";
 
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error("缺少测试记录");
+  return value;
+}
+
 type StoredItem = {
   id: string;
   status: string;
   attempt: number;
   taskId: string | null;
   dispatchedAt?: string;
+  cancelRequested?: boolean;
   request?: unknown;
   error: string | null;
 };
@@ -99,13 +105,23 @@ function fixture() {
       findMany: vi.fn(
         async ({
           where,
-        }: { where?: { items?: unknown; projectId?: string } } = {}) =>
+          take,
+        }: {
+          where?: { OR?: unknown; projectId?: string; id?: { gt: string } };
+          take?: number;
+        } = {}) =>
           [...batches.values()]
             .filter((row) =>
-              where?.items
-                ? row.items.items.some((item) => item.status === "dispatching")
+              where?.OR
+                ? row.items.items.some(
+                    (item) =>
+                      item.status === "dispatching" || item.cancelRequested,
+                  )
                 : !where?.projectId || row.projectId === where.projectId,
             )
+            .filter((row) => !where?.id || row.id > where.id.gt)
+            .sort((a, b) => a.id.localeCompare(b.id))
+            .slice(0, take)
             .map((row) => structuredClone(row)),
       ),
     },
@@ -353,7 +369,7 @@ describe("持久化批量任务", () => {
     item.dispatchedAt = new Date(Date.now() - 2 * 86400_000).toISOString();
     f.service.onModuleInit();
     await vi.advanceTimersByTimeAsync(15_000);
-    f.service.onModuleDestroy();
+    await f.service.onModuleDestroy();
     const current = f.batches.get(batch.id)?.items.items[0];
     expect(current?.taskId).toBe(originalId);
     expect(current?.status).toBe("queued");
@@ -361,10 +377,20 @@ describe("持久化批量任务", () => {
     expect(f.database.studioExperiment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          items: {
-            path: ["items"],
-            array_contains: [{ status: "dispatching" }],
-          },
+          OR: [
+            {
+              items: {
+                path: ["items"],
+                array_contains: [{ status: "dispatching" }],
+              },
+            },
+            {
+              items: {
+                path: ["items"],
+                array_contains: [{ cancelRequested: true }],
+              },
+            },
+          ],
         },
       }),
     );
@@ -389,7 +415,7 @@ describe("持久化批量任务", () => {
     f.revoke();
     f.service.onModuleInit();
     await vi.advanceTimersByTimeAsync(15_000);
-    f.service.onModuleDestroy();
+    await f.service.onModuleDestroy();
     expect(f.generation.createFromAgent).toHaveBeenCalledTimes(1);
     expect(f.batches.get(batch.id)?.items.items[0]?.status).toBe(
       "not_admitted",
@@ -397,5 +423,194 @@ describe("持久化批量任务", () => {
     await expect(
       f.service.act("editor", "project", batch.id, [id], "submit"),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+  it("单项签名准备失败不会中断整批提交，失败项可以单独重试", async () => {
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "prepare-failure",
+    );
+    f.storage.createDownloadUrl.mockRejectedValueOnce(
+      new Error("存储暂不可用"),
+    );
+    const result = await f.service.act(
+      "editor",
+      "project",
+      batch.id,
+      batch.items.map((item) => item.id),
+      "submit",
+    );
+    expect(result.items.map((item) => item.status)).toEqual([
+      "not_admitted",
+      "queued",
+    ]);
+    expect(result.items[0]?.error).toBe("存储暂不可用");
+    expect(f.generation.createFromAgent).toHaveBeenCalledTimes(1);
+    const retried = await f.service.act(
+      "editor",
+      "project",
+      batch.id,
+      batch.items.map((item) => item.id),
+      "retry",
+    );
+    expect(retried.items.map((item) => item.status)).toEqual([
+      "queued",
+      "queued",
+    ]);
+    expect(retried.items.map((item) => item.attempt)).toEqual([1, 0]);
+    expect(retried.items[1]?.taskId).toBe(result.items[1]?.taskId);
+  });
+  it("接纳后的恢复不因撤权或母图不可用丢失原任务，也不重新调用生成", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "admitted",
+    );
+    const id = required(batch.items[0]).id;
+    await f.service.act("editor", "project", batch.id, [id], "submit");
+    const item = required(f.batches.get(batch.id)?.items.items[0]);
+    const taskId = item.taskId;
+    item.status = "dispatching";
+    item.error = "旧的入队异常";
+    item.dispatchedAt = new Date(0).toISOString();
+    f.revoke();
+    f.database.designAsset.findFirst.mockResolvedValue(null);
+    f.service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await f.service.onModuleDestroy();
+    expect(f.batches.get(batch.id)?.items.items[0]).toMatchObject({
+      status: "queued",
+      taskId,
+      error: null,
+    });
+    expect(f.generation.createFromAgent).toHaveBeenCalledTimes(1);
+  });
+  it("任务真实失败原因和成功状态不被旧派发错误覆盖", async () => {
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "errors",
+    );
+    await f.service.act(
+      "editor",
+      "project",
+      batch.id,
+      [required(batch.items[0]).id],
+      "submit",
+    );
+    const item = required(f.batches.get(batch.id)?.items.items[0]);
+    item.error = "旧的网络错误";
+    const task = required(f.tasks.get(required(item.taskId)));
+    task.status = "FAILED";
+    task.errorMessage = "图片处理失败";
+    expect(
+      (await f.service.list("editor", "project"))[0]?.items[0]?.error,
+    ).toBe("图片处理失败");
+    task.status = "SUCCEEDED";
+    task.errorMessage = null;
+    expect(
+      (await f.service.list("editor", "project"))[0]?.items[0]?.error,
+    ).toBeNull();
+  });
+  it("取消早于任务接纳且原请求进程消失时，后台取消迟到的同一任务", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "late-admission",
+    );
+    const id = required(batch.items[0]).id;
+    await f.service.act("editor", "project", batch.id, [id], "submit");
+    const item = required(f.batches.get(batch.id)?.items.items[0]);
+    const taskId = required(item.taskId);
+    const admitted = required(f.tasks.get(taskId));
+    f.tasks.clear();
+    item.status = "dispatching";
+    const canceled = await f.service.act(
+      "editor",
+      "project",
+      batch.id,
+      [id],
+      "cancel",
+    );
+    expect(canceled.items[0]?.status).toBe("canceled");
+    expect(
+      required(f.batches.get(batch.id)?.items.items[0]).cancelRequested,
+    ).toBe(true);
+    // The original process can no longer observe the cancellation after committing.
+    f.tasks.set(taskId, admitted);
+    f.service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await f.service.onModuleDestroy();
+    expect(f.tasks.get(taskId)?.status).toBe("CANCELED");
+    expect(
+      required(f.batches.get(batch.id)?.items.items[0]).cancelRequested,
+    ).toBeUndefined();
+    expect(f.generation.createFromAgent).toHaveBeenCalledTimes(1);
+  });
+  it("取消一项失败仍处理其他项，并在后台重试已持久化的取消意图", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "cancel-retry",
+    );
+    const ids = batch.items.map((item) => item.id);
+    await f.service.act("editor", "project", batch.id, ids, "submit");
+    f.generation.cancel.mockRejectedValueOnce(new Error("数据库暂不可用"));
+    await expect(
+      f.service.act("editor", "project", batch.id, ids, "cancel"),
+    ).rejects.toThrow("数据库暂不可用");
+    expect([...f.tasks.values()].map((task) => task.status)).toEqual([
+      "QUEUED",
+      "CANCELED",
+    ]);
+    f.service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await f.service.onModuleDestroy();
+    expect([...f.tasks.values()].map((task) => task.status)).toEqual([
+      "CANCELED",
+      "CANCELED",
+    ]);
+  });
+  it("超过一百条待恢复记录时向后扫描，不被持续失败的头部记录阻塞", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    const batch = await f.service.create(
+      "editor",
+      "project",
+      f.input,
+      "pagination",
+    );
+    const seed = required(f.batches.get(batch.id));
+    f.batches.clear();
+    for (let index = 0; index < 101; index++) {
+      const row = structuredClone(seed);
+      row.id = `batch-${String(index).padStart(3, "0")}`;
+      Object.assign(required(row.items.items[0]), {
+        cancelRequested: true,
+        taskId: "not-yet-admitted",
+        status: "canceled",
+      });
+      f.batches.set(row.id, row);
+    }
+    f.service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await f.service.onModuleDestroy();
+    expect(f.generation.cancel).toHaveBeenCalledTimes(101);
+    expect(
+      f.database.studioExperiment.findMany.mock.calls[1]?.[0],
+    ).toMatchObject({ where: { id: { gt: "batch-099" } } });
   });
 });

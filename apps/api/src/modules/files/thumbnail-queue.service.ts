@@ -1,5 +1,5 @@
 import { THUMBNAIL_QUEUE_NAME, type ThumbnailJobData } from "@fashion/shared";
-import { Injectable, type OnModuleDestroy } from "@nestjs/common";
+import { Injectable, Logger, type OnModuleDestroy } from "@nestjs/common";
 import { Queue } from "bullmq";
 
 export interface ThumbnailJobs {
@@ -9,6 +9,8 @@ export interface ThumbnailJobs {
 function redisConnection() {
   const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
   return {
+    commandTimeout: 5_000,
+    maxRetriesPerRequest: 1,
     host: redisUrl.hostname,
     password: redisUrl.password || undefined,
     port: Number(redisUrl.port || 6379),
@@ -89,7 +91,7 @@ export class BullThumbnailJobs implements ThumbnailJobs, OnModuleDestroy {
   private getQueue(): Queue<ThumbnailJobData> {
     this.queue ??= new Queue<ThumbnailJobData>(THUMBNAIL_QUEUE_NAME, {
       connection: redisConnection(),
-    });
+    }).on("error", () => Logger.warn("缩略图队列连接异常，已确认上传将自动重试派发", "ThumbnailQueue"));
     return this.queue;
   }
 }

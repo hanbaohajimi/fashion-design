@@ -25,7 +25,12 @@ import { ProjectAccessPolicy } from "../studio/project-access.policy";
 export const EXPERIMENTS_DB = Symbol("EXPERIMENTS_DB");
 type Database = Pick<
   PrismaClient,
-  "studioExperiment" | "designAsset" | "fabric" | "generationTask" | "fileAsset" | "project"
+  | "studioExperiment"
+  | "designAsset"
+  | "fabric"
+  | "generationTask"
+  | "fileAsset"
+  | "project"
 >;
 interface FrozenFabric {
   id: string;
@@ -45,6 +50,7 @@ interface Item {
   fabric: FrozenFabric | null;
   request?: GenerationCreateRequest;
   dispatchedAt?: string;
+  cancelRequested?: boolean;
 }
 interface BatchData {
   mode: ExperimentCreateInput["mode"];
@@ -82,7 +88,9 @@ export function experimentFingerprint(input: ExperimentCreateInput): string {
 @Injectable()
 export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | undefined;
-  private recovering = false;
+  private recoveryFlight: Promise<void> | undefined;
+  private recoveryCursor: string | undefined;
+  private stopping = false;
   private readonly logger = new Logger(ExperimentsService.name);
   constructor(
     @Inject(EXPERIMENTS_DB) private readonly db: Database,
@@ -98,8 +106,10 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
     }, 15_000);
     this.timer.unref();
   }
-  onModuleDestroy() {
+  async onModuleDestroy() {
+    this.stopping = true;
     if (this.timer) clearInterval(this.timer);
+    await this.recoveryFlight;
   }
   async create(
     userId: string,
@@ -138,7 +148,13 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException("部分面料不存在或无权使用");
     for (const fabric of fabrics) {
       if (fabric.scope !== "PRESET" && fabric.ownerId !== userId)
-        await requireProjectFile(this.db, this.access, userId, fabric.mainFileId, projectId);
+        await requireProjectFile(
+          this.db,
+          this.access,
+          userId,
+          fabric.mainFileId,
+          projectId,
+        );
     }
     const items: Item[] = experimentCombinations(input).map(
       ({ color, fabricId, variation }, i) => {
@@ -241,7 +257,7 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
     action: "submit" | "retry" | "cancel",
   ) {
     await this.access.require(userId, projectId, "edit");
-    let record = await this.load(batchId, projectId);
+    const record = await this.load(batchId, projectId);
     const data = record.items as unknown as BatchData;
     if (itemIds.some((id) => !data.items.some((item) => item.id === id)))
       throw new BadRequestException("实验单元格不存在");
@@ -270,35 +286,53 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
             item.error = null;
             delete item.request;
             delete item.dispatchedAt;
+            delete item.cancelRequested;
           }
         }
       });
     }
     if (action === "cancel") {
       // Running remote requests are not promised cancellable; use the existing cancellation protocol.
+      // Persist every selected intent before contacting the generation service.
+      await this.mutate(batchId, (state) => {
+        for (const entry of state.items) {
+          if (!itemIds.includes(entry.id)) continue;
+          if (entry.status === "draft" || entry.status === "dispatching")
+            entry.status = "canceled";
+          if (entry.taskId) entry.cancelRequested = true;
+        }
+      });
+      let cancellationError: unknown;
       for (const id of itemIds) {
-        record = await this.load(batchId, projectId);
-        const current = record.items as unknown as BatchData;
-        const item = current.items.find((entry) => entry.id === id);
-        if (!item) continue;
-        if (item.status === "draft" || item.status === "dispatching")
-          await this.mutate(batchId, (state) => {
-            const entry = state.items.find((value) => value.id === id);
-            if (
-              entry &&
-              (entry.status === "draft" || entry.status === "dispatching")
-            )
-              entry.status = "canceled";
-          });
-        if (item.taskId)
-          await this.generation
-            .cancel(current.ownerId, item.taskId)
-            .catch((error) => {
-              if (!(error instanceof NotFoundException)) throw error;
-            });
+        try {
+          await this.settleCancellation(batchId, id);
+        } catch (error) {
+          cancellationError ??= error;
+        }
       }
+      if (cancellationError) throw cancellationError;
     } else {
-      for (const id of itemIds) await this.dispatch(batchId, id);
+      for (const id of itemIds) {
+        const current = (await this.load(batchId))
+          .items as unknown as BatchData;
+        const before = current.items.find((item) => item.id === id);
+        try {
+          await this.dispatch(batchId, id);
+        } catch (error) {
+          // A preparation failure belongs to this cell; the remaining selected
+          // cells must still be attempted. Never overwrite a concurrent claim.
+          if (before?.status !== "draft") throw error;
+          await this.mutate(batchId, (state) => {
+            const entry = state.items.find((item) => item.id === id);
+            if (entry?.status !== "draft" || entry.attempt !== before.attempt)
+              return false;
+            entry.status = "not_admitted";
+            entry.error =
+              error instanceof Error ? error.message : "任务准备失败，请重试";
+            return true;
+          });
+        }
+      }
     }
     return this.view(await this.load(batchId, projectId));
   }
@@ -311,6 +345,9 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
       (item.status !== "draft" && !(recover && item.status === "dispatching"))
     )
       return;
+    // Admission is a durable fact. A later permission/source change must not
+    // discard an existing task or cause a new attempt to charge the same cell.
+    if (recover && (await this.reconcileAdmitted(batchId, item))) return;
     await this.access.require(record.userId, record.projectId, "edit");
     if (item.status === "draft") {
       const source = await this.db.designAsset.findFirst({
@@ -493,17 +530,13 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
           ],
         },
       );
-      const latest = (await this.load(batchId)).items as unknown as BatchData;
-      if (
-        latest.items.find((entry) => entry.id === itemId)?.status ===
-          "canceled" &&
-        item.taskId
-      )
-        await this.generation.cancel(data.ownerId, item.taskId);
+      await this.settleCancellation(batchId, itemId);
       await this.mutate(batchId, (current) => {
         const entry = current.items.find((value) => value.id === itemId);
-        if (entry?.attempt === attempt && entry.status === "dispatching")
+        if (entry?.attempt === attempt && entry.status === "dispatching") {
           entry.status = "queued";
+          entry.error = null;
+        }
       });
     } catch (error) {
       const task = item.taskId
@@ -517,11 +550,61 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
         if (entry?.attempt !== attempt || entry.status !== "dispatching")
           return;
         entry.status = task ? "queued" : "not_admitted";
-        entry.error =
-          error instanceof Error ? error.message : "任务未接纳，请重试";
+        entry.error = task
+          ? null
+          : error instanceof Error
+            ? error.message
+            : "任务未接纳，请重试";
         if (!task) entry.taskId = null;
       });
     }
+  }
+  private async reconcileAdmitted(
+    batchId: string,
+    item: Item,
+  ): Promise<boolean> {
+    if (!item.taskId) return false;
+    const task = await this.db.generationTask.findUnique({
+      where: { id: item.taskId },
+      select: { id: true },
+    });
+    if (!task) return false;
+    await this.mutate(batchId, (state) => {
+      const entry = state.items.find((value) => value.id === item.id);
+      if (
+        entry?.status !== "dispatching" ||
+        entry.attempt !== item.attempt ||
+        entry.taskId !== item.taskId
+      )
+        return false;
+      entry.status = "queued";
+      entry.error = null;
+      return true;
+    });
+    return true;
+  }
+  private async settleCancellation(
+    batchId: string,
+    itemId: string,
+  ): Promise<void> {
+    const data = (await this.load(batchId)).items as unknown as BatchData;
+    const item = data.items.find((entry) => entry.id === itemId);
+    if (!item?.cancelRequested || !item.taskId) return;
+    try {
+      await this.generation.cancel(data.ownerId, item.taskId);
+    } catch (error) {
+      // Admission may still be in flight in another process. Keep the intent
+      // so recovery can cancel that exact identity once the task appears.
+      if (error instanceof NotFoundException) return;
+      throw error;
+    }
+    await this.mutate(batchId, (state) => {
+      const entry = state.items.find((value) => value.id === itemId);
+      if (entry?.attempt !== item.attempt || entry.taskId !== item.taskId)
+        return false;
+      delete entry.cancelRequested;
+      return true;
+    });
   }
   private async load(id: string, projectId?: string) {
     const record = await this.db.studioExperiment.findFirst({
@@ -592,7 +675,7 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
               : item.status,
             attempt: item.attempt,
             taskId: item.taskId,
-            error: item.error ?? task?.errorMessage ?? null,
+            error: task ? task.errorMessage : item.error,
             color: item.color,
             fabric: item.fabric
               ? {
@@ -622,59 +705,81 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
       ? this.storage.createDownloadUrl(value.slice(5), 60)
       : Promise.resolve(value);
   }
-  private async recover() {
-    if (this.recovering) return;
-    this.recovering = true;
-    try {
-      const records = await this.db.studioExperiment.findMany({
-        where: {
-          items: {
-            path: ["items"],
-            array_contains: [{ status: "dispatching" }],
+  private recover(): Promise<void> {
+    if (this.stopping) return Promise.resolve();
+    this.recoveryFlight ??= this.recoverBatch().finally(() => {
+      this.recoveryFlight = undefined;
+    });
+    return this.recoveryFlight;
+  }
+  private async recoverBatch() {
+    const records = await this.db.studioExperiment.findMany({
+      where: {
+        OR: [
+          {
+            items: {
+              path: ["items"],
+              array_contains: [{ status: "dispatching" }],
+            },
           },
-        },
-        orderBy: { updatedAt: "asc" },
-        take: 100,
-      });
-      for (const record of records) {
-        const data = record.items as unknown as BatchData;
-        for (const item of data.items) {
-          if (
-            item.status === "dispatching" &&
-            Date.now() - new Date(item.dispatchedAt ?? 0).getTime() > 30_000
-          )
-            await this.dispatch(record.id, item.id, true).catch(
-              async (error: unknown) => {
-                this.logger.warn(
-                  "实验分发恢复未完成：" + record.id + "/" + item.id,
-                );
-                if (
-                  error instanceof BadRequestException ||
-                  error instanceof NotFoundException ||
-                  error instanceof ForbiddenException
-                ) {
-                  await this.mutate(record.id, (state) => {
-                    const entry = state.items.find(
-                      (value) => value.id === item.id,
-                    );
-                    if (
-                      entry?.status !== "dispatching" ||
-                      entry.attempt !== item.attempt
-                    )
-                      return false;
-                    entry.status = "not_admitted";
-                    entry.taskId = null;
-                    entry.error =
-                      "原执行账号权限或参考图已不可用，请重新确认后重试";
-                    return true;
-                  });
-                }
-              },
-            );
+          {
+            items: {
+              path: ["items"],
+              array_contains: [{ cancelRequested: true }],
+            },
+          },
+        ],
+        ...(this.recoveryCursor ? { id: { gt: this.recoveryCursor } } : {}),
+      },
+      orderBy: { id: "asc" },
+      take: 100,
+    });
+    this.recoveryCursor =
+      records.length === 100 ? records.at(-1)?.id : undefined;
+    for (const record of records) {
+      const data = record.items as unknown as BatchData;
+      for (const item of data.items) {
+        if (this.stopping) return;
+        if (item.cancelRequested) {
+          await this.settleCancellation(record.id, item.id).catch(() =>
+            this.logger.warn("实验取消等待重试：" + record.id + "/" + item.id),
+          );
+          continue;
         }
+        if (
+          item.status === "dispatching" &&
+          Date.now() - new Date(item.dispatchedAt ?? 0).getTime() > 30_000
+        )
+          await this.dispatch(record.id, item.id, true).catch(
+            async (error: unknown) => {
+              this.logger.warn(
+                "实验分发恢复未完成：" + record.id + "/" + item.id,
+              );
+              if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException ||
+                error instanceof ForbiddenException
+              ) {
+                if (await this.reconcileAdmitted(record.id, item)) return;
+                await this.mutate(record.id, (state) => {
+                  const entry = state.items.find(
+                    (value) => value.id === item.id,
+                  );
+                  if (
+                    entry?.status !== "dispatching" ||
+                    entry.attempt !== item.attempt
+                  )
+                    return false;
+                  entry.status = "not_admitted";
+                  entry.taskId = null;
+                  entry.error =
+                    "原执行账号权限或参考图已不可用，请重新确认后重试";
+                  return true;
+                });
+              }
+            },
+          );
       }
-    } finally {
-      this.recovering = false;
     }
   }
 }

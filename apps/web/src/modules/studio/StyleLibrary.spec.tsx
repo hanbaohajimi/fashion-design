@@ -90,7 +90,6 @@ it("preserves local edits when a newer server revision conflicts", async () => {
     new Response(JSON.stringify({ message: "资料已更新" }), { status: 409 }),
   );
   render(<StyleLibrary {...values} />);
-  fireEvent.click(screen.getByRole("button", { name: /JK-027 · 褶线夹克/ }));
   await screen.findByDisplayValue("褶线夹克");
   fireEvent.change(screen.getByLabelText("款式名称"), {
     target: { value: "褶线夹克改款" },
@@ -113,7 +112,6 @@ it("does not expose an editable approval status", async () => {
     styles: [{ ...styleFixture(), status: "APPROVED" }],
   });
   render(<StyleLibrary {...values} />);
-  fireEvent.click(screen.getByRole("button", { name: /JK-027 · 褶线夹克/ }));
   await screen.findByDisplayValue("褶线夹克");
   expect(screen.queryByRole("option", { name: "已定稿" })).toBeNull();
   expect((screen.getByLabelText(/^状态/) as HTMLSelectElement).value).toBe(

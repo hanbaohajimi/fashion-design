@@ -1,0 +1,31 @@
+.progress { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; padding: 26px 0; border-block: 1px solid var(--color-divider); margin-bottom: 24px; }
+.kicker { color: var(--color-signal); font-size: 12px; letter-spacing: .08em; }
+.next h2 { font-family: var(--font-serif); font-size: clamp(20px, 2vw, 28px); margin: 10px 0 18px; font-weight: 500; }
+.next p, .activity p { font-size: 12px; color: var(--color-ink-secondary); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions button { border: 1px solid var(--color-border); background: var(--color-paper); color: var(--color-ink); border-radius: 6px; padding: 10px 14px; cursor: pointer; transition: transform 160ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)), background-color 160ms ease; }
+.actions button:first-child { background: var(--color-inverse); color: var(--color-on-inverse); }
+.actions button:focus-visible, .activity button:focus-visible { outline: 2px solid var(--color-signal); outline-offset: 3px; }
+.actions button:active:not(:disabled) { transform: scale(0.97); }
+.activity { border-left: 1px solid var(--color-divider); padding-left: 26px; }
+.activity h3 { font-size: 12px; font-weight: 500; margin: 0 0 12px; }
+.activity ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.activity button { text-align: left; border: 0; background: transparent; color: var(--color-ink); cursor: pointer; display: grid; gap: 4px; transition: transform 160ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); }
+.activity strong { font-size: 14px; font-weight: 500; }
+.activity span { color: var(--color-ink-secondary); font-size: 12px; }
+.activity button:active { transform: scale(0.98); }
+@media(max-width: 700px) { .progress { grid-template-columns: 1fr; gap: 20px; } .activity { border-left: 0; padding-left: 0; } }
+@media(prefers-reduced-motion: reduce) { .actions button:active, .activity button:active, .directory button:active { transform: none; } }
+.frame { border-block: 1px solid var(--color-divider); margin-bottom: 16px; }
+.frame > summary { cursor: pointer; padding: 12px 0; font-size: 14px; }
+.frame > summary span { font-size: 12px; margin-left: 16px; color: var(--color-ink-secondary); }
+.frame > summary:focus-visible { outline: 2px solid var(--color-signal); outline-offset: 2px; }
+.frame .progress { border: 0; margin: 0; }
+.actions button, .activity button { font-size: 14px; min-height: 36px; }
+@media(pointer: coarse) { .actions button, .activity button, .frame > summary { min-height: 44px; } }
+.directory { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--color-divider); padding-top: 16px; }
+.directory button { background: transparent; border: 0; color: var(--color-ink-secondary); padding: 8px 0; font-size: 14px; cursor: pointer; min-height: 36px; transition: color 160ms ease, transform 160ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)); }
+.directory button:active { transform: scale(0.97); color: var(--color-ink); }
+.directory button span { font-variant-numeric: tabular-nums; margin-left: 6px; color: var(--color-signal); }
+.directory button:focus-visible { outline: 2px solid var(--color-signal); outline-offset: 3px; }
+@media(pointer: coarse) { .directory button { min-height: 44px; } }

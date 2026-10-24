@@ -13,6 +13,7 @@ import { S3FileStorage } from "./storage.service";
 import { BullThumbnailJobs } from "./thumbnail-queue.service";
 import { SecurityModule } from "../../security/security.module";
 import { UploadsCleanupService } from "./uploads-cleanup.service";
+import { ThumbnailRecoveryService } from "./thumbnail-recovery.service";
 
 @Module({
   imports: [ProjectAccessModule, SecurityModule],
@@ -20,6 +21,7 @@ import { UploadsCleanupService } from "./uploads-cleanup.service";
   providers: [
     FilesService,
     UploadsCleanupService,
+    ThumbnailRecoveryService,
     S3FileStorage,
     BullThumbnailJobs,
     { provide: FILES_DB, useValue: prisma },

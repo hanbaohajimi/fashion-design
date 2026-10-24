@@ -55,6 +55,19 @@ textarea {
   font: inherit;
 }
 
+/* mobile-native: 消除 iOS/Android 点击高亮闪烁 */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* mobile-native: 防止长按选中按钮文字 */
+button,
+[role="button"] {
+  user-select: none;
+}
+
 a {
   color: inherit;
 }

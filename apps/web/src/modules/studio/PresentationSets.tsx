@@ -1,4 +1,6 @@
 "use client";
+
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为展示图片与逐图复核；修订和渠道资料为次级。编辑时保存优先，满足条件后导出优先。 */
 import { useState } from "react";
 import {
   studioPresentationSchema,
@@ -10,6 +12,7 @@ import {
   Button,
   Field,
   Input,
+  ImagePreview,
   Notice,
   Select,
   Textarea,
@@ -32,7 +35,9 @@ export function PresentationSets(
     readonly onGenerate: () => void;
   },
 ) {
-  const [id, setId] = useState<string | null>(null);
+  const [id, setId] = useState<string | null>(
+    props.data.presentationSets[0]?.id ?? null,
+  );
   const [draftVersion, setDraftVersion] = useState(0);
   const existing = props.data.presentationSets.find((item) => item.id === id);
   return (
@@ -64,22 +69,29 @@ export function PresentationSets(
         </div>
       </div>
       <div className={styles.split}>
-        <aside className={styles.rail} aria-label="商品展示包列表">
-          {props.data.presentationSets.map((item) => (
-            <Button
-              key={item.id}
-              aria-pressed={id === item.id}
-              onClick={() =>
-                void (async () => {
-                  if (await props.beforeChange()) setId(item.id);
-                })()
-              }
-            >
-              <strong>{item.currentRevision.payload.name}</strong>
-              <small>修订 {item.version}</small>
-            </Button>
-          ))}
-        </aside>
+        {props.data.presentationSets.length > 1 ? (
+          <details className={styles.objectChooser}>
+            <summary>
+              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
+            </summary>
+            <aside className={styles.rail} aria-label="商品展示包列表">
+              {props.data.presentationSets.map((item) => (
+                <Button
+                  key={item.id}
+                  aria-pressed={id === item.id}
+                  onClick={() =>
+                    void (async () => {
+                      if (await props.beforeChange()) setId(item.id);
+                    })()
+                  }
+                >
+                  <strong>{item.currentRevision.payload.name}</strong>
+                  <small>修订 {item.version}</small>
+                </Button>
+              ))}
+            </aside>
+          </details>
+        ) : null}
         <PresentationForm
           key={
             (existing?.id ?? "new") +
@@ -123,6 +135,9 @@ function PresentationForm({
   const form = useStudioForm(initial, onDirty);
   const { draft, setDraft } = form;
   const disabled = !canEdit || form.busy;
+  const exportPrimary = Boolean(
+    existing && !form.dirty && draft.status === "READY",
+  );
   const update = <K extends keyof Presentation>(
     key: K,
     value: Presentation[K],
@@ -221,6 +236,7 @@ function PresentationForm({
           </Select>
         </Field>
         <AssetPicker
+          compact
           assets={data.assets}
           selected={draft.items.map((item) => item.assetId)}
           max={12}
@@ -241,7 +257,18 @@ function PresentationForm({
           }
         />
         {draft.items.map((item, index) => (
-          <article className={styles.record} key={item.assetId}>
+          <article
+            className={`${styles.record} ${styles.presentationItem}`}
+            key={item.assetId}
+          >
+            <span className={styles.assetImage}>
+              <ImagePreview
+                src={
+                  data.assets.find((asset) => asset.id === item.assetId)?.url
+                }
+                alt={"展示图片 " + (index + 1)}
+              />
+            </span>
             <div className={styles.formGrid}>
               <Field label={"图片 " + (index + 1) + " 视图"}>
                 <Select
@@ -325,6 +352,7 @@ function PresentationForm({
         busy={form.busy}
         dirty={form.dirty || !existing}
         canEdit={canEdit}
+        primary={!exportPrimary}
       >
         <Button
           disabled={!canEdit}
@@ -338,6 +366,7 @@ function PresentationForm({
             projectId={projectId}
             revisionId={existing.currentRevision.id}
             sourceType="presentation_set"
+            primary={exportPrimary}
           />
         ) : null}
       </SaveBar>

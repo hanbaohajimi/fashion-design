@@ -587,6 +587,22 @@
   color: var(--color-accent-terracotta);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .navButton:hover {
+    background: color-mix(
+      in srgb,
+      var(--color-accent-terracotta) 12%,
+      transparent
+    );
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent-terracotta) 50%,
+      transparent
+    );
+    color: var(--color-accent-terracotta);
+  }
+}
+
 .navButton:hover::after {
   opacity: 0.8;
 }

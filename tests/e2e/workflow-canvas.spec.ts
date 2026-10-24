@@ -1208,7 +1208,8 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     await expectLightCanvas();
 
     const trendsPath = `/trends?from=board&boardId=${PROJECT_ID}`;
-    await expect(page.getByRole("link", { name: "趋势", exact: true })).toHaveAttribute("href", trendsPath);
+    await page.getByText("资料与更多", { exact: true }).click();
+    await expect(page.getByRole("link", { name: "趋势档案", exact: true })).toHaveAttribute("href", trendsPath);
     await page.goto(trendsPath);
     await page.waitForURL(/\/trends\?/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();

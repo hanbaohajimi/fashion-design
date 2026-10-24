@@ -71,7 +71,6 @@ afterEach(() => {
 it("replays the exact brand patch after losing a successful response", async () => {
   vi.mocked(patchWorkflow).mockRejectedValueOnce(new Error("响应丢失"));
   render(<BrandLibrary {...props()} />);
-  fireEvent.click(screen.getByRole("button", { name: /山岚.*r2/ }));
   await screen.findByDisplayValue("山岚");
   fireEvent.click(screen.getByRole("button", { name: "将此修订加入画布" }));
   await screen.findByText("响应丢失");

@@ -5,6 +5,7 @@ import { type FormEvent, useRef, useState } from "react";
 import { Button, Input } from "../../../components/ui";
 import { readErrorMessage } from "../../../modules/auth/auth-api";
 import styles from "./login-redesign.module.css";
+import creative from "./creative-login.module.css";
 
 type FormState = "idle" | "sending" | "sent";
 
@@ -64,7 +65,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={`${styles.page} ${creative.pageLayout}`}>
+      <aside className={creative.materialStudy} aria-label="Atelier 材料与版型习作"><span>ATELIER / 创作从这里开始</span><div className={creative.materialPieces} aria-hidden="true"><i /><i /><i /></div><h2>让一个想法，<br />慢慢成为一件作品。</h2><p>收集灵感 · 试探色彩 · 推敲廓形</p></aside>
       <section className={styles.formPanel} aria-labelledby="auth-title">
         <div className={styles.formHeader}>
           <span className={styles.brand}>Atelier 设计工作室</span>

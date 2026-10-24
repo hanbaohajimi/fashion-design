@@ -1,7 +1,6 @@
 .page {
   display: grid;
   min-height: 100dvh;
-  background: var(--surface-paper);
   color: var(--text-primary);
   place-items: center;
   padding: var(--space-6);
@@ -11,12 +10,6 @@
    RIGHT PANEL - 登录表单
    ======================================== */
 
-.formPanel {
-  width: min(100%, 32rem);
-  padding: clamp(var(--space-8), 6vw, var(--space-12));
-  background: var(--surface-paper);
-}
-
 .formHeader {
   margin-bottom: var(--space-8);
 }
@@ -25,21 +18,15 @@
   display: block;
   margin-bottom: var(--space-8);
   color: var(--color-ink-secondary);
-  font-size: var(--text-sm);
-  letter-spacing: var(--tracking-wide);
 }
 
 .formTitle {
   margin: 0;
-  font-family: var(--font-serif);
-  font-size: var(--text-3xl);
-  font-weight: var(--font-normal);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
 }
 
 .intro {
-  font-size: var(--text-lg);
   max-width: 30rem;
   margin: var(--space-4) 0 0;
   color: var(--text-secondary);
@@ -57,24 +44,16 @@
 
 .form label {
   display: block;
-  margin-bottom: var(--space-2);
   color: var(--text-primary);
   font-size: var(--text-base);
-  font-weight: var(--font-semibold);
-  letter-spacing: var(--tracking-wide);
 }
 
 .form input {
   width: 100%;
-  border: 0;
   border-bottom: 2px solid var(--color-border-strong);
-  border-radius: 0;
   outline: 0;
-  padding: var(--space-4) 0;
-  background: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: var(--text-lg);
   transition: border-color var(--duration-normal) var(--ease-standard);
 }
 
@@ -84,8 +63,6 @@
 
 .form input:focus {
   border-bottom-color: var(--accent-primary);
-  outline: 2px solid var(--color-signal);
-  outline-offset: 4px;
 }
 
 .form input:disabled {
@@ -94,17 +71,13 @@
 }
 
 .form button {
-  min-height: 54px;
   margin-top: var(--space-4);
-  border: 2px solid var(--text-primary);
-  border-radius: var(--radius-lg);
-  background: var(--text-primary);
-  color: var(--surface-card);
+  border: 1px solid var(--color-signal);
+  background: var(--color-signal);
+  color: var(--color-on-inverse);
   cursor: pointer;
   font-family: inherit;
-  font-size: var(--text-lg);
   font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
   transition:
     background-color var(--duration-normal) var(--ease-standard),
     color var(--duration-normal) var(--ease-standard),
@@ -113,10 +86,8 @@
 }
 
 .form button:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text-primary);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-ui);
+  background: var(--color-signal-hover);
+  color: var(--color-on-inverse);
 }
 
 .form button:focus-visible {
@@ -205,8 +176,6 @@
   }
 }
 
-
-
 /* ========================================
    ACCESSIBILITY
    ======================================== */
@@ -219,14 +188,56 @@
   }
 }
 
-.page { background: var(--color-canvas); }
-.formPanel { width: min(100%, 460px); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-paper); padding: var(--space-10); }
-.formTitle { font-family: var(--font-sans); font-weight: var(--font-semibold); font-size: var(--text-3xl); }
-.brand { letter-spacing: 0; font-size: var(--text-base); }
-.intro { font-size: var(--text-base); }
-.form label { letter-spacing: 0; font-weight: var(--font-medium); margin-bottom: 0; }
-.form input { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); background: var(--color-paper); font-size: var(--text-lg); }
-.form input:focus { outline: 2px solid var(--color-signal); outline-offset: 2px; }
-.form button { min-height: var(--control-height-primary); font-size: var(--text-base); letter-spacing: 0; border-radius: var(--radius-md); }
-.form button:hover:not(:disabled) { transform: none; box-shadow: none; }
-@media (max-width: 600px) { .formPanel { padding: var(--space-6); } }
+.page {
+  background: var(--color-canvas);
+}
+.formPanel {
+  width: min(100%, 460px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  padding: var(--space-10);
+}
+.formTitle {
+  font-family: var(--font-sans);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-3xl);
+}
+.brand {
+  letter-spacing: 0;
+  font-size: var(--text-base);
+}
+.intro {
+  font-size: var(--text-base);
+}
+.form label {
+  letter-spacing: 0;
+  font-weight: var(--font-medium);
+  margin-bottom: 0;
+}
+.form input {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-paper);
+  font-size: var(--text-lg);
+}
+.form input:focus {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+.form button {
+  min-height: var(--control-height-primary);
+  font-size: var(--text-base);
+  letter-spacing: 0;
+  border-radius: var(--radius-md);
+}
+.form button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+@media (max-width: 600px) {
+  .formPanel {
+    padding: var(--space-6);
+  }
+}

@@ -1,4 +1,6 @@
 "use client";
+
+/* refactoring-ui §2.1/§2.8/§3.3：主要内容为图案大预览；320px 参数区支持调整与生产规格确认。保存为主操作，平铺与坐标计算保持原值。 */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   studioPrintPatternSchema,
@@ -6,7 +8,7 @@ import {
   type StudioDocumentView,
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
-import { Button } from "../../components/ui";
+import { Button, Input, Select, Textarea } from "../../components/ui";
 import styles from "./print-workbench.module.css";
 type Pattern = (typeof studioPrintPatternSchema)["_output"];
 export function PrintWorkbench({
@@ -26,11 +28,16 @@ export function PrintWorkbench({
   onDirty?: (dirty: boolean) => void;
   beforeChange?: () => Promise<boolean>;
 }) {
-  const initial = studioPrintPatternSchema.parse({
-    name: "印花方案",
-    sourceAssetId: assets[0]?.id ?? "pending",
-    notes: "",
-  });
+  const savedPattern = studioPrintPatternSchema.safeParse(
+    documents[0]?.currentRevision.payload,
+  );
+  const initial = savedPattern.success
+    ? savedPattern.data
+    : studioPrintPatternSchema.parse({
+        name: "印花方案",
+        sourceAssetId: assets[0]?.id ?? "pending",
+        notes: "",
+      });
   const [value, setValue] = useState<Pattern>(initial);
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
   const signature = JSON.stringify(value);
@@ -38,12 +45,38 @@ export function PrintWorkbench({
     onDirty?.(signature !== baseline);
     return () => onDirty?.(false);
   }, [signature, baseline, onDirty]);
-  const [editing, setEditing] = useState<StudioDocumentView | null>(null);
+  const [editing, setEditing] = useState<StudioDocumentView | null>(
+    savedPattern.success ? (documents[0] ?? null) : null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<{ body: string; key: string } | null>(null);
   const asset = assets.find((asset) => asset.id === value.sourceAssetId);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [previewResult, setPreviewResult] = useState<{
+    url: string;
+    attempt: number;
+    failed: boolean;
+  } | null>(null);
+  const previewReady =
+    previewResult?.url === asset?.url &&
+    previewResult?.attempt === previewAttempt;
+  useEffect(() => {
+    if (!asset) return;
+    let active = true;
+    const image = new window.Image();
+    const complete = (failed: boolean) => {
+      if (active)
+        setPreviewResult({ url: asset.url, attempt: previewAttempt, failed });
+    };
+    image.onload = () => complete(false);
+    image.onerror = () => complete(true);
+    image.src = asset.url;
+    return () => {
+      active = false;
+    };
+  }, [asset, previewAttempt]);
   const update = <K extends keyof Pattern>(key: K, next: Pattern[K]) =>
     setValue((current) => ({
       ...current,
@@ -112,8 +145,12 @@ export function PrintWorkbench({
         </p>
       </div>
       <div className={styles.layout}>
-        <div className={styles.preview} aria-label="图案平铺预览">
-          {asset ? (
+        <div
+          className={styles.preview}
+          aria-label="图案平铺预览"
+          aria-busy={Boolean(asset && !previewReady)}
+        >
+          {asset && previewReady && !previewResult?.failed ? (
             <div
               style={
                 {
@@ -127,6 +164,17 @@ export function PrintWorkbench({
                 } as CSSProperties
               }
             />
+          ) : asset ? (
+            <section className={styles.previewStatus} role="status">
+              <p>{previewReady ? "图案暂时无法加载" : "正在加载图案…"}</p>
+              {previewReady ? (
+                <Button
+                  onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+                >
+                  重试预览
+                </Button>
+              ) : null}
+            </section>
           ) : (
             <p>先上传或选择图案素材</p>
           )}
@@ -139,7 +187,7 @@ export function PrintWorkbench({
         >
           <label>
             方案名称
-            <input
+            <Input
               required
               disabled={!canEdit || busy}
               value={value.name}
@@ -148,7 +196,7 @@ export function PrintWorkbench({
           </label>
           <label>
             原始图案
-            <select
+            <Select
               disabled={!canEdit || busy}
               value={value.sourceAssetId}
               onChange={(event) => update("sourceAssetId", event.target.value)}
@@ -159,7 +207,7 @@ export function PrintWorkbench({
                   素材 {index + 1} · {asset.id.slice(-6)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {(
             [
@@ -205,7 +253,7 @@ export function PrintWorkbench({
           ))}
           <label>
             生产重复宽度（cm，待确认可留空）
-            <input
+            <Input
               type="number"
               min={0.1}
               max={1000}
@@ -224,7 +272,7 @@ export function PrintWorkbench({
           </label>
           <label>
             生产重复高度（cm，待确认可留空）
-            <input
+            <Input
               type="number"
               min={0.1}
               max={1000}
@@ -243,7 +291,7 @@ export function PrintWorkbench({
           </label>
           <label>
             备注
-            <textarea
+            <Textarea
               disabled={!canEdit || busy}
               value={value.notes}
               onChange={(event) => update("notes", event.target.value)}
@@ -275,6 +323,7 @@ export function PrintWorkbench({
           documents.map((document) => (
             <button
               key={document.id}
+              aria-pressed={editing?.id === document.id}
               type="button"
               disabled={busy}
               onClick={() =>

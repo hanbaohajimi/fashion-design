@@ -137,3 +137,44 @@ it("does not offer generation controls to viewers", async () => {
   expect(screen.queryByRole("button", { name: "保存实验计划" })).toBeNull();
   expect(screen.queryByRole("button", { name: "提交待执行方案" })).toBeNull();
 });
+
+it("retries only the chosen failed cell without resubmitting other cells", async () => {
+  const first = batch.items[0];
+  if (!first) throw new Error("实验 fixture 缺少单元格");
+  const record: ExperimentView = {
+    ...batch,
+    items: [
+      { ...first, status: "failed" },
+      { ...first, id: "item-2", status: "failed" },
+      { ...first, id: "item-done", status: "succeeded" },
+    ],
+  };
+  const fetcher = vi.fn(
+    async (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).includes("/api/fabrics")) return json({ items: [] });
+      return options?.method === "POST" ? json(record) : json([record]);
+    },
+  );
+  vi.stubGlobal("fetch", fetcher);
+  render(
+    <ExperimentPanel projectId="project-1" assets={studioFixture().assets} />,
+  );
+  const retry = await screen.findAllByRole("button", {
+    name: /^重试此方案$/u,
+  });
+  const selected = retry[0];
+  if (!selected) throw new Error("缺少失败单元格的重试入口");
+  fireEvent.click(selected);
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(([, options]) => options?.method === "POST"),
+    ).toBe(true),
+  );
+  const post = fetcher.mock.calls.find(
+    ([, options]) => options?.method === "POST",
+  );
+  expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+    action: "retry",
+    itemIds: ["item-1"],
+  });
+});

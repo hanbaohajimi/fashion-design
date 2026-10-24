@@ -11,6 +11,10 @@ import {
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
 import { readErrorMessage } from "../auth/auth-api";
+import type { StudioCreativeSummary } from "@fashion/shared";
+export function fetchCreativeSummary(projectId: string, signal?: AbortSignal) {
+  return request<StudioCreativeSummary>(base(projectId) + "/creative-summary", signal ? { signal } : undefined);
+}
 
 export class StudioApiError extends Error {
   constructor(
