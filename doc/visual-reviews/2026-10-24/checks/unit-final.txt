@@ -1,0 +1,9 @@
+$ vitest run
+
+ RUN  v4.1.12 G:/new-fashion-design/apps/web
+
+
+ Test Files  46 passed (46)
+      Tests  206 passed (206)
+   Start at  22:43:12
+   Duration  19.53s (transform 8.68s, setup 0ms, import 46.45s, tests 32.32s, environment 102.27s)

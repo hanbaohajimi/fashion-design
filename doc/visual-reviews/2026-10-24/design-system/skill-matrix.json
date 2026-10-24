@@ -1,0 +1,160 @@
+{
+  "pairs": [
+    {
+      "name": "ink / canvas",
+      "fg": "#181818",
+      "bg": "#f5f5f5",
+      "size": "normal"
+    },
+    {
+      "name": "ink-secondary / canvas",
+      "fg": "#555555",
+      "bg": "#f5f5f5",
+      "size": "normal"
+    },
+    {
+      "name": "ink-tertiary / canvas",
+      "fg": "#6a6a6a",
+      "bg": "#f5f5f5",
+      "size": "normal"
+    },
+    {
+      "name": "ink / paper",
+      "fg": "#181818",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "ink-secondary / paper",
+      "fg": "#555555",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "ink-tertiary / paper",
+      "fg": "#6a6a6a",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "ink / surface",
+      "fg": "#181818",
+      "bg": "#fafafa",
+      "size": "normal"
+    },
+    {
+      "name": "ink-secondary / surface",
+      "fg": "#555555",
+      "bg": "#fafafa",
+      "size": "normal"
+    },
+    {
+      "name": "ink-tertiary / surface",
+      "fg": "#6a6a6a",
+      "bg": "#fafafa",
+      "size": "normal"
+    },
+    {
+      "name": "action",
+      "fg": "#ffffff",
+      "bg": "#314ec4",
+      "size": "normal"
+    },
+    {
+      "name": "action-hover",
+      "fg": "#ffffff",
+      "bg": "#253cae",
+      "size": "normal"
+    },
+    {
+      "name": "action-active",
+      "fg": "#ffffff",
+      "bg": "#192b97",
+      "size": "normal"
+    },
+    {
+      "name": "选中文字",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "size": "normal"
+    },
+    {
+      "name": "success 提示",
+      "fg": "#4a6b57",
+      "bg": "#effbf5",
+      "size": "normal"
+    },
+    {
+      "name": "success 文字",
+      "fg": "#4a6b57",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "warning 提示",
+      "fg": "#8c5831",
+      "bg": "#fff6eb",
+      "size": "normal"
+    },
+    {
+      "name": "warning 文字",
+      "fg": "#8c5831",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "error 提示",
+      "fg": "#b92727",
+      "bg": "#ffebed",
+      "size": "normal"
+    },
+    {
+      "name": "error 文字",
+      "fg": "#b92727",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "info 提示",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "size": "normal"
+    },
+    {
+      "name": "info 文字",
+      "fg": "#253cae",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "running 提示",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "size": "normal"
+    },
+    {
+      "name": "running 文字",
+      "fg": "#253cae",
+      "bg": "#ffffff",
+      "size": "normal"
+    },
+    {
+      "name": "禁用文字",
+      "fg": "#6a6a6a",
+      "bg": "#f5f5f5",
+      "size": "normal"
+    },
+    {
+      "name": "反色提示",
+      "fg": "#ffffff",
+      "bg": "#2b2b2b",
+      "size": "normal"
+    },
+    {
+      "name": "品牌展示",
+      "fg": "#b0452a",
+      "bg": "#fff5f0",
+      "size": "normal"
+    }
+  ]
+}

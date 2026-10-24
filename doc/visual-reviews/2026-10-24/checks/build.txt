@@ -1,0 +1,37 @@
+$ next build
+▲ Next.js 16.4.1 (Turbopack)
+[@sentry/nextjs] Importing `withSentryConfig` from `@sentry/nextjs` is deprecated and will stop working in v11. Import it from `@sentry/nextjs/config` instead:
+  import { withSentryConfig } from '@sentry/nextjs/config';
+✓ Running next.config.ts took 982ms
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · proxyTimeout: 905000
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1633ms
+  Running next.config.js provided runAfterProductionCompile ...
+✓ Completed runAfterProductionCompile in 1403ms
+  Running TypeScript ...
+  Finished TypeScript in 5.4s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/8) ...
+  Generating static pages using 11 workers (2/8)
+  Generating static pages using 11 workers (4/8)
+  Generating static pages using 11 workers (6/8)
+✓ Generating static pages using 11 workers (8/8) in 1140ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /[projectId]
+├ ƒ /[projectId]/studio
+├ ○ /auth/confirm
+├ ○ /fabrics
+├ ○ /login
+├ ƒ /tldraw-translations/zh-cn
+└ ƒ /trends
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

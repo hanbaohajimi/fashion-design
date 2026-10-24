@@ -1,0 +1,18 @@
+
+Running 9 tests using 1 worker
+
+(node:36780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium] › tests\e2e\workspace-ui.spec.ts:21:5 › 侧栏完整可达，方向键仅移动焦点，任务正文在笔记本首屏可输入 (1.1s)
+  ok 2 [chromium] › tests\e2e\workspace-ui.spec.ts:47:5 › 团队局部切换保留草稿，离开模块仍经过未保存保护 (1.2s)
+  ok 3 [chromium] › tests\e2e\workspace-ui.spec.ts:61:5 › 技术包章节与窄屏重排保留输入，错误和最后操作可达 (1.1s)
+  ok 4 [chromium] › tests\e2e\workspace-ui.spec.ts:92:5 › 只读和长内容在全部模块保留可达资料，缺图可重试 (5.8s)
+  ok 5 [chromium] › tests\e2e\workspace-ui.spec.ts:158:5 › 空项目的十一项功能保持输入和返回入口可达 (5.6s)
+  ok 6 [chromium] › tests\e2e\workspace-ui.spec.ts:197:5 › 技术包跨章节保持同一草稿，隐藏的无效字段会展开并获得焦点 (1.2s)
+  ok 7 [chromium] › tests\e2e\workspace-ui.spec.ts:238:5 › 375px 任务输入先于素材，折叠品牌规则后不丢失选择 (1.1s)
+  ok 8 [chromium] › tests\e2e\workspace-ui.spec.ts:256:5 › 200% 等效可用宽度下十一模块自然重排，主操作和字段仍可达 (6.3s)
+  ok 9 [chromium] › tests\e2e\workspace-ui.spec.ts:278:5 › 加载和工作室请求失败可恢复到原模块 (913ms)
+
+  9 passed (26.1s)

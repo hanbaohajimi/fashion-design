@@ -1,0 +1,334 @@
+{
+  "pairs": [
+    {
+      "name": "ink / canvas",
+      "foreground": "--color-ink",
+      "background": "--color-canvas",
+      "fg": "#181818",
+      "bg": "#f5f5f5",
+      "ratio": 16.29,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-secondary / canvas",
+      "foreground": "--color-ink-secondary",
+      "background": "--color-canvas",
+      "fg": "#555555",
+      "bg": "#f5f5f5",
+      "ratio": 6.84,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-tertiary / canvas",
+      "foreground": "--color-ink-tertiary",
+      "background": "--color-canvas",
+      "fg": "#6a6a6a",
+      "bg": "#f5f5f5",
+      "ratio": 4.96,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "输入边界 / canvas",
+      "foreground": "--color-control-border",
+      "background": "--color-canvas",
+      "fg": "#808080",
+      "bg": "#f5f5f5",
+      "ratio": 3.62,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "焦点 / canvas",
+      "foreground": "--color-focus-ring",
+      "background": "--color-canvas",
+      "fg": "#314ec4",
+      "bg": "#f5f5f5",
+      "ratio": 6.38,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "ink / paper",
+      "foreground": "--color-ink",
+      "background": "--color-paper",
+      "fg": "#181818",
+      "bg": "#ffffff",
+      "ratio": 17.76,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-secondary / paper",
+      "foreground": "--color-ink-secondary",
+      "background": "--color-paper",
+      "fg": "#555555",
+      "bg": "#ffffff",
+      "ratio": 7.46,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-tertiary / paper",
+      "foreground": "--color-ink-tertiary",
+      "background": "--color-paper",
+      "fg": "#6a6a6a",
+      "bg": "#ffffff",
+      "ratio": 5.41,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "输入边界 / paper",
+      "foreground": "--color-control-border",
+      "background": "--color-paper",
+      "fg": "#808080",
+      "bg": "#ffffff",
+      "ratio": 3.95,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "焦点 / paper",
+      "foreground": "--color-focus-ring",
+      "background": "--color-paper",
+      "fg": "#314ec4",
+      "bg": "#ffffff",
+      "ratio": 6.96,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "ink / surface",
+      "foreground": "--color-ink",
+      "background": "--color-surface",
+      "fg": "#181818",
+      "bg": "#fafafa",
+      "ratio": 17.01,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-secondary / surface",
+      "foreground": "--color-ink-secondary",
+      "background": "--color-surface",
+      "fg": "#555555",
+      "bg": "#fafafa",
+      "ratio": 7.14,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "ink-tertiary / surface",
+      "foreground": "--color-ink-tertiary",
+      "background": "--color-surface",
+      "fg": "#6a6a6a",
+      "bg": "#fafafa",
+      "ratio": 5.18,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "输入边界 / surface",
+      "foreground": "--color-control-border",
+      "background": "--color-surface",
+      "fg": "#808080",
+      "bg": "#fafafa",
+      "ratio": 3.78,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "焦点 / surface",
+      "foreground": "--color-focus-ring",
+      "background": "--color-surface",
+      "fg": "#314ec4",
+      "bg": "#fafafa",
+      "ratio": 6.67,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "action",
+      "foreground": "--color-action-on",
+      "background": "--color-action",
+      "fg": "#ffffff",
+      "bg": "#314ec4",
+      "ratio": 6.96,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "action-hover",
+      "foreground": "--color-action-on",
+      "background": "--color-action-hover",
+      "fg": "#ffffff",
+      "bg": "#253cae",
+      "ratio": 8.99,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "action-active",
+      "foreground": "--color-action-on",
+      "background": "--color-action-active",
+      "fg": "#ffffff",
+      "bg": "#192b97",
+      "ratio": 11.45,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "选中文字",
+      "foreground": "--color-selection-ink",
+      "background": "--color-selection-bg",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "ratio": 7.94,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "选中轮廓",
+      "foreground": "--color-selection-border",
+      "background": "--color-selection-bg",
+      "fg": "#314ec4",
+      "bg": "#ebf1ff",
+      "ratio": 6.15,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "name": "success 提示",
+      "foreground": "--color-status-success",
+      "background": "--color-status-success-bg",
+      "fg": "#4a6b57",
+      "bg": "#effbf5",
+      "ratio": 5.6,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "success 文字",
+      "foreground": "--color-status-success",
+      "background": "--color-paper",
+      "fg": "#4a6b57",
+      "bg": "#ffffff",
+      "ratio": 5.95,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "warning 提示",
+      "foreground": "--color-status-warning",
+      "background": "--color-status-warning-bg",
+      "fg": "#8c5831",
+      "bg": "#fff6eb",
+      "ratio": 5.52,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "warning 文字",
+      "foreground": "--color-status-warning",
+      "background": "--color-paper",
+      "fg": "#8c5831",
+      "bg": "#ffffff",
+      "ratio": 5.91,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "error 提示",
+      "foreground": "--color-status-error",
+      "background": "--color-status-error-bg",
+      "fg": "#b92727",
+      "bg": "#ffebed",
+      "ratio": 5.43,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "error 文字",
+      "foreground": "--color-status-error",
+      "background": "--color-paper",
+      "fg": "#b92727",
+      "bg": "#ffffff",
+      "ratio": 6.21,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "info 提示",
+      "foreground": "--color-status-info",
+      "background": "--color-status-info-bg",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "ratio": 7.94,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "info 文字",
+      "foreground": "--color-status-info",
+      "background": "--color-paper",
+      "fg": "#253cae",
+      "bg": "#ffffff",
+      "ratio": 8.99,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "running 提示",
+      "foreground": "--color-status-running",
+      "background": "--color-status-running-bg",
+      "fg": "#253cae",
+      "bg": "#ebf1ff",
+      "ratio": 7.94,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "running 文字",
+      "foreground": "--color-status-running",
+      "background": "--color-paper",
+      "fg": "#253cae",
+      "bg": "#ffffff",
+      "ratio": 8.99,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "禁用文字",
+      "foreground": "--color-disabled-ink",
+      "background": "--color-disabled-bg",
+      "fg": "#6a6a6a",
+      "bg": "#f5f5f5",
+      "ratio": 4.96,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "反色提示",
+      "foreground": "--color-on-inverse",
+      "background": "--color-inverse",
+      "fg": "#ffffff",
+      "bg": "#2b2b2b",
+      "ratio": 14.16,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "name": "品牌展示",
+      "foreground": "--color-brand",
+      "background": "--color-brand-bg",
+      "fg": "#b0452a",
+      "bg": "#fff5f0",
+      "ratio": 5.25,
+      "minimum": 4.5,
+      "pass": true
+    }
+  ]
+}

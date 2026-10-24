@@ -1,0 +1,29 @@
+[
+  {
+    "name": "projects",
+    "border": "rgb(128, 128, 128)",
+    "focus": {
+      "color": "rgb(49, 78, 196)",
+      "width": "2px",
+      "style": "solid"
+    }
+  },
+  {
+    "name": "fabrics",
+    "border": "rgb(128, 128, 128)",
+    "focus": {
+      "color": "rgb(49, 78, 196)",
+      "width": "2px",
+      "style": "solid"
+    }
+  },
+  {
+    "name": "trends",
+    "border": "rgb(128, 128, 128)",
+    "focus": {
+      "color": "rgb(49, 78, 196)",
+      "width": "2px",
+      "style": "solid"
+    }
+  }
+]

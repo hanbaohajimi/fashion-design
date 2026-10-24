@@ -1,0 +1,258 @@
+$ node scripts/run-visual-e2e.mjs
+视觉验收环境：atelier-visual-chromium:1.58.2
+[WebServer] (node:31712) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:29780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:38920) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [@sentry/nextjs] Importing `withSentryConfig` from `@sentry/nextjs` is deprecated and will stop working in v11. Import it from `@sentry/nextjs/config` instead:
+[WebServer]   import { withSentryConfig } from '@sentry/nextjs/config';
+
+Running 53 tests using 1 worker
+
+(node:30880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30880) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:41320) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › tasks 1280 (3.2s)
+[WebServer] (node:37680) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  2 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › styles 1280 (3.5s)
+[WebServer] (node:27164) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  3 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › experiments 1280 (2.9s)
+[WebServer] (node:16460) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  4 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › patterns 1280 (2.9s)
+[WebServer] (node:31648) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  5 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › presentation 1280 (3.4s)
+[WebServer] (node:3332) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  6 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › brand 1280 (3.4s)
+[WebServer] (node:41660) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  7 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › planning 1280 (1.8s)
+[WebServer] (node:31128) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  8 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › tech 1280 (2.7s)
+[WebServer] (node:16440) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok  9 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › samples 1280 (3.2s)
+[WebServer] (node:28560) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 10 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › team 1280 (1.9s)
+[WebServer] (node:9756) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 11 tests\visual\atelier.spec.ts:35:11 › workspace 1280 › trends 1280 (1.9s)
+[WebServer] (node:24164) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 12 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › tasks 1440 (1.9s)
+[WebServer] (node:40540) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 13 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › styles 1440 (3.2s)
+[WebServer] (node:25764) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 14 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › experiments 1440 (2.0s)
+[WebServer] (node:29508) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 15 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › patterns 1440 (2.9s)
+[WebServer] (node:41456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 16 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › presentation 1440 (3.2s)
+[WebServer] (node:36616) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 17 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › brand 1440 (3.4s)
+[WebServer] (node:36412) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 18 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › planning 1440 (1.9s)
+[WebServer] (node:24540) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 19 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › tech 1440 (2.9s)
+[WebServer] (node:4108) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 20 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › samples 1440 (3.3s)
+[WebServer] (node:19476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 21 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › team 1440 (1.9s)
+[WebServer] (node:27704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 22 tests\visual\atelier.spec.ts:35:11 › workspace 1440 › trends 1440 (1.9s)
+[WebServer] (node:42724) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 23 tests\visual\atelier.spec.ts:35:11 › workspace 390 › tasks 390 (1.7s)
+[WebServer] (node:23192) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 24 tests\visual\atelier.spec.ts:35:11 › workspace 390 › styles 390 (1.9s)
+[WebServer] (node:14520) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 25 tests\visual\atelier.spec.ts:35:11 › workspace 390 › experiments 390 (2.0s)
+[WebServer] (node:43220) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 26 tests\visual\atelier.spec.ts:35:11 › workspace 390 › patterns 390 (1.8s)
+[WebServer] (node:28936) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 27 tests\visual\atelier.spec.ts:35:11 › workspace 390 › presentation 390 (2.1s)
+[WebServer] (node:24704) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 28 tests\visual\atelier.spec.ts:35:11 › workspace 390 › brand 390 (1.8s)
+[WebServer] (node:12736) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 29 tests\visual\atelier.spec.ts:35:11 › workspace 390 › planning 390 (1.8s)
+[WebServer] (node:11252) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 30 tests\visual\atelier.spec.ts:35:11 › workspace 390 › tech 390 (1.8s)
+[WebServer] (node:12140) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 31 tests\visual\atelier.spec.ts:35:11 › workspace 390 › samples 390 (1.9s)
+[WebServer] (node:29940) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 32 tests\visual\atelier.spec.ts:35:11 › workspace 390 › team 390 (1.8s)
+[WebServer] (node:37984) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 33 tests\visual\atelier.spec.ts:35:11 › workspace 390 › trends 390 (1.8s)
+  ok 34 tests\visual\atelier.spec.ts:88:11 › 1440 › login 1440 (1.4s)
+  ok 35 tests\visual\atelier.spec.ts:88:11 › 1440 › projects 1440 (2.8s)
+  ok 36 tests\visual\atelier.spec.ts:88:11 › 1440 › fabrics 1440 (8.8s)
+  ok 37 tests\visual\atelier.spec.ts:88:11 › 1440 › trends 1440 (9.0s)
+  ok 38 tests\visual\atelier.spec.ts:88:11 › 1440 › invalid-link 1440 (1.7s)
+  ok 39 tests\visual\atelier.spec.ts:88:11 › 390 › login 390 (1.7s)
+  ok 40 tests\visual\atelier.spec.ts:88:11 › 390 › projects 390 (1.9s)
+  ok 41 tests\visual\atelier.spec.ts:88:11 › 390 › fabrics 390 (12.7s)
+  ok 42 tests\visual\atelier.spec.ts:88:11 › 390 › trends 390 (7.5s)
+  ok 43 tests\visual\atelier.spec.ts:88:11 › 390 › invalid-link 390 (1.4s)
+  ok 44 tests\visual\atelier.spec.ts:157:5 › trend destination keeps a single action and restores focus (6.8s)
+  ok 45 tests\visual\atelier.spec.ts:178:5 › project empty and failure states (4.3s)
+[WebServer] (node:31632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 46 tests\visual\atelier.spec.ts:203:5 › readonly technical revision remains readable (2.9s)
+[WebServer] (node:3296) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 47 tests\visual\atelier.spec.ts:227:7 › tasks readonly workspace (1.8s)
+[WebServer] (node:39772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 48 tests\visual\atelier.spec.ts:227:7 › experiments readonly workspace (1.9s)
+[WebServer] (node:40208) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 49 tests\visual\atelier.spec.ts:256:5 › task request failure retains the complete draft (2.4s)
+[WebServer] (node:27956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 50 tests\visual\atelier.spec.ts:293:5 › design preview failure keeps the editor and retry available (3.1s)
+[WebServer] (node:41132) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+  ok 51 tests\visual\atelier.spec.ts:313:5 › experiment request failure retains configuration (1.9s)
+[WebServer] (node:32472) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+  ok 52 tests\visual\atelier.spec.ts:342:7 › studio touch › assistant actions remain reachable with touch controls (5.2s)
+[WebServer] (node:33632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] NetworkError: A network error occurred.
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+[WebServer] [browser] Language zh-cn: missing messages for keys:
+[WebServer] action.copy-hovered-styles
+[WebServer] action.frame-selection
+[WebServer] page-menu.max-pages-reached
+[WebServer] page-menu.resize
+  ok 53 tests\visual\atelier.spec.ts:375:5 › studio, sketch, asset and export (6.3s)
+
+  53 passed (2.9m)

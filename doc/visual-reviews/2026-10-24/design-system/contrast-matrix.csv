@@ -1,0 +1,34 @@
+用途,前景变量,背景变量,前景,背景,对比度,最低要求,通过
+ink / canvas,--color-ink,--color-canvas,#181818,#f5f5f5,16.29,4.5,true
+ink-secondary / canvas,--color-ink-secondary,--color-canvas,#555555,#f5f5f5,6.84,4.5,true
+ink-tertiary / canvas,--color-ink-tertiary,--color-canvas,#6a6a6a,#f5f5f5,4.96,4.5,true
+输入边界 / canvas,--color-control-border,--color-canvas,#808080,#f5f5f5,3.62,3,true
+焦点 / canvas,--color-focus-ring,--color-canvas,#314ec4,#f5f5f5,6.38,3,true
+ink / paper,--color-ink,--color-paper,#181818,#ffffff,17.76,4.5,true
+ink-secondary / paper,--color-ink-secondary,--color-paper,#555555,#ffffff,7.46,4.5,true
+ink-tertiary / paper,--color-ink-tertiary,--color-paper,#6a6a6a,#ffffff,5.41,4.5,true
+输入边界 / paper,--color-control-border,--color-paper,#808080,#ffffff,3.95,3,true
+焦点 / paper,--color-focus-ring,--color-paper,#314ec4,#ffffff,6.96,3,true
+ink / surface,--color-ink,--color-surface,#181818,#fafafa,17.01,4.5,true
+ink-secondary / surface,--color-ink-secondary,--color-surface,#555555,#fafafa,7.14,4.5,true
+ink-tertiary / surface,--color-ink-tertiary,--color-surface,#6a6a6a,#fafafa,5.18,4.5,true
+输入边界 / surface,--color-control-border,--color-surface,#808080,#fafafa,3.78,3,true
+焦点 / surface,--color-focus-ring,--color-surface,#314ec4,#fafafa,6.67,3,true
+action,--color-action-on,--color-action,#ffffff,#314ec4,6.96,4.5,true
+action-hover,--color-action-on,--color-action-hover,#ffffff,#253cae,8.99,4.5,true
+action-active,--color-action-on,--color-action-active,#ffffff,#192b97,11.45,4.5,true
+选中文字,--color-selection-ink,--color-selection-bg,#253cae,#ebf1ff,7.94,4.5,true
+选中轮廓,--color-selection-border,--color-selection-bg,#314ec4,#ebf1ff,6.15,3,true
+success 提示,--color-status-success,--color-status-success-bg,#4a6b57,#effbf5,5.6,4.5,true
+success 文字,--color-status-success,--color-paper,#4a6b57,#ffffff,5.95,4.5,true
+warning 提示,--color-status-warning,--color-status-warning-bg,#8c5831,#fff6eb,5.52,4.5,true
+warning 文字,--color-status-warning,--color-paper,#8c5831,#ffffff,5.91,4.5,true
+error 提示,--color-status-error,--color-status-error-bg,#b92727,#ffebed,5.43,4.5,true
+error 文字,--color-status-error,--color-paper,#b92727,#ffffff,6.21,4.5,true
+info 提示,--color-status-info,--color-status-info-bg,#253cae,#ebf1ff,7.94,4.5,true
+info 文字,--color-status-info,--color-paper,#253cae,#ffffff,8.99,4.5,true
+running 提示,--color-status-running,--color-status-running-bg,#253cae,#ebf1ff,7.94,4.5,true
+running 文字,--color-status-running,--color-paper,#253cae,#ffffff,8.99,4.5,true
+禁用文字,--color-disabled-ink,--color-disabled-bg,#6a6a6a,#f5f5f5,4.96,4.5,true
+反色提示,--color-on-inverse,--color-inverse,#ffffff,#2b2b2b,14.16,4.5,true
+品牌展示,--color-brand,--color-brand-bg,#b0452a,#fff5f0,5.25,4.5,true

@@ -1,0 +1,101 @@
+[
+  {
+    "tab": "tasks",
+    "first": {
+      "tag": "TEXTAREA",
+      "label": "本次任务",
+      "y": 188.296875
+    },
+    "primary": 1
+  },
+  {
+    "tab": "styles",
+    "first": {
+      "tag": "IMG",
+      "label": "当前款式主设计图",
+      "y": 163
+    },
+    "primary": 0
+  },
+  {
+    "tab": "experiments",
+    "first": {
+      "tag": "SELECT",
+      "label": "实验类型批量配色配色与面料组合领型、袖型与细节改款商品展示素",
+      "y": 180.1875
+    },
+    "primary": 1
+  },
+  {
+    "tab": "patterns",
+    "first": {
+      "tag": "DIV",
+      "label": "图案平铺预览",
+      "y": 168.375
+    },
+    "primary": 0
+  },
+  {
+    "tab": "presentation",
+    "first": {
+      "tag": "INPUT",
+      "label": "展示包名称",
+      "y": 192
+    },
+    "primary": 1
+  },
+  {
+    "tab": "brand",
+    "first": {
+      "tag": "SECTION",
+      "label": "当前品牌修订摘要",
+      "y": 143
+    },
+    "primary": 0
+  },
+  {
+    "tab": "planning",
+    "first": {
+      "tag": "IMG",
+      "label": "计划款式",
+      "y": 184
+    },
+    "primary": 0
+  },
+  {
+    "tab": "tech",
+    "first": {
+      "tag": "INPUT",
+      "label": "技术包名称",
+      "y": 160
+    },
+    "primary": 1
+  },
+  {
+    "tab": "samples",
+    "first": {
+      "tag": "INPUT",
+      "label": "轮次名称",
+      "y": 192
+    },
+    "primary": 0
+  },
+  {
+    "tab": "team",
+    "first": {
+      "tag": "SELECT",
+      "label": "资料类型款式技术包",
+      "y": 178
+    },
+    "primary": 1
+  },
+  {
+    "tab": "trends",
+    "first": {
+      "tag": "IMG",
+      "label": "",
+      "y": 187.375
+    },
+    "primary": 1
+  }
+]

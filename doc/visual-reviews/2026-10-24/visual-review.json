@@ -1,0 +1,840 @@
+{
+  "environment": "atelier-visual-chromium:1.58.2 · Linux Chromium145.0.7632.6",
+  "realDesignerValidation": "尚未完成真实用户验证",
+  "records": [
+    {
+      "name": "asset-history-empty.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "74a32ed5ea92ae1b966953da96f7a5b8568460b14f855ec598362820577d9773",
+      "previousBaselineSha256": "bf548089eebfeea15c232dac9f8ff0c5e9125cecf2c094c8160ef5902501d55a",
+      "baselineSha256": "74a32ed5ea92ae1b966953da96f7a5b8568460b14f855ec598362820577d9773"
+    },
+    {
+      "name": "asset-preview.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "330e0c77fe3da160b19b4d780bdde2bfeb435abb52a87c40ac9dca6cea2a2077",
+      "previousBaselineSha256": "6fc1fced84b89306d5d4b4d94bd6a4389db9be0a363d8eaa9bbc2d5c4275b78d",
+      "baselineSha256": "330e0c77fe3da160b19b4d780bdde2bfeb435abb52a87c40ac9dca6cea2a2077"
+    },
+    {
+      "name": "export-ready.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "8f430f081409d60c3f2981fc61ff577818fc3ecb3939a3771f84d1eda5e73b61",
+      "previousBaselineSha256": "e52f0cb6fd91e3f09eb69e0f7a6591ff61b40d66d4ed4c209d01e195a2d7ffa6",
+      "baselineSha256": "8f430f081409d60c3f2981fc61ff577818fc3ecb3939a3771f84d1eda5e73b61"
+    },
+    {
+      "name": "fabrics-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "bbaa4a594f744219e94a77bfe2db15c7f8a65dccd0e202a34a60cea287f215bf",
+      "previousBaselineSha256": "7367ed49ca935b3d42a8025b6d70f886dc0fa581d153f284884d47c7b84f8464",
+      "baselineSha256": "bbaa4a594f744219e94a77bfe2db15c7f8a65dccd0e202a34a60cea287f215bf"
+    },
+    {
+      "name": "fabrics-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "ad450712dc5264bb5020f9785b777463a841df62f434af6899b60df7cafa2504",
+      "previousBaselineSha256": "9198979e27b2353aefecb78d9dd74cafdc089552661cfa75d468f9df0e9db669",
+      "baselineSha256": "ad450712dc5264bb5020f9785b777463a841df62f434af6899b60df7cafa2504"
+    },
+    {
+      "name": "invalid-link-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "4413257b6e2c264ea2308e2441222b38a66a9d5fa5258b219ba2ab68b591f938",
+      "previousBaselineSha256": "611eb80e42e31ed4f3f3aac45dbe11d5f7ed07a60b673a9a86d17d6d6e0479a6",
+      "baselineSha256": "4413257b6e2c264ea2308e2441222b38a66a9d5fa5258b219ba2ab68b591f938"
+    },
+    {
+      "name": "invalid-link-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "3e99cf04f6a090629a70961d5f90ea6934007f2cc989dc5f8da57db717e81cc0",
+      "previousBaselineSha256": "4c3a9c66609b987ff65ecc6c893732ccd9a89e00cfc42ddfa0066071503a86cb",
+      "baselineSha256": "3e99cf04f6a090629a70961d5f90ea6934007f2cc989dc5f8da57db717e81cc0"
+    },
+    {
+      "name": "login-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "f21fa81d64e6e3172a6a45b3afa06e1a594b97535bc6db0a8c6ca8b85c50e3e2",
+      "previousBaselineSha256": "ad7b45f717e3b5556ba86ef0ad02ea2be16c3b368fc3aab6f45ca58fc2994a6a",
+      "baselineSha256": "f21fa81d64e6e3172a6a45b3afa06e1a594b97535bc6db0a8c6ca8b85c50e3e2"
+    },
+    {
+      "name": "login-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "7cea65de9b58ae3040f5df0a4ce2cf44cf7398860151da2e1a914dd2feeaa239",
+      "previousBaselineSha256": "50512c35a7b4b8e8b25409c959896a210e5a789b78bbc1c5037aa29d54fb1520",
+      "baselineSha256": "7cea65de9b58ae3040f5df0a4ce2cf44cf7398860151da2e1a914dd2feeaa239"
+    },
+    {
+      "name": "projects-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "1e76d3e254963fa5375167040a7d02e62bed71dae382f16e547af7b91c4a33db",
+      "previousBaselineSha256": "cc5196124e59d3fb3777ccccbb09a210397ce484c57d61b9fc217f66137b423d",
+      "baselineSha256": "1e76d3e254963fa5375167040a7d02e62bed71dae382f16e547af7b91c4a33db"
+    },
+    {
+      "name": "projects-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "6fc3ad4522617cc0f1e7977ad4de114af035a6c25f46265f268ce1da9872e8ee",
+      "previousBaselineSha256": "8fd9b13b8ee6d0d8bc5ffb2f8a42465bf96645d1f85faebe171e8aca2883e57c",
+      "baselineSha256": "6fc3ad4522617cc0f1e7977ad4de114af035a6c25f46265f268ce1da9872e8ee"
+    },
+    {
+      "name": "projects-empty.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "3d31a1055be151056dabf7bebbf134a123779eda51fc9a5934de416760c64166",
+      "previousBaselineSha256": "238d714096be1eac537244f9c33a468465114797275a66677843469a1ad667e9",
+      "baselineSha256": "3d31a1055be151056dabf7bebbf134a123779eda51fc9a5934de416760c64166"
+    },
+    {
+      "name": "projects-error.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "4efb64c3fd9aaa0bf9ab0aa87874d1cbf4bafc69f643b06736941a7d99f32561",
+      "previousBaselineSha256": "954c78e83e940be3b0416bb5fda5b216050032e383923dcba7be8c8caede4c5e",
+      "baselineSha256": "4efb64c3fd9aaa0bf9ab0aa87874d1cbf4bafc69f643b06736941a7d99f32561"
+    },
+    {
+      "name": "sketch.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "3072926058428837bc4aaf7eef1c4526a5867d1e88594ea193d6d640bc7edd4f",
+      "previousBaselineSha256": "77ca3eb78d652c16225848fd4bf03ce8cb85d2d73266312078e9aef75d4b4d90",
+      "baselineSha256": "3072926058428837bc4aaf7eef1c4526a5867d1e88594ea193d6d640bc7edd4f"
+    },
+    {
+      "name": "studio-assistant-touch.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "2efeca8d01624591bf86644a3e4fa9a33cbdaa95f0aabaf30f44a7a099bb04d0",
+      "previousBaselineSha256": "b0c1222976acd5682384cab822e2f8ab994f7b84faf0c81046182791ee14f50e",
+      "baselineSha256": "2efeca8d01624591bf86644a3e4fa9a33cbdaa95f0aabaf30f44a7a099bb04d0"
+    },
+    {
+      "name": "studio-desktop.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "430b2660c99f43a3c29194152e314a64d5b5131a59e0904360e02022ff370ff6",
+      "previousBaselineSha256": "551a05632159c24e6784ddc3f183dfab36d98923a16fcaf57f6136ac9344361c",
+      "baselineSha256": "430b2660c99f43a3c29194152e314a64d5b5131a59e0904360e02022ff370ff6"
+    },
+    {
+      "name": "studio-menu-touch.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "8739588cc1d042a1c1240dd2d1b2d20abab6e4197162308edc82b6ea96c26329",
+      "previousBaselineSha256": "ee276d158f20fa14f7fb159f38447c3af42191948cda601f33817063e891e273",
+      "baselineSha256": "8739588cc1d042a1c1240dd2d1b2d20abab6e4197162308edc82b6ea96c26329"
+    },
+    {
+      "name": "trend-destination.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "ef90faf3c4a20ea6177923781ffa77d69544e0537424ffaff84eab3e8496be91",
+      "previousBaselineSha256": null,
+      "baselineSha256": "ef90faf3c4a20ea6177923781ffa77d69544e0537424ffaff84eab3e8496be91"
+    },
+    {
+      "name": "trends-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "350fdd6780eb555f752acd1e4ac1b6630e04674c452cfedca0da2f3a1863581e",
+      "previousBaselineSha256": "2b9be902bb7db24921b89dbf9c326fcb1463cb2d8b888b9db7f077ea69c180e3",
+      "baselineSha256": "350fdd6780eb555f752acd1e4ac1b6630e04674c452cfedca0da2f3a1863581e"
+    },
+    {
+      "name": "trends-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达",
+        "搜索与新建输入边界接入808080，已重新逐张检查"
+      ],
+      "sourceSha256": "41d861aefd461cc9a16f85b041f1af75ed6fa3c86a1ab0e7ecbeec1d7ee51b00",
+      "previousBaselineSha256": "1d0609932890db5a020fa6e535884a2d1dcff2f9944928901bf1e9086a7896e6",
+      "baselineSha256": "41d861aefd461cc9a16f85b041f1af75ed6fa3c86a1ab0e7ecbeec1d7ee51b00"
+    },
+    {
+      "name": "workspace-brand-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "7e27bc1b3c32e163a67754cf23bbdb7e1cf37938830caef47933ee5105ba65ac",
+      "previousBaselineSha256": "228e9746b06d56592b047d810d1577fa9586556664425902f7d0a2d8ea3694ae",
+      "baselineSha256": "7e27bc1b3c32e163a67754cf23bbdb7e1cf37938830caef47933ee5105ba65ac"
+    },
+    {
+      "name": "workspace-brand-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "cb985dd6bc9885b2482f09ddb0a7e73cccfa0b2cf2b4b3125a097dd90b61f6e5",
+      "previousBaselineSha256": "edcdcbf830b333dfb7563fd63364bb5a20df7b9939309c9e513ccd89206563b7",
+      "baselineSha256": "cb985dd6bc9885b2482f09ddb0a7e73cccfa0b2cf2b4b3125a097dd90b61f6e5"
+    },
+    {
+      "name": "workspace-brand-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "66272e0e9666e43d4d61235ed8e0096e3eedac8696fe420423539bab675beca8",
+      "previousBaselineSha256": "19d3b951ece2d92abb7a38e277cf79c2b8df276e9e653823c5455955bb07f35d",
+      "baselineSha256": "66272e0e9666e43d4d61235ed8e0096e3eedac8696fe420423539bab675beca8"
+    },
+    {
+      "name": "workspace-experiment-request-failure.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "8cab1d6f732847beef8e04ab1c26f941cea504fd318ff1066f250a6c1555b714",
+      "previousBaselineSha256": "28bc5db011042855f79b0e5743aeabdfcb2e561a6eb029dd99bf461e8e0eab28",
+      "baselineSha256": "8cab1d6f732847beef8e04ab1c26f941cea504fd318ff1066f250a6c1555b714"
+    },
+    {
+      "name": "workspace-experiments-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "0496228f00ad4993548723ff56e51d269332a49c84e0c4086290324ef64c00b7",
+      "previousBaselineSha256": "8f44f65fa2e98c4d285e8ed93adf53a8206f6004662d5d640f89ab148b252630",
+      "baselineSha256": "0496228f00ad4993548723ff56e51d269332a49c84e0c4086290324ef64c00b7"
+    },
+    {
+      "name": "workspace-experiments-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "eb3da0f89c28540d358a60597178b0e85e3bb540776c1487f16ed0b3c2fa1606",
+      "previousBaselineSha256": "533f45f3d1aeee8e52fa27c214607e173c105a4491548c6ecbf848068e4a6de0",
+      "baselineSha256": "eb3da0f89c28540d358a60597178b0e85e3bb540776c1487f16ed0b3c2fa1606"
+    },
+    {
+      "name": "workspace-experiments-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "88c65d8ba5a1168f8ff00c642c6ab9787ddd7fe69e23ad7ed58d5c8b21b2a2af",
+      "previousBaselineSha256": "4a20293b647eb23bfdb3344dab27dd22de4b3ad0426251e8bcf16afbbe3e207a",
+      "baselineSha256": "88c65d8ba5a1168f8ff00c642c6ab9787ddd7fe69e23ad7ed58d5c8b21b2a2af"
+    },
+    {
+      "name": "workspace-experiments-readonly.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "e93f20ce972a04d107c8a059770037f73659615b0a45a9602f7bb0499972e2dd",
+      "previousBaselineSha256": null,
+      "baselineSha256": "e93f20ce972a04d107c8a059770037f73659615b0a45a9602f7bb0499972e2dd"
+    },
+    {
+      "name": "workspace-patterns-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "c9e4b41e0ffa13e42b9369070bdf53adeb4955233440bddf88f69a7616278624",
+      "previousBaselineSha256": "9d079812c62239e6e5df85fecc91afa62f09ae9657e47cad6ad38f75c1d9fd04",
+      "baselineSha256": "c9e4b41e0ffa13e42b9369070bdf53adeb4955233440bddf88f69a7616278624"
+    },
+    {
+      "name": "workspace-patterns-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "7e78210d3c205189e9885b3a72d34da24ea3f7ed638a0d963447aa320ee69ba5",
+      "previousBaselineSha256": "bec7d6195bef647d20875cbc80fe85fadc2a2f5aa5d297d4bb000b76fea7823e",
+      "baselineSha256": "7e78210d3c205189e9885b3a72d34da24ea3f7ed638a0d963447aa320ee69ba5"
+    },
+    {
+      "name": "workspace-patterns-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "b4513cd707e9398aec3be5af224cf3f5c04def09da500dab1579c31e0d1167cf",
+      "previousBaselineSha256": "746e72bf7fd68b89c6f930b916815ee9f8b0316e8222780ea619b50d99924cca",
+      "baselineSha256": "b4513cd707e9398aec3be5af224cf3f5c04def09da500dab1579c31e0d1167cf"
+    },
+    {
+      "name": "workspace-planning-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "5993549d15459f723738a42d20c6612f6ab020bfa6d8cfaf84436f3e114295b5",
+      "previousBaselineSha256": "5839844bee3211c0150c621e4dc69a9b15712262c9addf6dad2fe6c46d38fd43",
+      "baselineSha256": "5993549d15459f723738a42d20c6612f6ab020bfa6d8cfaf84436f3e114295b5"
+    },
+    {
+      "name": "workspace-planning-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "2ba6edfd4c8b9333a981f022b19797b4585bcb08de5ed6789621d1c6a6bbdff1",
+      "previousBaselineSha256": "52688144850cde004078e134c44970107630c4fceb22947d505c355ade88a33d",
+      "baselineSha256": "2ba6edfd4c8b9333a981f022b19797b4585bcb08de5ed6789621d1c6a6bbdff1"
+    },
+    {
+      "name": "workspace-planning-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "5b8ae8bf3fdacdee7210c064b74468351608ad958b9659558353804d96b88438",
+      "previousBaselineSha256": "31bbec8ad6d4166e6effd2ee253729f6d689b24b55efe21da2f6723004e6b9f2",
+      "baselineSha256": "5b8ae8bf3fdacdee7210c064b74468351608ad958b9659558353804d96b88438"
+    },
+    {
+      "name": "workspace-presentation-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "15d0d496947afc9ced37cd56ec3222d9b804430936d589dce6ac73eba8a814a5",
+      "previousBaselineSha256": "4c3030360e0b65e3f47a1eab1a3f9f6a6f3f45544cbad1061539ffe8ccba111f",
+      "baselineSha256": "15d0d496947afc9ced37cd56ec3222d9b804430936d589dce6ac73eba8a814a5"
+    },
+    {
+      "name": "workspace-presentation-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "f15ad13c451709e8b0dbec109bd4563cabbc746e85d2551f7511252d29ff23fc",
+      "previousBaselineSha256": "31580d86afa73d39017065df85b7151676b2139e82727ab634d49150d56ec6c8",
+      "baselineSha256": "f15ad13c451709e8b0dbec109bd4563cabbc746e85d2551f7511252d29ff23fc"
+    },
+    {
+      "name": "workspace-presentation-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "db3fd55657fc7e8196cfb9b37224cc9fd4e690d682fede8e55c456ea3c9dd26e",
+      "previousBaselineSha256": "17e1d9ad232f20f3d2bef6ace6ebe352373e08e1f43bb6d1cb6ce627e168e5cf",
+      "baselineSha256": "db3fd55657fc7e8196cfb9b37224cc9fd4e690d682fede8e55c456ea3c9dd26e"
+    },
+    {
+      "name": "workspace-samples-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "5fbf804e060e66e2a9fbc2ced2337161f99de19a968bef7e6c920f629016d72a",
+      "previousBaselineSha256": "60ec87ebb5b1209a1bb9738133655335e4373f3e27278eda138a7045835604cf",
+      "baselineSha256": "5fbf804e060e66e2a9fbc2ced2337161f99de19a968bef7e6c920f629016d72a"
+    },
+    {
+      "name": "workspace-samples-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "2065d2389207726f451bc5f067406b7e152129cda7754720db5d6bb3ebcff180",
+      "previousBaselineSha256": "4708bfe8c59dd5591508e9f81a202ba99c807d08f5f50861cb094680d182bab6",
+      "baselineSha256": "2065d2389207726f451bc5f067406b7e152129cda7754720db5d6bb3ebcff180"
+    },
+    {
+      "name": "workspace-samples-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "b9b1fa65192e7a8dac1f6a48e07d0f71d70f8c31eb249a3344e7c9101a72aded",
+      "previousBaselineSha256": "77dc24cfe37d4fe53d5f8361510632c057a5163336f9899c2275bc2b36937fc4",
+      "baselineSha256": "b9b1fa65192e7a8dac1f6a48e07d0f71d70f8c31eb249a3344e7c9101a72aded"
+    },
+    {
+      "name": "workspace-style-image-failure.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "fcb1902771dec24675ce731e0a728e8fc0e1d607009ed8be86ebd8f8bb2c8319",
+      "previousBaselineSha256": "0a0633b398a41b3fbd3f6c80bdaef79a34b39a6d1cd5ae2d4a2cc4ea755324a9",
+      "baselineSha256": "fcb1902771dec24675ce731e0a728e8fc0e1d607009ed8be86ebd8f8bb2c8319"
+    },
+    {
+      "name": "workspace-styles-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "d801d96629b67b3d090a5b6e14e6b236bd9b0c9fe96d4d42affb66c5356918d8",
+      "previousBaselineSha256": "64dc2ff22454a82f9e5ed1f0a703e4b9d398f4a135bfa5c68e10f93387570e54",
+      "baselineSha256": "d801d96629b67b3d090a5b6e14e6b236bd9b0c9fe96d4d42affb66c5356918d8"
+    },
+    {
+      "name": "workspace-styles-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "fb0262737e277b1d4fa6e83711c47e2f45717928e222d58278c120d1727bd671",
+      "previousBaselineSha256": "a06ef2a50833230b56113aabd0195960d90b9c8538e02fa74fe9cc7152cef5a3",
+      "baselineSha256": "fb0262737e277b1d4fa6e83711c47e2f45717928e222d58278c120d1727bd671"
+    },
+    {
+      "name": "workspace-styles-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "caebd5d1a10efc35c463e47becda4fcf42856589c91b9419b36e9564ccbaa60b",
+      "previousBaselineSha256": "f401a0306f0176c4f0a82af19e919446045efd6ccf256c446f1f0638deb20d4c",
+      "baselineSha256": "caebd5d1a10efc35c463e47becda4fcf42856589c91b9419b36e9564ccbaa60b"
+    },
+    {
+      "name": "workspace-task-request-failure.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "fba0eaa58c1f8861766e696569e754144af8b1d0b151d1fb8089805e4011987e",
+      "previousBaselineSha256": null,
+      "baselineSha256": "fba0eaa58c1f8861766e696569e754144af8b1d0b151d1fb8089805e4011987e"
+    },
+    {
+      "name": "workspace-tasks-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "9f87f40efdffb5fb7d62d75fb65c0f5d95b993072d36f0f5d6e9403d70ac2bca",
+      "previousBaselineSha256": "825a0ce0f9eb93f258241464b92d12073a8e860d1aef6c7bb086553601ede53a",
+      "baselineSha256": "9f87f40efdffb5fb7d62d75fb65c0f5d95b993072d36f0f5d6e9403d70ac2bca"
+    },
+    {
+      "name": "workspace-tasks-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "f1026a61544b90c75dc11bf9aac18921b626a0e41252a098c65d467fd212c986",
+      "previousBaselineSha256": "5c46e402d4e84d9067c0486d2c16f17b5c358853c7e77e18b10af83e7ba40674",
+      "baselineSha256": "f1026a61544b90c75dc11bf9aac18921b626a0e41252a098c65d467fd212c986"
+    },
+    {
+      "name": "workspace-tasks-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "f04d181fda512721b9e6ccbe594c000d97d0a984de599a120be2b8871a81c186",
+      "previousBaselineSha256": "c4023066493534a352c78d1e60e54b79acee87b93bc56f9b369b12124670ba0f",
+      "baselineSha256": "f04d181fda512721b9e6ccbe594c000d97d0a984de599a120be2b8871a81c186"
+    },
+    {
+      "name": "workspace-tasks-readonly.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "cd18057a1dc2cec71cab422eefcaad5f13ffd991735b30a293b9f39f69ff9096",
+      "previousBaselineSha256": null,
+      "baselineSha256": "cd18057a1dc2cec71cab422eefcaad5f13ffd991735b30a293b9f39f69ff9096"
+    },
+    {
+      "name": "workspace-team-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "bb3d0c45684b1d97bfe51c9a8b6b491fe1671eb6dbe9cbb132d9a0f8aad69370",
+      "previousBaselineSha256": "ee98785f3090ae7f110e660f47b22d5bbea2279a8ed7bf9d701917d905a7a297",
+      "baselineSha256": "bb3d0c45684b1d97bfe51c9a8b6b491fe1671eb6dbe9cbb132d9a0f8aad69370"
+    },
+    {
+      "name": "workspace-team-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "32ea19fe59a34b3bde2d36ff3b4afd40198f294cea409ef5bc5831e332db44ba",
+      "previousBaselineSha256": "9f12369b15538da4ffd4e5a4fd6a9c5348d5bf24f7471f9b7e293ecfcbc627f6",
+      "baselineSha256": "32ea19fe59a34b3bde2d36ff3b4afd40198f294cea409ef5bc5831e332db44ba"
+    },
+    {
+      "name": "workspace-team-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "e3f2b0251471594b68002df0ba37df559921b75ce9eeab88dc4f559b5a8b9f43",
+      "previousBaselineSha256": "e57ac0bed9b8b04542b395233acbd52f0d47faed43b7912e7669a96d5a1e1cc4",
+      "baselineSha256": "e3f2b0251471594b68002df0ba37df559921b75ce9eeab88dc4f559b5a8b9f43"
+    },
+    {
+      "name": "workspace-tech-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "fe48ff4b9974801ae87664fc7749fc0fb7c7054f1b38143c4c82a75e0258610a",
+      "previousBaselineSha256": "fe4c40d7cde6aa0037c9eed91c6ca90a7a1b78b2e24975f48fd7007027edeab4",
+      "baselineSha256": "fe48ff4b9974801ae87664fc7749fc0fb7c7054f1b38143c4c82a75e0258610a"
+    },
+    {
+      "name": "workspace-tech-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "69895f60a141141d79c3997a98562e8ae833434ac69d381044b3cf67a294e7b0",
+      "previousBaselineSha256": "a4bd5d6d92a725cd9692414ed619494384e8fb3c4cc9afd37b67801eb7fbeb5e",
+      "baselineSha256": "69895f60a141141d79c3997a98562e8ae833434ac69d381044b3cf67a294e7b0"
+    },
+    {
+      "name": "workspace-tech-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "4afcb59dedb170d75bba99c2b0364a439f782167295aa2a68f58cf2909e89a80",
+      "previousBaselineSha256": "7940c82b703250ccb81d0499e697f9f0daa0df397d8f9d435a9872974f6d62c6",
+      "baselineSha256": "4afcb59dedb170d75bba99c2b0364a439f782167295aa2a68f58cf2909e89a80"
+    },
+    {
+      "name": "workspace-tech-readonly.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "17751ed21abba8280d34e11d7759ecf8f69915ac4851d1beb026c63c4416b5d3",
+      "previousBaselineSha256": "7172635f7c218ecdbbd92c94f5380278f3c4c898b555ba283abdc58819acded7",
+      "baselineSha256": "17751ed21abba8280d34e11d7759ecf8f69915ac4851d1beb026c63c4416b5d3"
+    },
+    {
+      "name": "workspace-trends-1280.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "f27be9b82d2f2309b109b78650c7724dedafb3595094071efec9e3ef444501b0",
+      "previousBaselineSha256": "6cdfa7b1a1998019981d57aee06b8441516ee97b54c1718ff94f7a25fad684b5",
+      "baselineSha256": "f27be9b82d2f2309b109b78650c7724dedafb3595094071efec9e3ef444501b0"
+    },
+    {
+      "name": "workspace-trends-1440.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "3516be093bd8b513e62f9bb6719e0dcffb1da88dbb9752c162b95344d492b943",
+      "previousBaselineSha256": "c65dce0ba900b9f91f0529404d88f02f6f66a36115fc2dfc4fbc0f5495d473ba",
+      "baselineSha256": "3516be093bd8b513e62f9bb6719e0dcffb1da88dbb9752c162b95344d492b943"
+    },
+    {
+      "name": "workspace-trends-390.png",
+      "reviewer": "Codex 代理逐张视觉检查",
+      "result": "通过",
+      "checks": [
+        "当前对象与主次动作",
+        "选中和错误文字标识",
+        "图片比例与容器",
+        "字段及操作条可达"
+      ],
+      "sourceSha256": "6f9cee97a97aa0b418aed4734110e3c1698fdb6029681e1b4376a699bcbefeb1",
+      "previousBaselineSha256": "28a918725bd4afbc5d22a0914ce97db114898dc37ec96801aa000dc33b01b9a8",
+      "baselineSha256": "6f9cee97a97aa0b418aed4734110e3c1698fdb6029681e1b4376a699bcbefeb1"
+    }
+  ]
+}

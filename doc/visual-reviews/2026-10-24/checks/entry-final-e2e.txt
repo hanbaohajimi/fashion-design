@@ -1,0 +1,17 @@
+
+Running 8 tests using 1 worker
+
+(node:8524) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8524) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [chromium] › tests\e2e\frontend-experience.spec.ts:105:5 › 趋势读取等待认证完成，空档案与空周报在页面切换后正常恢复 (7.4s)
+  ok 2 [chromium] › tests\e2e\frontend-experience.spec.ts:156:5 › 技术错误显示中文恢复指引，保留重试入口 (710ms)
+  ok 3 [chromium] › tests\e2e\frontend-experience.spec.ts:181:5 › 认证暂时不可用时显示恢复入口，不把失败显示为空档案 (6.8s)
+  ok 4 [chromium] › tests\e2e\frontend-experience.spec.ts:210:5 › 工作室侧栏保留旧链接、未保存保护与手机全部功能入口 (2.8s)
+  ok 5 [chromium] › tests\e2e\frontend-experience.spec.ts:245:5 › 面料规格默认收起，应用后显示条件摘要，空结果可重置 (11.9s)
+  ok 6 [chromium] › tests\e2e\frontend-experience.spec.ts:280:5 › 工作室首屏在各尺寸可直接输入且无横向溢出 (1.8s)
+  ok 7 [chromium] › tests\e2e\frontend-experience.spec.ts:311:5 › 日常任务使用简洁状态反馈，完成后不再提供重复执行 (5.1s)
+  ok 8 [chromium] › tests\e2e\frontend-experience.spec.ts:345:5 › 减少动画与普通模式均保留简洁任务状态，未知节点不显示完成 (3.4s)
+
+  8 passed (41.8s)

@@ -1,0 +1,906 @@
+[
+  {
+    "name": "projects",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 169,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 188.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 538.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "projects",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 257,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 476.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 815.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 449.703125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 84,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 163.59375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 1280,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 660.40625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 488,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 213.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 318,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 1280,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 160,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 326.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 1280,
+    "overflow": false,
+    "firstControlTop": 217.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 611.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 189,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 243.3125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 375,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 375,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 1055.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 847.265625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 479,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 554,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 375,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 455.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 428,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 1133.125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 375,
+    "overflow": false,
+    "firstControlTop": 851.265625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 433.703125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "projects",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 169,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 84,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 163.59375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 1366,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 628.40625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 188.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 488,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 538.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 213.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 318,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 1366,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 160,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 326.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 1366,
+    "overflow": false,
+    "firstControlTop": 217.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 499.703125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "projects",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 169,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 84,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 163.59375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 1440,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 760.40625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 188.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 488,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 538.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 213.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 318,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 1440,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 160,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 326.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 1440,
+    "overflow": false,
+    "firstControlTop": 217.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 589.703125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "projects",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 169,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 84,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 163.59375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 1920,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 940.40625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 188.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 488,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 538.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 213.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 318,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 1920,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 160,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 192,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 326.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 1920,
+    "overflow": false,
+    "firstControlTop": 217.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "login",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 627.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "projects",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 257,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "fabrics",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 189,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "trends",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 243.3125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "invalid-link",
+    "width": 390,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "canvas",
+    "width": 390,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tasks",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 476.296875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-styles",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 1055.796875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-experiments",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 815.1875,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-patterns",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 847.265625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-presentation",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 479,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-brand",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 554,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-planning",
+    "width": 390,
+    "overflow": false,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-tech",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 455.375,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-samples",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 428,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-team",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 1153.125,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  },
+  {
+    "name": "studio-trends",
+    "width": 390,
+    "overflow": false,
+    "firstControlTop": 851.265625,
+    "contrast": [],
+    "smallControls": [],
+    "errors": []
+  }
+]
