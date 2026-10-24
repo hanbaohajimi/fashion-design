@@ -45,7 +45,7 @@ function TaskFeedbackContent({
   completed,
   total,
   compact = false,
-  painting = true,
+  painting = false,
   actions,
 }: TaskFeedbackProps) {
   const active = isTaskActive(status);

@@ -20,6 +20,7 @@ import {
   saveStudioDocument,
 } from "./studio-api";
 import { AssetPicker, SaveBar } from "./studio-ui";
+import { ObjectSwitcher, FormSection } from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import styles from "./studio.module.css";
 
@@ -92,9 +93,6 @@ export function BrandLibrary(
       <div className={styles.recordHeader}>
         <div>
           <h2>品牌资料</h2>
-          <p className={styles.muted}>
-            保存品牌设计规则，以明确版本加入工作流。
-          </p>
         </div>
         {props.canEdit ? (
           <Button
@@ -111,8 +109,50 @@ export function BrandLibrary(
           </Button>
         ) : null}
       </div>
+      <div className={styles.split}>
+        {props.data.brandProfiles.length > 1 ? (
+          <ObjectSwitcher
+            label="切换对象"
+            current={
+              <>
+                切换资料 ·{" "}
+                {existing?.currentRevision.payload.name ?? "新建资料"}
+              </>
+            }
+          >
+            <aside className={styles.rail} aria-label="品牌列表">
+              {props.data.brandProfiles.map((item) => (
+                <Button
+                  aria-pressed={id === item.id}
+                  key={item.id}
+                  onClick={() =>
+                    void (async () => {
+                      if (await props.beforeChange()) setId(item.id);
+                    })()
+                  }
+                >
+                  <strong>{item.currentRevision.payload.name}</strong>
+                  <small>r{item.currentRevision.revision}</small>
+                </Button>
+              ))}
+            </aside>
+          </ObjectSwitcher>
+        ) : null}
+        <BrandEditor
+          key={
+            (existing?.id ?? "new") +
+            ":" +
+            (existing?.version ?? 0) +
+            ":" +
+            draftVersion
+          }
+          {...props}
+          existing={existing}
+          onCreated={setId}
+        />
+      </div>
       {props.canEdit ? (
-        <section className={styles.record}>
+        <FormSection title="共享品牌库" summary="按需从其他有权访问的项目复用">
           <Button loading={busy} onClick={() => void openLibrary()}>
             从其他项目复用品牌资料
           </Button>
@@ -137,45 +177,8 @@ export function BrandLibrary(
               )}
             </div>
           ) : null}
-        </section>
+        </FormSection>
       ) : null}
-      <div className={styles.split}>
-        {props.data.brandProfiles.length > 1 ? (
-          <details className={styles.objectChooser}>
-            <summary>
-              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
-            </summary>
-            <aside className={styles.rail} aria-label="品牌列表">
-              {props.data.brandProfiles.map((item) => (
-                <Button
-                  aria-pressed={id === item.id}
-                  key={item.id}
-                  onClick={() =>
-                    void (async () => {
-                      if (await props.beforeChange()) setId(item.id);
-                    })()
-                  }
-                >
-                  <strong>{item.currentRevision.payload.name}</strong>
-                  <small>r{item.currentRevision.revision}</small>
-                </Button>
-              ))}
-            </aside>
-          </details>
-        ) : null}
-        <BrandEditor
-          key={
-            (existing?.id ?? "new") +
-            ":" +
-            (existing?.version ?? 0) +
-            ":" +
-            draftVersion
-          }
-          {...props}
-          existing={existing}
-          onCreated={setId}
-        />
-      </div>
     </div>
   );
 }
@@ -444,14 +447,19 @@ function BrandEditor({
             onChange={(event) => update("notes", event.target.value)}
           />
         </Field>
-        <AssetPicker
-          compact
-          assets={data.assets}
-          selected={draft.referenceAssetIds}
-          max={12}
-          onChange={(ids) => update("referenceAssetIds", ids)}
-          label="认可的设计案例"
-        />
+        <FormSection
+          title="认可的设计案例"
+          summary={`${draft.referenceAssetIds.length} 张实际参考图`}
+        >
+          <AssetPicker
+            compact
+            assets={data.assets}
+            selected={draft.referenceAssetIds}
+            max={12}
+            onChange={(ids) => update("referenceAssetIds", ids)}
+            label="认可的设计案例"
+          />
+        </FormSection>
       </fieldset>
       <SaveBar
         busy={form.busy}

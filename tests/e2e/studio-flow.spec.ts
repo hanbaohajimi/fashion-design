@@ -378,12 +378,15 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
   await page
     .getByRole("combobox", { name: "图片 1 视图", exact: true })
     .selectOption("front");
+  await page.getByLabel("图片 1 说明", { exact: true }).fill("夹克正面");
+  await page.getByRole("checkbox", { name: /已人工核对图片 1/ }).check();
+  await page
+    .getByRole("button", { name: "图片 2 · 待复核", exact: true })
+    .click();
   await page
     .getByRole("combobox", { name: "图片 2 视图", exact: true })
     .selectOption("back");
-  await page.getByLabel("图片 1 说明", { exact: true }).fill("夹克正面");
   await page.getByLabel("图片 2 说明", { exact: true }).fill("夹克背面");
-  await page.getByRole("checkbox", { name: /已人工核对图片 1/ }).check();
   await page
     .getByRole("button", { name: "核对并完成展示包", exact: true })
     .click();
@@ -405,7 +408,9 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
       ],
     },
   });
-  await expect(page.getByText("已核对", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("r1 · 已核对", { exact: true }).first(),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "导出此修订 PDF", exact: true })
     .first()

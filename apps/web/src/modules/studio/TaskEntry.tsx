@@ -30,6 +30,7 @@ import { importDesignAsset } from "../board/generation/collection-api";
 import { privateFetch } from "../auth/private-fetch";
 import { useRouter } from "next/navigation";
 import { AssetPicker } from "./studio-ui";
+import { ActionBar, FormSection } from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import styles from "./studio.module.css";
 
@@ -395,37 +396,6 @@ export function TaskEntry(
           className={styles.form}
           disabled={!props.canEdit || form.busy || uploading}
         >
-          <div className={styles.taskSource}>
-            <UploadInput
-              aria-label="上传草图或参考图"
-              label="上传草图或参考图"
-              hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void upload(file);
-                event.target.value = "";
-              }}
-            />
-            {assets.length > 0 ? (
-              <AssetPicker
-                compact
-                assets={assets}
-                selected={draft.assetIds}
-                max={
-                  draft.kind === "combine" || draft.kind === "brief" ? 12 : 1
-                }
-                label={
-                  draft.kind === "brief"
-                    ? "可选设计参考"
-                    : "第一张为母图，其余为参考"
-                }
-                onChange={(ids) =>
-                  setDraft((current) => ({ ...current, assetIds: ids }))
-                }
-              />
-            ) : null}
-          </div>
           <div className={styles.taskBrief}>
             <Field label="本次任务">
               <Textarea
@@ -461,25 +431,65 @@ export function TaskEntry(
                 }
               />
             </Field>
-            <Field label="采用品牌资料">
-              <Select
-                value={draft.brandId}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    brandId: event.target.value,
-                  }))
+            <FormSection
+              title="品牌关联"
+              summary={
+                draft.brandId
+                  ? `已关联：${props.data.brandProfiles.find((item) => item.id === draft.brandId)?.currentRevision.payload.name ?? "当前品牌"}`
+                  : "未关联品牌"
+              }
+            >
+              <Field label="采用品牌资料">
+                <Select
+                  value={draft.brandId}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      brandId: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">本次不关联品牌</option>
+                  {props.data.brandProfiles.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.currentRevision.payload.name} · r
+                      {item.currentRevision.revision}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </FormSection>
+          </div>
+          <div className={styles.taskSource}>
+            <UploadInput
+              aria-label="上传草图或参考图"
+              label="上传草图或参考图"
+              hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = "";
+              }}
+            />
+            {assets.length > 0 ? (
+              <AssetPicker
+                compact
+                assets={assets}
+                selected={draft.assetIds}
+                max={
+                  draft.kind === "combine" || draft.kind === "brief" ? 12 : 1
                 }
-              >
-                <option value="">本次不关联品牌</option>
-                {props.data.brandProfiles.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.currentRevision.payload.name} · r
-                    {item.currentRevision.revision}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+                label={
+                  draft.kind === "brief"
+                    ? "可选设计参考"
+                    : "第一张为母图，其余为参考"
+                }
+                onChange={(ids) =>
+                  setDraft((current) => ({ ...current, assetIds: ids }))
+                }
+              />
+            ) : null}
           </div>
         </fieldset>
         <div className={styles.note}>
@@ -488,7 +498,7 @@ export function TaskEntry(
             : "将发起一次图片生成任务，成功后按现有额度规则计次。结果保留来源、修改要求和使用的品牌资料修订。"}
           图像中的尺寸和面料物性仍需人工确认。
         </div>
-        <div className={styles.actions}>
+        <ActionBar status={<span>完成后在画布查看进度和结果。</span>}>
           <Button
             type="submit"
             variant="primary"
@@ -497,8 +507,7 @@ export function TaskEntry(
           >
             {form.busy ? "正在提交…" : uploading ? "正在上传…" : submitLabel}
           </Button>
-          <small className={styles.muted}>完成后在画布查看进度和结果。</small>
-        </div>
+        </ActionBar>
       </div>
     </form>
   );

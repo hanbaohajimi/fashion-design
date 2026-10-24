@@ -18,6 +18,7 @@ import {
   ImagePreview,
 } from "../../components/ui";
 import styles from "./trend-brief.module.css";
+import { ActionBar, FormSection } from "../../components/workspace-ui";
 export function buildTrendBrief(
   goal: string,
   articles: readonly TrendItem[],
@@ -252,21 +253,30 @@ export function TrendBriefPanel({
               onChange={(event) => setGoal(event.target.value)}
             />
           </label>
-          <label>
-            采用的品牌资料
-            <Select
-              disabled={!canEdit || busy}
-              value={brandId}
-              onChange={(event) => setBrandId(event.target.value)}
-            >
-              <option value="">本次不指定品牌规则</option>
-              {brands.map((brand) => (
-                <option key={brand.id} value={brand.id}>
-                  {brand.currentRevision.payload.name} · 修订 {brand.version}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <FormSection
+            title="品牌关联"
+            summary={
+              brandId
+                ? `已关联：${brands.find((brand) => brand.id === brandId)?.currentRevision.payload.name ?? "当前品牌"}`
+                : "未关联品牌"
+            }
+          >
+            <label>
+              采用的品牌资料
+              <Select
+                disabled={!canEdit || busy}
+                value={brandId}
+                onChange={(event) => setBrandId(event.target.value)}
+              >
+                <option value="">本次不指定品牌规则</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.currentRevision.payload.name} · 修订 {brand.version}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </FormSection>
           <label>
             本轮探索方向，每行一个
             <Textarea
@@ -283,9 +293,11 @@ export function TrendBriefPanel({
             <pre>{text}</pre>
           </details>
           {canEdit ? (
-            <Button type="submit" variant="primary" loading={busy}>
-              存入工作流
-            </Button>
+            <ActionBar status="仅保存简报，不生成图片。">
+              <Button type="submit" variant="primary" loading={busy}>
+                存入工作流
+              </Button>
+            </ActionBar>
           ) : null}
           {notice ? (
             <p role="status">

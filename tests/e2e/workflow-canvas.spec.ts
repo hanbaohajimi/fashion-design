@@ -1190,8 +1190,8 @@ for (const savedTheme of [null, "dark", "system"] as const) {
       await expect(page.locator("[data-workflow-edge]")).toHaveCount(11);
       await expect(page.getByRole("application", { name: "tldraw" })).toHaveClass(/\btl-theme__light\b/);
       await expect(page.locator(".tl-theme__dark")).toHaveCount(0);
-      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(233, 230, 223)");
-      await expect(page.locator("main")).toHaveCSS("color", "rgb(31, 29, 26)");
+      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(250, 250, 250)");
+      await expect(page.locator("main")).toHaveCSS("color", "rgb(24, 24, 24)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       await expect(page.locator("[data-theme]")).toHaveCount(0);
       expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe(savedTheme);
@@ -1216,7 +1216,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
+      await expect(page.locator("main")).toHaveCSS("background-color", "rgb(245, 245, 245)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       const back = page.getByRole("link", { name: "返回设计画布", exact: true });
@@ -1226,7 +1226,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     await page.reload();
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(241, 239, 234)");
+    await expect(page.locator("main")).toHaveCSS("background-color", "rgb(245, 245, 245)");
     await page.getByRole("link", { name: "返回设计画布", exact: true }).click();
     await expectLightCanvas();
   });

@@ -45,7 +45,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--control-height);
-  color: var(--color-signal);
+  color: var(--color-action);
   text-underline-offset: 4px;
 }
 .card button {
@@ -53,12 +53,12 @@
   border: 0;
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-4);
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-on-inverse);
   font: inherit;
   cursor: pointer;
 }
 .card :is(button, a):focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }

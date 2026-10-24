@@ -239,9 +239,7 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
   ).toHaveCount(11);
   await page.getByLabel("当前功能", { exact: true }).selectOption("tech");
   await expect(page).toHaveURL(/tab=tech/);
-  await expect(
-    page.getByRole("heading", { name: "技术包", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^技术包 ·/ })).toBeVisible();
 });
 
 test("面料规格默认收起，应用后显示条件摘要，空结果可重置", async ({ page }) => {
@@ -263,8 +261,11 @@ test("面料规格默认收起，应用后显示条件摘要，空结果可重�
   await page.getByRole("button", { name: "应用筛选", exact: true }).click();
   const summary = page
     .locator("summary")
-    .filter({ hasText: "规格筛选 · 成分：棉" });
+    .filter({ hasText: "规格筛选 · 1 项已启用" });
   await expect(summary).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "移除成分筛选" }),
+  ).toContainText("棉");
   await expect(
     page.getByText("没有符合当前规格的面料", { exact: false }),
   ).toBeVisible();
@@ -307,9 +308,7 @@ test("工作室首屏在各尺寸可直接输入且无横向溢出", async ({ pa
   }
 });
 
-test("绘画只在查看长任务时播放，暂停不改变任务，完成立即释放媒体", async ({
-  page,
-}) => {
+test("日常任务使用简洁状态反馈，完成后不再提供重复执行", async ({ page }) => {
   const graph = await mockWorkspace(page);
   const media: string[] = [];
   page.on("request", (request) => {
@@ -325,30 +324,14 @@ test("绘画只在查看长任务时播放，暂停不改变任务，完成立�
     page.getByRole("region", { name: "任务状态", exact: true }),
   ).toBeVisible();
   expect(media).toEqual([]);
-  await expect(page.locator("video")).toHaveCount(1, { timeout: 8000 });
-  await expect
-    .poll(() =>
-      page
-        .locator("video")
-        .evaluate(
-          (element: HTMLVideoElement) =>
-            element.readyState >= 2 && element.currentTime > 0,
-        ),
-    )
-    .toBe(true);
-  await page.getByRole("button", { name: "暂停动画" }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "任务状态", exact: true })
+      .getByRole("status"),
+  ).toContainText("处理中");
+  await expect(page.locator("video")).toHaveCount(0);
+  expect(media).toEqual([]);
   expect(graph.nodes[1]?.status).toBe("running");
-  await expect
-    .poll(() =>
-      page
-        .locator("video")
-        .evaluate((element: HTMLVideoElement) => element.paused),
-    )
-    .toBe(true);
-  await page.getByRole("button", { name: "播放动画" }).click();
-  await page.screenshot({
-    path: "output/playwright/frontend-experience/painting-task.png",
-  });
   const running = graph.nodes[1];
   if (running) running.status = "completed";
   graph.revision++;
@@ -359,7 +342,7 @@ test("绘画只在查看长任务时播放，暂停不改变任务，完成立�
   ).toHaveCount(0);
 });
 
-test("减少动画与媒体故障均保留任务状态，未知节点不显示完成", async ({
+test("减少动画与普通模式均保留简洁任务状态，未知节点不显示完成", async ({
   page,
 }) => {
   await mockWorkspace(page, "unrecognized");
@@ -373,16 +356,14 @@ test("减少动画与媒体故障均保留任务状态，未知节点不显示�
   await mockWorkspace(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload();
+  const indicator = page
+    .locator('[data-type="generate_design"] [class*="toolStatus"] > span')
+    .first();
+  await expect(indicator).toHaveCSS("animation-name", "none");
   await page.locator('[data-type="generate_design"]').first().dblclick();
-  await expect(page.getByRole("button", { name: "关于等待动画" })).toBeVisible({
-    timeout: 8000,
-  });
   await expect(page.locator("video")).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await expect(page.locator("video")).toHaveCount(1);
-  await page
-    .locator("video")
-    .evaluate((video) => video.dispatchEvent(new Event("error")));
+  await expect(indicator).not.toHaveCSS("animation-name", "none");
   await expect(page.locator("video")).toHaveCount(0);
   await expect(
     page

@@ -35,6 +35,8 @@
   background: var(--color-paper);
   border: 0;
   border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: 0;
 }
 .form label {
   display: grid;
@@ -54,6 +56,56 @@
   line-height: 1.7;
   color: var(--color-ink-secondary);
   margin: 0;
+}
+.configurationForm {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: var(--color-paper);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.configurationActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.batchSelector {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+.item[data-status="failed"],
+.item[data-status="not_admitted"] {
+  border-color: var(--color-error);
+}
+.item[data-status="failed"] .preview > span,
+.item[data-status="not_admitted"] .preview > span {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  color: var(--color-error);
+}
+@media (min-width: 1024px) and (min-height: 640px) {
+  .workspace {
+    height: calc(100dvh - 200px);
+    align-items: stretch;
+  }
+  .configuration,
+  .configurationForm {
+    height: 100%;
+    min-height: 0;
+  }
+  .configurationForm > .form {
+    overflow-y: auto;
+    align-content: start;
+  }
+  .results {
+    overflow-y: auto;
+    padding-right: var(--space-1);
+  }
 }
 .wide {
   grid-column: 1/-1;
@@ -110,6 +162,7 @@
 .matrix {
   display: grid;
   gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
 }
 .item {
   overflow: hidden;
@@ -178,14 +231,19 @@
 }
 .empty,
 .skeleton {
-  padding: 40px;
-  border: 1px dashed var(--color-border);
+  padding: var(--space-10);
+  min-height: 320px;
+  display: grid;
+  place-content: center;
+  background: var(--color-paper);
+  border: 0;
+  border-radius: var(--radius-lg);
   text-align: center;
   line-height: 1.7;
 }
 .form :focus-visible,
 .itemBody a:focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 @media (max-width: 760px) {
@@ -197,9 +255,6 @@
   .batchHeading {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .matrix {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -243,22 +298,6 @@
   min-height: 0;
   min-width: 0;
   object-fit: contain;
-}
-.form {
-  padding: var(--space-4);
-  margin: 0;
-}
-.empty,
-.skeleton {
-  min-height: 320px;
-  display: grid;
-  place-content: center;
-  background: var(--color-paper);
-  border: 0;
-  border-radius: var(--radius-lg);
-}
-.matrix {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
 }
 @media (max-width: 1100px) {
   .workspace {

@@ -183,11 +183,11 @@
 }
 
 .edgeToolbar button:hover {
-  color: var(--swatch-indigo);
+  color: var(--color-selection-ink);
 }
 
 .edgeToolbar button:focus-visible {
-  outline: 2px solid var(--swatch-indigo);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 4px;
 }
 

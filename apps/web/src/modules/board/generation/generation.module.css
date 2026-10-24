@@ -30,7 +30,7 @@
 }
 
 .generationNotice button:focus-visible {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -82,7 +82,7 @@
   width: 48px;
   border-left: 1px solid var(--color-ink);
   font-size: var(--text-lg);
-  font-weight: 500;
+  font-weight: 400;
   place-items: center;
 }
 
@@ -160,13 +160,13 @@
 }
 
 .candidateActions button:first-child {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 
 .candidateActions button:hover {
-  background: var(--color-signal);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .candidateMenu {
@@ -185,12 +185,12 @@
 }
 
 .candidateMenu > button:hover {
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
 .candidateMenu > button[aria-expanded="true"] {
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
@@ -260,7 +260,7 @@
 .localEdit > button {
   border: 0;
   border-left: 1px solid var(--color-ink);
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -337,7 +337,7 @@
 
 .lightbox nav button:hover,
 .lightbox nav button[aria-pressed="true"] {
-  background: var(--color-ink);
+  background: var(--color-selection-bg);
   color: var(--color-paper);
 }
 
@@ -349,7 +349,7 @@
   background: var(--color-error-bg);
   color: var(--color-error);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .lightboxPreview {
@@ -583,7 +583,9 @@
 }
 .pathDecisionActions button:disabled {
   cursor: wait;
-  opacity: 0.6;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 .pathDecision li {
   margin: var(--space-2) 0;
@@ -632,7 +634,7 @@
   max-width: 12ch;
   margin: var(--space-2) 0 0;
   font-size: clamp(1.7rem, 3vw, 2.7rem);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.05em;
   line-height: 0.98;
 }
@@ -659,7 +661,7 @@
 .variationControl input,
 .inpaintControls input[type="range"] {
   width: 100%;
-  accent-color: var(--color-signal);
+  accent-color: var(--color-action);
 }
 
 .variationControl small,
@@ -673,7 +675,7 @@
 .inpaintSubmit {
   min-height: var(--control-height-touch);
   border: 1px solid var(--color-ink);
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
   cursor: pointer;
   font-size: var(--text-sm);
@@ -684,7 +686,9 @@
 .inpaintSubmit:disabled,
 .maskActions button:disabled {
   cursor: not-allowed;
-  opacity: 0.48;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .inpaintLayout {
@@ -760,7 +764,7 @@
 
 .inpaintControls > div:first-child strong {
   font-size: var(--text-2xl);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.04em;
 }
 
@@ -827,7 +831,7 @@
 }
 
 .paletteToggle input:checked {
-  background: var(--color-signal);
+  background: var(--color-action);
 }
 
 .paletteToggle input:checked::after {
@@ -837,7 +841,9 @@
 
 .paletteToggle input:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .paletteToggle input:focus-visible,
@@ -845,7 +851,7 @@
 .inpaintSubmit:focus-visible,
 .maskActions button:focus-visible,
 .inpaintControls textarea:focus-visible {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -904,7 +910,9 @@
 
 .paletteChoice:has(input:disabled) {
   cursor: not-allowed;
-  opacity: 0.55;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .palettePreview {
@@ -936,7 +944,7 @@
 }
 
 .paletteChoice b {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
 }
@@ -944,7 +952,9 @@
 .inpaintControls textarea:disabled,
 .inpaintControls input[type="range"]:disabled {
   cursor: wait;
-  opacity: 0.55;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .maskActions {
@@ -970,7 +980,7 @@
   margin: 0;
   color: var(--color-error);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -1115,8 +1125,8 @@
 .versionTimeline li > button:hover,
 .versionMore:hover,
 .versionEmpty button:hover {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .versionTimeline li > button:active,
@@ -1128,7 +1138,9 @@
 .versionTimeline li > button:disabled,
 .versionMore:disabled {
   cursor: not-allowed;
-  opacity: 0.46;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .versionSkeleton {
@@ -1166,7 +1178,7 @@
   padding: 10px 0;
   color: var(--color-error);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .versionMore {
@@ -1270,8 +1282,8 @@
 }
 
 .collectionHeader button:hover {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .saveIndicator {
@@ -1337,14 +1349,14 @@
 }
 
 .collectionHeroFallback span {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 22px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .collectionHeroFallback small {
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .collectionHero > div {
@@ -1357,7 +1369,7 @@
 .collectionHero strong {
   max-width: none;
   font-size: var(--text-xl);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.04em;
   line-height: 1.02;
 }
@@ -1380,7 +1392,7 @@
   padding: 9px 14px;
   background: var(--color-error-bg);
   color: var(--color-error);
-  font-weight: 700;
+  font-weight: 600;
   gap: var(--space-3);
 }
 
@@ -1399,7 +1411,9 @@
 
 .collectionInlineError button:disabled {
   cursor: wait;
-  opacity: 0.58;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .dnaCard {
@@ -1442,7 +1456,7 @@
 .dnaSection h3 {
   margin: 0;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.035em;
 }
 
@@ -1458,7 +1472,7 @@
 }
 
 .dnaSection > header button[aria-pressed="true"] {
-  background: var(--color-ink);
+  background: var(--color-selection-bg);
   color: var(--color-paper);
 }
 
@@ -1529,14 +1543,16 @@
 .paletteRow button:hover,
 .dnaAdd:hover,
 .collectionError button:hover {
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
 .paletteRow button:disabled,
 .dnaAdd:disabled {
   cursor: not-allowed;
-  opacity: 0.38;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .dnaAdd {
@@ -1552,7 +1568,7 @@
 .dnaTextarea > span {
   color: var(--color-ink-secondary);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .dnaTextarea textarea {
@@ -1570,8 +1586,8 @@
 }
 
 .dnaTextarea textarea:focus {
-  border-color: var(--color-signal);
-  box-shadow: inset 3px 0 0 var(--color-signal);
+  border-color: var(--color-action);
+  box-shadow: inset 3px 0 0 var(--color-action);
 }
 
 .dnaTextarea textarea:disabled {
@@ -1608,7 +1624,7 @@
 .sourceGarmentEditor h3 {
   margin: 0;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .sourceGarmentEditor > div {
@@ -1640,8 +1656,8 @@
 
 .sourceGarmentEditor :is(select, input):focus,
 .lookGenerator :is(select, input):focus {
-  border-color: var(--color-signal);
-  box-shadow: inset 3px 0 0 var(--color-signal);
+  border-color: var(--color-action);
+  box-shadow: inset 3px 0 0 var(--color-action);
 }
 
 .sourceGarmentEditor > small,
@@ -1656,7 +1672,7 @@
 
 .sourceGarmentEditor > p {
   color: var(--color-error);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .lookGenerator {
@@ -1675,7 +1691,7 @@
   border: 1px solid var(--color-ink);
   border-radius: 0;
   padding: 0 18px;
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
   cursor: pointer;
   font: inherit;
@@ -1685,7 +1701,9 @@
 
 .lookGenerator button:disabled {
   cursor: not-allowed;
-  opacity: 0.52;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .lookLab,
@@ -1723,7 +1741,7 @@
 .consistencyOverview h2 {
   margin: 0;
   font-size: 27px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.045em;
 }
 
@@ -1776,7 +1794,7 @@
 }
 
 .axisSelector label[data-selected="true"] {
-  background: var(--color-ink);
+  background: var(--color-selection-bg);
   color: var(--color-paper);
 }
 
@@ -1811,7 +1829,7 @@
   background: var(--color-error-bg);
   color: var(--color-error);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .lookGrid {
@@ -1873,7 +1891,7 @@
 .lookPending i {
   width: 28px;
   height: 28px;
-  border: 1px solid var(--color-signal);
+  border: 1px solid var(--color-action);
   animation: task-breathe 1.1s ease-in-out infinite;
 }
 
@@ -2025,7 +2043,7 @@
 
 .collectionError strong {
   font-size: var(--text-xl);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .collectionError button {
@@ -2087,7 +2105,7 @@
 
 .taskTray li[data-status="queued"] > i,
 .taskTray li[data-status="running"] > i {
-  background: var(--color-signal);
+  background: var(--color-action);
   animation: task-breathe 1.2s ease-in-out infinite;
 }
 
@@ -2125,7 +2143,7 @@
 .taskTray li small {
   color: var(--color-error);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -2145,7 +2163,7 @@
 }
 
 .taskTray li > button:hover {
-  background: var(--color-ink);
+  background: var(--color-overlay);
   color: var(--color-on-inverse);
 }
 
@@ -2201,8 +2219,8 @@
 }
 
 .exportModal > header button:hover:not(:disabled) {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .exportLayout {
@@ -2226,7 +2244,7 @@
   background: var(--color-scrim);
   color: var(--color-paper);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2286,7 +2304,7 @@
 }
 
 .exportUpgrade {
-  border-left: 3px solid var(--color-signal);
+  border-left: 3px solid var(--color-action);
   padding: 7px 9px;
   background: var(--color-warning-bg);
   color: var(--color-error);
@@ -2330,7 +2348,7 @@
 .exportLoading > i {
   width: 8px;
   height: 8px;
-  background: var(--color-signal);
+  background: var(--color-action);
   animation: task-breathe 1.2s ease-in-out infinite;
 }
 
@@ -2360,7 +2378,7 @@
 .exportProgress small {
   color: var(--color-ink-tertiary);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .exportError {
@@ -2393,7 +2411,7 @@
 .exportActions button,
 .exportActions a {
   min-height: 48px;
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
@@ -2408,7 +2426,7 @@
 .collectionDrawer :where(button, input, textarea, a, summary):focus-visible,
 .taskTray button:focus-visible,
 .exportModal :where(button, input, textarea, a, summary):focus-visible {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -2417,7 +2435,7 @@
 }
 
 .axisSelector label:has(input:focus-visible) {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 

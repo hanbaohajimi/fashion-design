@@ -53,14 +53,14 @@
   white-space: nowrap;
 }
 .nav a[aria-current="page"] {
-  color: var(--color-signal);
+  color: var(--color-selection-border);
   font-weight: 600;
 }
 .nav a[aria-current="page"]::after {
   content: "";
   position: absolute;
   height: 2px;
-  background: var(--color-signal);
+  background: var(--color-selection-border);
   bottom: 0;
   left: 0;
   right: 0;
@@ -101,7 +101,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--control-height);
-  color: var(--color-signal);
+  color: var(--color-action);
   text-decoration: none;
   white-space: nowrap;
 }

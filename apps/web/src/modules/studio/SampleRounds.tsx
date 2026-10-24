@@ -29,6 +29,11 @@ import { importDesignAsset } from "../board/generation/collection-api";
 import { saveStudioDocument } from "./studio-api";
 import { AssetPicker, SaveBar, type StudioAsset } from "./studio-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
+import {
+  ObjectSwitcher,
+  FormSection,
+  revealInvalidField,
+} from "../../components/workspace-ui";
 import { AssetAnchor } from "./AssetAnchor";
 import styles from "./studio.module.css";
 
@@ -84,9 +89,6 @@ export function SampleRounds(
       <div className={styles.recordHeader}>
         <div>
           <h2>样衣反馈</h2>
-          <p className={styles.muted}>
-            问题绑定照片、锚点与技术包修订；修改完成后继续复核。
-          </p>
         </div>
         <Button
           disabled={!props.canEdit}
@@ -105,10 +107,15 @@ export function SampleRounds(
       </div>
       <div className={styles.split}>
         {props.data.samples.length > 1 ? (
-          <details className={styles.objectChooser}>
-            <summary>
-              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
-            </summary>
+          <ObjectSwitcher
+            label="切换对象"
+            current={
+              <>
+                切换资料 ·{" "}
+                {existing?.currentRevision.payload.name ?? "新建资料"}
+              </>
+            }
+          >
             <aside className={styles.rail}>
               {props.data.samples.map((item) => {
                 const sample = item.currentRevision.payload as Sample;
@@ -139,7 +146,7 @@ export function SampleRounds(
                 );
               })}
             </aside>
-          </details>
+          </ObjectSwitcher>
         ) : null}
         <SampleEditor
           key={
@@ -195,6 +202,14 @@ function SampleEditor({
       });
   const form = useStudioForm(initial, onDirty);
   const { draft, setDraft } = form;
+  const [selectedIssueId, setSelectedIssueId] = useState(
+    initial.issues[0]?.id ?? "",
+  );
+  const currentIssueId = draft.issues.some(
+    (issue) => issue.id === selectedIssueId,
+  )
+    ? selectedIssueId
+    : draft.issues[0]?.id;
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<StudioAsset[]>([]);
   const assets = [
@@ -300,6 +315,17 @@ function SampleEditor({
   return (
     <form
       className={styles.form}
+      onInvalidCapture={(event) =>
+        revealInvalidField(event, () =>
+          setSelectedIssueId(
+            (event.target as HTMLElement).closest<HTMLElement>(
+              "[data-sample-issue]",
+            )?.dataset.sampleIssue ??
+              currentIssueId ??
+              "",
+          ),
+        )
+      }
       onSubmit={(event) => {
         event.preventDefault();
         void save();
@@ -377,24 +403,32 @@ function SampleEditor({
             }}
           />
         </Field>
-        <AssetPicker
-          assets={assets}
-          selected={draft.photoAssetIds}
-          max={30}
-          label="本轮照片"
-          onChange={(ids) => {
-            const removed = draft.photoAssetIds.filter(
-              (id) => !ids.includes(id),
-            );
-            if (draft.issues.some((issue) => removed.includes(issue.assetId))) {
-              form.setError(
-                "这张照片上仍有问题记录。请先修改问题的关联照片或移除问题。",
+        <FormSection
+          title="本轮照片"
+          summary={`${draft.photoAssetIds.length} 张 · 上传和选择不改变问题坐标`}
+          defaultOpen={!draft.photoAssetIds.length}
+        >
+          <AssetPicker
+            assets={assets}
+            selected={draft.photoAssetIds}
+            max={30}
+            label="本轮照片"
+            onChange={(ids) => {
+              const removed = draft.photoAssetIds.filter(
+                (id) => !ids.includes(id),
               );
-              return;
-            }
-            update("photoAssetIds", ids);
-          }}
-        />
+              if (
+                draft.issues.some((issue) => removed.includes(issue.assetId))
+              ) {
+                form.setError(
+                  "这张照片上仍有问题记录。请先修改问题的关联照片或移除问题。",
+                );
+                return;
+              }
+              update("photoAssetIds", ids);
+            }}
+          />
+        </FormSection>
         <section className={styles.section}>
           <div className={styles.recordHeader}>
             <h3>问题记录</h3>
@@ -402,11 +436,13 @@ function SampleEditor({
               disabled={
                 !draft.photoAssetIds.length || draft.issues.length >= 100
               }
-              onClick={() =>
+              onClick={() => {
+                const issueId = crypto.randomUUID();
+                setSelectedIssueId(issueId);
                 update("issues", [
                   ...draft.issues,
                   {
-                    id: crypto.randomUUID(),
+                    id: issueId,
                     assetId: draft.photoAssetIds[0] ?? "",
                     x: 0.5,
                     y: 0.5,
@@ -415,14 +451,32 @@ function SampleEditor({
                     status: "OPEN",
                     resolution: "",
                   },
-                ])
-              }
+                ]);
+              }}
             >
               添加问题
             </Button>
           </div>
+          <nav className={styles.issueNavigation} aria-label="样衣问题切换">
+            {draft.issues.map((issue, index) => (
+              <Button
+                key={issue.id}
+                aria-pressed={currentIssueId === issue.id}
+                onClick={() => setSelectedIssueId(issue.id)}
+              >
+                问题 {index + 1} ·{" "}
+                {issue.status === "VERIFIED"
+                  ? "已复核"
+                  : issue.status === "FIXED"
+                    ? "待复核"
+                    : "待处理"}
+              </Button>
+            ))}
+          </nav>
           {draft.issues.map((issue, index) => (
             <fieldset
+              data-sample-issue={issue.id}
+              hidden={currentIssueId !== issue.id}
               className={`${styles.record} ${styles.issueRecord}`}
               disabled={
                 issue.status === "VERIFIED" && !data.capabilities.review

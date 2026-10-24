@@ -34,14 +34,14 @@
 .eyebrow {
   color: var(--color-ink-tertiary);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.16em;
 }
 
 .header h2 {
   margin: 4px 0;
   font-size: var(--text-xl);
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -0.03em;
 }
 
@@ -78,7 +78,9 @@
 .headerActions button:disabled,
 .importButton:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .canvas {
@@ -147,12 +149,12 @@
   flex: none;
   margin-left: auto;
   border-color: var(--color-ink-secondary);
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-on-inverse);
 }
 
 .importButton:hover:not(:disabled) {
-  background: var(--color-signal-hover);
+  background: var(--color-action-hover);
 }
 
 @media (max-width: 720px) {

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui";
 import { privateFetch } from "../auth/private-fetch";
+import styles from "./studio.module.css";
 interface ExportTask {
   id: string;
   status: string;
@@ -42,6 +43,7 @@ export function TechPackExportButton(props: {
   revisionId: string;
   sourceType?: "tech_pack" | "presentation_set";
   primary?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <RevisionExport
@@ -61,11 +63,13 @@ function RevisionExport({
   revisionId,
   sourceType = "tech_pack",
   primary = false,
+  disabled = false,
 }: {
   projectId: string;
   revisionId: string;
   sourceType?: "tech_pack" | "presentation_set";
   primary?: boolean;
+  disabled?: boolean;
 }) {
   const [task, setTask] = useState<ExportTask | null>(null);
   const [restoring, setRestoring] = useState(true);
@@ -177,12 +181,14 @@ function RevisionExport({
     }
   };
   const waiting = !!task && ["queued", "running"].includes(task.status);
+  const canDownload =
+    task?.status === "succeeded" && !!task.downloadUrl && !disabled;
   return (
     <div>
       <Button
-        variant={primary ? "primary" : "secondary"}
+        variant={primary && !canDownload ? "primary" : "secondary"}
         loading={busy || restoring}
-        disabled={waiting}
+        disabled={waiting || disabled}
         onClick={() => {
           if (task && ["failed", "expired"].includes(task.status))
             key.current = null;
@@ -197,9 +203,13 @@ function RevisionExport({
           ，离开页面后仍会继续。
         </p>
       ) : null}
-      {task?.downloadUrl ? (
+      {canDownload ? (
         <p>
-          <a href={task.downloadUrl} download>
+          <a
+            className={primary ? styles.downloadAction : styles.link}
+            href={task.downloadUrl ?? undefined}
+            download
+          >
             下载已生成的
             {sourceType === "presentation_set" ? "展示包" : "技术包"} PDF
           </a>
@@ -215,7 +225,7 @@ function RevisionExport({
           {!waiting ? (
             <Button
               type="button"
-              disabled={busy || restoring}
+              disabled={busy || restoring || disabled}
               onClick={() => void submit()}
             >
               重试导出

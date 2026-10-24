@@ -63,22 +63,19 @@ export function CollaborationPanel(
   }, [memberDirty, reviewDirty, onDirty]);
   return (
     <div className={styles.section}>
-      <div>
-        <h2>团队评审</h2>
-        <p className={styles.muted}>
-          批注与审批绑定明确修订。后续修改需要重新评审。
-        </p>
+      <div className={`${styles.recordHeader} ${styles.reviewHeader}`}>
+        <h2 title="批注与审批绑定明确修订。后续修改需要重新评审。">团队评审</h2>
+        <Tabs
+          id={tabsId}
+          label="团队工作"
+          value={section}
+          options={[
+            { value: "review", label: "修订评审" },
+            { value: "members", label: "成员管理" },
+          ]}
+          onChange={setSection}
+        />
       </div>
-      <Tabs
-        id={tabsId}
-        label="团队工作"
-        value={section}
-        options={[
-          { value: "review", label: "修订评审" },
-          { value: "members", label: "成员管理" },
-        ]}
-        onChange={setSection}
-      />
       <TabPanel
         tabsId={tabsId}
         value="review"
@@ -315,6 +312,9 @@ function ReviewForm({
   };
   const form = useStudioForm(initial, onDirty);
   const { draft, setDraft } = form;
+  const [reviewMode, setReviewMode] = useState<"comment" | "decision">(
+    data.capabilities.edit ? "comment" : "decision",
+  );
   const targetOptions =
     draft.targetType === "STYLE"
       ? data.styles.flatMap((style) =>
@@ -393,7 +393,6 @@ function ReviewForm({
   );
   return (
     <section className={styles.section}>
-      <h3>修订批注与审批</h3>
       <div className={styles.formGrid}>
         <Field label="资料类型">
           <Select
@@ -570,9 +569,26 @@ function ReviewForm({
                   ) : null}
                 </>
               ) : null}
+              {data.capabilities.edit && data.capabilities.review ? (
+                <div className={styles.toolbar} aria-label="评审操作模式">
+                  <Button
+                    aria-pressed={reviewMode === "comment"}
+                    onClick={() => setReviewMode("comment")}
+                  >
+                    编辑批注
+                  </Button>
+                  <Button
+                    aria-pressed={reviewMode === "decision"}
+                    onClick={() => setReviewMode("decision")}
+                  >
+                    审批修订
+                  </Button>
+                </div>
+              ) : null}
               <div className={styles.toolbar}>
                 <Button
                   type="submit"
+                  variant={reviewMode === "comment" ? "primary" : "secondary"}
                   loading={form.busy}
                   disabled={!draft.targetRevisionId}
                 >
@@ -581,7 +597,9 @@ function ReviewForm({
                 {data.capabilities.review ? (
                   <>
                     <Button
-                      variant="primary"
+                      variant={
+                        reviewMode === "decision" ? "primary" : "secondary"
+                      }
                       loading={form.busy}
                       disabled={!draft.targetRevisionId}
                       onClick={() => void post("APPROVED")}

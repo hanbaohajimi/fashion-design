@@ -20,6 +20,11 @@ import {
 } from "../../components/ui";
 import { saveStudioDocument, techPackExportUrl } from "./studio-api";
 import { SaveBar } from "./studio-ui";
+import {
+  EditorChapters,
+  ObjectSwitcher,
+  revealInvalidField,
+} from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import { BomTable, PomTable } from "./TechPackTables";
 import { AssetAnchor } from "./AssetAnchor";
@@ -37,11 +42,17 @@ export function TechPackEditor(
   return (
     <div className={styles.section}>
       <div className={styles.recordHeader}>
-        <div>
-          <h2>技术包</h2>
-          <p className={styles.muted}>
-            把视图、工艺和人工规格整理为可复核、可导出的版本。
-          </p>
+        <div className={styles.row}>
+          <h2>
+            技术包 · {existing?.currentRevision.payload.name ?? "新建资料"}
+          </h2>
+          <Badge>
+            {existing ? `已保存 r${existing.currentRevision.revision} · ` : ""}
+            {(existing?.currentRevision.payload as StudioTechPack | undefined)
+              ?.status === "PUBLISHED"
+              ? "已发布"
+              : "草稿"}
+          </Badge>
         </div>
         <Button
           disabled={!props.canEdit}
@@ -59,10 +70,10 @@ export function TechPackEditor(
       </div>
       <div className={styles.split}>
         {props.data.techPacks.length > 1 ? (
-          <details className={styles.objectChooser}>
-            <summary>
-              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
-            </summary>
+          <ObjectSwitcher
+            label="切换技术包"
+            current={existing?.currentRevision.payload.name ?? "新建资料"}
+          >
             <aside className={styles.rail}>
               {props.data.techPacks.map((item) => (
                 <Button
@@ -85,7 +96,7 @@ export function TechPackEditor(
                 </Button>
               ))}
             </aside>
-          </details>
+          </ObjectSwitcher>
         ) : null}
         <TechPackForm
           key={
@@ -120,6 +131,7 @@ function TechPackForm({
 }) {
   const firstRevision = data.styles[0]?.currentRevision;
   const chapterId = useId();
+  const [chapter, setChapter] = useState("basics");
   const initial: StudioTechPack = existing
     ? (existing.currentRevision.payload as StudioTechPack)
     : {
@@ -157,6 +169,7 @@ function TechPackForm({
       const issues = studioPublishIssues(payload);
       if (issues.length) {
         form.setError(issues.join("；"));
+        setChapter("review");
         return;
       }
     }
@@ -178,16 +191,21 @@ function TechPackForm({
   };
   return (
     <form
-      className={styles.form}
+      className={`${styles.form} ${styles.chapterForm}`}
+      onInvalidCapture={(event) =>
+        revealInvalidField(event, () => {
+          const target = event.target as HTMLElement;
+          setChapter(
+            target.closest<HTMLElement>("[data-tech-chapter]")?.dataset
+              .techChapter ?? "basics",
+          );
+        })
+      }
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <div className={styles.recordHeader}>
-        <h3>{existing ? initial.name : "技术包草稿"}</h3>
-        <Badge>{draft.status === "PUBLISHED" ? "已发布" : "草稿"}</Badge>
-      </div>
       {form.error ? (
         <Notice tone="error">
           {form.error}
@@ -207,31 +225,35 @@ function TechPackForm({
       {viewsChanged ? (
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
-      <nav className={styles.chapterNavigation} aria-label="技术包章节">
-        {[
-          ["basics", "基本资料"],
-          ["views", "视图来源"],
-          ["annotations", "工艺标注"],
-          ["bom", "BOM"],
-          ["pom", "POM"],
-          ["colors", "配色"],
-          ["review", "复核发布"],
-        ].map(([value, label]) => (
-          <a key={value} href={`#${chapterId}-${value}`}>
-            {label}
-          </a>
-        ))}
-      </nav>
+      <Field label="技术包名称">
+        <Input
+          value={draft.name}
+          disabled={disabled}
+          required
+          maxLength={120}
+          onChange={(event) => update("name", event.target.value)}
+        />
+      </Field>
+      <EditorChapters
+        active={chapter}
+        onChange={setChapter}
+        chapters={[
+          { value: "basics", label: "基本资料" },
+          { value: "views", label: "视图来源" },
+          { value: "annotations", label: "工艺标注" },
+          { value: "bom", label: "BOM" },
+          { value: "pom", label: "POM" },
+          { value: "colors", label: "配色" },
+          { value: "review", label: "复核发布" },
+        ]}
+      />
       <fieldset disabled={disabled} className={styles.form}>
-        <div id={`${chapterId}-basics`} className={styles.formGrid}>
-          <Field label="技术包名称">
-            <Input
-              value={draft.name}
-              required
-              maxLength={120}
-              onChange={(event) => update("name", event.target.value)}
-            />
-          </Field>
+        <div
+          data-tech-chapter="basics"
+          hidden={chapter !== "basics"}
+          id={`${chapterId}-basics`}
+          className={styles.formGrid}
+        >
           <Field label="对应款式修订">
             <Select
               required
@@ -266,7 +288,12 @@ function TechPackForm({
             </Select>
           </Field>
         </div>
-        <section id={`${chapterId}-views`} className={styles.section}>
+        <section
+          data-tech-chapter="views"
+          hidden={chapter !== "views"}
+          id={`${chapterId}-views`}
+          className={styles.section}
+        >
           <div className={styles.recordHeader}>
             <h3>视图与来源</h3>
             <Button
@@ -415,7 +442,12 @@ function TechPackForm({
             </div>
           ))}
         </section>
-        <section id={`${chapterId}-annotations`} className={styles.section}>
+        <section
+          data-tech-chapter="annotations"
+          hidden={chapter !== "annotations"}
+          id={`${chapterId}-annotations`}
+          className={styles.section}
+        >
           <div className={styles.recordHeader}>
             <h3>工艺锚点标注</h3>
             <Button
@@ -536,21 +568,34 @@ function TechPackForm({
             </article>
           ))}
         </section>
-        <div id={`${chapterId}-bom`}>
+        <div
+          data-tech-chapter="bom"
+          hidden={chapter !== "bom"}
+          id={`${chapterId}-bom`}
+        >
           <BomTable
             rows={draft.bom}
             disabled={disabled}
             onChange={(rows) => update("bom", rows)}
           />
         </div>
-        <div id={`${chapterId}-pom`}>
+        <div
+          data-tech-chapter="pom"
+          hidden={chapter !== "pom"}
+          id={`${chapterId}-pom`}
+        >
           <PomTable
             rows={draft.pom}
             disabled={disabled}
             onChange={(rows) => update("pom", rows)}
           />
         </div>
-        <section id={`${chapterId}-colors`} className={styles.stack}>
+        <section
+          data-tech-chapter="colors"
+          hidden={chapter !== "colors"}
+          id={`${chapterId}-colors`}
+          className={styles.stack}
+        >
           <div className={styles.recordHeader}>
             <h3>配色</h3>
             <Button
@@ -637,39 +682,60 @@ function TechPackForm({
             </div>
           ))}
         </section>
-        <Field label="工艺与交接说明">
-          <Textarea
-            rows={5}
-            maxLength={2000}
-            value={draft.constructionNotes}
+        <div data-tech-chapter="review" hidden={chapter !== "review"}>
+          <Field label="工艺与交接说明">
+            <Textarea
+              rows={5}
+              maxLength={2000}
+              value={draft.constructionNotes}
+              onChange={(event) =>
+                update("constructionNotes", event.target.value)
+              }
+            />
+          </Field>
+        </div>
+      </fieldset>
+      <section
+        data-tech-chapter="review"
+        hidden={chapter !== "review"}
+        className={styles.stack}
+      >
+        <label id={`${chapterId}-review`} className={styles.check}>
+          <input
+            type="checkbox"
+            checked={draft.reviewConfirmed}
+            disabled={form.busy || (!data.capabilities.review && !canEdit)}
             onChange={(event) =>
-              update("constructionNotes", event.target.value)
+              update("reviewConfirmed", event.target.checked)
             }
           />
-        </Field>
-      </fieldset>
-      <label id={`${chapterId}-review`} className={styles.check}>
-        <input
-          type="checkbox"
-          checked={draft.reviewConfirmed}
-          disabled={form.busy || (!data.capabilities.review && !canEdit)}
-          onChange={(event) => update("reviewConfirmed", event.target.checked)}
-        />
-        我已人工复核本次资料的视图、材料、尺寸及工艺。
-      </label>
-      <div className={styles.note}>
-        未知尺寸、用量与公差请留空。正式发布需要正背视图、材料、尺寸和配色均完成复核。AI
-        建议的尺寸或用量需要替换为已确认资料。
-      </div>
+          我已人工复核本次资料的视图、材料、尺寸及工艺。
+        </label>
+        <div className={styles.note}>
+          未知尺寸、用量与公差请留空。正式发布需要正背视图、材料、尺寸和配色均完成复核。AI
+          建议的尺寸或用量需要替换为已确认资料。
+        </div>
+      </section>
       <SaveBar
         busy={form.busy}
         dirty={form.dirty || !existing}
         canEdit={canEdit}
+        primary={form.dirty || !existing}
       >
         <Button
-          variant="secondary"
+          variant={
+            (!form.dirty || !canEdit) &&
+            !!existing &&
+            draft.status !== "PUBLISHED"
+              ? "primary"
+              : "secondary"
+          }
           loading={form.busy}
-          disabled={!data.capabilities.review || (!canEdit && !existing)}
+          disabled={
+            !data.capabilities.review ||
+            (!canEdit && !existing) ||
+            (canEdit && Boolean(existing) && form.dirty)
+          }
           onClick={() => void save(true)}
         >
           复核并发布
@@ -678,6 +744,8 @@ function TechPackForm({
           <TechPackExportButton
             projectId={projectId}
             revisionId={existing.currentRevision.id}
+            disabled={form.dirty || form.busy}
+            primary={!form.dirty && draft.status === "PUBLISHED"}
           />
         ) : null}
       </SaveBar>

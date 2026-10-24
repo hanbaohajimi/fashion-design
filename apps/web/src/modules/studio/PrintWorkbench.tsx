@@ -9,8 +9,16 @@ import {
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
 import { Button, Input, Select, Textarea } from "../../components/ui";
+import { ActionBar, FormSection } from "../../components/workspace-ui";
 import styles from "./print-workbench.module.css";
 type Pattern = (typeof studioPrintPatternSchema)["_output"];
+const CONTROLS = [
+  { key: "scale", label: "重复尺度", min: 0.1, max: 5, step: 0.1 },
+  { key: "rotation", label: "旋转角度", min: 0, max: 360, step: 1 },
+  { key: "brightness", label: "亮度", min: 0.2, max: 2, step: 0.05 },
+  { key: "offsetX", label: "水平位置", min: -1, max: 1, step: 0.05 },
+  { key: "offsetY", label: "垂直位置", min: -1, max: 1, step: 0.05 },
+] as const;
 export function PrintWorkbench({
   projectId,
   assets,
@@ -136,6 +144,20 @@ export function PrintWorkbench({
       setBusy(false);
     }
   };
+  const slider = (control: (typeof CONTROLS)[number]) => (
+    <label key={control.key}>
+      {control.label} · {value[control.key]}
+      <input
+        type="range"
+        disabled={!canEdit || busy}
+        min={control.min}
+        max={control.max}
+        step={control.step}
+        value={value[control.key]}
+        onChange={(event) => update(control.key, Number(event.target.value))}
+      />
+    </label>
+  );
   return (
     <section className={styles.panel} aria-label="印花工作台">
       <div>
@@ -209,94 +231,70 @@ export function PrintWorkbench({
               ))}
             </Select>
           </label>
-          {(
-            [
-              { key: "scale", label: "重复尺度", min: 0.1, max: 5, step: 0.1 },
-              { key: "rotation", label: "旋转角度", min: 0, max: 360, step: 1 },
-              {
-                key: "brightness",
-                label: "亮度",
-                min: 0.2,
-                max: 2,
-                step: 0.05,
-              },
-              {
-                key: "offsetX",
-                label: "水平位置",
-                min: -1,
-                max: 1,
-                step: 0.05,
-              },
-              {
-                key: "offsetY",
-                label: "垂直位置",
-                min: -1,
-                max: 1,
-                step: 0.05,
-              },
-            ] as const
-          ).map((control) => (
-            <label key={control.key}>
-              {control.label} · {value[control.key]}
-              <input
-                type="range"
+          {CONTROLS.slice(0, 2).map(slider)}
+          <FormSection
+            title="高级调整"
+            summary={`亮度 ${value.brightness} · 位置 ${value.offsetX}, ${value.offsetY}`}
+          >
+            {CONTROLS.slice(2).map(slider)}
+          </FormSection>
+          <FormSection
+            title="生产规格"
+            summary={
+              value.tileWidthCm && value.tileHeightCm
+                ? `${value.tileWidthCm} × ${value.tileHeightCm} cm · 需人工确认`
+                : "宽高待确认"
+            }
+          >
+            <label>
+              生产重复宽度（cm，待确认可留空）
+              <Input
+                type="number"
+                min={0.1}
+                max={1000}
+                step={0.1}
                 disabled={!canEdit || busy}
-                min={control.min}
-                max={control.max}
-                step={control.step}
-                value={value[control.key]}
+                value={value.tileWidthCm ?? ""}
                 onChange={(event) =>
-                  update(control.key, Number(event.target.value))
+                  update(
+                    "tileWidthCm",
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                  )
                 }
               />
             </label>
-          ))}
-          <label>
-            生产重复宽度（cm，待确认可留空）
-            <Input
-              type="number"
-              min={0.1}
-              max={1000}
-              step={0.1}
-              disabled={!canEdit || busy}
-              value={value.tileWidthCm ?? ""}
-              onChange={(event) =>
-                update(
-                  "tileWidthCm",
-                  event.target.value === ""
-                    ? undefined
-                    : Number(event.target.value),
-                )
-              }
-            />
-          </label>
-          <label>
-            生产重复高度（cm，待确认可留空）
-            <Input
-              type="number"
-              min={0.1}
-              max={1000}
-              step={0.1}
-              disabled={!canEdit || busy}
-              value={value.tileHeightCm ?? ""}
-              onChange={(event) =>
-                update(
-                  "tileHeightCm",
-                  event.target.value === ""
-                    ? undefined
-                    : Number(event.target.value),
-                )
-              }
-            />
-          </label>
-          <label>
-            备注
-            <Textarea
-              disabled={!canEdit || busy}
-              value={value.notes}
-              onChange={(event) => update("notes", event.target.value)}
-            />
-          </label>
+            <label>
+              生产重复高度（cm，待确认可留空）
+              <Input
+                type="number"
+                min={0.1}
+                max={1000}
+                step={0.1}
+                disabled={!canEdit || busy}
+                value={value.tileHeightCm ?? ""}
+                onChange={(event) =>
+                  update(
+                    "tileHeightCm",
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                  )
+                }
+              />
+            </label>
+          </FormSection>
+          <FormSection title="备注" summary={value.notes ? "已填写" : "未填写"}>
+            <label>
+              备注
+              <Textarea
+                disabled={!canEdit || busy}
+                value={value.notes}
+                onChange={(event) => update("notes", event.target.value)}
+              />
+            </label>
+          </FormSection>
           <label className={styles.check}>
             <input
               type="checkbox"
@@ -307,9 +305,18 @@ export function PrintWorkbench({
             已人工检查重复边缘和视觉效果
           </label>
           {canEdit ? (
-            <Button type="submit" loading={busy} variant="primary">
-              {editing ? "保存新修订" : "保存印花方案"}
-            </Button>
+            <ActionBar
+              status={signature !== baseline ? "有未保存的修改" : "已保存"}
+            >
+              <Button
+                type="submit"
+                loading={busy}
+                variant="primary"
+                disabled={Boolean(editing) && signature === baseline}
+              >
+                {editing ? "保存新修订" : "保存印花方案"}
+              </Button>
+            </ActionBar>
           ) : null}
           {notice ? <p role="status">{notice}</p> : null}
           {error ? <p role="alert">{error}</p> : null}

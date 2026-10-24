@@ -75,7 +75,11 @@
   box-shadow:
     inset 0 0 0 1px var(--color-divider),
     inset 0 1px 2px color-mix(in srgb, white 40%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, white 3%, transparent) 0%, transparent 40%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, white 3%, transparent) 0%,
+    transparent 40%
+  );
 }
 
 .materialShell[data-material="paper"] .substrateLayer {
@@ -150,28 +154,50 @@
    producing visible offsets during drag. Shadow opacity change is safe. */
 .materialShell:hover .shadowLayer {
   opacity: 0.72;
-  transition: opacity var(--dur-material-hover, 160ms) var(--ease-material-drop, cubic-bezier(0.16,1,0.3,1));
+  transition: opacity var(--dur-material-hover, 160ms)
+    var(--ease-material-drop, cubic-bezier(0.16, 1, 0.3, 1));
 }
 
 /* Corner wear darkening */
 .materialShell[data-lod="high"] .substrateLayer::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: -2px;
   pointer-events: none;
   background:
     radial-gradient(circle at 0% 0%, var(--color-divider) 0%, transparent 12%),
-    radial-gradient(circle at 100% 0%, var(--color-divider) 0%, transparent 12%),
-    radial-gradient(circle at 0% 100%, var(--color-divider) 0%, transparent 12%),
-    radial-gradient(circle at 100% 100%, var(--color-divider) 0%, transparent 12%);
+    radial-gradient(
+      circle at 100% 0%,
+      var(--color-divider) 0%,
+      transparent 12%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      var(--color-divider) 0%,
+      transparent 12%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      var(--color-divider) 0%,
+      transparent 12%
+    );
 }
 
 /* ─── Mount tool drop animation ──────────────────────────────────────────── */
 /* 从 scale(0.9) 起手而非 scale(0.15) —— 真实物体不会从虚无中出现 */
 @keyframes mount-drop {
-  0%   { transform: scale(0.9) rotate(-12deg);  opacity: 0; }
-  55%  { transform: scale(1.04) rotate(3deg);   opacity: 1; }
-  100% { transform: scale(1)    rotate(0deg);   opacity: 1; }
+  0% {
+    transform: scale(0.9) rotate(-12deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.04) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 /* Each user-placed mount animated from center of the translate group */
@@ -190,7 +216,7 @@
 
 .mountInteractive:focus-visible {
   outline: none;
-  filter: drop-shadow(0 0 4px var(--color-signal));
+  filter: drop-shadow(0 0 4px var(--color-action));
 }
 
 /* ─── Pinned state: suppress hover-lift ──────────────────────────────────── */

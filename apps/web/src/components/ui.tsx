@@ -129,10 +129,12 @@ export function Badge({
   tone = "neutral",
 }: {
   readonly children: ReactNode;
-  readonly tone?: "neutral" | "success" | "warning" | "error";
+  readonly tone?:
+    "neutral" | "success" | "warning" | "error" | "info" | "running";
 }) {
   return (
     <span className={styles.badge} data-tone={tone}>
+      {tone !== "neutral" ? <StatusIcon tone={tone} /> : null}
       {children}
     </span>
   );
@@ -143,7 +145,7 @@ export function Notice({
   onClose,
 }: {
   readonly children: ReactNode;
-  readonly tone?: "info" | "error" | "success";
+  readonly tone?: "info" | "error" | "success" | "warning" | "running";
   readonly onClose?: () => void;
 }) {
   return (
@@ -152,6 +154,7 @@ export function Notice({
       data-tone={tone}
       role={tone === "error" ? "alert" : "status"}
     >
+      <StatusIcon tone={tone} />
       <div>
         {tone === "error" && typeof children === "string"
           ? userFacingError(children)
@@ -163,6 +166,35 @@ export function Notice({
         </IconButton>
       ) : null}
     </div>
+  );
+}
+
+/** §5.7：语义状态同时提供轮廓、图形和文字，不依赖色相。 */
+export function StatusIcon({ tone }: { readonly tone: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={styles.statusIcon}
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      {tone === "warning" ? (
+        <path d="m10 2 8 15H2Z" />
+      ) : (
+        <circle cx="10" cy="10" r="7.5" />
+      )}
+      {tone === "success" ? (
+        <path d="m6 10 3 3 5-6" />
+      ) : tone === "error" ? (
+        <path d="m7 7 6 6m0-6-6 6" />
+      ) : tone === "running" ? (
+        <path d="M10 5v5l3 2" />
+      ) : (
+        <path d="M10 8v5m0-8v1" />
+      )}
+    </svg>
   );
 }
 export function EmptyState({

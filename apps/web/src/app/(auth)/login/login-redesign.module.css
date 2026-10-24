@@ -62,18 +62,20 @@
 }
 
 .form input:focus {
-  border-bottom-color: var(--accent-primary);
+  border-bottom-color: var(--color-focus-ring);
 }
 
 .form input:disabled {
   cursor: not-allowed;
-  opacity: var(--opacity-disabled);
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .form button {
   margin-top: var(--space-4);
-  border: 1px solid var(--color-signal);
-  background: var(--color-signal);
+  border: 1px solid var(--color-action);
+  background: var(--color-action);
   color: var(--color-on-inverse);
   cursor: pointer;
   font-family: inherit;
@@ -86,12 +88,12 @@
 }
 
 .form button:hover:not(:disabled) {
-  background: var(--color-signal-hover);
+  background: var(--color-action-hover);
   color: var(--color-on-inverse);
 }
 
 .form button:focus-visible {
-  outline: 3px solid var(--accent-primary);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 
@@ -100,11 +102,10 @@
 }
 
 .form button:disabled {
-  border-color: var(--color-border);
-  background: var(--color-overlay);
-  color: var(--color-ink-secondary);
+  border-color: var(--color-disabled-border);
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
   cursor: wait;
-  opacity: var(--opacity-disabled);
 }
 
 /* ========================================
@@ -122,7 +123,7 @@
 }
 
 .error {
-  border-left-color: var(--accent-primary);
+  border-left-color: var(--color-error);
   background: var(--color-error-bg);
   color: var(--color-error);
 }
@@ -148,8 +149,8 @@
 }
 
 .messageActions button:hover:not(:disabled) {
-  border-bottom-color: var(--accent-primary);
-  color: var(--accent-primary);
+  border-bottom-color: var(--color-focus-ring);
+  color: var(--color-focus-ring);
 }
 
 .messageActions button:active:not(:disabled) {
@@ -158,11 +159,13 @@
 
 .messageActions button:disabled {
   cursor: wait;
-  opacity: var(--opacity-disabled);
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .messageActions button:focus-visible {
-  outline: 3px solid var(--accent-primary);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 
@@ -223,7 +226,7 @@
   font-size: var(--text-lg);
 }
 .form input:focus {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 .form button {

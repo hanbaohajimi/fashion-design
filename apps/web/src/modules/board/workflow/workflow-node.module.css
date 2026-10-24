@@ -69,8 +69,13 @@
 
 /* 缩小到 85% 以下：英文类别词与摘要让位给色条与标题，
    保证在全图视图下仍能靠颜色和轮廓读图。 */
-.node[data-compact="true"] .summary { visibility: hidden; }
-.node[data-compact="true"] .eyebrow { font-size: 9px; letter-spacing: 0.08em; }
+.node[data-compact="true"] .summary {
+  visibility: hidden;
+}
+.node[data-compact="true"] .eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
 
 /* ── 交互态 ─────────────────────────────────────────────── */
 /* 只靠阴影加深表达"拿起"。不用 translateY：节点 DOM 位移后连线端点不会跟随，
@@ -80,10 +85,10 @@
 }
 
 .node[data-highlighted="true"] {
-  border-color: var(--swatch-indigo);
-  border-left-color: var(--swatch-indigo);
+  border-color: var(--color-selection-border);
+  border-left-color: var(--color-selection-border);
   box-shadow:
-    0 0 0 3px var(--swatch-indigo-wash),
+    0 0 0 3px var(--color-selection-bg),
     var(--shadow-material-2);
   /* 高亮不改变几何位置，保持节点、端口和连线使用同一画布坐标。 */
 }
@@ -128,7 +133,7 @@
   overflow: hidden;
   color: var(--color-ink);
   /* 标题用衬线字体，和正文形成清晰层级 */
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -160,7 +165,7 @@
   margin-top: 0;
   background: var(--image-stage-background);
   /* 图片像被压进纸里，而不是浮在卡面上 */
-  box-shadow: inset 0 0 0 1px rgba(31, 29, 26, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 24, 0.06);
 }
 
 .imageFrame img {
@@ -238,11 +243,11 @@
   border-radius: 3px;
   margin-top: 10px;
   padding: 3px 7px;
-  background: var(--swatch-mauve-wash);
-  color: var(--swatch-mauve);
+  background: var(--color-surface);
+  color: var(--color-ink-secondary);
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.02em;
 }
 
@@ -251,12 +256,21 @@
   height: 5px;
   border-radius: 50%;
   background: currentColor;
-  /* 状态指示器脉冲 —— 只在运行中才有意义 */
+  animation: none;
+}
+
+.node[data-status="running"] .toolStatus {
+  background: var(--color-status-running-bg);
+  color: var(--color-status-running);
+}
+
+.node[data-status="running"] .toolStatus > span {
   animation: statusPulse var(--dur-ai-pulse) ease-in-out infinite;
 }
 
 @keyframes statusPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -274,6 +288,8 @@
 /* 完成落定：容器类变化时，芯片轻轻"定住"一次。
    这是唯一的一次性反馈——不要在这里加持续发光。 */
 .node[data-status="completed"] .toolStatus {
+  background: var(--color-success-bg);
+  color: var(--color-success);
   animation: statusSettle var(--dur-standard) var(--ease-spring);
 }
 
@@ -329,10 +345,31 @@
   right: -6px;
 }
 
-.interactivePort { position: absolute; z-index: 3; top: calc(50% - 14px); width: 28px; height: 28px; display: grid; place-items: center; border: 0; padding: 0; background: transparent; cursor: crosshair; touch-action: none; pointer-events: all; }
-.interactivePort { transform: scale(var(--tl-scale, 1)); font-size: var(--text-base); }
-.portInput { left: -14px; }
-.portOutput { right: -14px; }
+.interactivePort {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 14px);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: crosshair;
+  touch-action: none;
+  pointer-events: all;
+}
+.interactivePort {
+  transform: scale(var(--tl-scale, 1));
+  font-size: var(--text-base);
+}
+.portInput {
+  left: -14px;
+}
+.portOutput {
+  right: -14px;
+}
 .interactivePort > span:first-child {
   width: 11px;
   height: 11px;
@@ -342,28 +379,113 @@
   /* 内环留白制造双环（黄铜环）效果 */
   box-shadow: inset 0 0 0 2px var(--color-paper);
   opacity: 0.45;
-  transition: transform var(--dur-fast) var(--ease-spring), border-color var(--dur-fast) var(--ease-state), box-shadow var(--dur-fast) var(--ease-state), opacity var(--dur-fast);
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-state),
+    box-shadow var(--dur-fast) var(--ease-state),
+    opacity var(--dur-fast);
 }
-.node:hover .interactivePort > span:first-child { opacity: 1; }
-.interactivePort:hover > span:first-child, .interactivePort:focus-visible > span:first-child, .interactivePort[data-valid="true"] > span:first-child { transform: scale(1.35); opacity: 1; border-color: var(--swatch-indigo); box-shadow: inset 0 0 0 2px var(--color-paper), 0 0 0 3px var(--swatch-indigo-wash); }
-.interactivePort:focus-visible { outline: 2px solid var(--swatch-indigo); border-radius: 50%; outline-offset: 2px; }
-.interactivePort:disabled { cursor: default; }
-.portLabel { position: absolute; bottom: 30px; width: max-content; max-width: 200px; border: 1px solid var(--color-border); border-radius: 4px; padding: var(--space-1) var(--space-2); background: var(--color-paper); color: var(--color-ink-secondary); font-size: var(--text-sm); line-height: 1.5; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity var(--dur-fast) var(--ease-state), transform var(--dur-fast) var(--ease-enter); }
-.interactivePort:hover .portLabel, .interactivePort:focus-visible .portLabel, .interactivePort[data-valid="true"] .portLabel { opacity: 1; transform: translateY(0); }
-.node[data-connectable="valid"] { border-color: var(--swatch-indigo); }
-.node[data-connectable="invalid"] { opacity: .55; }
-.nodeActions { position: absolute; right: 0; bottom: -34px; display: flex; gap: var(--space-2); }
-.nodeActions button { border: 1px solid var(--color-border); border-radius: 5px; padding: 5px var(--space-3); background: var(--color-paper); color: var(--color-ink-secondary); font: 14px/1.4 var(--font-sans); cursor: pointer; }
-.nodeActions button:hover { color: var(--swatch-indigo); }
-@media (pointer: coarse) { .interactivePort { width: 44px; height: 44px; top: calc(50% - 22px); } .portInput { left: -22px; } .portOutput { right: -22px; } }
+.node:hover .interactivePort > span:first-child {
+  opacity: 1;
+}
+.interactivePort:hover > span:first-child,
+.interactivePort:focus-visible > span:first-child,
+.interactivePort[data-valid="true"] > span:first-child {
+  transform: scale(1.35);
+  opacity: 1;
+  border-color: var(--color-selection-border);
+  box-shadow:
+    inset 0 0 0 2px var(--color-paper),
+    0 0 0 3px var(--color-selection-bg);
+}
+.interactivePort:focus-visible {
+  outline: 2px solid var(--color-selection-border);
+  border-radius: 50%;
+  outline-offset: 2px;
+}
+.interactivePort:disabled {
+  cursor: default;
+}
+.portLabel {
+  position: absolute;
+  bottom: 30px;
+  width: max-content;
+  max-width: 200px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-state),
+    transform var(--dur-fast) var(--ease-enter);
+}
+.interactivePort:hover .portLabel,
+.interactivePort:focus-visible .portLabel,
+.interactivePort[data-valid="true"] .portLabel {
+  opacity: 1;
+  transform: translateY(0);
+}
+.node[data-connectable="valid"] {
+  border-color: var(--color-selection-border);
+}
+.node[data-connectable="invalid"] {
+  opacity: 0.55;
+}
+.nodeActions {
+  position: absolute;
+  right: 0;
+  bottom: -34px;
+  display: flex;
+  gap: var(--space-2);
+}
+.nodeActions button {
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 5px var(--space-3);
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font: 14px/1.4 var(--font-sans);
+  cursor: pointer;
+}
+.nodeActions button:hover {
+  color: var(--color-selection-border);
+}
+@media (pointer: coarse) {
+  .interactivePort {
+    width: 44px;
+    height: 44px;
+    top: calc(50% - 22px);
+  }
+  .portInput {
+    left: -22px;
+  }
+  .portOutput {
+    right: -22px;
+  }
+}
 
 /* ── 无障碍降级 ─────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
+  .interactivePort > span:first-child,
+  .interactivePort:hover > span:first-child,
+  .interactivePort:focus-visible > span:first-child,
+  .interactivePort[data-valid="true"] > span:first-child,
+  .portLabel {
+    transition: none;
+    transform: none;
+  }
   .node {
     transition: none;
     animation: none;
   }
   .toolStatus > span,
+  .node[data-status="running"] .toolStatus > span,
   .node[data-status="completed"] .toolStatus {
     animation: none;
   }

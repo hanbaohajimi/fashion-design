@@ -63,8 +63,16 @@
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(circle at 30% 12%, color-mix(in srgb, white 42%, transparent), transparent 36%),
-    linear-gradient(135deg, color-mix(in srgb, white 10%, transparent), transparent 42%);
+    radial-gradient(
+      circle at 30% 12%,
+      color-mix(in srgb, white 42%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, white 10%, transparent),
+      transparent 42%
+    );
   mix-blend-mode: overlay;
 }
 
@@ -160,7 +168,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .shapeActions {
@@ -173,7 +181,7 @@
   border-left: 1px solid var(--color-border);
   display: flex;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 0 12px;
   white-space: nowrap;
 }
@@ -188,7 +196,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   transition:
     background-color var(--transition-fast, 120ms),
     color var(--transition-fast, 120ms);
@@ -212,14 +220,14 @@
 
 .shapeActions button:hover,
 .shapeActions select:hover {
-  background: var(--color-ink);
+  background: var(--color-overlay);
   color: white;
 }
 
 .shapeActions :where(button, select):focus-visible,
 .boardIdentity a:focus-visible,
 .uploadTray button:focus-visible {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: -3px;
 }
 
@@ -234,7 +242,7 @@
 
 .roleControl > span {
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.1em;
   white-space: nowrap;
 }
@@ -333,15 +341,15 @@
 }
 
 .boardError p {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.18em;
 }
 
 .boardError h1 {
   margin: 0.8rem 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(2.5rem, 6vw, 5rem);
   font-weight: 400;
 }
@@ -352,10 +360,10 @@
 
 .boardError button {
   min-height: 42px;
-  border: 1px solid var(--color-ink);
+  border: 1px solid var(--color-action);
   margin-top: 2rem;
   padding: 0 20px;
-  background: var(--color-ink);
+  background: var(--color-action);
   color: white;
   cursor: pointer;
 }
@@ -365,7 +373,7 @@
   z-index: 1000;
   inset: 12px calc(var(--board-agent-current-width) + 12px) 12px 12px;
   display: grid;
-  border: 2px dashed var(--color-signal);
+  border: 2px dashed var(--color-action);
   background: color-mix(in srgb, var(--color-canvas) 90%, transparent);
   color: var(--color-ink);
   place-content: center;
@@ -374,7 +382,7 @@
 }
 
 .uploadDropZone strong {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(2rem, 7vw, 6rem);
   font-weight: 400;
 }
@@ -382,7 +390,7 @@
 .uploadDropZone span {
   margin-top: 12px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.12em;
 }
 
@@ -399,7 +407,8 @@
   transform: translate(-50%, -50%);
   z-index: 420;
   /* 首次引导入场：稀有频率，spatial + preventing-jarring-change 目的 */
-  animation: emptyGuideEnter 400ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
+  animation: emptyGuideEnter 400ms
+    var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both;
 }
 
 @keyframes emptyGuideEnter {
@@ -414,9 +423,9 @@
 }
 
 .emptyBoardGuide > span {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.14em;
 }
 
@@ -449,11 +458,11 @@
 }
 
 .emptyBoardGuide button {
-  background: var(--color-ink);
+  background: var(--color-action);
   border: 0;
   color: white;
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 600;
   padding: 12px 16px;
   width: 100%;
   transition: transform 160ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1));
@@ -509,7 +518,7 @@
 
 .uploadTray span {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .uploadTray small {
@@ -522,9 +531,9 @@
   top: 12px;
   right: 10px;
   min-height: 32px;
-  border: 1px solid var(--color-ink);
+  border: 1px solid var(--color-action);
   padding: 0 12px;
-  background: var(--color-ink);
+  background: var(--color-action);
   color: white;
   cursor: pointer;
 }
@@ -574,7 +583,7 @@
 .rolePanel > header strong {
   font-family: var(--font-sans);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.06em;
 }
 
@@ -585,14 +594,14 @@
 
 .rolePanelEmpty span {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .rolePanelEmpty p {
   max-width: 23ch;
   margin: 12px 0 0;
   color: var(--color-ink-secondary);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -637,9 +646,9 @@
 }
 
 .roleOptions button[aria-checked="true"] {
-  border-color: var(--color-ink);
-  background: var(--color-ink);
-  color: var(--color-paper);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
 }
 
 .roleOptions button[data-role="avoid"] {
@@ -668,7 +677,7 @@
 .roleNoteEditor > span {
   color: var(--color-ink-secondary);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -837,7 +846,7 @@
 
 .fabricDrawer > header h2 {
   margin: 4px 0 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(1.3rem, 2vw, 1.7rem);
   font-weight: 400;
   color: var(--color-ink);
@@ -860,8 +869,8 @@
 }
 
 .fabricDrawer > header button:hover {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 /* 分类 tabs — 实线矩形切换，无圆角 */
@@ -883,7 +892,7 @@
   color: var(--color-ink-secondary);
   cursor: pointer;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.06em;
   transition:
     background var(--transition-fast, 120ms),
@@ -900,9 +909,9 @@
 }
 
 .fabricScopeTabs button[aria-pressed="true"] {
-  background: var(--color-ink);
+  background: var(--color-selection-bg);
   color: var(--color-paper);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 /* 搜索框 */
@@ -937,7 +946,7 @@
 }
 
 .fabricDrawerSearch input:focus {
-  border-color: var(--color-signal);
+  border-color: var(--color-action);
   background: var(--color-paper);
 }
 
@@ -952,7 +961,7 @@
   justify-content: space-between;
   color: var(--color-ink-secondary);
   font-size: 8px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   border-bottom: 1px solid var(--color-border);
 }
@@ -979,15 +988,15 @@
   color: var(--color-ink);
   cursor: pointer;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   transition:
     background var(--transition-fast, 120ms),
     color var(--transition-fast, 120ms);
 }
 
 .fabricDrawerState button:hover {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 /* 拖拽放置区叠层 */
@@ -996,7 +1005,7 @@
   z-index: 1090;
   inset: 70px 16px 16px;
   display: grid;
-  border: 2.5px dashed var(--color-signal);
+  border: 2.5px dashed var(--color-action);
   border-radius: 0;
   background: color-mix(in srgb, var(--color-paper) 90%, transparent);
   color: var(--color-ink);
@@ -1006,7 +1015,7 @@
 }
 
 .fabricDropZone strong {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: 20px;
   letter-spacing: 0.16em;
 }

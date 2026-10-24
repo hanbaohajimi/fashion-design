@@ -1,14 +1,9 @@
 /**
  * 新时尚 AI 设计平台 — 设计系统
  *
- * 视觉主张：「样衣间」
- *   界面是白墙，素材是展品。
- *   UI 控件的视觉重量必须低于画布上的任何素材。
- *
- * 三条纪律：
- *   1. 墙与纸 —— 画布（墙）略深，面板（纸）最亮，两者必须可辨。
- *   2. 染料而非霓虹 —— 强调色取自织物染料，不用科技橙。
- *   3. 中性不冷 —— 灰阶带极轻暖调，为服装色彩判断提供中立底。
+ * 视觉主张：中性浅色专业工作台。作品、当前任务和恢复操作优先。
+ * §2.1/§2.8/§5.2：品牌、动作、选中、焦点和状态分别命名。
+ * 本文件是唯一运行时主题；颜色清单和预览从这里导出。
  */
 
 :root {
@@ -28,8 +23,7 @@
   --upload-preview-height: 200px;
   --content-max-width: 1600px;
   --page-gutter: 32px;
-  /* 图像台底：暖灰而非冷灰。冷灰在暖调纸面上发脏，是图片显廉价的直接原因。 */
-  --image-stage-background: #eae5db;
+  --image-stage-background: #d7d7d7;
 
   /* 旧组件只引用别名，所有视觉值以本文件为准。 */
   --surface-base: var(--color-canvas);
@@ -52,20 +46,24 @@
      一、表面层级 —— 墙 / 纸 / 台
      ============================================================
      设计工具的铁律：画布与面板必须可辨。
-     画布是"墙"，略深、略暖，让素材从背景中浮起。
+     画布是"墙"，中性灰色，让素材从背景中浮起。
      面板是"纸"，最亮，浮动在墙之上。
   */
 
-  --color-canvas: #f1efea; /* 墙：画布底，略深于面板 */
-  --color-paper: #fcfbf8; /* 纸：面板、工具栏、卡片 */
-  --color-surface: #e9e6df; /* 台：次级表面、分组背景 */
-  --color-overlay: #dedad1; /* 叠层：悬停、选中底 */
+  --color-canvas: #f5f5f5;
+  --color-paper: #ffffff;
+  --color-surface: #fafafa;
+  --color-overlay: #f5f5f5;
+  --color-control-border: #808080;
+  --color-disabled-bg: #f5f5f5;
+  --color-disabled-ink: #6a6a6a;
+  --color-disabled-border: #d7d7d7;
 
   /* 工作室画布专用表面 —— 只给设计工作台用。
      全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
-     因此工作台另开一档更深、更暖的"木台"底色，让节点真正浮起来。 */
-  --color-studio-canvas: #efebe3;
-  --color-studio-canvas-edge: #e4dfd5;
+     因此工作台另开一档中性的图像台底色，让节点真正浮起来。 */
+  --color-studio-canvas: #d7d7d7;
+  --color-studio-canvas-edge: #d7d7d7;
 
   /* ============================================================
      二、文字层级 —— 墨
@@ -73,22 +71,35 @@
      不用纯黑。纯黑在浅色底上过于尖锐，长时间阅读疲劳。
   */
 
-  --color-ink: #1f1d1a; /* 主要文字 —— 深墨 */
-  --color-ink-secondary: #5c574f; /* 次要文字 —— 说明、元数据 */
-  --color-ink-tertiary: #686259; /* 辅助文字，在次级表面上同样满足正文对比度 */
-  --color-ink-disabled: #bdb8ae; /* 禁用 */
+  --color-ink: #181818;
+  --color-ink-secondary: #555555;
+  --color-ink-tertiary: #6a6a6a;
+  --color-ink-disabled: var(--color-disabled-ink);
 
   /* ============================================================
      三、强调色 —— 染料
      ============================================================
-     取自茜草染（madder）/ 陶土 / 皮革的烧赭色。
-     比科技橙更沉，接近真实织物与材料的颜色。
+     主操作靛蓝与品牌茜草分开，导航与对象选中使用浅色表面。
   */
 
-  --color-signal: #b0452a;
-  --color-signal-hover: #98381f;
-  --color-signal-subtle: rgba(176, 69, 42, 0.08);
-  --color-signal-wash: rgba(176, 69, 42, 0.04);
+  /* generate_palette.py --base 'hsl(228,60%,48%)' --extended --cap 8 */
+  --color-action: #314ec4;
+  --color-action-hover: #253cae;
+  --color-action-active: #192b97;
+  --color-action-on: #ffffff;
+  --color-action-subtle: #f6f9ff;
+  --color-selection-bg: #ebf1ff;
+  --color-selection-ink: #253cae;
+  --color-selection-border: #314ec4;
+  --color-focus-ring: #314ec4;
+  --color-brand: #b0452a;
+  --color-brand-hover: #98381f;
+  --color-brand-bg: #fff5f0;
+  /* 兼容调用保留解析能力；活跃组件按用途迁移到语义变量。 */
+  --color-signal: var(--color-action);
+  --color-signal-hover: var(--color-action-hover);
+  --color-signal-subtle: var(--color-selection-bg);
+  --color-signal-wash: var(--color-action-subtle);
 
   /* ============================================================
      四、边框与分割线
@@ -96,40 +107,48 @@
      线是结构，不是装饰。宁可少用。
   */
 
-  --color-border: rgba(31, 29, 26, 0.16);
-  --color-border-strong: rgba(31, 29, 26, 0.28);
-  --color-divider: rgba(31, 29, 26, 0.09);
+  --color-border: rgba(24, 24, 24, 0.16);
+  --color-border-strong: rgba(24, 24, 24, 0.28);
+  --color-divider: rgba(24, 24, 24, 0.1);
 
   /* 遮罩层 —— 模态背景、聚焦遮罩，需要足够暗以隔离内容 */
-  --color-scrim: rgba(31, 29, 26, 0.72);
-  --color-scrim-soft: rgba(31, 29, 26, 0.48);
+  --color-scrim: rgba(24, 24, 24, 0.72);
+  --color-scrim-soft: rgba(24, 24, 24, 0.48);
 
   /* 画布网格点 —— 必须是耳语，不能是图案。
      全不透明的墨色会把网格变成噪音，毁掉画布的安静感。 */
-  --color-canvas-dot: rgba(31, 29, 26, 0.16);
+  --color-canvas-dot: rgba(24, 24, 24, 0.12);
 
-  /* 反色层 —— 深色按钮、选中态、深色提示条 */
-  --color-inverse: #26241f;
-  --color-inverse-hover: #14120f;
-  --color-on-inverse: #fcfbf8;
+  /* 反色层 —— Tooltip 等短提示；操作与选择使用专门变量。 */
+  --color-inverse: #2b2b2b;
+  --color-inverse-hover: #181818;
+  --color-on-inverse: #ffffff;
 
-  /* 视觉锚 —— 画面里唯一的深色。用于主操作、空状态主按钮等"重量级"物件。
-     没有深色锚的浅色界面会显得没有重心，所有元素重量相同。 */
-  --color-ink-strong: #16130f;
-  --color-walnut: #2b231c;
+  /* 兼容旧内容中的深色文字，不用于主操作。 */
+  --color-ink-strong: #181818;
+  --color-walnut: #2b2b2b;
 
   /* ============================================================
      五、语义状态
      ============================================================ */
 
-  --color-success: #4a6b57;
-  --color-success-bg: rgba(74, 107, 87, 0.08);
-  --color-warning: #9c6b3c;
-  /* §5.6: generated 600 shade of the existing warning ramp, 5.17:1 on its tint. */
-  --color-warning-ink: #8c5831;
-  --color-warning-bg: rgba(156, 107, 60, 0.08);
-  --color-error: #a33a22;
-  --color-error-bg: rgba(163, 58, 34, 0.08);
+  --color-status-success: #4a6b57;
+  --color-status-success-bg: #effbf5;
+  --color-status-warning: #8c5831;
+  --color-status-warning-bg: #fff6eb;
+  --color-status-error: #b92727;
+  --color-status-error-bg: #ffebed;
+  --color-status-info: #253cae;
+  --color-status-info-bg: #ebf1ff;
+  --color-status-running: #253cae;
+  --color-status-running-bg: #ebf1ff;
+  --color-success: var(--color-status-success);
+  --color-success-bg: var(--color-status-success-bg);
+  --color-warning: var(--color-status-warning);
+  --color-warning-ink: var(--color-status-warning);
+  --color-warning-bg: var(--color-status-warning-bg);
+  --color-error: var(--color-status-error);
+  --color-error-bg: var(--color-status-error-bg);
 
   /* ============================================================
      六、材料色板 —— 品牌签名
@@ -164,7 +183,7 @@
   /* ============================================================
      七、字体
      ============================================================
-     无衬线承担界面，衬线承担品牌与编辑标题。
+     无衬线承担工作界面，衬线仅用于品牌。
      中文回退顺序决定实际观感，优先苹方 / 思源。
   */
 
@@ -191,9 +210,9 @@
 
   /* 字重 */
   --font-normal: 400;
-  --font-medium: 500;
+  --font-medium: 400;
   --font-semibold: 600;
-  --font-bold: 700;
+  --font-bold: 600;
 
   /* 行高 */
   --leading-tight: 1.12;
@@ -245,25 +264,25 @@
 
   --shadow-none: none;
   --shadow-hairline: 0 0 0 1px var(--color-border);
-  --shadow-ui: 0 1px 2px rgba(31, 29, 26, 0.05);
+  --shadow-ui: 0 1px 2px rgba(24, 24, 24, 0.05);
 
   /* 画布素材专用 —— 模拟纸张 / 卡纸的物理厚度。
      三层叠加：接触阴影（贴住台面）+ 近距投影（厚度）+ 远距环境影（离台高度）。
      单一阴影会让纸片看起来像贴纸；三层才有"被放在桌上"的重量。
      基色统一 31,29,26（暖墨），不用纯黑——纯黑阴影会让米色底发灰。 */
   --shadow-material-1:
-    0 1px 1px rgba(31, 29, 26, 0.04), 0 2px 6px rgba(31, 29, 26, 0.06),
-    0 8px 18px -8px rgba(31, 29, 26, 0.1);
+    0 1px 1px rgba(24, 24, 24, 0.04), 0 2px 6px rgba(24, 24, 24, 0.06),
+    0 8px 18px -8px rgba(24, 24, 24, 0.1);
   --shadow-material-2:
-    0 1px 2px rgba(31, 29, 26, 0.05), 0 6px 16px -4px rgba(31, 29, 26, 0.12),
-    0 18px 40px -12px rgba(31, 29, 26, 0.16);
+    0 1px 2px rgba(24, 24, 24, 0.05), 0 6px 16px -4px rgba(24, 24, 24, 0.12),
+    0 18px 40px -12px rgba(24, 24, 24, 0.16);
   --shadow-material-3:
-    0 2px 4px rgba(31, 29, 26, 0.06), 0 14px 32px -6px rgba(31, 29, 26, 0.18),
-    0 32px 64px -24px rgba(31, 29, 26, 0.22);
+    0 2px 4px rgba(24, 24, 24, 0.06), 0 14px 32px -6px rgba(24, 24, 24, 0.18),
+    0 32px 64px -24px rgba(24, 24, 24, 0.22);
 
   /* 浮层 */
-  --shadow-popup: 0 4px 16px rgba(31, 29, 26, 0.12);
-  --shadow-modal: 0 12px 40px rgba(31, 29, 26, 0.18);
+  --shadow-popup: 0 4px 16px rgba(24, 24, 24, 0.12);
+  --shadow-modal: 0 12px 40px rgba(24, 24, 24, 0.18);
 
   /* ============================================================
      十一、动效
@@ -349,7 +368,7 @@
   --trend-motion: var(--duration-normal) var(--ease-standard);
 
   /* 字体映射 */
-  --type-editorial: var(--font-serif);
+  --type-editorial: var(--font-sans);
   --type-ui: var(--font-sans);
 
   /* 动效映射 */
@@ -417,6 +436,13 @@
   :root {
     --page-gutter: 16px;
   }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="color"]
+    ),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 body {
@@ -431,8 +457,8 @@ body {
 }
 
 ::selection {
-  background: var(--color-signal-subtle);
-  color: var(--color-ink);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
 }
 
 /* ============================================================
@@ -465,7 +491,7 @@ body {
      ============================================================ */
 
 :focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 

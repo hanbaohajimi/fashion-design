@@ -64,8 +64,8 @@
 }
 
 .header > button:hover:not(:disabled) {
-  background: var(--color-ink);
-  color: var(--color-surface);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .tabs {
@@ -152,7 +152,7 @@
 }
 
 .previewAside dd {
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -177,14 +177,18 @@
 
 .actionStack .primary,
 .primary {
-  background: var(--color-signal);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
-.actionStack button:hover:not(:disabled),
+.actionStack button:hover:not(:disabled) {
+  background: var(--color-overlay);
+  color: var(--color-ink);
+}
+.actionStack .primary:hover:not(:disabled),
 .primary:hover:not(:disabled) {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-action-hover);
+  color: var(--color-action-on);
 }
 
 .notice,
@@ -293,7 +297,7 @@
 }
 
 .options button[aria-pressed="true"]:not(.colorChoice) {
-  background: var(--color-ink);
+  background: var(--color-selection-bg);
   color: var(--color-paper);
 }
 
@@ -304,7 +308,7 @@
 }
 
 .options .colorChoice[aria-pressed="true"] {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -316,12 +320,14 @@
 .actionStack button:disabled,
 .notice button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .assetDialog :where(button, input, textarea, select):focus-visible,
 .sketchDialog :where(button, input, textarea):focus-visible {
-  outline: 3px solid var(--color-signal);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -413,9 +419,9 @@
   font-weight: var(--font-medium);
 }
 .tabs button[aria-current="page"] {
-  color: var(--color-signal);
+  color: var(--color-selection-border);
   background: transparent;
-  border-bottom-color: var(--color-signal);
+  border-bottom-color: var(--color-selection-border);
 }
 .imageStage {
   min-height: 320px;
@@ -452,8 +458,8 @@
   gap: var(--space-2);
 }
 .previewTools button[aria-pressed="true"] {
-  border-color: var(--color-signal);
-  color: var(--color-signal);
+  border-color: var(--color-selection-border);
+  color: var(--color-selection-border);
 }
 .actionStack button,
 .sketchControls button {
@@ -465,7 +471,7 @@
   border-color: var(--color-border);
 }
 .actionStack button.primary {
-  border-color: var(--color-signal);
+  border-color: var(--color-action);
 }
 .backdrop {
   z-index: var(--z-modal);

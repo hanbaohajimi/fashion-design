@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { test, expect, seedVisualApp, settleImages, PROJECT } from "./fixtures";
 import {
   contrastFailures,
@@ -153,6 +154,27 @@ for (const viewport of [
   });
 }
 
+test("trend destination keeps a single action and restores focus", async ({
+  page,
+}) => {
+  await page.goto("/trends");
+  const entry = page
+    .getByRole("button", { name: "加入工作流", exact: true })
+    .first();
+  await entry.click();
+  const dialog = page.getByRole("dialog", { name: "选择存入位置" });
+  await expect(
+    dialog.getByRole("button", { name: /秋冬通勤服装设计/u }),
+  ).toBeVisible();
+  await expect(
+    dialog.locator('button[data-variant="primary"]:enabled'),
+  ).toHaveCount(1);
+  expect(await contrastFailures(page, true)).toEqual([]);
+  await expect(page).toHaveScreenshot("trend-destination.png");
+  await page.keyboard.press("Escape");
+  await expect(entry).toBeFocused();
+});
+
 test("project empty and failure states", async ({ page }) => {
   await page.route("**/api/projects?*", (route) =>
     route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }),
@@ -197,6 +219,73 @@ test("readonly technical revision remains readable", async ({ page }) => {
   await settleImages(page);
   expect(await contrastFailures(page, true)).toEqual([]);
   await expect(page).toHaveScreenshot("workspace-tech-readonly.png", {
+    fullPage: true,
+  });
+});
+
+for (const tab of ["tasks", "experiments"]) {
+  test(`${tab} readonly workspace`, async ({ page }) => {
+    const data = workspaceFixture();
+    await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
+      route.fulfill({
+        json: {
+          ...data,
+          role: "VIEWER",
+          capabilities: { edit: false, review: false, manageMembers: false },
+        },
+      }),
+    );
+    await page.route(`**/api/projects/${PROJECT}/experiments`, (route) =>
+      route.fulfill({ json: experimentFixture(PROJECT) }),
+    );
+    await page.goto(`/${PROJECT}/studio?tab=${tab}`);
+    await expect(
+      page.getByText("只读工作区", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.locator('main button[data-variant="primary"]:enabled'),
+    ).toHaveCount(0);
+    await settleImages(page);
+    expect(await contrastFailures(page, true)).toEqual([]);
+    await expect(page).toHaveScreenshot(`workspace-${tab}-readonly.png`, {
+      fullPage: true,
+    });
+  });
+}
+
+test("task request failure retains the complete draft", async ({ page }) => {
+  // Docker 的 host.docker.internal HTTP 不提供 secure-context UUID；此用例只验证失败界面。
+  // 请求键由 Node 原生 API 提供，生产逻辑及 localhost 业务回归继续使用浏览器原生实现。
+  await page.addInitScript((requestKey) => {
+    if (typeof crypto.randomUUID !== "function") {
+      Object.defineProperty(crypto, "randomUUID", { value: () => requestKey });
+    }
+  }, randomUUID());
+  await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
+    route.fulfill({ json: workspaceFixture() }),
+  );
+  await page.route(`**/api/projects/${PROJECT}/workflow`, (route) =>
+    route.fulfill({
+      status: 503,
+      json: { message: "任务暂时无法提交，请重试" },
+    }),
+  );
+  await page.goto(`/${PROJECT}/studio?tab=tasks`);
+  await page
+    .getByLabel("本次任务", { exact: true })
+    .fill("保持夹克廓形并调整袖口");
+  await page.getByLabel(/^必须保留/u).fill("双口袋和肩线");
+  await page.getByRole("button", { name: "选择图片 1", exact: true }).click();
+  await page.getByRole("button", { name: "生成效果图", exact: true }).click();
+  await expect(
+    page.getByText("任务暂时无法提交，请重试", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "本次任务", exact: true }),
+  ).toHaveValue("保持夹克廓形并调整袖口");
+  await settleImages(page);
+  expect(await contrastFailures(page, true)).toEqual([]);
+  await expect(page).toHaveScreenshot("workspace-task-request-failure.png", {
     fullPage: true,
   });
 });

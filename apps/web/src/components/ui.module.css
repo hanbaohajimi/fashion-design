@@ -11,6 +11,7 @@
     border-color var(--duration-fast);
 }
 .button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -31,13 +32,17 @@
 }
 .button[data-variant="primary"] {
   min-height: var(--control-height-primary);
-  background: var(--color-signal);
-  border-color: var(--color-signal);
-  color: var(--color-on-inverse);
+  background: var(--color-action);
+  border-color: var(--color-action);
+  color: var(--color-action-on);
 }
 .button[data-variant="primary"]:hover:enabled {
-  background: var(--color-signal-hover);
-  border-color: var(--color-signal-hover);
+  background: var(--color-action-hover);
+  border-color: var(--color-action-hover);
+}
+.button[data-variant="primary"]:active:enabled {
+  background: var(--color-action-active);
+  border-color: var(--color-action-active);
 }
 .button[data-variant="ghost"] {
   border-color: transparent;
@@ -54,18 +59,22 @@
   font-size: var(--text-base);
 }
 .button:disabled {
-  opacity: 0.5;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
   cursor: not-allowed;
 }
 .button:active:enabled {
-  transform: translateY(1px);
+  transform: none;
 }
 .button[aria-busy="true"] {
   cursor: progress;
-  opacity: 0.8;
 }
 .busyMark {
-  font-weight: 700;
+  position: absolute;
+  inset-inline-end: 2px;
+  bottom: 0;
+  font-weight: 600;
   letter-spacing: 1px;
   animation: busy-pulse 1.2s ease-in-out infinite;
 }
@@ -88,7 +97,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -134,11 +143,12 @@ textarea.input {
   cursor: pointer;
 }
 .uploadTrigger:focus-within {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 .uploadTrigger:has(input:disabled) {
-  opacity: 0.5;
+  color: var(--color-disabled-ink);
+  background: var(--color-disabled-bg);
   cursor: not-allowed;
 }
 .uploadFile {
@@ -172,7 +182,7 @@ textarea.input {
   background: var(--color-surface);
   color: var(--color-ink-secondary);
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 400;
 }
 .badge[data-tone="success"] {
   color: var(--color-success);
@@ -198,6 +208,31 @@ textarea.input {
   font-size: var(--text-base);
   line-height: 1.6;
   background: var(--color-paper);
+}
+.notice > div {
+  flex: 1;
+  min-width: 0;
+}
+.statusIcon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  align-self: center;
+}
+.notice > .statusIcon {
+  margin-top: 2px;
+  align-self: flex-start;
+}
+.badge[data-tone="info"],
+.badge[data-tone="running"],
+.notice[data-tone="info"],
+.notice[data-tone="running"] {
+  color: var(--color-status-info);
+  background: var(--color-status-info-bg);
+}
+.notice[data-tone="warning"] {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-bg);
 }
 .notice[data-tone="error"] {
   background: var(--color-error-bg);
@@ -262,9 +297,9 @@ textarea.input {
   cursor: pointer;
 }
 .segments button[aria-pressed="true"] {
-  background: var(--color-paper);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-ui);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+  box-shadow: inset 0 0 0 1px var(--color-selection-border);
 }
 .menu {
   position: relative;
@@ -288,22 +323,23 @@ textarea.input {
   white-space: nowrap;
 }
 .tabs button[aria-selected="true"] {
-  color: var(--color-signal);
-  border-bottom-color: var(--color-signal);
+  color: var(--color-selection-ink);
+  background: var(--color-selection-bg);
+  border-bottom-color: var(--color-selection-border);
 }
 .tabs button:hover:enabled {
   background: var(--color-surface);
 }
 .tabs button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  color: var(--color-disabled-ink);
 }
 .tabPanel[hidden] {
   display: none;
 }
 .tabs button:focus-visible,
 .tabPanel:focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
 .tooltipAnchor {
@@ -379,8 +415,10 @@ textarea.input {
   border-color: var(--color-border-strong);
 }
 .menu button:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 .menu button,
 .menu a {
@@ -425,7 +463,7 @@ textarea.input {
   .menu button,
   .menu a
 ):focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 @media (pointer: coarse) {

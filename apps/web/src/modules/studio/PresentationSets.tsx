@@ -19,6 +19,11 @@ import {
 } from "../../components/ui";
 import { saveStudioDocument } from "./studio-api";
 import { AssetPicker, SaveBar } from "./studio-ui";
+import {
+  ObjectSwitcher,
+  FormSection,
+  revealInvalidField,
+} from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import { TechPackExportButton } from "./TechPackExportButton";
 import styles from "./studio.module.css";
@@ -43,11 +48,18 @@ export function PresentationSets(
   return (
     <section className={styles.section}>
       <div className={styles.recordHeader}>
-        <div>
+        <div className={styles.row}>
           <h2>商品展示包</h2>
-          <p className={styles.muted}>
-            将已选定款式整理为可复核、可下载的展示素材。每组保留所采用的款式修订。
-          </p>
+          <h3>
+            {existing ? existing.currentRevision.payload.name : "整理展示素材"}
+          </h3>
+          <Badge>
+            {existing ? `r${existing.currentRevision.revision} · ` : ""}
+            {(existing?.currentRevision.payload as Presentation | undefined)
+              ?.status === "READY"
+              ? "已核对"
+              : "草稿"}
+          </Badge>
         </div>
         <div className={styles.toolbar}>
           <Button disabled={!props.canEdit} onClick={props.onGenerate}>
@@ -70,10 +82,15 @@ export function PresentationSets(
       </div>
       <div className={styles.split}>
         {props.data.presentationSets.length > 1 ? (
-          <details className={styles.objectChooser}>
-            <summary>
-              切换资料 · {existing?.currentRevision.payload.name ?? "新建资料"}
-            </summary>
+          <ObjectSwitcher
+            label="切换对象"
+            current={
+              <>
+                切换资料 ·{" "}
+                {existing?.currentRevision.payload.name ?? "新建资料"}
+              </>
+            }
+          >
             <aside className={styles.rail} aria-label="商品展示包列表">
               {props.data.presentationSets.map((item) => (
                 <Button
@@ -90,7 +107,7 @@ export function PresentationSets(
                 </Button>
               ))}
             </aside>
-          </details>
+          </ObjectSwitcher>
         ) : null}
         <PresentationForm
           key={
@@ -134,6 +151,14 @@ function PresentationForm({
       };
   const form = useStudioForm(initial, onDirty);
   const { draft, setDraft } = form;
+  const [selectedAssetId, setSelectedAssetId] = useState(
+    initial.items[0]?.assetId ?? "",
+  );
+  const currentAssetId = draft.items.some(
+    (item) => item.assetId === selectedAssetId,
+  )
+    ? selectedAssetId
+    : draft.items[0]?.assetId;
   const disabled = !canEdit || form.busy;
   const exportPrimary = Boolean(
     existing && !form.dirty && draft.status === "READY",
@@ -149,6 +174,11 @@ function PresentationForm({
     });
     if (!parsed.success) {
       form.setError(parsed.error.issues[0]?.message ?? "请检查展示资料");
+      const itemIndex = parsed.error.issues.find(
+        (issue) => issue.path[0] === "items",
+      )?.path[1];
+      if (typeof itemIndex === "number")
+        setSelectedAssetId(draft.items[itemIndex]?.assetId ?? "");
       return;
     }
     let savedId = "";
@@ -170,15 +200,22 @@ function PresentationForm({
   return (
     <form
       className={styles.form}
+      onInvalidCapture={(event) =>
+        revealInvalidField(event, () =>
+          setSelectedAssetId(
+            (event.target as HTMLElement).closest<HTMLElement>(
+              "[data-presentation-asset]",
+            )?.dataset.presentationAsset ??
+              currentAssetId ??
+              "",
+          ),
+        )
+      }
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <div className={styles.recordHeader}>
-        <h3>{existing ? initial.name : "整理展示素材"}</h3>
-        <Badge>{draft.status === "READY" ? "已核对" : "草稿"}</Badge>
-      </div>
       {form.error ? (
         <Notice tone="error">
           {form.error}
@@ -235,31 +272,62 @@ function PresentationForm({
             )}
           </Select>
         </Field>
-        <AssetPicker
-          compact
-          assets={data.assets}
-          selected={draft.items.map((item) => item.assetId)}
-          max={12}
-          label="选择展示图片"
-          onChange={(ids) =>
-            update(
-              "items",
-              ids.map(
-                (assetId) =>
-                  draft.items.find((item) => item.assetId === assetId) ?? {
-                    assetId,
-                    kind: "detail",
-                    label: "",
-                    reviewed: false,
-                  },
-              ),
-            )
-          }
-        />
+        <FormSection
+          title="选择展示图片"
+          summary={`已选择 ${draft.items.length} 张，顺序保持不变`}
+          defaultOpen={!draft.items.length}
+        >
+          <AssetPicker
+            compact
+            assets={data.assets}
+            selected={draft.items.map((item) => item.assetId)}
+            max={12}
+            label="选择展示图片"
+            onChange={(ids) =>
+              update(
+                "items",
+                ids.map(
+                  (assetId) =>
+                    draft.items.find((item) => item.assetId === assetId) ?? {
+                      assetId,
+                      kind: "detail",
+                      label: "",
+                      reviewed: false,
+                    },
+                ),
+              )
+            }
+          />
+        </FormSection>
+        <nav className={styles.presentationStrip} aria-label="展示图片切换">
+          {draft.items.map((item, index) => (
+            <Button
+              key={item.assetId}
+              aria-label={`图片 ${index + 1} · ${item.reviewed ? "已复核" : "待复核"}`}
+              aria-pressed={currentAssetId === item.assetId}
+              onClick={() => setSelectedAssetId(item.assetId)}
+            >
+              <ImagePreview
+                retryable={false}
+                src={
+                  data.assets.find((asset) => asset.id === item.assetId)
+                    ?.thumbnailUrl ??
+                  data.assets.find((asset) => asset.id === item.assetId)?.url
+                }
+                alt={`展示缩略图 ${index + 1}`}
+              />
+              <span>
+                图片 {index + 1} · {item.reviewed ? "已复核" : "待复核"}
+              </span>
+            </Button>
+          ))}
+        </nav>
         {draft.items.map((item, index) => (
           <article
             className={`${styles.record} ${styles.presentationItem}`}
             key={item.assetId}
+            data-presentation-asset={item.assetId}
+            hidden={currentAssetId !== item.assetId}
           >
             <span className={styles.assetImage}>
               <ImagePreview
@@ -355,6 +423,11 @@ function PresentationForm({
         primary={!exportPrimary}
       >
         <Button
+          variant={
+            existing && !form.dirty && draft.status !== "READY"
+              ? "primary"
+              : "secondary"
+          }
           disabled={!canEdit}
           loading={form.busy}
           onClick={() => void save(true)}
@@ -367,6 +440,7 @@ function PresentationForm({
             revisionId={existing.currentRevision.id}
             sourceType="presentation_set"
             primary={exportPrimary}
+            disabled={form.dirty || form.busy}
           />
         ) : null}
       </SaveBar>

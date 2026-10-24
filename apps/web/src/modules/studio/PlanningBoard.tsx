@@ -41,16 +41,25 @@ export function PlanningBoard(
   const [id, setId] = useState<string | null>(props.data.slots[0]?.id ?? null);
   const [draftVersion, setDraftVersion] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [collectionId, setCollectionId] = useState(
+    (props.data.slots[0]?.currentRevision.payload as Slot | undefined)
+      ?.collectionId ??
+      props.data.collections[0]?.id ??
+      "",
+  );
+  const [editorOpen, setEditorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const existing = props.data.slots.find((slot) => slot.id === id);
   return (
     <div className={styles.section}>
       <div className={styles.recordHeader}>
-        <div>
+        <div className={styles.row}>
           <h2>系列规划</h2>
-          <p className={styles.muted}>
-            给每个品类安排位置，用已保存的款式修订填补设计缺口。
-          </p>
+          <span className={styles.muted}>
+            {props.data.collections.find(
+              (collection) => collection.id === collectionId,
+            )?.name ?? "先建立系列，再安排款式位置"}
+          </span>
         </div>
         <Button
           disabled={!props.canEdit}
@@ -58,6 +67,7 @@ export function PlanningBoard(
             void (async () => {
               if (await props.beforeChange()) {
                 setId(null);
+                setEditorOpen(true);
                 setDraftVersion((current) => current + 1);
               }
             })()
@@ -73,7 +83,10 @@ export function PlanningBoard(
               {
                 props.data.slots.filter(
                   (slot) =>
-                    (slot.currentRevision.payload as Slot).status === value,
+                    (slot.currentRevision.payload as Slot).status === value &&
+                    (!collectionId ||
+                      (slot.currentRevision.payload as Slot).collectionId ===
+                        collectionId),
                 ).length
               }
             </strong>
@@ -108,54 +121,115 @@ export function PlanningBoard(
         </div>
       ) : null}
       <div className={styles.split}>
+        {props.data.collections.length > 1 ? (
+          <Field label="当前系列">
+            <Select
+              value={collectionId}
+              onChange={(event) => {
+                const value = event.target.value;
+                void (async () => {
+                  if (await props.beforeChange()) {
+                    setCollectionId(value);
+                    setId(
+                      props.data.slots.find(
+                        (slot) =>
+                          (slot.currentRevision.payload as Slot)
+                            .collectionId === value,
+                      )?.id ?? null,
+                    );
+                    setEditorOpen(false);
+                  }
+                })();
+              }}
+            >
+              {props.data.collections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {collection.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
         <aside className={styles.planningGrid} aria-label="系列款式位置">
-          {props.data.slots.map((slot) => {
-            const payload = slot.currentRevision.payload as Slot;
-            return (
-              <button
-                type="button"
-                className={styles.planningCard}
-                key={slot.id}
-                aria-pressed={id === slot.id}
-                onClick={() =>
-                  void (async () => {
-                    if (await props.beforeChange()) setId(slot.id);
-                  })()
-                }
-              >
-                <span className={styles.assetImage}>
-                  <ImagePreview
-                    retryable={false}
-                    src={
-                      props.data.styles
-                        .flatMap((style) => style.revisions)
-                        .find(
-                          (revision) => revision.id === payload.styleRevisionId,
-                        )?.views[0]?.url
-                    }
-                    alt={payload.styleRevisionId ? "计划款式" : "待补款式位置"}
-                  />
-                </span>
-                <strong>{payload.name}</strong>
-                <small>
-                  {roles[payload.role]} · {states[payload.status]}
-                </small>
-              </button>
-            );
-          })}
+          {props.data.slots
+            .filter(
+              (slot) =>
+                !collectionId ||
+                (slot.currentRevision.payload as Slot).collectionId ===
+                  collectionId,
+            )
+            .map((slot) => {
+              const payload = slot.currentRevision.payload as Slot;
+              return (
+                <button
+                  type="button"
+                  className={styles.planningCard}
+                  key={slot.id}
+                  aria-pressed={id === slot.id}
+                  onClick={() =>
+                    void (async () => {
+                      if (await props.beforeChange()) {
+                        setId(slot.id);
+                        setEditorOpen(true);
+                      }
+                    })()
+                  }
+                >
+                  <span className={styles.assetImage}>
+                    <ImagePreview
+                      retryable={false}
+                      src={
+                        props.data.styles
+                          .flatMap((style) => style.revisions)
+                          .find(
+                            (revision) =>
+                              revision.id === payload.styleRevisionId,
+                          )?.views[0]?.url
+                      }
+                      alt={
+                        payload.styleRevisionId ? "计划款式" : "待补款式位置"
+                      }
+                    />
+                  </span>
+                  <strong>{payload.name}</strong>
+                  <small>
+                    {roles[payload.role]} · {states[payload.status]}
+                  </small>
+                </button>
+              );
+            })}
         </aside>
-        <SlotEditor
-          key={
-            (existing?.id ?? "new") +
-            ":" +
-            (existing?.version ?? 0) +
-            ":" +
-            draftVersion
-          }
-          {...props}
-          existing={existing}
-          onCreated={setId}
-        />
+        {editorOpen ? (
+          <section className={styles.slotEditor}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void (async () => {
+                  if (await props.beforeChange()) setEditorOpen(false);
+                })();
+              }}
+            >
+              关闭位置编辑
+            </Button>
+            <SlotEditor
+              key={
+                (existing?.id ?? "new") +
+                ":" +
+                (existing?.version ?? 0) +
+                ":" +
+                draftVersion
+              }
+              {...props}
+              existing={existing}
+              onCreated={setId}
+              collectionId={collectionId}
+            />
+          </section>
+        ) : (
+          <p className={styles.muted}>
+            选择一个款式位置进行编辑，或新增计划位置。
+          </p>
+        )}
       </div>
     </div>
   );
@@ -170,16 +244,18 @@ function SlotEditor({
   onSaved,
   beforeChange,
   onCreated,
+  collectionId,
 }: StudioPanelProps & {
   readonly data: StudioSummary;
   readonly existing: StudioDocumentView | undefined;
   readonly onCreated: (id: string) => void;
+  readonly collectionId: string;
 }) {
   const initial: Slot = existing
     ? (existing.currentRevision.payload as Slot)
     : {
         name: "",
-        collectionId: data.collections[0]?.id ?? "",
+        collectionId: collectionId || data.collections[0]?.id || "",
         category: "",
         role: "CORE",
         status: "PLANNED",

@@ -1,9 +1,9 @@
 .materialStudy {
   position: relative;
   overflow: hidden;
-  width: min(100%, 560px);
-  padding: var(--space-10);
-  background: var(--color-studio-canvas);
+  width: min(100%, 460px);
+  padding: var(--space-8);
+  background: var(--color-surface);
   border-radius: var(--radius-xl);
 }
 .materialStudy > span {
@@ -14,7 +14,7 @@
   font-family: var(--font-serif);
   font-size: var(--text-3xl);
   line-height: var(--leading-snug);
-  font-weight: 500;
+  font-weight: 400;
   margin: 30px 0 16px;
 }
 .materialStudy p {
@@ -23,8 +23,8 @@
 }
 .materialPieces {
   position: relative;
-  height: 170px;
-  margin-top: 32px;
+  height: 130px;
+  margin-top: var(--space-6);
 }
 .materialPieces i {
   position: absolute;

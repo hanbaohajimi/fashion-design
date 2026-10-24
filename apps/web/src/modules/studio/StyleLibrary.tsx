@@ -23,6 +23,7 @@ import {
 import { saveStyle } from "./studio-api";
 import { AssetPicker, SaveBar } from "./studio-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
+import { ObjectSwitcher, FormSection } from "../../components/workspace-ui";
 import styles from "./studio.module.css";
 
 const STATUS_LABELS: Record<StudioStyleInput["status"], string> = {
@@ -69,12 +70,12 @@ export function StyleLibrary(
   return (
     <div className={styles.section}>
       <div className={styles.recordHeader}>
-        <div>
+        <div className={styles.row}>
           <h2>款式档案</h2>
-          <p className={styles.muted}>
-            让选中的方案成为可持续修订、交接的款式。共{" "}
-            {props.data.styles.length} 款档案。
-          </p>
+          <h3>{selected ? selected.name : "建立新款式"}</h3>
+          {selected ? (
+            <Badge>r{selected.currentRevision.revision}</Badge>
+          ) : null}
         </div>
         <div className={styles.toolbar}>
           <Button onClick={() => setComparisonOpen(true)}>
@@ -148,8 +149,10 @@ export function StyleLibrary(
       ) : null}
       <div className={styles.split}>
         {props.data.styles.length > 1 ? (
-          <details className={styles.objectChooser}>
-            <summary>切换款式 · {selected?.name ?? "建立新款式"}</summary>
+          <ObjectSwitcher
+            label="切换对象"
+            current={<>切换款式 · {selected?.name ?? "建立新款式"}</>}
+          >
             <aside
               className={`${styles.rail} ${styles.styleRail}`}
               aria-label="已有款式"
@@ -185,7 +188,7 @@ export function StyleLibrary(
                 </p>
               ) : null}
             </aside>
-          </details>
+          </ObjectSwitcher>
         ) : null}
         {props.canEdit || selected ? (
           <StyleEditor
@@ -293,10 +296,6 @@ function StyleEditor({
         void submit();
       }}
     >
-      <div className={styles.recordHeader}>
-        <h3>{existing ? existing.name : "建立新款式"}</h3>
-        {existing ? <Badge>r{existing.currentRevision.revision}</Badge> : null}
-      </div>
       {form.error ? (
         <Notice tone="error">
           {form.error}
@@ -405,8 +404,7 @@ function StyleEditor({
           />
         </Field>
 
-        <div className={styles.section}>
-          <h3>视图资料</h3>
+        <FormSection title="视图资料" summary={`${draft.views.length} 个视图`}>
           {draft.views.map((view, index) => (
             <div className={styles.record} key={index}>
               <div className={styles.formGrid}>
@@ -502,7 +500,7 @@ function StyleEditor({
           >
             添加视图
           </Button>
-        </div>
+        </FormSection>
         <Field
           label={existing ? "本次修改说明" : "采用理由"}
           hint="记录为什么选择这个方案，以及本次修改了什么。"

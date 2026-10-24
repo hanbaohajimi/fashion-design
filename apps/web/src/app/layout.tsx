@@ -46,9 +46,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
             <QueryProvider>{children}</QueryProvider>
           </AuthProvider>
         </div>
-        {/* ask-sonner: 全局唯一 Toaster，挂在 body 末尾，跟随系统亮暗色 */}
+        {/* 全局通知与本轮浅色工作台使用同一主题。 */}
         <Toaster
-          theme="system"
+          theme="light"
           position="bottom-right"
           richColors
           toastOptions={{

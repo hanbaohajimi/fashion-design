@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Dialog, ImagePreview, Notice } from "../../components/ui";
+import { ActionBar } from "../../components/workspace-ui";
 import {
   HISTORY_POSITION,
   navigationPosition,
@@ -105,6 +106,8 @@ export function SaveBar({
   children,
   formId,
   primary = true,
+  label = "保存修订",
+  error,
 }: {
   readonly busy: boolean;
   readonly dirty: boolean;
@@ -112,9 +115,27 @@ export function SaveBar({
   readonly children?: ReactNode;
   readonly formId?: string;
   readonly primary?: boolean;
+  readonly label?: string;
+  readonly error?: ReactNode;
 }) {
   return (
-    <div className={styles.actions}>
+    <ActionBar
+      status={
+        <>
+          <span role="status">
+            {busy
+              ? "正在保存…"
+              : !canEdit
+                ? "只读资料"
+                : dirty
+                  ? "有未保存的修改"
+                  : "已保存"}
+          </span>
+          {error ? <Notice tone="error">{error}</Notice> : null}
+        </>
+      }
+      secondary={children}
+    >
       <Button
         type="submit"
         form={formId}
@@ -122,19 +143,9 @@ export function SaveBar({
         loading={busy}
         disabled={!canEdit || !dirty}
       >
-        保存修订
+        {busy ? "正在保存…" : label}
       </Button>
-      <small className={styles.muted} role="status">
-        {busy
-          ? "正在保存…"
-          : !canEdit
-            ? "只读资料"
-            : dirty
-              ? "有未保存的修改"
-              : "已保存"}
-      </small>
-      {children}
-    </div>
+    </ActionBar>
   );
 }
 

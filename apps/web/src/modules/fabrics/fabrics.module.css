@@ -29,7 +29,7 @@
   align-items: center;
   color: var(--text-muted, var(--color-ink-secondary));
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   gap: var(--space-2);
   text-decoration: none;
   transition: color var(--transition-fast, 120ms);
@@ -76,7 +76,7 @@
 
 .searchWrap input {
   width: 100%;
-  border: 1px solid var(--border-light, var(--color-border));
+  border: 1px solid var(--color-control-border);
   outline: none;
   padding: 0 52px 0 var(--space-5);
   background: var(--surface-card, var(--color-surface));
@@ -89,9 +89,11 @@
 }
 
 .searchWrap input:focus {
-  border-color: var(--accent-primary, var(--color-signal));
+  border-color: var(--color-action);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
   background: var(--color-paper);
-  box-shadow: 0 0 0 3px var(--color-signal-subtle);
+  box-shadow: 0 0 0 3px var(--color-selection-bg);
 }
 
 .searchWrap input:hover:not(:focus) {
@@ -122,7 +124,7 @@
 
 .searchClear:hover {
   background: var(--surface-paper, var(--color-surface));
-  color: var(--accent-primary, var(--color-signal));
+  color: var(--color-action);
 }
 
 .searchClear:focus-visible,
@@ -130,7 +132,7 @@
 .libraryState button:focus-visible,
 .fabricManageButton:focus-visible,
 .fabricUploadTrigger:focus-visible {
-  outline: 3px solid var(--accent-primary, var(--color-signal));
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 
@@ -179,7 +181,7 @@
   margin-bottom: 13px;
   color: var(--text-primary, var(--color-ink));
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .filterGroup > div {
@@ -203,10 +205,10 @@
 
 .filterGroup button:hover,
 .filterGroup button[aria-pressed="true"] {
-  border-color: var(--accent-primary, var(--color-signal));
-  background: var(--accent-primary, var(--color-signal));
-  color: var(--color-paper);
-  transform: translateY(-1px);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+  transform: none;
 }
 
 .archivePanel {
@@ -238,7 +240,7 @@
   color: var(--text-muted, var(--color-ink-secondary));
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
   transition:
     background-color var(--transition-fast, 120ms),
     color var(--transition-fast, 120ms),
@@ -254,13 +256,13 @@
 }
 
 .scopeTabs button[aria-pressed="true"] {
-  background: var(--color-paper);
-  box-shadow: 0 1px 4px var(--color-divider);
-  color: var(--text-primary, var(--color-ink));
+  background: var(--color-selection-bg);
+  box-shadow: inset 0 -2px var(--color-selection-border);
+  color: var(--color-selection-ink);
 }
 
 .scopeTabs button:focus-visible {
-  outline: 3px solid var(--accent-primary, var(--color-signal));
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -314,8 +316,8 @@
 }
 
 .fabricCard:focus-within {
-  border-color: var(--accent-primary, var(--color-signal));
-  outline: 3px solid var(--color-signal-subtle);
+  border-color: var(--color-action);
+  outline: 3px solid var(--color-selection-bg);
   outline-offset: 3px;
 }
 
@@ -391,7 +393,7 @@
   background: var(--color-border);
   color: var(--text-primary, var(--color-ink));
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .fabricManageButton {
@@ -408,7 +410,7 @@
   color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
   opacity: 0;
   transform: translateY(-3px);
   transition:
@@ -425,8 +427,8 @@
 }
 
 .fabricManageButton:hover {
-  background: var(--text-primary, var(--color-ink));
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .categoryPill {
@@ -438,13 +440,13 @@
   background: var(--color-border);
   color: var(--text-secondary, var(--color-ink-secondary));
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .categoryPill[data-scope="user"] {
-  background: var(--color-signal-subtle);
-  color: var(--accent-secondary, var(--color-signal-hover));
+  background: var(--color-selection-bg);
+  color: var(--color-action-hover);
 }
 
 .fabricTags p {
@@ -453,7 +455,7 @@
   overflow: hidden;
   color: var(--text-muted, var(--color-ink-secondary));
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -520,7 +522,7 @@
 }
 
 .metricGauge b[data-on="true"] {
-  background: var(--accent-primary, var(--color-signal));
+  background: var(--color-action);
 }
 
 .cardFacts {
@@ -540,10 +542,10 @@
   width: 100%;
   min-height: 34px;
   margin-top: 13px;
-  border: 0;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-pill, 999px);
-  background: var(--accent-primary, var(--color-signal));
-  color: var(--color-paper);
+  background: var(--color-paper);
+  color: var(--color-ink);
   cursor: pointer;
   font-weight: var(--font-semibold);
   transition:
@@ -552,8 +554,8 @@
 }
 
 .cardBody button:hover {
-  background: var(--accent-secondary, var(--color-signal-hover));
-  transform: translateY(-2px);
+  background: var(--color-overlay);
+  transform: none;
 }
 
 .fabricCardActions {
@@ -573,9 +575,9 @@
 }
 
 .cardBody .fabricManageButton:hover {
-  border-color: var(--accent-primary, var(--color-signal));
-  background: var(--color-signal-subtle);
-  color: var(--accent-secondary, var(--color-signal-hover));
+  border-color: var(--color-action);
+  background: var(--color-selection-bg);
+  color: var(--color-action-hover);
 }
 
 .fabricCard[data-compact="true"] .cardVisual {
@@ -613,7 +615,7 @@
 
 .libraryState button {
   justify-self: center;
-  border: 1px solid var(--accent-primary, var(--color-signal));
+  border: 1px solid var(--color-action);
   border-radius: var(--radius-pill, 999px);
   padding: 9px 14px;
   background: transparent;
@@ -627,7 +629,7 @@
 }
 
 .libraryState button:hover {
-  background: var(--accent-primary, var(--color-signal));
+  background: var(--color-action);
   color: var(--color-paper);
   transform: translateY(-2px);
 }
@@ -655,8 +657,8 @@
 }
 
 .fabricUploadPanel[data-dragging="true"] {
-  border-color: var(--accent-primary, var(--color-signal));
-  background: var(--color-signal-subtle);
+  border-color: var(--color-action);
+  background: var(--color-selection-bg);
 }
 
 .fabricUploadTrigger {
@@ -678,7 +680,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   gap: 9px;
 }
 
@@ -694,7 +696,7 @@
 }
 
 .fabricUploadPanel[data-dragging="true"] .fabricUploadTrigger {
-  color: var(--accent-primary, var(--color-signal));
+  color: var(--color-action);
 }
 
 .fabricUploadForm {
@@ -776,8 +778,8 @@
 
 .fabricUploadFields input:focus,
 .fabricUploadFields select:focus {
-  border-color: var(--accent-primary, var(--color-signal));
-  box-shadow: 0 0 0 2px var(--color-signal-subtle);
+  border-color: var(--color-action);
+  box-shadow: 0 0 0 2px var(--color-selection-bg);
 }
 
 .fabricUploadActions {
@@ -802,8 +804,8 @@
 }
 
 .fabricUploadActions button[type="submit"] {
-  border-color: var(--accent-primary, var(--color-signal));
-  background: var(--accent-primary, var(--color-signal));
+  border-color: var(--color-action);
+  background: var(--color-action);
   color: var(--color-paper);
 }
 
@@ -813,7 +815,9 @@
 
 .fabricUploadActions button:disabled {
   cursor: wait;
-  opacity: 0.55;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 .fabricUploadError,
@@ -918,7 +922,7 @@
 
 .fabricDialog > header span {
   font-size: var(--text-sm);
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .fabricDialog > header h2 {
@@ -968,7 +972,7 @@
   margin-bottom: 5px;
   color: var(--text-secondary, var(--color-ink-tertiary));
   font-size: var(--text-sm);
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .fabricDetailList dd {
@@ -1020,7 +1024,7 @@
 
 .fabricEditForm label > span {
   font-size: var(--text-sm);
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .fabricEditForm input,
@@ -1281,7 +1285,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   background: var(--color-paper);
@@ -1293,7 +1297,7 @@
 .specField input:focus-visible,
 .specField select:focus-visible,
 .structuredFilters input:focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1379,7 +1383,7 @@
     box-shadow var(--duration-fast);
 }
 .fabricCard:focus-within {
-  box-shadow: 0 0 0 2px var(--color-signal);
+  box-shadow: 0 0 0 2px var(--color-action);
 }
 .fabricCard:active {
   transform: translateY(-2px);
@@ -1398,4 +1402,13 @@
   .fabricCard:active {
     transform: none;
   }
+}
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.filterChips:empty {
+  display: none;
 }

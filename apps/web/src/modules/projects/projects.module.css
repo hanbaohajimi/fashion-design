@@ -92,7 +92,7 @@
   height: 28px;
   border: 1.5px solid var(--color-ink);
   place-items: center;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 13px;
   font-style: italic;
 }
@@ -140,12 +140,14 @@
 }
 
 .logoutButton:hover:not(:disabled) {
-  color: var(--color-signal);
+  color: var(--color-action);
 }
 
 .logoutButton:disabled {
   cursor: wait;
-  opacity: 0.5;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 /* ==================== Hero 区域 ==================== */
@@ -162,7 +164,7 @@
 
 .kicker {
   margin: 0 0 var(--space-3);
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.2em;
@@ -172,7 +174,7 @@
 /* 项目标题：衬线大字，字间距负值，体现手稿纸张的字体节奏 */
 .hero h1 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(52px, 9vw, 96px);
   font-weight: var(--font-normal);
   letter-spacing: -0.045em;
@@ -180,7 +182,7 @@
 }
 
 .hero h1 em {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-style: normal;
 }
 
@@ -239,8 +241,9 @@
 }
 
 .statusFilterActive {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+  box-shadow: inset 0 -2px var(--color-selection-border);
 }
 
 .search {
@@ -267,6 +270,12 @@
 
 .search input::placeholder {
   color: var(--color-ink-tertiary);
+}
+
+.search:focus-within {
+  border-color: var(--color-focus-ring);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .projectCount {
@@ -297,8 +306,9 @@
 }
 
 .primaryButton {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-action);
+  border-color: var(--color-action);
+  color: var(--color-action-on);
 }
 
 .secondaryButton {
@@ -307,13 +317,13 @@
 }
 
 .primaryButton:hover {
-  background: var(--color-signal);
-  border-color: var(--color-signal);
+  background: var(--color-action-hover);
+  border-color: var(--color-action-hover);
 }
 
 .secondaryButton:hover {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  background: var(--color-overlay);
+  color: var(--color-ink);
 }
 
 .primaryButton:disabled,
@@ -383,7 +393,7 @@
 
 .projectCard:hover .projectCover,
 .projectOpen:focus-visible .projectCover {
-  border-color: var(--color-signal);
+  border-color: var(--color-action);
 }
 
 /* ==================== 卡片内容 ==================== */
@@ -399,7 +409,7 @@
 .cardHeading h2 {
   overflow: hidden;
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-lg);
   font-weight: var(--font-normal);
   letter-spacing: -0.02em;
@@ -414,7 +424,7 @@
 }
 
 .cardHeading h2 a:hover {
-  color: var(--color-signal);
+  color: var(--color-action);
 }
 
 .cardMenu {
@@ -555,7 +565,9 @@
 
 .confirmActions button:disabled {
   cursor: wait;
-  opacity: 0.6;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 
 /* ==================== 重命名表单 ==================== */
@@ -570,7 +582,7 @@
   min-width: 0;
   flex: 1;
   border: 0;
-  border-bottom: 2px solid var(--color-signal);
+  border-bottom: 2px solid var(--color-action);
   outline: none;
   background: transparent;
   color: inherit;
@@ -581,7 +593,7 @@
 .renameForm button {
   border: 0;
   background: transparent;
-  color: var(--color-signal);
+  color: var(--color-action);
   cursor: pointer;
   font: inherit;
   font-size: var(--text-base);
@@ -602,7 +614,7 @@
 }
 
 .emptyKicker {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.16em;
@@ -612,7 +624,7 @@
 
 .emptyState h2 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(32px, 5vw, 48px);
   font-weight: var(--font-normal);
   letter-spacing: -0.02em;
@@ -664,7 +676,7 @@
 }
 
 .dialogIndex {
-  color: var(--color-signal);
+  color: var(--color-action);
   font-size: var(--text-sm);
   font-weight: var(--font-bold);
   letter-spacing: 0.12em;
@@ -692,21 +704,25 @@
 
 .dialog input {
   width: 100%;
-  border: 0;
-  border-bottom: 2px solid var(--color-border);
-  border-radius: 0;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
   outline: 0;
-  padding: var(--space-4) 0;
-  background: transparent;
+  padding: var(--space-3);
+  background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: var(--text-xl);
   transition: border-color var(--duration-fast);
 }
 
 .dialog input:focus {
-  border-color: var(--color-signal);
+  border-color: var(--color-action);
+}
+
+.dialog input:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .dialog .fieldError {
@@ -727,12 +743,12 @@
 .notice {
   display: flex;
   margin-top: var(--space-4);
-  border-left: 3px solid var(--color-signal);
+  border-left: 3px solid var(--color-action);
   padding: var(--space-3) var(--space-4);
   align-items: center;
   justify-content: space-between;
-  background: var(--color-signal-subtle);
-  color: var(--color-signal);
+  background: var(--color-selection-bg);
+  color: var(--color-action);
   font-size: var(--text-sm);
   border-radius: var(--radius-sm);
 }
@@ -902,6 +918,7 @@
   margin-bottom: var(--space-5);
 }
 .search {
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-md);
   min-height: var(--control-height);
   background: var(--color-paper);

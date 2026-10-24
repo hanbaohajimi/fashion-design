@@ -8,10 +8,11 @@
 }
 .panel h2 {
   font-size: var(--text-module-title);
-  margin: 8px 0 12px;
+  margin: 0 0 var(--space-2);
   line-height: 1.3;
 }
 .panel p {
+  margin: 0;
   font-size: var(--text-base);
   line-height: 1.8;
   color: var(--color-ink-secondary);
@@ -37,7 +38,7 @@
   margin-top: 5px;
   width: 18px;
   height: 18px;
-  accent-color: var(--color-signal);
+  accent-color: var(--color-action);
 }
 .sources strong {
   display: block;
@@ -75,7 +76,7 @@
   line-height: 1.8;
 }
 .panel :focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 @media (max-width: 760px) {
@@ -104,8 +105,8 @@
   object-fit: cover;
 }
 .sources > label:has(input:checked) {
-  background: var(--color-signal-subtle);
-  box-shadow: inset 2px 0 var(--color-signal);
+  background: var(--color-selection-bg);
+  box-shadow: inset 2px 0 var(--color-action);
 }
 .layout form {
   padding: var(--space-5);

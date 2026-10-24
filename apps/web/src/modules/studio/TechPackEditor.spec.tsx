@@ -50,10 +50,12 @@ it("keeps unknown measurements and usage empty in a draft", async () => {
   fireEvent.change(screen.getByLabelText("技术包名称"), {
     target: { value: "夹克技术资料" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "BOM" }));
   fireEvent.click(screen.getByRole("button", { name: "添加材料" }));
   fireEvent.change(screen.getByLabelText("BOM 1 名称"), {
     target: { value: "主面料" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "POM" }));
   fireEvent.click(screen.getByRole("button", { name: "添加测量部位" }));
   fireEvent.change(screen.getByLabelText("POM 1 部位"), {
     target: { value: "胸围" },
@@ -67,6 +69,37 @@ it("keeps unknown measurements and usage empty in a draft", async () => {
     bom: [{ quantity: null, reviewed: false, source: "manual" }],
     pom: [{ value: null, tolerance: null, reviewed: false }],
   });
+});
+
+it("保留评审者的人工确认权限，编辑权限不会扩大", () => {
+  const values = props();
+  render(
+    <TechPackEditor
+      {...values}
+      canEdit={false}
+      data={studioFixture({
+        role: "REVIEWER",
+        capabilities: { edit: false, review: true, manageMembers: false },
+        styles: [styleFixture()],
+        techPacks: [techPackFixture()],
+      })}
+    />,
+  );
+  expect(
+    (screen.getByLabelText("技术包名称") as HTMLInputElement).disabled,
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "复核发布" }));
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: /我已人工复核本次资料/ }),
+  );
+  expect(
+    (screen.getByRole("button", { name: "复核并发布" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(false);
+  expect(
+    (screen.getByRole("button", { name: "保存修订" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
 });
 
 it("invalidates anchor review when a linked view image changes", async () => {

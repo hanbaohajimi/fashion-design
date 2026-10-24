@@ -2,13 +2,7 @@
   min-height: 100dvh;
   overflow: hidden;
   background-color: var(--color-paper);
-  background-image: linear-gradient(
-    90deg,
-    var(--color-divider) 1px,
-    transparent 1px
-  );
-  background-position: center top;
-  background-size: clamp(6rem, 8.333vw, 10rem) 100%;
+  background-image: none;
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
@@ -37,7 +31,7 @@
 }
 
 .pageHeader span {
-  color: var(--color-signal);
+  color: var(--color-action);
 }
 
 .pageHeader a {
@@ -51,7 +45,7 @@
 
 .pageHeader a:focus-visible,
 .sourceRow:focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 4px;
 }
 
@@ -62,7 +56,7 @@
 
 .hero h1 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(3.5rem, 5vw, 6rem);
   font-weight: 400;
   line-height: 0.92;
@@ -103,7 +97,7 @@
   color: var(--trend-muted);
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.12em;
   transition: color var(--trend-motion);
 }
@@ -194,7 +188,7 @@
   display: grid;
   color: var(--trend-muted);
   font-size: clamp(0.56rem, 0.52rem + 0.08vw, 0.64rem);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.16em;
   line-height: 1.55;
   text-align: right;
@@ -368,7 +362,7 @@
 .digestCard h2 {
   margin: 0.55rem 0;
   font-size: 1.4rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 .digestCard p {
   margin: 0.5rem 0;
@@ -394,7 +388,7 @@
 .archiveFilters h2 {
   margin: 0.6rem 0;
   font-size: 1.75rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 .archiveFilters p {
   margin: 0;
@@ -413,7 +407,8 @@
   min-height: 2.75rem;
   box-sizing: border-box;
   padding: 0.65rem 0.85rem;
-  border: 1px solid var(--trend-divider);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--trend-ink);
   font: inherit;
@@ -438,9 +433,10 @@
   cursor: pointer;
 }
 .categoryTabs button[aria-pressed="true"] {
-  border-color: var(--trend-ink);
-  background: var(--trend-ink);
-  color: var(--trend-bg);
+  border-color: var(--color-selection-border);
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+  box-shadow: inset 0 -2px var(--color-selection-border);
 }
 .archiveGrid {
   display: grid;
@@ -505,7 +501,7 @@
 .cardBody h3 {
   margin: 0.7rem 0;
   font-size: 1.3rem;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -532,7 +528,7 @@
   font-size: var(--text-sm);
 }
 .aiBoundary strong {
-  font-weight: 500;
+  font-weight: 400;
 }
 .aiSummary p {
   font-size: 0.82rem;
@@ -583,8 +579,10 @@
   font-size: 0.8rem;
 }
 .importButton:disabled {
-  opacity: 0.5;
   cursor: wait;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
 }
 .archiveState {
   padding: 3rem 0;
@@ -650,7 +648,7 @@
 }
 .dialogHeading h2 {
   margin: 0.5rem 0;
-  font-weight: 500;
+  font-weight: 400;
 }
 .dialogHeading > button {
   border: 0;
@@ -697,11 +695,6 @@
 }
 .createBoardForm button {
   flex-shrink: 0;
-  border: 1px solid var(--trend-ink);
-  padding: 0.5rem 0.8rem;
-  background: var(--trend-ink);
-  color: var(--trend-bg);
-  cursor: pointer;
 }
 .archive :is(button, input):focus-visible {
   outline: 2px solid var(--trend-accent);
@@ -835,7 +828,7 @@
   transition: box-shadow var(--duration-fast);
 }
 .trendCard:focus-within {
-  box-shadow: 0 0 0 2px var(--color-signal);
+  box-shadow: 0 0 0 2px var(--color-action);
 }
 @media (hover: hover) {
   .trendCard:hover {

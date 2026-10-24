@@ -4,10 +4,11 @@
 }
 .panel h2 {
   font-size: var(--text-module-title);
-  margin: 8px 0 12px;
+  margin: 0 0 var(--space-2);
   line-height: 1.3;
 }
 .panel p {
+  margin: 0;
   font-size: var(--text-base);
   line-height: 1.8;
   color: var(--color-ink-secondary);
@@ -64,7 +65,7 @@
 }
 .layout input[type="range"] {
   padding: 0;
-  accent-color: var(--color-signal);
+  accent-color: var(--color-action);
 }
 .check {
   display: flex !important;
@@ -87,7 +88,7 @@
   cursor: pointer;
 }
 .panel :focus-visible {
-  outline: 2px solid var(--color-signal);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 @media (max-width: 760px) {
@@ -106,8 +107,8 @@
 }
 
 .saved button[aria-pressed="true"] {
-  border-color: var(--color-signal);
-  color: var(--color-signal);
+  border-color: var(--color-selection-border);
+  color: var(--color-selection-border);
 }
 @media (max-height: 600px) {
   .preview {

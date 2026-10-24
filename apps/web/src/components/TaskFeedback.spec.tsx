@@ -30,10 +30,10 @@ it("delays artwork and never flashes it after a fast completion", () => {
 
 it("resets media when changing task identity and excludes text analysis", () => {
   vi.useFakeTimers();
-  const view = render(<TaskFeedback taskId="first" status="queued" />);
+  const view = render(<TaskFeedback taskId="first" status="queued" painting />);
   act(() => vi.advanceTimersByTime(2000));
   expect(screen.queryByTestId("painting")).not.toBeNull();
-  view.rerender(<TaskFeedback taskId="second" status="running" />);
+  view.rerender(<TaskFeedback taskId="second" status="running" painting />);
   expect(screen.queryByTestId("painting")).toBeNull();
   view.rerender(
     <TaskFeedback taskId="analysis" status="running" operation="analysis" />,

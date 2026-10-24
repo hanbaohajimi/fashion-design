@@ -30,7 +30,7 @@ body {
   background: var(--color-ink);
   color: var(--color-surface);
   font-size: 0.85rem;
-  font-weight: 800;
+  font-weight: 600;
   opacity: 0;
   pointer-events: none;
   text-decoration: none;
@@ -41,7 +41,7 @@ body {
 }
 
 .skip-link:focus-visible {
-  outline: 3px solid var(--color-warning);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 3px;
   opacity: 1;
   pointer-events: auto;
@@ -53,6 +53,7 @@ input,
 select,
 textarea {
   font: inherit;
+  accent-color: var(--color-action);
 }
 
 /* mobile-native: 消除 iOS/Android 点击高亮闪烁 */
