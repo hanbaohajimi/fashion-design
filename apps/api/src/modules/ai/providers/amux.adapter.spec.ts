@@ -89,6 +89,12 @@ describe("AmuxAdapter", () => {
     expect(result.job).not.toHaveProperty("completedResult");
   });
 
+  it("同时返回内联图片和临时地址时优先保存内联数据", async () => {
+    vi.mocked(transport.generate).mockResolvedValue({ data: [{ url: "https://images.example.com/temporary.png", b64_json: "iVBORw0KGgo=" }] });
+    const job = await adapter.submit(t2iRequest, new AbortController().signal);
+    expect(job.completedResult?.images).toEqual([{ url: "data:image/png;base64,iVBORw0KGgo=" }]);
+  });
+
   it.each([
     { expected: "1008x1008", height: 1_000, width: 1_000 },
     { expected: "816x816", height: 512, width: 512 },

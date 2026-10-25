@@ -17,6 +17,7 @@ export function workflowInputPorts(
   assetType: string,
   toolType: string,
 ): readonly WorkflowConnectionPort[] {
+  if (toolType === "transform_image") return assetType === "candidate" ? ["source"] : [];
   if (toolType === "analyze_brief") {
     if (assetType === "brief") return ["goal"];
     if (assetType === "reference_text") return ["goal", "reference"];

@@ -4,10 +4,12 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const STORAGE_OPERATION_TIMEOUT_MS = 15_000;
 
 export interface ThumbnailStorage {
+  downloadUrl?(objectKey: string): Promise<string>;
   delete(objectKey: string): Promise<void>;
   get(objectKey: string): Promise<Buffer>;
   put(objectKey: string, body: Buffer, contentType: string): Promise<void>;
@@ -31,6 +33,9 @@ function requiredEnvironment(name: string): string {
 }
 
 export class S3ThumbnailStorage implements ThumbnailStorage {
+  async downloadUrl(objectKey: string) {
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: objectKey }), { expiresIn: 3600 });
+  }
   private readonly bucket = requiredEnvironment("S3_BUCKET");
   private readonly client = new S3Client({
     credentials: {

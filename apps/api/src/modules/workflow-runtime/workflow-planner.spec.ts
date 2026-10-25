@@ -43,7 +43,7 @@ describe("Fig8 tool contract and action protocol", () => {
   });
   it("provides one serializable tool catalog with parameter defaults and honest reference semantics", () => {
     const tools = getWorkflowToolCatalog();
-    expect(tools.map((tool) => tool.key)).toEqual(["analyze_brief", "generate_design", "evaluate_design", "edit_design"]);
+    expect(tools.map((tool) => tool.key)).toEqual(["analyze_brief", "generate_design", "evaluate_design", "edit_design", "transform_image"]);
     expect(tools.find((tool) => tool.key === "generate_design")?.defaults).toMatchObject({ count: 2, width: 768, height: 1024, quality: "high" });
     expect(tools.find((tool) => tool.key === "edit_design")?.limits.join(" ")).toContain("提示词");
     expect(JSON.stringify(tools)).toContain("negativePrompt");

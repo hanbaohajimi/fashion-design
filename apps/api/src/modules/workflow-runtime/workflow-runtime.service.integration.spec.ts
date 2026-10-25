@@ -449,6 +449,9 @@ describe("WorkflowRuntimeService integration", () => {
     const fabricId = crypto.randomUUID();
     const toolId = crypto.randomUUID();
     const obstacleId = crypto.randomUUID();
+    const paletteId = crypto.randomUUID();
+    const legacyPaletteId = crypto.randomUUID();
+    const disconnectedPaletteId = crypto.randomUUID();
     const createFromAgent = vi.fn(async (_userId: string, request: { projectId: string; prompt: string }) => {
       const task = await prisma.generationTask.create({ data: {
         userId: user.id, projectId: request.projectId, taskType: "t2i",
@@ -470,10 +473,15 @@ describe("WorkflowRuntimeService integration", () => {
         { type: "add_node", node: { id: fabricId, kind: "asset", type: "fabric", title: "羊毛混纺", payload: { fabricId: fabric.id, text: "羊毛混纺保暖面料" }, x: 100, y: 600 } },
         { type: "add_node", node: { id: toolId, kind: "tool", type: "generate_design", title: "生成风衣", payload: { toolKey: "generate_design", toolVersion: "1", params: { prompt: "生成秋冬通勤风衣", count: 1 } }, x: 500, y: 350 } },
         { type: "add_node", node: { id: obstacleId, kind: "asset", type: "reference_image", title: "已摆放的参考图", payload: { fileAssetId: file.id }, x: 840, y: 450 } },
+        { type: "add_node", node: { id: paletteId, kind: "asset", type: "swatch", title: "通勤配色", payload: { color: "#40536D", colors: [{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }, { hex: "#A87F65", name: "追加陶土" }] }, x: 100, y: 900 } },
+        { type: "add_node", node: { id: legacyPaletteId, kind: "asset", type: "swatch", title: "旧单色卡", payload: { color: "#112233" }, x: 100, y: 1200 } },
+        { type: "add_node", node: { id: disconnectedPaletteId, kind: "asset", type: "swatch", title: "未连接色卡", payload: { color: "#FF00FF", colors: [{ hex: "#FF00FF", name: "不可引用的洋红" }] }, x: 100, y: 1500 } },
         ...[
           { id: imageId, port: "reference" as const },
           { id: trendId, port: "reference" as const },
           { id: fabricId, port: "reference" as const },
+          { id: paletteId, port: "reference" as const },
+          { id: legacyPaletteId, port: "reference" as const },
         ].map(({ id, port }) => ({ type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId: id, targetNodeId: toolId, sourcePort: "out" as const, targetPort: port } })),
       ] });
 
@@ -482,6 +490,10 @@ describe("WorkflowRuntimeService integration", () => {
       const request = createFromAgent.mock.calls[0]?.[1] as { prompt: string; referenceImages: Array<{ role: string }> } | undefined;
       expect(request?.prompt).toContain(trend.summary);
       expect(request?.prompt).toContain("羊毛混纺保暖面料");
+      expect(request?.prompt).toContain("雾蓝: #40536D\n暖象牙: #E6D8C6\n追加陶土: #A87F65");
+      expect(request?.prompt).toContain("旧单色卡: #112233");
+      expect(request?.prompt).not.toContain("不可引用的洋红");
+      expect(request?.prompt).not.toContain("#FF00FF");
       expect(request?.referenceImages.map((reference) => reference.role)).toEqual(["detail_ref", "style_ref", "fabric_texture"]);
       const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { projectId: project.id, toolNodeId: toolId } });
       expect((attempt.requestSnapshot as { request: { referenceImages: Array<{ role: string }> } }).request.referenceImages[0]?.role).toBe("detail_ref");

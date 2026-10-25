@@ -7,7 +7,7 @@ import type { WorkflowSemanticPatchInput } from "../workflows/workflows.schemas"
 
 const id = z.string().trim().min(1).max(128);
 export const workflowToolPlanSchema = z.object({
-  tool: z.enum(["analyze_brief", "generate_design", "evaluate_design", "edit_design"]),
+  tool: workflowToolKeySchema,
   title: z.string().trim().min(1).max(120),
   prompt: z.string().trim().min(1).max(4_000),
   rationale: z.string().trim().min(1).max(1_000),

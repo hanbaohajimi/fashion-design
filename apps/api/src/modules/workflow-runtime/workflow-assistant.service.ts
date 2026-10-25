@@ -1,4 +1,6 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { workflowReferenceSummarySchema } from "@fashion/shared";
+import { buildWorkflowReferenceSummary } from "./workflow-reference-summary";
 import { AgentMessageRole, AgentMessageStatus, Prisma, appendWorkflowOutbox, type PrismaClient } from "@fashion/db";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
@@ -347,6 +349,7 @@ export class WorkflowAssistantService {
         executionId: observation?.executionId ?? null, proposalId: proposal?.id ?? null,
         context: json({ version: "workflow-message-context/2", graphRevision: built.graph.revision, contextRevision, planRevision,
           referencedNodeIds: input.referencedNodeIds, focusNodeIds: built.context.focusNodeIds, coverage: result.coverage,
+          referenceSummary: buildWorkflowReferenceSummary(built.graph.nodes, input.referencedNodeIds, built.context.focusNodeIds, visual.coverage.attachedNodeIds),
           visualCoverage: visual.coverage, imageBindings: visual.imageBindings, understanding: decision.understanding, fileAssetIds: [], shapeIds: [] }) };
       const assistantMessage = turn.assistantMessage
         ? await tx.agentMessage.update({ where: { id: turn.assistantMessage.id, status: "PENDING" }, data, include: { proposal: true } })
@@ -395,6 +398,8 @@ type MessageRow = {
 function messageView(row: MessageRow) {
   const raw = object(row.context);
   const context = Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]]));
+  const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
+  if (summary.success) context.referenceSummary = summary.data;
   const evidence = object(row.proposal?.evidence);
   return { id: row.id, role: row.role === "USER" ? "user" : "assistant", status: row.status.toLowerCase(), content: row.content,
     kind: row.kind ?? null, context, clientRequestId: row.clientRequestId, replyToId: row.replyToId, generationTaskId: row.generationTaskId,

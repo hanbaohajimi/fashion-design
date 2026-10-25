@@ -59,6 +59,7 @@ export function captureWorkerException(
   context: {
     readonly phase: "bootstrap" | "failed" | "fallback";
     readonly queue:
+      | "image-transform"
       | "collection-similarity"
       | "export"
       | "generation"

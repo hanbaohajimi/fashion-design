@@ -1,4 +1,5 @@
 import { ProjectAccessModule } from "../studio/project-access.module";
+import { ImageTransformQueue } from "./image-transform-queue.service";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 import { SecurityModule } from "../../security/security.module";
@@ -36,6 +37,7 @@ import {
   controllers: [WorkflowRuntimeController, WorkflowAssistantController],
   providers: [
     WorkflowRuntimeService,
+    ImageTransformQueue,
     WorkflowAssistantService,
     WorkflowCoordinator,
     WorkflowOutboxConsumer,

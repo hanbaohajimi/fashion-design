@@ -59,6 +59,23 @@ afterEach(async () => { for (const id of cleanup.splice(0)) {
 } });
 
 describe("persistent workflow collaboration", () => {
+  it("keeps turn-time reference names after renaming or deleting nodes and after reloading messages", async () => {
+    const h = await harness();
+    const result = await h.assistant.send(h.user.id, h.conversation.id, { clientRequestId: "reference-history-123", content: "比较这个候选", referencedNodeIds: [h.ids.a], focusNodeIds: [h.ids.a] });
+    const expected = { version: 1, explicit: [{ nodeId: h.ids.a, title: "同名候选" }], discussion: [{ nodeId: h.ids.a, title: "同名候选" }], images: [] };
+    expect(result.assistantMessage.context?.referenceSummary).toEqual(expected);
+    let graph = await workflows.get(h.user.id, h.project.id);
+    graph = await workflows.patch(h.user.id, h.project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision, operations: [{ type: "update_node", nodeId: h.ids.a, title: "改名后的候选" }] });
+    await workflows.patch(h.user.id, h.project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision, operations: [{ type: "remove_node", nodeId: h.ids.a }] });
+    const messages = await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 });
+    expect(messages.items.find((message) => message.id === result.assistantMessage.id)?.context?.referenceSummary).toEqual(expected);
+    await prisma.agentMessage.update({ where: { id: result.assistantMessage.id }, data: { context: { referencedNodeIds: [h.ids.a], referenceSummary: { version: 0 } } } });
+    const legacy = await h.assistant.messages(h.user.id, h.conversation.id, { limit: 50 });
+    const legacyContext = legacy.items.find((message) => message.id === result.assistantMessage.id)?.context;
+    expect(legacyContext?.referenceSummary).toBeUndefined();
+    expect(legacyContext?.referencedNodeIds).toEqual([h.ids.a]);
+  });
+
   it("persists revisable goal plans and turn budgets without scheduling generation", async () => {
     const h = await harness();
     h.model.generateJson.mockImplementation(async (request) => request.parse(planningReply("比较袖型后再修改")));

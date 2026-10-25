@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageOutpaintSchema, imageAnnotationSchema } from "@fashion/shared";
 
 export const AI_TASK_TYPES = ["t2i", "i2i", "inpaint"] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
@@ -29,7 +30,8 @@ const paletteColorSchema = z.object({
 
 const commonRequestSchema = z
   .object({
-    background: z.enum(["auto", "opaque"]).optional(),
+    background: z.enum(["auto", "opaque", "transparent"]).optional(),
+    imageEdit: z.object({ intent: z.enum(["edit", "feedback", "erase", "remove_background", "outpaint"]), outpaint: imageOutpaintSchema.optional(), annotations: z.array(imageAnnotationSchema).max(100).optional() }).strict().optional(),
     prompt: z.string().trim().min(1).max(4_000),
     negativePrompt: z.string().trim().max(3_000).optional(),
     width: z.number().int().min(256).max(2_048).multipleOf(8),

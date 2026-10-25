@@ -1,3 +1,4 @@
+export { workflowReferenceSummarySchema, type WorkflowReferenceSummary } from "./workflow-reference-summary";
 export const PLATFORM_NAME = "AI 服装设计平台";
 export * from "./visual-context";
 export * from "./workflow-tools";
@@ -348,6 +349,7 @@ export interface AgentRunView {
 export interface AgentMessageContext {
   readonly fileAssetIds: readonly string[];
   readonly shapeIds: readonly string[];
+  readonly referenceSummary?: import("./workflow-reference-summary").WorkflowReferenceSummary;
 }
 
 export interface AgentConversationSummary {
@@ -381,7 +383,7 @@ export type AgentAction =
   | {
       readonly type: "generate";
       readonly request: {
-        readonly background?: "auto" | "opaque";
+        readonly background?: "auto" | "opaque" | "transparent";
         readonly height: number;
         readonly outputCompression?: number;
         readonly outputFormat?: "jpeg" | "png" | "webp";
@@ -394,6 +396,7 @@ export type AgentAction =
     };
 
 export * from "./studio";
+export * from "./image-workspace";
 
 export * from "./experiments";
 

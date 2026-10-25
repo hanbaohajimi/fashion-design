@@ -75,6 +75,7 @@ const toolOutputType: Record<string, string> = {
   generate_design: "candidate",
   evaluate_design: "evaluation",
   edit_design: "candidate",
+  transform_image: "candidate",
   restore_version: "candidate",
 };
 

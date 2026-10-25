@@ -1,9 +1,10 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { ImageTransformQueue } from "./image-transform-queue.service";
 import { requireProjectFile } from "../files/project-file-access";
 import { FileStatus, Prisma, appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, type PrismaClient, type WorkflowProposal } from "@fashion/db";
 import { AmuxClaudeVlmClassifier, type AmuxClaudeImageInput, type AmuxClaudeJsonClient } from "@fashion/ai";
 import type { AgentDesignBrief, AgentDesignEvidence, VlmRoleLabel } from "@fashion/shared";
-import { workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowToolParameters, workflowToolKeySchema } from "@fashion/shared";
+import { imageFeedbackSchema, readSwatchColors, workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowToolParameters, workflowToolKeySchema } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -88,7 +89,10 @@ function nodeText(node: Node): string {
   const constraints = Array.isArray(brief.constraints)
     ? brief.constraints.map((value) => { const constraint = object(value); return `${text(constraint.mode)}: ${text(constraint.requirement)}`; }).join("\n")
     : "";
-  return [node.title, text(payload.text), text(brief.summary), constraints, text(payload.color), text(params.prompt), text(payload.rationale)]
+  const palette = node.type === "swatch"
+    ? readSwatchColors(payload, node.title).map((color) => `${color.name}: ${color.hex}`).join("\n")
+    : text(payload.color);
+  return [node.title, text(payload.text), text(brief.summary), constraints, palette, text(params.prompt), text(payload.rationale)]
     .filter(Boolean)
     .join("\n");
 }
@@ -184,6 +188,7 @@ export class WorkflowRuntimeService {
     @Optional() @Inject(DesignContextService) private readonly contexts?: DesignContextService,
     @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
     @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
+    @Optional() @Inject(ImageTransformQueue) private readonly transforms?: ImageTransformQueue,
   ) {}
 
   async toolCatalog(userId: string, projectId: string) {
@@ -350,6 +355,12 @@ export class WorkflowRuntimeService {
     const params = parseWorkflowToolParameters(toolKey, { ...safeParams, prompt: text(safeParams.prompt) || node.title,
       ...(toolKey === "edit_design" && legacyMask && !safeParams.mask ? { mask: await this.resolveLegacyMask(userId, projectId, text(legacyMask)) } : {}) });
     const count = typeof params.count === "number" ? params.count : 1;
+    const transformSource = node.type === "transform_image" ? sources.find((source) => graph.edges.some((edge) => edge.sourceNodeId === source.id && edge.targetNodeId === nodeId && edge.targetPort === "source")) : null;
+    const transformAssetId = transformSource ? text(object(transformSource.payload).assetId) : null;
+    if (node.type === "transform_image") {
+      if (!transformAssetId || !this.transforms) throw new BadRequestException("图片变换缺少原图或队列");
+      await this.ownedAsset(userId, projectId, transformAssetId);
+    }
     const ordinal = (attempts[0]?.ordinal ?? 0) + 1;
     const request = node.type === "generate_design" || node.type === "edit_design"
       ? await this.generationRequest(userId, projectId, { ...node, payload: json({ ...object(node.payload), params }) as Prisma.JsonValue }, sources, graph) : null;
@@ -367,7 +378,7 @@ export class WorkflowRuntimeService {
       if (current?.revision !== graph.revision) throw new ConflictException("执行前画布已变化，请重新确认输入");
       const nodeVersionId = versions.get(nodeId)?.id;
       if (!nodeVersionId) throw new ConflictException("节点版本缺失，请刷新后重试");
-      const snapshot = json({ executionActor: userId, mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
+      const snapshot = json({ ...(transformAssetId ? { transformAssetId } : {}), executionActor: userId, mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
         inputNodeIds: sources.map((source) => source.id), inputBindings: versions.get(nodeId)?.inputBindings,
         inputSnapshot: sources.map((source) => ({ id: source.id, nodeVersionId: versions.get(source.id)?.id, type: source.type, title: source.title, payload: source.payload })),
         ...(request ? { request } : { model: process.env.AMUX_CLAUDE_MODEL }) });
@@ -386,6 +397,11 @@ export class WorkflowRuntimeService {
     graph = await this.workflows.get(userId, projectId);
     const reserved = await this.database.workflowAttempt.findMany({ where: { executionId: execution.id }, orderBy: { ordinal: "asc" } });
     try {
+      if (transformAssetId) {
+        if (!this.transforms) throw new BadRequestException("图片变换队列不可用");
+        for (const attempt of reserved) await this.transforms.enqueue(attempt.id);
+        return this.sync(userId, projectId);
+      }
       if (request) {
         for (const attempt of reserved) {
           const result = await this.generation.createFromAgent(userId, request, attempt.executionKey, request.prompt);
@@ -499,6 +515,24 @@ export class WorkflowRuntimeService {
     const attempts = await this.database.workflowAttempt.findMany({ where: { projectId, status: { in: ACTIVE_ATTEMPT_STATUSES } }, orderBy: { createdAt: "asc" } });
     for (const attempt of attempts) {
       const snapshot = object(attempt.requestSnapshot);
+      if (snapshot.transformAssetId && this.transforms) {
+        const result = await this.database.imageTransformResult.findUnique({ where: { attemptId: attempt.id } });
+        if (!result) { await this.transforms.enqueue(attempt.id); continue; }
+        const tool = graph.nodes.find((node) => node.id === attempt.toolNodeId);
+        if (!tool) continue;
+        if (result.error) {
+          graph = await this.persistAttemptResult(graph, attempt.id, { status: "failed", error: result.error }, [{ type: "update_node", nodeId: tool.id, status: "failed" }]);
+        } else if (result.assetId) {
+          const asset = await this.ownedAsset(userId, projectId, result.assetId);
+          const outputId = stableMutationId(`transform:output:${attempt.id}`);
+          graph = await this.persistAttemptResult(graph, attempt.id, { status: "completed", error: null }, [
+            { type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: "调整尺寸结果", payload: { assetId: asset.id, parentAssetId: asset.parentAssetId, imageUrl: `/api/design-assets/${asset.id}/content`, width: asset.width, height: asset.height, attemptId: attempt.id, executionId: attempt.executionId }, ...availableNodePosition(graph, [], { kind: "asset", type: "candidate" }, tool.x + 340, tool.y), status: "completed" } },
+            { type: "add_edge", edge: { id: stableMutationId(`transform:edge:${attempt.id}`), sourceNodeId: tool.id, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } },
+            { type: "update_node", nodeId: tool.id, status: "completed" },
+          ]);
+        }
+        continue;
+      }
       if (!attempt.generationTaskId) {
         if (!snapshot.request) {
           if (Date.now() - attempt.updatedAt.getTime() > 15 * 60_000)
@@ -533,13 +567,13 @@ export class WorkflowRuntimeService {
           const independentReference = matchingNodes.find((node) => !graph.edges.some((edge) => edge.targetNodeId === node.id));
           if (independentReference) {
             operations.push({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId: tool.id, targetNodeId: independentReference.id, sourcePort: "out", targetPort: "source" } });
-            operations.push({ type: "update_node", nodeId: independentReference.id, status: "completed", payload: { ...object(independentReference.payload), generationTaskId: task.id, attemptId: attempt.id } });
+            operations.push({ type: "update_node", nodeId: independentReference.id, status: "completed", payload: { ...object(independentReference.payload), generationTaskId: task.id, attemptId: attempt.id, executionId: attempt.executionId } });
             continue;
           }
           const outputId = stableMutationId(`workflow:output:${attempt.id}:${assetId}`);
           const existingOutputs = graph.edges.filter((edge) => edge.sourceNodeId === tool.id).length + operations.filter((operation) => operation.type === "add_node").length;
           const outputPosition = availableNodePosition(graph, operations, { kind: "asset", type: "candidate" }, tool.x + 340, tool.y + existingOutputs * 350);
-          operations.push({ type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: `候选 ${String.fromCharCode(65 + existingOutputs + index)}`, payload: { assetId, imageUrl: `/api/design-assets/${encodeURIComponent(assetId)}/content`, thumbnailUrl: `/api/design-assets/${encodeURIComponent(assetId)}/thumbnail`, generationTaskId: task.id, attemptId: attempt.id, width: image.width, height: image.height }, ...outputPosition, status: "completed" } });
+          operations.push({ type: "add_node", node: { id: outputId, kind: "asset", type: "candidate", title: `候选 ${String.fromCharCode(65 + existingOutputs + index)}`, payload: { assetId, imageUrl: `/api/design-assets/${encodeURIComponent(assetId)}/content`, thumbnailUrl: `/api/design-assets/${encodeURIComponent(assetId)}/thumbnail`, generationTaskId: task.id, attemptId: attempt.id, executionId: attempt.executionId, width: image.width, height: image.height }, ...outputPosition, status: "completed" } });
           operations.push({ type: "add_edge", edge: { id: stableMutationId(`workflow:output-edge:${attempt.id}:${assetId}`), sourceNodeId: tool.id, targetNodeId: outputId, sourcePort: "out", targetPort: "source" } });
         }
       }
@@ -878,10 +912,31 @@ export class WorkflowRuntimeService {
             : item.type === "sketch" ? "silhouette_ref" : "style_ref";
       if (url) references.push({ order: references.length, role, url, weight: typeof setting?.weight === "number" ? setting.weight : 0.7 });
     }
-    const prompt = [text(params.prompt), ...sources.filter((item) => ["constraint", "brief", "reference_text", "swatch", "trend", "fabric"].includes(item.type)).map(nodeText)].filter(Boolean).join("\n");
+    let prompt = [text(params.prompt), ...sources.filter((item) => ["constraint", "brief", "reference_text", "swatch", "trend", "fabric"].includes(item.type)).map(nodeText)].filter(Boolean).join("\n");
+    let annotations: unknown[] | undefined;
+    if (params.intent === "outpaint") {
+      const frame = object(params.outpaint);
+      if (!sourceAsset?.width || !sourceAsset.height || Number(frame.left) + sourceAsset.width > Number(frame.width) || Number(frame.top) + sourceAsset.height > Number(frame.height) || (sourceAsset.width === frame.width && sourceAsset.height === frame.height)) {
+        throw new BadRequestException("扩展画布必须完整包含原图并增加画面区域");
+      }
+    }
+    if (params.intent === "feedback") {
+      if (!sourceAsset) throw new BadRequestException("按意见修改需要原图");
+      const saved = await this.database.imageAssetFeedback.findUnique({ where: { assetId: sourceAsset.id } });
+      if (!saved || saved.revision !== params.feedbackRevision) throw new ConflictException("标注已更新，请重新保存并提交");
+      const feedback = imageFeedbackSchema.parse({ ...object(saved.data), revision: saved.revision });
+      const selected = feedback.comments.filter((comment) => Array.isArray(params.commentIds) && params.commentIds.includes(comment.id));
+      if (!selected.length) throw new BadRequestException("请选择修改意见");
+      const linked = new Set(selected.flatMap((comment) => comment.annotationIds));
+      annotations = feedback.annotations.filter((annotation) => !linked.size || linked.has(annotation.id));
+      prompt += "\n修改意见（位置为原图宽高的比例）：\n" + selected.map((comment) => `${comment.point ? `(${comment.point.x.toFixed(3)},${comment.point.y.toFixed(3)}) ` : ""}${comment.text}`).join("\n");
+      prompt += "\n附图中的彩色标注仅用于指示修改位置，不要将标注绘制在最终图片里。";
+    }
     if (prompt.length > 4_000) throw new BadRequestException("工具提示词与已连接文字超过 4000 字符，请缩短本轮描述或参考文字；系统不会静默截掉设计要求");
     if (references.length > (sourceAsset ? 15 : 16)) throw new BadRequestException("本次图片输入超过上限（含母图最多 16 张），请明确减少参考图后再执行；系统不会静默忽略参考");
-    const base = { projectId, shapeIds: [], prompt, negativePrompt: text(params.negativePrompt), width: params.width, height: params.height, quality: params.quality, outputFormat: "png" };
+    const base = { projectId, shapeIds: [], prompt, negativePrompt: text(params.negativePrompt), width: params.width, height: params.height, quality: params.quality, outputFormat: "png",
+      ...(params.intent && params.intent !== "edit" ? { imageEdit: { intent: params.intent, ...(params.outpaint ? { outpaint: params.outpaint } : {}), ...(annotations ? { annotations } : {}) } } : {}),
+      ...(params.intent === "remove_background" ? { background: "transparent" } : {}) };
     if (params.taskType === "inpaint") {
       if (!sourceAsset || !params.mask) throw new BadRequestException("局部重绘需要实际母图与蒙版");
       if (references.length) throw new BadRequestException("当前局部重绘只接受母图、蒙版和可选调色板，请移除图片参考连接");

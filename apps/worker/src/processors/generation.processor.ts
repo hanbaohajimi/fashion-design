@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sharp from "sharp";
+import { prepareImageEdit, finishImageEdit } from "./image-edit";
 
 import type {
   ContentModerationDecision,
@@ -251,11 +252,20 @@ export function createGenerationProcessor({
     let materializationCommitted = false;
 
     try {
+      const editRequest = aiGenerationRequestSchema.parse(task.input);
+      let preparedInput = task.input;
+      let editSource: Buffer | undefined;
+      if (["outpaint", "feedback"].includes(editRequest.imageEdit?.intent ?? "")) {
+        const parent = task.parentAssetId ? await database.designAsset.findUnique({ where: { id: task.parentAssetId } }) : null;
+        if (!parent || !parent.url.startsWith("s3://") || !storage) throw new UnrecoverableError("图片编辑缺少原始资产");
+        editSource = await storage.get(parent.url.slice(5));
+        if (!task.providerJob) preparedInput = toJson(await prepareImageEdit(editRequest, editSource, task.id, storage)) as Prisma.JsonValue;
+      }
       const result = await executeGeneration({
         ai,
         attemptCount: leaseAttempt,
         database,
-        input: task.input,
+        input: preparedInput,
         providerJob: task.providerJob,
         signal,
         taskId: task.id,
@@ -304,6 +314,8 @@ export function createGenerationProcessor({
           result,
           resolveHostname,
           signal,
+          editRequest,
+          editSource,
         );
         durableResult = materialized.result;
         materializedObjectKeys = materialized.objectKeys;
@@ -321,6 +333,7 @@ export function createGenerationProcessor({
           parentAssetId: task.parentAssetId,
           projectId: task.projectId,
           taskType: task.taskType,
+          imageIntent: editRequest.imageEdit?.intent,
           variationAxis: task.variationAxis,
           garmentTypeCode: task.garmentTypeCode,
           garmentTypeLabel: task.garmentTypeLabel,
@@ -580,6 +593,7 @@ async function persistSuccessOnce(
     { status: "approved" | "review_required" }
   >,
   lineage: {
+    readonly imageIntent?: string | undefined;
     readonly collectionId: string | null;
     readonly parentAssetId: string | null;
     readonly projectId: string | null;
@@ -660,6 +674,7 @@ async function persistDesignAssets(
   taskId: string,
   result: AiProviderResult,
   lineage: {
+    readonly imageIntent?: string | undefined;
     readonly collectionId: string | null;
     readonly parentAssetId: string | null;
     readonly projectId: string | null;
@@ -713,7 +728,7 @@ async function persistDesignAssets(
         id: assetId,
         generationTaskId: taskId,
         height: image.height ?? null,
-        operation: operationFrom(lineage.taskType),
+        operation: lineage.imageIntent === "outpaint" ? DesignAssetOperation.OUTPAINT : lineage.imageIntent === "erase" ? DesignAssetOperation.ERASE : lineage.imageIntent === "remove_background" ? DesignAssetOperation.REMOVE_BACKGROUND : operationFrom(lineage.taskType),
         parentAssetId: lineage.parentAssetId,
         projectId: lineage.projectId,
         rootAssetId: parent?.rootAssetId ?? assetId,
@@ -759,6 +774,8 @@ async function materializeResult(
   result: AiProviderResult,
   resolveHostname: GenerationHostnameResolver,
   signal: AbortSignal,
+  editRequest?: import("@fashion/ai").AiGenerationRequest,
+  editSource?: Buffer,
 ): Promise<{
   readonly objectKeys: string[];
   readonly result: AiProviderResult;
@@ -784,7 +801,8 @@ async function materializeResult(
         throw new Error("生成结果 Content-Type 不受支持");
       }
       assertDeclaredImageSize(response.headers.get("content-length"));
-      const body = await readBodyWithLimit(response, MAX_GENERATED_IMAGE_BYTES);
+      let body = await readBodyWithLimit(response, MAX_GENERATED_IMAGE_BYTES);
+      if (editRequest?.imageEdit) body = await finishImageEdit(body, editRequest, editSource);
       if (body.byteLength === 0) {
         throw new Error("生成结果为空");
       }
@@ -820,10 +838,10 @@ async function materializeResult(
         ...image,
         assetId,
         contentType,
-        height: image.height ?? metadata.height,
+        height: metadata.height,
         thumbnailUrl: `s3://${thumbnailKey}`,
         url: `s3://${contentKey}`,
-        width: image.width ?? metadata.width,
+        width: metadata.width,
       });
     }
   } catch (error) {

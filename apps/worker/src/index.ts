@@ -33,6 +33,8 @@ import {
   markCollectionSimilarityFailed,
 } from "./processors/collection-similarity.processor";
 import { createGenerationProcessor } from "./processors/generation.processor";
+import { createImageTransformProcessor } from "./processors/image-transform.processor";
+import { IMAGE_TRANSFORM_QUEUE, type ImageTransformJob } from "@fashion/shared";
 import {
   cleanupExport,
   cleanupExpiredExports,
@@ -74,6 +76,8 @@ function redisConnection() {
 }
 
 const storage = new S3ThumbnailStorage();
+const imageTransformWorker = new Worker<ImageTransformJob>(IMAGE_TRANSFORM_QUEUE, createImageTransformProcessor(prisma, storage), { connection: redisConnection(), concurrency: 2 });
+imageTransformWorker.on("error", (error) => captureWorkerException(error, { phase: "failed", queue: IMAGE_TRANSFORM_QUEUE }));
 const amuxClaude = createAmuxClaudeClientFromEnv();
 const missingTrendDigestConfiguration = [
   !process.env.BRAVE_SEARCH_API_KEY?.trim() ? "BRAVE_SEARCH_API_KEY" : null,
@@ -284,6 +288,7 @@ async function start(): Promise<void> {
   );
   await Promise.all([
     thumbnailWorker.waitUntilReady(),
+    imageTransformWorker.waitUntilReady(),
     visualSummaryWorker.waitUntilReady(),
     inferenceWorker.waitUntilReady(),
     generationWorker.waitUntilReady(),
@@ -304,6 +309,7 @@ async function start(): Promise<void> {
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log(`收到 ${signal}，正在关闭 Worker。`);
   await Promise.all([
+    imageTransformWorker.close(),
     generationWorker.close(),
     collectionSimilarityWorker.close(),
     exportWorker.close(),
@@ -401,6 +407,7 @@ void start().catch(async (error: unknown) => {
   console.error("Worker 启动失败：无法连接 Redis 或对象存储配置无效。", error);
   captureWorkerException(error, { phase: "bootstrap", queue: "worker" });
   await Promise.all([
+    imageTransformWorker.close(),
     generationWorker.close(),
     collectionSimilarityWorker.close(),
     exportWorker.close(),

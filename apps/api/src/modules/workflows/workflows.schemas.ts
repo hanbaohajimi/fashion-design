@@ -15,6 +15,7 @@ export const workflowAssetTypes = [
 ] as const;
 
 export const workflowToolTypes = [
+  "transform_image",
   "analyze_brief",
   "generate_design",
   "evaluate_design",

@@ -247,8 +247,7 @@ export class AmuxAdapter implements AiProvider {
       });
     }
     const images = parsed.data.flatMap((image) => {
-      if (image.url) return [{ url: image.url }];
-      if (!image.b64_json || !isBase64(image.b64_json)) return [];
+      if (!image.b64_json || !isBase64(image.b64_json)) return image.url ? [{ url: image.url }] : [];
       return [
         {
           url: `data:${contentTypeFor(outputFormat)};base64,${image.b64_json}`,
