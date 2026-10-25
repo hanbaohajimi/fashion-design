@@ -4,10 +4,13 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 
 type Node = { id: string; kind: string; type: string; title: string; status: string; payload: Record<string, unknown>; x: number; y: number };
-type Graph = { revision: number; nodes: Node[]; edges: { sourceNodeId: string; targetNodeId: string }[] };
+type Graph = { revision: number; layoutRevision: number; nodes: Node[]; edges: { sourceNodeId: string; targetNodeId: string }[] };
 
 test("真实登录、上传、执行、刷新、副本继续设计、系列扩展和后台导出", async ({ page }, testInfo) => {
   test.skip(process.env.TRIAL_E2E !== "1", "只能通过隔离验收启动器运行");
+  // This queue/storage scenario exercises the explicit workflow editor, while
+  // the default workbench is covered by the visual browser matrix.
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
   const email = `trial-${randomUUID()}@example.com`;
   await page.goto("/login");
   await page.getByLabel("邮箱地址").fill(email);
@@ -52,6 +55,14 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   await (await chooser).setFiles({ name: "trial-reference.png", mimeType: "image/png", buffer: png });
   await expect.poll(async () => (await graph(project.id)).nodes.filter((node) => node.type === "reference_image").length).toBe(1);
   const reference = (await graph(project.id)).nodes.find((node) => node.type === "reference_image")!;
+  const beforeLayout = await graph(project.id);
+  const layoutRequest = { mode: "layout", baseLayoutRevision: beforeLayout.layoutRevision, mutationId: randomUUID(), positions: [{ nodeId: reference.id, x: 160, y: 220 }] };
+  await json(`/projects/${project.id}/workflow`, layoutRequest, "PATCH");
+  // Replaying a save after a lost response must keep the same layout revision.
+  await json(`/projects/${project.id}/workflow`, layoutRequest, "PATCH");
+  const afterLayout = await graph(project.id);
+  expect(afterLayout.layoutRevision).toBe(beforeLayout.layoutRevision + 1);
+  expect(afterLayout.nodes.find((node) => node.id === reference.id)).toMatchObject({ x: 160, y: 220 });
   const goal = randomUUID(), analysis = randomUUID();
   const node = (id: string, kind: string, type: string, title: string, payload: unknown, x: number) => ({ type: "add_node", node: { id, kind, type, title, payload, x, y: 100 } });
   const edge = (sourceNodeId: string, targetNodeId: string, targetPort: string) => ({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId, targetNodeId, sourcePort: "out", targetPort } });
@@ -109,16 +120,18 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   if (!primaryCandidate) throw new Error("副本缺少原候选");
   const primaryCard = page.locator(`[data-shape-id="shape:workflow-node-${primaryCandidate.id}"] [data-type="candidate"]`);
   await primaryCard.dblclick();
-  await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  await page.getByRole("button", { name: "单图高清导出" }).click();
+  await page.getByRole("button", { name: "图像", exact: true }).click();
+  await page.getByRole("button", { name: "更多导出选项", exact: true }).click();
   await page.getByRole("button", { name: "开始导出", exact: true }).click();
   await page.getByRole("button", { name: "关闭导出窗口" }).click();
   await expect(page.getByRole("dialog", { name: "导出成果" })).toHaveCount(0);
+  await page.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
   await expect(page.getByRole("button", { name: "关闭菜单" })).toBeVisible();
   await page.getByRole("button", { name: "关闭菜单" }).click();
-  await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  await page.getByRole("button", { name: "单图高清导出" }).click();
+  await primaryCard.dblclick();
+  await page.getByRole("button", { name: "图像", exact: true }).click();
+  await page.getByRole("button", { name: "更多导出选项", exact: true }).click();
   await expect(page.getByRole("link", { name: "下载 PNG" })).toBeVisible();
   const downloadEvent = page.waitForEvent("download");
   await page.getByRole("link", { name: "下载 PNG" }).click();
@@ -128,7 +141,8 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   expect((await readFile(path)).subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
   await testInfo.attach("export", { path, contentType: "image/png" });
   await page.getByRole("button", { name: "返回工作区", exact: true }).click();
-  await page.getByRole("button", { name: "关闭候选工作台", exact: true }).click();
+  await page.getByRole("button", { name: "图像", exact: true }).click();
+  await page.getByRole("button", { name: "来源与设计决策", exact: true }).click();
   const admittedCollection = page.waitForResponse((response) => response.url().endsWith("/api/collections") && response.request().method() === "POST");
   await page.getByRole("button", { name: "设为主推款并建立系列", exact: true }).click();
   const collection = await (await admittedCollection).json() as { id: string; name: string };
@@ -138,7 +152,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   await series.getByLabel("廓形关键词，以逗号或换行分隔").fill("宽松直线廓形");
   await series.getByLabel("面料关键词，以逗号或换行分隔").fill("哑光棉布");
   await series.getByLabel("情绪关键词，以逗号或换行分隔").fill("克制通勤");
-  await expect(series.getByRole("status")).toHaveText("已保存");
+  await expect(series.getByRole("status").filter({ hasText: /^已保存$/ })).toBeVisible();
   const looksTab = series.getByRole("tab", { name: "Look 扩展", exact: true });
   await looksTab.click();
   await expect(series.getByText("还没有扩展款", { exact: true })).toBeVisible();
