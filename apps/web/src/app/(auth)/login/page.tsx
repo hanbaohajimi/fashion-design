@@ -3,9 +3,9 @@
 import { type FormEvent, useRef, useState } from "react";
 
 import { Button, Input } from "../../../components/ui";
+import { BrandLockup } from "../../../components/BrandLockup";
 import { readErrorMessage } from "../../../modules/auth/auth-api";
-import styles from "./login-redesign.module.css";
-import creative from "./creative-login.module.css";
+import styles from "./forest-login.module.css";
 
 type FormState = "idle" | "sending" | "sent";
 
@@ -65,93 +65,106 @@ export default function LoginPage() {
   }
 
   return (
-    <main className={`${styles.page} ${creative.pageLayout}`}>
-      <aside className={creative.materialStudy} aria-label="Atelier 设计工作室">
-        <span>Atelier / 设计工作室</span>
-        <h2>从灵感到交付，<br />让每一版都有来处。</h2>
-        <p>收集素材、推敲方案、整理款式与技术资料。登录后继续你的设计。</p>
-      </aside>
-      <section className={styles.formPanel} aria-labelledby="auth-title">
-        <div className={styles.formHeader}>
-          <h1 className={styles.formTitle} id="auth-title">
-            登录或注册
-          </h1>
-          <p className={styles.intro}>
-            输入邮箱，我们会向你发送一次性登录链接。首次使用的邮箱将自动完成注册。
+    <main className={styles.page}>
+      <aside className={styles.brandPanel} aria-label="森织 设计工作室">
+        <BrandLockup size={360} className={styles.brand} />
+        <div className={styles.brandStory}>
+          <h2>
+            从灵感到交付，
+            <br />
+            让每一版都有来处。
+          </h2>
+          <p>
+            收集素材、推敲方案、整理款式与技术资料。
+            <br />
+            登录后继续你的设计。
           </p>
         </div>
-
-        <form
-          aria-busy={state === "sending"}
-          className={styles.form}
-          onSubmit={handleSubmit}
-        >
-          <label htmlFor="email">邮箱地址</label>
-          <Input
-            aria-describedby={
-              error ? "login-error" : sentEmail ? "login-status" : undefined
-            }
-            autoCapitalize="none"
-            autoComplete="email"
-            autoFocus
-            disabled={state === "sending" || Boolean(sentEmail)}
-            enterKeyHint="send"
-            id="email"
-            inputMode="email"
-            name="email"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="designer@example.com"
-            ref={emailInputRef}
-            required
-            spellCheck={false}
-            type="email"
-            value={email}
-          />
-          <Button variant="primary"
-            disabled={state === "sending" || state === "sent"}
-            type="submit"
-          >
-            {state === "sending"
-              ? "正在发送…"
-              : sentEmail
-                ? "邮件已发送"
-                : "发送登录链接"}
-          </Button>
-        </form>
-
-        {sentEmail ? (
-          <>
-            <p className={styles.message} id="login-status" role="status">
-              请检查 {sentEmail} 的收件箱，并在同一浏览器中打开登录链接。
+      </aside>
+      <div className={styles.formRegion}>
+        <section className={styles.formPanel} aria-labelledby="auth-title">
+          <div className={styles.formHeader}>
+            <h1 className={styles.formTitle} id="auth-title">
+              登录或注册
+            </h1>
+            <p className={styles.intro}>
+              输入邮箱，我们会向你发送一次性登录链接。首次使用的邮箱将自动完成注册。
             </p>
-            <div className={styles.messageActions}>
-              <button
-                disabled={state === "sending"}
-                onClick={() => void sendLoginLink(sentEmail)}
-                type="button"
-              >
-                重新发送
-              </button>
-              <button
-                disabled={state === "sending"}
-                onClick={changeEmail}
-                type="button"
-              >
-                换个邮箱
-              </button>
-            </div>
-          </>
-        ) : null}
-        {error ? (
-          <p
-            className={`${styles.message} ${styles.error}`}
-            id="login-error"
-            role="alert"
+          </div>
+
+          <form
+            aria-busy={state === "sending"}
+            className={styles.form}
+            onSubmit={handleSubmit}
           >
-            {error}
-          </p>
-        ) : null}
-      </section>
+            <label htmlFor="email">邮箱地址</label>
+            <Input
+              aria-describedby={
+                error ? "login-error" : sentEmail ? "login-status" : undefined
+              }
+              autoCapitalize="none"
+              autoComplete="email"
+              autoFocus
+              disabled={state === "sending" || Boolean(sentEmail)}
+              enterKeyHint="send"
+              id="email"
+              inputMode="email"
+              name="email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="designer@example.com"
+              ref={emailInputRef}
+              required
+              spellCheck={false}
+              type="email"
+              value={email}
+            />
+            <Button
+              variant="primary"
+              disabled={state === "sending" || state === "sent"}
+              type="submit"
+            >
+              {state === "sending"
+                ? "正在发送…"
+                : sentEmail
+                  ? "邮件已发送"
+                  : "发送登录链接"}
+            </Button>
+          </form>
+
+          {sentEmail ? (
+            <>
+              <p className={styles.message} id="login-status" role="status">
+                请检查 {sentEmail} 的收件箱，并在同一浏览器中打开登录链接。
+              </p>
+              <div className={styles.messageActions}>
+                <button
+                  disabled={state === "sending"}
+                  onClick={() => void sendLoginLink(sentEmail)}
+                  type="button"
+                >
+                  重新发送
+                </button>
+                <button
+                  disabled={state === "sending"}
+                  onClick={changeEmail}
+                  type="button"
+                >
+                  换个邮箱
+                </button>
+              </div>
+            </>
+          ) : null}
+          {error ? (
+            <p
+              className={`${styles.message} ${styles.error}`}
+              id="login-error"
+              role="alert"
+            >
+              {error}
+            </p>
+          ) : null}
+        </section>
+      </div>
     </main>
   );
 }

@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<
         data-area={this.props.area}
         role="alert"
       >
-        <span className={styles.brand}>Atelier 设计工作室</span>
+        <span className={styles.brand}>森织 设计工作室</span>
         <strong>出现了一点问题，已自动上报</strong>
         <p>你的项目数据仍会保留，可以重新载入这一部分继续工作。</p>
         <button

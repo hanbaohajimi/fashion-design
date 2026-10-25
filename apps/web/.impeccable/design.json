@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-10-25T11:24:12.827221+00:00",
-  "title": "Design System: Atelier 设计工作室 · 织物档案",
+  "title": "Design System: 森织设计工作室 · 织物档案",
   "extensions": {
     "colorMeta": {
       "image-stage-background": {
@@ -979,8 +979,8 @@
         "purpose": "状态与元数据"
       },
       "brand": {
-        "displayName": "品牌 a 标识",
-        "purpose": "ArchiveNavigation 的斜体 a；品牌名称与工作文字仍为无衬线。"
+        "displayName": "森织品牌名称",
+        "purpose": "森织名称使用宋体回退栈；目录 24px，登录页桌面 44px、窄屏 28px。副标题与工作文字为无衬线。"
       }
     },
     "shadows": [

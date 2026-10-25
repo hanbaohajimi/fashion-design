@@ -1,0 +1,32 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+}
+
+.mark {
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+
+.wordmark {
+  display: grid;
+  gap: 4px;
+}
+
+.name {
+  font-family: var(--font-serif);
+  font-size: var(--brand-name-size, 24px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+}
+
+.description {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}

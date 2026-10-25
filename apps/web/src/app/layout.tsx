@@ -10,7 +10,7 @@ import "./globals.css";
 import "tldraw/tldraw.css";
 
 export const metadata: Metadata = {
-  applicationName: "Atelier 设计工作室",
+  applicationName: "森织",
   category: "design",
   description: "专业服装设计师的创作工作台",
   formatDetection: {
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
     index: false,
   },
   title: {
-    default: "Atelier 设计工作室",
-    template: "%s · Atelier",
+    default: "森织",
+    template: "%s · 森织",
   },
 };
 
@@ -35,7 +35,7 @@ interface RootLayoutProps {
 
 export const viewport: Viewport = {
   width: "device-width", initialScale: 1, viewportFit: "cover",
-  interactiveWidget: "resizes-content", themeColor: "#fcfbf8", colorScheme: "light",
+  interactiveWidget: "resizes-content", themeColor: "#f5f4ee", colorScheme: "light",
 };
 
 export default function RootLayout({ children }: RootLayoutProps) {

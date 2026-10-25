@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BrandLockup } from "./BrandLockup";
 import styles from "./archive-navigation.module.css";
 
 export type ArchiveSection =
@@ -110,12 +111,9 @@ export function ArchiveNavigation({
       <Link
         href="/"
         className={styles.brand}
-        aria-label="Atelier 设计工作室 首页"
+        aria-label="森织 设计工作室 首页"
       >
-        <span aria-hidden="true">a</span>
-        <span>
-          Atelier<small>设计工作室</small>
-        </span>
+        <BrandLockup tone="light" size={44} />
       </Link>
       <nav aria-label="工作区导航" className={styles.navigation}>
         {entries.map((entry) => (

@@ -1,0 +1,211 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  min-height: 100dvh;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+.brandPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  min-width: 0;
+  padding: 56px 32px;
+  text-align: center;
+}
+
+.brand {
+  --brand-name-size: 44px;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.brand img {
+  width: clamp(240px, 25vw, 360px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.brandStory h2 {
+  margin: 0;
+  font-size: clamp(24px, 2vw, 30px);
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: -0.02em;
+}
+
+.brandStory p {
+  margin: 20px 0 0;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.formRegion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 48px clamp(24px, 3.3vw, 64px);
+  background: var(--color-navigation);
+}
+
+.formPanel {
+  width: 100%;
+  max-width: 440px;
+  min-width: 0;
+  padding: clamp(28px, 3vw, 44px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+}
+
+.formHeader {
+  margin-bottom: 32px;
+}
+
+.formTitle {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+
+.intro {
+  margin: 16px 0 0;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.form {
+  --control-height-primary: 48px;
+  display: grid;
+  gap: 12px;
+}
+
+.form label {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  font-size: 16px;
+}
+
+.form button {
+  margin-top: 12px;
+}
+
+.message {
+  margin: 24px 0 0;
+  padding: 16px;
+  border-left: 3px solid var(--color-status-success);
+  background: var(--color-status-success-bg);
+  color: var(--color-status-success);
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  border-color: var(--color-status-error);
+  background: var(--color-status-error-bg);
+  color: var(--color-status-error);
+}
+
+.messageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 12px;
+}
+
+.messageActions button {
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-action);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.messageActions button:hover:not(:disabled) {
+  color: var(--color-action-hover);
+}
+
+.messageActions button:disabled {
+  color: var(--color-disabled-ink);
+  cursor: default;
+}
+
+.messageActions button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+@media (max-width: 899px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .brandPanel {
+    align-items: flex-start;
+    width: min(100%, 488px);
+    margin-inline: auto;
+    padding: 32px 24px 24px;
+  }
+
+  .brand {
+    --brand-name-size: 28px;
+    flex-direction: row;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .brand img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .brandStory {
+    display: none;
+  }
+
+  .formRegion {
+    padding: 0 24px 40px;
+    background: transparent;
+  }
+
+  .formPanel {
+    padding: 28px 24px;
+  }
+}
+
+@media (max-width: 359px) {
+  .brandPanel {
+    padding-inline: 16px;
+  }
+
+  .formRegion {
+    padding-inline: 16px;
+  }
+
+  .formPanel {
+    padding: 24px 20px;
+  }
+}

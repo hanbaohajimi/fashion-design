@@ -31,18 +31,6 @@
   color: inherit;
   padding: 0 10px 12px;
 }
-.brand > span:first-child {
-  font: italic 38px/1 var(--font-serif);
-}
-.brand > span:last-child {
-  font-size: 22px;
-  letter-spacing: -0.02em;
-}
-.brand small {
-  display: block;
-  font: 12px/1.6 var(--font-sans);
-  letter-spacing: 0;
-}
 .navigation {
   display: grid;
   gap: var(--space-2);
@@ -150,15 +138,6 @@
   .brand {
     padding: 0;
     min-height: 44px;
-  }
-  .brand > span:first-child {
-    font-size: 30px;
-  }
-  .brand > span:last-child {
-    font-size: 18px;
-  }
-  .brand small {
-    display: none;
   }
   .account {
     margin: 0 0 0 auto;

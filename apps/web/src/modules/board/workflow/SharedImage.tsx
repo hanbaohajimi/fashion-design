@@ -26,7 +26,7 @@ export function SharedImage({ token }: { token: string }) {
   }, [token]);
   return (
     <main className={styles.workspace}>
-      <header className={styles.topbar}><strong>Atelier · 分享的设计</strong><Link href="/">进入工作室</Link></header>
+      <header className={styles.topbar}><strong>森织 · 分享的设计</strong><Link href="/">进入工作室</Link></header>
       {error ? (
         <div className={styles.shareMessage}><h1>暂时无法查看这份设计</h1><p role="alert">{error}</p><p>请联系分享者，获取新的有效链接。</p><Link href="/">返回工作室</Link></div>
       ) : image ? (

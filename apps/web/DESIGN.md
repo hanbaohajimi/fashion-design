@@ -1,5 +1,5 @@
 ---
-name: Atelier 设计工作室 · 织物档案
+name: 森织设计工作室 · 织物档案
 description: 用户选定 A 后的生产视觉系统：深青绿目录、暖白工作面、完整服装与可追溯修订。
 colors:
   image-stage-background: '#e7e9e2'
@@ -96,8 +96,8 @@ typography:
     fontWeight: 400
   brand:
     fontFamily: '"Palatino Linotype", Palatino, "Book Antiqua", "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif'
-    fontSize: 38px
-    lineHeight: 1
+    fontSize: 24px
+    lineHeight: 1.2
 rounded:
   sm: 4px
   md: 6px
@@ -179,7 +179,7 @@ components:
     rounded: '{rounded.lg}'
 ---
 
-# Design System: Atelier 设计工作室 · 织物档案
+# Design System: 森织设计工作室 · 织物档案
 
 ## Overview
 
@@ -231,7 +231,7 @@ Sidecar 的八级 tonalRamp 是合成 OKLCH 色板预览，非新增生产 token
 
 ## Typography
 
-**Body Font:** YAML `body.fontFamily` 保留 Inter / 中文无衬线 / 系统回退栈。**Brand Font:** `brand.fontFamily` 保留 Palatino / 宋体栈，仅目录斜体 a 标识采用该品牌角色；品牌名称为无衬线。**Label/Mono Font:** 普通标签仍用无衬线，局部状态及统计用 `--font-mono`（SF Mono、JetBrains Mono、Consolas、Liberation Mono、Menlo）。未导入的旧字体文件不构成新增字体依赖。
+**Body Font:** YAML `body.fontFamily` 保留 Inter / 中文无衬线 / 系统回退栈。**Brand Font:** `brand.fontFamily` 保留 Palatino / 宋体栈，用于“森织”品牌名称；“设计工作室”副标题为无衬线。**Label/Mono Font:** 普通标签仍用无衬线，局部状态及统计用 `--font-mono`（SF Mono、JetBrains Mono、Consolas、Liberation Mono、Menlo）。未导入的旧字体文件不构成新增字体依赖。
 
 ### Hierarchy
 
@@ -241,7 +241,13 @@ Sidecar 的八级 tonalRamp 是合成 OKLCH 色板预览，非新增生产 token
 - **Body:** body（14px、400、1.5）；较大正文/对象名使用现有 16px 档。
 - **Label:** label（12px、400）；用作元信息与状态文字，不升格为标题前眉题。
 
-当前 `--font-medium` 实际也是 400，不能按名称推断为 500。WorkspaceHeader 说明最长 64ch，EmptyState 说明最长 44ch。手机及 any-pointer: coarse 的文字输入强制 16px。桌面目录 a 标识 38px，窄屏目录隐藏品牌；不把品牌字号推广为正文。
+当前 `--font-medium` 实际也是 400，不能按名称推断为 500。WorkspaceHeader 说明最长 64ch，EmptyState 说明最长 44ch。手机及 any-pointer: coarse 的文字输入强制 16px。桌面目录使用 44px 浅色叶片裙摆标识、24px 品牌名称与 12px 副标题；窄屏目录继续隐藏品牌，不把品牌字号推广为正文。
+
+### 森织品牌与登录页
+
+用户可见品牌为“森织”，副标题为“设计工作室”；页面标题模板为 `%s · 森织`。`BrandLockup` 共享图形、文字和替代文本规则；图文并列时图形不重复朗读，单独显示图形时替代文本为“森织”。素材说明见 `public/branding/SOURCE.md`，位图中的叶片与织物融合轮廓作为品牌识别，不作为工作区背景纹理。
+
+登录页使用独立的 `forest-login.module.css`。≥900px 为 55% 暖白展示区与 45% 深绿表单区，暖白卡片最大宽度 440px；彩色标识显示 240–360px，品牌名称为 44px。<900px 使用单列暖白页面，标识缩为 64px、名称为 28px，隐藏桌面说明。保留邮箱一次性登录链接、发送反馈和错误重试，消息自然撑开页面，无持续品牌动画。现有全局配色与画布底色不因品牌接入而改变。
 
 ## Layout
 
