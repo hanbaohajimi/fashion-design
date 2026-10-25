@@ -356,9 +356,18 @@
         "图片比例与容器",
         "字段及操作条可达"
       ],
-      "sourceSha256": "0496228f00ad4993548723ff56e51d269332a49c84e0c4086290324ef64c00b7",
+      "sourceSha256": "2ba1b731ca6561d95021cd5a3bd507ac2941b950e9e7983488dc1042cf4a27e2",
       "previousBaselineSha256": "8f44f65fa2e98c4d285e8ed93adf53a8206f6004662d5d640f89ab148b252630",
-      "baselineSha256": "0496228f00ad4993548723ff56e51d269332a49c84e0c4086290324ef64c00b7"
+      "baselineSha256": "2ba1b731ca6561d95021cd5a3bd507ac2941b950e9e7983488dc1042cf4a27e2",
+      "followUpReviews": [
+        {
+          "date": "2026-10-25",
+          "reviewer": "Codex 代理逐张视觉检查",
+          "reason": "配置表单使用独立滚动容器与稳定滚动条留白，消除原生 fieldset 的宽度抖动",
+          "previousSha256": "0496228f00ad4993548723ff56e51d269332a49c84e0c4086290324ef64c00b7",
+          "sha256": "2ba1b731ca6561d95021cd5a3bd507ac2941b950e9e7983488dc1042cf4a27e2"
+        }
+      ]
     },
     {
       "name": "workspace-experiments-1440.png",

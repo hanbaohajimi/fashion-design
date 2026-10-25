@@ -72,6 +72,10 @@
   padding: var(--space-4);
   border-top: 1px solid var(--color-divider);
 }
+.configurationFields {
+  min-width: 0;
+  min-height: 0;
+}
 .batchSelector {
   display: grid;
   gap: var(--space-2);
@@ -98,9 +102,9 @@
     height: 100%;
     min-height: 0;
   }
-  .configurationForm > .form {
+  .configurationFields {
     overflow-y: auto;
-    align-content: start;
+    scrollbar-gutter: stable;
   }
   .results {
     overflow-y: auto;
