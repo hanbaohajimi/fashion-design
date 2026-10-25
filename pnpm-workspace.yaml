@@ -4,7 +4,7 @@ packages:
 
 overrides:
   dompurify: 3.4.17
-  fast-uri: 3.1.8
+  fast-uri: 3.1.9
   find-my-way: 9.7.0
   nanoid@3.3.16: 3.3.18
   postcss: 8.5.23
@@ -16,14 +16,17 @@ overrides:
   # These upstream packages still pin vulnerable transitive dependencies.
   "@prisma/config>deepmerge-ts": 8.0.2
   "prisma>mysql2": 3.24.4
-  "@nestjs/platform-express>multer": 2.4.0
+  "@nestjs/platform-express>multer": 2.5.0
+  # Patch request parsing and jsdom's HTTP client without changing major lines.
+  body-parser@2.3.0: 2.4.0
+  undici@8.11.2: 8.12.2
   # Prisma Studio pins React 19.2 types; its DOM peer must use the same line.
   "@types/react-dom": 19.2.3
   ansi-regex@5.0.0: 5.0.1
   brace-expansion@1.1.16: 1.1.21
   brace-expansion@5.0.8: 5.0.12
   js-yaml@4.3.0: 4.3.2
-  qs: 6.16.0
+  qs: 6.16.1
   proxy-addr: 2.0.8
   prosemirror-view: 1.42.3
   # Tiptap's exact peer versions require upgrading the entire family together.
