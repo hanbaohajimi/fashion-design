@@ -42,7 +42,7 @@ test("后台会话变更时隔离项目缓存，旧请求不会回填新账号",
   await expect.poll(() => Boolean(releaseOld)).toBe(true);
   identity = "b";
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-  await expect(page.getByText("b@example.com", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("b@example.com", { exact: true })).toBeVisible();
   releaseOld?.();
   await expect(page.getByRole("link", { name: "打开项目 账号 b 的项目" })).toBeVisible();
   await expect(page.getByRole("link", { name: "打开项目 账号 a 的项目" })).toHaveCount(0);

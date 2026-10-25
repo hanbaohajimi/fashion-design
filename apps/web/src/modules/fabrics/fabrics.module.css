@@ -437,7 +437,7 @@
   align-items: center;
   border-radius: var(--radius-pill, 999px);
   padding: 3px 9px;
-  background: var(--color-border);
+  background: var(--color-overlay);
   color: var(--text-secondary, var(--color-ink-secondary));
   font-size: var(--text-sm);
   font-weight: 600;

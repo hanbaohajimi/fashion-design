@@ -1,8 +1,8 @@
 "use client";
 
 /* §2.1/§2.4/§3.6: clothing images first, references second, process as annotations.
- * One primary action asks the assistant; surface, type and spacing use shared tokens. */
-import { useMemo, useState } from "react";
+ * Execution owns primary emphasis; the open assistant has a quiet entry point. */
+import { useMemo, useRef, useState } from "react";
 import type { WorkflowGraph, WorkflowNode } from "./workflow-api";
 import { buildDesignWorkbench, designNoteText } from "./design-workbench";
 import { displayNodeTitle, nodeImageUrl, nodeSummary } from "./workflow-graph";
@@ -14,6 +14,8 @@ interface Props {
   readonly onReference: (id: string) => void;
   readonly onStart: () => void;
   readonly onAdd: () => void;
+  readonly assistantOpen?: boolean;
+  readonly pendingProposal?: boolean;
 }
 
 function AssetPreview({ node }: { readonly node: WorkflowNode }) {
@@ -30,8 +32,18 @@ function AssetPreview({ node }: { readonly node: WorkflowNode }) {
   return <span className={styles.textPreview}>{url ? "图片暂不可用，点击查看详情" : nodeSummary(node) || displayNodeTitle(node)}</span>;
 }
 
-export function DesignWorkbench({ graph, onOpen, onReference, onStart, onAdd }: Props) {
+export function DesignWorkbench({ graph, onOpen, onReference, onStart, onAdd, assistantOpen = false, pendingProposal = false }: Props) {
   const work = useMemo(() => buildDesignWorkbench(graph), [graph]);
+  const workbenchRef = useRef<HTMLDivElement>(null);
+  const materialsRef = useRef<HTMLElement>(null);
+  const locateMaterials = () => {
+    const workbench = workbenchRef.current;
+    const materials = materialsRef.current;
+    if (!workbench || !materials) return;
+    // Scroll only this surface; keep the project header and view switch in place.
+    workbench.scrollTop += materials.getBoundingClientRect().top - workbench.getBoundingClientRect().top - 48;
+    materials.focus({ preventScroll: true });
+  };
   const total = work.groups.reduce((count, group) => count + group.candidates.length, 0);
   const notes = (items: readonly WorkflowNode[], candidates: readonly WorkflowNode[] = []) => items.length ? <details className={styles.notes}>
     <summary>设计说明 <span>要求与评估 · {items.length}</span></summary>
@@ -42,10 +54,10 @@ export function DesignWorkbench({ graph, onOpen, onReference, onStart, onAdd }: 
     </section>)}
   </details> : null;
 
-  return <div className={styles.workbench} aria-label="设计作品工作台" role="region">
+  return <div ref={workbenchRef} className={styles.workbench} aria-label="设计作品工作台" role="region">
     <header className={styles.heading}>
-      <div><h2>方案与灵感</h2><p>{total ? `${total} 个服装方案 · ${work.materials.length} 项参考素材` : "从一个想法、一张参考图开始。"}</p></div>
-      <button className={styles.primary} type="button" onClick={onStart}>{total ? "继续设计" : "开始设计"}</button>
+      <div><h2>方案与灵感</h2><p className={styles.summary}>{total ? `${total} 个服装方案` : "从一个想法、一张参考图开始。"}<span aria-hidden="true"> · </span><button type="button" className={styles.materialJump} onClick={locateMaterials}>{work.materials.length} 项参考素材</button></p></div>
+      <button className={styles.primary} data-secondary={assistantOpen || pendingProposal} type="button" onClick={onStart}>{total ? "继续设计" : "开始设计"}</button>
     </header>
 
     {work.briefs.length ? <section className={styles.direction} aria-label="设计方向"><h3>设计方向</h3>
@@ -64,20 +76,20 @@ export function DesignWorkbench({ graph, onOpen, onReference, onStart, onAdd }: 
       {!total ? <div className={styles.empty}><h3>服装方案会展示在这里</h3><p>在助手里描述款式和想保留的细节，确认方案后生成。</p></div> : null}
       {work.groups.map((group, index) => <section className={styles.group} key={group.id} aria-label={`方案组 ${index + 1}`}>
         <header><h3>{group.producer ? displayNodeTitle(group.producer) : "已有方案"}</h3><span>{group.candidates.length} 个方案</span></header>
-        <div className={styles.designGrid}>
+        <div className={styles.designGrid} data-single={total === 1}>
           {group.candidates.map((candidate) => <article key={candidate.id} className={styles.card} data-node-id={candidate.id} role="group" aria-label={`服装方案 ${displayNodeTitle(candidate)}`} tabIndex={-1}>
             <button type="button" className={styles.preview} aria-label={`打开方案 ${displayNodeTitle(candidate)}`} onClick={() => onOpen(candidate.id)}><AssetPreview key={nodeImageUrl(candidate)} node={candidate} /></button>
             <div className={styles.caption}><h4>{displayNodeTitle(candidate)}</h4><button type="button" aria-label={`以${displayNodeTitle(candidate)}继续设计`} onClick={() => onReference(candidate.id)}>继续修改 ↗</button></div>
             {nodeSummary(candidate) ? <p className={styles.decision}>{nodeSummary(candidate)}</p> : null}
           </article>)}
         </div>
-        {group.sources.length ? <div className={styles.sources}><span>参考了</span>{group.sources.map((source) => <button key={source.id} type="button" onClick={() => onOpen(source.id)}>{displayNodeTitle(source)}</button>)}</div> : null}
+        {group.sources.length ? <div className={styles.sources}><span>参考了</span>{group.sources.map((source) => <button key={source.id} type="button" onClick={() => onOpen(source.id)}><span className={styles.sourcePreview} aria-hidden="true"><AssetPreview key={nodeImageUrl(source)} node={source} /></span><span>{displayNodeTitle(source)}</span></button>)}</div> : null}
         {notes(group.notes, group.candidates)}
       </section>)}
     </section>
 
     {notes(work.notes)}
-    <section className={styles.materials} aria-label="参考素材">
+    <section ref={materialsRef} tabIndex={-1} className={styles.materials} aria-label="参考素材">
       <header><div><h3>参考素材</h3><p>图片、面料和配色，留在手边随时引用。</p></div><button type="button" data-material-trigger onClick={onAdd}>＋ 添加素材</button></header>
       {work.materials.length ? <div className={styles.materialGrid}>{work.materials.map((material) => <article key={material.id} className={styles.material} data-node-id={material.id} role="group" aria-label={`参考素材 ${displayNodeTitle(material)}`} tabIndex={-1}>
         <button className={styles.materialPreview} type="button" aria-label={`查看素材 ${displayNodeTitle(material)}`} onClick={() => onOpen(material.id)}><AssetPreview key={nodeImageUrl(material)} node={material} /></button>

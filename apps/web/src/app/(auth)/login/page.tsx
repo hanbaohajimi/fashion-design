@@ -66,10 +66,13 @@ export default function LoginPage() {
 
   return (
     <main className={`${styles.page} ${creative.pageLayout}`}>
-      <aside className={creative.materialStudy} aria-label="Atelier 材料与版型习作"><span>ATELIER / 创作从这里开始</span><div className={creative.materialPieces} aria-hidden="true"><i /><i /><i /></div><h2>让一个想法，<br />慢慢成为一件作品。</h2><p>收集灵感 · 试探色彩 · 推敲廓形</p></aside>
+      <aside className={creative.materialStudy} aria-label="Atelier 设计工作室">
+        <span>Atelier / 设计工作室</span>
+        <h2>从灵感到交付，<br />让每一版都有来处。</h2>
+        <p>收集素材、推敲方案、整理款式与技术资料。登录后继续你的设计。</p>
+      </aside>
       <section className={styles.formPanel} aria-labelledby="auth-title">
         <div className={styles.formHeader}>
-          <span className={styles.brand}>Atelier 设计工作室</span>
           <h1 className={styles.formTitle} id="auth-title">
             登录或注册
           </h1>

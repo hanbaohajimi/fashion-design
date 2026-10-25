@@ -2,6 +2,7 @@
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
 
+import { BoundStyleContext } from "./studio-object-context";
 import { useId, useRef, useState } from "react";
 import {
   createTechPackDraft,
@@ -39,10 +40,19 @@ import { TechPackExportButton } from "./TechPackExportButton";
 import styles from "./studio.module.css";
 
 export function TechPackEditor(
-  props: StudioPanelProps & { readonly data: StudioSummary },
+  props: StudioPanelProps & {
+    readonly data: StudioSummary;
+    readonly initialStyleRevisionId?: string | undefined;
+  },
 ) {
   const [id, setId] = useState<string | null>(
-    props.data.techPacks[0]?.id ?? null,
+    (props.initialStyleRevisionId
+      ? props.data.techPacks.find(
+          (item) =>
+            (item.currentRevision.payload as StudioTechPack).styleRevisionId ===
+            props.initialStyleRevisionId,
+        )?.id
+      : props.data.techPacks[0]?.id) ?? null,
   );
   const [draftVersion, setDraftVersion] = useState(0);
   const existing = props.data.techPacks.find((item) => item.id === id);
@@ -131,12 +141,18 @@ function TechPackForm({
   onSaved,
   beforeChange,
   onCreated,
+  initialStyleRevisionId,
 }: StudioPanelProps & {
   readonly data: StudioSummary;
   readonly existing: StudioDocumentView | undefined;
+  readonly initialStyleRevisionId?: string | undefined;
   readonly onCreated: (id: string) => void;
 }) {
-  const firstRevision = data.styles[0]?.currentRevision;
+  const firstRevision =
+    data.styles
+      .flatMap((style) => [style.currentRevision, ...style.revisions])
+      .find((revision) => revision.id === initialStyleRevisionId) ??
+    data.styles[0]?.currentRevision;
   const chapterId = useId();
   const [chapter, setChapter] = useState("basics");
   const initial: StudioTechPack = existing
@@ -161,6 +177,25 @@ function TechPackForm({
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const validationId = `${chapterId}-validation`;
   const disabled = !canEdit || form.busy;
+  const readiness = (() => {
+    try {
+      return studioPublishIssues(serializeTechPackDraft(draft));
+    } catch {
+      return ["请先补全或更正表格数值，再检查发布条件"];
+    }
+  })();
+  const issueChapter = (issue: string) =>
+    issue.includes("BOM")
+      ? "bom"
+      : issue.includes("POM")
+        ? "pom"
+        : issue.includes("视图")
+          ? "views"
+          : issue.includes("配色")
+            ? "colors"
+            : issue.includes("工艺")
+              ? "annotations"
+              : "review";
   const update = <K extends keyof TechPackDraft>(
     key: K,
     value: TechPackDraft[K],
@@ -286,6 +321,7 @@ function TechPackForm({
       {viewsChanged ? (
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
+      <BoundStyleContext data={data} revisionId={draft.styleRevisionId} />
       <Field label="技术包名称">
         <Input
           aria-invalid={invalidField === "技术包名称" || undefined}
@@ -312,6 +348,31 @@ function TechPackForm({
           { value: "review", label: "复核发布" },
         ]}
       />
+      {chapter === "basics" || chapter === "review" ? (
+        <section className={styles.reviewReadiness} aria-label="发布准备情况">
+          <h3>
+            {readiness.length
+              ? `还有 ${readiness.length} 项待复核`
+              : "复核条件已满足"}
+          </h3>
+          {readiness.length ? (
+            <ul>
+              {readiness.map((issue) => (
+                <li key={issue}>
+                  <button
+                    type="button"
+                    onClick={() => setChapter(issueChapter(issue))}
+                  >
+                    {issue}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>保存当前修改后，可人工确认发布。导出使用已保存的修订。</p>
+          )}
+        </section>
+      ) : null}
       <fieldset disabled={disabled} className={styles.form}>
         <div
           data-tech-chapter="basics"

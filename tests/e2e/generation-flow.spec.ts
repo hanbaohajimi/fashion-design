@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openImageDetails } from "./workflow-navigation";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
@@ -126,7 +127,7 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
   });
 
   await page.goto("/");
-  await expect(page.getByText("logout@example.com")).toBeVisible();
+  await expect(page.getByLabel("logout@example.com", { exact: true })).toBeVisible();
 
   const workspaceNavigation = page.getByRole("navigation", {
     name: "工作区导航",
@@ -155,7 +156,7 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
   await expect(projectSearch).toBeFocused();
   await page.keyboard.press("Escape");
 
-  await page.getByText("logout@example.com", { exact: true }).click();
+  await page.getByLabel("logout@example.com", { exact: true }).click();
   await page.getByRole("button", { name: "退出登录" }).click();
 
   await expect.poll(() => logoutRequestCount).toBe(1);
@@ -315,7 +316,7 @@ test("新建项目成功后立即进入空白设计工作流", async ({ page }) 
   await page.getByRole("button", { name: "创建项目", exact: true }).click();
 
   await expect(page).toHaveURL(/\/created-project$/u);
-  await expect(page.getByText(project.name)).toBeVisible();
+  await expect(page.getByRole("main").getByText(project.name, { exact: true })).toBeVisible();
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   await expect(canvas).toBeVisible();
   await expect(canvas.getByRole("heading", { name: "让想法成为设计方案" })).toBeVisible();
@@ -465,7 +466,7 @@ test("本地图片从素材菜单上传后保留来源文件 ID 和名称", asyn
   );
 
   await page.goto("/e2e-drop");
-  await expect(page.getByText("E2E 拖放项目")).toBeVisible();
+  await expect(page.getByRole("main").getByText("E2E 拖放项目", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
   const chooserPromise = page.waitForEvent("filechooser");
@@ -809,10 +810,10 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   await expect(page.getByText("参考角色：silhouette_ref · 权重 0.7")).toBeVisible();
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByRole("button", { name: "返回画布" }).click();
+  await page.getByRole("button", { name: "适合画布", exact: true }).click();
   await canvas.locator('[data-type="candidate"]').dblclick();
   await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
-  await details.getByRole("button", { name: /图像/u }).click();
-  await details.getByRole("button", { name: "来源与设计决策", exact: true }).click();
+  await openImageDetails(page);
   await page.getByPlaceholder("记录选择或否决理由").fill("更符合通勤场景");
   await page.getByRole("button", { name: "保存决定" }).click();
   await expect.poll(() => candidateDecision).toMatchObject({

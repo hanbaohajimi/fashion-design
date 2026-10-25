@@ -1,0 +1,758 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T10:23:51.694Z",
+  "title": "Design System: Atelier · 三个未选定开发原型",
+  "extensions": {
+    "colorMeta": {
+      "archive-canvas": {
+        "role": "neutral",
+        "displayName": "archive-canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.0036 98.88)",
+          "oklch(26.43% 0.0059 98.88)",
+          "oklch(37.86% 0.0074 98.88)",
+          "oklch(49.29% 0.0080 98.88)",
+          "oklch(60.71% 0.0076 98.88)",
+          "oklch(72.14% 0.0062 98.88)",
+          "oklch(83.57% 0.0040 98.88)",
+          "oklch(95.00% 0.0013 98.88)"
+        ]
+      },
+      "archive-paper": {
+        "role": "neutral",
+        "displayName": "archive-paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0024 95.10)",
+          "oklch(26.43% 0.0040 95.10)",
+          "oklch(37.86% 0.0050 95.10)",
+          "oklch(49.29% 0.0054 95.10)",
+          "oklch(60.71% 0.0051 95.10)",
+          "oklch(72.14% 0.0041 95.10)",
+          "oklch(83.57% 0.0027 95.10)",
+          "oklch(95.00% 0.0008 95.10)"
+        ]
+      },
+      "archive-ink": {
+        "role": "neutral",
+        "displayName": "archive-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0120 176.18)",
+          "oklch(26.43% 0.0195 176.18)",
+          "oklch(37.86% 0.0245 176.18)",
+          "oklch(49.29% 0.0264 176.18)",
+          "oklch(60.71% 0.0249 176.18)",
+          "oklch(72.14% 0.0202 176.18)",
+          "oklch(83.57% 0.0130 176.18)",
+          "oklch(95.00% 0.0041 176.18)"
+        ]
+      },
+      "archive-muted": {
+        "role": "neutral",
+        "displayName": "archive-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0122 160.98)",
+          "oklch(26.43% 0.0198 160.98)",
+          "oklch(37.86% 0.0249 160.98)",
+          "oklch(49.29% 0.0268 160.98)",
+          "oklch(60.71% 0.0253 160.98)",
+          "oklch(72.14% 0.0206 160.98)",
+          "oklch(83.57% 0.0132 160.98)",
+          "oklch(95.00% 0.0042 160.98)"
+        ]
+      },
+      "archive-line": {
+        "role": "neutral",
+        "displayName": "archive-line",
+        "tonalRamp": [
+          "oklch(15.00% 0.0066 128.64)",
+          "oklch(26.43% 0.0107 128.64)",
+          "oklch(37.86% 0.0135 128.64)",
+          "oklch(49.29% 0.0145 128.64)",
+          "oklch(60.71% 0.0137 128.64)",
+          "oklch(72.14% 0.0111 128.64)",
+          "oklch(83.57% 0.0072 128.64)",
+          "oklch(95.00% 0.0023 128.64)"
+        ]
+      },
+      "archive-accent": {
+        "role": "primary",
+        "displayName": "archive-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.0315 170.63)",
+          "oklch(26.43% 0.0512 170.63)",
+          "oklch(37.86% 0.0643 170.63)",
+          "oklch(49.29% 0.0693 170.63)",
+          "oklch(60.71% 0.0654 170.63)",
+          "oklch(72.14% 0.0532 170.63)",
+          "oklch(83.57% 0.0342 170.63)",
+          "oklch(95.00% 0.0108 170.63)"
+        ]
+      },
+      "archive-accent-hover": {
+        "role": "primary",
+        "displayName": "archive-accent-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0265 169.68)",
+          "oklch(26.43% 0.0431 169.68)",
+          "oklch(37.86% 0.0542 169.68)",
+          "oklch(49.29% 0.0584 169.68)",
+          "oklch(60.71% 0.0552 169.68)",
+          "oklch(72.14% 0.0449 169.68)",
+          "oklch(83.57% 0.0288 169.68)",
+          "oklch(95.00% 0.0091 169.68)"
+        ]
+      },
+      "archive-tint": {
+        "role": "neutral",
+        "displayName": "archive-tint",
+        "tonalRamp": [
+          "oklch(15.00% 0.0080 131.88)",
+          "oklch(26.43% 0.0130 131.88)",
+          "oklch(37.86% 0.0163 131.88)",
+          "oklch(49.29% 0.0176 131.88)",
+          "oklch(60.71% 0.0166 131.88)",
+          "oklch(72.14% 0.0135 131.88)",
+          "oklch(83.57% 0.0087 131.88)",
+          "oklch(95.00% 0.0028 131.88)"
+        ]
+      },
+      "archive-rail": {
+        "role": "neutral",
+        "displayName": "archive-rail",
+        "tonalRamp": [
+          "oklch(15.00% 0.0217 174.01)",
+          "oklch(26.43% 0.0354 174.01)",
+          "oklch(37.86% 0.0445 174.01)",
+          "oklch(49.29% 0.0479 174.01)",
+          "oklch(60.71% 0.0452 174.01)",
+          "oklch(72.14% 0.0368 174.01)",
+          "oklch(83.57% 0.0236 174.01)",
+          "oklch(95.00% 0.0075 174.01)"
+        ]
+      },
+      "archive-rail-ink": {
+        "role": "neutral",
+        "displayName": "archive-rail-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0063 124.55)",
+          "oklch(26.43% 0.0102 124.55)",
+          "oklch(37.86% 0.0129 124.55)",
+          "oklch(49.29% 0.0138 124.55)",
+          "oklch(60.71% 0.0131 124.55)",
+          "oklch(72.14% 0.0106 124.55)",
+          "oklch(83.57% 0.0068 124.55)",
+          "oklch(95.00% 0.0022 124.55)"
+        ]
+      },
+      "archive-rail-muted": {
+        "role": "neutral",
+        "displayName": "archive-rail-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0127 157.28)",
+          "oklch(26.43% 0.0206 157.28)",
+          "oklch(37.86% 0.0259 157.28)",
+          "oklch(49.29% 0.0279 157.28)",
+          "oklch(60.71% 0.0263 157.28)",
+          "oklch(72.14% 0.0214 157.28)",
+          "oklch(83.57% 0.0138 157.28)",
+          "oklch(95.00% 0.0044 157.28)"
+        ]
+      },
+      "archive-focus": {
+        "role": "primary",
+        "displayName": "archive-focus",
+        "tonalRamp": [
+          "oklch(15.00% 0.0363 167.12)",
+          "oklch(26.43% 0.0590 167.12)",
+          "oklch(37.86% 0.0742 167.12)",
+          "oklch(49.29% 0.0799 167.12)",
+          "oklch(60.71% 0.0755 167.12)",
+          "oklch(72.14% 0.0614 167.12)",
+          "oklch(83.57% 0.0395 167.12)",
+          "oklch(95.00% 0.0125 167.12)"
+        ]
+      },
+      "gallery-canvas": {
+        "role": "neutral",
+        "displayName": "gallery-canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.0039 84.57)",
+          "oklch(26.43% 0.0064 84.57)",
+          "oklch(37.86% 0.0080 84.57)",
+          "oklch(49.29% 0.0086 84.57)",
+          "oklch(60.71% 0.0081 84.57)",
+          "oklch(72.14% 0.0066 84.57)",
+          "oklch(83.57% 0.0043 84.57)",
+          "oklch(95.00% 0.0013 84.57)"
+        ]
+      },
+      "gallery-paper": {
+        "role": "neutral",
+        "displayName": "gallery-paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0020 78.30)",
+          "oklch(26.43% 0.0033 78.30)",
+          "oklch(37.86% 0.0042 78.30)",
+          "oklch(49.29% 0.0045 78.30)",
+          "oklch(60.71% 0.0043 78.30)",
+          "oklch(72.14% 0.0035 78.30)",
+          "oklch(83.57% 0.0022 78.30)",
+          "oklch(95.00% 0.0007 78.30)"
+        ]
+      },
+      "gallery-ink": {
+        "role": "neutral",
+        "displayName": "gallery-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0056 62.15)",
+          "oklch(26.43% 0.0092 62.15)",
+          "oklch(37.86% 0.0115 62.15)",
+          "oklch(49.29% 0.0124 62.15)",
+          "oklch(60.71% 0.0117 62.15)",
+          "oklch(72.14% 0.0095 62.15)",
+          "oklch(83.57% 0.0061 62.15)",
+          "oklch(95.00% 0.0019 62.15)"
+        ]
+      },
+      "gallery-muted": {
+        "role": "neutral",
+        "displayName": "gallery-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0121 56.56)",
+          "oklch(26.43% 0.0197 56.56)",
+          "oklch(37.86% 0.0248 56.56)",
+          "oklch(49.29% 0.0267 56.56)",
+          "oklch(60.71% 0.0252 56.56)",
+          "oklch(72.14% 0.0205 56.56)",
+          "oklch(83.57% 0.0132 56.56)",
+          "oklch(95.00% 0.0042 56.56)"
+        ]
+      },
+      "gallery-line": {
+        "role": "neutral",
+        "displayName": "gallery-line",
+        "tonalRamp": [
+          "oklch(15.00% 0.0079 76.10)",
+          "oklch(26.43% 0.0128 76.10)",
+          "oklch(37.86% 0.0161 76.10)",
+          "oklch(49.29% 0.0174 76.10)",
+          "oklch(60.71% 0.0164 76.10)",
+          "oklch(72.14% 0.0133 76.10)",
+          "oklch(83.57% 0.0086 76.10)",
+          "oklch(95.00% 0.0027 76.10)"
+        ]
+      },
+      "gallery-accent": {
+        "role": "primary",
+        "displayName": "gallery-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.0575 35.41)",
+          "oklch(26.43% 0.0935 35.41)",
+          "oklch(37.86% 0.1176 35.41)",
+          "oklch(49.29% 0.1266 35.41)",
+          "oklch(60.71% 0.1196 35.41)",
+          "oklch(72.14% 0.0972 35.41)",
+          "oklch(83.57% 0.0625 35.41)",
+          "oklch(95.00% 0.0198 35.41)"
+        ]
+      },
+      "gallery-accent-hover": {
+        "role": "primary",
+        "displayName": "gallery-accent-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0480 35.77)",
+          "oklch(26.43% 0.0781 35.77)",
+          "oklch(37.86% 0.0982 35.77)",
+          "oklch(49.29% 0.1058 35.77)",
+          "oklch(60.71% 0.0999 35.77)",
+          "oklch(72.14% 0.0812 35.77)",
+          "oklch(83.57% 0.0522 35.77)",
+          "oklch(95.00% 0.0165 35.77)"
+        ]
+      },
+      "gallery-tint": {
+        "role": "neutral",
+        "displayName": "gallery-tint",
+        "tonalRamp": [
+          "oklch(15.00% 0.0100 58.77)",
+          "oklch(26.43% 0.0163 58.77)",
+          "oklch(37.86% 0.0205 58.77)",
+          "oklch(49.29% 0.0221 58.77)",
+          "oklch(60.71% 0.0209 58.77)",
+          "oklch(72.14% 0.0170 58.77)",
+          "oklch(83.57% 0.0109 58.77)",
+          "oklch(95.00% 0.0035 58.77)"
+        ]
+      },
+      "gallery-rail": {
+        "role": "neutral",
+        "displayName": "gallery-rail",
+        "tonalRamp": [
+          "oklch(15.00% 0.0044 132.60)",
+          "oklch(26.43% 0.0072 132.60)",
+          "oklch(37.86% 0.0091 132.60)",
+          "oklch(49.29% 0.0098 132.60)",
+          "oklch(60.71% 0.0092 132.60)",
+          "oklch(72.14% 0.0075 132.60)",
+          "oklch(83.57% 0.0048 132.60)",
+          "oklch(95.00% 0.0015 132.60)"
+        ]
+      },
+      "gallery-rail-ink": {
+        "role": "neutral",
+        "displayName": "gallery-rail-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0067 80.71)",
+          "oklch(26.43% 0.0108 80.71)",
+          "oklch(37.86% 0.0136 80.71)",
+          "oklch(49.29% 0.0147 80.71)",
+          "oklch(60.71% 0.0139 80.71)",
+          "oklch(72.14% 0.0113 80.71)",
+          "oklch(83.57% 0.0072 80.71)",
+          "oklch(95.00% 0.0023 80.71)"
+        ]
+      },
+      "gallery-rail-muted": {
+        "role": "neutral",
+        "displayName": "gallery-rail-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0085 78.23)",
+          "oklch(26.43% 0.0137 78.23)",
+          "oklch(37.86% 0.0173 78.23)",
+          "oklch(49.29% 0.0186 78.23)",
+          "oklch(60.71% 0.0176 78.23)",
+          "oklch(72.14% 0.0143 78.23)",
+          "oklch(83.57% 0.0092 78.23)",
+          "oklch(95.00% 0.0029 78.23)"
+        ]
+      },
+      "gallery-focus": {
+        "role": "primary",
+        "displayName": "gallery-focus",
+        "tonalRamp": [
+          "oklch(15.00% 0.0575 35.41)",
+          "oklch(26.43% 0.0935 35.41)",
+          "oklch(37.86% 0.1176 35.41)",
+          "oklch(49.29% 0.1266 35.41)",
+          "oklch(60.71% 0.1196 35.41)",
+          "oklch(72.14% 0.0972 35.41)",
+          "oklch(83.57% 0.0625 35.41)",
+          "oklch(95.00% 0.0198 35.41)"
+        ]
+      },
+      "relay-canvas": {
+        "role": "neutral",
+        "displayName": "relay-canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.0027 239.82)",
+          "oklch(26.43% 0.0043 239.82)",
+          "oklch(37.86% 0.0055 239.82)",
+          "oklch(49.29% 0.0059 239.82)",
+          "oklch(60.71% 0.0056 239.82)",
+          "oklch(72.14% 0.0045 239.82)",
+          "oklch(83.57% 0.0029 239.82)",
+          "oklch(95.00% 0.0009 239.82)"
+        ]
+      },
+      "relay-paper": {
+        "role": "neutral",
+        "displayName": "relay-paper",
+        "tonalRamp": [
+          "oklch(15.00% 0.0013 264.54)",
+          "oklch(26.43% 0.0021 264.54)",
+          "oklch(37.86% 0.0026 264.54)",
+          "oklch(49.29% 0.0029 264.54)",
+          "oklch(60.71% 0.0027 264.54)",
+          "oklch(72.14% 0.0022 264.54)",
+          "oklch(83.57% 0.0014 264.54)",
+          "oklch(95.00% 0.0004 264.54)"
+        ]
+      },
+      "relay-ink": {
+        "role": "neutral",
+        "displayName": "relay-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0198 250.55)",
+          "oklch(26.43% 0.0322 250.55)",
+          "oklch(37.86% 0.0405 250.55)",
+          "oklch(49.29% 0.0437 250.55)",
+          "oklch(60.71% 0.0412 250.55)",
+          "oklch(72.14% 0.0335 250.55)",
+          "oklch(83.57% 0.0216 250.55)",
+          "oklch(95.00% 0.0068 250.55)"
+        ]
+      },
+      "relay-muted": {
+        "role": "neutral",
+        "displayName": "relay-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0169 245.76)",
+          "oklch(26.43% 0.0275 245.76)",
+          "oklch(37.86% 0.0346 245.76)",
+          "oklch(49.29% 0.0372 245.76)",
+          "oklch(60.71% 0.0352 245.76)",
+          "oklch(72.14% 0.0286 245.76)",
+          "oklch(83.57% 0.0184 245.76)",
+          "oklch(95.00% 0.0058 245.76)"
+        ]
+      },
+      "relay-line": {
+        "role": "neutral",
+        "displayName": "relay-line",
+        "tonalRamp": [
+          "oklch(15.00% 0.0071 248.00)",
+          "oklch(26.43% 0.0116 248.00)",
+          "oklch(37.86% 0.0146 248.00)",
+          "oklch(49.29% 0.0157 248.00)",
+          "oklch(60.71% 0.0148 248.00)",
+          "oklch(72.14% 0.0121 248.00)",
+          "oklch(83.57% 0.0078 248.00)",
+          "oklch(95.00% 0.0025 248.00)"
+        ]
+      },
+      "relay-accent": {
+        "role": "primary",
+        "displayName": "relay-accent",
+        "tonalRamp": [
+          "oklch(15.00% 0.0501 252.26)",
+          "oklch(26.43% 0.0815 252.26)",
+          "oklch(37.86% 0.1024 252.26)",
+          "oklch(49.29% 0.1103 252.26)",
+          "oklch(60.71% 0.1042 252.26)",
+          "oklch(72.14% 0.0847 252.26)",
+          "oklch(83.57% 0.0545 252.26)",
+          "oklch(95.00% 0.0173 252.26)"
+        ]
+      },
+      "relay-accent-hover": {
+        "role": "primary",
+        "displayName": "relay-accent-hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0431 252.64)",
+          "oklch(26.43% 0.0701 252.64)",
+          "oklch(37.86% 0.0882 252.64)",
+          "oklch(49.29% 0.0950 252.64)",
+          "oklch(60.71% 0.0897 252.64)",
+          "oklch(72.14% 0.0729 252.64)",
+          "oklch(83.57% 0.0469 252.64)",
+          "oklch(95.00% 0.0149 252.64)"
+        ]
+      },
+      "relay-tint": {
+        "role": "neutral",
+        "displayName": "relay-tint",
+        "tonalRamp": [
+          "oklch(15.00% 0.0078 248.01)",
+          "oklch(26.43% 0.0127 248.01)",
+          "oklch(37.86% 0.0160 248.01)",
+          "oklch(49.29% 0.0172 248.01)",
+          "oklch(60.71% 0.0163 248.01)",
+          "oklch(72.14% 0.0132 248.01)",
+          "oklch(83.57% 0.0085 248.01)",
+          "oklch(95.00% 0.0027 248.01)"
+        ]
+      },
+      "relay-rail": {
+        "role": "neutral",
+        "displayName": "relay-rail",
+        "tonalRamp": [
+          "oklch(15.00% 0.0227 251.79)",
+          "oklch(26.43% 0.0368 251.79)",
+          "oklch(37.86% 0.0463 251.79)",
+          "oklch(49.29% 0.0499 251.79)",
+          "oklch(60.71% 0.0471 251.79)",
+          "oklch(72.14% 0.0383 251.79)",
+          "oklch(83.57% 0.0246 251.79)",
+          "oklch(95.00% 0.0078 251.79)"
+        ]
+      },
+      "relay-rail-ink": {
+        "role": "neutral",
+        "displayName": "relay-rail-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0041 258.34)",
+          "oklch(26.43% 0.0067 258.34)",
+          "oklch(37.86% 0.0084 258.34)",
+          "oklch(49.29% 0.0091 258.34)",
+          "oklch(60.71% 0.0086 258.34)",
+          "oklch(72.14% 0.0070 258.34)",
+          "oklch(83.57% 0.0045 258.34)",
+          "oklch(95.00% 0.0014 258.34)"
+        ]
+      },
+      "relay-rail-muted": {
+        "role": "neutral",
+        "displayName": "relay-rail-muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.0128 253.26)",
+          "oklch(26.43% 0.0208 253.26)",
+          "oklch(37.86% 0.0262 253.26)",
+          "oklch(49.29% 0.0282 253.26)",
+          "oklch(60.71% 0.0266 253.26)",
+          "oklch(72.14% 0.0217 253.26)",
+          "oklch(83.57% 0.0139 253.26)",
+          "oklch(95.00% 0.0044 253.26)"
+        ]
+      },
+      "relay-focus": {
+        "role": "primary",
+        "displayName": "relay-focus",
+        "tonalRamp": [
+          "oklch(15.00% 0.0501 252.26)",
+          "oklch(26.43% 0.0815 252.26)",
+          "oklch(37.86% 0.1024 252.26)",
+          "oklch(49.29% 0.1103 252.26)",
+          "oklch(60.71% 0.1042 252.26)",
+          "oklch(72.14% 0.0847 252.26)",
+          "oklch(83.57% 0.0545 252.26)",
+          "oklch(95.00% 0.0173 252.26)"
+        ]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "control-border",
+        "tonalRamp": [
+          "oklch(15.00% 0.0091 150.40)",
+          "oklch(26.43% 0.0148 150.40)",
+          "oklch(37.86% 0.0187 150.40)",
+          "oklch(49.29% 0.0201 150.40)",
+          "oklch(60.71% 0.0190 150.40)",
+          "oklch(72.14% 0.0154 150.40)",
+          "oklch(83.57% 0.0099 150.40)",
+          "oklch(95.00% 0.0031 150.40)"
+        ]
+      },
+      "on-action": {
+        "role": "neutral",
+        "displayName": "on-action",
+        "tonalRamp": [
+          "oklch(15.00% 0.0000 89.88)",
+          "oklch(26.43% 0.0000 89.88)",
+          "oklch(37.86% 0.0000 89.88)",
+          "oklch(49.29% 0.0000 89.88)",
+          "oklch(60.71% 0.0000 89.88)",
+          "oklch(72.14% 0.0000 89.88)",
+          "oklch(83.57% 0.0000 89.88)",
+          "oklch(95.00% 0.0000 89.88)"
+        ]
+      },
+      "review-ink": {
+        "role": "neutral",
+        "displayName": "review-ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0081 184.73)",
+          "oklch(26.43% 0.0132 184.73)",
+          "oklch(37.86% 0.0166 184.73)",
+          "oklch(49.29% 0.0179 184.73)",
+          "oklch(60.71% 0.0169 184.73)",
+          "oklch(72.14% 0.0137 184.73)",
+          "oklch(83.57% 0.0088 184.73)",
+          "oklch(95.00% 0.0028 184.73)"
+        ]
+      },
+      "review-border": {
+        "role": "neutral",
+        "displayName": "review-border",
+        "tonalRamp": [
+          "oklch(15.00% 0.0046 164.84)",
+          "oklch(26.43% 0.0075 164.84)",
+          "oklch(37.86% 0.0094 164.84)",
+          "oklch(49.29% 0.0102 164.84)",
+          "oklch(60.71% 0.0096 164.84)",
+          "oklch(72.14% 0.0078 164.84)",
+          "oklch(83.57% 0.0050 164.84)",
+          "oklch(95.00% 0.0016 164.84)"
+        ]
+      },
+      "review-canvas": {
+        "role": "neutral",
+        "displayName": "review-canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.0011 165.08)",
+          "oklch(26.43% 0.0018 165.08)",
+          "oklch(37.86% 0.0023 165.08)",
+          "oklch(49.29% 0.0025 165.08)",
+          "oklch(60.71% 0.0023 165.08)",
+          "oklch(72.14% 0.0019 165.08)",
+          "oklch(83.57% 0.0012 165.08)",
+          "oklch(95.00% 0.0004 165.08)"
+        ]
+      },
+      "review-focus": {
+        "role": "primary",
+        "displayName": "review-focus",
+        "tonalRamp": [
+          "oklch(15.00% 0.0357 184.31)",
+          "oklch(26.43% 0.0580 184.31)",
+          "oklch(37.86% 0.0730 184.31)",
+          "oklch(49.29% 0.0786 184.31)",
+          "oklch(60.71% 0.0742 184.31)",
+          "oklch(72.14% 0.0604 184.31)",
+          "oklch(83.57% 0.0388 184.31)",
+          "oklch(95.00% 0.0123 184.31)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "headline",
+        "purpose": "原型局部实际文字角色；不推广为生产规范"
+      },
+      "title": {
+        "displayName": "title",
+        "purpose": "原型局部实际文字角色；不推广为生产规范"
+      },
+      "section": {
+        "displayName": "section",
+        "purpose": "原型局部实际文字角色；不推广为生产规范"
+      },
+      "body": {
+        "displayName": "body",
+        "purpose": "原型局部实际文字角色；不推广为生产规范"
+      },
+      "label": {
+        "displayName": "label",
+        "purpose": "原型局部实际文字角色；不推广为生产规范"
+      },
+      "task-title": {
+        "displayName": "task-title",
+        "purpose": "C 任务队列 strong；不把被覆盖的按钮字体声明当计算值"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "160ms ease-out",
+        "purpose": "no-preference 时候选边框与按钮背景/边框变化"
+      },
+      {
+        "name": "skeleton-breathe",
+        "value": "1.4s ease-in-out infinite alternate",
+        "purpose": "no-preference 时 Skeleton opacity 0.55→1；reduce 不启用动画"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-max",
+        "value": "1200px"
+      },
+      {
+        "name": "stack-max",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile-max",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "archive / Primary",
+      "kind": "button",
+      "refersTo": "archive-primary",
+      "description": "未选定候选的 Action 主按钮；保留真实 font:inherit 层叠、hover、disabled、focus 及减弱动态。",
+      "html": "<div class=\"ds-archive\"><button class=\"ds-primary\" type=\"button\">保存款式并继续</button></div>",
+      "css": ".ds-archive{--canvas:#f5f4ee;--paper:#fffefa;--ink:#20332e;--muted:#586a60;--line:#d8ddd3;--accent:#286452;--accent-hover:#1c4c3d;--tint:#e7eee2;--rail:#183f35;--rail-ink:#f2f6ec;--rail-muted:#c2d6c9;--focus:#2b7058;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-archive button,.ds-archive input{font:inherit;}.ds-archive button{cursor:pointer;touch-action:manipulation;}.ds-archive :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 14px;border-radius:5px;font-size:13px;font-weight:600;text-align:center;line-height:1.4;background:var(--accent);color:#fff;border:1px solid transparent;}.ds-primary:not(:disabled):hover{background:var(--accent-hover);}.ds-primary:disabled{cursor:not-allowed;color:var(--muted);background:var(--canvas);border-color:var(--line);}@media(max-width:760px){.ds-primary{min-height:44px;font-size:13px;}}@media(prefers-reduced-motion:no-preference){.ds-primary{transition:border-color 160ms ease-out,background-color 160ms ease-out;}}"
+    },
+    {
+      "name": "archive / Field",
+      "kind": "input",
+      "refersTo": "archive-input",
+      "description": "共享表单输入；父标签13px，桌面输入继承，手机16px/44px。未构造不存在的hover状态。",
+      "html": "<div class=\"ds-archive\"><label class=\"ds-label\">技术包名称<input class=\"ds-input\" value=\"通勤风衣技术包\"></label></div>",
+      "css": ".ds-archive{--canvas:#f5f4ee;--paper:#fffefa;--ink:#20332e;--muted:#586a60;--line:#d8ddd3;--accent:#286452;--accent-hover:#1c4c3d;--tint:#e7eee2;--rail:#183f35;--rail-ink:#f2f6ec;--rail-muted:#c2d6c9;--focus:#2b7058;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-archive button,.ds-archive input{font:inherit;}.ds-archive button{cursor:pointer;touch-action:manipulation;}.ds-archive :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-label{display:grid;gap:8px;font-size:13px;}.ds-input{background:var(--paper);border:1px solid #89958b;border-radius:5px;color:var(--ink);padding:10px 12px;width:100%;min-width:0;}.ds-input::placeholder{color:var(--muted);opacity:1;}.ds-input:read-only{background:var(--canvas);}@media(max-width:760px){.ds-archive .ds-input{font-size:16px;min-height:44px;}}"
+    },
+    {
+      "name": "gallery / Primary",
+      "kind": "button",
+      "refersTo": "gallery-primary",
+      "description": "未选定候选的 Action 主按钮；保留真实 font:inherit 层叠、hover、disabled、focus 及减弱动态。",
+      "html": "<div class=\"ds-gallery\"><button class=\"ds-primary\" type=\"button\">保存款式并继续</button></div>",
+      "css": ".ds-gallery{--canvas:#f1eee8;--paper:#fffdfa;--ink:#332d28;--muted:#736358;--line:#dcd4c9;--accent:#963c25;--accent-hover:#78301d;--tint:#f4e5da;--rail:#2d302b;--rail-ink:#fff9ef;--rail-muted:#d6cec2;--focus:#963c25;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-gallery button,.ds-gallery input{font:inherit;}.ds-gallery button{cursor:pointer;touch-action:manipulation;}.ds-gallery :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 14px;border-radius:5px;font-size:13px;font-weight:600;text-align:center;line-height:1.4;background:var(--accent);color:#fff;border:1px solid transparent;}.ds-primary:not(:disabled):hover{background:var(--accent-hover);}.ds-primary:disabled{cursor:not-allowed;color:var(--muted);background:var(--canvas);border-color:var(--line);}@media(max-width:760px){.ds-primary{min-height:44px;font-size:13px;}}@media(prefers-reduced-motion:no-preference){.ds-primary{transition:border-color 160ms ease-out,background-color 160ms ease-out;}}"
+    },
+    {
+      "name": "gallery / Field",
+      "kind": "input",
+      "refersTo": "gallery-input",
+      "description": "共享表单输入；父标签13px，桌面输入继承，手机16px/44px。未构造不存在的hover状态。",
+      "html": "<div class=\"ds-gallery\"><label class=\"ds-label\">技术包名称<input class=\"ds-input\" value=\"通勤风衣技术包\"></label></div>",
+      "css": ".ds-gallery{--canvas:#f1eee8;--paper:#fffdfa;--ink:#332d28;--muted:#736358;--line:#dcd4c9;--accent:#963c25;--accent-hover:#78301d;--tint:#f4e5da;--rail:#2d302b;--rail-ink:#fff9ef;--rail-muted:#d6cec2;--focus:#963c25;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-gallery button,.ds-gallery input{font:inherit;}.ds-gallery button{cursor:pointer;touch-action:manipulation;}.ds-gallery :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-label{display:grid;gap:8px;font-size:13px;}.ds-input{background:var(--paper);border:1px solid #89958b;border-radius:5px;color:var(--ink);padding:10px 12px;width:100%;min-width:0;}.ds-input::placeholder{color:var(--muted);opacity:1;}.ds-input:read-only{background:var(--canvas);}@media(max-width:760px){.ds-gallery .ds-input{font-size:16px;min-height:44px;}}"
+    },
+    {
+      "name": "relay / Primary",
+      "kind": "button",
+      "refersTo": "relay-primary",
+      "description": "未选定候选的 Action 主按钮；保留真实 font:inherit 层叠、hover、disabled、focus 及减弱动态。",
+      "html": "<div class=\"ds-relay\"><button class=\"ds-primary\" type=\"button\">保存款式并继续</button></div>",
+      "css": ".ds-relay{--canvas:#eef2f5;--paper:#fcfdff;--ink:#213448;--muted:#586c7e;--line:#d5dee7;--accent:#275e98;--accent-hover:#1b4878;--tint:#e3edf7;--rail:#1b3047;--rail-ink:#f2f6fc;--rail-muted:#c0cedf;--focus:#275e98;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-relay button,.ds-relay input{font:inherit;}.ds-relay button{cursor:pointer;touch-action:manipulation;}.ds-relay :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:9px 14px;border-radius:5px;font-size:13px;font-weight:600;text-align:center;line-height:1.4;background:var(--accent);color:#fff;border:1px solid transparent;}.ds-primary:not(:disabled):hover{background:var(--accent-hover);}.ds-primary:disabled{cursor:not-allowed;color:var(--muted);background:var(--canvas);border-color:var(--line);}@media(max-width:760px){.ds-primary{min-height:44px;font-size:13px;}}@media(prefers-reduced-motion:no-preference){.ds-primary{transition:border-color 160ms ease-out,background-color 160ms ease-out;}}"
+    },
+    {
+      "name": "relay / Field",
+      "kind": "input",
+      "refersTo": "relay-input",
+      "description": "共享表单输入；父标签13px，桌面输入继承，手机16px/44px。未构造不存在的hover状态。",
+      "html": "<div class=\"ds-relay\"><label class=\"ds-label\">技术包名称<input class=\"ds-input\" value=\"通勤风衣技术包\"></label></div>",
+      "css": ".ds-relay{--canvas:#eef2f5;--paper:#fcfdff;--ink:#213448;--muted:#586c7e;--line:#d5dee7;--accent:#275e98;--accent-hover:#1b4878;--tint:#e3edf7;--rail:#1b3047;--rail-ink:#f2f6fc;--rail-muted:#c0cedf;--focus:#275e98;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-relay button,.ds-relay input{font:inherit;}.ds-relay button{cursor:pointer;touch-action:manipulation;}.ds-relay :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-label{display:grid;gap:8px;font-size:13px;}.ds-input{background:var(--paper);border:1px solid #89958b;border-radius:5px;color:var(--ink);padding:10px 12px;width:100%;min-width:0;}.ds-input::placeholder{color:var(--muted);opacity:1;}.ds-input:read-only{background:var(--canvas);}@media(max-width:760px){.ds-relay .ds-input{font-size:16px;min-height:44px;}}"
+    },
+    {
+      "name": "Archive / Navigation",
+      "kind": "nav",
+      "refersTo": "archive-navigation",
+      "description": "A 的目录导航片段；候选本地状态预览，不提供正式项目跳转。",
+      "html": "<div class=\"ds-archive\"><nav class=\"ds-nav\" aria-label=\"原型应用导航\"><button type=\"button\" aria-current=\"page\">项目</button><button type=\"button\">设计工作台</button><button type=\"button\">技术包</button></nav></div>",
+      "css": ".ds-archive{--canvas:#f5f4ee;--paper:#fffefa;--ink:#20332e;--muted:#586a60;--line:#d8ddd3;--accent:#286452;--accent-hover:#1c4c3d;--tint:#e7eee2;--rail:#183f35;--rail-ink:#f2f6ec;--rail-muted:#c2d6c9;--focus:#2b7058;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-archive button,.ds-archive input{font:inherit;}.ds-archive button{cursor:pointer;touch-action:manipulation;}.ds-archive :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-nav{display:grid;gap:8px;background:var(--rail);}.ds-nav button{display:flex;gap:11px;align-items:center;min-height:44px;padding:10px 12px;border:0;border-radius:5px;background:none;color:var(--rail-muted);text-align:left;}.ds-nav button[aria-current]{background:#2f5a48;color:#f2f6ec;}.ds-nav button:hover{background:#274d40;color:#f2f6ec;}.ds-nav :focus-visible{outline-color:#c4dfcc;}@media(max-width:760px){.ds-nav{display:flex;width:100%;gap:4px;}.ds-nav>button{flex:1;justify-content:center;min-height:44px;font-size:12px;padding:10px 4px;gap:7px;}}"
+    },
+    {
+      "name": "Archive / Reference tag",
+      "kind": "chip",
+      "refersTo": "archive-reference-tag",
+      "description": "有名称和移除按钮的素材引用；静态预览不写入 Trial。",
+      "html": "<div class=\"ds-archive\"><div class=\"ds-tags\"><span>藏蓝棉混纺<button type=\"button\" aria-label=\"移除藏蓝棉混纺\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M6 6l12 12M18 6 6 18\"/></svg></button></span></div></div>",
+      "css": ".ds-archive{--canvas:#f5f4ee;--paper:#fffefa;--ink:#20332e;--muted:#586a60;--line:#d8ddd3;--accent:#286452;--accent-hover:#1c4c3d;--tint:#e7eee2;--rail:#183f35;--rail-ink:#f2f6ec;--rail-muted:#c2d6c9;--focus:#2b7058;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-archive button,.ds-archive input{font:inherit;}.ds-archive button{cursor:pointer;touch-action:manipulation;}.ds-archive :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-tags{display:flex;gap:6px;flex-wrap:wrap;}.ds-tags>span{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--accent);padding:0 4px 0 8px;border:1px solid var(--accent);border-radius:4px;}.ds-tags button{border:0;background:none;color:inherit;display:grid;place-items:center;height:32px;width:28px;}.ds-tags button svg{width:12px;}@media(max-width:760px){.ds-tags button{width:44px;height:44px;}}"
+    },
+    {
+      "name": "Archive / Empty project card",
+      "kind": "card",
+      "refersTo": "archive-project",
+      "description": "项目记录的空白项目占位与文字部分，沿用已存在的 newProject 状态；不伪造服装图。",
+      "html": "<div class=\"ds-archive\"><article class=\"ds-project\"><button class=\"ds-project-image\" type=\"button\" aria-label=\"打开新的设计想法\"><span class=\"ds-new-project\">从一个想法开始</span></button><div class=\"ds-project-info\"><h2><button type=\"button\">新的设计想法</button></h2><p>留给下一次灵感。</p></div></article></div>",
+      "css": ".ds-archive{--canvas:#f5f4ee;--paper:#fffefa;--ink:#20332e;--muted:#586a60;--line:#d8ddd3;--accent:#286452;--accent-hover:#1c4c3d;--tint:#e7eee2;--rail:#183f35;--rail-ink:#f2f6ec;--rail-muted:#c2d6c9;--focus:#2b7058;color:var(--ink);font-family:\"PingFang SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, sans-serif;font-size:14px;line-height:1.55;}.ds-archive button,.ds-archive input{font:inherit;}.ds-archive button{cursor:pointer;touch-action:manipulation;}.ds-archive :focus-visible{outline:2px solid var(--focus);outline-offset:3px;}.ds-project{display:grid;grid-template-columns:180px minmax(0,1fr);background:var(--paper);border-radius:8px;overflow:hidden;}.ds-project-image{padding:0;border:0;display:block;min-width:0;background:#f5f5f3;}.ds-new-project{min-height:160px;height:100%;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;color:var(--muted);background:var(--tint);font-size:12px;}.ds-project-info{display:flex;flex-direction:column;align-items:flex-start;padding:22px 28px;min-width:0;}.ds-project-info h2{margin:10px 0 7px;font-size:20px;font-weight:600;line-height:1.4;overflow-wrap:anywhere;}.ds-project-info h2 button{text-align:left;border:0;background:none;padding:0;font:inherit;color:inherit;}.ds-project-info h2 button:hover{color:var(--accent);}.ds-project-info>p{color:var(--muted);font-size:13px;max-width:65ch;margin:0 0 12px;}@media(max-width:760px){.ds-project{grid-template-columns:110px minmax(0,1fr);}.ds-project-info{padding:16px 12px;}.ds-project-info h2{font-size:17px;}.ds-project-info>p{font-size:12px;}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "同一服装任务的三个未选定结构",
+    "overview": "这是一份候选实现记录，不是生产设计规范。A「织物档案」、B「作品展台」、C「任务接力」共用服装、项目及任务数据，以不同的作品、资料与任务布局供用户实际比较。默认显示 A 只是初始化顺序；没有任何方向已经获得最终选择。上级 `../../../DESIGN.md` 及 `../../../.impeccable/design.json` 继续描述现行生产系统。\n\n范围仅限 `/prototypes/impeccable` 开发路由、本目录组件和局部 CSS。用户须比较后在聊天中确认方向，才能开展全平台推广；页面“记录偏好”只改变当前内存中的提示，不触发推广、保存偏好到服务器或选择正式主题。",
+    "keyCharacteristics": [
+      "三种结构使用同一组真实来源样图与明确模拟的数据。",
+      "对象、已保存方案和款式修订在工作台与技术包之间绑定。",
+      "手机比较工具折叠，作品、素材、助手分区切换。",
+      "无持久化业务数据；刷新重置，网络与模型执行均不在原型范围。"
+    ],
+    "rules": [
+      {
+        "name": "Candidate Scope",
+        "body": "A、B、C 的 tokens 仅在各自 data-direction 局部容器生效，不能提升为生产规范。",
+        "section": "colors"
+      },
+      {
+        "name": "Complete Silhouette",
+        "body": "服装 raster 使用 object-fit: contain 保留完整轮廓，模拟编辑复用已标明来源的样图。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 用同一项目和任务顺序比较三个方向，保持对象与已保存修订绑定。",
+      "Do 读取当前 CSS 的实际候选值，先取得最终选择再推广生产主题。",
+      "Do 在手机分别检查 designs、materials、assistant 三个面板和可展开比较设置。",
+      "Do 明确标注模拟生成、人工复核与 TXT 交付，保留数据和素材来源。"
+    ],
+    "donts": [
+      "Don't 把默认 A、“记录偏好”或完成审查解释为用户最终选定方向。",
+      "Don't 覆盖上级生产 DESIGN.md 或将候选局部 CSS 导入生产主题。",
+      "Don't 声称刷新后保留草稿，或声称本页调用真实项目、模型、计费、队列和正式发布。",
+      "Don't 把小号元数据、Georgia 品牌字母或现存实现局限升级为新的全平台规范。"
+    ]
+  }
+}

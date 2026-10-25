@@ -1,6 +1,6 @@
 .shell {
   display: grid;
-  grid-template-columns: var(--workspace-nav-width) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: calc(100dvh - var(--app-header-height));
   font-family: var(--font-sans);
   color: var(--atelier-ink);
@@ -124,7 +124,7 @@
   display: none;
 }
 .header {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
@@ -150,7 +150,7 @@
   gap: var(--space-3);
 }
 .body {
-  padding: var(--space-6) 0;
+  padding: var(--space-4) 0;
   min-width: 0;
 }
 .section {
@@ -237,14 +237,14 @@
   .chapterForm {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - 148px);
-    min-height: 0;
+    height: auto;
+    min-height: auto;
     gap: var(--space-3);
   }
   .chapterForm > fieldset {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+    flex: none;
+    min-height: auto;
+    overflow: visible;
     padding-right: var(--space-2);
     align-content: start;
   }
@@ -521,6 +521,10 @@
   width: min(1100px, 95vw);
   max-height: 90dvh;
   overflow: auto;
+  padding: var(--space-6);
+}
+.unsavedDialog {
+  width: min(480px, calc(100vw - 32px));
   padding: var(--space-6);
 }
 .status {
@@ -991,3 +995,33 @@
     min-width: 0;
   }
 }
+
+/* 织物档案：项目功能并入唯一导航，编辑区保留全宽。 */
+.workspaceTitle { max-width: min(620px, 65vw); font-size: var(--text-lg); }
+.workspaceNavigation { gap: var(--space-3); }
+.navigationLabel, .workspaceNavigation button, .workspaceNavigation .navigationDisclosure { color: var(--color-navigation-muted); }
+.workspaceNavigation button { min-height: 40px; }
+.workspaceNavigation button:hover { color: var(--color-navigation-ink); background: var(--color-navigation-hover); }
+.workspaceNavigation button[aria-selected="true"] { color: var(--color-navigation-ink); background: var(--color-navigation-selected); box-shadow: inset 2px 0 var(--color-navigation-ink); }
+.form details > summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+.reviewReadiness { border: 1px solid var(--color-border); background: var(--color-surface); padding: var(--space-4); border-radius: var(--radius-md); }
+.reviewReadiness h3 { font-size: var(--text-lg); margin-bottom: var(--space-2); }
+.reviewReadiness ul { margin: 0; padding-left: var(--space-5); }
+.reviewReadiness button { min-height: 36px; color: var(--color-action); text-align: left; background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+.compare article { display: flex; flex-direction: column; }
+.compare article > button { order: -1; align-self: flex-start; }
+.compare .assetImage { height: 320px; }
+@media (max-width: 767px) {
+  .workspaceTitle { font-size: var(--text-base); }
+  .reviewReadiness button { min-height: 44px; }
+}
+
+.compareSelection summary { cursor: pointer; min-height: 44px; padding-block: 12px; }
+@media (min-width: 1200px) {
+ .chapterForm { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: var(--space-6); align-items: start; }
+ .chapterForm > * { grid-column: 2; }
+ .chapterForm > [data-object-context] { grid-column: 1; grid-row: 1 / span 12; position: sticky; top: var(--space-4); display: flex; flex-direction: column; align-items: stretch; border: 0; padding: 0; }
+ .chapterForm > [data-object-context] > div:first-child { width: 100%; height: 260px; }
+ .chapterForm > [data-object-context] > div:last-child { height: auto; }
+}
+@media (min-width: 768px) and (max-width: 1023px) { .mobileNavigation { display: none; } }

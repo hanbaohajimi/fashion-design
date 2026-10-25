@@ -1,20 +1,26 @@
 /**
  * 新时尚 AI 设计平台 — 设计系统
  *
- * 视觉主张：中性浅色专业工作台。作品、当前任务和恢复操作优先。
+ * 视觉主张：织物档案。森林绿导航、暖纸编辑区；作品、当前对象和下一步优先。
  * §2.1/§2.8/§5.2：品牌、动作、选中、焦点和状态分别命名。
  * 本文件是唯一运行时主题；颜色清单和预览从这里导出。
  */
 
 :root {
   color-scheme: light;
+  --color-navigation: #183f35;
+  --color-navigation-ink: #f2f6ec;
+  --color-navigation-muted: #c2d6c9;
+  --color-navigation-hover: #234c40;
+  --color-navigation-selected: #315d4e;
+  --color-navigation-border: #426557;
   --control-height: 36px;
   --control-height-compact: 32px;
   --control-height-primary: 40px;
   --control-height-touch: 44px;
   --studio-header-height: 56px;
   --app-header-height: 56px;
-  --workspace-nav-width: 216px;
+  --workspace-nav-width: 204px;
   --inspector-width: 320px;
   --editor-header-height: 64px;
   --text-page-title: 32px;
@@ -23,7 +29,7 @@
   --upload-preview-height: 200px;
   --content-max-width: 1600px;
   --page-gutter: 32px;
-  --image-stage-background: #d7d7d7;
+  --image-stage-background: #e7e9e2;
 
   /* 旧组件只引用别名，所有视觉值以本文件为准。 */
   --surface-base: var(--color-canvas);
@@ -50,11 +56,11 @@
      面板是"纸"，最亮，浮动在墙之上。
   */
 
-  --color-canvas: #f5f5f5;
-  --color-paper: #ffffff;
-  --color-surface: #fafafa;
-  --color-overlay: #f5f5f5;
-  --color-control-border: #808080;
+  --color-canvas: #f5f4ee;
+  --color-paper: #fffefa;
+  --color-surface: #f7f8f2;
+  --color-overlay: #eef1e9;
+  --color-control-border: #7c8d81;
   --color-disabled-bg: #f5f5f5;
   --color-disabled-ink: #6a6a6a;
   --color-disabled-border: #d7d7d7;
@@ -71,9 +77,9 @@
      不用纯黑。纯黑在浅色底上过于尖锐，长时间阅读疲劳。
   */
 
-  --color-ink: #181818;
-  --color-ink-secondary: #555555;
-  --color-ink-tertiary: #6a6a6a;
+  --color-ink: #20332e;
+  --color-ink-secondary: #586a60;
+  --color-ink-tertiary: #627167;
   --color-ink-disabled: var(--color-disabled-ink);
 
   /* ============================================================
@@ -83,18 +89,18 @@
   */
 
   /* generate_palette.py --base 'hsl(228,60%,48%)' --extended --cap 8 */
-  --color-action: #314ec4;
-  --color-action-hover: #253cae;
-  --color-action-active: #192b97;
+  --color-action: #286452;
+  --color-action-hover: #1c4c3d;
+  --color-action-active: #183f35;
   --color-action-on: #ffffff;
-  --color-action-subtle: #f6f9ff;
-  --color-selection-bg: #ebf1ff;
-  --color-selection-ink: #253cae;
-  --color-selection-border: #314ec4;
-  --color-focus-ring: #314ec4;
-  --color-brand: #b0452a;
-  --color-brand-hover: #98381f;
-  --color-brand-bg: #fff5f0;
+  --color-action-subtle: #f0f4ea;
+  --color-selection-bg: #e7eee2;
+  --color-selection-ink: #1c4c3d;
+  --color-selection-border: #286452;
+  --color-focus-ring: #2b7058;
+  --color-brand: #286452;
+  --color-brand-hover: #1c4c3d;
+  --color-brand-bg: #e7eee2;
   /* 兼容调用保留解析能力；活跃组件按用途迁移到语义变量。 */
   --color-signal: var(--color-action);
   --color-signal-hover: var(--color-action-hover);
@@ -107,9 +113,9 @@
      线是结构，不是装饰。宁可少用。
   */
 
-  --color-border: rgba(24, 24, 24, 0.16);
-  --color-border-strong: rgba(24, 24, 24, 0.28);
-  --color-divider: rgba(24, 24, 24, 0.1);
+  --color-border: #d8ddd3;
+  --color-border-strong: #a6b2a7;
+  --color-divider: #e0e4db;
 
   /* 遮罩层 —— 模态背景、聚焦遮罩，需要足够暗以隔离内容 */
   --color-scrim: rgba(24, 24, 24, 0.72);
@@ -138,10 +144,10 @@
   --color-status-warning-bg: #fff6eb;
   --color-status-error: #b92727;
   --color-status-error-bg: #ffebed;
-  --color-status-info: #253cae;
-  --color-status-info-bg: #ebf1ff;
-  --color-status-running: #253cae;
-  --color-status-running-bg: #ebf1ff;
+  --color-status-info: #1c4c3d;
+  --color-status-info-bg: #e7eee2;
+  --color-status-running: #1c4c3d;
+  --color-status-running-bg: #e7eee2;
   --color-success: var(--color-status-success);
   --color-success-bg: var(--color-status-success-bg);
   --color-warning: var(--color-status-warning);

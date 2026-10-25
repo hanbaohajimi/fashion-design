@@ -1,3 +1,4 @@
+import { openImageDetails } from "./workflow-navigation";
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
@@ -487,6 +488,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
 
   await page.goto("/e2e-collection");
   await page.locator('[data-type="candidate"]').dblclick();
+  await openImageDetails(page);
   await page.getByRole("button", { name: "打开关联系列" }).click();
 
   const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });

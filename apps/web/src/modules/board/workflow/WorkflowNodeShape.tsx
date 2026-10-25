@@ -320,6 +320,10 @@ function WorkflowPort({
 }) {
   const interaction = useWorkflowInteractions();
   const exporting = useSvgExportContext();
+  const editor = useEditor();
+  // Keep overview connection targets outside the node, so they remain available
+  // without covering its selection/details target.
+  const overview = useValue("workflow-port-overview", () => editor.getZoomLevel() < 0.45, [editor]);
   if (exporting) return null;
   const hint = interaction?.hint(shape.props.nodeId, side);
   const label =
@@ -329,6 +333,7 @@ function WorkflowPort({
       aria-label={`${shape.props.title} · ${label}`}
       className={`${styles.interactivePort} ${side === "input" ? styles.portInput : styles.portOutput}`}
       data-workflow-port={side}
+      data-overview={overview ? "true" : undefined}
       data-node-id={shape.props.nodeId}
       data-valid={hint?.valid ? "true" : "false"}
       disabled={shape.props.status === "proposed"}

@@ -191,7 +191,7 @@ test("空项目的十一项功能保持输入和返回入口可达", async ({ pa
       page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "返回设计画布", exact: false }),
+      page.getByRole("link", { name: "设计工作台", exact: true }),
     ).toBeVisible();
     expect(
       await page.evaluate(

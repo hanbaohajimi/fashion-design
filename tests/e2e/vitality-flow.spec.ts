@@ -38,7 +38,7 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
     fullPage: true,
   });
   await page.getByRole("link", { name: "继续创作", exact: true }).click();
-  await page.getByRole("link", { name: "款式与交付", exact: true }).click();
+  await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "款式与交付", exact: true }).click();
   await page.getByRole("button", { name: "设计工具", exact: true }).click();
   await page.getByRole("tab", { name: "色料实验", exact: true }).click();
   await page.getByRole("button", { name: "创作进展" }).click();

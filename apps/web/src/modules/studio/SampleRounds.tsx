@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  BoundStyleContext,
+  techPackStyleRevision,
+} from "./studio-object-context";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前轮次照片、锚点与问题；轮次切换和历史为次级。保存为主操作，照片坐标保持原值。 */
 
 import { useState } from "react";
@@ -347,6 +352,10 @@ function SampleEditor({
           ) : null}
         </Notice>
       ) : null}
+      <BoundStyleContext
+        data={data}
+        revisionId={techPackStyleRevision(data, draft.techPackRevisionId)}
+      />
       <fieldset
         className={styles.form}
         disabled={!canEdit || form.busy || uploading}

@@ -61,7 +61,7 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
   const [executionErrors, setExecutionErrors] = useState<Record<string, string>>({});
   const executionFlight = useRef(false);
   const composerInput = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { if (focusRequest) composerInput.current?.focus(); }, [focusRequest]);
+  useEffect(() => { if (focusRequest) composerInput.current?.focus({ preventScroll: true }); }, [focusRequest]);
   const [agentVersion, setAgentVersion] = useState<1 | 2>(2);
   const [contextError, setContextError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -77,7 +77,10 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
   const initializedMessages = useRef("");
   const contextEpoch = useRef(0);
   const pendingRequest = useRef<{ key: string; id: string } | null>(null);
-  const timelineEnd = useRef<HTMLDivElement>(null);
+  const conversationView = useRef<HTMLDivElement>(null);
+  const composerSurface = useRef<HTMLDivElement>(null);
+  const conversationSize = useRef({ width: 0, height: 0 });
+  const readingAnchor = useRef<{ id: string; offset: number } | null>(null);
   const followMessages = useRef(true);
   const [newMessages, setNewMessages] = useState(false);
   const active = conversations.find((item) => item.id === conversationId);
@@ -91,7 +94,7 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     if (collaborationReadOnly) { onError("请先打开可编辑的设计对话再引用素材。"); return; }
     if (!graph.nodes.some((node) => node.id === referenceRequest.nodeId)) return;
     setReferencedIds((current) => [...new Set([...current, referenceRequest.nodeId])]);
-    composerInput.current?.focus();
+    composerInput.current?.focus({ preventScroll: true });
   }, [collaborationReadOnly, graph.nodes, loading, onError, referenceRequest]);
   const mentionMatch = prompt.match(/(?:^|\s)@([^@\s]*)$/u);
   const mentionChoices = mentionMatch ? graph.nodes.filter((node) => node.title.includes(mentionMatch[1] ?? "") && !referencedIds.includes(node.id)).slice(0, 6) : [];
@@ -102,6 +105,7 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
 
   const activateConversation = useCallback((id: string) => {
     followMessages.current = true;
+    readingAnchor.current = null;
     setNewMessages(false);
     initializedMessages.current = "";
     contextEpoch.current += 1;
@@ -208,9 +212,32 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     return `${proposal?.id}:${proposal?.status}:${tool?.status}:${outputs.join(",")}`;
   }).join("|");
   useEffect(() => {
-    if (followMessages.current) timelineEnd.current?.scrollIntoView({ block: "nearest" });
+    if (followMessages.current && conversationView.current) conversationView.current.scrollTop = conversationView.current.scrollHeight;
     else setNewMessages(true);
   }, [latestMessageKey, pendingReply, proposalResultKey]);
+
+  // §2.1/§3.6: resizing the composer must not hide the current confirmation or
+  // pull a reader away from history. Scroll events caused by reflow keep intent.
+  useEffect(() => {
+    const view = conversationView.current;
+    const composer = composerSurface.current;
+    if (!view || !composer || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        conversationSize.current = { width: view.clientWidth, height: view.clientHeight };
+        if (followMessages.current) view.scrollTop = view.scrollHeight;
+        else if (readingAnchor.current) {
+          const anchor = Array.from(view.querySelectorAll<HTMLElement>("[data-message-id]")).find((item) => item.dataset.messageId === readingAnchor.current?.id);
+          if (anchor) view.scrollTop += anchor.getBoundingClientRect().top - view.getBoundingClientRect().top - readingAnchor.current.offset;
+        }
+      });
+    });
+    observer.observe(view);
+    observer.observe(composer);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [conversationId]);
 
   const createConversation = async (keepDraft = false) => {
     const created = await createAgentConversation(projectId, { mode: "workflow" });
@@ -354,7 +381,7 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
     if (activeId.current !== target) return;
     setReferencedIds([]);
     setPrompt((value) => removeReferenceMentions(value, graph.nodes, ids));
-    composerInput.current?.focus();
+    composerInput.current?.focus({ preventScroll: true });
   };
   const retryContext = () => { void refreshContext().catch((error: unknown) => setContextError(error instanceof Error ? error.message : "设计要求读取失败")); };
 
@@ -363,9 +390,19 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
       {!conversationId ? <option value="">新设计对话</option> : null}
       {conversations.map((item) => <option key={item.id} value={item.id}>{item.title || "未命名对话"}{item.mode === "workflow" ? "" : " · 只读历史"}</option>)}
     </select></div> : null}
-    <div aria-label="设计对话" aria-live="polite" className={styles.assistantConversation} onScroll={(event) => { const view = event.currentTarget; followMessages.current = view.scrollHeight - view.scrollTop - view.clientHeight < STUDIO_LAYOUT.followThreshold; if (followMessages.current) setNewMessages(false); }} data-empty={!loading && messages.length === 0}>
+    <div ref={conversationView} aria-label="设计对话" aria-live="polite" className={styles.assistantConversation} onScroll={(event) => {
+      const view = event.currentTarget;
+      if (view.clientWidth !== conversationSize.current.width || view.clientHeight !== conversationSize.current.height) return;
+      followMessages.current = view.scrollHeight - view.scrollTop - view.clientHeight < STUDIO_LAYOUT.followThreshold;
+      if (followMessages.current) { setNewMessages(false); readingAnchor.current = null; }
+      else {
+        const top = view.getBoundingClientRect().top;
+        const anchor = Array.from(view.querySelectorAll<HTMLElement>("[data-message-id]")).find((item) => item.getBoundingClientRect().bottom > top);
+        readingAnchor.current = anchor?.dataset.messageId ? { id: anchor.dataset.messageId, offset: anchor.getBoundingClientRect().top - top } : null;
+      }
+    }} data-empty={!loading && messages.length === 0}>
       {messageSync.error ? <p role="status">{userFacingError(messageSync.error, "设计对话暂时无法同步")}<button onClick={() => { messageSync.retry(); }} type="button">重试同步</button></p> : null}
-      {loading ? <p className={styles.chatEmpty}>正在恢复设计对话…</p> : messages.length === 0 ? <div className={styles.assistantWelcome}><span>从想法到方案</span><h3>{legacy ? "这段历史会话没有消息" : "你想设计一件什么服装？"}</h3><p>写下款式、场景和想保留的细节。确认方案后，直接在这里生成。</p></div> : null}
+      {loading ? <p className={styles.chatEmpty}>正在恢复设计对话…</p> : messages.length === 0 ? <div className={styles.assistantWelcome}><h3>{legacy ? "这段历史会话没有消息" : graph.nodes.some((node) => node.type === "candidate") ? "选择方案，继续调整" : "你想设计一件什么服装？"}</h3><p>{graph.nodes.some((node) => node.type === "candidate") ? "从作品旁选择“继续修改”，再写下想调整的细节与保留项。确认要求后再生成。" : "写下款式、场景和想保留的细节。确认方案后，直接在这里生成。"}</p></div> : null}
       {cursor ? <button className={styles.historyAction} disabled={loading} onClick={() => { setLoading(true); void listWorkflowMessages(conversationId, cursor).then((page) => { setMessages((current) => [...page.items, ...current.filter((item) => !page.items.some((older) => older.id === item.id))]); setCursor(page.nextCursor); }).catch((error: unknown) => onError(error instanceof Error ? error.message : "历史读取失败")).finally(() => setLoading(false)); }} type="button">读取更早消息</button> : null}
       {messages.map((message) => <article className={styles.workflowMessage} data-role={message.role} data-message-id={message.id} key={message.id}>
         {message.kind === "clarify" ? <span className={styles.messageKind}>需要补充</span> : null}
@@ -375,25 +412,27 @@ export function WorkflowAssistantPanel({ graph, projectId, selected, onGraphChan
         {message.error ? <small role="alert">{userFacingError(message.error.message, "本轮处理未完成，可以重试")}</small> : null}
         {message.role === "assistant" && message.status === "failed" && message.error?.code !== "WORKFLOW_BUDGET_EXHAUSTED" && !legacy && messages.some((user) => user.id === message.replyToId && user.clientRequestId) ? <button className={styles.actionSecondary} disabled={sending || contextSaving || pendingReply} onClick={() => void retryMessage(message)} type="button">重试这条回复</button> : null}
         {message.role === "assistant" && message.status !== "pending" ? <MessageReferenceRecord context={message.context} graph={graph} onLocate={onLocate} /> : null}
-        {message.proposal ? <ProposalReview proposal={message.proposal} graph={graph} disabled={sending || pendingReply || collaborationReadOnly} error={executionErrors[message.proposal.id]} onAccept={() => { if (message.proposal) void decide(message.proposal, "accept"); }} onReject={() => { if (message.proposal) void decide(message.proposal, "reject"); }} onAdjust={() => { if (!message.proposal) return; setAdjustment(message.proposal); setReferencedIds(message.proposal.referencedNodeIds); composerInput.current?.focus(); }} onOpenResult={onOpenResult} /> : null}
+        {message.proposal ? <ProposalReview proposal={message.proposal} graph={graph} disabled={sending || pendingReply || collaborationReadOnly} error={executionErrors[message.proposal.id]} onAccept={() => { if (message.proposal) void decide(message.proposal, "accept"); }} onReject={() => { if (message.proposal) void decide(message.proposal, "reject"); }} onAdjust={() => { if (!message.proposal) return; setAdjustment(message.proposal); setReferencedIds(message.proposal.referencedNodeIds); composerInput.current?.focus({ preventScroll: true }); }} onOpenResult={onOpenResult} /> : null}
       </article>)}
-      <div ref={timelineEnd} />
     </div>
-    {newMessages ? <button className={styles.newMessages} onClick={() => { followMessages.current = true; setNewMessages(false); timelineEnd.current?.scrollIntoView({ block: "nearest" }); }} type="button">有新消息 ↓</button> : null}
+    {newMessages ? <button className={styles.newMessages} onClick={() => { followMessages.current = true; setNewMessages(false); if (conversationView.current) conversationView.current.scrollTop = conversationView.current.scrollHeight; }} type="button">有新消息 ↓</button> : null}
     {legacy && legacyRunsOpen ? renderLegacyRuns(conversationId) : null}
-    <div className={styles.composer}>
+    <div ref={composerSurface} className={styles.composer}>
       {legacy ? <div className={styles.legacyReadOnly}><p>历史聊天保留为只读。可在“更多”中新建设计对话，继承项目目标和有效偏好。</p></div> : agentVersion === 1 ? <div className={styles.legacyReadOnly}><p>设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。</p></div> : <>
       <div className={ui.discussion} aria-label="正在讨论">
-        <span>正在讨论</span>
-        {discussionIds.length ? discussionIds.map((id) => <button className={styles.nodeLink} key={id} disabled={!graph.nodes.some((node) => node.id === id)} onClick={() => onLocate(id)} type="button">{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"}</button>) : <span>{conversationId && !context ? contextError ? "讨论对象读取失败" : "正在读取…" : "整个项目"}</span>}
-        {draftReferences.ids.length ? <small>待发送引用</small> : null}
+        <span>{draftReferences.ids.length ? "待发送引用" : "正在讨论"}</span>
         {discussionIds.length > 0 ? <button className={styles.actionQuiet} disabled={sending || pendingReply || contextSaving || (Boolean(conversationId) && !context)} onClick={() => void clearDiscussion()} type="button">讨论整个项目</button> : null}
+        <div className={ui.discussionReferences}>
+          {discussionIds.length ? discussionIds.map((id) => <span className={draftReferences.ids.length ? ui.referenceChip : undefined} key={id}>
+            <button className={styles.nodeLink} title={graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"} disabled={!graph.nodes.some((node) => node.id === id)} onClick={() => onLocate(id)} type="button">{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"}</button>
+            {draftReferences.ids.length ? <button className={ui.removeReference} disabled={sending || contextSaving} aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`} onClick={() => { setReferencedIds((current) => current.filter((item) => item !== id)); setPrompt((value) => removeReferenceMentions(value, graph.nodes, [id])); }} type="button">×</button> : null}
+          </span>) : <span>{conversationId && !context ? contextError ? "讨论对象读取失败" : "正在读取…" : "整个项目"}</span>}
+        </div>
       </div>
       {contextError ? <p role="alert">{contextError}<button type="button" onClick={retryContext}>重新读取</button></p> : null}
       {draftReferences.error ? <p role="status">{draftReferences.error}</p> : null}
       {selected && !referencedIds.includes(selected.id) ? <button className={styles.referenceAction} disabled={sending || contextSaving} onClick={() => setReferencedIds((current) => [...new Set([...current, selected.id])].slice(0, 16))} type="button">＋ 引用「{displayNodeTitle(selected)}」</button> : null}
 
-      {draftReferences.ids.length > 0 ? <div className={styles.mentions}>{draftReferences.ids.map((id) => <button disabled={sending || contextSaving} aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`} key={id} onClick={() => { setReferencedIds((current) => current.filter((item) => item !== id)); setPrompt((value) => removeReferenceMentions(value, graph.nodes, [id])); }} type="button">@{graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"} ×</button>)}</div> : null}
       {mentionChoices.length > 0 ? <div aria-label="引用画布节点" className={styles.mentionChoices} role="listbox">{mentionChoices.map((node) => <button disabled={sending || contextSaving} aria-selected={false} key={node.id} onClick={() => { setReferencedIds((current) => [...new Set([...current, node.id])].slice(0, 16)); setPrompt((value) => value.replace(/(?:^|\s)@([^@\s]*)$/u, (match) => `${match.startsWith(" ") ? " " : ""}@${node.title} `)); }} role="option" type="button">@{node.title}<small>{node.kind === "asset" ? "素材" : "工具"}{graph.nodes.filter((item) => item.title === node.title).length > 1 ? ` · ${node.id.slice(0, 8)}` : ""}</small></button>)}</div> : null}
       {adjustment ? <div className={styles.adjustmentContext}><span>修改这条方案的要求</span><button type="button" onClick={() => setAdjustment(null)}>取消修改</button></div> : null}
       <textarea ref={composerInput} aria-label="向设计助手描述下一步" disabled={loading || sending || contextSaving} maxLength={MAX_AGENT_MESSAGE_LENGTH} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} placeholder={adjustment ? "例如：保留版型，将面料改为亚麻，生成 2 张。" : "例如：设计一件秋冬通勤风衣，藏蓝色，宽松廓形。"} rows={3} value={prompt} />

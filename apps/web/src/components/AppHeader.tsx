@@ -1,69 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "../modules/auth/AuthProvider";
 import { Button, Menu } from "./ui";
-import styles from "./app-header.module.css";
+import { ArchiveNavigation, type ArchiveSection } from "./ArchiveNavigation";
 
-export function AppHeader({
-  current,
-  projectId,
-  account,
-  hideProjectReturn = false,
-}: {
-  readonly current: "projects" | "fabrics" | "trends";
+export function AppHeader(props: {
+  readonly current: ArchiveSection;
   readonly projectId?: string | undefined;
+  readonly projectName?: string | undefined;
   readonly account?: ReactNode;
+  readonly navigation?: ReactNode;
   readonly hideProjectReturn?: boolean;
 }) {
-  const context = projectId
-    ? `?from=board&boardId=${encodeURIComponent(projectId)}`
-    : "";
   return (
-    <header className={styles.header}>
-      <Link
-        className={styles.brand}
-        href="/"
-        aria-label="Atelier 设计工作室 首页"
-      >
-        <span aria-hidden="true">A</span>
-        <strong>
-          Atelier <small>设计工作室</small>
-        </strong>
-      </Link>
-      <nav aria-label="工作区导航" className={styles.nav}>
-        <Link
-          aria-current={current === "projects" ? "page" : undefined}
-          href="/"
-        >
-          项目库
-        </Link>
-        <Link
-          aria-current={current === "fabrics" ? "page" : undefined}
-          href={`/fabrics${context}`}
-        >
-          面料库
-        </Link>
-        <Link
-          aria-current={current === "trends" ? "page" : undefined}
-          href={`/trends${context || (current === "projects" ? "?from=projects" : "")}`}
-        >
-          趋势档案
-        </Link>
-      </nav>
-      <div className={styles.account}>
-        {projectId && !hideProjectReturn ? (
-          <Link
-            className={styles.returnLink}
-            href={`/${encodeURIComponent(projectId)}`}
-          >
-            返回设计画布
-          </Link>
-        ) : null}
-        {account ?? <Account />}
-      </div>
-    </header>
+    <ArchiveNavigation {...props} account={props.account ?? <Account />} />
   );
 }
 
@@ -74,7 +25,7 @@ function Account() {
   if (!session) return null;
   return (
     <div>
-      <Menu label={session.user.email}>
+      <Menu label={session.user.email} trigger="账户">
         <Button
           loading={pending}
           onClick={() => {

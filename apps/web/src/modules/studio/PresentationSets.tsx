@@ -1,6 +1,7 @@
 "use client";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为展示图片与逐图复核；修订和渠道资料为次级。编辑时保存优先，满足条件后导出优先。 */
+import { BoundStyleContext } from "./studio-object-context";
 import { useState } from "react";
 import {
   studioPresentationSchema,
@@ -232,6 +233,7 @@ function PresentationForm({
           ) : null}
         </Notice>
       ) : null}
+      <BoundStyleContext data={data} revisionId={draft.styleRevisionId} />
       <fieldset className={styles.form} disabled={disabled}>
         <div className={styles.formGrid}>
           <Field label="展示包名称">

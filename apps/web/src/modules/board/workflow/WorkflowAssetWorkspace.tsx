@@ -17,6 +17,8 @@ import {
   type ImageFeedback,
 } from "@fashion/shared";
 import { ImageViewer, type ImageSize } from "./ImageViewer";
+import { Button, IconButton } from "../../../components/ui";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 import { LegacyAssetTools } from "./LegacyAssetTools";
 import { ExportModal } from "../generation/ExportModal";
 import { useWorkspaceDraft } from "./workspace-drafts";
@@ -61,15 +63,15 @@ export interface WorkflowAssetWorkspaceProps {
   onSelectAsset?: (id: string) => void;
   details?: ReactNode;
 }
-const tools: { mode: Mode; label: string; icon: string }[] = [
-  { mode: "annotate", label: "标注", icon: "✎" },
-  { mode: "comment", label: "添加评论", icon: "⊕" },
-  { mode: "remove_background", label: "移除背景", icon: "▧" },
-  { mode: "erase", label: "擦除", icon: "◇" },
-  { mode: "resize", label: "调整大小", icon: "↔" },
-  { mode: "inpaint", label: "局部重绘", icon: "◌" },
-  { mode: "variation", label: "生成变体", icon: "⧉" },
-];
+const tools = [
+  { mode: "annotate", label: "标注" },
+  { mode: "comment", label: "添加评论" },
+  { mode: "remove_background", label: "移除背景" },
+  { mode: "erase", label: "擦除" },
+  { mode: "resize", label: "调整大小" },
+  { mode: "inpaint", label: "局部重绘" },
+  { mode: "variation", label: "生成变体" },
+] as const;
 const empty: ImageFeedback = { revision: 0, annotations: [], comments: [] };
 interface Share {
   id: string;
@@ -456,10 +458,12 @@ function ImageWorkspace({
       }}
     >
       <header className={styles.topbar}>
+        <div className={styles.currentImage}><strong>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}</span></div>
+        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}>保存为款式</a>
         <div className={styles.menuAnchor}>
-          <button onClick={() => setMenu(!menu)} aria-expanded={menu}>
-            ▧　图像⌄
-          </button>
+          <Button onClick={() => setMenu(!menu)} aria-expanded={menu}>
+            <WorkspaceIcon name="image" />图像<WorkspaceIcon name="chevron" />
+          </Button>
           {menu ? (
             <div className={styles.menu}>
               <strong>{title}</strong>
@@ -479,11 +483,7 @@ function ImageWorkspace({
               >
                 下载带标注图片
               </button>
-              <a
-                href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}
-              >
-                保存为款式
-              </a>
+
             </div>
           ) : null}
         </div>
@@ -521,12 +521,12 @@ function ImageWorkspace({
             aria-label="下载原图"
             onClick={() => void act(() => download())}
           >
-            ↓ <span>下载</span>
+            <WorkspaceIcon name="download" /> <span>下载</span>
           </button>
-          <button onClick={() => changeMode("share")}>↥ 分享</button>
-          <button disabled={busy} aria-label="关闭图片工作区" onClick={onClose}>
-            ×
-          </button>
+          <Button onClick={() => changeMode("share")}><WorkspaceIcon name="share" />分享</Button>
+          <IconButton disabled={busy} label="关闭图片工作区" onClick={onClose}>
+            <WorkspaceIcon name="close" />
+          </IconButton>
         </div>
       </header>
       {error || notice ? (
@@ -1228,7 +1228,7 @@ function ImageWorkspace({
           ))}
         </nav>
       ) : null}
-      <nav className={styles.toolbar} aria-label="图片工具">
+      <nav className={styles.toolbar} data-surface="inverse" aria-label="图片工具">
         {tools.map((tool) => (
           <button
             key={tool.mode}
@@ -1236,7 +1236,7 @@ function ImageWorkspace({
             aria-pressed={mode === tool.mode}
             onClick={() => changeMode(mode === tool.mode ? "view" : tool.mode)}
           >
-            <span aria-hidden="true">{tool.icon}</span>
+            <WorkspaceIcon name={tool.mode} />
             {tool.label}
           </button>
         ))}

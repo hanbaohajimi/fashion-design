@@ -357,7 +357,7 @@ test.describe("studio touch", () => {
       send,
       page.getByRole("button", { name: "收起设计助手" }),
       page.getByText("更多", { exact: true }),
-      page.getByRole("link", { name: "返回项目库", exact: true }),
+      page.getByRole("link", { name: "项目库", exact: true }),
     ]) {
       const bounds = await target.boundingBox();
       expect(bounds!.width).toBeGreaterThanOrEqual(minimum);
@@ -375,6 +375,7 @@ test.describe("studio touch", () => {
 test("studio, sketch, asset and export", async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto(`/${PROJECT}`);
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(1);
   await page.getByRole("button", { name: "适合画布" }).click();
   await expect(page.locator('[data-type="candidate"]')).toBeInViewport({
@@ -395,28 +396,22 @@ test("studio, sketch, asset and export", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.locator('[data-type="candidate"]').focus();
   await page.keyboard.press("Enter");
-  await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
   await expect(
-    page.getByRole("dialog", { name: "候选资产工作台" }),
+    page.getByRole("dialog", { name: "图片工作区" }),
   ).toBeVisible();
   await settleImages(page);
   await expect(page).toHaveScreenshot("asset-preview.png");
   expect(await controlFontFailures(page)).toEqual([]);
   expect(await contrastFailures(page, true)).toEqual([]);
-  const preview = page.getByRole("tab", { name: "大图预览", exact: true });
-  await preview.focus();
-  await preview.press("End");
-  await expect(page.getByRole("tab", { name: "版本历史" })).toBeFocused();
-  await expect(preview).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("tab", { name: "版本历史" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await image.getByRole("button", { name: "图像", exact: true }).click();
+  const history = image.getByRole("button", { name: "版本历史", exact: true });
+  await history.focus();
+  await history.press("Enter");
   await expect(page.getByRole("region", { name: "版本时间线" })).toBeVisible();
   await expect(page).toHaveScreenshot("asset-history-empty.png");
-  await preview.click();
-  await page.getByRole("button", { name: "单图高清导出" }).click();
+  await image.getByRole("button", { name: "图像", exact: true }).click();
+  await image.getByRole("button", { name: "更多导出选项", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "开始导出", exact: true }),
   ).toBeVisible();

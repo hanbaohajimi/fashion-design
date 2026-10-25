@@ -407,7 +407,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 <figcaption>涂抹需要修改的区域</figcaption>
               </figure>
               <aside className={generationStyles.inpaintControls}>
-                <div><span>局部修改分支</span><strong>选择并描述修改</strong></div>
+                <div><strong>选择并描述修改</strong></div>
                 <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
                 {palettes.length ? <label><span>参考色卡 · 可选</span><select disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label> : null}
                 <label><span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>

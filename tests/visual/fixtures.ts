@@ -197,6 +197,8 @@ export async function seedVisualApp(page: Page) {
       (path.endsWith("/content") || path.endsWith("/thumbnail"))
     )
       return route.fulfill({ contentType: "image/svg+xml", body: garment });
+    if (/^\/design-assets\/[^/]+\/feedback$/u.test(path)) return json({ revision: 0, annotations: [], comments: [] });
+    if (/^\/design-assets\/[^/]+\/shares$/u.test(path)) return json([]);
     if (path.endsWith("/versions"))
       return json({ items: [], nextCursor: null });
     if (path.endsWith("/path"))

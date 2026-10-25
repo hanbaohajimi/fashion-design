@@ -28,7 +28,20 @@
   color: var(--color-ink-secondary);
   margin-bottom: var(--space-2);
 }
+.discussion > button { order: 3; margin-left: auto; }
 .discussion button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.discussionReferences { display: flex; flex: 1 1 120px; order: 2; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); max-height: 72px; overflow: auto; overscroll-behavior: contain; padding: var(--space-1); }
+.discussionReferences > span { min-width: 0; max-width: 100%; }
+.referenceChip { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; border-radius: var(--radius-sm); background: var(--color-selection-bg); }
+.referenceChip button { color: var(--color-selection-ink); }
+.referenceChip > button:first-child { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.referenceChip .removeReference { flex: none; min-width: var(--control-height); min-height: var(--control-height); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; text-align: center; cursor: pointer; }
+.referenceChip .removeReference:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+.referenceChip .removeReference:disabled { color: var(--color-disabled-ink); cursor: not-allowed; }
+.referenceChip .removeReference:hover:enabled { background: var(--color-action-subtle); }
+@media (pointer: coarse) {
+  .referenceChip .removeReference { min-width: var(--control-height-touch); min-height: var(--control-height-touch); }
+}
 .referenceRecord { font-size: var(--text-sm); color: var(--color-ink-secondary); margin-top: var(--space-2); overflow-wrap: anywhere; }
 .referenceRecord summary, .drawerContents summary { cursor: pointer; padding-block: var(--space-2); }
 .referenceRecord h4 { margin: var(--space-3) 0 var(--space-1); font-size: inherit; font-weight: 600; }

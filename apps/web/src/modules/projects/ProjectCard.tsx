@@ -313,11 +313,12 @@ export function ProjectCard({
             {project.optimistic
               ? "正在保存"
               : project.assetCount > 0
-                ? `${project.assetCount} 项资产`
+                ? `${project.assetCount} 项设计资料`
                 : "空项目"}
           </span>
         </div>
 
+        {!project.optimistic && !project.archived ? <Link className={styles.continueProject} href={`/${project.id}`}>继续设计 <span aria-hidden="true">↗</span></Link> : null}
         {confirmingDelete ? (
           <div className={styles.confirmPanel} role="group">
             <span>DISCARD · 不可撤销</span>

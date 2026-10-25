@@ -1007,3 +1007,24 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* 以服装预览和项目资料组成档案行，继续操作始终可见。 */
+.projectGrid, .skeletonGrid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.projectCard { display: grid; grid-template-columns: 200px minmax(0, 1fr); border-radius: var(--radius-lg); }
+.projectOpen { min-width: 0; display: flex; }
+.projectCover { width: 100%; height: 100%; min-height: 180px; aspect-ratio: auto; border-radius: var(--radius-lg) 0 0 var(--radius-lg); background: var(--color-surface); }
+.coverImage { object-fit: contain; padding: var(--space-3); }
+.cardBody { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--space-6); min-width: 0; }
+.cardHeading h2 { font-size: var(--text-section-title); }
+.cardMeta { justify-content: flex-start; gap: var(--space-6); margin: 0; }
+.cardTags { margin: 0; }
+.continueProject { display: inline-flex; align-items: center; gap: var(--space-6); align-self: flex-start; min-height: 40px; margin-top: auto; color: var(--color-action); font-size: var(--text-base); font-weight: var(--font-semibold); text-decoration: none; }
+.continueProject:hover { text-decoration: underline; }
+@media (max-width: 767px) {
+ .projectCard { grid-template-columns: 96px minmax(0, 1fr); }
+ .projectCover { min-height: 170px; }
+ .cardBody { padding: var(--space-3); gap: var(--space-2); }
+ .cardHeading h2 { font-size: var(--text-lg); }
+ .cardMeta { flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+ .continueProject { min-height: 44px; }
+}

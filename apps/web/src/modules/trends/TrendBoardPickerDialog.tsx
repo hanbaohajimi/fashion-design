@@ -61,7 +61,6 @@ export function TrendBoardPickerDialog({
     >
       <div className={styles.dialogHeading}>
         <div>
-          <span>存入设计项目</span>
           <h2 id="trend-board-dialog-title">选择存入位置</h2>
         </div>
         <button

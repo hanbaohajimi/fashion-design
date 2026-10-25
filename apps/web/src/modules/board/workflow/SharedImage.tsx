@@ -1,6 +1,7 @@
 "use client";
 /* Public share responses must bypass optimized-image caches so revocation takes effect. */
 /* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./image-workspace.module.css";
 export function SharedImage({ token }: { token: string }) {
@@ -25,9 +26,9 @@ export function SharedImage({ token }: { token: string }) {
   }, [token]);
   return (
     <main className={styles.workspace}>
-      <header className={styles.topbar}>分享的图片</header>
+      <header className={styles.topbar}><strong>Atelier · 分享的设计</strong><Link href="/">进入工作室</Link></header>
       {error ? (
-        <p role="alert">{error}</p>
+        <div className={styles.shareMessage}><h1>暂时无法查看这份设计</h1><p role="alert">{error}</p><p>请联系分享者，获取新的有效链接。</p><Link href="/">返回工作室</Link></div>
       ) : image ? (
         <img
           src={image}
@@ -40,7 +41,7 @@ export function SharedImage({ token }: { token: string }) {
           onError={() => setError("图片已失效或读取失败")}
         />
       ) : (
-        <p role="status">正在加载图片…</p>
+        <p className={styles.shareMessage} role="status">正在加载图片…</p>
       )}
     </main>
   );

@@ -295,6 +295,20 @@
 .portOutput {
   right: -14px;
 }
+.portInput[data-overview="true"] {
+  left: -28px;
+  transform-origin: right center;
+}
+.portOutput[data-overview="true"] {
+  right: -28px;
+  transform-origin: left center;
+}
+.interactivePort[data-overview="true"] > span:first-child {
+  position: absolute;
+  top: calc(50% - 5.5px);
+}
+.portInput[data-overview="true"] > span:first-child { right: -5.5px; }
+.portOutput[data-overview="true"] > span:first-child { left: -5.5px; }
 .interactivePort > span:first-child {
   width: 11px;
   height: 11px;
@@ -393,6 +407,8 @@
   .portOutput {
     right: -22px;
   }
+  .portInput[data-overview="true"] { left: -44px; }
+  .portOutput[data-overview="true"] { right: -44px; }
 }
 
 /* ── 无障碍降级 ─────────────────────────────────────────── */

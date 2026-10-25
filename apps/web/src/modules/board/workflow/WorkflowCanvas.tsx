@@ -15,6 +15,7 @@ import { WorkspaceDraftProvider, WorkspaceDraftStore, useWorkspaceDraftRevision 
 import detailStyles from "./workflow-detail-workspace.module.css";
 
 import Link from "next/link";
+import { AppHeader } from "../../../components/AppHeader";
 import {
   Button,
   Dialog,
@@ -1340,6 +1341,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   );
 
   return (
+    <>
+    <AppHeader current="design" projectId={projectId} projectName={projectName} hideProjectReturn />
     <main
       className={styles.shell}
       data-layout-save-state={layoutSave.state}
@@ -1357,11 +1360,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     >
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
-          <Link aria-label="返回项目库" className={styles.brandIcon} href="/">
-            A
-          </Link>
-          <strong className={styles.brand}>Atelier 设计工作室</strong>
-          <span className={styles.topDivider} />
           <span className={styles.projectName}><MotionReceipt receiptKey={`project:${projectId}`}>{projectName}</MotionReceipt></span>
         </div>
         <div className={`${styles.topActions} ${controls.controlSurface}`}>
@@ -1398,7 +1396,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </Button>
               ) : null}
             </div>
-          </details> : null}
+          </details> : <span className={`${styles.saved} ${styles.saveFeedback}`} data-save-state={layoutSave.state} role="status" aria-label="画布保存状态"><span aria-hidden="true" />{layoutSave.state === "saving" ? "保存中…" : layoutSave.state === "dirty" ? "等待保存" : "已保存"}</span>}
           <WorkflowProjectPanels
             projectId={projectId}
             graph={graph}
@@ -1565,6 +1563,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             >
               {canvasView === "workbench" ? <DesignWorkbench
                 graph={graph}
+                assistantOpen={sidebarOpen}
+                pendingProposal={proposal?.status === "pending"}
                 onOpen={openDetails}
                 onAdd={() => setMenuTab("assets")}
                 onStart={() => { setSidebarOpen(true); setMobileView("assistant"); setAssistantFocusRequest((value) => value + 1); }}
@@ -2051,6 +2051,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
         </BoardProjectContext.Provider>
       ) : null}
     </main>
+    </>
   );
 }
 

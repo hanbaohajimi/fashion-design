@@ -17,6 +17,7 @@ import {
   registerTraversalGuard,
 } from "../navigation";
 import styles from "./studio.module.css";
+import { useStudioAssetName } from "./studio-object-context";
 import { userFacingError } from "../../components/user-facing-error";
 
 export interface StudioAsset {
@@ -46,6 +47,7 @@ export function AssetPicker({
   readonly compact?: boolean;
 }) {
   const [limit, setLimit] = useState(false);
+  const assetName = useStudioAssetName();
   return (
     <div className={styles.stack}>
       <div className={styles.recordHeader}>
@@ -61,6 +63,7 @@ export function AssetPicker({
           {assets.map((asset, index) => (
             <button
               aria-label={"选择图片 " + (index + 1)}
+              title={assetName(asset.id)}
               aria-pressed={selected.includes(asset.id)}
               className={styles.assetButton}
               disabled={disabled}
@@ -80,10 +83,10 @@ export function AssetPicker({
                 <ImagePreview
                   retryable={false}
                   src={asset.thumbnailUrl ?? asset.url}
-                  alt={"设计图片 " + (index + 1)}
+                  alt={assetName(asset.id)}
                 />
               </span>
-              <span className={styles.assetLabel}>图片 {index + 1}</span>
+              <span className={styles.assetLabel}>{assetName(asset.id)}</span>
             </button>
           ))}
         </div>
@@ -265,6 +268,7 @@ export function useStudioLeaveGuard(dirty: boolean) {
   const dialog = open ? (
     <Dialog
       label="保留未保存的修改"
+      className={styles.unsavedDialog}
       onClose={() => {
         resolveRef.current?.(false);
         setOpen(false);

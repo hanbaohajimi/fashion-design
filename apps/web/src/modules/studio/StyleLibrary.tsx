@@ -2,7 +2,8 @@
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前修订的设计图与资料；对象切换和历史为次级。保存为主操作，比较在独立弹窗完成。 */
 
-import { useState } from "react";
+import { useStudioAssetName } from "./studio-object-context";
+import { useRef, useState } from "react";
 import type {
   StudioStyleInput,
   StudioStyleView,
@@ -50,8 +51,11 @@ export function StyleLibrary(
     readonly data: StudioSummary;
     readonly initialAssetId?: string | undefined;
     readonly onExplore?: (assetId: string) => void;
+    readonly onTechPack?: (revisionId: string) => void;
   },
 ) {
+  const assetName = useStudioAssetName();
+  const comparisonPicker = useRef<HTMLDetailsElement>(null);
   const [draftVersion, setDraftVersion] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(
     props.initialAssetId ? null : (props.data.styles[0]?.id ?? null),
@@ -97,13 +101,31 @@ export function StyleLibrary(
               <h2>比较候选并选款</h2>
               <Button onClick={() => setComparisonOpen(false)}>关闭</Button>
             </div>
-            <AssetPicker
-              assets={props.data.assets}
-              selected={comparison}
-              onChange={setComparison}
-              max={4}
-              label="候选比较"
-            />
+            <details
+              ref={comparisonPicker}
+              className={styles.compareSelection}
+              open
+            >
+              <summary>调整比较对象 · 已选 {comparison.length} 张</summary>
+              <AssetPicker
+                assets={props.data.assets}
+                selected={comparison}
+                onChange={setComparison}
+                max={4}
+                label="候选比较"
+              />
+              <Button
+                disabled={comparison.length < 2}
+                onClick={() => {
+                  if (comparisonPicker.current) {
+                    comparisonPicker.current.open = false;
+                    comparisonPicker.current.querySelector("summary")?.focus();
+                  }
+                }}
+              >
+                开始比较
+              </Button>
+            </details>
             {comparison.length >= 2 ? (
               <div className={styles.compare}>
                 {comparison.map((id, index) => {
@@ -119,7 +141,7 @@ export function StyleLibrary(
                         />
                       </span>
                       <strong>方案 {index + 1}</strong>
-                      <small className={styles.muted}>{id.slice(0, 12)}</small>
+                      <small className={styles.muted}>{assetName(id)}</small>
                       <Button
                         disabled={!props.canEdit}
                         onClick={() =>
@@ -224,6 +246,13 @@ export function StyleLibrary(
           >
             以此款式探索色料
           </Button>
+          {props.onTechPack ? (
+            <Button
+              onClick={() => props.onTechPack?.(selected.currentRevision.id)}
+            >
+              继续技术包
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>

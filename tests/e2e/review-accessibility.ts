@@ -61,7 +61,9 @@ export async function contrastFailures(page: Page, includeOffscreen = false) {
         selector: string;
       }> = [];
       const walker = document.createTreeWalker(
-        Array.from(document.querySelectorAll("dialog[open]")).at(-1) ??
+        Array.from(document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]'))
+          .filter((element) => element.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true }))
+          .at(-1) ??
           document.querySelector("main") ??
           document.body,
         NodeFilter.SHOW_TEXT,

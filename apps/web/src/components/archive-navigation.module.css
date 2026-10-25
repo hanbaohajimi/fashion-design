@@ -1,0 +1,233 @@
+:global(.app-root):has(.rail) {
+  padding-left: var(--workspace-nav-width);
+}
+.rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  width: var(--workspace-nav-width);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: 28px 16px 20px;
+  background: var(--color-navigation);
+  color: var(--color-navigation-ink);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--color-navigation-muted) var(--color-navigation);
+}
+.rail a {
+  text-decoration: none;
+}
+.rail :focus-visible {
+  outline: 2px solid var(--color-navigation-ink);
+  outline-offset: 3px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  padding: 0 10px 12px;
+}
+.brand > span:first-child {
+  font: italic 38px/1 var(--font-serif);
+}
+.brand > span:last-child {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.brand small {
+  display: block;
+  font: 12px/1.6 var(--font-sans);
+  letter-spacing: 0;
+}
+.navigation {
+  display: grid;
+  gap: var(--space-2);
+}
+.navigation a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  color: var(--color-navigation-muted);
+  font-size: var(--text-base);
+}
+.navigation svg {
+  flex: none;
+}
+.navigation a:hover {
+  color: var(--color-navigation-ink);
+  background: var(--color-navigation-hover);
+}
+.navigation a[aria-current="page"] {
+  color: var(--color-navigation-ink);
+  background: var(--color-navigation-selected);
+  font-weight: var(--font-semibold);
+}
+.project {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-navigation-border);
+  padding: var(--space-5) 10px 0;
+}
+.project > span {
+  font-size: var(--text-sm);
+  color: var(--color-navigation-muted);
+}
+.project strong {
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+.projectNavigation {
+  min-width: 0;
+  border-top: 1px solid var(--color-navigation-border);
+  padding-top: var(--space-4);
+}
+.resources {
+  border-top: 1px solid var(--color-navigation-border);
+  padding-top: var(--space-2);
+  color: var(--color-navigation-muted);
+  font-size: var(--text-sm);
+}
+.resources summary {
+  min-height: 44px;
+  padding: 12px 10px;
+  cursor: pointer;
+}
+.resources a {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  color: inherit;
+}
+.resources a:hover {
+  background: var(--color-navigation-hover);
+  color: var(--color-navigation-ink);
+}
+.account {
+  margin-top: auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.account > div {
+  min-width: 0;
+}
+.account summary {
+  color: var(--color-navigation-ink);
+  background: transparent;
+  border-color: var(--color-navigation-border);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account details > div {
+  top: auto;
+  bottom: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+}
+@media (max-width: 767px) {
+  :global(.app-root):has(.rail) {
+    padding-left: 0;
+  }
+  .rail {
+    position: relative;
+    width: 100%;
+    height: auto;
+    padding: 10px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    overflow: visible;
+  }
+  .brand {
+    padding: 0;
+    min-height: 44px;
+  }
+  .brand > span:first-child {
+    font-size: 30px;
+  }
+  .brand > span:last-child {
+    font-size: 18px;
+  }
+  .brand small {
+    display: none;
+  }
+  .account {
+    margin: 0 0 0 auto;
+    align-self: center;
+    max-width: 140px;
+  }
+  .account summary {
+    max-width: 140px;
+    min-height: 44px;
+  }
+  .account details > div {
+    top: calc(100% + 4px);
+    bottom: auto;
+  }
+  .navigation {
+    order: 3;
+    display: flex;
+    width: 100%;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .navigation a {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: var(--text-base);
+    gap: 6px;
+  }
+  .project,
+  .projectNavigation,
+  .resources {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .rail {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand {
+    display: none;
+  }
+  .navigation {
+    order: 0;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
+  .navigation svg {
+    display: none;
+  }
+  .navigation a {
+    padding-inline: 8px;
+  }
+  .account {
+    flex: none;
+    max-width: 56px;
+  }
+  .account summary {
+    max-width: 56px;
+  }
+}
+@media print {
+  .rail {
+    display: none;
+  }
+  :global(.app-root):has(.rail) {
+    padding-left: 0;
+  }
+}

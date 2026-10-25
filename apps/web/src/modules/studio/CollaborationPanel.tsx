@@ -1,5 +1,7 @@
 "use client";
 
+import { BoundStyleContext } from "./studio-object-context";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为确切修订的图片、意见与审批；成员管理移入次级页签。保留两份草稿，动作服从原权限。 */
 
 import { useCallback, useEffect, useId, useState } from "react";
@@ -393,6 +395,16 @@ function ReviewForm({
   );
   return (
     <section className={styles.section}>
+      <BoundStyleContext
+        data={data}
+        revisionId={
+          draft.targetType === "STYLE"
+            ? draft.targetRevisionId
+            : packRevision && "styleRevisionId" in packRevision.payload
+              ? (packRevision.payload.styleRevisionId ?? "")
+              : ""
+        }
+      />
       <div className={styles.formGrid}>
         <Field label="资料类型">
           <Select

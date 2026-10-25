@@ -53,7 +53,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname) || /^\/share\/[\w-]+$/u.test(pathname);
+  const isPrototypePath = process.env.NODE_ENV !== "production" && pathname === "/prototypes/impeccable";
+  const isPublicPath = isPrototypePath || PUBLIC_AUTH_PATHS.has(pathname) || /^\/share\/[\w-]+$/u.test(pathname);
   const draftOwner = useRef<string | null>(null);
   useEffect(() => {
     const id = session?.user.id ?? null;

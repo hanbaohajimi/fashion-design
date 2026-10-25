@@ -57,7 +57,7 @@ it("blocks publication until missing production facts are manually confirmed", a
   vi.stubGlobal("fetch", vi.fn());
   render(<TechPackEditor {...props()} />);
   fireEvent.click(screen.getByRole("button", { name: "复核并发布" }));
-  await screen.findByText(/BOM 需要已复核的材料和用量/);
+  expect((await screen.findByRole("alert")).textContent).toContain("BOM 需要已复核的材料和用量");
   expect(fetch).not.toHaveBeenCalled();
 });
 

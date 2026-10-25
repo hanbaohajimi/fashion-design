@@ -8,6 +8,7 @@ export default async function StudioPage({
   readonly searchParams: Promise<{
     readonly assetId?: string | string[];
     readonly tab?: string | string[];
+    readonly styleRevisionId?: string | string[];
   }>;
 }) {
   const { projectId } = await params;
@@ -18,6 +19,7 @@ export default async function StudioPage({
       key={projectId}
       projectId={projectId}
       initialAssetId={assetId}
+      initialStyleRevisionId={typeof query.styleRevisionId === "string" ? query.styleRevisionId : undefined}
       initialTab={typeof query.tab === "string" ? query.tab : undefined}
     />
   );

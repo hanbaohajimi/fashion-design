@@ -1,3 +1,4 @@
+import { openImageDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
@@ -225,10 +226,10 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
   const tool = graph.nodes.find((node: { id: string }) => node.id === "tool");
   graph.revision++;
   tool.status = "queued";
-  await effect(page, "needle");
+  await expect(page.locator('[data-kind="tool"][data-status="queued"]')).toBeVisible();
   graph.revision++;
   tool.status = "running";
-  await effect(page, "thread");
+  await expect(page.locator('[data-kind="tool"][data-status="running"]')).toBeVisible();
   graph.revision++;
   graph.nodes.push({
     ...graph.nodes[0],
@@ -391,24 +392,19 @@ test("系列签章在新建后播放，重新打开不重播", async ({ page }) 
       }),
   );
   await page.goto(`/${PROJECT}`);
-  await page.getByRole("button", { name: "适合画布", exact: true }).click();
-  const candidate = page.getByRole("group", {
-    name: "设计节点 藏蓝通勤外套",
-    exact: true,
-  });
-  // Use the node's accessible details action even when the assistant overlaps its center.
-  await candidate.focus();
-  await candidate.press("Enter");
+  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("button", { name: "打开方案 藏蓝通勤外套", exact: true }).click();
+  await openImageDetails(page);
   await page
     .getByRole("button", { name: "设为主推款并建立系列", exact: true })
     .click();
   await effect(page, "seal");
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "系列 DNA", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: "设为主推款并建立系列", exact: true })
     .click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "系列 DNA", exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () =>

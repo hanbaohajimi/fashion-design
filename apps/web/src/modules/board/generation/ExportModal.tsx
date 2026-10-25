@@ -185,7 +185,6 @@ export function ExportModal({
     <>
         <header>
           <div>
-            <span>导出与交付</span>
             <strong>
               {source.type === "collection" ? "系列 Lookbook" : "单图高清导出"}
             </strong>

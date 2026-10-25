@@ -2,6 +2,10 @@
   --tl-color-selection-fill: var(--color-selection-bg);
   --tl-color-selection-stroke: var(--color-selection-border);
 }
+/* A selected connection owns its reconnect handle even at overview zoom. */
+.canvasSection :global(.tl-shape):has([data-workflow-edge][data-selected="true"]) {
+  z-index: 2147483647 !important;
+}
 .shell {
   display: flex;
   width: 100%;
@@ -210,7 +214,7 @@
 .canvas :global(.tl-shape):has([data-node-selected="true"]) { z-index: 100000 !important; }
 .viewSwitch { position: absolute; top: var(--space-3); left: var(--space-4); z-index: 5; }
 .canvasSection[data-canvas-view="workbench"] { background: var(--color-canvas); }
-.canvasSection[data-canvas-view="workbench"] .viewSwitch { top: 0; left: 0; right: 0; padding: var(--space-3) var(--space-4); background: var(--color-canvas); border-bottom: 1px solid var(--color-divider); }
+.canvasSection[data-canvas-view="workbench"] .viewSwitch { top: 0; left: 0; right: 0; display: flex; align-items: center; height: var(--space-12); padding: var(--space-1) var(--space-4); background: var(--color-canvas); border-bottom: 1px solid var(--color-divider); }
 .canvasSection[data-canvas-view="workbench"] .canvasHeading { display: none; }
 .canvasSection[data-canvas-view="workflow"] .edgeLegend { top: calc(var(--control-height) + var(--space-6)); }
 
@@ -2149,9 +2153,12 @@
 }
 
 .composer:focus-within {
-  border-color: var(--swatch-indigo);
-  box-shadow: 0 0 0 2px var(--swatch-indigo-wash);
+  border-color: var(--color-border-strong);
+  box-shadow: none;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 0;
 }
+.composer textarea:focus-visible { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .designContext > summary::after,
@@ -2558,8 +2565,12 @@
 .zoomControls {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-popup);
+  box-shadow: var(--shadow-ui);
 }
+.bottomMenu .zoomControls { border: 0; border-radius: 0; box-shadow: none; }
+.topActions .saveFeedback { display: inline-flex; flex: none; font-size: var(--text-sm); letter-spacing: 0; color: var(--color-ink-tertiary); }
+.saveFeedback[data-save-state="dirty"] > span,
+.saveFeedback[data-save-state="saving"] > span { background: var(--color-status-warning); }
 .bottomMenu button,
 .zoomControls button {
   min-height: var(--control-height);
@@ -2811,3 +2822,13 @@
     min-height: 44px;
   }
 }
+
+/* 共享侧栏提供跨模块导航，顶部只保留当前项目和真实操作状态。 */
+.brandGroup { flex: 1; }
+.projectName { font-size: var(--text-lg); color: var(--color-ink); }
+@media (max-width: 767px) {
+  .shell { height: calc(100dvh - 64px); min-height: 420px; }
+  .projectName { font-size: var(--text-base); }
+}
+
+@media (max-width: 767px) { .mobileViews { padding-block: 4px; } }

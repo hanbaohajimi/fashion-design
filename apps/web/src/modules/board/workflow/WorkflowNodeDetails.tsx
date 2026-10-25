@@ -320,6 +320,7 @@ export function NodeDetails({
           </button> : null}
           <h4>设计师决定</h4>
           <select
+            aria-label="设计师决定"
             onChange={(event) =>
               setDecisionKind(event.target.value as typeof decisionKind)
             }
