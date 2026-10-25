@@ -12,6 +12,81 @@ describe("User → Workspace → Project database relations", () => {
     await prisma.$disconnect();
   });
 
+  it("preserves image feedback and shares when an asset id changes and deletes them with the asset", async () => {
+    const user = await prisma.user.create({
+      data: {
+        email: `image-relations-${crypto.randomUUID()}@example.com`,
+        ownedWorkspaces: {
+          create: {
+            name: "Image relations workspace",
+            projects: { create: { name: "Image relations project" } },
+          },
+        },
+      },
+      include: { ownedWorkspaces: { include: { projects: true } } },
+    });
+
+    try {
+      const project = user.ownedWorkspaces[0]?.projects[0];
+      if (!project) throw new Error("Expected the image relations project");
+      const assetId = crypto.randomUUID();
+      const share = {
+        tokenHash: crypto.randomUUID(),
+        expiresAt: new Date(Date.now() + 60_000),
+      };
+      const asset = await prisma.designAsset.create({
+        data: {
+          id: assetId,
+          rootAssetId: assetId,
+          projectId: project.id,
+          operation: "IMPORTED",
+          url: "https://example.com/image-relations.png",
+          feedback: { create: { data: { note: "保留袖口" } } },
+          shares: { create: share },
+        },
+        include: { shares: true },
+      });
+      const newAssetId = crypto.randomUUID();
+      await prisma.designAsset.update({
+        where: { id: assetId },
+        data: { id: newAssetId, rootAssetId: newAssetId },
+      });
+
+      await expect(
+        prisma.imageAssetFeedback.findUnique({
+          where: { assetId: newAssetId },
+        }),
+      ).resolves.toMatchObject({
+        assetId: newAssetId,
+        data: { note: "保留袖口" },
+        revision: 0,
+      });
+      await expect(
+        prisma.imageAssetShare.findUnique({
+          where: { tokenHash: share.tokenHash },
+        }),
+      ).resolves.toMatchObject({
+        id: asset.shares[0]?.id,
+        assetId: newAssetId,
+        tokenHash: share.tokenHash,
+      });
+
+      await prisma.designAsset.delete({ where: { id: newAssetId } });
+      await expect(
+        prisma.imageAssetFeedback.findUnique({
+          where: { assetId: newAssetId },
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        prisma.imageAssetShare.findUnique({
+          where: { tokenHash: share.tokenHash },
+        }),
+      ).resolves.toBeNull();
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  });
+
   it("creates the relation chain and enforces the workspace foreign key", async () => {
     const email = `task02-${crypto.randomUUID()}@example.com`;
     const user = await prisma.user.create({
