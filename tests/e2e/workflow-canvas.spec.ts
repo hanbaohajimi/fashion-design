@@ -1,9 +1,589 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "./review-accessibility";
 
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
+async function openDesignRequirements(page: Page) {
+  await page.getByLabel("对话操作", { exact: true }).click();
+  await page.getByRole("button", { name: "设计要求与偏好", exact: true }).click();
+  return page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
+}
+
+test("讨论对象与发送一致：引用优先、失败保留、清空保留正文及切换会话隔离", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  mocked.getContext().focusNodeIds = ["candidate-a"];
+  await page.route("**/api/agent-conversations/chat-new/context", (route) => route.fulfill({ json: { ...mocked.getContext(), focusNodeIds: [], summaryRevision: 0 } }));
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  const discussion = page.getByLabel("正在讨论", { exact: true });
+  const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  await expect(discussion).toContainText("候选 A");
+  await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
+  await expect(discussion).toContainText("候选 A");
+  expect(mocked.contextPatches).toHaveLength(0);
+  await input.fill("@候选 B 保留衣领");
+  await expect(discussion).toContainText("候选 B");
+  await expect(discussion).not.toContainText("候选 A");
+  await page.getByRole("button", { name: "移除引用 候选 B", exact: true }).click();
+  await expect(discussion).toContainText("候选 A");
+  await expect(input).toHaveValue(" 保留衣领");
+  await input.fill("@候选 B 保留衣领");
+  let rejectSend = true;
+  await page.route("**/api/agent-conversations/*/workflow-messages", (route) => {
+    if (rejectSend) { rejectSend = false; return route.fulfill({ status: 503, json: { message: "发送失败，请重试" } }); }
+    return route.fallback();
+  });
+  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect(input).toHaveValue("@候选 B 保留衣领");
+  await expect(discussion).toContainText("候选 B");
+  let rejectClear = true;
+  await page.route("**/api/agent-conversations/workflow-current/context", (route) => {
+    if (route.request().method() === "PATCH" && rejectClear) { rejectClear = false; return route.fulfill({ status: 409, json: { message: "讨论对象版本已更新，请重试" } }); }
+    return route.fallback();
+  });
+  await page.getByRole("button", { name: "讨论整个项目", exact: true }).click();
+  await expect(page.getByText("讨论对象版本已更新，请重试", { exact: false }).first()).toBeVisible();
+  await expect(input).toHaveValue("@候选 B 保留衣领");
+  expect(mocked.getContext().focusNodeIds).toEqual(["candidate-a"]);
+  await page.getByRole("button", { name: "讨论整个项目", exact: true }).click();
+  await expect(discussion).toContainText("整个项目");
+  await expect(input).toHaveValue(" 保留衣领");
+  expect(mocked.contextPatches.at(-1)).toMatchObject({ focusNodeIds: [], summaryRevision: 0 });
+  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect.poll(() => mocked.workflowRequests.length).toBe(1);
+  expect(mocked.workflowRequests[0]).toMatchObject({ content: "保留衣领", referencedNodeIds: [], focusNodeIds: [] });
+  await input.fill("@候选 B 新会话不应继承这条引用");
+  await page.getByLabel("对话操作", { exact: true }).click();
+  await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
+  await expect(discussion).toContainText("整个项目");
+  await expect(input).toHaveValue("");
+  await expect(page.getByRole("button", { name: "移除引用 候选 B", exact: true })).toHaveCount(0);
+});
+
+test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读取后再继续发送", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  mocked.getContext().focusNodeIds = ["candidate-a"];
+  let blockContext = false;
+  await page.route("**/api/agent-conversations/*/context", (route) => blockContext
+    ? route.fulfill({ status: 503, json: { message: "讨论对象读取暂不可用" } }) : route.fallback());
+  await page.goto(`/${PROJECT_ID}`);
+  const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const discussion = page.getByLabel("正在讨论", { exact: true });
+  await expect(discussion).toContainText("候选 A");
+  await input.fill("比较两张风衣图 @候选 B");
+  blockContext = true;
+  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect(discussion).toContainText("讨论对象读取失败");
+  await expect(discussion).not.toContainText("候选 A");
+  await input.fill("比较两张风衣图，继续");
+  await expect(page.getByRole("button", { name: "发送 ↑" })).toBeDisabled();
+  blockContext = false;
+  await page.getByRole("button", { name: "重新读取", exact: true }).click();
+  await expect(discussion).toContainText("候选 B");
+  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect.poll(() => mocked.workflowRequests.length).toBe(2);
+  expect(mocked.workflowRequests[1]).toMatchObject({ referencedNodeIds: [], focusNodeIds: ["candidate-b"] });
+});
+
+for (const width of [1440, 390]) {
+  test(`引用记录 ${width}：历史名称、旧消息和图片失败信息保持准确`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    mocked.getGraph().nodes.find((entry) => entry.id === "candidate-a")!.title = "后来改名的风衣";
+    mocked.setMessages([
+      { id: "saved", role: "assistant", status: "completed", content: "保留衣领，参考这轮讨论的设计。", context: {
+        referenceSummary: { version: 1, explicit: [{ nodeId: "candidate-a", title: "当时的候选 A" }], discussion: [{ nodeId: "deleted", title: "已删除候选的历史名称" }], images: [{ nodeId: "candidate-a", title: "当时的候选 A" }] },
+        visualCoverage: { total: 2, ready: 1, pending: 0, failed: 1, attachedNodeIds: ["candidate-a"] },
+      } },
+      { id: "legacy", role: "assistant", status: "completed", content: "旧回复只保存了部分记录。", context: { referencedNodeIds: ["candidate-b", "removed"] } },
+      { id: "unrecorded", role: "assistant", status: "completed", content: "这是一条没有历史记录的回复。", context: null },
+    ]);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showAssistant(page, width);
+    const saved = page.locator('[data-message-id="saved"]');
+    await expect(saved.locator("details").first()).not.toHaveAttribute("open");
+    await saved.getByText("查看引用记录", { exact: true }).click();
+    await expect(saved.getByRole("button", { name: "当时的候选 A", exact: true })).toHaveCount(2);
+    await expect(saved.getByRole("button", { name: "已删除候选的历史名称", exact: true })).toBeDisabled();
+    await expect(saved).not.toContainText("后来改名的风衣");
+    await saved.getByText("图片统计与读取范围", { exact: true }).click();
+    await expect(saved).toContainText("读取失败 1 张");
+    await expect(saved).not.toContainText("已理解");
+    const legacy = page.locator('[data-message-id="legacy"]');
+    await legacy.getByText("查看引用记录", { exact: true }).click();
+    await expect(legacy.getByRole("button", { name: "候选 B（当前名称）", exact: true })).toBeVisible();
+    await expect(legacy.getByRole("button", { name: "名称未记录", exact: true })).toBeDisabled();
+    const missing = page.locator('[data-message-id="unrecorded"]');
+    await expect(missing.getByText("查看引用记录", { exact: true })).toHaveCount(0);
+    await expect(missing.getByText("这条回复未保存引用记录", { exact: true })).toBeVisible();
+    const conversation = page.getByLabel("设计对话", { exact: true });
+    await conversation.evaluate((element) => { element.scrollTop = 0; });
+    await mkdir("output/playwright/context", { recursive: true });
+    await page.screenshot({ path: `output/playwright/context/references-${width}.png` });
+    const before = await conversation.evaluate((element) => element.scrollTop);
+    const drawer = await openDesignRequirements(page);
+    await expect(drawer.getByText("让助手记住这个项目的设计要求。修改会影响后续讨论，已有设计结果保持不变。")).toBeVisible();
+    await page.screenshot({ path: `output/playwright/context/requirements-${width}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(page.getByLabel("对话操作", { exact: true })).toBeFocused();
+    expect(await conversation.evaluate((element) => element.scrollTop)).toBe(before);
+  });
+}
+
+for (const width of [1440, 1280, 889, 390]) {
+  test(`聚焦工作区 ${width}：工具轻量化、详情独立、返回保留草稿`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate")!;
+    tool.status = "ready";
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showCanvas(page, width);
+    await page.getByRole("button", { name: "适合画布" }).click();
+    const node = page.locator('[data-kind="tool"][data-type="generate_design"]');
+    await expect(node).toBeVisible();
+    expect(await node.evaluate((element) => ({ w: (element as HTMLElement).offsetWidth, h: (element as HTMLElement).offsetHeight }))).toEqual({ w: 96, h: 44 });
+    await node.click();
+    const originalBounds = await node.boundingBox();
+    await node.getByRole("button", { name: "详情", exact: true }).click();
+    const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+    await expect(workspace).toBeVisible();
+    const prompt = workspace.getByRole("textbox", { name: "执行指令", exact: true });
+    await prompt.fill("保留本次工具草稿，不自动保存");
+    await expect(workspace.getByText("未保存", { exact: true })).toBeVisible();
+    if (width >= 1100) {
+      const assistant = page.getByRole("complementary", { name: "设计助手", exact: true });
+      await expect(assistant).toBeVisible();
+      await assistant.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("助手输入保持独立");
+    }
+    await mkdir("output/playwright/detail-workspace", { recursive: true });
+    await page.screenshot({ path: `output/playwright/detail-workspace/tool-${width}.png` });
+    await workspace.getByRole("button", { name: "返回画布" }).click();
+    await expect(workspace).toBeHidden();
+    await expect(node).toBeFocused();
+    const returnedBounds = await node.boundingBox();
+    if (!originalBounds || !returnedBounds) throw new Error("工具节点不可见");
+    for (const coordinate of ["x", "y", "width", "height"] as const)
+      expect(Math.abs(returnedBounds[coordinate] - originalBounds[coordinate])).toBeLessThan(1);
+    await node.press("Enter");
+    await expect(prompt).toHaveValue("保留本次工具草稿，不自动保存");
+    expect(tool.payload.params).toBeUndefined();
+    await workspace.getByRole("button", { name: "放弃修改", exact: true }).click();
+    await expect(prompt).toHaveValue("");
+    expect(await workspace.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  });
+}
+
+test("聚焦工作区：候选重绘与变体分别保留，手机助手切换不丢失", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await showCanvas(page, 390);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.locator('[data-type="candidate"]').first().dblclick();
+  const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await workspace.getByRole("tab", { name: "局部重绘" }).click();
+  await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("调整袖口宽度");
+  await workspace.getByRole("button", { name: "标记中央区域" }).click();
+  await expect(workspace.getByRole("button", { name: "撤销一笔" })).toBeEnabled();
+  await workspace.getByRole("tab", { name: "生成变体" }).click();
+  await workspace.getByRole("textbox", { name: "变体修改说明" }).fill("尝试两种领型");
+  await workspace.getByRole("textbox", { name: "变体保留特征" }).fill("保留面料与配色");
+  await page.getByRole("button", { name: "助手", exact: true }).click();
+  await expect(workspace).toBeHidden();
+  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("助手自己的草稿");
+  await page.getByRole("button", { name: "画布", exact: true }).click();
+  await expect(workspace.getByRole("textbox", { name: "变体修改说明" })).toHaveValue("尝试两种领型");
+  await workspace.getByRole("tab", { name: "局部重绘" }).click();
+  await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toHaveValue("调整袖口宽度");
+  await expect(workspace.getByRole("button", { name: "撤销一笔" })).toBeEnabled();
+  await page.screenshot({ path: "output/playwright/detail-workspace/inpaint-390.png" });
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await page.locator('[data-type="candidate"]').first().dblclick();
+  await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toHaveValue("调整袖口宽度");
+});
+
+test("聚焦工作区：色卡与草图嵌入编辑、返回恢复和放弃草稿", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  mocked.getGraph().nodes.push(
+    Object.assign(node("palette-edit", "asset", "swatch", "秋冬配色", 40, 80, { colors: [{ hex: "#40536D", name: "雾蓝" }] }), { canEditPayload: true }),
+    Object.assign(node("sketch-edit", "asset", "sketch", "版型草图", 360, 80, { sketchDocument: { version: 1, width: 640, height: 860, strokes: [] } }), { canEditPayload: true }),
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await expect(page.locator(".tl-canvas")).toBeVisible();
+  const open = (id: string) => page.evaluate((nodeId) => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: nodeId })), id);
+  await open("palette-edit");
+  const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await workspace.getByLabel("颜色名称 1").fill("新的色彩名称");
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await open("sketch-edit");
+  const canvas = workspace.getByLabel("廓形草图画布");
+  const bounds = await canvas.boundingBox();
+  if (!bounds) throw new Error("草图没有显示");
+  await page.mouse.move(bounds.x + 50, bounds.y + 50);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 100, bounds.y + 100, { steps: 6 });
+  await page.mouse.up();
+  await expect(workspace.getByRole("button", { name: "撤销", exact: true })).toBeEnabled();
+  await page.screenshot({ path: "output/playwright/detail-workspace/sketch-1280.png" });
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await open("palette-edit");
+  await expect(workspace.getByLabel("颜色名称 1")).toHaveValue("新的色彩名称");
+  await workspace.getByRole("button", { name: "保存色卡" }).click();
+  await expect(workspace.getByText("未保存", { exact: true })).toHaveCount(0);
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await open("sketch-edit");
+  await expect(workspace.getByRole("button", { name: "撤销", exact: true })).toBeEnabled();
+  await workspace.getByRole("button", { name: "放弃修改", exact: true }).click();
+  await expect(workspace.getByRole("button", { name: "撤销", exact: true })).toBeDisabled();
+  await expect(workspace.getByText("未保存", { exact: true })).toHaveCount(0);
+  await workspace.locator("summary:visible").filter({ hasText: /^素材详情与用途$/u }).click();
+  await expect(workspace.getByRole("combobox", { name: "参考图角色" })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "从工作流移除节点" })).toBeVisible();
+});
+
+test("聚焦工作区：后台更新保护草稿，刷新提醒与录屏", async ({ browser, baseURL }, testInfo) => {
+  const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 900 }, recordVideo: { dir: testInfo.outputPath("videos") } });
+  const page = await context.newPage();
+  try {
+    const mocked = await mockWorkflow(page);
+    const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate")!;
+    tool.status = "ready";
+    await page.goto(`/${PROJECT_ID}`);
+    await page.getByRole("button", { name: "适合画布" }).click();
+    await page.screenshot({ path: "output/playwright/detail-workspace/canvas-1440.png" });
+    await page.locator('[data-type="generate_design"]').dblclick();
+    const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+    await workspace.getByRole("textbox", { name: "执行指令", exact: true }).fill("我尚未保存的设计要求");
+    tool.payload = { params: { prompt: "后台更新的参数" } };
+    mocked.getGraph().revision++;
+    await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+    await expect(workspace.getByText("节点内容或权限已更新", { exact: false })).toBeVisible();
+    await expect(workspace.getByRole("textbox", { name: "执行指令", exact: true })).toHaveValue("我尚未保存的设计要求");
+    await expect(workspace.getByRole("button", { name: "保存工具参数" })).toBeDisabled();
+    expect(await page.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })).toBe(true);
+    await workspace.getByRole("button", { name: "载入最新内容并放弃草稿" }).click();
+    await expect(workspace.getByRole("textbox", { name: "执行指令", exact: true })).toHaveValue("后台更新的参数");
+    await workspace.getByRole("button", { name: "返回画布" }).click();
+    await expect(workspace).toBeHidden();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.locator('[data-type="generate_design"]').focus();
+    await page.keyboard.press("Enter");
+    await expect(workspace).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(workspace).toBeHidden();
+  } finally { await context.close(); }
+});
+
+test("聚焦工作区：权限变化保留草稿，删除节点清理编辑会话", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const palette = Object.assign(node("palette-permission", "asset", "swatch", "权限变化色卡", 40, 80, { colors: [{ hex: "#40536D", name: "雾蓝" }] }), { canEditPayload: true, canForkPayload: true });
+  mocked.getGraph().nodes.push(palette);
+  await page.goto(`/${PROJECT_ID}`);
+  await expect(page.locator(".tl-canvas")).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: "palette-permission" })));
+  const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await workspace.getByLabel("颜色名称 1").fill("应保留的修改");
+  palette.canEditPayload = false;
+  palette.canForkPayload = false;
+  mocked.getGraph().revision++;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  await expect(workspace.getByText("节点内容或权限已更新", { exact: false })).toBeVisible();
+  await expect(workspace.getByLabel("颜色名称 1")).toHaveValue("应保留的修改");
+  await expect(workspace.getByRole("button", { name: "保存色卡" })).toBeDisabled();
+  mocked.getGraph().nodes = mocked.getGraph().nodes.filter((entry) => entry.id !== palette.id);
+  mocked.getGraph().revision++;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  await expect(workspace).toBeHidden();
+  expect(await page.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })).toBe(false);
+});
+
+test("聚焦工作区：Escape 层级、助手独立与快速反向切换", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate");
+  if (!tool) throw new Error("缺少工具节点");
+  Object.assign(tool, { canDelete: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  const target = page.locator('[data-kind="tool"][data-type="generate_design"]');
+  await target.dblclick();
+  const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  const assistant = page.getByRole("complementary", { name: "设计助手", exact: true });
+  await assistant.getByRole("textbox", { name: "向设计助手描述下一步" }).press("Escape");
+  await expect(workspace).toBeVisible();
+  await workspace.getByRole("button", { name: "从工作流移除节点", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "确认移除节点", exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(workspace).toBeVisible();
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
+  await target.dblclick();
+  await expect(assistant).toBeHidden();
+  await workspace.getByRole("button", { name: "返回画布" }).evaluate((button: HTMLButtonElement) => button.click());
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: "generate" })));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(workspace).toBeVisible();
+  const bounds = await workspace.boundingBox();
+  if (!bounds) throw new Error("工作区不可见");
+  expect(bounds.width).toBeGreaterThan(700);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(1280);
+  await workspace.getByRole("heading", { name: tool.title, exact: true }).focus();
+  await page.keyboard.press("Escape");
+  await expect(workspace).toBeHidden();
+  await expect(target).toBeFocused();
+});
+
+test("聚焦工作区：跨节点草稿、保存失败重试与助手独立", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate")!;
+  tool.status = "ready";
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布" }).click();
+  const target = page.locator('[data-kind="tool"][data-type="generate_design"]');
+  await target.dblclick();
+  const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  const prompt = workspace.getByRole("textbox", { name: "执行指令", exact: true });
+  await prompt.fill("保留风衣的廓形和面料");
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await page.locator('[data-kind="asset"][data-type="brief"]').dblclick();
+  await expect(workspace).toContainText("秋冬通勤风衣");
+  await workspace.getByRole("button", { name: "返回画布" }).click();
+  await target.dblclick();
+  await expect(prompt).toHaveValue("保留风衣的廓形和面料");
+  let fail = true;
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => {
+    if (route.request().method() === "PATCH" && fail) { fail = false; return route.fulfill({ status: 503, json: { message: "暂时无法保存" } }); }
+    return route.fallback();
+  });
+  await workspace.getByRole("button", { name: "保存工具参数" }).click();
+  await expect(workspace.getByRole("alert")).toBeVisible();
+  await expect(prompt).toHaveValue("保留风衣的廓形和面料");
+  await workspace.getByRole("button", { name: "保存工具参数" }).click();
+  await expect(workspace.getByText("未保存", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "设计助手", exact: true })).toBeVisible();
+});
+
+test.describe("P1 宽屏触控", () => {
+  test.use({ hasTouch: true });
+  test("平板输入字号与缩放配置保持可用", async ({ page }) => {
+    await mockWorkflow(page);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto(`/${PROJECT_ID}`);
+    await page.getByRole("button", { name: "展开设计助手" }).click();
+    const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    await expect(input).toHaveCSS("font-size", "16px");
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
+    expect(viewport).toContain("viewport-fit=cover");
+    expect(viewport).not.toMatch(/user-scalable=no|maximum-scale=1/);
+  });
+});
+
+test("优化侧栏性能录制：普通图与压力图各三次十秒拖动", async ({ page }) => {
+  test.skip(process.env.ATELIER_OPT_PERF !== "1", "按需运行性能录制，避免增加普通回归时间");
+  test.setTimeout(180_000);
+  const mocked = await mockWorkflow(page);
+  const graph = mocked.getGraph();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const samples: unknown[] = [];
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Performance.enable");
+  for (const size of [12, 200]) {
+    const half = size / 2;
+    graph.nodes = Array.from({ length: size }, (_, index) => node(`perf-${index}`, index < half ? "asset" : "tool", index < half ? "brief" : "analyze_brief", `设计步骤 ${index + 1}`, (index < half ? 40 : 500), (index % half) * 240, index < half ? { text: "秋冬通勤风衣" } : {}));
+    graph.edges = Array.from({ length: half * 3 }, (_, index) => edge(`perf-edge-${index}`, `perf-${(Math.floor(index / 3) + index % 3) % half}`, `perf-${half + Math.floor(index / 3)}`, "brief"));
+    graph.revision++;
+    await page.goto(`/${PROJECT_ID}`);
+    const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
+    await expect(separator).toBeVisible();
+    for (let repeat = 0; repeat < 3; repeat++) {
+      const before = await cdp.send("Performance.getMetrics");
+      const box = await separator.boundingBox(); if (!box) throw new Error("缺少分隔条");
+      await page.evaluate(() => {
+        const longTasks: number[] = [], frames: number[] = [];
+        let last = performance.now(), frame = 0, writes = 0;
+        const observe = new PerformanceObserver((entries) => longTasks.push(...entries.getEntries().map((entry) => entry.duration)));
+        observe.observe({ type: "longtask" });
+        const mutations = new MutationObserver((entries) => { writes += entries.length; });
+        const workspace = document.querySelector('[data-mobile-view]');
+        if (workspace) mutations.observe(workspace, { attributes: true, attributeFilter: ["style"] });
+        const tick = (now: number) => { frames.push(now - last); last = now; frame = requestAnimationFrame(tick); };
+        frame = requestAnimationFrame(tick);
+        Object.assign(window, { stopSidebarMeasurement: () => { cancelAnimationFrame(frame); observe.disconnect(); mutations.disconnect(); return { longTasks, frames, writes }; } });
+      });
+      const x = box.x + box.width / 2, y = box.y + 100;
+      await page.mouse.move(x, y); await page.mouse.down();
+      let moves = 0;
+      const started = Date.now();
+      while (Date.now() - started < 10000) { await page.mouse.move(x + Math.sin(moves / 8) * 36, y); moves++; await page.waitForTimeout(16); }
+      await page.mouse.up();
+      const timing = await page.evaluate(() => (window as unknown as { stopSidebarMeasurement(): { longTasks: number[]; frames: number[]; writes: number } }).stopSidebarMeasurement());
+      const after = await cdp.send("Performance.getMetrics");
+      const metrics = Object.fromEntries(after.metrics.filter((metric) => ["LayoutCount", "RecalcStyleCount", "LayoutDuration", "RecalcStyleDuration", "ScriptDuration", "TaskDuration"].includes(metric.name)).map((metric) => [metric.name, metric.value - (before.metrics.find((entry) => entry.name === metric.name)?.value ?? 0)]));
+      samples.push({ nodes: size, edges: graph.edges.length, repeat: repeat + 1, elapsedMs: Date.now() - started, moves, ...timing, metrics });
+    }
+  }
+  await mkdir("output/playwright/optimization", { recursive: true });
+  await writeFile("output/playwright/optimization/sidebar-performance.json", JSON.stringify({ build: "isolated Next development server", browser: page.context().browser()?.version(), samples }, null, 2), "utf8");
+});
+
+test("P2 侧栏拖动提交最终宽度，取消恢复且 Tooltip 连续浏览即时", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
+  const initial = Number(await separator.getAttribute("aria-valuenow"));
+  const box = await separator.boundingBox();
+  if (!box) throw new Error("分隔条不可见");
+  const x = box.x + box.width / 2, y = box.y + 80;
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x - 40, y, { steps: 10 }); await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow", String(initial + 40));
+  // Cancel through an active mouse gesture, retaining the last committed width.
+  const next = await separator.boundingBox(); if (!next) throw new Error("缺少分隔条");
+  await page.mouse.move(next.x + 3, y); await page.mouse.down(); await page.mouse.move(next.x - 30, y);
+  await separator.dispatchEvent("pointercancel"); await page.mouse.up();
+  await expect(separator).toHaveAttribute("aria-valuenow", String(initial + 40));
+  await page.getByRole("button", { name: "缩小画布" }).hover();
+  await expect(page.getByRole("tooltip", { name: "缩小画布，查看更多节点" })).toBeVisible();
+  await page.getByRole("button", { name: "放大画布" }).hover();
+  await expect(page.getByRole("tooltip", { name: "放大画布，查看节点细节" })).toBeVisible();
+});
+
+test("P1 手机助手在断点和键盘高度变化后保留内容", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.setViewportSize({ width: 761, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "助手", exact: true }).click();
+  const assistant = page.getByRole("complementary", { name: "设计助手" });
+  const input = assistant.locator("textarea").last();
+  await input.fill("保留未发送的面料设计要求");
+  for (const [width, height] of [[761, 600], [767, 500], [768, 600], [1099, 700], [1100, 800], [767, 600]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await expect(assistant).toBeVisible();
+    await expect(input).toHaveValue("保留未发送的面料设计要求");
+  }
+  await mkdir("output/playwright/optimization", { recursive: true });
+  await page.screenshot({ path: "output/playwright/optimization/mobile-assistant-767.png" });
+});
+
+test("P1 历史图首帧节点和连线无入场等待，静态选择不流动", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await mockWorkflow(page);
+  await page.goto(`/${PROJECT_ID}`);
+  const node = page.locator('[data-type="brief"]').first();
+  await expect(node).toBeVisible();
+  expect(await node.evaluate((element) => ({ animation: getComputedStyle(element).animationName, transform: getComputedStyle(element).transform }))).toEqual({ animation: "none", transform: "none" });
+  const edges = page.locator('[data-workflow-edge][data-running]');
+  await expect(edges.first()).toBeAttached();
+  expect(await edges.evaluateAll((items) => items.every((element) => Array.from(element.querySelectorAll("path")).every((path) => getComputedStyle(path).animationName === "none" || element.getAttribute("data-running") === "true")))).toBe(true);
+});
+
+for (const width of [1440, 390]) {
+  test(`智能配色 ${width}：预览不保存，追加色卡保存并刷新恢复`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showCanvas(page, width);
+    await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
+    await page.getByRole("button", { name: "色彩参考 色号与配色说明", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "添加色彩参考" });
+    await dialog.getByRole("button", { name: "探索配色", exact: true }).click();
+    const preview = dialog.getByRole("region", { name: "配色探索" });
+    await expect(preview).toBeVisible();
+    await preview.getByLabel("配色策略").selectOption("analogous");
+    await preview.getByLabel("建议色 1 名称").fill("秋日雾蓝");
+    expect(mocked.getGraph().nodes.filter((entry) => entry.type === "swatch")).toHaveLength(0);
+    const suggestions = await preview.getByRole("list", { name: "建议颜色" }).locator("code").allTextContents();
+    expect(suggestions).toHaveLength(3);
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await mkdir("output/playwright/palette", { recursive: true });
+    await preview.screenshot({ path: `output/playwright/palette/workflow-${width}.png` });
+    await preview.getByRole("button", { name: "应用配色" }).click();
+    expect(mocked.getGraph().nodes.filter((entry) => entry.type === "swatch")).toHaveLength(0);
+    await expect(dialog.getByLabel("颜色名称 2")).toHaveValue("秋日雾蓝");
+    await dialog.getByRole("button", { name: "加入工作流" }).click();
+    await expect(dialog).toHaveCount(0);
+    const saved = mocked.getGraph().nodes.find((entry) => entry.type === "swatch");
+    expect(saved?.payload.colors).toEqual([
+      { hex: "#40536D", name: "色彩 1" },
+      ...suggestions.map((hex, i) => ({ hex: hex.toLowerCase(), name: i === 0 ? "秋日雾蓝" : `建议色 ${i + 2}` })),
+    ]);
+    expect(saved?.payload.color).toBe("#40536D");
+    await page.reload();
+    await showCanvas(page, width);
+    await page.getByRole("button", { name: "适合画布" }).click();
+    await page.locator('[data-type="swatch"]').dblclick();
+    await expect(page.getByLabel("颜色名称 2")).toHaveValue("秋日雾蓝");
+    await expect(page.getByLabel("色号 4", { exact: true })).toHaveValue(suggestions[2]?.toLowerCase() ?? "missing");
+  });
+}
+
+test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留配色并遵守锁定", async ({ page }) => {
+  await mockWorkflow(page);
+  await page.route(`**/api/generations?*projectId=${PROJECT_ID}`, (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
+  let palette = [{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }];
+  let locked = false;
+  let failNextSave = true;
+  let saves = 0;
+  const dna = () => ({ extractionStatus: "ready", fabrics: ["羊毛"], locks: { fabrics: false, moodWords: false, palette: locked, silhouettes: false }, moodWords: ["克制"], palette, referenceFileIds: [], signatureDetails: [], silhouettes: ["直筒"], updatedAt: NOW });
+  const collection = () => ({ id: "palette-collection", name: "秋冬配色系列", projectId: PROJECT_ID, createdAt: NOW, updatedAt: NOW, sourceGarmentType: { code: "coat", label: "大衣" }, dna: dna(), hero: { assetId: "asset-a", thumbnailUrl: "/api/design-assets/asset-a/thumbnail", url: "/api/design-assets/asset-a/content" } });
+  await page.route(`**/api/collections?projectId=${PROJECT_ID}`, (route) => route.fulfill({ json: [collection()] }));
+  await page.route("**/api/collections/palette-collection", (route) => route.fulfill({ json: collection() }));
+  await page.route("**/api/collections/palette-collection/consistency", (route) => route.fulfill({ json: { looks: [], referenceLabel: "参考相似度", similarities: [] } }));
+  await page.route("**/api/collections/palette-collection/dna", (route) => {
+    saves++;
+    if (failNextSave) { failNextSave = false; return route.fulfill({ status: 503, json: { message: "配色保存失败，请重试" } }); }
+    const body = route.request().postDataJSON();
+    palette = body.palette;
+    locked = body.locks.palette;
+    return route.fulfill({ json: dna() });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/${PROJECT_ID}`);
+  const openCollection = async () => {
+    await page.getByRole("button", { name: "系列", exact: true }).click();
+    await page.getByRole("button", { name: "秋冬配色系列", exact: true }).click();
+  };
+  await openCollection();
+  const drawer = page.getByRole("dialog", { name: "系列 DNA" });
+  await drawer.getByRole("button", { name: "探索配色" }).click();
+  await expect(drawer.getByRole("region", { name: "配色探索" })).toBeVisible();
+  await drawer.getByLabel("建议色 1 名称").fill("系列晨雾");
+  expect(saves).toBe(0);
+  await mkdir("output/playwright/palette", { recursive: true });
+  await drawer.getByRole("region", { name: "配色探索" }).screenshot({ path: "output/playwright/palette/dna-1440.png" });
+  await drawer.getByRole("button", { name: "应用配色" }).click();
+  await expect(drawer.getByText("配色保存失败，请重试")).toBeVisible();
+  await expect(drawer.getByLabel("颜色 3 名称")).toHaveValue("系列晨雾");
+  await drawer.getByRole("button", { name: "重试保存" }).click();
+  await expect.poll(() => palette.length).toBe(5);
+  expect(palette.slice(0, 2)).toEqual([{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }]);
+  await drawer.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await page.reload();
+  await openCollection();
+  await expect(drawer.getByLabel("颜色 3 名称")).toHaveValue("系列晨雾");
+  await drawer.getByRole("button", { name: "探索配色" }).click();
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await expect(drawer.getByRole("region", { name: "配色探索" })).toBeVisible();
+  expect(await drawer.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await drawer.getByLabel("基准色").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "output/playwright/palette/dna-390.png" });
+  const cancelPreview = drawer.getByRole("button", { name: "取消预览" });
+  await cancelPreview.scrollIntoViewIfNeeded();
+  await cancelPreview.focus();
+  await expect(cancelPreview).toBeFocused();
+  await page.screenshot({ path: "output/playwright/palette/dna-390-actions.png" });
+  await cancelPreview.press("Enter");
+  const paletteSection = drawer.locator("section").filter({ has: page.getByRole("heading", { name: "色板", exact: true }) });
+  await paletteSection.getByRole("button", { name: "锁定", exact: true }).click();
+  await expect(drawer.getByRole("button", { name: "探索配色" })).toBeDisabled();
+  await expect.poll(() => locked).toBe(true);
+});
 
 async function showCanvas(page: Page, width: number) {
   if (width < 768) await page.getByRole("button", { name: "画布", exact: true }).click();
@@ -12,6 +592,87 @@ async function showCanvas(page: Page, width: number) {
 async function showAssistant(page: Page, width: number) {
   if (width < 768) await page.getByRole("button", { name: "助手", exact: true }).click();
   else if (await page.getByRole("button", { name: "展开设计助手" }).isVisible()) await page.getByRole("button", { name: "展开设计助手" }).click();
+}
+
+for (const width of [1280, 375]) {
+  test(`精简空画布 ${width}：推荐起点唯一，素材和导出按需可达`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    mocked.getGraph().nodes.splice(0);
+    mocked.getGraph().edges.splice(0);
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showCanvas(page, width);
+    const welcome = page.getByRole("heading", { name: "让想法成为设计方案" }).locator("..");
+    await expect(welcome.getByRole("button")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "导出画布 PNG", exact: true })).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await mkdir("output/playwright/simplification", { recursive: true });
+    await page.screenshot({ path: `output/playwright/simplification/empty-canvas-${width}.png` });
+    await welcome.getByRole("button", { name: "开始设计", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await showCanvas(page, width);
+    await page.getByText("资料与更多", { exact: true }).click();
+    await expect(page.getByRole("button", { name: "导出画布 PNG", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
+    await expect(page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true })).toBeVisible();
+  });
+}
+
+for (const width of [1280, 375]) {
+  test(`助手直接生成 ${width}：保存后失败可恢复，同一请求不重复生成，结果原位打开`, async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    const requests: Array<{ mutationId: string; conversationId: string }> = [];
+    let accepts = 0;
+    page.on("request", (request) => { if (request.url().endsWith("/accept")) accepts++; });
+    await page.route(`**/api/projects/${PROJECT_ID}/workflow/nodes/*/execute`, async (route) => {
+      requests.push(route.request().postDataJSON());
+      if (requests.length === 1) return route.fulfill({ status: 503, json: { message: "提交暂未完成，请重试" } });
+      const id = new URL(route.request().url()).pathname.split("/").at(-2);
+      const target = mocked.getGraph().nodes.find((item) => item.id === id);
+      if (target) target.status = "running";
+      mocked.getGraph().revision++;
+      return route.fulfill({ json: mocked.getGraph() });
+    });
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showAssistant(page, width);
+    const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    await composer.fill("请以 @候选 A 为基础设计一件藏蓝风衣，保留肩线。");
+    await page.getByRole("button", { name: "发送 ↑" }).click();
+    const card = page.getByRole("region", { name: "方案确认" });
+    await expect(card).toContainText("藏蓝风衣");
+    expect(requests).toHaveLength(0);
+    await mkdir("output/playwright/assistant-direct", { recursive: true });
+    await page.screenshot({ path: `output/playwright/assistant-direct/review-${width}.png` });
+    await card.getByRole("button", { name: "确认并生成" }).evaluate((element) => { (element as HTMLButtonElement).click(); (element as HTMLButtonElement).click(); });
+    await expect(card.getByRole("alert")).toBeVisible();
+    expect(accepts).toBe(1);
+    expect(requests).toHaveLength(1);
+    expect(mocked.getGraph().nodes.filter((item) => item.id === "edit-proposed-0")).toHaveLength(1);
+    await page.reload();
+    await showAssistant(page, width);
+    await card.getByRole("button", { name: "继续生成" }).click();
+    await expect(card.getByRole("status")).toContainText("正在生成");
+    expect(accepts).toBe(1);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[0]?.conversationId).toBe("workflow-current");
+    await expect(card.getByRole("button", { name: /确认并生成|继续生成/ })).toHaveCount(0);
+    const tool = mocked.getGraph().nodes.find((item) => item.id === "edit-proposed-0");
+    if (!tool) throw new Error("缺少执行节点");
+    tool.status = "completed";
+    mocked.getGraph().nodes.push(node("direct-result", "asset", "candidate", "新风衣方案", 1100, 1100, { assetId: "asset-a" }));
+    mocked.getGraph().edges.push(edge("direct-output", tool.id, "direct-result", "source"));
+    mocked.getGraph().revision++;
+    await expect(card.getByRole("button", { name: "查看新风衣方案" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "查看新风衣方案" })).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `output/playwright/assistant-direct/result-${width}.png` });
+    await card.getByRole("button", { name: "查看新风衣方案" }).click();
+    await expect(page.getByRole("region", { name: "候选资产工作台", exact: true })).toBeVisible();
+  });
 }
 
 test("帮助提示可键盘关闭，草图窗口圈定焦点并返回素材入口", async ({ page }) => {
@@ -74,11 +735,11 @@ test("工作室详情草稿在对话切换和同步后保留；侧栏支持键�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="generate_design"]').first().click();
-  await page.getByRole("button", { name: "节点详情", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
   const prompt = page.getByRole("textbox", { name: "执行指令", exact: true });
   await prompt.fill("尚未保存的领口修改");
-  await page.getByRole("button", { name: "返回对话" }).click();
-  await page.getByRole("button", { name: "节点详情", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布" }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
   await expect(prompt).toHaveValue("尚未保存的领口修改");
   await page.waitForTimeout(3200);
   await expect(prompt).toHaveValue("尚未保存的领口修改");
@@ -86,11 +747,12 @@ test("工作室详情草稿在对话切换和同步后保留；侧栏支持键�
   const before = Number(await separator.getAttribute("aria-valuenow"));
   await separator.press("ArrowLeft");
   await expect(separator).toHaveAttribute("aria-valuenow", String(before + 16));
-  await page.getByRole("button", { name: "返回对话" }).click();
+  await page.getByRole("button", { name: "返回画布" }).click();
   await page.locator('[data-type="candidate"]').first().click();
-  await page.getByRole("button", { name: "节点详情", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "保留未保存的参数" })).toBeVisible();
-  await page.getByRole("button", { name: "返回编辑", exact: true }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "保留未保存的参数" })).toHaveCount(0);
+  await page.getByRole("button", { name: "返回画布" }).click();
+  await page.locator('[data-type="generate_design"]').first().dblclick();
   await expect(prompt).toBeVisible();
   await expect(prompt).toHaveValue("尚未保存的领口修改");
 });
@@ -211,7 +873,257 @@ function sampleGraph() {
   };
 }
 
-async function mockWorkflow(page: Page) {
+for (const width of [1280, 375]) {
+  test(`密集连线 ${width}：三类关系色、上下游聚焦与取消恢复`, async ({ page }) => {
+    test.setTimeout(60_000);
+    const mocked = await mockWorkflow(page);
+    const graph = mocked.getGraph();
+    graph.nodes = Array.from({ length: 4 }, (_, index) => node(
+      `material-${index}`, "asset", index === 0 ? "candidate" : "reference_text",
+      index === 0 ? "设计原图" : `参考素材 ${index}`, 40, 40 + index * 260,
+      { text: ["主图输入", "廓形参考", "面料参考", "细节参考"][index], width: 1600, height: 600 },
+    ));
+    graph.edges = [];
+    for (let branch = 0; branch < 4; branch++) {
+      const y = 40 + branch * 260;
+      graph.nodes.push(
+        node(`tool-${branch}`, "tool", "edit_design", `方案生成 ${branch + 1}`, 600, y),
+        node(`draft-${branch}`, "asset", "candidate", `分支方案 ${branch + 1}`, 1120, y, { text: "独立方案", width: 1600, height: 600 }),
+        node(`refine-${branch}`, "tool", "edit_design", `细节调整 ${branch + 1}`, 1640, y),
+        node(`result-${branch}`, "asset", "candidate", `最终方案 ${branch + 1}`, 2160, y, { text: "调整结果", width: 1600, height: 600 }),
+      );
+      for (let material = 0; material < 4; material++) {
+        graph.edges.push(edge(`input-${branch}-${material}`, `material-${material}`, `tool-${branch}`, material === 0 ? "source" : "reference"));
+      }
+      graph.edges.push(
+        edge(`output-${branch}`, `tool-${branch}`, `draft-${branch}`, "source"),
+        edge(`refine-input-${branch}`, `draft-${branch}`, `refine-${branch}`, "source"),
+        edge(`refine-output-${branch}`, `refine-${branch}`, `result-${branch}`, "source"),
+      );
+    }
+    const running = graph.nodes.find((item) => item.id === "tool-3");
+    if (!running) throw new Error("缺少运行中的分支");
+    running.status = "running";
+    await page.emulateMedia({ reducedMotion: width === 375 ? "reduce" : "no-preference" });
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    await showCanvas(page, width);
+    const edges = page.locator("[data-workflow-edge]");
+    await expect(edges).toHaveCount(28);
+    await expect(page.getByText("画布已保存", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("正在保存画布…", { exact: true })).toHaveCount(0);
+    const toolCards = page.locator('[data-kind="tool"]');
+    await expect(toolCards).toHaveCount(8);
+    expect((await toolCards.allTextContents()).join(" ")).not.toMatch(/已完成|运行中|处理中|等待执行/);
+    if (width === 1280) {
+      await page.getByRole("button", { name: "收起设计助手" }).click();
+      await expect(page.getByRole("button", { name: "展开设计助手" })).toBeVisible();
+    }
+    await page.getByRole("button", { name: "适合画布" }).click();
+    const wire = (id: string) => page.locator(`[data-workflow-edge="${id}"]`);
+    await expect(wire("input-0-0")).toHaveAttribute("data-relation", "input");
+    await expect(wire("input-0-1")).toHaveAttribute("data-relation", "reference");
+    await expect(wire("output-0")).toHaveAttribute("data-relation", "result");
+    const colors = await Promise.all(["input-0-0", "input-0-1", "output-0"].map((id) =>
+      wire(id).evaluate((element) => getComputedStyle(element).color)));
+    expect(new Set(colors).size).toBe(3);
+    const legend = page.getByRole("list", { name: "连线颜色图例" });
+    await expect(legend).toBeVisible();
+    await expect(legend.getByRole("listitem")).toHaveText(["主输入", "参考素材", "生成结果"]);
+    expect(await legend.locator("svg").evaluateAll((items) => items.map((element) => getComputedStyle(element).color))).toEqual(colors);
+    const legendBounds = await legend.boundingBox();
+    expect(legendBounds?.x).toBeGreaterThanOrEqual(0);
+    expect((legendBounds?.x ?? 0) + (legendBounds?.width ?? 0)).toBeLessThanOrEqual(width);
+    await mkdir("output/playwright/edge-focus", { recursive: true });
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `output/playwright/edge-focus/dense-${width}-compact-tools.png` });
+    const hoveredEdges = page.locator('[data-workflow-edge][data-node-hovered="true"]');
+    const edgeLabel = page.locator("[data-workflow-edge-label]");
+    await expect(edgeLabel).toHaveCount(0);
+    // 总览下连接点可能覆盖标题；悬停整个节点也允许命中其内部连接点。
+    const hoverNode = (title: string) => page.getByRole("group", { name: `设计节点 ${title}`, exact: true }).hover();
+    // 未选中时悬停工具只突出四条输入和一条输出，继续下游的线不参与。
+    await hoverNode("方案生成 1");
+    await expect(hoveredEdges).toHaveCount(5);
+    await expect(edgeLabel).toHaveCount(0);
+    await expect(wire("input-0-0")).toHaveAttribute("data-node-hovered", "true");
+    await expect(wire("output-0")).toHaveAttribute("data-node-hovered", "true");
+    await expect(wire("refine-input-0")).toHaveAttribute("data-muted", "true");
+    await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(23);
+    await hoverNode("方案生成 2");
+    await expect(wire("output-0")).toHaveAttribute("data-node-hovered", "false");
+    await expect(wire("output-1")).toHaveAttribute("data-node-hovered", "true");
+    await page.mouse.move(0, 0);
+    await expect(hoveredEdges).toHaveCount(0);
+    await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(0);
+    // 总览下连接点保持屏幕尺寸，点击标题以避免命中卡片右侧的连接热区。
+    await page.getByRole("group", { name: "设计节点 分支方案 2", exact: true }).locator("strong").first().click();
+    await page.mouse.move(0, 0);
+    await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(21);
+    for (const id of ["input-1-0", "input-1-1", "input-1-2", "input-1-3", "output-1", "refine-input-1", "refine-output-1"]) {
+      await expect(wire(id)).toHaveAttribute("data-highlighted", "true");
+    }
+    const lineOpacity = (id: string) => wire(id).locator("path").nth(1).evaluate((element) => Number(getComputedStyle(element).opacity));
+    await expect.poll(() => lineOpacity("output-0")).toBeCloseTo(0.18);
+    await expect.poll(() => lineOpacity("output-1")).toBe(1);
+    expect(await wire("output-1").evaluate((element) => getComputedStyle(element).color)).toBe(colors[2]);
+    await expect.poll(() => wire("output-3").locator("path").nth(2).evaluate((element) => Number(getComputedStyle(element).opacity))).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `output/playwright/edge-focus/dense-${width}-focused-legend.png` });
+    const focusedState = await edges.evaluateAll((items) => items.map((element) => [element.getAttribute("data-workflow-edge"), element.getAttribute("data-highlighted"), element.getAttribute("data-muted")]));
+    await hoverNode("分支方案 1");
+    await expect(hoveredEdges).toHaveCount(2);
+    await expect(wire("output-0")).toHaveAttribute("data-node-hovered", "true");
+    await expect(wire("refine-input-0")).toHaveAttribute("data-node-hovered", "true");
+    await expect.poll(() => lineOpacity("output-0")).toBe(1);
+    await expect.poll(() => lineOpacity("output-1")).toBeCloseTo(0.18);
+    expect(await wire("output-0").evaluate((element) => getComputedStyle(element).color)).toBe(colors[2]);
+    await page.screenshot({ path: `output/playwright/edge-focus/dense-${width}-hover.png` });
+    await page.mouse.move(0, 0);
+    await expect.poll(() => edges.evaluateAll((items) => items.map((element) => [element.getAttribute("data-workflow-edge"), element.getAttribute("data-highlighted"), element.getAttribute("data-muted")]))).toEqual(focusedState);
+    // 切出窗口同样清除临时悬停，不留下整图变淡的状态。
+    await hoverNode("分支方案 1");
+    await expect(hoveredEdges).toHaveCount(2);
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await expect(hoveredEdges).toHaveCount(0);
+    await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(21);
+    await page.mouse.move(0, 0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(0);
+    await expect.poll(() => lineOpacity("output-0")).toBeCloseTo(0.9);
+    for (const [id, label] of width === 1280
+      ? [["input-0-0", "主图输入"], ["input-0-1", "参考素材"], ["output-0", "生成结果"]] as const
+      : [["output-0", "生成结果"]] as const) {
+      const point = await wirePoint(page, id);
+      await page.mouse.move(point.x, point.y);
+      await expect(edgeLabel).toHaveText(label);
+      await expect(edgeLabel).toHaveCSS("font-size", "12px");
+      const labelBounds = await edgeLabel.boundingBox();
+      if (!labelBounds) throw new Error("连线标签未显示");
+      expect(labelBounds.x).toBeGreaterThanOrEqual(0);
+      expect(labelBounds.y).toBeGreaterThanOrEqual(0);
+      expect(labelBounds.x + labelBounds.width).toBeLessThanOrEqual(width);
+      expect(labelBounds.y + labelBounds.height).toBeLessThanOrEqual(900);
+      await page.screenshot({ path: `output/playwright/edge-focus/label-${width}-${id}.png` });
+      await page.keyboard.press("Escape");
+      await expect(edgeLabel).toHaveCount(0);
+      // 密集交叉处偏移 1px 可能进入另一条线；原位置移动验证同一条线不会重新弹出。
+      await page.mouse.move(point.x, point.y);
+      await expect(edgeLabel).toHaveCount(0);
+      await page.mouse.move(0, 0);
+      await page.mouse.move(point.x, point.y);
+      await expect(edgeLabel).toHaveText(label);
+      await page.mouse.move(0, 0);
+      await expect(edgeLabel).toHaveCount(0);
+    }
+    if (width === 1280) {
+      // 淡出并未关闭命中区域：仍能直接选择旁支连线。
+      await page.getByRole("group", { name: "设计节点 分支方案 2", exact: true }).locator("strong").first().click();
+      await selectWire(page, "output-0");
+      await expect(wire("output-0")).toHaveAttribute("data-selected", "true");
+      await expect(edgeLabel).toHaveCount(0);
+      await expect.poll(() => lineOpacity("output-0")).toBe(1);
+    }
+  });
+}
+
+for (const width of [1280, 375]) {
+  test(`作品工作台 ${width}：方案成组、过程归入说明、引用与原始路径可达`, async ({ page }) => {
+    test.setTimeout(60_000);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+    const mocked = await mockWorkflow(page, "workbench");
+    mocked.getGraph().nodes.push(node("image-ref", "asset", "reference_image", "廓形参考", 0, 700, { imageUrl: "/api/design-assets/asset-a/thumbnail" }));
+    mocked.getGraph().nodes.push(node("color-ref", "asset", "swatch", "藏蓝色", 0, 900, { color: "#26384c" }));
+    const saved = JSON.stringify(mocked.getGraph());
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/${PROJECT_ID}`);
+    const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
+    await expect(work).toBeVisible();
+    await expect(work.getByRole("region", { name: "方案组 1", exact: true })).toBeVisible();
+    await expect(work.getByRole("button", { name: /^打开方案/ })).toHaveCount(2);
+    await expect(page.locator("[data-workflow-edge]")).toHaveCount(0);
+    await expect(page.locator('[data-kind="tool"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "＋ 添加工具", exact: true })).toHaveCount(0);
+    await work.getByText("设计说明", { exact: false }).click();
+    await expect(work.getByText("候选 A 更符合目标", { exact: true })).toBeVisible();
+    await expect(work.getByText("藏蓝色与宽松 H 型廓形", { exact: true })).toBeVisible();
+    await work.getByRole("button", { name: "查看完整评估", exact: true }).click();
+    const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
+    await expect(details).toBeVisible();
+    await details.getByRole("button", { name: /返回画布/ }).click();
+    await work.evaluate((element) => { element.scrollTop = 0; });
+    await mkdir("output/playwright/design-workbench", { recursive: true });
+    await page.screenshot({ path: `output/playwright/design-workbench/designs-${width}.png` });
+    await work.getByRole("region", { name: "参考素材", exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `output/playwright/design-workbench/materials-${width}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await work.getByRole("button", { name: "引用素材 廓形参考", exact: true }).click();
+    await expect(page.getByRole("button", { name: "移除引用 廓形参考", exact: true })).toBeVisible();
+    expect(mocked.workflowRequests).toHaveLength(0);
+    if (width < 768) await page.getByRole("button", { name: "画布", exact: true }).click();
+    await page.getByRole("button", { name: "流程画布", exact: true }).click();
+    await expect(page.locator('[data-kind="tool"]')).toHaveCount(3);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "流程画布", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('[data-kind="tool"]')).toHaveCount(3);
+    await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+    await expect(work).toBeVisible();
+    expect(JSON.stringify(mocked.getGraph())).toBe(saved);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(errors).toEqual([]);
+  });
+}
+
+test("作品工作台：空项目直接开始，失败任务可恢复且默认不渲染流程图", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  mocked.getGraph().nodes.splice(0);
+  mocked.getGraph().edges.splice(0);
+  await page.goto(`/${PROJECT_ID}`);
+  const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
+  await work.getByRole("button", { name: "开始设计", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeFocused();
+  const failed = node("failed-gen", "tool", "generate_design", "风衣方案生成", 0, 0, { params: { prompt: "藏蓝风衣", count: 2 } });
+  failed.status = "failed";
+  mocked.getGraph().nodes.push(failed);
+  mocked.getGraph().revision++;
+  await page.reload();
+  await expect(work.getByText("未完成", { exact: true })).toBeVisible();
+  await work.getByRole("button", { name: "查看原因与重试", exact: true }).click();
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await expect(details.getByRole("button", { name: "重试执行", exact: true })).toBeVisible();
+  expect(mocked.getExecuteCount()).toBe(0);
+});
+
+test("作品工作台：方案详情返回恢复焦点，导出可转入完整流程", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  const mocked = await mockWorkflow(page, "workbench");
+  await page.goto(`/${PROJECT_ID}`);
+  const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
+  await work.getByRole("button", { name: "打开方案 候选 A", exact: true }).click();
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await expect(details).toBeVisible();
+  await details.getByRole("button", { name: /返回画布/ }).click();
+  await expect(work.getByRole("group", { name: "服装方案 候选 A", exact: true })).toBeFocused();
+  await page.getByText("资料与更多", { exact: true }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+  expect((await download).suggestedFilename()).toContain(".png");
+  await expect(page.locator('[data-kind="tool"]')).toHaveCount(3);
+  expect(mocked.getExecuteCount()).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workflow") {
+  await page.addInitScript((view) => {
+    if (sessionStorage.getItem("fashion:e2e-workflow-view-seeded")) return;
+    sessionStorage.setItem("fashion:e2e-workflow-view-seeded", "1");
+    if (view === "workflow") sessionStorage.setItem("fashion:canvas-view", view);
+    else sessionStorage.removeItem("fashion:canvas-view");
+  }, view);
   const graph = sampleGraph();
   let proposal: Record<string, unknown> | null = null;
   let executeCount = 0;
@@ -374,6 +1286,8 @@ async function mockWorkflow(page: Page) {
     if (path.endsWith("/execute")) {
       executeCount += 1;
       executionRequests.push(route.request().postDataJSON());
+      const target = graph.nodes.find((item) => item.id === path.split("/").at(-2));
+      if (target) target.status = "running";
       return route.fulfill({ json: graph });
     }
     if (path.endsWith("/infer-role")) {
@@ -470,7 +1384,7 @@ async function mockWorkflow(page: Page) {
   return { getGraph: () => graph, getExecuteCount: () => executeCount, getInferRoleCount: () => inferRoleCount, rejectSketchOnce: () => { rejectNextSketch = true; }, rejectRoleOnce: () => { rejectNextRole = true; }, failMessageOnce: () => { failNextMessage = true; }, setPendingProposal: (value: Record<string, unknown>) => { proposal = value; }, proposalRequests, chatRequests, workflowRequests, contextPatches, executionRequests, rejectionRequests, getContext: () => context, setPlan: (value: Record<string, unknown>) => { currentPlan = value; }, setMessages: (items: Array<Record<string, unknown>>) => workflowMessages.set("workflow-current", items), appendMessage: (value: Record<string, unknown>) => { const items = workflowMessages.get("workflow-current") ?? []; items.push(value); workflowMessages.set("workflow-current", items); }, clearConversations: () => { conversations.length = 0; } };
 }
 
-test("Fig8 原卡配置预览保留位置与数量，确认修改不会执行", async ({ page }) => {
+test("方案确认显示数量与保留项，一次确认更新原节点并执行", async ({ page }) => {
   // Keep artifact capture independent of optional external canvas fonts.
   await page.route(/\.(?:woff2?|ttf|otf)(?:\?.*)?$/u, (route) => route.abort());
   const mocked = await mockWorkflow(page);
@@ -489,18 +1403,21 @@ test("Fig8 原卡配置预览保留位置与数量，确认修改不会执行", 
   await page.waitForTimeout(250);
   await expect(page.locator('[data-kind="tool"]')).toHaveCount(4);
   await expect(page.locator('[data-type="generate_design"][data-status="proposed"]')).toHaveCount(1);
-  await page.getByText("查看修改前后", { exact: true }).click();
-  await expect(page.getByText("候选数量：4", { exact: false })).toBeVisible();
+  await expect(page.getByRole("region", { name: "方案确认" })).toContainText("4 张方案");
+  expect(mocked.getExecuteCount()).toBe(0);
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/fig8-collaboration-review.png" });
-  await page.getByRole("button", { name: "确认修改", exact: true }).click();
+  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await expect(page.getByRole("button", { name: "取消修改", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
   await expect.poll(() => draft.payload.params).toMatchObject({ count: 4 });
   expect(mocked.getGraph().nodes).toHaveLength(10);
   expect({ x: draft.x, y: draft.y }).toEqual({ x: 1080, y: 1050 });
-  expect(mocked.getExecuteCount()).toBe(0);
+  await expect.poll(() => mocked.getExecuteCount()).toBe(1);
+  await expect(page.getByRole("button", { name: "取消修改", exact: true })).toHaveCount(0);
 });
 
-test("Fig8 调整直接编辑参数和输入，关联原提案并覆盖旧引用", async ({ page }) => {
+test("修改要求复用输入框与引用，关联原提案并覆盖旧引用", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -508,26 +1425,26 @@ test("Fig8 调整直接编辑参数和输入，关联原提案并覆盖旧引用
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   await composer.fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
-  await page.getByRole("button", { name: "调整", exact: true }).click();
-  await page.getByRole("textbox", { name: "调整执行指令" }).fill("保留藏蓝和立领，只调整候选B袖型");
-  await page.getByRole("combobox", { name: "调整母图 1", exact: true }).selectOption("candidate-b");
-  await page.getByRole("spinbutton", { name: "调整候选数量", exact: true }).fill("3");
-  await page.getByRole("button", { name: "提交调整建议", exact: true }).click();
+  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
+  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
+  await page.getByRole("button", { name: "更新方案 ↑", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]).toMatchObject({ respondingToProposalId: "proposal-0", referencedNodeIds: ["candidate-b"] });
-  expect(mocked.workflowRequests[1]?.content).toContain("候选数量：3");
+  expect(mocked.workflowRequests[1]?.content).toContain("生成3张");
   expect(mocked.workflowRequests[1]?.referencedNodeIds).not.toContain("candidate-a");
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-test("Fig8 后台结果持续恢复且不阻塞用户输入，计划随刷新保留", async ({ page }) => {
+test("后台结果持续恢复，移除重复工作计划后不再轮询计划", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  let planRequests = 0;
+  page.on("request", (request) => { if (/\/agent-conversations\/[^/]+\/plan$/u.test(request.url())) planRequests++; });
   mocked.setPlan({ goal: "改进通勤风衣", milestones: [{ id: "inspect", title: "比较实际候选", status: "active", completionCriteria: ["确认肩线和袖型"], evidenceRefs: ["candidate-a"] }], activeMilestoneId: "inspect", nextGoal: "确定修改范围", completionCriteria: ["设计师选定方案"] });
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByLabel("工作计划", { exact: true }).locator("summary").click();
-  await expect(page.getByText("当前步骤 · 比较实际候选", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("工作计划", { exact: true })).toHaveCount(0);
   mocked.appendMessage({ id: "result-1", role: "assistant", status: "completed", content: "已完成本次执行，共两个候选。", origin: "execution_result", executionId: "execution-1", sourceEventId: "event-1" });
   mocked.appendMessage({ id: "analysis-1", role: "assistant", status: "pending", content: "正在比较两个候选的肩线。", origin: "background_analysis", executionId: "execution-1" });
   await expect(page.getByText("已完成本次执行，共两个候选。", { exact: true })).toBeVisible();
@@ -540,7 +1457,8 @@ test("Fig8 后台结果持续恢复且不阻塞用户输入，计划随刷新保
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(page.getByText("已完成本次执行，共两个候选。", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("工作计划", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("工作计划", { exact: true })).toHaveCount(0);
+  expect(planRequests).toBe(0);
 });
 
 test("Fig8 调整提案失败后重试保留原提案关联和精确输入", async ({ page }) => {
@@ -550,11 +1468,11 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
   await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
-  await page.getByRole("button", { name: "调整", exact: true }).click();
-  await page.getByRole("textbox", { name: "调整执行指令" }).fill("保留藏蓝和立领，只调整候选B袖型");
-  await page.getByRole("combobox", { name: "调整母图 1", exact: true }).selectOption("candidate-b");
+  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
+  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
   mocked.failMessageOnce();
-  await page.getByRole("button", { name: "提交调整建议", exact: true }).click();
+  await page.getByRole("button", { name: "更新方案 ↑", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -573,12 +1491,13 @@ test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByLabel("设计上下文", { exact: true }).locator("summary").click();
+  await openDesignRequirements(page);
   await page.getByRole("button", { name: "更正这条要求", exact: true }).click();
   await page.getByRole("textbox", { name: "更正内容", exact: true }).fill("保留深藏蓝色，避免纯黑");
   await page.getByRole("button", { name: "保存更正", exact: true }).click();
   await expect.poll(() => mocked.contextPatches.length).toBe(1);
   expect(mocked.contextPatches[0]).toMatchObject({ updatedItems: [{ id: "must-navy", text: "保留深藏蓝色，避免纯黑", scope: "project", confirm: true }] });
+  await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "暂停设计协作", exact: true }).click();
   await expect(page.getByText("设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。", { exact: true })).toBeVisible();
@@ -616,7 +1535,7 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
   expect(mocked.executionRequests[0]).toMatchObject({ conversationId: "chat-new" });
 });
 
-test("Fig8 跳过理由随提案保存，不触发执行", async ({ page }) => {
+test("一次跳过建议，不再出现重复确认表单且不触发执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -624,10 +1543,9 @@ test("Fig8 跳过理由随提案保存，不触发执行", async ({ page }) => {
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请优化袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
-  await page.getByRole("textbox", { name: "跳过理由", exact: true }).fill("先保留袖型，等待材料测试");
-  await page.getByRole("button", { name: "确认跳过", exact: true }).click();
   await expect.poll(() => mocked.rejectionRequests.length).toBe(1);
-  expect(mocked.rejectionRequests[0]).toMatchObject({ reason: "先保留袖型，等待材料测试" });
+  expect(mocked.rejectionRequests[0]).not.toHaveProperty("reason");
+  await expect(page.getByRole("textbox", { name: "跳过理由" })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
@@ -898,7 +1816,7 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
   });
 }
 
-test("@节点提案先以虚线预览，确认后保留分支且不自动执行", async ({ page }) => {
+test("@节点提案先以虚线预览，确认后保留分支并直接执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -909,19 +1827,19 @@ test("@节点提案先以虚线预览，确认后保留分支且不自动执行"
   await page.getByRole("option", { name: /候选 A/ }).click();
   await expect(composer).toHaveValue("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送 ↑" }).click();
-  await expect(page.getByText("请修改 @候选 A", { exact: false })).toBeVisible();
+  await expect(page.locator('[data-role="user"]').getByText("请修改 @候选 A", { exact: false })).toBeVisible();
   await expect(page.locator('[data-type="edit_design"][data-status="proposed"]')).toBeVisible();
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a"]);
   expect(mocked.getExecuteCount()).toBe(0);
-  await page.getByRole("button", { name: "加入画布", exact: true }).click();
-  await expect(page.locator('[data-type="edit_design"][data-status="ready"]')).toBeVisible();
+  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
+  await expect(page.locator('[data-type="edit_design"][data-status="running"]')).toBeVisible();
   expect(mocked.getGraph().edges.some((item) => item.id === "edit-source")).toBe(true);
-  expect(mocked.getExecuteCount()).toBe(0);
+  await expect.poll(() => mocked.getExecuteCount()).toBe(1);
 });
 
 const port = (page: Page, id: string, side: "input" | "output") => page.locator(`[data-workflow-port="${side}"][data-node-id="${id}"]`);
 
-async function selectWire(page: Page, id: string) {
+async function wirePoint(page: Page, id: string) {
   const path = page.locator(`[data-workflow-edge="${id}"] path`).first();
   await path.waitFor();
   // Camera fit is animated; wait for the projected curve to settle before measuring it.
@@ -948,6 +1866,11 @@ async function selectWire(page: Page, id: string) {
     }
     return toScreen(total * 0.55);
   });
+  return point;
+}
+
+async function selectWire(page: Page, id: string) {
+  const point = await wirePoint(page, id);
   await page.mouse.click(point.x, point.y);
   await expect(page.getByLabel("连接操作")).toBeVisible();
 }
@@ -987,7 +1910,7 @@ test("上传图片直接作为修改原图，已有参考连线可切换用途",
   expect(mocked.getGraph().edges.filter((item) => item.targetPort === "source")).toHaveLength(1);
   expect(mocked.getExecuteCount()).toBe(0);
   await page.locator('[data-type="edit_design"]').dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByText("来源与路径", { exact: true }).click();
   await expect(details.getByText("原图 · 上传服装", { exact: true })).toBeVisible();
   await details.getByRole("button", { name: "确认并执行", exact: true }).click();
@@ -1067,39 +1990,33 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, borderColor: style.borderTopColor, borderWidth: Number.parseFloat(style.borderTopWidth) };
   });
-  const context = page.getByLabel("设计上下文", { exact: true });
-  const summary = context.locator("summary").first();
-  await summary.focus();
-  await summary.press("Enter");
-  await expect(context).toHaveAttribute("open", "");
-  await expect(summary).toBeFocused();
-  expect(await summary.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
-  })).toBe(true);
-  await summary.press("Space");
-  await expect(context).not.toHaveAttribute("open");
+  const menu = page.getByLabel("对话操作", { exact: true });
+  await menu.focus();
+  await menu.press("ArrowDown");
+  await page.getByRole("button", { name: "设计要求与偏好", exact: true }).press("Enter");
+  const drawer = page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(menu).toBeFocused();
   await composer.fill("保留这段输入草稿");
   await page.locator('[data-type="candidate"]').first().click();
   await expect(composer).toBeVisible();
-  await summary.press("Enter");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("整个项目");
+  expect(mocked.contextPatches).toHaveLength(0);
   const reference = page.getByRole("button", { name: /引用「候选 A」/ });
   const referenceStyle = await appearance(reference);
-  const locationStyle = await appearance(context.getByRole("button", { name: "定位 候选 A", exact: true }));
   expect(referenceStyle.borderWidth).toBeGreaterThan(0);
   expect(referenceStyle.background).not.toBe("rgba(0, 0, 0, 0)");
-  expect(locationStyle.borderWidth).toBe(0);
-  expect(locationStyle.background).toBe("rgba(0, 0, 0, 0)");
-  await summary.press("Space");
-  await page.getByRole("button", { name: "节点详情", exact: true }).click();
-  await expect(composer).toBeHidden();
-  await page.getByRole("button", { name: "返回对话" }).click();
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  await expect(composer).toBeVisible();
+  await page.getByRole("button", { name: "返回画布" }).click();
   await expect(composer).toHaveValue("保留这段输入草稿");
   await page.getByRole("button", { name: "发送 ↑" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual([]);
-  const primaryStyle = await appearance(page.getByRole("button", { name: "加入画布", exact: true }));
-  const secondaryStyle = await appearance(page.getByRole("button", { name: "调整", exact: true }));
+  const primaryStyle = await appearance(page.getByRole("button", { name: "确认并生成", exact: true }));
+  const secondaryStyle = await appearance(page.getByRole("button", { name: "修改要求", exact: true }));
   const quietStyle = await appearance(page.getByRole("button", { name: "跳过", exact: true }));
   expect(primaryStyle.background).not.toBe(secondaryStyle.background);
   expect(secondaryStyle.borderWidth).toBeGreaterThan(0);
@@ -1108,15 +2025,13 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   expect(quietStyle.borderColor).toBe("rgba(0, 0, 0, 0)");
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/workflow-assistant-actions-desktop.png" });
-  await page.getByRole("button", { name: "调整", exact: true }).click();
-  expect((await appearance(page.getByRole("button", { name: "提交调整建议", exact: true }))).background).toBe(primaryStyle.background);
-  expect(await appearance(page.getByRole("button", { name: "取消调整", exact: true }))).toEqual(quietStyle);
-  await page.getByRole("button", { name: "取消调整", exact: true }).click();
+  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await expect(composer).toBeFocused();
+  await composer.fill("保留领口");
+  await expect.poll(async () => (await appearance(page.getByRole("button", { name: "更新方案 ↑", exact: true }))).background).toBe(primaryStyle.background);
+  await page.getByRole("button", { name: "取消修改", exact: true }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
-  expect(await appearance(page.getByRole("button", { name: "返回建议", exact: true }))).toEqual(quietStyle);
-  const rejectStyle = await appearance(page.getByRole("button", { name: "确认跳过", exact: true }));
-  expect(rejectStyle.background !== quietStyle.background || rejectStyle.borderColor !== quietStyle.borderColor).toBe(true);
-  await page.getByRole("button", { name: "确认跳过", exact: true }).click();
+  await expect(page.getByRole("button", { name: "确认跳过", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /引用「候选 A」/ }).click();
   await composer.fill("修改领口");
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
@@ -1253,6 +2168,7 @@ test("固定浅色与三种宽度保持画布布局，PNG 导出包含曲线", a
     await page.screenshot({ path: `output/playwright/workflow-light-${width}.png` });
   }
   const download = page.waitForEvent("download");
+  await page.getByText("资料与更多", { exact: true }).click();
   await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const file = await download;
   await file.saveAs("output/playwright/workflow-export-with-curves.png");
@@ -1369,16 +2285,15 @@ test("候选的大图、版本、局部重绘入口和新草图保存均可从�
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').first().click();
-  await page.getByRole("button", { name: "节点详情", exact: true }).click();
-  await page.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  const workspace = page.getByRole("dialog", { name: "候选资产工作台" });
+  await page.getByRole("button", { name: "详情", exact: true }).click();
+  const workspace = page.getByRole("region", { name: "候选资产工作台", exact: true });
   await expect(workspace).toBeVisible();
   await expect(workspace.getByRole("button", { name: "单图高清导出" })).toBeVisible();
   await workspace.getByRole("tab", { name: "版本历史" }).click();
   await expect(workspace.getByRole("region", { name: "版本时间线" })).toBeVisible();
   await workspace.getByRole("tab", { name: "局部重绘" }).click();
   await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toBeVisible();
-  await workspace.getByRole("button", { name: "关闭候选工作台" }).click();
+  await page.getByRole("button", { name: "返回画布" }).click();
 
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
   await page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true }).click();
@@ -1433,7 +2348,7 @@ test("未执行工具可保存真实参数；历史显示来源和模型，完�
   await page.waitForTimeout(250);
   await page.locator('[data-type="generate_design"]').hover();
   await page.locator('[data-type="generate_design"]').dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await expect(details.getByRole("textbox", { name: "执行指令" })).toHaveValue("原始风衣");
   await details.getByRole("textbox", { name: "执行指令" }).fill("新版通勤风衣");
   await details.getByText("高级设置", { exact: true }).click();
@@ -1469,7 +2384,7 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
   await composer.fill("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送 ↑" }).click();
-  await expect(page.getByRole("complementary", { name: "设计助手与节点详情" }).getByRole("alert")).toContainText("请从 @列表选择准确节点");
+  await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("alert")).toContainText("请从 @列表选择准确节点");
   expect(mocked.proposalRequests).toHaveLength(0);
   await composer.fill("请修改 @候选");
   await page.getByRole("option", { name: /候选 A/ }).last().click();
@@ -1478,7 +2393,6 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a-branch"]);
   expect(mocked.workflowRequests[0]?.focusNodeIds).toEqual(["candidate-a-branch"]);
   await page.getByRole("button", { name: "跳过", exact: true }).click();
-  await page.getByRole("button", { name: "确认跳过", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -1533,11 +2447,11 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   await expect.poll(() => mocked.getGraph().nodes.filter((item) => item.type === "reference_image").length).toBe(1);
   const uploaded = mocked.getGraph().nodes.find((item) => item.type === "reference_image");
   expect(uploaded?.payload).toMatchObject({ fileAssetId: "sketch-file", role: "style_ref", roleSource: "default", roleInferenceState: "pending" });
-  await expect(page.getByRole("complementary", { name: "设计助手与节点详情" }).getByRole("alert")).toContainText("角色识别暂不可用");
+  await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("alert")).toContainText("角色识别暂不可用");
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="reference_image"]').dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByRole("button", { name: "识别参考角色" }).click();
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.roleSource).toBe("inferred");
   expect(mocked.getInferRoleCount()).toBe(2);
@@ -1567,7 +2481,7 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 A" }).dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByRole("button", { name: "设为主推款并建立系列" }).click();
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.id === "candidate-a")?.payload.collectionId).toBe("collection-one");
   await page.getByRole("button", { name: "关闭系列抽屉" }).click();
@@ -1589,67 +2503,79 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   await page.waitForTimeout(250);
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
-  await page.getByText("设计上下文", { exact: true }).click();
-  const context = page.getByLabel("设计上下文", { exact: true });
+  const context = await openDesignRequirements(page);
   const preference = context.locator("li").filter({ hasText: "该分支偏好银灰色" });
   await expect(preference).toBeVisible();
-  await expect(preference).toContainText("当前焦点不适用");
+  await expect(preference).toContainText("当前讨论对象不适用");
   await expect(preference).toContainText("作用分支：候选 B");
   await expect(preference.getByRole("button", { name: "定位 候选 B", exact: true })).toBeVisible();
   expect(mocked.getContext().preferences.some((item) => item.id === "prefer-silver")).toBe(false);
+  await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
   expect(mocked.contextPatches).toHaveLength(0);
-  await context.getByRole("button", { name: "将「候选 B」设为焦点" }).click();
-  await expect(preference).toContainText("当前焦点适用");
-  await context.getByRole("button", { name: "清除焦点" }).click();
-  await expect(preference).toContainText("当前焦点不适用");
+  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图 @候选 B");
+  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect.poll(() => mocked.getContext().focusNodeIds).toEqual(["candidate-b"]);
+  await openDesignRequirements(page);
+  await expect(preference).toContainText("当前讨论对象适用");
+  await preference.getByRole("button", { name: "确认这条理解" }).click();
+  await expect(preference).toContainText("明确提出");
+  await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
+  await page.getByRole("button", { name: "讨论整个项目" }).click();
+  await expect.poll(() => mocked.getContext().focusNodeIds).toEqual([]);
+  await openDesignRequirements(page);
+  await expect(preference).toContainText("当前讨论对象不适用");
   await preference.getByRole("button", { name: "停用这条偏好" }).click();
+  await context.getByText("已停用记录（1）", { exact: true }).click();
+  await expect(preference).toBeVisible();
   await expect(preference).toContainText("已停用");
   expect(mocked.contextPatches.at(-1)?.disabledPreferenceIds).toEqual(["prefer-silver"]);
   expect(mocked.getContext().preferences.some((item) => item.id === "prefer-silver")).toBe(false);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByText("设计上下文", { exact: true }).click();
+  await openDesignRequirements(page);
+  await context.getByText("已停用记录（1）", { exact: true }).click();
   await expect(preference).toContainText("已停用");
   await expect(preference.getByRole("button", { name: "停用这条偏好" })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-test("持续助手显示真实上下文，点击节点不改焦点，目标与偏好更正可恢复", async ({ page }) => {
+test("设计要求抽屉更正失败保留输入，重试后刷新恢复且返回键盘焦点", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
-  await page.waitForTimeout(250);
-  await page.getByText("设计上下文", { exact: true }).click();
-  const context = page.getByLabel("设计上下文", { exact: true });
-  await expect(context.getByText("秋冬通勤风衣", { exact: true }).last()).toBeVisible();
-  await expect(context.getByText("共 2 张 · 已理解 1 · 处理中 1 · 失败 0")).toBeVisible();
-  await page.locator('[data-type="candidate"]').first().click();
-  expect(mocked.contextPatches).toHaveLength(0);
-  await context.getByRole("button", { name: "将「候选 A」设为焦点" }).click();
-  await expect.poll(() => mocked.getContext().focusNodeIds).toEqual(["candidate-a"]);
-  expect(mocked.contextPatches[0]?.summaryRevision).toBe(0);
+  const conversation = page.getByLabel("设计对话", { exact: true });
+  const scrollBefore = await conversation.evaluate((element) => element.scrollTop);
+  const context = await openDesignRequirements(page);
+  await expect(context.getByText("秋冬通勤风衣", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("设计上下文", { exact: true })).toHaveCount(0);
   await context.getByRole("button", { name: "停用这条偏好" }).click();
-  await expect(context.locator('li[data-status="inactive"]').filter({ hasText: "偏好哑光面料" })).toBeVisible();
+  await expect(context.getByText("已停用记录（1）", { exact: true })).toBeVisible();
   await context.getByRole("button", { name: "更正项目目标" }).click();
   await context.getByRole("textbox", { name: "更正项目目标" }).fill("春季轻量通勤风衣");
+  let fail = true;
+  await page.route("**/api/agent-conversations/*/context", (route) => {
+    if (route.request().method() === "PATCH" && fail) { fail = false; return route.fulfill({ status: 409, json: { message: "项目目标版本已更新，请重试" } }); }
+    return route.fallback();
+  });
   await context.getByRole("button", { name: "保存目标" }).click();
-  await expect(context.getByText("春季轻量通勤风衣", { exact: true }).last()).toBeVisible();
-  await context.getByRole("heading", { name: "项目目标", exact: true }).scrollIntoViewIfNeeded();
-  await mkdir("output/playwright", { recursive: true });
-  await page.screenshot({ path: "output/playwright/workflow-assistant-context-verified.png" });
-  expect(mocked.contextPatches.every((patch) => typeof patch.baseRevision === "number" && typeof patch.mutationId === "string")).toBe(true);
-  expect(mocked.getExecuteCount()).toBe(0);
+  await expect(context.getByRole("alert")).toBeVisible();
+  await expect(context.getByRole("textbox", { name: "更正项目目标" })).toHaveValue("春季轻量通勤风衣");
+  expect(mocked.getContext().currentObjective).toBe("秋冬通勤风衣");
+  await context.getByRole("button", { name: "保存目标" }).click();
+  await expect(context.getByText("春季轻量通勤风衣", { exact: true })).toBeVisible();
+  await mkdir("output/playwright/context", { recursive: true });
+  await page.screenshot({ path: "output/playwright/context/requirements-desktop.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("对话操作", { exact: true })).toBeFocused();
+  expect(await conversation.evaluate((element) => element.scrollTop)).toBe(scrollBefore);
+  expect(mocked.contextPatches.every((value) => typeof value.baseRevision === "number" && typeof value.mutationId === "string")).toBe(true);
   await page.reload();
-  await page.getByRole("button", { name: "适合画布" }).click();
-  await page.waitForTimeout(250);
-  await page.getByText("设计上下文", { exact: true }).click();
-  await expect(context.getByText("春季轻量通勤风衣", { exact: true }).last()).toBeVisible();
-  await expect(context.getByRole("button", { name: "清除焦点" })).toBeVisible();
-  await context.getByRole("button", { name: "清除焦点" }).click();
-  await expect.poll(() => mocked.getContext().focusNodeIds).toEqual([]);
+  await openDesignRequirements(page);
+  await expect(context.getByText("春季轻量通勤风衣", { exact: true })).toBeVisible();
+  expect(mocked.getExecuteCount()).toBe(0);
 });
 
 test("持续助手刷新后保留消息和待确认提案，不重复或自动执行", async ({ page }) => {
@@ -1659,18 +2585,17 @@ test("持续助手刷新后保留消息和待确认提案，不重复或自动�
   await page.waitForTimeout(250);
   await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
   await page.getByRole("button", { name: "发送 ↑" }).click();
-  await expect(page.getByRole("button", { name: "加入画布", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await expect(page.getByRole("button", { name: "加入画布", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toBeVisible();
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   expect(mocked.proposalRequests).toHaveLength(1);
   expect(mocked.getExecuteCount()).toBe(0);
   await page.getByRole("button", { name: "跳过", exact: true }).click();
-  await page.getByRole("button", { name: "确认跳过", exact: true }).click();
-  await expect(page.getByRole("button", { name: "加入画布", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
@@ -1687,7 +2612,7 @@ test("项目中其他会话的待确认提案不会自动出现在当前对话�
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "加入画布", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
@@ -1751,7 +2676,7 @@ test("跨窗口读取到待识别参考图时会同步最终角色", async ({ pa
   await page.waitForTimeout(250);
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   await page.locator('[data-type="reference_image"]').dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await expect(details.getByText(/当前标签：细节参考/)).toBeVisible({ timeout: 10_000 });
   await expect(details.getByRole("button", { name: /识别参考角色/ })).toHaveCount(0);
   expect(reads).toBeGreaterThanOrEqual(2);
@@ -1848,7 +2773,7 @@ test("保存失败保留批次，重试使用同一请求且成功前不显示�
   await page.screenshot({ path: "output/playwright/review-save-error-after.png" });
   fail = false;
   await page.getByRole("button", { name: "重试保存", exact: true }).click();
-  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
   expect(requests[1]).toEqual(requests[0]);
 });
 
@@ -1911,6 +2836,8 @@ test("默认视图可读，查看全图、100%和窄屏保持可达", async ({ p
   await page.getByRole("button", { name: "画布原始比例" }).click();
   for (const width of [1440, 1920, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    // 转入手机时保留已打开的助手；用户可显式回到画布。
+    await showCanvas(page, width);
     await expect(page.getByRole("button", { name: "画布原始比例" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
@@ -1983,7 +2910,7 @@ for (const deleted of [false, true]) {
     await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 25, { steps: 6 });
     await page.mouse.up();
     await expect.poll(() => requests.length).toBe(deleted ? 1 : 2);
-    await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+    await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
     if (deleted) {
       await expect(brief).toHaveCount(0);
     } else {
@@ -2025,7 +2952,7 @@ test("断网保留待保存数量，恢复后同一批次重试成功", async ({
   await context.setOffline(false);
   offline = false;
   await page.getByRole("button", { name: "重试保存", exact: true }).click();
-  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
   await expect(page.getByLabel("待保存节点数")).toHaveCount(0);
   expect(requests[1]).toEqual(requests[0]);
 });
@@ -2058,7 +2985,7 @@ test("保存失败的后退可取消，恢复后前进历史仍然可用", async
   await page.goto("/");
   await page.getByRole("link", { name: "打开项目 历史导航验收" }).click();
   await dragReviewBrief(page);
-  await expect(page.getByLabel("待保存节点数")).toBeVisible();
+  await expect(page.locator("main[data-layout-pending-count]")).not.toHaveAttribute("data-layout-pending-count", "0");
   await page.goBack({ timeout: 1500 }).catch(() => undefined);
   await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
@@ -2067,7 +2994,7 @@ test("保存失败的后退可取消，恢复后前进历史仍然可用", async
   await expect(page).toHaveURL("/");
   await page.goForward();
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
-  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
 });
 
 test("保存飞行中继续拖动，旧响应不覆盖新位置且串行提交", async ({ page }) => {
@@ -2086,7 +3013,7 @@ test("保存飞行中继续拖动，旧响应不覆盖新位置且串行提交",
   await dragReviewBrief(page, 85);
   const afterSecond = await page.locator('[data-type="brief"]').boundingBox();
   release();
-  await expect(page.getByText("画布已保存", { exact: true })).toBeVisible();
+  await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
   expect(bodies).toHaveLength(2);
   const afterSave = await page.locator('[data-type="brief"]').boundingBox();
   expect(Math.abs((afterSave?.x ?? 0) - (afterSecond?.x ?? 0))).toBeLessThan(2);
@@ -2170,7 +3097,7 @@ for (const viewport of REVIEW_VIEWPORTS) {
       ? route.fulfill({ status: 503, json: { message: "保存服务暂不可用" } }) : route.fallback());
     await dragReviewBrief(page, 15);
     await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("待保存节点数")).toBeVisible();
+    await expect(page.locator("main[data-layout-pending-count]")).not.toHaveAttribute("data-layout-pending-count", "0");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await contrastFailures(page)).toEqual([]);
     await page.screenshot({ path: `output/playwright/review-canvas-error-${viewport.width}-final.png`, fullPage: true });
@@ -2188,7 +3115,7 @@ test("未保存时前进也会等待保存，失败不破坏前进目标", async
   await expect(page).toHaveURL("/");
   await page.goBack();
   await dragReviewBrief(page);
-  await expect(page.getByLabel("待保存节点数")).toBeVisible();
+  await expect(page.locator("main[data-layout-pending-count]")).not.toHaveAttribute("data-layout-pending-count", "0");
   await page.goForward({ timeout: 1500 }).catch(() => undefined);
   await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
@@ -2248,16 +3175,16 @@ test("仅用键盘完成添加、取消、打开详情和删除确认", async ({
 
 
 test.describe("自由白板功能迁移", () => {
-  test("草图保存后重开笔画，历史引用另存分支", async ({ browser }, testInfo) => {
-    const context = await browser.newContext({ baseURL: "http://127.0.0.1:3000", recordVideo: { dir: testInfo.outputPath("videos") } });
+  test("草图保存后重开笔画，历史引用另存分支", async ({ browser, baseURL }, testInfo) => {
+    const context = await browser.newContext({ baseURL, recordVideo: { dir: testInfo.outputPath("videos") } });
     const page = await context.newPage();
     const mocked = await mockWorkflow(page);
     await page.goto(`/${PROJECT_ID}`);
     await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
     await page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "绘制廓形草图" });
-    const draw = async () => {
-      const bounds = await dialog.getByLabel("廓形草图画布").boundingBox();
+    const draw = async (container: Locator = dialog) => {
+      const bounds = await container.getByLabel("廓形草图画布").boundingBox();
       if (!bounds) throw new Error("草图画布不可见");
       await page.mouse.move(bounds.x + 60, bounds.y + 60);
       await page.mouse.down();
@@ -2276,12 +3203,13 @@ test.describe("自由白板功能迁移", () => {
     await page.reload();
     await expect(page.getByRole("button", { name: "＋ 添加素材", exact: true })).toBeVisible();
     await page.evaluate(id => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: id })), created.id);
-    await expect(dialog.getByRole("button", { name: "保存到工作流", exact: true })).toBeEnabled();
-    await draw();
+    const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
+    await expect(workspace.getByRole("button", { name: "保存到工作流", exact: true })).toBeEnabled();
+    await draw(workspace);
     await mkdir("output/playwright", { recursive: true });
     await page.screenshot({ path: "output/playwright/editable-sketch.png" });
-    await dialog.getByRole("button", { name: "保存到工作流", exact: true }).click();
-    await expect(dialog).toHaveCount(0);
+    await workspace.getByRole("button", { name: "保存到工作流", exact: true }).click();
+    await expect(workspace).toBeHidden();
     expect(JSON.stringify(created.payload.sketchDocument)).toBe(original);
     expect(mocked.getGraph().nodes.some(item => item.payload.sourceNodeId === created.id)).toBe(true);
     await context.close();

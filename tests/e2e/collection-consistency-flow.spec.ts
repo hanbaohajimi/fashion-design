@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+});
+
 test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }) => {
   test.setTimeout(90_000);
   const createdAt = "2026-07-28T10:00:00.000Z";

@@ -470,6 +470,7 @@ test("未保存内容可继续编辑，确认丢弃后新建和切换功能会�
   await expect(
     page.getByRole("tabpanel", { name: "款式档案", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "设计工具", exact: true }).click();
   await page.getByRole("tab", { name: "商品展示", exact: true }).click();
   await expect(page.getByLabel("展示包名称", { exact: true })).toHaveValue("");
   expect(mocked.savedDocuments).toHaveLength(0);

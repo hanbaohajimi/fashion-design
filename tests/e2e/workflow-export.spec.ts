@@ -1,4 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+
+// These scenarios exercise the editable workflow, not the default design workbench.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+});
 import { mkdir, readFile } from "node:fs/promises";
 
 const PROJECT_ID = "e2e-workflow-export";
@@ -36,10 +41,12 @@ async function mockExportWorkflow(page: Page) {
   } }));
   await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.fulfill({ json: graph }));
   await page.route(`**/api/projects/${PROJECT_ID}/workflow/sync`, (route) => route.fulfill({ json: { ...graph, proposals: [] } }));
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow/tools`, (route) => route.fulfill({ json: { items: [] } }));
+  await page.route(`**/api/projects/${PROJECT_ID}/agent-conversations*`, (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
   return graph;
 }
 
-test("工作流 PNG 导出真实包含节点文字、工具和素材色条", async ({ page }) => {
+test("工作流 PNG 导出包含紧凑工具名称和素材文字", async ({ page }) => {
   test.setTimeout(60_000);
   const graph = await mockExportWorkflow(page);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -51,7 +58,7 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
   await expect(canvas.locator('[data-type="constraint"]')).toBeVisible();
   await expect(canvas.locator('[data-workflow-edge]')).toHaveCount(2);
   await page.evaluate(() => document.fonts.ready);
-  // 类别色条位于卡片左侧（贯穿整卡高度），不再是一条 2px 顶边线。
+  // 工具使用中性细边框，素材继续保留类别色条。
   const readBorderColor = (kind: "tool" | "asset") => canvas.locator(`[data-kind="${kind}"]`).first().evaluate((element) => {
     const channels = getComputedStyle(element).borderLeftColor.match(/\d+/gu);
     if (!channels || channels.length < 3) throw new Error("Node border color is unavailable");
@@ -65,19 +72,23 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
     const card = canvas.locator(`[data-type="${node.type}"]`);
     const cardBox = await card.boundingBox();
     const titleBox = await card.locator("strong").boundingBox();
-    const summaryBox = await card.locator("p").boundingBox();
-    if (!cardBox || !titleBox || !summaryBox) throw new Error(`${node.id} text boxes are unavailable`);
-    const zoom = cardBox.width / 300;
+    const summaryBox = node.kind === "tool" ? null : await card.locator("p").boundingBox();
+    if (!cardBox || !titleBox || (node.kind !== "tool" && !summaryBox)) throw new Error(`${node.id} text boxes are unavailable`);
+    const naturalWidth = await card.evaluate((element) => (element as HTMLElement).offsetWidth);
+    const zoom = cardBox.width / naturalWidth;
     return {
       id: node.id,
+      kind: node.kind,
+      width: naturalWidth,
       x: node.x,
       y: node.y,
       title: { x: (titleBox.x - cardBox.x) / zoom, y: (titleBox.y - cardBox.y) / zoom, width: titleBox.width / zoom, height: titleBox.height / zoom },
-      summary: { x: (summaryBox.x - cardBox.x) / zoom, y: (summaryBox.y - cardBox.y) / zoom, width: summaryBox.width / zoom, height: summaryBox.height / zoom },
+      summary: summaryBox ? { x: (summaryBox.x - cardBox.x) / zoom, y: (summaryBox.y - cardBox.y) / zoom, width: summaryBox.width / zoom, height: summaryBox.height / zoom } : null,
     };
   }));
 
   const downloadPromise = page.waitForEvent("download");
+  await page.getByText("资料与更多", { exact: true }).click();
   await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(`fashion-workflow-${PROJECT_ID}.png`);
@@ -114,7 +125,7 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
       if (Math.abs(r - borderColors.tool.r) < 3 && Math.abs(g - borderColors.tool.g) < 3 && Math.abs(b - borderColors.tool.b) < 3) toolColorPixels += 1;
       if (Math.abs(r - borderColors.asset.r) < 3 && Math.abs(g - borderColors.asset.g) < 3 && Math.abs(b - borderColors.asset.b) < 3) assetColorPixels += 1;
     }
-    const scale = bitmap.width / (998 - 40 + 128);
+    const scale = bitmap.width / (Math.max(...textBoxes.map((node) => node.x + node.width)) - 40 + 128);
     const countText = (node: typeof textBoxes[number], box: typeof node.title) => {
       const left = Math.floor((node.x - 40 + 64 + box.x) * scale);
       const top = Math.floor((node.y - 120 + 64 + box.y) * scale);
@@ -137,15 +148,15 @@ test("工作流 PNG 导出真实包含节点文字、工具和素材色条", asy
       height: bitmap.height,
       toolColorPixels,
       assetColorPixels,
-      text: textBoxes.map((node) => ({ id: node.id, title: countText(node, node.title), summary: countText(node, node.summary) })),
+      text: textBoxes.map((node) => ({ id: node.id, kind: node.kind, title: countText(node, node.title), summary: node.summary ? countText(node, node.summary) : null })),
     };
   }, { dataUrl: `data:image/png;base64,${png.toString("base64")}`, textBoxes, borderColors });
   expect(pixels.width).toBe(width);
   expect(pixels.height).toBe(height);
-  expect(pixels.toolColorPixels, "PNG must contain the tool's current top border color").toBeGreaterThan(1_000);
+  expect(pixels.toolColorPixels, "PNG must contain the tool's neutral outline").toBeGreaterThan(400);
   expect(pixels.assetColorPixels, "PNG must contain both assets' current top border color").toBeGreaterThan(2_000);
   for (const text of pixels.text) {
     expect(text.title, `${text.id} title must be rasterized in the PNG`).toBeGreaterThan(300);
-    expect(text.summary, `${text.id} summary must be rasterized in the PNG`).toBeGreaterThan(300);
+    if (text.kind !== "tool") expect(text.summary, `${text.id} summary must be rasterized in the PNG`).toBeGreaterThan(300);
   }
 });

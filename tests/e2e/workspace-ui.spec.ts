@@ -27,7 +27,11 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toBeVisible();
   const navigation = page.getByRole("tablist", { name: "设计工作室功能" });
-  await expect(navigation.getByRole("tab")).toHaveCount(11);
+  await expect(navigation.getByRole("tab")).toHaveCount(3);
+  await navigation.getByRole("button", { name: "设计工具", exact: true }).click();
+  await expect(navigation.getByRole("tab", { name: "印花工作台" })).toBeVisible();
+  await navigation.getByRole("button", { name: "设计工具", exact: true }).click();
+  await expect(navigation.getByRole("tab")).toHaveCount(3);
   const tasks = navigation.getByRole("tab", { name: "开始任务", exact: true });
   await tasks.focus();
   await page.keyboard.press("ArrowDown");
@@ -35,6 +39,11 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
     navigation.getByRole("tab", { name: "款式档案", exact: true }),
   ).toBeFocused();
   await expect(tasks).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("End");
+  await expect(navigation.getByRole("tab", { name: "技术包", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(tasks).toBeFocused();
+  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/tab=styles/u);
   await tasks.click();

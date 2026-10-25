@@ -8,6 +8,57 @@ const user = {
   name: "设计师",
 };
 
+test("P1 项目重命名防重复、失败留稿、键盘恢复和归档焦点", async ({ page }) => {
+  await mockWorkspace(page);
+  const now = "2026-10-25T00:00:00.000Z";
+  const projects = ["秋冬风衣设计", "春夏针织设计"].map((name, index) => ({ id: `rename-${index}`, name, archived: false, assetCount: 0, createdAt: now, updatedAt: now }));
+  await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: projects.filter((item) => !item.archived), total: projects.filter((item) => !item.archived).length, page: 1, hasMore: false } }));
+  let requests = 0;
+  let release: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/projects/rename-0", async (route) => {
+    requests++;
+    if (requests === 1) {
+      await pending;
+      return route.fulfill({ status: 503, json: { message: "暂时无法保存，请重试" } });
+    }
+    Object.assign(projects[0]!, route.request().postDataJSON());
+    return route.fulfill({ json: projects[0] });
+  });
+  await page.goto("/");
+  const card = page.locator('[data-project-id="rename-0"]');
+  await card.locator("summary").click();
+  await card.getByRole("button", { name: "重命名", exact: true }).click();
+  const input = card.getByRole("textbox", { name: "项目名称", exact: true });
+  await input.fill("秋冬风衣的新名称");
+  try {
+    await input.press("Enter");
+    await input.press("Enter");
+    await expect.poll(() => requests).toBe(1);
+    await expect(card.getByRole("button", { name: "取消", exact: true })).toBeDisabled();
+    await input.press("Escape");
+    await expect(input).toBeVisible();
+  } finally { release?.(); }
+  await expect(card.getByRole("alert")).toContainText("暂时无法保存");
+  await expect(page.getByRole("alert").filter({ hasText: "暂时无法保存" })).toHaveCount(1);
+  await expect(input).toHaveValue("秋冬风衣的新名称");
+  await mkdir("output/playwright/optimization", { recursive: true });
+  await page.screenshot({ path: "output/playwright/optimization/rename-error.png" });
+  await input.press("Enter");
+  await expect(card.locator("summary")).toBeFocused();
+  expect(requests).toBe(2);
+  await card.locator("summary").press("Enter");
+  await card.getByRole("button", { name: "重命名", exact: true }).click();
+  await input.press("Escape");
+  await expect(card.locator("summary")).toBeFocused();
+  await card.locator("summary").press("Enter");
+  await card.getByRole("button", { name: "归档", exact: true }).click();
+  await expect(card).toHaveCount(0);
+  await expect(page.locator('[data-project-id="rename-1"] a').first()).toBeFocused();
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "项目已归档" })).toHaveCount(1);
+  await page.screenshot({ path: "output/playwright/optimization/archive-success.png" });
+});
+
 async function mockWorkspace(page: Page, status = "running") {
   const now = new Date().toISOString();
   const graph = {
@@ -217,6 +268,7 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
   await page
     .getByRole("textbox", { name: "本次任务", exact: true })
     .fill("尚未保存的风衣要求");
+  await page.getByRole("button", { name: "开发交付", exact: true }).click();
   await page.getByRole("tab", { name: "系列规划", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
@@ -286,6 +338,8 @@ test("工作室首屏在各尺寸可直接输入且无横向溢出", async ({ pa
   ).toBeVisible();
   await mkdir("output/playwright/frontend-experience", { recursive: true });
   for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 375, height: 812 },
     { width: 1366, height: 768 },
     { width: 1440, height: 900 },
     { width: 1920, height: 1080 },
@@ -310,6 +364,7 @@ test("工作室首屏在各尺寸可直接输入且无横向溢出", async ({ pa
 
 test("日常任务使用简洁状态反馈，完成后不再提供重复执行", async ({ page }) => {
   const graph = await mockWorkspace(page);
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
   const media: string[] = [];
   page.on("request", (request) => {
     if (request.url().includes("/painting-loaders/")) media.push(request.url());
@@ -335,21 +390,23 @@ test("日常任务使用简洁状态反馈，完成后不再提供重复执行",
   const running = graph.nodes[1];
   if (running) running.status = "completed";
   graph.revision++;
-  await expect(node).toContainText("已完成", { timeout: 8000 });
+  await expect(node).toHaveAttribute("data-status", "completed", { timeout: 8000 });
+  await expect(node).not.toContainText("已完成");
   await expect(page.locator("video")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "确认并执行", exact: true }),
   ).toHaveCount(0);
 });
 
-test("减少动画与普通模式均保留简洁任务状态，未知节点不显示完成", async ({
+test("工具节点隐藏状态，详情保留任务反馈并兼容减少动画", async ({
   page,
 }) => {
   await mockWorkspace(page, "unrecognized");
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
   await page.goto("/experience");
   await expect(
     page.locator('[data-type="generate_design"]').first(),
-  ).toContainText("正在确认状态");
+  ).toHaveAttribute("data-status", "unrecognized");
   await expect(
     page.locator('[data-type="generate_design"]').first(),
   ).not.toContainText("已完成");
@@ -359,11 +416,11 @@ test("减少动画与普通模式均保留简洁任务状态，未知节点不�
   const indicator = page
     .locator('[data-type="generate_design"] [class*="toolStatus"] > span')
     .first();
-  await expect(indicator).toHaveCSS("animation-name", "none");
+  await expect(indicator).toHaveCount(0);
   await page.locator('[data-type="generate_design"]').first().dblclick();
   await expect(page.locator("video")).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await expect(indicator).not.toHaveCSS("animation-name", "none");
+  await expect(indicator).toHaveCount(0);
   await expect(page.locator("video")).toHaveCount(0);
   await expect(
     page

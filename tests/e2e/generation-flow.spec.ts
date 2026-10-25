@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+// These scenarios exercise the editable workflow, not the default design workbench.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+});
+
 const WORKFLOW_NOW = "2026-10-14T00:00:00.000Z";
 
 interface WorkflowTestNode {
@@ -313,8 +318,8 @@ test("新建项目成功后立即进入空白设计工作流", async ({ page }) 
   await expect(page.getByText(project.name)).toBeVisible();
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   await expect(canvas).toBeVisible();
-  await expect(canvas.getByRole("heading", { name: "从一条设计需求开始" })).toBeVisible();
-  await expect(canvas.getByRole("button", { name: "添加设计需求" })).toBeVisible();
+  await expect(canvas.getByRole("heading", { name: "让想法成为设计方案" })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "开始设计", exact: true })).toBeVisible();
   await expect(canvas.getByRole("button", { name: "＋ 添加素材" })).toBeVisible();
 });
 
@@ -798,13 +803,16 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
     targetPort: "source",
   });
 
-  await generationTool.dblclick();
   await page.getByText("执行记录", { exact: true }).click();
   await page.getByRole("button", { name: "读取尝试记录" }).click();
   await expect(page.getByText("来源：秋冬通勤约束、廓形参考")).toBeVisible();
   await expect(page.getByText("参考角色：silhouette_ref · 权重 0.7")).toBeVisible();
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await details.getByRole("button", { name: "返回画布" }).click();
   await canvas.locator('[data-type="candidate"]').dblclick();
-  await expect(page.getByRole("button", { name: "打开大图、版本与局部重绘" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
+  await details.getByRole("button", { name: /图像/u }).click();
+  await details.getByRole("button", { name: "来源与设计决策", exact: true }).click();
   await page.getByPlaceholder("记录选择或否决理由").fill("更符合通勤场景");
   await page.getByRole("button", { name: "保存决定" }).click();
   await expect.poll(() => candidateDecision).toMatchObject({
@@ -813,8 +821,10 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
     reason: "更符合通勤场景",
   });
   expect(candidateDecision?.mutationId).toMatch(/^[0-9a-f-]{36}$/u);
+  await page.getByRole("button", { name: "关闭图片工作区" }).click();
 
   const downloadPromise = page.waitForEvent("download");
+  await page.getByText("资料与更多", { exact: true }).click();
   await page.getByRole("button", { name: "导出画布 PNG" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("fashion-workflow-e2e-project.png");

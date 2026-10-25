@@ -1,4 +1,8 @@
 import { test, expect } from "@playwright/test";
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+});
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import {
   studioFixture,
@@ -11,24 +15,32 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: studioFixture({ styles: [styleFixture()] }) }),
   );
+  let summaryRequests = 0;
   await page.route(
     `**/api/projects/${PROJECT}/studio/creative-summary`,
-    (route) => route.fulfill({ json: { styles: 1, assets: 3, packs: 0 } }),
+    (route) => {
+      summaryRequests++;
+      return route.fulfill({ json: { styles: 1, assets: 3, packs: 0 } });
+    },
   );
   await page.route(`**/api/projects/${PROJECT}/experiments`, (route) =>
     route.fulfill({ json: [] }),
   );
-  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   await expect(page.getByRole("region", { name: "继续创作" })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "进入色料实验", exact: true }),
-  ).toBeVisible();
+    page.getByRole("region", { name: "继续创作" }).getByRole("link"),
+  ).toHaveCount(1);
+  expect(summaryRequests).toBe(0);
   await page.screenshot({
     path: "output/playwright/vitality-projects-desktop.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "进入色料实验", exact: true }).click();
+  await page.getByRole("link", { name: "继续创作", exact: true }).click();
+  await page.getByRole("link", { name: "款式与交付", exact: true }).click();
+  await page.getByRole("button", { name: "设计工具", exact: true }).click();
+  await page.getByRole("tab", { name: "色料实验", exact: true }).click();
   await page.getByRole("button", { name: "创作进展" }).click();
   await expect(page.getByRole("region", { name: "创作进展" })).toBeVisible();
   await expect(
@@ -50,7 +62,7 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   await expect(
     page.getByRole("link", { name: "继续创作", exact: true }),
   ).toHaveAttribute("href", new RegExp("studio\\?tab=experiments$", "u"));
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(
     page.getByRole("link", { name: "继续创作", exact: true }),
@@ -79,7 +91,7 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   }
 });
 
-test("助手建议只填草稿，新结果提示不自动移动视角且刷新不重复提示", async ({
+test("引用显式加入且不自动发送，新结果提示不移动画布且刷新不重复提示", async ({
   page,
 }) => {
   await seedVisualApp(page);
@@ -110,13 +122,14 @@ test("助手建议只填草稿，新结果提示不自动移动视角且刷新�
   const beforeSuggestion = writes;
   await page
     .getByRole("button", {
-      name: "梳理这张素材可用的设计特征与未知项",
+      name: "＋ 引用「藏蓝通勤外套」",
       exact: true,
     })
     .click();
   await expect(
     page.getByRole("textbox", { name: "向设计助手描述下一步", exact: true }),
-  ).toHaveValue(/先给出建议，等待我确认/u);
+  ).toHaveValue("");
+  await expect(page.getByRole("button", { name: "移除引用 藏蓝通勤外套" })).toBeVisible();
   expect(writes).toBe(beforeSuggestion);
   graph.revision++;
   graph.nodes.find(

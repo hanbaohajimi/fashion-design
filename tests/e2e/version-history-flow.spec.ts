@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+});
+
 const PROJECT_ID = "e2e-history";
 const CREATED_AT = "2026-07-27T08:00:00.000Z";
 
@@ -140,15 +144,17 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
-  const details = page.getByRole("complementary", { name: "设计助手与节点详情" });
+  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
+  await details.getByRole("button", { name: /图像/u }).click();
+  await details.getByRole("button", { name: "来源与设计决策", exact: true }).click();
   await details.getByText("来源与路径", { exact: true }).click();
   await expect(details.getByText("挺括羊毛").first()).toBeVisible();
   await details.getByPlaceholder("记录选择或否决理由").fill("保留肩线，面料表现符合预期");
   await details.getByRole("button", { name: "保存决定" }).click();
   await expect.poll(() => decisions).toContain("保留肩线，面料表现符合预期");
-  await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  let workspace = page.getByRole("dialog", { name: "候选资产工作台" });
-  await workspace.getByRole("tab", { name: "版本历史" }).click();
+  let workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
   await expect(workspace.getByText("恢复版本已创建，正在等待加入画布。", { exact: false })).toBeVisible();
   expect(restoreRequests).toHaveLength(1);
@@ -160,21 +166,22 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
-  await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  workspace = page.getByRole("dialog", { name: "候选资产工作台" });
-  await workspace.getByRole("tab", { name: "版本历史" }).click();
+  workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
   await expect.poll(() => graph.nodes.filter((item) => item.payload.assetId === restoredOne.id).length).toBe(1);
   expect(restoreRequests.map((item) => item.clientRequestId)).toEqual([firstRequestId, firstRequestId]);
   expect(importedAssets).toEqual([restoredOne.id, restoredOne.id]);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBeNull();
 
+  await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" })).toHaveCount(1);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" }).first().dblclick();
-  await details.getByRole("button", { name: "打开大图、版本与局部重绘" }).click();
-  workspace = page.getByRole("dialog", { name: "候选资产工作台" });
-  await workspace.getByRole("tab", { name: "版本历史" }).click();
+  workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "设计变体" }).getByRole("button", { name: "恢复此版" }).click();
   await expect.poll(() => graph.nodes.filter((item) => item.payload.assetId === restoredTwo.id).length).toBe(1);
   expect(restoreRequests.at(-1)).toMatchObject({ currentAssetId: restoredOne.id, targetAssetId: current.id });
