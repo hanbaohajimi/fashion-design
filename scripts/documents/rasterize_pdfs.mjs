@@ -1,20 +1,24 @@
 import { createRequire } from "node:module";
 import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { homedir } from "node:os";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
-const runtimeModules = "C:/Users/朱奕玮/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules";
+const runtimeModules = process.env.DOCUMENT_NODE_MODULES ?? path.join(
+  homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules",
+);
 const { createCanvas } = require(`${runtimeModules}/@napi-rs/canvas`);
 const pdfjs = await import(
   pathToFileURL(`${runtimeModules}/pdfjs-dist/legacy/build/pdf.mjs`).href
 );
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1")), "..");
-const work = path.join(root, ".codex-work");
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const work = process.env.FLOWBOOK_RENDER_DIR ?? path.join(root, "output/documents/flowbooks");
 const entries = (await readdir(work, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory() && /^render-0\d$/.test(entry.name))
   .sort((a, b) => a.name.localeCompare(b.name));
+if (!entries.length) throw new Error(`No render folders found in ${work}; place PDFs in render-01, render-02, render-03 first`);
 
 for (const entry of entries) {
   const folder = path.join(work, entry.name);

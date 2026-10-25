@@ -8,6 +8,8 @@
 - `apps/api/src/modules/`：NestJS 业务模块；`apps/worker/src/processors/`：BullMQ 异步任务。
 - `packages/ai/`、`billing/`、`shared/`：模型适配、计费、共享类型；`packages/db/prisma/`：数据库 schema 与迁移。
 - 测试通常与源码同目录；浏览器测试在 `tests/e2e/`，辅助脚本在 `scripts/`，设计资料在 `doc/`。上传图片存储于私有 MinIO。
+- 文档入口为 `doc/README.md`，工具入口为 `scripts/README.md`；架构、产品、演示、历史计划和实施记录分别放入对应子目录。前端现行规范仍以 `apps/web/DESIGN.md` 与源码为准。
+- 可复用文档工具放入 `scripts/documents/`，手工验证工具放入 `scripts/manual/`；生成物统一写入忽略的 `output/`。不要在仓库根目录新增临时脚本、报告或渲染目录。历史文件先归档，保留路径迁移记录。
 
 ## 构建、测试与本地开发
 

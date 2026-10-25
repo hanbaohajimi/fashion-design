@@ -1,6 +1,7 @@
 /**
  * gen-preview.tsx
- * Run: cd apps/web && npx tsx --tsconfig ../../doc/preview/tsconfig.preview.json ../../doc/preview/gen-preview.tsx
+ * Run from the repository root:
+ * node apps/api/node_modules/tsx/dist/cli.mjs --tsconfig doc/reference/material-mounting/preview/tsconfig.preview.json doc/reference/material-mounting/preview/gen-preview.tsx
  *
  * Mounts are rendered via the production React components — no manual sync needed.
  * Background / edge / substrate helpers stay here (not part of the shared library).
@@ -9,12 +10,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MountRenderer } from '../../apps/web/src/modules/board/shapes/mount-renderers';
+import { MountRenderer } from '../../../../apps/web/src/modules/board/shapes/mount-renderers';
 import {
   generateMaterialAppearance,
   type MaterialPreset,
-} from '../../apps/web/src/modules/board/shapes/material-appearance';
-import type { BoardElementRole } from '../../packages/shared/src/index';
+} from '../../../../apps/web/src/modules/board/shapes/material-appearance';
+import type { BoardElementRole } from '../../../../packages/shared/src/index';
 
 // ─── card dimensions ──────────────────────────────────────────────────────────
 const W = 420, H = 300, PAD = 20, EX = 28;
@@ -243,4 +244,4 @@ h1{font:600 13px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;color
 
 const outPath = path.resolve(__dirname, 'material-preview.html');
 fs.writeFileSync(outPath, html, 'utf8');
-console.log(`Written ${fs.statSync(outPath).size} bytes → doc/preview/material-preview.html`);
+console.log(`Written ${fs.statSync(outPath).size} bytes → doc/reference/material-mounting/preview/material-preview.html`);

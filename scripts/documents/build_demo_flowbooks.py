@@ -14,8 +14,8 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
 
-ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = Path(os.environ.get("FLOWBOOK_OUTPUT_DIR", ROOT / "doc"))
+ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_DIR = Path(os.environ.get("FLOWBOOK_OUTPUT_DIR", ROOT / "doc" / "demos"))
 OUTPUT_SUFFIX = os.environ.get("FLOWBOOK_OUTPUT_SUFFIX", "")
 
 INK = "18212B"

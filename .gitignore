@@ -14,9 +14,10 @@ test-results/
 generated/
 tmp/
 
-# Local document/a11y rendering artifacts (source scripts stay tracked)
-.codex-work/a11y-*.json
-.codex-work/render-*/
+# Legacy tool output directories stay ignored if an older tool recreates them.
+# Reusable sources live in scripts/documents; new artifacts belong in output/.
+.codex-work/
+.codex-docx-render/
 __pycache__/
 *.py[cod]
 

@@ -9,9 +9,10 @@ from docx import Document
 from docx.oxml.ns import qn
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DOC_PATTERN = os.environ.get("FLOWBOOK_DOC_PATTERN", "演示视频*_拍摄流程书.docx")
-DOCS = sorted((ROOT / "doc").glob(DOC_PATTERN))
+DOC_DIR = Path(os.environ.get("FLOWBOOK_DOC_DIR", ROOT / "doc" / "demos"))
+DOCS = sorted(DOC_DIR.glob(DOC_PATTERN))
 REQUIRED = {
     "01": ["冬季长款双面羊毛大衣", "枪驳领", "局部重绘", "版本时间线", "系列 DNA", "一致性", "面料库严格只有图片和名称", "图片为唯一材质参考"],
     "02": ["夏季连衣裙", "方领", "完成并引用", "安全橡皮", "廓形参考", "版本时间线", "V2", "面料库严格只有图片和名称", "图片为材质参考"],

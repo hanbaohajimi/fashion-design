@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('node:path');
 
 function seededRng(seed) {
   let s = (seed + 1) | 0;
@@ -360,5 +361,5 @@ h1{font-size:2rem;font-weight:900;letter-spacing:-.025em;color:#18191a;margin-bo
 </div>
 </body></html>`;
 
-fs.writeFileSync('G:/new-fashion-design/doc/preview/material-preview.html', html, 'utf8');
-console.log('Written ' + html.length + ' bytes → doc/preview/material-preview.html');
+fs.writeFileSync(path.join(__dirname, 'material-preview.html'), html, 'utf8');
+console.log('Written ' + html.length + ' bytes → doc/reference/material-mounting/preview/material-preview.html');

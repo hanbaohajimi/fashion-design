@@ -243,5 +243,5 @@ Manual verification checklist:
 ## References
 
 - Target visual: Image #7 (provided by user)
-- Reference materials: `G:\new-fashion-design\doc\素材装裱\` (5 PNG files)
+- Reference materials: `G:\new-fashion-design\doc\reference\material-mounting\素材装裱\` (5 PNG files)
 - Implementation spec: `C:\Users\朱奕玮\Desktop\goal.txt`
