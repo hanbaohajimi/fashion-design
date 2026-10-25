@@ -16,9 +16,11 @@ import {
   type Ref,
 } from "react";
 import styles from "./ui.module.css";
-import { UI_TIMING } from "./ui-config";
+import { motionDuration, UI_TIMING } from "./ui-config";
 import { createPortal } from "react-dom";
 import { userFacingError } from "./user-facing-error";
+import { useTooltipGroup } from "./tooltip-group";
+export { TooltipGroup } from "./tooltip-group";
 
 export function Button({
   variant = "secondary",
@@ -254,16 +256,19 @@ export function ImagePreview({
   onRetry,
   fit = "contain",
   retryable = true,
+  draggable,
 }: {
   readonly src: string | undefined;
   readonly alt: string;
   readonly onRetry?: () => Promise<unknown>;
   readonly fit?: "contain" | "cover";
   readonly retryable?: boolean;
+  readonly draggable?: boolean;
 }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  const explicitRetry = useRef<string | null>(null);
   return !src || failedSource === src ? (
     <div className={styles.imageFallback}>
       <span aria-label={alt} role="img">
@@ -278,6 +283,7 @@ export function ImagePreview({
             void Promise.resolve()
               .then(() => onRetry?.())
               .then(() => {
+                explicitRetry.current = src;
                 setFailedSource(null);
                 setAttempt((current) => current + 1);
               })
@@ -295,8 +301,16 @@ export function ImagePreview({
     <img
       alt={alt}
       loading="lazy"
+      draggable={draggable}
       key={`${src}:${attempt}`}
       onError={() => setFailedSource(src)}
+      onLoad={(event) => {
+        if (explicitRetry.current !== src) return;
+        explicitRetry.current = null;
+        if (document.visibilityState !== "visible") return;
+        const duration = motionDuration("fast");
+        if (duration) event.currentTarget.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration, easing: getComputedStyle(event.currentTarget).getPropertyValue("--ease-enter").trim() || "cubic-bezier(0.23,1,0.32,1)" });
+      }}
       src={src}
       style={{ objectFit: fit }}
     />
@@ -475,14 +489,37 @@ export function Tooltip({
   const tip = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
+  const group = useTooltipGroup();
+  const shown = useRef(false);
+  const touchFocus = useRef(false);
+  const dismissed = useRef(false);
   const clearTimer = () => {
     if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  const close = () => {
+    clearTimer();
+    if (shown.current) group?.close(id);
+    shown.current = false;
+    setOpen(false);
+  };
+  const show = () => {
+    clearTimer();
+    if (dismissed.current) return;
+    group?.open(id, close);
+    shown.current = true;
+    setOpen(true);
+  };
+  const leave = () => {
+    clearTimer();
+    if (!anchor?.contains(document.activeElement)) timer.current = setTimeout(close, UI_TIMING.tooltipClose);
   };
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
+      group?.close(id);
     },
-    [],
+    [group, id],
   );
   useLayoutEffect(() => {
     if (!open) return;
@@ -509,33 +546,33 @@ export function Tooltip({
     <span
       className={styles.tooltipAnchor}
       ref={setAnchor}
+      onPointerDown={(event) => { touchFocus.current = event.pointerType === "touch"; if (touchFocus.current) close(); }}
       onFocus={() => {
-        clearTimer();
-        setOpen(true);
+        if (!touchFocus.current) show();
       }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          clearTimer();
-          setOpen(false);
+          close();
+          dismissed.current = false;
+          touchFocus.current = false;
         }
       }}
-      onPointerEnter={() => {
+      onPointerEnter={(event) => {
+        if (event.pointerType === "touch") return;
+        touchFocus.current = false;
+        dismissed.current = false;
         clearTimer();
-        timer.current = setTimeout(() => setOpen(true), UI_TIMING.tooltipOpen);
+        const warm = group?.warm();
+        if (warm) show();
+        else timer.current = setTimeout(show, UI_TIMING.tooltipOpen);
       }}
-      onPointerLeave={() => {
-        clearTimer();
-        if (!anchor?.contains(document.activeElement))
-          timer.current = setTimeout(
-            () => setOpen(false),
-            UI_TIMING.tooltipClose,
-          );
-      }}
+      onPointerLeave={leave}
       onKeyDown={(event) => {
+        touchFocus.current = false;
         if (event.key === "Escape" && open) {
           event.stopPropagation();
-          clearTimer();
-          setOpen(false);
+          dismissed.current = true;
+          close();
         }
       }}
     >
@@ -552,6 +589,8 @@ export function Tooltip({
               id={id}
               ref={tip}
               role="tooltip"
+              onPointerEnter={clearTimer}
+              onPointerLeave={leave}
             >
               {content}
             </span>,
@@ -570,6 +609,7 @@ export function Menu({
   placement = "bottom",
   align = "end",
   className = "",
+  triggerRef,
 }: {
   readonly label: string;
   readonly children: ReactNode;
@@ -577,6 +617,7 @@ export function Menu({
   readonly placement?: "top" | "bottom";
   readonly align?: "start" | "end";
   readonly className?: string | undefined;
+  readonly triggerRef?: Ref<HTMLElement>;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -618,7 +659,7 @@ export function Menu({
         }
       }}
     >
-      <summary aria-label={label}>{trigger ?? label}</summary>
+      <summary aria-label={label} ref={triggerRef}>{trigger ?? label}</summary>
       <div
         onClick={(event) => {
           if ((event.target as Element).closest("button,a"))

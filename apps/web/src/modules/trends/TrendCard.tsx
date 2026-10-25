@@ -77,6 +77,7 @@ export function TrendCard({
 
   return (
     <article
+      data-trend-id={trend.id}
       draggable={!disabled && !importing}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "copy";

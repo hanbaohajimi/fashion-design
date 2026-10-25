@@ -50,7 +50,7 @@ export function useWorkflowLayoutSave(save: (batch: LayoutBatch) => Promise<void
         }).catch(() => { leaving = false; });
         return;
       }
-      if (!queue.hasUnsaved()) return;
+      if (!queue.hasUnsaved() && !hasUnsavedDetails?.()) return;
       event.stopImmediatePropagation();
       if (leaving) return;
       traversal = navigationPosition() - Number(event.state?.[HISTORY_POSITION] ?? 0);

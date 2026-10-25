@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Menu } from "../../components/ui";
-import { useState } from "react";
+import { Button, Menu } from "../../components/ui";
+import { userFacingError } from "../../components/user-facing-error";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { Project } from "./project-types";
 import styles from "./projects.module.css";
@@ -66,27 +67,52 @@ export function ProjectCard({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [name, setName] = useState(project.name);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [renamePending, setRenamePending] = useState(false);
+  const renameFlight = useRef(false);
+  const renameInput = useRef<HTMLInputElement>(null);
+  const menuTrigger = useRef<HTMLElement>(null);
+  const restoreFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!renaming && restoreFocus.current) {
+      restoreFocus.current = false;
+      menuTrigger.current?.focus();
+    }
+  }, [renaming]);
+  const finishRename = () => { restoreFocus.current = true; setRenaming(false); };
+  const cancelRename = () => {
+    if (renameFlight.current) return;
+    setName(project.name);
+    setRenameError(null);
+    finishRename();
+  };
 
   const submitRename = async (): Promise<void> => {
+    if (renameFlight.current) return;
     const trimmed = name.trim();
-    const length = Array.from(trimmed).length;
+    const length = trimmed.length;
 
     if (trimmed === project.name) {
       setRenameError(null);
-      setRenaming(false);
+      finishRename();
       return;
     }
     if (length < 3 || length > 80) {
       setRenameError("项目名称需为 3–80 个字");
+      renameInput.current?.focus();
       return;
     }
     setRenameError(null);
+    renameFlight.current = true;
+    setRenamePending(true);
     try {
       await onRename(project, trimmed);
       setName(trimmed);
-      setRenaming(false);
+      finishRename();
     } catch (error) {
-      setRenameError(error instanceof Error ? error.message : "重命名失败");
+      setRenameError(userFacingError(error, "重命名失败，请重试"));
+    } finally {
+      renameFlight.current = false;
+      setRenamePending(false);
     }
   };
 
@@ -112,6 +138,8 @@ export function ProjectCard({
 
   return (
     <article
+      data-project-card
+      data-project-id={project.id}
       className={`${styles.projectCard} ${
         project.optimistic ? styles.optimisticCard : ""
       }`}
@@ -144,9 +172,7 @@ export function ProjectCard({
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  setName(project.name);
-                  setRenameError(null);
-                  setRenaming(false);
+                  cancelRename();
                 }
               }}
               onSubmit={(event) => {
@@ -163,23 +189,23 @@ export function ProjectCard({
                 }
                 aria-invalid={Boolean(renameError)}
                 autoFocus
+                ref={renameInput}
+                readOnly={renamePending}
                 id={`rename-${project.id}`}
                 maxLength={80}
                 minLength={3}
                 onChange={(event) => setName(event.target.value)}
                 value={name}
               />
-              <button type="submit">保存</button>
-              <button
-                onClick={() => {
-                  setName(project.name);
-                  setRenameError(null);
-                  setRenaming(false);
-                }}
+              <Button size="small" loading={renamePending} type="submit">保存</Button>
+              <Button
+                size="small"
+                disabled={renamePending}
+                onClick={cancelRename}
                 type="button"
               >
                 取消
-              </button>
+              </Button>
               {renameError ? (
                 <small id={`rename-error-${project.id}`} role="alert">
                   {renameError}
@@ -193,7 +219,7 @@ export function ProjectCard({
           )}
 
           {!project.optimistic && !renaming ? (
-            <Menu className={styles.cardMenu} label={`${project.name} 项目操作`} trigger={<span aria-hidden="true">•••</span>}>
+            <Menu triggerRef={menuTrigger} className={styles.cardMenu} label={`${project.name} 项目操作`} trigger={<span aria-hidden="true">•••</span>}>
                 <button
                   onClick={(event) => {
                     event.currentTarget

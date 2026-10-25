@@ -28,15 +28,25 @@
     opacity var(--dur-standard) var(--ease-state),
     border-color var(--dur-fast) var(--ease-state);
 
-  /* 入场：按 BFS 深度错峰落下，上游先落、下游后落 */
-  animation: nodeEnter var(--dur-enter) var(--ease-enter) backwards;
-  animation-delay: calc(var(--enter-index, 0) * 45ms);
+  /* 节点几何与模型端口始终一致；真实事件的反馈由内部装饰层承担。 */
 }
 
 /* ── 类别色 ─────────────────────────────────────────────── */
 .node[data-kind="tool"] {
   --cat-color: var(--swatch-mauve);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  border-left-width: 1px;
+  border-left-color: var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  box-shadow: none;
 }
+
+.node[data-kind="tool"] .nodeHeader { flex: 1; min-width: 0; border: 0; padding: 0; }
+.node[data-kind="tool"] .nodeHeader strong { font-size: var(--text-base); font-weight: 500; }
+.node[data-kind="tool"][data-status="proposed"] { border-left-width: 1px; }
 
 .node[data-type="candidate"],
 .node[data-type="reference_image"],
@@ -52,19 +62,14 @@
   --cat-color: var(--swatch-turmeric);
 }
 
-.node[data-type="constraint"] {
-  --cat-color: var(--swatch-sage);
+/* These arrivals have event-bound couture effects; remounting is not an arrival. */
+.node[data-type="candidate"],
+.node[data-type="fabric"] {
+  animation: none;
 }
 
-@keyframes nodeEnter {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+.node[data-type="constraint"] {
+  --cat-color: var(--swatch-sage);
 }
 
 /* 缩小到 85% 以下：英文类别词与摘要让位给色条与标题，
@@ -231,86 +236,6 @@
   border: 1px solid var(--color-divider);
   border-radius: 4px;
   margin-top: var(--space-2);
-}
-
-/* 状态徽章只在节点确实有进度时渲染（见 WorkflowNodeShape）。
-   常态下工具节点不该挂着"等待执行"自我声明。 */
-.toolStatus {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 5px;
-  border-radius: 3px;
-  margin-top: 10px;
-  padding: 3px 7px;
-  background: var(--color-surface);
-  color: var(--color-ink-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-}
-
-.toolStatus > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: none;
-}
-
-.node[data-status="running"] .toolStatus {
-  background: var(--color-status-running-bg);
-  color: var(--color-status-running);
-}
-
-.node[data-status="running"] .toolStatus > span {
-  animation: statusPulse var(--dur-ai-pulse) ease-in-out infinite;
-}
-
-@keyframes statusPulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.4;
-    transform: scale(0.85);
-  }
-}
-
-.node[data-status="ready"] .toolStatus > span,
-.node[data-status="proposed"] .toolStatus > span {
-  animation: none;
-}
-
-/* 完成落定：容器类变化时，芯片轻轻"定住"一次。
-   这是唯一的一次性反馈——不要在这里加持续发光。 */
-.node[data-status="completed"] .toolStatus {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-  animation: statusSettle var(--dur-standard) var(--ease-spring);
-}
-
-@keyframes statusSettle {
-  0% {
-    transform: scale(0.94);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.node[data-status="failed"] .toolStatus {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.node[data-status="failed"] .toolStatus > span {
-  animation: none;
 }
 
 /* ── 端口：黄铜环 ───────────────────────────────────────── */
@@ -482,11 +407,6 @@
   }
   .node {
     transition: none;
-    animation: none;
-  }
-  .toolStatus > span,
-  .node[data-status="running"] .toolStatus > span,
-  .node[data-status="completed"] .toolStatus {
     animation: none;
   }
 }

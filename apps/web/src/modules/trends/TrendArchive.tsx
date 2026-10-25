@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 
 import {
   fetchWorkflow,
@@ -23,6 +24,8 @@ export function TrendArchive({
   readonly projectId?: string | undefined;
 }) {
   const trends = useTrends();
+  const motionRoot = useRef<HTMLElement>(null);
+  const play = useCoutureMotion();
   const digest = useCurrentTrendDigest();
   const [category, setCategory] = useState("");
   const [search, setSearch] = useState("");
@@ -105,6 +108,8 @@ export function TrendArchive({
           mutationId: crypto.randomUUID(),
           operations,
         });
+        const anchor = [...(motionRoot.current?.querySelectorAll<HTMLElement>("[data-trend-id]") ?? [])].find((card) => card.dataset.trendId === trend.id);
+        play("stitch", { anchor: anchor ?? null, eventKey: `trend:${targetId}:${trend.id}`, colors });
       }
       setDestination(targetId);
       setNotice(
@@ -121,7 +126,7 @@ export function TrendArchive({
   };
 
   return (
-    <section aria-label="趋势资料库" className={styles.archive}>
+    <section ref={motionRoot} aria-label="趋势资料库" className={styles.archive}>
       <section aria-label="趋势筛选" className={styles.archiveFilters}>
         <div>
           <p>

@@ -1,0 +1,144 @@
+/* 主体是作品和编辑内容；导航与状态次之。沿用现有色彩、间距和动效变量。 */
+.workspace {
+  position: absolute;
+  inset: var(--space-6);
+  z-index: 20;
+  min-width: 0;
+}
+.workspace[hidden],
+.session[hidden] {
+  display: none;
+}
+.fullScreen { position: fixed; inset: 0; z-index: 120; }
+.fullScreen .header { display: none; }
+.fullScreen .body { container-type: normal; }
+.fullScreen .content { border-radius: 0; }
+.fullScreen .metadata { display: none; }
+.shell {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-popup);
+  transform-origin: top left;
+  pointer-events: none;
+}
+.content {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+  flex: none;
+}
+.header h2 {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header button {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  min-height: 36px;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.header > span {
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  white-space: nowrap;
+}
+.header .unsaved {
+  color: var(--color-warning);
+}
+.body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  container-type: inline-size;
+}
+.session {
+  min-height: 100%;
+}
+.editorFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.metadata {
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.metadata > summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.embedded {
+  width: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: var(--color-paper) !important;
+}
+.embedded > header {
+  display: none;
+}
+.embedded > section > header {
+  display: none;
+}
+.embedded form {
+  width: 100%;
+  max-width: 720px;
+  margin: auto;
+}
+.embedded img {
+  object-fit: contain;
+}
+.draftWarning {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+}
+.draftWarning button {
+  margin-left: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  min-height: 36px;
+}
+@media (max-width: 767px) {
+  .workspace {
+    inset: var(--space-2);
+  }
+  .header {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2);
+  }
+  .header button {
+    min-height: 44px;
+  }
+}

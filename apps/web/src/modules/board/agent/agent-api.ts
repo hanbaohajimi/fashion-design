@@ -5,6 +5,7 @@ import type {
   AgentRunView,
   AgentPlanStepSpec,
   AgentDomainActionView,
+  WorkflowReferenceSummary,
 } from "@fashion/shared";
 import type { WorkflowProposal } from "../workflow/workflow-api";
 
@@ -35,7 +36,7 @@ export interface WorkflowConversationContext {
   readonly focusNodeIds: readonly string[];
   readonly requirements: readonly WorkflowContextItem[];
   readonly preferences: readonly WorkflowContextItem[];
-  readonly state?: { readonly preferences: readonly WorkflowContextItem[] };
+  readonly state?: { readonly requirements?: readonly WorkflowContextItem[]; readonly preferences: readonly WorkflowContextItem[] };
   readonly scopedMemory?: readonly {
     readonly id: string;
     readonly branchNodeIds: readonly string[];
@@ -63,7 +64,7 @@ export type WorkflowMessageView = Omit<AgentMessageView, "context"> & {
   readonly origin?: "user" | "execution_result" | "background_analysis";
   readonly executionId?: string | null;
   readonly sourceEventId?: string | null;
-  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null }) | null;
+  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary }) | null;
 };
 
 interface CursorPage<T> {

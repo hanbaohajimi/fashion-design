@@ -21,6 +21,7 @@ import { DNACard } from "./DNACard";
 import { ExportModal } from "./ExportModal";
 import styles from "./generation.module.css";
 import { LookGrid } from "./LookGrid";
+import { MotionReceipt } from "../../../components/motion/MotionReceipt";
 
 type SaveState = "error" | "saved" | "saving" | "unsaved";
 type DrawerTab = "dna" | "looks";
@@ -235,7 +236,7 @@ export function CollectionDrawer({
       <div className={styles.collectionContents} hidden={exportOpen}>
       <header className={styles.collectionHeader}>
         <div>
-          <strong>{collection ? "系列" : "正在读取系列"}</strong>
+          <strong>{collection ? <MotionReceipt receiptKey={`collection:${collectionId}`}>系列</MotionReceipt> : "正在读取系列"}</strong>
         </div>
         <div>
           <SaveIndicator state={saveState} />

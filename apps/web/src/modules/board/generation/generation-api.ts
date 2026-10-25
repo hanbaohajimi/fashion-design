@@ -1,4 +1,5 @@
 import { privateFetch as fetch } from "../../auth/private-fetch";
+import { markMotion } from "../../../components/motion/events";
 import type {
   DesignDecisionKind,
   DesignDecisionView,
@@ -148,6 +149,7 @@ export async function createGeneration(
     throw await apiError(response, "生成任务创建失败，请稍后重试");
   }
   const body = (await response.json()) as { readonly task_id: string };
+  markMotion(`task:${body.task_id}`, "needle");
   return body.task_id;
 }
 

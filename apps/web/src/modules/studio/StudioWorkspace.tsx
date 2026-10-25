@@ -12,8 +12,10 @@ import {
   Dialog,
   TabPanel,
   Select,
+  Menu,
 } from "../../components/ui";
 import { AppHeader } from "../../components/AppHeader";
+import { RevisionSaved } from "../../components/motion/RevisionSaved";
 import { fetchProject } from "../projects/projects-api";
 import { fetchStudio } from "./studio-api";
 import { useStudioLeaveGuard, errorMessage } from "./studio-ui";
@@ -35,7 +37,7 @@ import { rememberCreativeVisit } from "../projects/creative-memory";
 import { StudioNavigation } from "./StudioNavigation";
 import {
   isStudioTab,
-  STUDIO_TABS as TABS,
+  STUDIO_GROUPS,
   type StudioTab as Tab,
 } from "./studio-navigation";
 
@@ -134,6 +136,7 @@ export function StudioWorkspace({
     <>
       <AppHeader current="projects" projectId={projectId} hideProjectReturn />
       <main
+        data-studio-motion
         id="main-content"
         className={styles.shell}
         onInvalidCapture={(event) => {
@@ -203,31 +206,33 @@ export function StudioWorkspace({
               <span className={styles.projectCaption}>款式与交付</span>
             </div>
             <div className={styles.toolbar}>
-              {data ? <Badge>{ROLE_LABELS[data.role]}</Badge> : null}
-              {data ? (
+              <Menu label="项目选项" trigger="项目选项">
+                {data ? <Badge>{ROLE_LABELS[data.role]}</Badge> : null}
+                {data ? (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    onClick={() => setProgressOpen(true)}
+                  >
+                    创作进展
+                  </Button>
+                ) : null}
                 <Button
                   size="small"
-                  variant="ghost"
-                  onClick={() => setProgressOpen(true)}
+                  loading={refreshing}
+                  onClick={() =>
+                    void (async () => {
+                      if (await guard.confirmLeave()) {
+                        setDirty(false);
+                        await reload();
+                        setPanelVersion((current) => current + 1);
+                      }
+                    })()
+                  }
                 >
-                  创作进展
+                  刷新资料
                 </Button>
-              ) : null}
-              <Button
-                size="small"
-                loading={refreshing}
-                onClick={() =>
-                  void (async () => {
-                    if (await guard.confirmLeave()) {
-                      setDirty(false);
-                      await reload();
-                      setPanelVersion((current) => current + 1);
-                    }
-                  })()
-                }
-              >
-                刷新资料
-              </Button>
+              </Menu>
               {data && !data.capabilities.edit ? (
                 <span className={styles.muted}>只读工作区</span>
               ) : null}
@@ -257,10 +262,14 @@ export function StudioWorkspace({
                       void changeTab(event.target.value as Tab)
                     }
                   >
-                    {TABS.map((item) => (
-                      <option value={item.value} key={item.value}>
-                        {item.label}
-                      </option>
+                    {STUDIO_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.items.map((item) => (
+                          <option value={item.value} key={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </Select>
                 </label>
@@ -398,6 +407,7 @@ export function StudioWorkspace({
           </Dialog>
         ) : null}
         {guard.dialog}
+        <RevisionSaved />
       </main>
     </>
   );

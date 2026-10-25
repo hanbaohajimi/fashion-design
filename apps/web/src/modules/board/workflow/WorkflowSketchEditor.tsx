@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { sketchDocumentSchema, type SketchDocumentV1 } from "@fashion/shared";
-import { Button, Dialog, Input } from "../../../components/ui";
+import { Button, Input } from "../../../components/ui";
+import { EmbeddedEditor } from "./EmbeddedEditor";
+import { useWorkspaceDraft } from "./workspace-drafts";
 import { useAuth } from "../../auth/AuthProvider";
 import {
   completeUpload,
@@ -21,6 +23,8 @@ export interface SketchAsset {
   sketchDocument: SketchDocumentV1;
 }
 interface Props {
+  embedded?: boolean;
+  ignoreStoredDraft?: boolean;
   projectId: string;
   open: boolean;
   node?: WorkflowNode | null;
@@ -35,6 +39,8 @@ const blank = (): SketchDocumentV1 => ({
 });
 
 export function WorkflowSketchEditor({
+  embedded,
+  ignoreStoredDraft,
   projectId,
   open,
   node,
@@ -62,6 +68,7 @@ export function WorkflowSketchEditor({
         };
   };
   const [restored] = useState(() => {
+    if (ignoreStoredDraft) return null;
     try {
       const raw = localStorage.getItem(key);
       if (raw) {
@@ -98,6 +105,10 @@ export function WorkflowSketchEditor({
   const active = useRef<{ id: number; x: number; y: number } | null>(null);
   const [loadedBase, setLoadedBase] = useState<string | null>(null);
   const baseReady = !doc.baseFileAssetId || loadedBase === doc.baseFileAssetId;
+  useEffect(() => {
+    if (ignoreStoredDraft) { try { localStorage.removeItem(key); } catch { /* Local recovery is optional. */ } }
+  }, [ignoreStoredDraft, key]);
+  useWorkspaceDraft("sketch", { doc, title, undo, redo }, embedded === true && dirty, saving || Boolean(pending));
 
   useEffect(() => {
     if (!dirty || !owner || auth.session?.user.id !== owner) return;
@@ -251,6 +262,7 @@ export function WorkflowSketchEditor({
         /* Saved remotely. */
       }
       setDirty(false);
+      setPending(null);
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "草图保存失败");
@@ -261,12 +273,13 @@ export function WorkflowSketchEditor({
   if (!open) return null;
   const close = () => {
     if (!saving) {
-      if (dirty) setClosing(true);
+      if (dirty && !embedded) setClosing(true);
       else onClose();
     }
   };
   return (
-    <Dialog
+    <EmbeddedEditor
+      embedded={embedded}
       label="绘制廓形草图"
       className={styles.sketchDialog}
       returnFocusSelector="[data-material-trigger]"
@@ -485,6 +498,6 @@ export function WorkflowSketchEditor({
           ) : null}
         </aside>
       </div>
-    </Dialog>
+    </EmbeddedEditor>
   );
 }

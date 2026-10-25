@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useTaskMotion } from "./motion/use-task-motion";
 import { isTaskActive, taskState } from "./task-feedback-state";
 import { PAINTING_LOADERS_ENABLED, UI_TIMING } from "./ui-config";
 import { paintingFor, type TaskOperation } from "./painting-media";
@@ -14,6 +15,7 @@ const PaintingLoader = dynamic(() => import("./PaintingLoader"), {
 
 export interface TaskFeedbackProps {
   readonly taskId: string;
+  readonly motionKey?: string;
   readonly status: string;
   readonly operation?: TaskOperation;
   readonly title?: string;
@@ -27,9 +29,12 @@ export interface TaskFeedbackProps {
 }
 
 export function TaskFeedback(props: TaskFeedbackProps) {
+  const motionAnchor = useRef<HTMLParagraphElement>(null);
+  useTaskMotion(props.motionKey ?? `task:${props.taskId}`, props.status, motionAnchor);
   // Reset every local timer/media state when changing tasks or starting another attempt.
   return (
     <TaskFeedbackContent
+      motionAnchor={motionAnchor}
       key={`${props.taskId}:${isTaskActive(props.status) ? "active" : props.status}`}
       {...props}
     />
@@ -37,6 +42,7 @@ export function TaskFeedback(props: TaskFeedbackProps) {
 }
 
 function TaskFeedbackContent({
+  motionAnchor,
   status,
   operation = "generate",
   title,
@@ -47,7 +53,7 @@ function TaskFeedbackContent({
   compact = false,
   painting = false,
   actions,
-}: TaskFeedbackProps) {
+}: TaskFeedbackProps & { motionAnchor: RefObject<HTMLParagraphElement | null> }) {
   const active = isTaskActive(status);
   const state = taskState(status);
   const [elapsed, setElapsed] = useState(0);
@@ -105,7 +111,7 @@ function TaskFeedbackContent({
       ) : null}
       <div className={styles.feedbackContent}>
         {title ? <strong>{title}</strong> : null}
-        <p role="status" aria-atomic="true">
+        <p ref={motionAnchor} role="status" aria-atomic="true">
           <i aria-hidden="true" />
           {error
             ? userFacingError(error, "任务未完成，请重试")

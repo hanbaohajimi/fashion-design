@@ -2,7 +2,14 @@
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import {
+  createTechPackDraft,
+  serializeTechPackDraft,
+  validateTechPack,
+  TechPackDraftError,
+  type TechPackDraft,
+} from "./tech-pack-draft";
 import {
   studioPublishIssues,
   type StudioTechPack,
@@ -146,25 +153,38 @@ function TechPackForm({
         constructionNotes: "",
         reviewConfirmed: false,
       };
-  const form = useStudioForm(initial, onDirty);
+  const [initialDraft] = useState(() => createTechPackDraft(initial));
+  const form = useStudioForm(initialDraft, onDirty);
+  const formElement = useRef<HTMLFormElement>(null);
   const { draft, setDraft } = form;
   const [viewsChanged, setViewsChanged] = useState(false);
+  const [invalidField, setInvalidField] = useState<string | null>(null);
+  const validationId = `${chapterId}-validation`;
   const disabled = !canEdit || form.busy;
-  const update = <K extends keyof StudioTechPack>(
+  const update = <K extends keyof TechPackDraft>(
     key: K,
-    value: StudioTechPack[K],
-  ) =>
+    value: TechPackDraft[K],
+  ) => {
+    if (invalidField) {
+      setInvalidField(null);
+      form.setError(null);
+    }
     setDraft((current) => ({
       ...current,
       [key]: value,
       ...(key === "reviewConfirmed" ? {} : { reviewConfirmed: false }),
       status: "DRAFT",
     }));
+  };
   const save = async (publish = false) => {
-    const payload = {
-      ...draft,
-      status: publish ? ("PUBLISHED" as const) : ("DRAFT" as const),
-    };
+    let payload: StudioTechPack;
+    try {
+      payload = serializeTechPackDraft(draft);
+    } catch (error) {
+      showValidationError(error);
+      return;
+    }
+    payload.status = publish ? "PUBLISHED" : "DRAFT";
     if (publish) {
       const issues = studioPublishIssues(payload);
       if (issues.length) {
@@ -172,6 +192,12 @@ function TechPackForm({
         setChapter("review");
         return;
       }
+    }
+    try {
+      validateTechPack(payload);
+    } catch (error) {
+      showValidationError(error);
+      return;
     }
     let id = "";
     if (
@@ -185,12 +211,45 @@ function TechPackForm({
         id = result.id;
       })
     ) {
+      const normalized = createTechPackDraft(payload);
+      form.reset({
+        ...normalized,
+        bom: normalized.bom.map((row, index) => ({
+          ...row,
+          uiId: draft.bom[index]?.uiId ?? row.uiId,
+        })),
+        pom: normalized.pom.map((row, index) => ({
+          ...row,
+          uiId: draft.pom[index]?.uiId ?? row.uiId,
+        })),
+      });
       await onSaved();
       onCreated(id);
     }
   };
+  const showValidationError = (error: unknown) => {
+    form.setError(error instanceof Error ? error.message : "请检查技术资料");
+    if (!(error instanceof TechPackDraftError)) return;
+    setInvalidField(error.label);
+    setChapter(error.chapter);
+    requestAnimationFrame(() => {
+      const input = Array.from(
+        formElement.current?.querySelectorAll<HTMLElement>(
+          "[aria-label],input,select",
+        ) ?? [],
+      ).find(
+        (element) =>
+          element.getAttribute("aria-label") === error.label ||
+          (error.label === "技术包名称" &&
+            element instanceof HTMLInputElement &&
+            element.value === draft.name),
+      );
+      input?.focus();
+    });
+  };
   return (
     <form
+      ref={formElement}
       className={`${styles.form} ${styles.chapterForm}`}
       onInvalidCapture={(event) =>
         revealInvalidField(event, () => {
@@ -207,26 +266,32 @@ function TechPackForm({
       }}
     >
       {form.error ? (
-        <Notice tone="error">
-          {form.error}
-          {form.conflict ? (
-            <Button
-              onClick={() =>
-                void (async () => {
-                  if (await beforeChange()) await onSaved();
-                })()
-              }
-            >
-              重新载入
-            </Button>
-          ) : null}
-        </Notice>
+        <div id={validationId}>
+          <Notice tone="error">
+            {form.error}
+            {form.conflict ? (
+              <Button
+                onClick={() =>
+                  void (async () => {
+                    if (await beforeChange()) await onSaved();
+                  })()
+                }
+              >
+                重新载入
+              </Button>
+            ) : null}
+          </Notice>
+        </div>
       ) : null}
       {viewsChanged ? (
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
       <Field label="技术包名称">
         <Input
+          aria-invalid={invalidField === "技术包名称" || undefined}
+          aria-describedby={
+            invalidField === "技术包名称" ? validationId : undefined
+          }
           value={draft.name}
           disabled={disabled}
           required
@@ -574,6 +639,11 @@ function TechPackForm({
           id={`${chapterId}-bom`}
         >
           <BomTable
+            error={
+              invalidField
+                ? { label: invalidField, id: validationId }
+                : undefined
+            }
             rows={draft.bom}
             disabled={disabled}
             onChange={(rows) => update("bom", rows)}
@@ -585,6 +655,11 @@ function TechPackForm({
           id={`${chapterId}-pom`}
         >
           <PomTable
+            error={
+              invalidField
+                ? { label: invalidField, id: validationId }
+                : undefined
+            }
             rows={draft.pom}
             disabled={disabled}
             onChange={(rows) => update("pom", rows)}
@@ -780,7 +855,9 @@ function TechPackForm({
                   size="small"
                   onClick={() =>
                     setDraft({
-                      ...(revision.payload as StudioTechPack),
+                      ...createTechPackDraft(
+                        revision.payload as StudioTechPack,
+                      ),
                       status: "DRAFT",
                       reviewConfirmed: false,
                     })

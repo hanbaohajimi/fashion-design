@@ -1,4 +1,5 @@
 import { privateFetch as fetch } from "../../auth/private-fetch";
+import { markMotion } from "../../../components/motion/events";
 import type {
   CollectionConsistency,
   CollectionDetail,
@@ -60,7 +61,9 @@ export async function createCollection(
   if (!response.ok) {
     throw await apiError(response, "系列创建失败，请稍后重试");
   }
-  return (await response.json()) as CollectionDetail;
+  const collection = (await response.json()) as CollectionDetail;
+  markMotion(`collection:${collection.id}`, "seal");
+  return collection;
 }
 
 export async function updateCollection(

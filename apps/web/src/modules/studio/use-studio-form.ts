@@ -13,7 +13,7 @@ export interface StudioPanelProps {
 }
 
 /** Keeps a failed request key stable until its exact payload changes or succeeds. */
-export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void) {
+export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void, options: { readonly notifySaved?: boolean } = {}) {
   const [draft, setDraft] = useState(initial);
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
   const [busy, setBusy] = useState(false);
@@ -30,8 +30,10 @@ export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void) 
     const signature = JSON.stringify(draft);
     if (packet.current?.signature !== signature) packet.current = { signature, requestKey: crypto.randomUUID() };
     setBusy(true); setError(null); setConflict(false); setSaved(false);
+    const scope = typeof document === "undefined" ? null : document.querySelector<HTMLElement>("[data-studio-motion]");
     try {
       await action(packet.current.requestKey);
+      if (options.notifySaved !== false) scope?.dispatchEvent(new CustomEvent("atelier:revision-saved", { detail: packet.current.requestKey }));
       setBaseline(signature); packet.current = null; setSaved(true); onDirty(false);
       return true;
     } catch (cause) {

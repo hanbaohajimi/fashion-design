@@ -17,6 +17,7 @@ export type WorkflowAssetType =
   | "legacy";
 
 export type WorkflowToolType =
+  | "transform_image"
   | "analyze_brief"
   | "generate_design"
   | "evaluate_design"
@@ -225,9 +226,9 @@ export function decideWorkflowProposal(
   });
 }
 
-export function executeWorkflowNode(projectId: string, nodeId: string, conversationId?: string): Promise<WorkflowGraph> {
+export function executeWorkflowNode(projectId: string, nodeId: string, conversationId?: string, mutationId = crypto.randomUUID()): Promise<WorkflowGraph> {
   return runtimePost(projectId, `/nodes/${encodeURIComponent(nodeId)}/execute`, {
-    mutationId: crypto.randomUUID(),
+    mutationId,
     ...(conversationId ? { conversationId } : {}),
   });
 }

@@ -1,445 +1,1246 @@
 "use client";
-import { readSwatchColors } from "@fashion/shared";
-
-import { privateFetch as fetch } from "../../auth/private-fetch";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Dialog, Button, Tabs, TabPanel } from "../../../components/ui";
-import controls from "../../../components/ui.module.css";
-
-import { ExportModal } from "../generation/ExportModal";
-import { uploadTemporaryMask } from "../generation/generation-api";
+/* Private images must use the authenticated content endpoint without image optimization. */
+/* eslint-disable @next/next/no-img-element */
 import {
-  MaskCanvas,
-  type MaskCanvasHandle,
-  type MaskCanvasState,
-} from "../generation/MaskCanvas";
-import { VersionTimeline } from "../generation/VersionTimeline";
-import type { DesignAssetVersion, GenerationPaletteColor } from "../generation/generation-types";
-import generationStyles from "../generation/generation.module.css";
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  imageAnnotationsSvg,
+  imageOutpaintSchema,
+  imageTransformSchema,
+  type ImageAnnotation,
+  type ImageComment,
+  type ImageFeedback,
+} from "@fashion/shared";
+import { ImageViewer, type ImageSize } from "./ImageViewer";
+import { LegacyAssetTools } from "./LegacyAssetTools";
+import { ExportModal } from "../generation/ExportModal";
+import { useWorkspaceDraft } from "./workspace-drafts";
 import {
   executeWorkflowNode,
   fetchWorkflow,
   patchWorkflow,
-  type WorkflowGraph,
   type WorkflowNode,
   type WorkflowOperation,
 } from "./workflow-api";
-import styles from "./workflow-asset-workspace.module.css";
+import {
+  imageRequest,
+  imageBlob,
+  saveBlob,
+  ImageRequestError,
+} from "./image-workspace-api";
+import styles from "./image-workspace.module.css";
 
+type Mode =
+  | "view"
+  | "annotate"
+  | "comment"
+  | "remove_background"
+  | "erase"
+  | "resize"
+  | "inpaint"
+  | "variation"
+  | "history"
+  | "share"
+  | "export"
+  | "details";
 export interface WorkflowAssetWorkspaceProps {
-  readonly projectId: string;
-  readonly assetId: string;
-  readonly open: boolean;
-  readonly onClose: () => void;
-  readonly onGraphRefresh: () => void;
-  readonly onEnsureConversation?: () => Promise<string>;
+  embedded?: boolean;
+  projectId: string;
+  assetId: string;
+  open: boolean;
+  onClose: () => void;
+  onGraphRefresh: () => void;
+  onEnsureConversation?: () => Promise<string>;
+  tasks?: readonly WorkflowNode[];
+  candidates?: readonly WorkflowNode[];
+  onSelectAsset?: (id: string) => void;
+  details?: ReactNode;
 }
-
-interface ImageDimensions { readonly width: number; readonly height: number }
-interface PendingRestore { readonly asset: DesignAssetVersion; readonly mutationId: string }
-interface PendingEditPatch {
-  readonly toolId: string;
-  readonly mutationId: string;
-  readonly baseRevision: number;
-  readonly operations: readonly WorkflowOperation[];
-}
-type Tab = "preview" | "inpaint" | "variation" | "history";
-
-const MAX_MASK_DIMENSION = 2048;
-
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function equalJson(left: unknown, right: unknown): boolean {
-  const normalize = (_key: string, value: unknown): unknown => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, record[key]]));
-  };
-  return JSON.stringify(left, normalize) === JSON.stringify(right, normalize);
-}
-
-function generationDimension(value: number): number {
-  const safe = Math.min(2048, Math.max(256, value));
-  return Math.max(256, Math.round(safe / 8) * 8);
-}
-
-function sourceFor(graph: WorkflowGraph | null, assetId: string): WorkflowNode | null {
-  return graph?.nodes.find((node) => node.type === "candidate" && node.payload.assetId === assetId) ?? null;
-}
-
-function graphPalettes(graph: WorkflowGraph | null): Array<{ id: string; title: string; colors: GenerationPaletteColor[] }> {
-  return (graph?.nodes ?? []).flatMap((node) => {
-    if (node.type !== "swatch") return [];
-    const colors = readSwatchColors(node.payload, node.title);
-    return colors.length ? [{ id: node.id, title: node.title, colors }] : [];
-  });
-}
-
-async function importRestoredAsset(
-  projectId: string,
-  sourceNodeId: string,
-  restored: PendingRestore,
-): Promise<WorkflowGraph> {
-  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/workflow/import-asset`, {
-    body: JSON.stringify({
-      sourceNodeId,
-      assetId: restored.asset.id,
-      operation: "restore",
-      mutationId: restored.mutationId,
-    }),
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
-  });
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(body?.message ?? "恢复版本已生成，但写入工作流失败");
-  }
-  return (await response.json()) as WorkflowGraph;
+const tools: { mode: Mode; label: string; icon: string }[] = [
+  { mode: "annotate", label: "标注", icon: "✎" },
+  { mode: "comment", label: "添加评论", icon: "⊕" },
+  { mode: "remove_background", label: "移除背景", icon: "▧" },
+  { mode: "erase", label: "擦除", icon: "◇" },
+  { mode: "resize", label: "调整大小", icon: "↔" },
+  { mode: "inpaint", label: "局部重绘", icon: "◌" },
+  { mode: "variation", label: "生成变体", icon: "⧉" },
+];
+const empty: ImageFeedback = { revision: 0, annotations: [], comments: [] };
+interface Share {
+  id: string;
+  expiresAt: string;
+  revokedAt: string | null;
 }
 
 export function WorkflowAssetWorkspace(props: WorkflowAssetWorkspaceProps) {
-  if (!props.open) return null;
-  return <AssetWorkspaceContent key={props.assetId} {...props} />;
+  return props.open ? <ImageWorkspace key={props.assetId} {...props} /> : null;
 }
-
-function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefresh, onEnsureConversation }: WorkflowAssetWorkspaceProps) {
-  const [tab, setTab] = useState<Tab>("preview");
-  const [graph, setGraph] = useState<WorkflowGraph | null>(null);
-  const [graphError, setGraphError] = useState<string | null>(null);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [dimensions, setDimensions] = useState<ImageDimensions | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const tabsId = useId();
-  const exportTrigger = useRef<HTMLButtonElement>(null);
-  const [actualSize, setActualSize] = useState(false);
-  const [maskState, setMaskState] = useState<MaskCanvasState>({ coverage: 0, strokeCount: 0 });
-  const [brushRatio, setBrushRatio] = useState(0.06);
-  const [prompt, setPrompt] = useState("");
-  const [preserve, setPreserve] = useState("");
-  const [paletteId, setPaletteId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [submissionStage, setSubmissionStage] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingToolId, setPendingToolId] = useState<string | null>(null);
-  const [pendingPatch, setPendingPatch] = useState(false);
-  const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
-  const mask = useRef<MaskCanvasHandle>(null);
-  const pendingEditPatch = useRef<PendingEditPatch | null>(null);
-  const previewUrl = `/api/design-assets/${encodeURIComponent(assetId)}/content`;
-  const source = sourceFor(graph, assetId);
-  const palettes = useMemo(() => graphPalettes(graph), [graph]);
-  const selectedPalette = palettes.find((entry) => entry.id === paletteId);
-  const changeTab = (next: Tab) => {
-    if (tab === "inpaint" && next !== "inpaint" && !pendingToolId) {
-      setMaskState({ coverage: 0, strokeCount: 0 });
-    }
-    setTab(next);
-  };
-
-  const reloadGraph = useCallback(async () => {
-    try {
-      const result = await fetchWorkflow(projectId);
-      setGraph(result);
-      setGraphError(null);
-      return result;
-    } catch (error) {
-      setGraphError(message(error, "工作流读取失败"));
-      throw error;
-    }
-  }, [projectId]);
-
+function ImageWorkspace({
+  assetId,
+  projectId,
+  onClose,
+  onGraphRefresh,
+  onEnsureConversation,
+  candidates = [],
+  tasks = [],
+  onSelectAsset,
+  details,
+}: WorkflowAssetWorkspaceProps) {
+  const [mode, setMode] = useState<Mode>("view");
+  const [legacyTab, setLegacyTab] = useState<
+    "inpaint" | "variation" | "erase" | "history" | null
+  >(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [size, setSize] = useState<ImageSize | null>(null);
+  const [feedback, setFeedback] = useState<ImageFeedback>(empty);
+  const [baseline, setBaseline] = useState(JSON.stringify(empty));
+  const [feedbackLoaded, setFeedbackLoaded] = useState(false);
+  const [feedbackEpoch, setFeedbackEpoch] = useState(0);
+  const [conflict, setConflict] = useState(false);
+  const [undo, setUndo] = useState<ImageAnnotation[][]>([]);
+  const [redo, setRedo] = useState<ImageAnnotation[][]>([]);
+  const [pen, setPen] = useState<{
+    kind: ImageAnnotation["kind"];
+    color: string;
+    width: number;
+    text: string;
+  }>({ kind: "pen", color: "#e74c3c", width: 5, text: "" });
+  const [comment, setComment] = useState("");
+  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [hasPending, setHasPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [shares, setShares] = useState<Share[]>([]);
+  const [now] = useState(() => Date.now());
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [resizeKind, setResizeKind] = useState<"resize" | "crop" | "outpaint">(
+    "resize",
+  );
+  const [target, setTarget] = useState({ width: 1024, height: 1024 });
+  const [lockRatio, setLockRatio] = useState(true);
+  const [crop, setCrop] = useState({
+    left: 0,
+    top: 0,
+    width: 1024,
+    height: 1024,
+  });
+  const [frame, setFrame] = useState({
+    left: 0,
+    top: 0,
+    width: 1024,
+    height: 1024,
+  });
+  const [expandPrompt, setExpandPrompt] = useState(
+    "自然延伸背景与光线，保持原图服装主体不变。",
+  );
+  const root = useRef<HTMLElement>(null);
+  const pending = useRef<{
+    toolId: string;
+    mutationId: string;
+    executionMutationId: string;
+    operations: WorkflowOperation[];
+  } | null>(null);
+  const dirty = JSON.stringify(feedback) !== baseline || Boolean(comment);
+  useWorkspaceDraft(
+    "image-workspace",
+    { feedback, comment, mode },
+    dirty,
+    busy,
+  );
+  const current = candidates.find((node) => node.payload.assetId === assetId);
+  const groupId = current?.payload.executionId;
+  const siblings = groupId
+    ? candidates.filter((node) => node.payload.executionId === groupId)
+    : current
+      ? [current]
+      : [];
+  const title = current?.title ?? "生成图片";
+  const base = `/api/design-assets/${encodeURIComponent(assetId)}`;
+  const setImageSize = useCallback((next: ImageSize) => {
+    setSize((previous) => {
+      if (previous?.width === next.width && previous.height === next.height)
+        return previous;
+      return next;
+    });
+  }, []);
   useEffect(() => {
-    if (!open) return;
     let active = true;
-    void fetchWorkflow(projectId).then(
-      (result) => { if (active) { setGraph(result); setGraphError(null); } },
-      (error: unknown) => { if (active) setGraphError(message(error, "工作流读取失败")); },
-    );
-    const image = new Image();
-    image.onload = () => {
-      if (!active) return;
-      if (!image.naturalWidth || !image.naturalHeight) {
-        setImageError("无法读取原图尺寸");
-      } else if (image.naturalWidth > MAX_MASK_DIMENSION || image.naturalHeight > MAX_MASK_DIMENSION) {
-        setImageError(`原图尺寸超过局部重绘上限 ${MAX_MASK_DIMENSION}×${MAX_MASK_DIMENSION}`);
-        setDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-      } else {
-        setDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-        setImageError(null);
-      }
+    void imageRequest<ImageFeedback>(`${base}/feedback`)
+      .then((value) => {
+        if (!active) return;
+        setFeedback(value);
+        setBaseline(JSON.stringify(value));
+        setFeedbackLoaded(true);
+      })
+      .catch((cause: unknown) => {
+        if (active)
+          setError(cause instanceof Error ? cause.message : "标注读取失败");
+      });
+    return () => {
+      active = false;
     };
-    image.onerror = () => { if (active) setImageError("原图加载失败，请重试"); };
-    image.src = previewUrl;
-    return () => { active = false; image.onload = null; image.onerror = null; };
-  }, [assetId, open, previewUrl, projectId]);
-
-  const attachRestore = async (restored: PendingRestore) => {
-    setSubmitting(true);
-    setActionError(null);
-    setPendingRestore(restored);
-    setSubmissionStage("正在将恢复版本接入工作流…");
+  }, [base, feedbackEpoch]);
+  useEffect(() => {
+    root.current
+      ?.querySelector<HTMLButtonElement>("button")
+      ?.focus({ preventScroll: true });
+  }, []);
+  const act = async (action: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
     try {
-      const latest = await reloadGraph();
-      const current = sourceFor(latest, assetId);
-      if (!current) throw new Error("找不到原候选节点，无法建立恢复分支");
-      const result = await importRestoredAsset(projectId, current.id, restored);
-      setGraph(result);
-      setPendingRestore(null);
-      onGraphRefresh();
-      onClose();
-    } catch (error) {
-      setActionError(message(error, "恢复版本写入工作流失败，请重试"));
-      throw error;
+      await action();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "操作失败，请重试");
+      if (cause instanceof ImageRequestError && cause.status === 409)
+        setConflict(true);
     } finally {
-      setSubmitting(false);
-      setSubmissionStage(null);
+      setBusy(false);
     }
   };
-
-  const executePending = async (toolNodeId: string) => {
-    setSubmitting(true);
-    setActionError(null);
-    setSubmissionStage("正在创建修改任务…");
-    try {
-      const result = await executeWorkflowNode(projectId, toolNodeId, await onEnsureConversation?.());
-      setGraph(result);
-      setPendingToolId(null);
-      onGraphRefresh();
-      onClose();
-    } catch (error) {
-      setActionError(message(error, "工具节点已创建，但执行失败；可重试当前节点"));
-      onGraphRefresh();
-    } finally {
-      setSubmitting(false);
-      setSubmissionStage(null);
-    }
+  const save = async () => {
+    if (!feedbackLoaded) throw new Error("标注尚未加载，请先重试读取");
+    const value = await imageRequest<ImageFeedback>(
+      `${base}/feedback`,
+      "PUT",
+      feedback,
+    );
+    setFeedback(value);
+    setBaseline(JSON.stringify(value));
+    setConflict(false);
+    return value;
   };
-
-  const saveAndExecuteEdit = async () => {
-    let draft = pendingEditPatch.current;
-    if (!draft) throw new Error("修改分支尚未准备好");
-    setSubmissionStage("正在建立可追溯的修改分支…");
-    const latest = await reloadGraph();
-    const existing = latest.nodes.find((node) => node.id === draft?.toolId);
-    const expectedNode = draft.operations.find((operation) => operation.type === "add_node");
-    const expectedEdge = draft.operations.find((operation) => operation.type === "add_edge");
-    if (existing && (!expectedNode || expectedNode.type !== "add_node" || existing.kind !== expectedNode.node.kind || existing.type !== expectedNode.node.type || !equalJson(existing.payload, expectedNode.node.payload) ||
-      !expectedEdge || expectedEdge.type !== "add_edge" || !latest.edges.some((edge) => edge.sourceNodeId === expectedEdge.edge.sourceNodeId && edge.targetNodeId === draft?.toolId && edge.sourcePort === "out" && edge.targetPort === "source"))) {
-      throw new Error("修改节点与待提交分支不一致，请检查工作流");
+  const annotations = (next: ImageAnnotation[]) => {
+    setUndo((history) => [...history.slice(-49), feedback.annotations]);
+    setRedo([]);
+    setFeedback((value) => ({ ...value, annotations: next }));
+  };
+  const changeMode = (next: Mode) => {
+    if (busy) return;
+    setMode(next);
+    setMenu(false);
+    setError(null);
+    if (
+      next === "inpaint" ||
+      next === "variation" ||
+      next === "erase" ||
+      next === "history"
+    )
+      setLegacyTab(next);
+    if (next === "resize" && size && mode !== "resize") {
+      setTarget(size);
+      setCrop({ left: 0, top: 0, ...size });
+      setFrame({ left: 0, top: 0, ...size });
     }
-    if (!existing && latest.revision !== draft.baseRevision) {
-      draft = { ...draft, mutationId: crypto.randomUUID(), baseRevision: latest.revision };
-      pendingEditPatch.current = draft;
+    if (next === "share")
+      void act(async () =>
+        setShares(await imageRequest<Share[]>(`${base}/shares`)),
+      );
+  };
+  const submit = async (params: Record<string, unknown>, transform = false) => {
+    if (!size) throw new Error("原图尚未加载");
+    if (pending.current && Object.keys(params).length) throw new Error("上一次提交尚未确认，请使用“重试原操作”继续处理");
+    let graph = await fetchWorkflow(projectId);
+    if (!pending.current) {
+      const source = graph.nodes.find(
+        (node) => node.payload.assetId === assetId,
+      );
+      if (!source) throw new Error("图片来源节点不存在");
+      const toolId = crypto.randomUUID();
+      const key = transform ? "transform_image" : "edit_design";
+      const toolTitle = transform
+        ? "调整图片尺寸"
+        : params.intent === "outpaint"
+          ? "AI 扩图"
+          : params.intent === "feedback"
+            ? "按意见修改"
+            : "移除背景";
+      setHasPending(true);
+      pending.current = {
+        toolId,
+        mutationId: crypto.randomUUID(),
+        executionMutationId: crypto.randomUUID(),
+        operations: [
+          {
+            type: "add_node",
+            node: {
+              id: toolId,
+              kind: "tool",
+              type: key,
+              title: toolTitle,
+              payload: { toolKey: key, toolVersion: "1", params },
+              x: source.x + 340,
+              y: source.y + 160,
+            },
+          },
+          {
+            type: "add_edge",
+            edge: {
+              id: crypto.randomUUID(),
+              sourceNodeId: source.id,
+              targetNodeId: toolId,
+              sourcePort: "out",
+              targetPort: "source",
+            },
+          },
+          ...graph.edges
+            .filter(
+              (edge) =>
+                edge.targetNodeId ===
+                  graph.edges.find((edge) => edge.targetNodeId === source.id)
+                    ?.sourceNodeId &&
+                edge.targetPort === "constraint" &&
+                !transform,
+            )
+            .map((edge): WorkflowOperation => ({
+              type: "add_edge",
+              edge: {
+                id: crypto.randomUUID(),
+                sourceNodeId: edge.sourceNodeId,
+                targetNodeId: toolId,
+                sourcePort: "out",
+                targetPort: "constraint",
+              },
+            })),
+        ],
+      };
     }
-    const result = existing ? latest : await patchWorkflow(projectId, { mode: "semantic", mutationId: draft.mutationId, baseRevision: draft.baseRevision, operations: draft.operations });
-    setGraph(result);
-    setPendingToolId(draft.toolId);
-    pendingEditPatch.current = null;
-    setPendingPatch(false);
+    const request = pending.current;
+    if (!graph.nodes.some((node) => node.id === request.toolId)) {
+      graph = await patchWorkflow(projectId, {
+        mode: "semantic",
+        mutationId: request.mutationId,
+        baseRevision: graph.revision,
+        operations: request.operations,
+      });
+    }
+    await executeWorkflowNode(
+      projectId,
+      request.toolId,
+      await onEnsureConversation?.(),
+      request.executionMutationId,
+    );
+    pending.current = null;
+    setHasPending(false);
+    setMode("view");
+    setNotice("任务已提交，完成后会展示新版本");
     onGraphRefresh();
-    setSubmitting(false);
-    await executePending(draft.toolId);
   };
-
-  const submitVariation = async () => {
-    if (pendingToolId) { await executePending(pendingToolId); return; }
-    if (!pendingEditPatch.current && (!dimensions || imageError)) { setActionError(imageError ?? "原图尚未就绪"); return; }
-    if (!pendingEditPatch.current && prompt.trim().length < 3) { setActionError("请描述变体需要如何修改"); return; }
-    if (!pendingEditPatch.current && preserve.trim().length < 3) { setActionError("请明确需要保留的设计特征"); return; }
-    setSubmitting(true);
-    setActionError(null);
-    try {
-      if (!pendingEditPatch.current) {
-        if (!dimensions) throw new Error("原图尚未就绪");
-        const latest = await reloadGraph();
-        const current = sourceFor(latest, assetId);
-        if (!current) throw new Error("找不到当前候选节点，无法建立变体分支");
-        const toolId = crypto.randomUUID();
-        pendingEditPatch.current = {
-          toolId,
-          mutationId: crypto.randomUUID(),
-          baseRevision: latest.revision,
-          operations: [
-            { type: "add_node", node: {
-              id: toolId, kind: "tool", type: "edit_design", title: `变体 · ${prompt.trim().slice(0, 42)}`,
-              payload: { toolKey: "edit_design", toolVersion: "1", params: {
-                taskType: "i2i", prompt: `${prompt.trim()}\n保持不变：${preserve.trim()}`,
-                width: generationDimension(dimensions.width), height: generationDimension(dimensions.height),
-              } },
-              x: current.x + 340, y: current.y + 160,
-            } },
-            { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: current.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
-          ],
-        };
-        setPendingPatch(true);
-      }
-      await saveAndExecuteEdit();
-    } catch (error) {
-      setActionError(message(error, "变体未提交，请重试"));
-      setSubmitting(false);
-      setSubmissionStage(null);
-    }
-  };
-
-  const submitInpaint = async () => {
-    if (pendingToolId) { await executePending(pendingToolId); return; }
-    if (!pendingEditPatch.current && (!dimensions || dimensions.width > MAX_MASK_DIMENSION || dimensions.height > MAX_MASK_DIMENSION)) {
-      setActionError(imageError ?? "原图尚未就绪");
+  const generationParams = () => ({
+    taskType: "i2i",
+    count: 1,
+    width: Math.min(
+      2048,
+      Math.max(256, Math.round((size?.width ?? 768) / 8) * 8),
+    ),
+    height: Math.min(
+      2048,
+      Math.max(256, Math.round((size?.height ?? 1024) / 8) * 8),
+    ),
+  });
+  const download = async (annotated = false) => {
+    const blob = await imageBlob(assetId);
+    if (!annotated || !size) {
+      saveBlob(
+        blob,
+        `${title}.${blob.type === "image/jpeg" ? "jpg" : blob.type === "image/webp" ? "webp" : "png"}`,
+      );
       return;
     }
-    if (!pendingEditPatch.current && (!mask.current || maskState.strokeCount === 0)) { setActionError("请先涂抹需要修改的区域"); return; }
-    if (!pendingEditPatch.current && prompt.trim().length < 3) { setActionError("请描述局部区域需要如何修改"); return; }
-    setSubmitting(true);
-    setActionError(null);
-    try {
-      if (!pendingEditPatch.current) {
-        if (!mask.current || !dimensions) throw new Error("原图与掩码尚未就绪");
-        setSubmissionStage("正在准备掩码…");
-        const blob = await mask.current.exportPng();
-        setSubmissionStage("正在上传掩码…");
-        const maskImageUrl = await uploadTemporaryMask(projectId, blob, dimensions.width, dimensions.height);
-        const latest = await reloadGraph();
-        const current = sourceFor(latest, assetId);
-        if (!current) throw new Error("找不到当前候选节点，无法建立修改分支");
-        const toolId = crypto.randomUUID();
-        pendingEditPatch.current = {
-          toolId,
-          mutationId: crypto.randomUUID(),
-          baseRevision: latest.revision,
-          operations: [
-            {
-              type: "add_node",
-              node: {
-                id: toolId,
-                kind: "tool",
-                type: "edit_design",
-                title: `局部修改 · ${prompt.trim().slice(0, 42)}`,
-                payload: {
-                  toolKey: "edit_design",
-                  toolVersion: "1",
-                  params: {
-                    taskType: "inpaint",
-                    maskImageUrl,
-                    prompt: prompt.trim(),
-                    width: generationDimension(dimensions.width),
-                    height: generationDimension(dimensions.height),
-                    ...(selectedPalette ? { palette: selectedPalette.colors } : {}),
-                  },
-                },
-                x: current.x + 340,
-                y: current.y + 160,
-              },
-            },
-            {
-              type: "add_edge",
-              edge: { id: crypto.randomUUID(), sourceNodeId: current.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" },
-            },
-          ],
-        };
-        setPendingPatch(true);
-      }
-      await saveAndExecuteEdit();
-    } catch (error) {
-      setActionError(message(error, "局部修改未提交，请重试"));
-      setSubmitting(false);
-      setSubmissionStage(null);
-    }
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("浏览器不支持图片合成");
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const svg = new Image();
+    svg.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(imageAnnotationsSvg(feedback.annotations, canvas.width, canvas.height))}`;
+    await svg.decode();
+    context.drawImage(svg, 0, 0);
+    const result = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (value) =>
+          value ? resolve(value) : reject(new Error("标注图片导出失败")),
+        "image/png",
+      ),
+    );
+    saveBlob(result, `${title}-标注.png`);
   };
-
-  if (!open) return null;
+  const addComment = () => {
+    if (!comment.trim()) return;
+    const value: ImageComment = {
+      id: editingComment ?? crypto.randomUUID(),
+      text: comment.trim(),
+      point,
+      annotationIds: feedback.annotations.map((a) => a.id),
+    };
+    setFeedback((old) => ({
+      ...old,
+      comments: editingComment
+        ? old.comments.map((c) => (c.id === editingComment ? value : c))
+        : [...old.comments, value],
+    }));
+    setSelected((old) => [...new Set([...old, value.id])]);
+    setComment("");
+    setPoint(null);
+    setEditingComment(null);
+  };
+  const legacy =
+    mode === "erase" ||
+    mode === "inpaint" ||
+    mode === "variation" ||
+    mode === "history";
   return (
-    <Dialog label={exportOpen ? "导出成果" : "候选资产工作台"} className={`${styles.assetDialog} ${controls.controlSurface}`} onClose={() => { if (!submitting && !pendingRestore) onClose(); }}>
-        <section hidden={exportOpen}>
-          <header className={styles.header}>
-            <div><span>候选方案</span><h2>{source?.title ?? "候选设计"}</h2></div>
-            <button aria-label="关闭候选工作台" disabled={submitting || Boolean(pendingRestore)} onClick={onClose} type="button">关闭</button>
-          </header>
-          <Tabs<Tab> id={tabsId} label="候选资产操作" value={tab} onChange={changeTab} options={[{ value: "preview", label: "大图预览" }, { value: "inpaint", label: "局部重绘" }, { value: "variation", label: "生成变体" }, { value: "history", label: "版本历史" }].map((item) => ({ ...item, value: item.value as Tab, disabled: submitting || Boolean(pendingToolId) || pendingPatch }))} />
-          {graphError ? <p className={styles.notice} role="alert">{graphError} <button onClick={() => void reloadGraph().catch(() => undefined)} type="button">重试</button></p> : null}
-          <TabPanel tabsId={tabsId} value="preview" activeValue={tab}>
-            <div className={styles.previewLayout}>
-              <figure className={styles.imageStage} data-actual-size={actualSize}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img alt={source?.title ?? "候选设计原图"} src={previewUrl} />
-              </figure>
-              <aside className={styles.previewAside}>
-                <span>原图与设计分支</span>
-                <div className={styles.previewTools}><Button size="small" onClick={() => setActualSize(false)} aria-pressed={!actualSize}>适合窗口</Button><Button size="small" onClick={() => setActualSize(true)} aria-pressed={actualSize}>原始比例</Button></div>
-                <h3>沿这张候选继续设计</h3>
-                <p>版本恢复和局部修改会创建新的分支；当前候选与它的来源会保留在画布中。</p>
-                <a href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}>比较并保存为款式</a>
-                {dimensions ? <dl><div><dt>原图尺寸</dt><dd>{dimensions.width} × {dimensions.height}</dd></div></dl> : null}
-                {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
-                <div className={styles.actionStack}>
-                  <button className={styles.primary} onClick={() => changeTab("inpaint")} type="button">创建局部修改分支</button>
-                  <button onClick={() => changeTab("variation")} type="button">创建变体分支</button>
-                  <button onClick={() => changeTab("history")} type="button">查看与恢复版本</button>
-                  <button ref={exportTrigger} onClick={() => setExportOpen(true)} type="button">单图高清导出</button>
-                </div>
-              </aside>
-            </div>
-          </TabPanel>
-          <TabPanel tabsId={tabsId} value="inpaint" activeValue={tab}>
-            <div aria-busy={submitting} className={generationStyles.inpaintLayout}>
-              <figure className={generationStyles.maskStage}>
-                <div className={generationStyles.maskMedia} data-busy={submitting}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt="局部重绘原图" src={previewUrl} />
-                  {dimensions && dimensions.width <= MAX_MASK_DIMENSION && dimensions.height <= MAX_MASK_DIMENSION ? (
-                    <MaskCanvas brushRatio={brushRatio} height={dimensions.height} onChange={setMaskState} ref={mask} width={dimensions.width} />
-                  ) : null}
-                </div>
-                <figcaption>涂抹需要修改的区域</figcaption>
-              </figure>
-              <aside className={generationStyles.inpaintControls}>
-                <div><span>局部修改分支</span><strong>选择并描述修改</strong></div>
-                <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
-                {palettes.length ? <label><span>参考色卡 · 可选</span><select disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label> : null}
-                <label><span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
-                <div className={generationStyles.maskActions}><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !dimensions} onClick={() => mask.current?.addCenterRegion()} type="button">标记中央区域</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.undo()} type="button">撤销一笔</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.clear()} type="button">清空</button></div>
-                {submissionStage ? <p role="status">{submissionStage}</p> : null}
-                {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
-                {actionError ? <p className={styles.error} role="alert">{actionError}</p> : null}
-                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitInpaint()} type="button">{pendingToolId ? "重试执行当前修改节点" : submitting ? "正在处理…" : "提交局部重绘"}</button>
-              </aside>
-            </div>
-          </TabPanel>
-          <TabPanel tabsId={tabsId} value="variation" activeValue={tab}>
-            <div className={styles.previewLayout}>
-              <figure className={styles.imageStage}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img alt="变体来源候选" src={previewUrl} />
-              </figure>
-              <aside className={generationStyles.inpaintControls}>
-                <div><span>变体分支</span><strong>从当前候选生成变体</strong></div>
-                <p>原候选会保留。确认后，新变体将沿当前候选的来源建立独立分支。</p>
-                <label><span>修改方向</span><textarea aria-label="变体修改说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：探索两种更简洁的领型" value={prompt} /></label>
-                <label><span>需要保留的特征</span><textarea aria-label="变体保留特征" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPreserve(event.target.value); setActionError(null); }} placeholder="例如：保持宽松廓形、原有面料与配色" value={preserve} /></label>
-                {submissionStage ? <p role="status">{submissionStage}</p> : null}
-                {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
-                {actionError ? <p className={styles.error} role="alert">{actionError}</p> : null}
-                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitVariation()} type="button">{pendingToolId ? "重试执行当前变体节点" : submitting ? "正在处理…" : "确认生成变体"}</button>
-              </aside>
-            </div>
-          </TabPanel>
-          <TabPanel tabsId={tabsId} value="history" activeValue={tab}>
-            <div className={styles.historyBody}>
-              {pendingRestore ? <p className={styles.notice} role="alert">恢复版本已创建，正在等待加入画布。{actionError ? ` ${actionError}` : ""} <button disabled={submitting} onClick={() => void attachRestore(pendingRestore).catch(() => undefined)} type="button">重试加入画布</button></p> : null}
-              {!pendingRestore ? (
-                <VersionTimeline
-                  assetId={assetId}
-                  onRestore={(asset) => attachRestore({ asset, mutationId: crypto.randomUUID() })}
-                  onRestoreEnd={() => setSubmitting(false)}
-                  onRestoreStart={() => setSubmitting(true)}
-                />
+    <section
+      ref={root}
+      role="dialog"
+      aria-modal="true"
+      aria-label="图片工作区"
+      data-image-editing={mode !== "view" || busy}
+      className={styles.workspace}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && !event.defaultPrevented) {
+          event.stopPropagation();
+          if (!busy) {
+            if (mode === "view") onClose();
+            else setMode("view");
+          }
+        }
+        if (event.key === "Tab") {
+          const buttons = [
+            ...event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]',
+            ),
+          ].filter((element) => element.checkVisibility());
+          const first = buttons[0];
+          const last = buttons.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }
+        if (
+          event.target instanceof HTMLElement &&
+          /INPUT|TEXTAREA|SELECT/u.test(event.target.tagName)
+        )
+          return;
+        if (
+          mode === "view" &&
+          (event.key === "ArrowLeft" || event.key === "ArrowRight")
+        ) {
+          const index = siblings.findIndex(
+            (n) => n.payload.assetId === assetId,
+          );
+          const next = siblings[index + (event.key === "ArrowRight" ? 1 : -1)];
+          if (next && onSelectAsset) {
+            event.preventDefault();
+            onSelectAsset(String(next.payload.assetId));
+          }
+        }
+      }}
+    >
+      <header className={styles.topbar}>
+        <div className={styles.menuAnchor}>
+          <button onClick={() => setMenu(!menu)} aria-expanded={menu}>
+            ▧　图像⌄
+          </button>
+          {menu ? (
+            <div className={styles.menu}>
+              <strong>{title}</strong>
+              <span>
+                {size ? `${size.width} × ${size.height}` : "正在加载原图"}
+              </span>
+              <button onClick={() => changeMode("history")}>版本历史</button>
+              <button onClick={() => changeMode("export")}>更多导出选项</button>
+              {details ? (
+                <button onClick={() => changeMode("details")}>
+                  来源与设计决策
+                </button>
               ) : null}
+              <button
+                disabled={busy}
+                onClick={() => void act(() => download(true))}
+              >
+                下载带标注图片
+              </button>
+              <a
+                href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}
+              >
+                保存为款式
+              </a>
             </div>
-          </TabPanel>
-        </section>
-      {exportOpen ? <ExportModal embedded onBack={() => { setExportOpen(false); requestAnimationFrame(() => exportTrigger.current?.focus()); }} onClose={onClose} source={{ assetId, previewUrl, type: "asset" }} /> : null}
-    </Dialog>
+          ) : null}
+        </div>
+        <div className={styles.topActions}>
+          <select
+            aria-label="缩放比例"
+            value={zoom ?? "fit"}
+            onChange={(e) =>
+              setZoom(e.target.value === "fit" ? null : Number(e.target.value))
+            }
+          >
+            <option value="fit">适合窗口</option>
+            {[
+              ...new Set([
+                10,
+                25,
+                50,
+                75,
+                100,
+                150,
+                200,
+                400,
+                ...(zoom === null ? [] : [zoom]),
+              ]),
+            ]
+              .sort((a, b) => a - b)
+              .map((z) => (
+                <option key={z} value={z}>
+                  {Math.round(z)}%
+                </option>
+              ))}
+          </select>
+          <button
+            disabled={busy}
+            aria-label="下载原图"
+            onClick={() => void act(() => download())}
+          >
+            ↓ <span>下载</span>
+          </button>
+          <button onClick={() => changeMode("share")}>↥ 分享</button>
+          <button disabled={busy} aria-label="关闭图片工作区" onClick={onClose}>
+            ×
+          </button>
+        </div>
+      </header>
+      {error || notice ? (
+        <div className={styles.notice} role={error ? "alert" : "status"}>
+          {error ?? notice}
+          {!feedbackLoaded ? (
+            <button
+              onClick={() => {
+                setError(null);
+                setFeedbackEpoch((n) => n + 1);
+              }}
+            >
+              重新读取标注
+            </button>
+          ) : null}
+          <button
+            aria-label="关闭图片提示"
+            onClick={() => {
+              setError(null);
+              setNotice(null);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {hasPending && !busy ? (
+        <div className={styles.notice} role="status">
+          <span>上一次提交尚未确认，重试将继续原操作。</span>
+          <button onClick={() => void act(() => submit({}))}>重试原操作</button>
+        </div>
+      ) : null}
+      {conflict ? (
+        <div className={styles.notice} role="alert">
+          <span>远端标注已变化，本地草稿仍保留。</span>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void act(async () => {
+                const latest = await imageRequest<ImageFeedback>(
+                  `${base}/feedback`,
+                );
+                setFeedback(latest);
+                setBaseline(JSON.stringify(latest));
+                setUndo([]);
+                setRedo([]);
+                setConflict(false);
+              })
+            }
+          >
+            载入最新并放弃本地标注
+          </button>
+        </div>
+      ) : null}
+      {tasks
+        .filter((task) => ["queued", "running", "failed"].includes(task.status))
+        .map((task) => (
+          <div key={task.id} className={styles.notice} role="status">
+            <span>
+              {task.title} ·{" "}
+              {task.status === "failed"
+                ? "处理失败，输入已保留"
+                : task.status === "queued"
+                  ? "排队中"
+                  : "正在处理"}
+            </span>
+            {task.status === "failed" ? (
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void act(async () => {
+                    await executeWorkflowNode(
+                      projectId,
+                      task.id,
+                      await onEnsureConversation?.(),
+                    );
+                    onGraphRefresh();
+                  })
+                }
+              >
+                重试处理
+              </button>
+            ) : null}
+          </div>
+        ))}
+      <div className={styles.body}>
+        <ImageViewer
+          url={`${base}/content`}
+          title={title}
+          zoom={zoom}
+          onZoom={setZoom}
+          onSize={setImageSize}
+          annotations={feedback.annotations}
+          comments={feedback.comments}
+          mode={feedbackLoaded ? mode : "view"}
+          pen={pen}
+          onAnnotation={(a) => annotations([...feedback.annotations, a])}
+          onPoint={setPoint}
+          frame={
+            mode === "resize" && resizeKind === "outpaint" ? frame : undefined
+          }
+          onFrame={setFrame}
+          crop={mode === "resize" && resizeKind === "crop" ? crop : undefined}
+          onCrop={(value) => {
+            setCrop(value);
+            setTarget({ width: value.width, height: value.height });
+          }}
+        />
+        {mode !== "view" &&
+        !legacy &&
+        mode !== "export" &&
+        mode !== "details" ? (
+          <aside className={styles.panel} aria-label="图片工具参数">
+            <div className={styles.panelHeading}>
+              <h2>{tools.find((t) => t.mode === mode)?.label ?? "分享图片"}</h2>
+              <button
+                disabled={busy}
+                onClick={() => setMode("view")}
+                aria-label="收起工具"
+              >
+                ×
+              </button>
+            </div>
+            {mode === "annotate" ? (
+              <>
+                <label>
+                  标注工具
+                  <select
+                    value={pen.kind}
+                    onChange={(e) =>
+                      setPen({
+                        ...pen,
+                        kind: e.target.value as ImageAnnotation["kind"],
+                      })
+                    }
+                  >
+                    <option value="pen">自由画笔</option>
+                    <option value="rectangle">矩形</option>
+                    <option value="arrow">箭头</option>
+                    <option value="text">文字</option>
+                  </select>
+                </label>
+                <label>
+                  颜色
+                  <input
+                    type="color"
+                    value={pen.color}
+                    onChange={(e) => setPen({ ...pen, color: e.target.value })}
+                  />
+                </label>
+                <label>
+                  粗细
+                  <input
+                    type="range"
+                    min={1}
+                    max={30}
+                    value={pen.width}
+                    onChange={(e) =>
+                      setPen({ ...pen, width: Number(e.target.value) })
+                    }
+                  />
+                </label>
+                {pen.kind === "text" ? (
+                  <label>
+                    标注文字
+                    <input
+                      maxLength={500}
+                      value={pen.text}
+                      onChange={(e) => setPen({ ...pen, text: e.target.value })}
+                      placeholder="输入后点击图片放置"
+                    />
+                  </label>
+                ) : null}
+                <div className={styles.row}>
+                  <button
+                    disabled={!undo.length}
+                    onClick={() => {
+                      setRedo([...redo, feedback.annotations]);
+                      setFeedback({
+                        ...feedback,
+                        annotations: undo.at(-1) ?? feedback.annotations,
+                      });
+                      setUndo(undo.slice(0, -1));
+                    }}
+                  >
+                    撤销
+                  </button>
+                  <button
+                    disabled={!redo.length}
+                    onClick={() => {
+                      setUndo([...undo, feedback.annotations]);
+                      setFeedback({
+                        ...feedback,
+                        annotations: redo.at(-1) ?? feedback.annotations,
+                      });
+                      setRedo(redo.slice(0, -1));
+                    }}
+                  >
+                    重做
+                  </button>
+                </div>
+                {feedback.annotations.map((a, i) => (
+                  <div className={styles.row} key={a.id}>
+                    <span>
+                      标注 {i + 1} {a.text}
+                    </span>
+                    <button
+                      aria-label={`删除标注 ${i + 1}`}
+                      onClick={() =>
+                        annotations(
+                          feedback.annotations.filter((v) => v.id !== a.id),
+                        )
+                      }
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className={styles.primary}
+                  disabled={busy || !feedbackLoaded}
+                  onClick={() =>
+                    void act(async () => {
+                      await save();
+                      setNotice("标注已保存");
+                    })
+                  }
+                >
+                  保存标注
+                </button>
+                <button onClick={() => changeMode("comment")}>
+                  添加修改意见
+                </button>
+              </>
+            ) : null}
+            {mode === "comment" ? (
+              <>
+                <p>点击图片定位，或直接填写整图意见。</p>
+                {point ? (
+                  <div className={styles.row}>
+                    <span>已选择图片位置</span>
+                    <button onClick={() => setPoint(null)}>改为整图</button>
+                  </div>
+                ) : null}
+                <textarea
+                  aria-label="图片评论"
+                  maxLength={2000}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="例如：保留面料，将袖口收窄"
+                />
+                <button
+                  disabled={!comment.trim() || !feedbackLoaded}
+                  onClick={addComment}
+                >
+                  {editingComment ? "更新评论" : "添加评论"}
+                </button>
+                {feedback.comments.map((c, i) => (
+                  <div className={styles.comment} key={c.id}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(c.id)}
+                        onChange={(e) =>
+                          setSelected(
+                            e.target.checked
+                              ? [...selected, c.id]
+                              : selected.filter((id) => id !== c.id),
+                          )
+                        }
+                      />
+                      {i + 1}. {c.text}
+                    </label>
+                    <div className={styles.row}>
+                      <button
+                        onClick={() => {
+                          setComment(c.text);
+                          setPoint(c.point);
+                          setEditingComment(c.id);
+                        }}
+                      >
+                        编辑
+                      </button>
+                      <button
+                        onClick={() => {
+                          setFeedback({
+                            ...feedback,
+                            comments: feedback.comments.filter(
+                              (v) => v.id !== c.id,
+                            ),
+                          });
+                          setSelected(selected.filter((id) => id !== c.id));
+                        }}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  disabled={busy || !feedbackLoaded || Boolean(comment)}
+                  onClick={() =>
+                    void act(async () => {
+                      await save();
+                      setNotice("评论已保存");
+                    })
+                  }
+                >
+                  保存评论
+                </button>
+                <button
+                  className={styles.primary}
+                  disabled={busy || !selected.length || Boolean(comment)}
+                  onClick={() =>
+                    void act(async () => {
+                      const saved = await save();
+                      await submit({
+                        ...generationParams(),
+                        intent: "feedback",
+                        prompt:
+                          "按照选定的修改意见调整服装，保留未要求修改的内容。",
+                        feedbackRevision: saved.revision,
+                        commentIds: selected,
+                      });
+                    })
+                  }
+                >
+                  按选中意见修改
+                </button>
+              </>
+            ) : null}
+            {mode === "remove_background" ? (
+              <>
+                <p>
+                  由 AI 移除背景并输出透明
+                  PNG，保留原图作为历史版本。主体细节可能变化。
+                </p>
+                <button
+                  disabled={busy || !size}
+                  className={styles.primary}
+                  onClick={() =>
+                    void act(() =>
+                      submit({
+                        ...generationParams(),
+                        intent: "remove_background",
+                        prompt:
+                          "精确提取原图服装或人物主体，移除整个背景，输出真正透明背景。尽量保留服装纹理、色彩、轮廓和所有主体细节。",
+                      }),
+                    )
+                  }
+                >
+                  {busy ? "正在提交…" : "移除背景并生成新版本"}
+                </button>
+              </>
+            ) : null}
+            {mode === "resize" ? (
+              <>
+                <label>
+                  调整方式
+                  <select
+                    value={resizeKind}
+                    onChange={(e) =>
+                      setResizeKind(e.target.value as typeof resizeKind)
+                    }
+                  >
+                    <option value="resize">缩放尺寸</option>
+                    <option value="crop">裁剪并调整尺寸</option>
+                    <option value="outpaint">AI 扩图</option>
+                  </select>
+                </label>
+                {resizeKind === "outpaint" ? (
+                  <>
+                    <p>
+                      拖动图片调整位置，拖动右下角扩展边界。原图区域会保留。
+                    </p>
+                    {(["width", "height", "left", "top"] as const).map(
+                      (key) => (
+                        <label key={key}>
+                          {
+                            {
+                              width: "画布宽度",
+                              height: "画布高度",
+                              left: "原图左边距",
+                              top: "原图上边距",
+                            }[key]
+                          }
+                          <input
+                            type="number"
+                            min={0}
+                            max={2048}
+                            value={frame[key]}
+                            onChange={(e) =>
+                              setFrame({
+                                ...frame,
+                                [key]: Number(e.target.value),
+                              })
+                            }
+                          />
+                        </label>
+                      ),
+                    )}
+                    <p>
+                      实际输出 {frame.width} × {frame.height}，边长为 16
+                      的倍数；最长边 2048，至少 655360 像素。
+                    </p>
+                    <textarea
+                      aria-label="扩图要求"
+                      value={expandPrompt}
+                      maxLength={1000}
+                      onChange={(e) => setExpandPrompt(e.target.value)}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {resizeKind === "crop" ? (
+                      <>
+                        <label>
+                          裁剪比例
+                          <select
+                            defaultValue="free"
+                            onChange={(e) => {
+                              if (!size || e.target.value === "free") return;
+                              const ratio = Number(e.target.value);
+                              const width = Math.min(
+                                size.width,
+                                size.height * ratio,
+                              );
+                              const height = width / ratio;
+                              setCrop({
+                                left: Math.floor((size.width - width) / 2),
+                                top: Math.floor((size.height - height) / 2),
+                                width: Math.floor(width),
+                                height: Math.floor(height),
+                              });
+                              setTarget({
+                                width: Math.floor(width),
+                                height: Math.floor(height),
+                              });
+                            }}
+                          >
+                            <option value="free">自由比例</option>
+                            <option value="1">1:1</option>
+                            <option value={3 / 4}>3:4</option>
+                            <option value={4 / 3}>4:3</option>
+                            <option value={16 / 9}>16:9</option>
+                          </select>
+                        </label>
+                        {(["left", "top", "width", "height"] as const).map(
+                          (key) => (
+                            <label key={key}>
+                              裁剪
+                              {
+                                {
+                                  left: "左边距",
+                                  top: "上边距",
+                                  width: "宽度",
+                                  height: "高度",
+                                }[key]
+                              }
+                              <input
+                                type="number"
+                                min={0}
+                                value={crop[key]}
+                                onChange={(e) =>
+                                  setCrop({
+                                    ...crop,
+                                    [key]: Number(e.target.value),
+                                  })
+                                }
+                              />
+                            </label>
+                          ),
+                        )}
+                      </>
+                    ) : null}
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={lockRatio}
+                        onChange={(e) => setLockRatio(e.target.checked)}
+                      />
+                      锁定比例
+                    </label>
+                    {(["width", "height"] as const).map((key) => (
+                      <label key={key}>
+                        输出{key === "width" ? "宽度" : "高度"}
+                        <input
+                          type="number"
+                          min={16}
+                          max={8192}
+                          value={target[key]}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            const source = resizeKind === "crop" ? crop : size;
+                            setTarget(
+                              lockRatio && source
+                                ? key === "width"
+                                  ? {
+                                      width: value,
+                                      height: Math.round(
+                                        (value * source.height) / source.width,
+                                      ),
+                                    }
+                                  : {
+                                      height: value,
+                                      width: Math.round(
+                                        (value * source.width) / source.height,
+                                      ),
+                                    }
+                                : { ...target, [key]: value },
+                            );
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </>
+                )}
+                <button
+                  className={styles.primary}
+                  disabled={busy || !size}
+                  onClick={() =>
+                    void act(async () => {
+                      if (resizeKind === "outpaint") {
+                        const parsed = imageOutpaintSchema.safeParse(frame);
+                        if (!parsed.success)
+                          throw new Error(
+                            parsed.error.issues[0]?.message ?? "扩图尺寸不合法",
+                          );
+                        if (
+                          !size ||
+                          frame.left + size.width > frame.width ||
+                          frame.top + size.height > frame.height
+                        )
+                          throw new Error("画布必须完整包含原图");
+                        await submit({
+                          ...generationParams(),
+                          width: frame.width,
+                          height: frame.height,
+                          intent: "outpaint",
+                          outpaint: frame,
+                          prompt:
+                            expandPrompt.trim() || "自然扩展背景，保留原图主体",
+                        });
+                      } else {
+                        const parsed = imageTransformSchema.safeParse({
+                          ...target,
+                          ...(resizeKind === "crop" ? { crop } : {}),
+                        });
+                        if (!parsed.success)
+                          throw new Error(
+                            parsed.error.issues[0]?.message ?? "图片尺寸不合法",
+                          );
+                        if (
+                          resizeKind === "crop" &&
+                          size &&
+                          (crop.left + crop.width > size.width ||
+                            crop.top + crop.height > size.height)
+                        )
+                          throw new Error("裁剪区域超出原图");
+                        await submit(parsed.data, true);
+                      }
+                    })
+                  }
+                >
+                  {busy
+                    ? "正在提交…"
+                    : resizeKind === "outpaint"
+                      ? "生成扩图版本"
+                      : "保存为新版本"}
+                </button>
+              </>
+            ) : null}
+            {mode === "share" ? (
+              <>
+                <p>
+                  链接有效期七天。获得链接的人可查看此图片，评论和项目内容不会公开。
+                </p>
+                <button
+                  className={styles.primary}
+                  disabled={busy}
+                  onClick={() =>
+                    void act(async () => {
+                      const result = await imageRequest<{ path: string }>(
+                        `${base}/shares`,
+                        "POST",
+                      );
+                      setShareUrl(
+                        new URL(result.path, window.location.origin).href,
+                      );
+                      setShares(await imageRequest<Share[]>(`${base}/shares`));
+                    })
+                  }
+                >
+                  创建只读链接
+                </button>
+                {shareUrl ? (
+                  <>
+                    <input aria-label="分享链接" value={shareUrl} readOnly />
+                    <button
+                      onClick={() =>
+                        void act(async () => {
+                          await navigator.clipboard.writeText(shareUrl);
+                          setNotice("链接已复制");
+                        })
+                      }
+                    >
+                      复制链接
+                    </button>
+                  </>
+                ) : null}
+                {shares.map((share) => (
+                  <div className={styles.comment} key={share.id}>
+                    <span>
+                      {share.revokedAt
+                        ? "已撤销"
+                        : new Date(share.expiresAt).getTime() < now
+                          ? "已过期"
+                          : `有效至 ${new Date(share.expiresAt).toLocaleDateString()}`}
+                    </span>
+                    <button
+                      disabled={busy || Boolean(share.revokedAt)}
+                      onClick={() =>
+                        void act(async () => {
+                          await imageRequest(
+                            `${base}/shares/${share.id}`,
+                            "DELETE",
+                          );
+                          setShareUrl(null);
+                          setShares(
+                            await imageRequest<Share[]>(`${base}/shares`),
+                          );
+                        })
+                      }
+                    >
+                      撤销链接
+                    </button>
+                  </div>
+                ))}
+              </>
+            ) : null}
+            {dirty ? (
+              <small>
+                有未保存的标注或评论，关闭工作区后仍会保留本次草稿。
+              </small>
+            ) : null}
+          </aside>
+        ) : null}
+        {legacyTab ? (
+          <div className={styles.legacy} hidden={!legacy}>
+            <button className={styles.back} onClick={() => setMode("view")}>
+              ← 返回图片
+            </button>
+            <LegacyAssetTools
+              initialTab={legacyTab}
+              embedded
+              open
+              assetId={assetId}
+              projectId={projectId}
+              onClose={() => setMode("view")}
+              onGraphRefresh={onGraphRefresh}
+              {...(onEnsureConversation ? { onEnsureConversation } : {})}
+            />
+          </div>
+        ) : null}
+        {mode === "export" ? (
+          <div className={styles.legacy}>
+            <ExportModal
+              embedded
+              onClose={() => setMode("view")}
+              onBack={() => setMode("view")}
+              source={{ type: "asset", assetId, previewUrl: `${base}/content` }}
+            />
+          </div>
+        ) : null}
+        {mode === "details" ? (
+          <div className={styles.legacy}>
+            <button onClick={() => setMode("view")}>← 返回图片</button>
+            {details}
+          </div>
+        ) : null}
+      </div>
+      {siblings.length > 1 ? (
+        <nav className={styles.filmstrip} aria-label="本次生成结果">
+          {siblings.map((node) => (
+            <button
+              key={node.id}
+              aria-label={`查看${node.title}`}
+              aria-current={
+                node.payload.assetId === assetId ? "true" : undefined
+              }
+              disabled={busy}
+              onClick={() => onSelectAsset?.(String(node.payload.assetId))}
+            >
+              <img
+                src={`/api/design-assets/${encodeURIComponent(String(node.payload.assetId))}/thumbnail`}
+                alt={node.title}
+              />
+            </button>
+          ))}
+        </nav>
+      ) : null}
+      <nav className={styles.toolbar} aria-label="图片工具">
+        {tools.map((tool) => (
+          <button
+            key={tool.mode}
+            disabled={busy}
+            aria-pressed={mode === tool.mode}
+            onClick={() => changeMode(mode === tool.mode ? "view" : tool.mode)}
+          >
+            <span aria-hidden="true">{tool.icon}</span>
+            {tool.label}
+          </button>
+        ))}
+      </nav>
+    </section>
   );
 }

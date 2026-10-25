@@ -30,6 +30,29 @@ const props = () => ({
   beforeChange: vi.fn(async () => true),
 });
 
+it("小数中间态与非法草稿跨章节保留，失败输入不会保存旧数值", async () => {
+  const values = props();
+  vi.stubGlobal("fetch", vi.fn());
+  render(<TechPackEditor {...values} />);
+  fireEvent.change(screen.getByLabelText("技术包名称"), { target: { value: "边界资料" } });
+  fireEvent.click(screen.getByRole("button", { name: "BOM" }));
+  fireEvent.click(screen.getByRole("button", { name: "添加材料" }));
+  fireEvent.change(screen.getByLabelText("BOM 1 名称"), { target: { value: "主料" } });
+  const quantity = screen.getByLabelText("BOM 1 用量") as HTMLInputElement;
+  fireEvent.change(quantity, { target: { value: "1." } });
+  expect(quantity.value).toBe("1.");
+  fireEvent.click(screen.getByLabelText("BOM 1 已复核"));
+  fireEvent.change(quantity, { target: { value: "1e" } });
+  expect((screen.getByLabelText("BOM 1 已复核") as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "POM" }));
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { callback(0); return 1; });
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await screen.findByText(/BOM 1 用量需为/);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(quantity.value).toBe("1e");
+  expect(quantity.closest("[data-tech-chapter]")?.hasAttribute("hidden")).toBe(false);
+});
+
 it("blocks publication until missing production facts are manually confirmed", async () => {
   vi.stubGlobal("fetch", vi.fn());
   render(<TechPackEditor {...props()} />);

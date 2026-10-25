@@ -47,7 +47,7 @@ export interface GenerationTaskList {
 }
 
 export interface PersistedGenerationRequest {
-  readonly background?: "auto" | "opaque";
+  readonly background?: "auto" | "opaque" | "transparent";
   readonly height: number;
   readonly maskImageUrl?: string;
   readonly negativePrompt?: string;
@@ -79,7 +79,7 @@ export interface GenerationTaskItem {
 }
 
 export interface GenerationParameters {
-  readonly background?: "auto" | "opaque";
+  readonly background?: "auto" | "opaque" | "transparent";
   readonly height: number;
   readonly outputCompression?: number;
   readonly outputFormat?: "jpeg" | "png" | "webp";
@@ -109,7 +109,7 @@ export interface GenerationStartRequest {
 }
 
 export type DesignAssetOperation =
-  "generated" | "imported" | "variation" | "inpaint" | "upscale" | "restore";
+  "generated" | "imported" | "variation" | "inpaint" | "upscale" | "restore" | "transform" | "remove_background" | "erase" | "outpaint";
 
 export interface DesignAssetVersion {
   readonly archivedAt: string | null;

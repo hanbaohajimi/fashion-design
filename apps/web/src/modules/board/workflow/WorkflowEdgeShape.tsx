@@ -9,20 +9,31 @@ import {
   type RecordProps,
   type TLShape,
 } from "tldraw";
-import type { CSSProperties } from "react";
+import { useCallback, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { curveLength, curvePath } from "./workflow-curve";
+import type { WorkflowEdgeRelation } from "./workflow-graph";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
+import { WorkflowEdgeHoverLabel } from "./WorkflowEdgeHoverLabel";
 import styles from "./workflow-connections.module.css";
 
 export const WORKFLOW_EDGE_SHAPE_TYPE = "fashion-workflow-edge";
+const RELATION_COLORS = {
+  input: { token: "--color-workflow-edge-input", fallback: "#415879" },
+  reference: { token: "--color-workflow-edge-reference", fallback: "#7a5e32" },
+  result: { token: "--color-workflow-edge-result", fallback: "#61476c" },
+} satisfies Record<WorkflowEdgeRelation, { token: string; fallback: string }>;
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
     [WORKFLOW_EDGE_SHAPE_TYPE]: {
       edgeId: string;
+      sourceNodeId: string;
+      targetNodeId: string;
       endX: number;
       endY: number;
       detourY: number;
       highlighted: boolean;
+      muted: boolean;
+      relation: WorkflowEdgeRelation;
       proposed: boolean;
       editable: boolean;
       label: string;
@@ -38,10 +49,33 @@ export type WorkflowEdgeShape = TLShape<typeof WORKFLOW_EDGE_SHAPE_TYPE>;
 function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
   const interaction = useWorkflowInteractions();
   const editor = useEditor();
+  const labelId = useId();
+  const [labelPoint, setLabelPoint] = useState<{ x: number; y: number } | null>(null);
+  const labelDismissed = useRef(false);
+  const dismissLabel = useCallback(() => {
+    labelDismissed.current = true;
+    setLabelPoint(null);
+  }, []);
+  const label = shape.props.relation === "result" ? "生成结果"
+    : shape.props.relation === "reference" ? "参考素材"
+      : shape.props.label === "原图" ? "主图输入" : shape.props.label;
+  const showLabel = (event: ReactPointerEvent<SVGPathElement>) => {
+    if (event.pointerType === "mouse" && event.buttons === 0 &&
+      !interaction?.gesture && !labelDismissed.current) {
+      setLabelPoint({ x: event.clientX, y: event.clientY });
+    }
+  };
   const zoom = useValue("workflow-edge-zoom", () => editor.getZoomLevel(), [
     editor,
   ]);
   const selected = interaction?.selectedEdgeId === shape.props.edgeId;
+  const hoveredNodeId = interaction?.hoveredNodeId;
+  const adjacent = Boolean(hoveredNodeId && (
+    shape.props.sourceNodeId === hoveredNodeId || shape.props.targetNodeId === hoveredNodeId
+  ));
+  // 悬停仅覆盖显示层；移开后直接恢复选中节点的链路，不写入画布存储。
+  const highlighted = hoveredNodeId ? adjacent : shape.props.highlighted;
+  const muted = hoveredNodeId ? !adjacent : shape.props.muted;
   const curve = curvePath(
     shape.props.endX,
     shape.props.endY,
@@ -58,26 +92,41 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
       className={styles.edge}
       data-workflow-edge={shape.props.edgeId}
       data-selected={selected ? "true" : "false"}
-      data-highlighted={shape.props.highlighted ? "true" : "false"}
+      data-relation={shape.props.relation}
+      data-node-hovered={adjacent ? "true" : "false"}
+      data-muted={muted && !selected && !interaction?.gesture ? "true" : "false"}
+      data-highlighted={highlighted ? "true" : "false"}
       data-proposed={shape.props.proposed ? "true" : "false"}
       data-running={shape.props.running ? "true" : "false"}
       style={
         {
+          "--edge-color": `var(${RELATION_COLORS[shape.props.relation].token})`,
           "--edge-length": String(length),
           "--edge-enter-index": String(shape.props.enterIndex),
         } as CSSProperties
       }
     >
       <g
+        onPointerDownCapture={dismissLabel}
         onPointerDown={(event) => {
           event.stopPropagation();
           if (!shape.props.proposed)
             interaction?.selectEdge(shape.props.edgeId);
         }}
       >
-        <path className={styles.edgeHit} d={curve.d}>
-          <title>{shape.props.label}</title>
-        </path>
+        <path className={styles.edgeHit} d={curve.d}
+          aria-label={label}
+          aria-describedby={labelPoint && !interaction?.gesture ? labelId : undefined}
+          onPointerEnter={(event) => {
+            labelDismissed.current = false;
+            showLabel(event);
+          }}
+          onPointerMove={showLabel}
+          onPointerLeave={() => {
+            labelDismissed.current = false;
+            setLabelPoint(null);
+          }}
+        />
         <path className={styles.edgeLine} d={curve.d} />
         {/* 流动光点：独立一条 path，避免与生长动画的 dash 互相干扰 */}
         <path className={styles.edgeFlow} d={curve.d} />
@@ -106,6 +155,12 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
           </g>
         ) : null}
       </g>
+      {labelPoint && !interaction?.gesture ? (
+        <WorkflowEdgeHoverLabel id={labelId}
+          label={shape.props.proposed ? `${label} · 待确认` : label}
+          color={`var(${RELATION_COLORS[shape.props.relation].token})`}
+          point={labelPoint} onDismiss={dismissLabel} />
+      ) : null}
     </SVGContainer>
   );
 }
@@ -114,11 +169,15 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
   static override type = WORKFLOW_EDGE_SHAPE_TYPE;
   static override props: RecordProps<WorkflowEdgeShape> = {
     edgeId: T.string,
+    sourceNodeId: T.string,
+    targetNodeId: T.string,
     endX: T.number,
     endY: T.number,
     detourY: T.number,
     enterIndex: T.number,
     highlighted: T.boolean,
+    muted: T.boolean,
+    relation: T.literalEnum("input", "reference", "result"),
     proposed: T.boolean,
     editable: T.boolean,
     label: T.string,
@@ -127,11 +186,15 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
   override getDefaultProps(): WorkflowEdgeShape["props"] {
     return {
       edgeId: "",
+      sourceNodeId: "",
+      targetNodeId: "",
       endX: 120,
       endY: 0,
       detourY: 0,
       enterIndex: 0,
       highlighted: false,
+      muted: false,
+      relation: "reference",
       proposed: false,
       editable: true,
       label: "参考素材",
@@ -175,20 +238,19 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
   }
   override toSvg(shape: WorkflowEdgeShape) {
     const theme = getComputedStyle(this.editor.getContainer());
+    const palette = RELATION_COLORS[shape.props.relation];
     const color =
       theme
-        .getPropertyValue(
-          shape.props.highlighted ? "--swatch-indigo" : "--color-ink-tertiary",
-        )
-        .trim() || "#78746e";
+        .getPropertyValue(palette.token)
+        .trim() || palette.fallback;
     return (
       <g
         fill="none"
         stroke={color}
-        strokeWidth={shape.props.highlighted ? 2 : 1.5}
+        strokeWidth={shape.props.muted ? 1.5 : shape.props.highlighted ? 2.5 : 2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        opacity={shape.props.highlighted ? 1 : 0.72}
+        opacity={shape.props.muted ? 0.18 : shape.props.highlighted ? 1 : 0.9}
       >
         <path
           d={
@@ -201,7 +263,6 @@ export class WorkflowEdgeShapeUtil extends ShapeUtil<WorkflowEdgeShape> {
           d={`M ${shape.props.endX} ${shape.props.endY} L ${shape.props.endX - 8} ${shape.props.endY - 4.5} L ${shape.props.endX - 8} ${shape.props.endY + 4.5} Z`}
           fill={color}
           stroke="none"
-          opacity={0.8}
         />
       </g>
     );

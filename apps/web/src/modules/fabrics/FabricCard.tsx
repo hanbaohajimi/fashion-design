@@ -1,4 +1,5 @@
 "use client";
+import { ImagePreview } from "../../components/ui";
 
 import type { DragEvent as ReactDragEvent } from "react";
 import { Dialog } from "../../components/ui";
@@ -17,6 +18,7 @@ import {
 import type { Fabric } from "./fabric-types";
 import { canManageFabric } from "./fabric-filters";
 import styles from "./fabrics.module.css";
+import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 import { createFabricDetailsDraft, parseFabricDetailsDraft, FabricDetailsEditor, FabricDetailsSummary } from "./FabricDetailsEditor";
 
 const FABRIC_IMAGE_ACCEPT =
@@ -33,6 +35,7 @@ export function FabricUploadPanel({
 }: FabricUploadPanelProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const play = useCoutureMotion();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -123,6 +126,7 @@ export function FabricUploadPanel({
       setSuccess("面料已加入面料库");
       reset();
       onUploaded(created);
+      play("material", { anchor: panel.current, eventKey: `fabric-upload:${created.id}` });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "面料上传失败，请重试");
     } finally {
@@ -342,8 +346,7 @@ export function FabricCard({
       onDragStart={beginDrag}
     >
       <div className={styles.cardVisual}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt={label} draggable={false} src={fabric.mainImageUrl} />
+        <ImagePreview alt={label} src={fabric.mainImageUrl} fit="cover" retryable={false} draggable={false} />
         <span className={styles.dragHint}>拖至白板</span>
         <button
             aria-label={`${manageable ? "管理" : "查看"}面料：${label}`}
@@ -355,8 +358,8 @@ export function FabricCard({
           </button>
       </div>
       <div className={styles.cardBody}>
-        {fabric.details?.name ? <h3>{fabric.details.name}</h3> : null}
-        {fabric.details?.code || fabric.details?.weightGsm ? <p className={styles.cardSpec}>{[fabric.details.code, fabric.details.weightGsm ? `${fabric.details.weightGsm} g/m²` : null].filter(Boolean).join(" · ")}</p> : null}
+        <h3>{fabric.details?.name || "未命名面料"}</h3>
+        <p className={styles.cardSpec}>{[fabric.details?.code, fabric.details?.weightGsm ? `${fabric.details.weightGsm} g/m²` : null].filter(Boolean).join(" · ") || "规格未填写"}</p>
         <div className={styles.fabricTags}>
           <span className={styles.categoryPill} data-scope={fabric.scope}>
             {scopeLabel}
@@ -393,8 +396,7 @@ export function FabricCard({
                   </button>
                 </header>
                 <div className={styles.fabricDialogImage}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={label} src={fabric.mainImageUrl} />
+                  <ImagePreview alt={label} src={fabric.mainImageUrl} />
                 </div>
                 {editing ? (
                   <form

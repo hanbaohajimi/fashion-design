@@ -6,7 +6,10 @@ import { privateFetch } from "../../auth/private-fetch";
 import type { WorkflowAssetType } from "./workflow-api";
 import { WorkflowDialog } from "./WorkflowDialog";
 import { Button, Field, Input, Select } from "../../../components/ui";
+import { PaletteExplorer } from "../../palette/PaletteExplorer";
 import styles from "./workflow-canvas.module.css";
+import { EmbeddedEditor } from "./EmbeddedEditor";
+import { useWorkspaceDraft } from "./workspace-drafts";
 
 interface LibraryItem {
   readonly id: string;
@@ -16,7 +19,8 @@ interface LibraryItem {
   readonly sourceUrl?: string;
 }
 
-export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy, onAdd, onClose }: {
+export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy, onAdd, onClose, embedded }: {
+  readonly embedded?: boolean;
   readonly type: WorkflowAssetType;
   readonly initialTitle: string;
   readonly initialPayload?: Readonly<Record<string, unknown>>;
@@ -28,21 +32,28 @@ export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy
   const [text, setText] = useState(typeof initialPayload?.text === "string" ? initialPayload.text : "");
   const [colors, setColors] = useState(() => initialPayload ? readSwatchColors(initialPayload, initialTitle) : [{ hex: "#40536D", name: "色彩 1" }]);
   const [error, setError] = useState<string | null>(null);
-  return <WorkflowDialog label={`添加${initialTitle}`} onClose={onClose} returnFocusSelector="[data-material-trigger]">
+  const [saving, setSaving] = useState(false);
+  const [baseline, setBaseline] = useState(() => JSON.stringify({ title: initialTitle, text: typeof initialPayload?.text === "string" ? initialPayload.text : "", colors: initialPayload ? readSwatchColors(initialPayload, initialTitle) : [{ hex: "#40536D", name: "色彩 1" }] }));
+  const value = { title, text, colors };
+  const signature = JSON.stringify(value);
+  useWorkspaceDraft("material", value, embedded === true && signature !== baseline, saving);
+  return <EmbeddedEditor embedded={embedded} label={embedded ? "编辑色卡" : `添加${initialTitle}`} onClose={onClose} returnFocusSelector="[data-material-trigger]">
     <form className={styles.entryDialog} onSubmit={(event) => {
       event.preventDefault();
-      if (!title.trim() || busy) return;
-      void onAdd(title.trim(), { text: text.trim(), ...(type === "swatch" ? { color: colors[0]?.hex, colors } : {}) }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "素材保存失败"));
+      if (!title.trim() || busy || saving) return;
+      setSaving(true);
+      void onAdd(title.trim(), { text: text.trim(), ...(type === "swatch" ? { color: colors[0]?.hex, colors } : {}) }).then(() => { setBaseline(signature); setError(null); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "素材保存失败")).finally(() => setSaving(false));
     }}>
-      <header><span className={styles.overline}>添加设计素材</span><button aria-label="关闭" onClick={onClose} type="button">×</button></header>
+      {!embedded ? <header><span className={styles.overline}>添加设计素材</span><button aria-label="关闭" onClick={onClose} type="button">×</button></header> : null}
       <h2>{initialTitle}</h2>
-      <label>名称<input autoFocus maxLength={200} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
+      <label>名称<input autoFocus={!embedded} maxLength={200} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
       {type === "swatch" ? <fieldset><legend>色卡（最多12色）</legend>{colors.map((color, index) => <div key={index}><input aria-label={`色号 ${index + 1}`} type="color" value={color.hex} onChange={e => setColors(colors.map((c, i) => i === index ? { ...c, hex: e.target.value } : c))} /><input aria-label={`颜色名称 ${index + 1}`} maxLength={48} required value={color.name} onChange={e => setColors(colors.map((c, i) => i === index ? { ...c, name: e.target.value } : c))} /><button type="button" disabled={index === 0} onClick={() => { const next = [...colors]; const previous = next[index - 1]; const current = next[index]; if (previous && current) { next[index - 1] = current; next[index] = previous; setColors(next); } }}>上移</button><button type="button" disabled={colors.length === 1} onClick={() => setColors(colors.filter((_, i) => i !== index))}>删除</button></div>)}<button type="button" disabled={colors.length >= 12} onClick={() => setColors([...colors, { hex: "#40536D", name: `色彩 ${colors.length + 1}` }])}>添加颜色</button></fieldset> : null}
+      {type === "swatch" ? <PaletteExplorer colors={colors} disabled={busy} onApply={setColors} /> : null}
       <label>内容<textarea maxLength={4000} onChange={(event) => setText(event.target.value)} placeholder="写下设计目标、场景或参考说明…" rows={5} value={text} /></label>
       {error ? <p role="alert">{error}</p> : null}
-      <button disabled={busy} type="submit">加入工作流</button>
+      <button disabled={busy || saving} type="submit">{saving ? "正在保存…" : embedded ? "保存色卡" : "加入工作流"}</button>
     </form>
-  </WorkflowDialog>;
+  </EmbeddedEditor>;
 }
 
 export function WorkflowLibraryDialog({ kind, onAdd, onClose }: {

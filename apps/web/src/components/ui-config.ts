@@ -1,5 +1,7 @@
 /** 与 design-system.css 的工作区尺寸约定保持一致；数值用于画布计算与键盘步进。 */
 export const STUDIO_LAYOUT = {
+  mobileMax: 767,
+  dockedMin: 1100,
   sidebarDefault: 384,
   sidebarMin: 320,
   sidebarMax: 480,

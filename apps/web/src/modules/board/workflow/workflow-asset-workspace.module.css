@@ -24,6 +24,13 @@
   width: min(1020px, 100%);
 }
 
+@container (max-width: 760px) {
+  .assetDialog[data-embedded-editor] .previewLayout,
+  .sketchDialog[data-embedded-editor] .sketchBody { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .sketchDialog[data-embedded-editor] .sketchControls { max-height: none; }
+  .assetDialog[data-embedded-editor] .imageStage img { max-height: 50dvh; }
+}
+
 .header {
   display: flex;
   align-items: stretch;

@@ -71,6 +71,16 @@ export function nodeSize(
   readonly h: number;
   readonly w: number;
 } {
+  if (node.kind === "tool") {
+    const title = displayNodeTitle({ type: node.type, title: node.title ?? "" });
+    // 按 14px 标题估算字宽，加上两侧 12px 内边距和边框。
+    // 与渲染环境无关，节点、连线接点和导出始终使用同一尺寸。
+    const textWidth = Array.from(title).reduce(
+      (width, character) => width + (character.charCodeAt(0) <= 0x7f ? 8 : 14),
+      0,
+    );
+    return { w: Math.min(224, Math.max(96, Math.ceil((textWidth + 26) / 8) * 8)), h: 44 };
+  }
   if (
     isImageNodeType(node.type) &&
     (node.type !== "fabric" || Boolean(nodeImageUrl({ payload: node.payload ?? {} })))
@@ -89,7 +99,7 @@ export function nodeSize(
   // 色卡是纯色块，做成正方形样本，像布料小样
   if (node.type === "swatch") return compact ? { h: 148, w: width } : { h: 236, w: 236 };
   // 工具节点比素材矮一档：过程不该抢作品的视觉高度
-  return { h: compact ? (node.kind === "tool" ? 186 : 172) : node.kind === "tool" ? 168 : 200, w: width };
+  return { h: compact ? 172 : 200, w: width };
 }
 
 export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
@@ -99,6 +109,7 @@ export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
     case "evaluate_design":
       return "candidate";
     case "edit_design":
+    case "transform_image":
     case "restore_version":
       return "source";
     case "generate_design":
@@ -110,6 +121,7 @@ export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
  * 素材/工具类型的中文名，用于在没有可读标题时兜底。
  */
 const NODE_TYPE_TITLES: Readonly<Record<string, string>> = {
+  transform_image: "调整图片尺寸",
   analyze_brief: "解析设计需求",
   brief: "设计需求",
   candidate: "设计方案",
@@ -315,6 +327,46 @@ export function lineageOf(
   return { edgeIds, nodeIds };
 }
 
+/** 聚焦只沿选中节点分别向上、向下追踪，不从祖先扩散到兄弟分支。 */
+export function focusPathOf(graph: WorkflowGraph, selectedNodeId: string) {
+  if (!graph.nodes.some((node) => node.id === selectedNodeId)) return null;
+  const ancestors = lineageOf(graph, selectedNodeId);
+  const nodeIds = new Set(ancestors.nodeIds);
+  const edgeIds = new Set(ancestors.edgeIds);
+  const outgoing = new Map<string, WorkflowEdge[]>();
+  for (const edge of graph.edges) {
+    const edges = outgoing.get(edge.sourceNodeId) ?? [];
+    edges.push(edge);
+    outgoing.set(edge.sourceNodeId, edges);
+  }
+  const visited = new Set([selectedNodeId]);
+  const pending = [selectedNodeId];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === undefined) continue;
+    for (const edge of outgoing.get(id) ?? []) {
+      edgeIds.add(edge.id);
+      nodeIds.add(edge.targetNodeId);
+      if (!visited.has(edge.targetNodeId)) {
+        visited.add(edge.targetNodeId);
+        pending.push(edge.targetNodeId);
+      }
+    }
+  }
+  return { nodeIds, edgeIds };
+}
+
+export type WorkflowEdgeRelation = "input" | "reference" | "result";
+
+export function edgeRelation(
+  source: WorkflowNode,
+  edge: WorkflowEdge,
+): WorkflowEdgeRelation {
+  // 工具输出也使用 source 端口，必须先按源节点区分生成结果。
+  if (source.kind === "tool") return "result";
+  return edge.targetPort === "reference" ? "reference" : "input";
+}
+
 export function incomingEdges(
   graph: WorkflowGraph,
   nodeId: string,
@@ -336,6 +388,7 @@ export function availableInputPorts(
   if (source.kind === target.kind || source.id === target.id) return [];
   if (source.kind === "tool") {
     const outputType: Readonly<Record<WorkflowToolType, string>> = {
+      transform_image: "candidate",
       analyze_brief: "constraint",
       edit_design: "candidate",
       restore_version: "candidate",

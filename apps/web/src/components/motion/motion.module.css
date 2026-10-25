@@ -1,0 +1,25 @@
+.revisionSaved {
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 80;
+  padding: 12px 56px 12px 18px;
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 13px;
+  box-shadow: var(--shadow-material-1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-enter);
+}
+
+.revisionSaved[data-visible="true"] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revisionSaved {
+    transition: none;
+  }
+}

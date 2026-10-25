@@ -29,6 +29,8 @@ interface Gesture {
 }
 interface InteractionContext {
   gesture: Gesture | null;
+  hoveredNodeId: string | null;
+  setNodeHovered: (nodeId: string, hovered: boolean) => void;
   selectedEdgeId: string | null;
   hint: (
     nodeId: string,
@@ -68,6 +70,20 @@ export function WorkflowInteractionProvider({
   children: ReactNode;
 }) {
   const [gesture, setGesture] = useState<Gesture | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+  const setNodeHovered = useCallback((nodeId: string, hovered: boolean) => {
+    setHoveredNodeId((current) => hovered ? nodeId : current === nodeId ? null : current);
+  }, []);
+  useEffect(() => {
+    const clear = () => setHoveredNodeId(null);
+    const visibility = () => { if (document.hidden) clear(); };
+    window.addEventListener("blur", clear);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      window.removeEventListener("blur", clear);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, []);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -246,6 +262,8 @@ export function WorkflowInteractionProvider({
   }, [disconnect, selectedEdgeId]);
   const value: InteractionContext = {
     gesture,
+    hoveredNodeId: gesture ? null : hoveredNodeId,
+    setNodeHovered,
     selectedEdgeId,
     hint,
     status: submitting ? "正在保存连接…" : status,

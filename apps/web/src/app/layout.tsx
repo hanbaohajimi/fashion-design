@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 
@@ -33,6 +33,11 @@ interface RootLayoutProps {
   readonly children: ReactNode;
 }
 
+export const viewport: Viewport = {
+  width: "device-width", initialScale: 1, viewportFit: "cover",
+  interactiveWidget: "resizes-content", themeColor: "#fcfbf8", colorScheme: "light",
+};
+
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="zh-CN">
@@ -51,7 +56,12 @@ export default function RootLayout({ children }: RootLayoutProps) {
           theme="light"
           position="bottom-right"
           richColors
+          closeButton
+          duration={4000}
+          offset={{ bottom: "calc(32px + env(safe-area-inset-bottom, 0px))", right: "calc(32px + env(safe-area-inset-right, 0px))", left: "calc(32px + env(safe-area-inset-left, 0px))" }}
+          mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", right: "calc(16px + env(safe-area-inset-right, 0px))", left: "calc(16px + env(safe-area-inset-left, 0px))" }}
           toastOptions={{
+            closeButtonAriaLabel: "关闭通知",
             style: {
               fontFamily: "var(--font-sans)",
               fontSize: "var(--text-sm, 13px)",

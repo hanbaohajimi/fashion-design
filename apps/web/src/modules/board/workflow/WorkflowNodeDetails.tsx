@@ -38,6 +38,7 @@ import {
 import { userFacingError } from "../../../components/user-facing-error";
 import { WorkflowDialog } from "./WorkflowDialog";
 import styles from "./workflow-canvas.module.css";
+import { useWorkspaceDraft } from "./workspace-drafts";
 
 const REFERENCE_ROLE_OPTIONS = [
   { value: "style_ref", label: "风格参考" },
@@ -56,6 +57,7 @@ const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
 };
 
 export function NodeDetails({
+  embedded = false,
   graph,
   node,
   onCreateCollection,
@@ -70,6 +72,7 @@ export function NodeDetails({
   setError,
   onDirtyChange,
 }: {
+  readonly embedded?: boolean;
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   readonly graph: WorkflowGraph;
   readonly node: WorkflowNode | null;
@@ -95,6 +98,7 @@ export function NodeDetails({
   >("selected");
   const [decisionReason, setDecisionReason] = useState("");
   const [toolDirty, setToolDirty] = useState(false);
+  useWorkspaceDraft("decision", { decisionKind, decisionReason }, Boolean(decisionReason.trim()));
   useEffect(() => {
     onDirtyChange?.(toolDirty || Boolean(decisionReason.trim()));
   }, [decisionReason, onDirtyChange, toolDirty]);
@@ -132,14 +136,15 @@ export function NodeDetails({
         })
       : null;
   return (
-    <div className={styles.detailScroll}>
-      {nodeTypeLabel(node.type) !== displayNodeTitle(node) ? (
+    <div className={styles.detailScroll} data-workspace={embedded}>
+      {!embedded && nodeTypeLabel(node.type) !== displayNodeTitle(node) ? (
         <span className={styles.overline}>{nodeTypeLabel(node.type)}</span>
       ) : null}
-      <h3>{displayNodeTitle(node)}</h3>
+      {!embedded ? <h3>{displayNodeTitle(node)}</h3> : null}
       {node.kind === "tool" &&
       (isTaskActive(node.status) || state.state === "failed") ? (
         <TaskFeedback
+          motionKey={`node:${node.id}`}
           taskId={`${projectId}:${node.id}`}
           status={node.status}
           updatedAt={node.updatedAt}
@@ -152,15 +157,15 @@ export function NodeDetails({
                 : "analysis"
           }
         />
-      ) : node.kind === "tool" || state.state === "unknown" ? (
+      ) : !embedded && (node.kind === "tool" || state.state === "unknown") ? (
         <Badge tone={state.state === "complete" ? "success" : "neutral"}>
           {state.label}
         </Badge>
       ) : null}
-      {summary && summary !== node.title ? (
+      {summary && summary !== node.title && !(embedded && node.kind === "tool") ? (
         <p className={styles.detailSummary}>{summary}</p>
       ) : null}
-      {nodeImageUrl(node) ? (
+      {nodeImageUrl(node) && !(embedded && node.type === "candidate") ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt={node.title}
@@ -274,37 +279,7 @@ export function NodeDetails({
           ))}
         </section>
       ) : null}
-      <details className={styles.detailSection}>
-        <summary>来源与路径</summary>
-        <div className={styles.detailMeta}>
-          <span>输入</span>
-          <strong>{inputs.length}</strong>
-          <span>输出</span>
-          <strong>{outputs.length}</strong>
-        </div>
-        {inputs.map((edge) => (
-          <p key={edge.id}>
-            {PORT_LABELS[edge.targetPort]} ·{" "}
-            {displayNodeTitle(
-              graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? {
-                title: "未知节点",
-                type: "legacy",
-              },
-            )}
-          </p>
-        ))}
-        {path && path.nodeIds.size > 1 ? (
-          <ol>
-            {graph.nodes
-              .filter((item) => path.nodeIds.has(item.id))
-              .map((item) => (
-                <li key={item.id}>{displayNodeTitle(item)}</li>
-              ))}
-          </ol>
-        ) : null}
-        {assetId ? <DesignPathPanel assetId={assetId} /> : null}
-      </details>
-      {node.type === "sketch" || node.type === "swatch" ? (
+      {!embedded && (node.type === "sketch" || node.type === "swatch") ? (
         <Button
           onClick={() =>
             window.dispatchEvent(
@@ -318,6 +293,9 @@ export function NodeDetails({
         </Button>
       ) : null}
       {node.kind === "tool" ? (
+        <section className={styles.detailSection}>
+          <h4>输入素材</h4>
+          {inputs.length ? inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} · {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>) : <p>尚未连接输入素材。</p>}
         <ToolSettings
           graph={graph}
           inputs={inputs.length}
@@ -330,13 +308,16 @@ export function NodeDetails({
           projectId={projectId}
           setError={setError}
         />
+          <h4>执行结果</h4>
+          {outputs.length ? outputs.map((edge) => { const result = graph.nodes.find((item) => item.id === edge.targetNodeId); return result ? <p key={edge.id}>{displayNodeTitle(result)} · {nodeSummary(result)}</p> : null; }) : <p>执行完成后，结果会出现在这里和画布中。</p>}
+        </section>
       ) : null}
       {node.type === "candidate" && assetId ? (
         <section className={styles.detailSection}>
           <h4>候选方案</h4>
-          <button onClick={() => onOpenAsset(assetId)} type="button">
+          {!embedded ? <button onClick={() => onOpenAsset(assetId)} type="button">
             打开大图、版本与局部重绘
-          </button>
+          </button> : null}
           <h4>设计师决定</h4>
           <select
             onChange={(event) =>
@@ -394,6 +375,36 @@ export function NodeDetails({
           </button>
         </section>
       ) : null}
+      <details className={styles.detailSection}>
+        <summary>来源与路径</summary>
+        <div className={styles.detailMeta}>
+          <span>输入</span>
+          <strong>{inputs.length}</strong>
+          <span>输出</span>
+          <strong>{outputs.length}</strong>
+        </div>
+        {inputs.map((edge) => (
+          <p key={edge.id}>
+            {PORT_LABELS[edge.targetPort]} ·{" "}
+            {displayNodeTitle(
+              graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? {
+                title: "未知节点",
+                type: "legacy",
+              },
+            )}
+          </p>
+        ))}
+        {path && path.nodeIds.size > 1 ? (
+          <ol>
+            {graph.nodes
+              .filter((item) => path.nodeIds.has(item.id))
+              .map((item) => (
+                <li key={item.id}>{displayNodeTitle(item)}</li>
+              ))}
+          </ol>
+        ) : null}
+        {assetId ? <DesignPathPanel assetId={assetId} /> : null}
+      </details>
       <section className={styles.detailSection}>
         <button
           className={styles.dangerButton}
@@ -523,6 +534,8 @@ function ToolSettings({
   const original = toolDraft(node);
   const [draft, setDraft] = useState<ToolDraft>(original);
   const [saving, setSaving] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const executeLock = useRef(false);
   const previousOriginal = useRef(JSON.stringify(original));
   const originalSignature = JSON.stringify(original);
   const draftSignature = JSON.stringify(draft);
@@ -550,6 +563,7 @@ function ToolSettings({
         draft.count !== original.count ||
         JSON.stringify(draft.referenceInputs) !==
           JSON.stringify(original.referenceInputs)));
+  useWorkspaceDraft("tool", draft, dirty, saving || executing);
   useEffect(() => {
     onDirtyChange?.(canEdit && dirty);
   }, [canEdit, dirty, onDirtyChange]);
@@ -636,6 +650,9 @@ function ToolSettings({
   };
 
   const execute = async () => {
+    if (executeLock.current) return;
+    executeLock.current = true;
+    setExecuting(true);
     try {
       const next = await executeWorkflowNode(
         projectId,
@@ -646,6 +663,9 @@ function ToolSettings({
       window.dispatchEvent(new Event("fashion-workflow:refresh"));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "节点执行失败");
+    } finally {
+      executeLock.current = false;
+      setExecuting(false);
     }
   };
 
@@ -857,7 +877,7 @@ function ToolSettings({
         ["ready", "failed"].includes(node.status) ? (
           <Button
             variant={dirty ? "secondary" : "primary"}
-            disabled={saving || inputs === 0 || (canEdit && dirty)}
+            disabled={saving || executing || inputs === 0 || (canEdit && dirty)}
             onClick={() => void execute()}
             type="button"
           >

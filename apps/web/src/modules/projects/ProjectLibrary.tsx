@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { markMotion } from "../../components/motion/events";
+import { useArchiveOpening } from "../../components/motion/use-archive-opening";
 import { AppHeader } from "../../components/AppHeader";
-import { Button, Skeleton } from "../../components/ui";
+import { Button, Notice, Skeleton } from "../../components/ui";
+import { notifyOperation } from "../../components/operation-notice";
 import controls from "../../components/ui.module.css";
 import { userFacingError } from "../../components/user-facing-error";
 import { useGuardedRouter as useRouter } from "../use-guarded-router";
@@ -49,6 +52,7 @@ export function ProjectLibrary() {
     ReadonlySet<string>
   >(() => new Set());
   const duplicateFlightsRef = useRef(new Map<string, Promise<void>>());
+  const removalFocus = useRef<{ id: string; next: HTMLElement | null } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const projectsQuery = useProjects(
@@ -65,6 +69,23 @@ export function ProjectLibrary() {
     [projectsQuery.data],
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
+  const motionRoot = useRef<HTMLElement>(null);
+  useArchiveOpening(motionRoot, Boolean(session) && !authLoading && projectsQuery.isSuccess);
+  useEffect(() => {
+    const pending = removalFocus.current;
+    if (!pending || projects.some((item) => item.id === pending.id)) return;
+    removalFocus.current = null;
+    if (document.activeElement !== document.body) return;
+    if (pending.next?.isConnected) pending.next.focus();
+    else searchInputRef.current?.focus();
+  }, [projects]);
+  const prepareRemovalFocus = (project: Project) => {
+    const cards = Array.from(motionRoot.current?.querySelectorAll<HTMLElement>("[data-project-id]") ?? []);
+    const index = cards.findIndex((card) => card.dataset.projectId === project.id);
+    if (index < 0 || !cards[index]?.contains(document.activeElement)) return;
+    const next = cards[index + 1] ?? cards[index - 1];
+    removalFocus.current = { id: project.id, next: next?.querySelector<HTMLElement>("summary,a[href]") ?? null };
+  };
 
   useEffect(() => {
     const handleSearchShortcut = (event: KeyboardEvent): void => {
@@ -102,6 +123,7 @@ export function ProjectLibrary() {
     });
     setProjectStatus("active");
     writeActiveBoardId(created.id);
+    markMotion(`project:${created.id}`, "signature");
     router.push(`/${created.id}`);
   };
 
@@ -114,13 +136,13 @@ export function ProjectLibrary() {
         input: { name },
       });
     } catch (error) {
-      setNotice(errorMessage(error));
-      throw error;
+      throw new Error(errorMessage(error));
     }
   };
 
   const runArchive = async (project: Project): Promise<void> => {
     setNotice(null);
+    prepareRemovalFocus(project);
 
     try {
       await updateMutation.mutateAsync({
@@ -130,6 +152,7 @@ export function ProjectLibrary() {
       if (readActiveBoardId() === project.id) {
         clearActiveBoardId();
       }
+      notifyOperation({ id: `archive:${project.id}`, title: "项目已归档" });
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -137,12 +160,14 @@ export function ProjectLibrary() {
 
   const runRestore = async (project: Project): Promise<void> => {
     setNotice(null);
+    prepareRemovalFocus(project);
 
     try {
       await updateMutation.mutateAsync({
         id: project.id,
         input: { archived: false },
       });
+      notifyOperation({ id: `restore:${project.id}`, title: "项目已恢复" });
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -150,12 +175,12 @@ export function ProjectLibrary() {
 
   const runDelete = async (project: Project): Promise<void> => {
     setNotice(null);
+    prepareRemovalFocus(project);
 
     try {
       await deleteMutation.mutateAsync(project.id);
     } catch (error) {
-      setNotice(errorMessage(error));
-      throw error;
+      throw new Error(errorMessage(error));
     }
   };
 
@@ -180,7 +205,7 @@ export function ProjectLibrary() {
         projectId: project.id,
       })
       .then(() => {
-        setNotice("已复制当前设计；历史对话和执行记录保留在原项目");
+        notifyOperation({ id: `duplicate:${project.id}`, title: "已复制当前设计；历史对话和执行记录保留在原项目" });
       })
       .catch((error: unknown) => {
         setNotice(errorMessage(error));
@@ -234,7 +259,7 @@ export function ProjectLibrary() {
   }
 
   return (
-    <main className={`${styles.library} ${controls.controlSurface}`}>
+    <main ref={motionRoot} className={`${styles.library} ${controls.controlSurface}`}>
       <AppHeader current="projects" />
 
       <section className={styles.dashboard} aria-label="项目库">
@@ -284,7 +309,7 @@ export function ProjectLibrary() {
         <span aria-live="polite" className={styles.projectCount} role="status">
           {total} 个{projectStatus === "archived" ? "归档项目" : "项目"}
         </span>
-        <Button variant="secondary" onClick={() => setCreateOpen(true)}>
+        <Button variant={projects.length ? "primary" : "secondary"} onClick={() => setCreateOpen(true)}>
           <span aria-hidden="true">＋</span>
           新建项目
         </Button>
@@ -299,12 +324,12 @@ export function ProjectLibrary() {
       ) : null}
 
       {notice ? (
-        <div className={styles.notice} role="alert">
+        <Notice tone="error">
           {notice}
           <button onClick={() => setNotice(null)} type="button">
             关闭
           </button>
-        </div>
+        </Notice>
       ) : null}
 
       {projectsQuery.isPending ? (

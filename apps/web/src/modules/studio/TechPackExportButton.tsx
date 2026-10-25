@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui";
 import { privateFetch } from "../auth/private-fetch";
 import styles from "./studio.module.css";
+import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 interface ExportTask {
   id: string;
   status: string;
@@ -72,6 +73,14 @@ function RevisionExport({
   disabled?: boolean;
 }) {
   const [task, setTask] = useState<ExportTask | null>(null);
+  const motionAnchor = useRef<HTMLAnchorElement>(null);
+  const requestedTask = useRef<string | null>(null);
+  const play = useCoutureMotion();
+  useEffect(() => {
+    if (task?.id === requestedTask.current && task?.status === "succeeded" && task.downloadUrl) {
+      play("seal", { anchor: motionAnchor.current, eventKey: `export:${task.id}` });
+    }
+  }, [task, play]);
   const [restoring, setRestoring] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,7 +179,10 @@ function RevisionExport({
         key.current,
         controller.signal,
       );
-      if (mounted.current) setTask(result);
+      if (mounted.current) {
+        requestedTask.current = result.id;
+        setTask(result);
+      }
     } catch (cause) {
       if (mounted.current)
         setError(cause instanceof Error ? cause.message : "导出失败");
@@ -206,6 +218,7 @@ function RevisionExport({
       {canDownload ? (
         <p>
           <a
+            ref={motionAnchor}
             className={primary ? styles.downloadAction : styles.link}
             href={task.downloadUrl ?? undefined}
             download

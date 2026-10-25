@@ -71,7 +71,7 @@
 }
 .workspaceNavigation {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 .workspaceNavigation button {
   display: flex;
@@ -87,6 +87,15 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  width: 100%;
+}
+.workspaceNavigation .navigationDisclosure {
+  font-size: var(--text-base);
+  color: var(--color-ink-secondary);
+}
+.workspaceNavigation .navigationDisclosure:disabled {
+  cursor: default;
+  opacity: 1;
 }
 .workspaceNavigation button:hover {
   background: var(--color-surface);

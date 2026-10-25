@@ -19,6 +19,7 @@ import {
 } from "../../components/ui";
 import { WorkspaceHeader } from "../../components/workspace-ui";
 import { TaskFeedback } from "../../components/TaskFeedback";
+import { markMotion } from "../../components/motion/events";
 import { isTaskActive } from "../../components/task-feedback-state";
 import { userFacingError } from "../../components/user-facing-error";
 import styles from "./experiments.module.css";
@@ -285,6 +286,11 @@ export function ExperimentPanel({
           action,
         },
       );
+      if (action !== "cancel") {
+        for (const item of updated.items) {
+          if (itemIds.includes(item.id)) markMotion(`task:${projectId}:${item.id}:${item.attempt}`, "needle");
+        }
+      }
       setBatches((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );

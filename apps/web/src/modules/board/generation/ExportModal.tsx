@@ -19,6 +19,7 @@ import styles from "./generation.module.css";
 import { captureAnalytics } from "../../../observability/analytics";
 import { BoardProjectContext } from "../board-context";
 import { useSerialPolling } from "../../use-serial-polling";
+import { useCoutureMotion } from "../../../components/motion/use-couture-motion";
 
 const POLL_INTERVAL_MS = 1_000;
 
@@ -41,6 +42,14 @@ export function ExportModal({
   );
   const [quality, setQuality] = useState<ExportQuality>("standard");
   const [job, setJob] = useState<ExportJob | null>(null);
+  const downloadAnchor = useRef<HTMLAnchorElement>(null);
+  const requestedJob = useRef<string | null>(null);
+  const play = useCoutureMotion();
+  useEffect(() => {
+    if (job?.id === requestedJob.current && job?.status === "succeeded" && job.downloadUrl) {
+      play("seal", { anchor: downloadAnchor.current, eventKey: `export:${job.id}` });
+    }
+  }, [job, play]);
   const [error, setError] = useState<string | null>(null);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -152,6 +161,7 @@ export function ExportModal({
         try { sessionStorage.setItem(requestStorageKey, request.current.key); } catch { /* same-window retry still retains the ref */ }
       }
       const next = await createExport(source, format, quality, request.current.key);
+      requestedJob.current = next.id;
       setJob(next);
       setNewExport(false);
       setRecent((current) => [next, ...current.filter((item) => item.id !== next.id)]);
@@ -294,7 +304,7 @@ export function ExportModal({
 
             <div className={styles.exportActions}>
               {canDownload ? (
-                <a href={job.downloadUrl ?? undefined}>
+                <a ref={downloadAnchor} href={job.downloadUrl ?? undefined}>
                   下载 {format.toUpperCase()}
                 </a>
               ) : job?.retryAllowed ? (

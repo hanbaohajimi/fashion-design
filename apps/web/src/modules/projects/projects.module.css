@@ -351,18 +351,6 @@
 
 .projectCard {
   min-width: 0;
-  animation: card-in 400ms var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)) both;
-}
-
-/* Stagger: fills a 3-column grid with natural falling-into-place rhythm */
-.projectCard:nth-child(3n + 2) {
-  animation-delay: var(--stagger-md, 80ms);
-}
-.projectCard:nth-child(3n + 3) {
-  animation-delay: calc(var(--stagger-md, 80ms) * 2);
-}
-.projectCard:nth-child(n + 10) {
-  animation-delay: 0ms;
 }
 
 .projectOpen {

@@ -16,7 +16,7 @@
 
 .nativeDialog {
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   margin: auto;
   padding: 0;
   border: 0;
@@ -203,6 +203,24 @@
   background-position: center;
 }
 
+.canvasBackdrop { position: absolute; inset: 0; }
+.canvasBackdrop[data-detail-open="true"] { opacity: 0.45; pointer-events: none; }
+
+/* 选中节点的详情入口不能被相邻图片遮住；仅改变临时绘制层级。 */
+.canvas :global(.tl-shape):has([data-node-selected="true"]) { z-index: 100000 !important; }
+.viewSwitch { position: absolute; top: var(--space-3); left: var(--space-4); z-index: 5; }
+.canvasSection[data-canvas-view="workbench"] { background: var(--color-canvas); }
+.canvasSection[data-canvas-view="workbench"] .viewSwitch { top: 0; left: 0; right: 0; padding: var(--space-3) var(--space-4); background: var(--color-canvas); border-bottom: 1px solid var(--color-divider); }
+.canvasSection[data-canvas-view="workbench"] .canvasHeading { display: none; }
+.canvasSection[data-canvas-view="workflow"] .edgeLegend { top: calc(var(--control-height) + var(--space-6)); }
+
+.detailScroll[data-workspace="true"] { max-width: 800px; height: auto; margin: auto; padding: var(--space-6); }
+.detailScroll[data-workspace="true"] > .detailSection:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.detailScroll[data-workspace="true"] .toolActions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.detailScroll[data-workspace="true"] .toolActions > button { width: auto; min-width: 140px; padding-inline: var(--space-5); }
+.detailScroll[data-workspace="true"] .toolActions > p { flex-basis: 100%; }
+.detailScroll[data-workspace="true"] .detailImage { max-height: calc(100dvh - 240px); background: var(--color-surface); }
+
 /* 画布角落：一个极弱的定位标签。
    画布是工作区，不是落地页——标语和副标题都不该出现在这里。 */
 .canvasHeading {
@@ -240,7 +258,8 @@
    否则会叠加两套网格，密度翻倍成摩尔纹。 */
 .canvas {
   position: absolute;
-  inset: 50px 0 0;
+  /* 标题已隐藏，画布铺满工作区，避免聚焦轮廓露在旧标题留白中。 */
+  inset: 0;
   background: transparent;
 }
 
@@ -248,6 +267,44 @@
 .canvas :global(.tl-background__wrapper) {
   background: transparent !important;
   pointer-events: none !important;
+}
+
+/* 次要说明保持紧凑；文字补充颜色含义，指针穿透以保留画布操作。 */
+.edgeLegend {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font: var(--text-xs)/1.5 var(--font-sans);
+  list-style: none;
+  pointer-events: none;
+}
+
+.edgeLegend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.edgeLegend svg {
+  flex: none;
+}
+
+.canvas:has(.edgeLegend) .arrivalNotice {
+  top: calc(var(--space-3) + 48px);
 }
 
 .emptyState {
@@ -275,19 +332,17 @@
 }
 
 .emptyState h2 {
-  margin: 12px 0 0;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--color-divider);
+  margin: 0;
   color: var(--color-ink);
   font-family: var(--font-sans);
-  font-size: 32px;
+  font-size: var(--text-module-title);
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.2;
 }
 
 .emptyState p {
-  margin-top: 14px;
+  margin-top: var(--space-4);
   color: var(--color-ink-secondary);
   font-size: var(--text-base);
   line-height: 1.7;
@@ -633,13 +688,8 @@
 }
 
 .userExample {
-  width: 88%;
-  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm)
-    var(--radius-xl);
-  margin: 0 0 23px auto;
-  padding: 15px;
-  background: var(--color-surface);
-  color: var(--color-ink-secondary);
+  margin: 0;
+  color: var(--color-ink);
   font-size: var(--text-base);
   line-height: 1.6;
 }
@@ -1454,10 +1504,6 @@
     display: none;
   }
 
-  .canvas {
-    top: 76px;
-  }
-
   .mobileNodeList {
     position: absolute;
     inset: 78px 0 0;
@@ -1857,28 +1903,6 @@
 }
 .proposalEditor textarea {
   resize: vertical;
-}
-.proposalInput {
-  display: flex;
-  gap: 6px;
-  align-items: end;
-}
-.proposalInput label {
-  flex: 1;
-}
-.proposalInput button {
-  padding: 7px;
-  border: 0;
-  background: transparent;
-  color: var(--color-ink-secondary);
-  font-size: var(--text-base);
-  cursor: pointer;
-}
-.previewValue {
-  max-height: 200px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 .referenceConfig {
   display: grid;
@@ -2281,6 +2305,16 @@
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
+.workspace[data-resizing="true"] {
+  user-select: none;
+}
+@media (any-pointer: coarse) {
+  .sidebarResizer {
+    width: 44px;
+    right: calc(var(--studio-sidebar-width) - 22px);
+    background: transparent;
+  }
+}
 .detailsMount {
   display: flex;
   flex: 1;
@@ -2336,6 +2370,88 @@
 .assistantBody {
   padding: var(--space-3) var(--space-4) var(--space-4);
   gap: var(--space-2);
+}
+/* §2.1/§2.4/§3.6: one conversation, one composer, one execution action. */
+.assistantWelcome {
+  padding: var(--space-8) var(--space-2);
+  max-width: 35em;
+  margin: 0;
+}
+.assistantWelcome > span,
+.proposalMeta,
+.proposalReview header > span {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+}
+.assistantWelcome h3 {
+  margin: var(--space-3) 0;
+  font-size: var(--text-section-title);
+  line-height: var(--leading-normal);
+}
+.assistantWelcome p {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+}
+.proposalReview {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+.proposalReview header,
+.adjustmentContext {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-base);
+}
+.proposalReview p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: var(--leading-relaxed);
+}
+.proposalError {
+  color: var(--color-status-error);
+}
+.proposalResults {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.proposalResults button {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--control-height-touch);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.proposalResults img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+}
+.adjustmentContext {
+  margin-bottom: var(--space-3);
+  color: var(--color-ink-secondary);
+}
+.adjustmentContext button {
+  min-height: var(--control-height);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  cursor: pointer;
 }
 .assistantConversation {
   overscroll-behavior: contain;
@@ -2504,9 +2620,9 @@
 }
 @media (max-width: 767px) {
   .topbar {
-    min-height: var(--studio-header-height);
-    height: var(--studio-header-height);
-    padding: 0 var(--space-3);
+    min-height: calc(var(--studio-header-height) + env(safe-area-inset-top, 0px));
+    height: calc(var(--studio-header-height) + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) calc(var(--space-3) + env(safe-area-inset-right, 0px)) 0 calc(var(--space-3) + env(safe-area-inset-left, 0px));
   }
   .libraryDialog > form {
     grid-template-columns: minmax(0, 1fr);
@@ -2595,6 +2711,8 @@
     padding: var(--space-3);
   }
   .workspace[data-mobile-view="assistant"] .assistantBody {
+    padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
     padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
   }
   .sidebarHeader h2 {
@@ -2684,34 +2802,11 @@
 .arrivalNotice button:focus-visible {
   outline: 2px solid var(--color-focus-ring);
 }
-.starterSuggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.starterSuggestions button {
-  text-align: left;
-  font: inherit;
-  font-size: 12px;
-  color: var(--color-ink-secondary);
-  background: var(--color-action-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-.starterSuggestions button:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-.starterSuggestions button,
 .arrivalNotice button {
   font-size: 14px;
   min-height: 36px;
 }
 @media (pointer: coarse) {
-  .starterSuggestions button,
   .arrivalNotice button {
     min-height: 44px;
   }

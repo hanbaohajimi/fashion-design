@@ -439,7 +439,7 @@ textarea.input {
 }
 .dialog {
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   margin: auto;
   padding: 0;
   border: 1px solid var(--color-border);

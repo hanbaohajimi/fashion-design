@@ -53,7 +53,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname);
+  const isPublicPath = PUBLIC_AUTH_PATHS.has(pathname) || /^\/share\/[\w-]+$/u.test(pathname);
   const draftOwner = useRef<string | null>(null);
   useEffect(() => {
     const id = session?.user.id ?? null;

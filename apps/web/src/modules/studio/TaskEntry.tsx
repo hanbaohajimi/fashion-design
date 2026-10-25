@@ -32,6 +32,7 @@ import { useRouter } from "next/navigation";
 import { AssetPicker } from "./studio-ui";
 import { ActionBar, FormSection } from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
+import { markMotion } from "../../components/motion/events";
 import styles from "./studio.module.css";
 
 type TaskKind = "sketch" | "combine" | "color" | "detail" | "brief";
@@ -231,6 +232,7 @@ export function TaskEntry(
   const form = useStudioForm<TaskDraft>(
     { kind: "sketch", prompt: "", preserve: "", assetIds: [], brandId: "" },
     props.onDirty,
+    { notifySaved: false },
   );
   const { draft, setDraft } = form;
   const router = useRouter();
@@ -322,6 +324,7 @@ export function TaskEntry(
           body?.message ?? "节点已建立，执行未成功。重试将继续原任务。",
         );
       }
+      markMotion(`node:${current.toolId}`, "needle", `execute:${current.executeMutationId}`);
     });
     if (succeeded) {
       props.onDirty(false);
@@ -431,34 +434,36 @@ export function TaskEntry(
                 }
               />
             </Field>
-            <FormSection
-              title="品牌关联"
-              summary={
-                draft.brandId
-                  ? `已关联：${props.data.brandProfiles.find((item) => item.id === draft.brandId)?.currentRevision.payload.name ?? "当前品牌"}`
-                  : "未关联品牌"
-              }
-            >
-              <Field label="采用品牌资料">
-                <Select
-                  value={draft.brandId}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      brandId: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">本次不关联品牌</option>
-                  {props.data.brandProfiles.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.currentRevision.payload.name} · r
-                      {item.currentRevision.revision}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </FormSection>
+            {props.data.brandProfiles.length > 0 ? (
+              <FormSection
+                title="品牌关联"
+                summary={
+                  draft.brandId
+                    ? `已关联：${props.data.brandProfiles.find((item) => item.id === draft.brandId)?.currentRevision.payload.name ?? "当前品牌"}`
+                    : "未关联品牌"
+                }
+              >
+                <Field label="采用品牌资料">
+                  <Select
+                    value={draft.brandId}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        brandId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">本次不关联品牌</option>
+                    {props.data.brandProfiles.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.currentRevision.payload.name} · r
+                        {item.currentRevision.revision}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </FormSection>
+            ) : null}
           </div>
           <div className={styles.taskSource}>
             <UploadInput
@@ -495,8 +500,7 @@ export function TaskEntry(
         <div className={styles.note}>
           {draft.kind === "brief"
             ? "将建立需求分析任务，本步骤不生成图片。"
-            : "将发起一次图片生成任务，成功后按现有额度规则计次。结果保留来源、修改要求和使用的品牌资料修订。"}
-          图像中的尺寸和面料物性仍需人工确认。
+            : "生成成功后按额度计次；尺寸与面料物性需人工确认。"}
         </div>
         <ActionBar status={<span>完成后在画布查看进度和结果。</span>}>
           <Button

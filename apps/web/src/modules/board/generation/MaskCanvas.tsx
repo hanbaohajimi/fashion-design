@@ -21,6 +21,7 @@ interface Stroke {
 }
 
 export interface MaskCanvasState {
+  readonly draft?: unknown;
   readonly coverage: number;
   readonly strokeCount: number;
 }
@@ -124,6 +125,7 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
           context.stroke();
         }
         onChange({
+          draft: { strokes: nextStrokes, brushRatio, width, height },
           coverage: maskCoverage(context, width, height),
           strokeCount: nextStrokes.length,
         });

@@ -697,6 +697,10 @@
   grid-template-columns: minmax(0, 1fr) 360px;
 }
 
+@container (max-width: 760px) {
+  .inpaintLayout { grid-template-columns: minmax(0, 1fr); }
+}
+
 .maskStage {
   isolation: isolate;
 }

@@ -1,0 +1,106 @@
+.panel {
+  min-width: 0;
+  margin-top: var(--space-4);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+}
+.body {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.controls > :first-child {
+  grid-column: 1 / -1;
+}
+.panel .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+.panel .field input,
+.panel .field select {
+  min-width: 0;
+  width: 100%;
+  font-size: var(--text-base);
+}
+.heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+.originals,
+.suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.originals li,
+.suggestions li {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chip {
+  display: flex;
+  min-height: var(--control-height-touch);
+  align-items: flex-end;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.suggestions .chip {
+  min-height: 80px;
+}
+.chip code {
+  font-size: var(--text-sm);
+}
+.hint {
+  margin: var(--space-2) 0 0;
+  color: var(--color-ink-secondary);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+.hint p {
+  margin: 0;
+}
+.warnings {
+  max-height: 120px;
+  overflow: auto;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+@media (max-width: 480px) {
+  .body {
+    padding: var(--space-3);
+  }
+  .suggestions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel button {
+    min-height: var(--control-height-touch);
+  }
+}

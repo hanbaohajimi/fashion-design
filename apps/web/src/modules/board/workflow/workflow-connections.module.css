@@ -1,36 +1,22 @@
-/* 连线 = 工序，不是电线。
-   默认状态下安静（墨色细线 + 实心箭头），
-   有事情发生时才表达：生长、流动、选中加粗。 */
+/* §2.1/§2.4/§5.7：关系色保持语义，线宽与淡化表达聚焦。
+   使用材料色相的深色连线变量；保留箭头、用途提示和提案虚线作为非颜色线索。 */
 
 .edge {
   overflow: visible;
-  color: var(--color-ink-tertiary);
-}
-
-/* 生长入场：从源节点出发画到目标节点。
-   弧长由 WorkflowEdgeShape 按采样点算好后通过 --edge-length 传入。 */
-@keyframes edgeDraw {
-  from {
-    stroke-dashoffset: var(--edge-length, 400);
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+  color: var(--edge-color, var(--color-workflow-edge-input));
 }
 
 .edgeLine {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.72;
+  opacity: 0.9;
   pointer-events: none;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: var(--edge-length, 400);
-  stroke-dashoffset: var(--edge-length, 400);
-  animation: edgeDraw 320ms var(--ease-enter) forwards;
-  animation-delay: calc(var(--edge-enter-index, 0) * 45ms + 180ms);
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
   transition:
     stroke-width var(--dur-fast) var(--ease-state),
     stroke var(--dur-fast) var(--ease-state),
@@ -41,7 +27,7 @@
    旧实现把动画挂在本元素的 ::after 上——SVG 不支持伪元素，那段动画从未生效。 */
 .edgeFlow {
   fill: none;
-  stroke: var(--swatch-indigo);
+  stroke: currentColor;
   stroke-width: 2;
   stroke-dasharray: 2 14;
   stroke-linecap: round;
@@ -57,17 +43,19 @@
   }
 }
 
-.edge[data-running="true"] .edgeFlow,
-.edge[data-highlighted="true"] .edgeFlow,
-.edge[data-selected="true"] .edgeFlow {
+.edge[data-running="true"] .edgeFlow {
   opacity: 0.85;
   animation: edgeFlowMove 1.6s linear infinite;
+}
+
+:global([data-page-hidden="true"]) .edgeFlow {
+  animation-play-state: paused;
 }
 
 .edgeArrow {
   fill: currentColor;
   stroke: none;
-  opacity: 0.8;
+  opacity: 0.9;
   pointer-events: none;
   transition: opacity var(--dur-fast) var(--ease-state);
 }
@@ -81,22 +69,32 @@
   vector-effect: non-scaling-stroke;
 }
 
-.edge[data-highlighted="true"],
-.edge[data-selected="true"],
-.edge:hover {
-  color: var(--swatch-indigo);
-}
-
 .edge[data-highlighted="true"] .edgeLine,
 .edge[data-selected="true"] .edgeLine,
 .edge:hover .edgeLine {
-  stroke-width: 2;
+  stroke-width: 2.5;
   opacity: 1;
 }
 
+.edge[data-highlighted="true"] .edgeArrow,
 .edge[data-selected="true"] .edgeArrow,
 .edge:hover .edgeArrow {
   opacity: 1;
+}
+
+/* 不改变命中区域，淡出的关系仍可悬停查看、点击和重连。 */
+.edge[data-muted="true"]:not(:hover) .edgeLine {
+  stroke-width: 1.5;
+}
+
+.edge[data-muted="true"]:not(:hover) .edgeLine,
+.edge[data-muted="true"]:not(:hover) .edgeArrow {
+  opacity: 0.18;
+}
+
+.edge[data-muted="true"]:not(:hover) .edgeFlow {
+  opacity: 0;
+  animation: none;
 }
 
 /* 提案中的连线：虚线表示"尚未确认"，不参与生长动画 */
@@ -107,12 +105,29 @@
 }
 
 .edge[data-proposed="true"] .edgeHit {
+  cursor: default;
+}
+
+.edgeHoverLabel {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--edge-color, var(--color-workflow-edge-input));
+  border-radius: var(--radius-md);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-material-1);
+  font: var(--text-xs)/1.5 var(--font-sans);
+  white-space: nowrap;
   pointer-events: none;
 }
 
 .reconnectHandle {
   fill: var(--color-paper);
-  stroke: var(--swatch-indigo);
+  stroke: currentColor;
   stroke-width: 1.5;
   pointer-events: none;
   cursor: grab;
@@ -192,6 +207,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .edgeLine,
+  .edgeArrow,
+  .edgeFlow {
+    transition: none;
+  }
   .edgeLine {
     animation: none;
     stroke-dasharray: none;

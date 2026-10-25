@@ -8,6 +8,10 @@ import type { DesignAssetVersion } from "./generation-types";
 import styles from "./generation.module.css";
 
 const OPERATION_LABEL: Record<DesignAssetVersion["operation"], string> = {
+  transform: "调整尺寸",
+  remove_background: "移除背景",
+  erase: "智能擦除",
+  outpaint: "AI 扩图",
   generated: "初次生成",
   imported: "素材导入",
   variation: "设计变体",

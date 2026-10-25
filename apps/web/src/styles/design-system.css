@@ -180,6 +180,12 @@
   --swatch-mauve: #68586f;
   --swatch-mauve-wash: #e6e0e9;
 
+  /* 画布连线专用深色：沿用材料色相，提高饱和度并降低亮度。
+     以 90% 不透明度叠加工作台底色时，对比度均高于 3.5:1。 */
+  --color-workflow-edge-input: #415879;
+  --color-workflow-edge-reference: #7a5e32;
+  --color-workflow-edge-result: #61476c;
+
   /* ============================================================
      七、字体
      ============================================================
@@ -297,6 +303,17 @@
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   --duration-instant: 90ms;
+  /* Atelier: event-bound decorative timelines, shared by CSS and Mo.js. */
+  --motion-archive: 600ms;
+  --motion-signature: 500ms;
+  --motion-stitch: 420ms;
+  --motion-material: 360ms;
+  --motion-needle: 420ms;
+  --motion-thread: 260ms;
+  --motion-reveal: 700ms;
+  --motion-seal: 480ms;
+  --motion-card: 260ms;
+  --motion-stagger: 40ms;
   --duration-fast: 140ms;
   --duration-normal: 180ms;
   --duration-result: 280ms;
@@ -506,6 +523,15 @@ body {
   font-weight: var(--font-bold);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
+}
+
+/* 宽屏触控设备也保持可编辑文字尺寸；不限制浏览器缩放。 */
+@media (any-pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -28,14 +28,13 @@ export function FabricVirtualGrid({
       <VirtuosoGrid
         aria-label="面料卡片列表"
         style={{ height }}
-        totalCount={fabrics.length}
+        data={fabrics}
+        computeItemKey={(_, fabric) => fabric.id}
         overscan={200}
         endReached={() => onNearEnd?.()}
         listClassName={styles.virtualGrid ?? ""}
         itemClassName={styles.virtualCell ?? ""}
-        itemContent={(index) => {
-          const fabric = fabrics[index];
-          if (!fabric) return null;
+        itemContent={(_, fabric) => {
           return (
             <FabricCard
               compact={compact}

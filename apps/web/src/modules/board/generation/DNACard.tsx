@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 
 import type { CollectionDna, PaletteColor } from "./collection-types";
 import styles from "./generation.module.css";
+import { PaletteExplorer } from "../../palette/PaletteExplorer";
 
 type LockKey = keyof CollectionDna["locks"];
 
@@ -90,6 +91,7 @@ export function DNACard({
         >
           {dna.palette.length >= 12 ? "已达上限" : "添加颜色"}
         </button>
+        <PaletteExplorer colors={dna.palette} disabled={dna.locks.palette} onApply={setPalette} />
       </DnaSection>
 
       <DnaSection
