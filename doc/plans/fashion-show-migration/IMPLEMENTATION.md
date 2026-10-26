@@ -103,3 +103,5 @@
 提交 `76e9847` 的远端 CI 已通过应用、数据库、构建、Python、服装秀集成、完整浏览器及 60 项视觉检查；最后的真实应用阶段在 `supabase start` 失败，业务用例尚未启动。原脚本丢弃捕获命令的 stderr，无法据此判定启动失败原因。已保留有界 stderr 诊断，成功时仍只返回 stdout，保持 Supabase status 的 JSON 解析；通过真实子进程验证两种行为。真实应用验证拆为独立 Runner/任务，保持原用例及断言，单独输出磁盘与 Docker 使用情况，避免等待完整浏览器套件后才获得启动反馈。
 
 本机全量 `pnpm check` 另出现既有 API 时序失败（普通环境两项、隔离环境一项）；两份 API 测试在单独隔离复测中 9 条均通过。Web 350、原 Worker 117、数据库 3、生产构建分项通过，真实应用流程此前 1 条通过；这些分项结果不记作本机完整命令退出 0。并行聊天后续产生的界面改动保持原状，不纳入本次 CI 修复提交。
+
+补齐诊断后的独立真实任务确认：Supabase 默认 ECR 仓库返回 `toomanyrequests: Data limit exceeded`。CI 采用 [官方 setup-cli 的相同配置](https://github.com/supabase/setup-cli/blob/v1/src/main.ts)，为锁定的 CLI 2.76.15 设置 `SUPABASE_INTERNAL_IMAGE_REGISTRY=ghcr.io`；CLI 版本与镜像标签保持不变，已直接读取 `ghcr.io/supabase/postgres:17.6.1.088` 的 manifest。另一次质量任务暴露出服装秀事件刷新用例在订阅尚未注册时可选回调静默不执行，测试现先等待回调就绪，再发送既有事件；目标用例连续 3 次通过，未放宽超时。

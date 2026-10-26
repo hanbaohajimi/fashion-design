@@ -521,6 +521,7 @@ it("fetches again when an event arrives during an in-flight refresh", async () =
     />,
   );
   await screen.findByLabelText("模特 1 的服装");
+  await waitFor(() => expect(change).toBeTypeOf("function"));
   fireEvent.click(screen.getByRole("button", { name: "刷新进度" }));
   act(() => change?.());
   await act(async () => refresh.resolve(runwayRunFixture()));

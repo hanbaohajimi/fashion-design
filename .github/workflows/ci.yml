@@ -152,6 +152,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
+      # Match supabase/setup-cli for pinned CLI versions without registry fallbacks.
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
       EXPORT_PDF_FONT_PATH: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
       EXPORT_PDF_FONT_FAMILY: NotoSansCJKsc-Regular
     steps:
