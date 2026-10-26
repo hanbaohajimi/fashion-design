@@ -300,6 +300,7 @@ test("面料上传成功反馈与真实加入画布后的落定", async ({ page 
       : route.fallback(),
   );
   await page.goto("/fabrics");
+  await expect(page.getByRole("img", { name: "棉布、哑光、通勤", exact: true }).first()).toBeVisible();
   await page.locator("summary").filter({ hasText: "上传面料" }).click();
   const upload = page.getByRole("region", { name: "上传面料", exact: true });
   await upload.locator('input[type="file"]').setInputFiles({
