@@ -13,9 +13,10 @@ test("三个结果原型可切换、保留选择、查看来源、重试且不�
   page.on("request", (request) => { if (request.url().includes("/api/") && request.method() !== "GET") writes.push(request.url()); });
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/prototypes/result-selection");
+  const picker = page.getByRole("navigation", { name: "Prototype variants" });
+  await expect(picker).toHaveAttribute("data-ready", "");
   await page.getByRole("button", { name: "选择候选", exact: true }).first().click();
   await expect(page.getByRole("status")).toContainText("已选择 1 张");
-  const picker = page.getByRole("navigation", { name: "Prototype variants" });
   await mkdir("output/playwright/optimization", { recursive: true });
   for (const [index, name] of ["矩阵", "比较", "队列"].entries()) {
     await picker.getByRole("button", { name }).click();

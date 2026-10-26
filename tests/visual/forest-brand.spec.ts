@@ -10,7 +10,7 @@ for (const width of [1440, 1024, 390, 320]) {
   test(`森织登录 ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: width < 900 ? 844 : 900 });
     await page.goto("/login");
-    await expect(page).toHaveTitle("森织");
+    await expect(page).toHaveTitle("森织设计工作室");
     await expect(
       page.getByRole("complementary", { name: "森织 设计工作室" }),
     ).toBeVisible();
@@ -120,10 +120,10 @@ test("森织登录：标识加载失败仍可发送链接", async ({ page }) => 
 
 test("森织品牌：图标、导航、确认页与公开分享", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("森织");
+  await expect(page).toHaveTitle("森织设计工作室");
   await expect(page.locator('meta[name="application-name"]')).toHaveAttribute(
     "content",
-    "森织",
+    "森织设计工作室",
   );
   const home = page.getByRole("link", { name: "森织 设计工作室 首页" });
   await expect(home).toHaveAttribute("href", "/");
