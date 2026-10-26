@@ -133,9 +133,6 @@ jobs:
       - name: Compare Atelier screenshots in pinned Chromium environment
         run: pnpm test:e2e:visual
 
-      - name: Run isolated real application browser flow
-        run: pnpm test:e2e:real
-
       - name: Save browser and application diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -149,3 +146,90 @@ jobs:
       - name: Stop integration infrastructure
         if: always()
         run: docker compose down -v
+
+  trial:
+    name: real application with isolated infrastructure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPORT_PDF_FONT_PATH: /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+      EXPORT_PDF_FONT_FAMILY: NotoSansCJKsc-Regular
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure official Ubuntu mirrors
+        run: |
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt
+          printf '%s\n' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-security-mirrors.txt
+          sudo tee /etc/apt/apt.conf.d/80-ci-network >/dev/null <<'EOF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          EOF
+
+      - name: Restore export font
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fashion-ci/fonts
+          key: ubuntu-24.04-noto-cjk-regular-v1
+
+      - name: Install export font
+        timeout-minutes: 5
+        run: |
+          font_cache="$HOME/.cache/fashion-ci/fonts/NotoSansCJK-Regular.ttc"
+          if [ ! -s "$font_cache" ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+            mkdir -p "$(dirname "$font_cache")"
+            cp "$EXPORT_PDF_FONT_PATH" "$font_cache"
+          fi
+          sudo install -D -m 644 "$font_cache" "$EXPORT_PDF_FONT_PATH"
+          test -s "$EXPORT_PDF_FONT_PATH"
+
+      - name: Resolve Playwright version
+        id: playwright-version
+        run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ubuntu-24.04-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}-headless
+
+      - name: Install Playwright browser
+        timeout-minutes: 10
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Run isolated real application browser flow
+        run: pnpm test:e2e:real
+
+      - name: Report infrastructure resources
+        if: always()
+        run: |
+          docker system df
+          df -h /
+
+      - name: Save real application diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-app-diagnostics
+          path: |
+            output/playwright/
+            output/trial-runtime/*.log
+          retention-days: 7

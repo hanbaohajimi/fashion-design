@@ -22,9 +22,12 @@ const children = [];
 await mkdir(resolve(runtime, "supabase/templates"), { recursive: true });
 const run = (command, args, options = {}) => new Promise((done, fail) => {
   const child = spawn(command, args, { cwd: root, env, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit", ...options });
-  let output = "";
-  if (options.capture) { child.stdout.on("data", (chunk) => { output += chunk; }); child.stderr.resume(); }
-  child.on("error", fail); child.on("exit", (code) => code === 0 ? done(output) : fail(new Error(`${command} ${args.slice(0, 4).join(" ")} exited ${code}${options.capture ? ": " + output.slice(-2000) : ""}`)));
+  let output = "", diagnostics = "";
+  if (options.capture) {
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { diagnostics = (diagnostics + chunk.toString("utf8")).slice(-8000); });
+  }
+  child.on("error", fail); child.on("exit", (code) => code === 0 ? done(output) : fail(new Error(`${command} ${args.slice(0, 4).join(" ")} exited ${code}${options.capture ? ": " + output.slice(-2000) + "\n" + diagnostics : ""}`)));
 });
 const pm = (args, options) => run(process.execPath, [pnpm, ...args], options);
 const background = (name, command, args, cwd = root) => {
