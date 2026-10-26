@@ -2,7 +2,8 @@
 .input,
 .segments button,
 .menu summary,
-.menu button {
+.menu button,
+.menuPanel button {
   font: var(--font-medium) var(--text-base)/var(--leading-normal)
     var(--font-sans);
   transition:
@@ -389,7 +390,7 @@ textarea.input {
 .menu summary::-webkit-details-marker {
   display: none;
 }
-.menu > div {
+.menuPanel {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
@@ -414,14 +415,17 @@ textarea.input {
   background: var(--color-surface);
   border-color: var(--color-border-strong);
 }
-.menu button:disabled {
+.menu button:disabled,
+.menuPanel button:disabled {
   cursor: not-allowed;
   background: var(--color-disabled-bg);
   color: var(--color-disabled-ink);
   border-color: var(--color-disabled-border);
 }
 .menu button,
-.menu a {
+.menu a,
+.menuPanel button,
+.menuPanel a {
   display: block;
   width: 100%;
   border: 0;
@@ -434,7 +438,9 @@ textarea.input {
   cursor: pointer;
 }
 .menu button:hover,
-.menu a:hover {
+.menu a:hover,
+.menuPanel button:hover,
+.menuPanel a:hover {
   background: var(--color-surface);
 }
 .dialog {
@@ -461,7 +467,9 @@ textarea.input {
   .segments button,
   .menu summary,
   .menu button,
-  .menu a
+  .menu a,
+  .menuPanel button,
+  .menuPanel a
 ):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
@@ -471,7 +479,8 @@ textarea.input {
   .input,
   .segments button,
   .menu summary,
-  .menu button {
+  .menu button,
+  .menuPanel button {
     min-height: var(--control-height-touch);
   }
 }

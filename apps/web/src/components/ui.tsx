@@ -14,6 +14,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
   type Ref,
+  type KeyboardEvent,
 } from "react";
 import styles from "./ui.module.css";
 import { motionDuration, UI_TIMING } from "./ui-config";
@@ -309,7 +310,14 @@ export function ImagePreview({
         explicitRetry.current = null;
         if (document.visibilityState !== "visible") return;
         const duration = motionDuration("fast");
-        if (duration) event.currentTarget.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration, easing: getComputedStyle(event.currentTarget).getPropertyValue("--ease-enter").trim() || "cubic-bezier(0.23,1,0.32,1)" });
+        if (duration)
+          event.currentTarget.animate?.([{ opacity: 0 }, { opacity: 1 }], {
+            duration,
+            easing:
+              getComputedStyle(event.currentTarget)
+                .getPropertyValue("--ease-enter")
+                .trim() || "cubic-bezier(0.23,1,0.32,1)",
+          });
       }}
       src={src}
       style={{ objectFit: fit }}
@@ -512,7 +520,8 @@ export function Tooltip({
   };
   const leave = () => {
     clearTimer();
-    if (!anchor?.contains(document.activeElement)) timer.current = setTimeout(close, UI_TIMING.tooltipClose);
+    if (!anchor?.contains(document.activeElement))
+      timer.current = setTimeout(close, UI_TIMING.tooltipClose);
   };
   useEffect(
     () => () => {
@@ -546,7 +555,10 @@ export function Tooltip({
     <span
       className={styles.tooltipAnchor}
       ref={setAnchor}
-      onPointerDown={(event) => { touchFocus.current = event.pointerType === "touch"; if (touchFocus.current) close(); }}
+      onPointerDown={(event) => {
+        touchFocus.current = event.pointerType === "touch";
+        if (touchFocus.current) close();
+      }}
       onFocus={() => {
         if (!touchFocus.current) show();
       }}
@@ -610,6 +622,7 @@ export function Menu({
   align = "end",
   className = "",
   triggerRef,
+  portal = false,
 }: {
   readonly label: string;
   readonly children: ReactNode;
@@ -618,56 +631,144 @@ export function Menu({
   readonly align?: "start" | "end";
   readonly className?: string | undefined;
   readonly triggerRef?: Ref<HTMLElement>;
+  readonly portal?: boolean;
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const closeMenu = () => {
+    if (ref.current) ref.current.open = false;
+    setOpen(false);
+  };
+  useLayoutEffect(() => {
+    if (!portal || !open) return;
+    const position = () => {
+      const anchor = ref.current?.querySelector("summary");
+      const popup = panel.current;
+      if (!anchor || !popup) return;
+      const bounds = anchor.getBoundingClientRect();
+      const size = popup.getBoundingClientRect();
+      const gap = 8;
+      const left = align === "start" ? bounds.left : bounds.right - size.width;
+      const preferredTop =
+        placement === "top"
+          ? bounds.top - size.height - gap
+          : bounds.bottom + gap;
+      const fallbackTop =
+        placement === "top"
+          ? bounds.bottom + gap
+          : bounds.top - size.height - gap;
+      const top =
+        preferredTop < gap || preferredTop + size.height > innerHeight - gap
+          ? fallbackTop
+          : preferredTop;
+      popup.style.left = `${Math.max(gap, Math.min(left, innerWidth - size.width - gap))}px`;
+      popup.style.top = `${Math.max(gap, Math.min(top, innerHeight - size.height - gap))}px`;
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [portal, open, placement, align]);
   useEffect(() => {
     const close = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node))
-        ref.current?.removeAttribute("open");
+      if (
+        !ref.current?.contains(event.target as Node) &&
+        !panel.current?.contains(event.target as Node)
+      ) {
+        if (ref.current) ref.current.open = false;
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu();
+      ref.current?.querySelector("summary")?.focus();
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (ref.current) ref.current.open = true;
+      if (portal)
+        setPortalTarget(ref.current?.closest("dialog[open]") ?? document.body);
+      setOpen(true);
+      const move = () => {
+        const items = Array.from(
+          panel.current?.querySelectorAll<HTMLElement>(
+            "button:not(:disabled),a[href]",
+          ) ?? [],
+        );
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        const next =
+          index < 0
+            ? event.key === "ArrowDown"
+              ? 0
+              : items.length - 1
+            : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+              items.length;
+        items[next]?.focus();
+      };
+      if (portal && !open) requestAnimationFrame(move);
+      else move();
+    }
+  };
+  const content = (
+    <div
+      className={styles.menuPanel}
+      ref={panel}
+      style={
+        portal
+          ? {
+              position: "fixed",
+              right: "auto",
+              bottom: "auto",
+              maxWidth: "calc(100vw - 16px)",
+              maxHeight: "calc(100dvh - 16px)",
+              overflowY: "auto",
+            }
+          : undefined
+      }
+      onKeyDown={portal ? onKeyDown : undefined}
+      onClick={(event) => {
+        if ((event.target as Element).closest("button,a")) closeMenu();
+      }}
+    >
+      {children}
+    </div>
+  );
   return (
     <details
       className={`${styles.menu} ${className}`}
       data-placement={placement}
       data-align={align}
       ref={ref}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+        if (portal && event.currentTarget.open)
+          setPortalTarget(
+            event.currentTarget.closest("dialog[open]") ?? document.body,
+          );
+      }}
       onKeyDown={(event) => {
-        const root = event.currentTarget;
-        const items = Array.from(
-          root.querySelectorAll<HTMLElement>("button:not(:disabled),a[href]"),
-        );
-        if (event.key === "Escape") {
-          event.preventDefault();
-          root.open = false;
-          root.querySelector("summary")?.focus();
-        }
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          event.preventDefault();
-          root.open = true;
-          const index = items.indexOf(document.activeElement as HTMLElement);
-          const next =
-            index < 0
-              ? event.key === "ArrowDown"
-                ? 0
-                : items.length - 1
-              : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
-                items.length;
-          items[next]?.focus();
-        }
+        if (!portal || !panel.current?.contains(event.target as Node))
+          onKeyDown(event);
       }}
     >
-      <summary aria-label={label} ref={triggerRef}>{trigger ?? label}</summary>
-      <div
-        onClick={(event) => {
-          if ((event.target as Element).closest("button,a"))
-            ref.current?.removeAttribute("open");
-        }}
-      >
-        {children}
-      </div>
+      <summary aria-label={label} ref={triggerRef}>
+        {trigger ?? label}
+      </summary>
+      {portal
+        ? open && portalTarget
+          ? createPortal(content, portalTarget)
+          : null
+        : content}
     </details>
   );
 }

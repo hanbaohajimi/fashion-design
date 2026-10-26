@@ -1362,7 +1362,7 @@ export function WorkflowAssistantPanel({
               添加引用
             </Button>
           ) : null}
-          <Menu label="对话操作" trigger="更多" placement="top" align="start">
+          <Menu label="对话操作" trigger="更多" placement="top" align="start" portal>
             {legacy ? (
               <button
                 onClick={() => setLegacyRunsOpen((value) => !value)}

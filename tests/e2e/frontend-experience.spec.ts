@@ -287,10 +287,11 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByLabel("当前功能", { exact: true }).locator("option"),
-  ).toHaveCount(11);
+  ).toHaveCount(12);
+  await expect(page.getByLabel("当前功能", { exact: true }).locator('option[value="runway"]')).toHaveText("服装秀");
   await page.getByLabel("当前功能", { exact: true }).selectOption("tech");
   await expect(page).toHaveURL(/tab=tech/);
-  await expect(page.getByRole("heading", { name: /^技术包 ·/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "编辑技术包资料", exact: true })).toBeVisible();
 });
 
 test("面料规格默认收起，应用后显示条件摘要，空结果可重置", async ({ page }) => {

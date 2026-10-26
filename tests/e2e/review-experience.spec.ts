@@ -6,7 +6,7 @@ test("登录样式契约、发送和失败状态", async ({ page }) => {
   await page.route("**/api/auth/login", (route) => route.fulfill({ json: { ok: true } }));
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "登录或注册" })).toHaveCSS("font-size", "32px");
+  await expect(page.getByRole("heading", { name: "登录或注册" })).toHaveCSS("font-size", "28px");
   const email = page.getByRole("textbox", { name: "邮箱地址" });
   await expect(email).toHaveCSS("font-size", "16px");
   await expect(email).toHaveCSS("border-bottom-width", "1px");

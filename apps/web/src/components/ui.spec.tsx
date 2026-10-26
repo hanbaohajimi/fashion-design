@@ -68,6 +68,31 @@ describe("shared controls", () => {
     expect(document.activeElement).toBe(trigger);
     expect(trigger.closest("details")?.open).toBe(false);
   });
+  it("keeps a portaled menu outside clipping containers and supports keyboard dismissal", async () => {
+    const { container } = render(
+      <div style={{ overflow: "auto", height: 40 }}>
+        <Menu label="对话操作" placement="top" portal>
+          <button>旧设计运行</button>
+          <button>暂停助手</button>
+        </Menu>
+      </div>,
+    );
+    const trigger = screen.getByText("对话操作");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const history = await screen.findByRole("button", { name: "旧设计运行" });
+    expect(container.contains(history)).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(history));
+    fireEvent.keyDown(history, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "暂停助手" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "暂停助手" }), { key: "Escape" });
+    expect(document.activeElement).toBe(trigger);
+    expect(screen.queryByRole("button", { name: "旧设计运行" })).toBeNull();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    await screen.findByRole("button", { name: "旧设计运行" });
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("button", { name: "旧设计运行" })).toBeNull();
+  });
   it("uses arrow keys to choose the next segment", () => {
     const change = vi.fn();
     render(

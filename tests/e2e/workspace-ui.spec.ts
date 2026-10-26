@@ -27,7 +27,8 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toBeVisible();
   const navigation = page.getByRole("tablist", { name: "设计工作室功能" });
-  await expect(navigation.getByRole("tab")).toHaveCount(11);
+  await expect(navigation.getByRole("tab")).toHaveCount(12);
+  await expect(navigation.getByRole("tab", { name: "服装秀", exact: true })).toBeVisible();
   await expect(
     navigation.getByRole("tab", { name: "印花工作台" }),
   ).toBeVisible();

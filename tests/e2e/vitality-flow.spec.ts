@@ -121,7 +121,7 @@ test("引用显式加入且不自动发送，新结果提示不移动画布且�
   const beforeSuggestion = writes;
   await page
     .getByRole("button", {
-      name: "＋ 引用「藏蓝通勤外套」",
+      name: "引用选中对象「藏蓝通勤外套」",
       exact: true,
     })
     .click();

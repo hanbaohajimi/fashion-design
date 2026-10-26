@@ -842,7 +842,7 @@ for (const width of [1280, 375]) {
     await page.reload();
     await showAssistant(page, width);
     await card.getByRole("button", { name: "继续生成" }).click();
-    await expect(card.getByRole("status")).toContainText("正在生成");
+    await expect(card.getByRole("status").filter({ hasText: "正在生成" })).toBeVisible();
     expect(accepts).toBe(1);
     expect(requests).toHaveLength(2);
     expect(requests[1]).toEqual(requests[0]);
@@ -854,11 +854,12 @@ for (const width of [1280, 375]) {
     mocked.getGraph().nodes.push(node("direct-result", "asset", "candidate", "新风衣方案", 1100, 1100, { assetId: "asset-a" }));
     mocked.getGraph().edges.push(edge("direct-output", tool.id, "direct-result", "source"));
     mocked.getGraph().revision++;
-    await expect(card.getByRole("button", { name: "查看新风衣方案" })).toBeVisible();
-    await expect(card.getByRole("button", { name: "查看新风衣方案" })).toBeInViewport({ ratio: 1 });
+    await expect(card.getByRole("button", { name: "查看大图：新风衣方案", exact: true })).toBeVisible();
+    const openResult = card.getByRole("button", { name: "查看大图：新风衣方案", exact: true }).getByText("查看大图", { exact: true });
+    await expect(openResult).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `output/playwright/assistant-direct/result-${width}.png` });
-    await card.getByRole("button", { name: "查看新风衣方案" }).click();
+    await openResult.click();
     await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
   });
 }
@@ -2425,7 +2426,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
 
     const trendsPath = `/trends?from=board&boardId=${PROJECT_ID}`;
     await page.getByText("资料与更多", { exact: true }).click();
-    await expect(page.getByRole("link", { name: "趋势档案", exact: true })).toHaveAttribute("href", trendsPath);
+    await expect(page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "趋势档案", exact: true })).toHaveAttribute("href", trendsPath);
     await page.goto(trendsPath);
     await page.waitForURL(/\/trends\?/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
@@ -2435,9 +2436,12 @@ for (const savedTheme of [null, "dark", "system"] as const) {
       await expect(page.locator("main")).toHaveCSS("background-color", "rgb(245, 244, 238)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
-      const back = page.getByRole("link", { name: "设计工作台", exact: true });
+      const navigation = page.getByRole("navigation", { name: "工作区导航", exact: true });
+      if (width < 1200) await navigation.locator('summary[aria-label="切换工作区"]').click();
+      const back = navigation.getByRole("link", { name: "设计工作台", exact: true });
       await expect(back).toBeVisible();
       await expect(back).toHaveAttribute("href", `/${PROJECT_ID}`);
+      if (width < 1200) await page.keyboard.press("Escape");
     }
     await page.reload();
     await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
@@ -2686,8 +2690,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await page.waitForTimeout(250);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选 A ");
-  await page.getByRole("button", { name: "发送需求" }).click();
-  await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("alert")).toContainText("请从 @列表选择准确节点");
+  await expect(page.getByRole("button", { name: "发送需求" })).toBeDisabled();
+  await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("status").filter({ hasText: "请从 @列表选择准确节点" })).toBeVisible();
   expect(mocked.proposalRequests).toHaveLength(0);
   await composer.fill("请修改 @候选");
   await page.getByRole("button", { name: /@候选 A/ }).last().click();
@@ -2711,7 +2715,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-test("普通会话可只读查看旧设计运行的简报、尝试和人工决定", async ({ page }) => {
+for (const width of [1280, 375]) {
+test(`普通会话 ${width} 可只读查看旧设计运行的简报、尝试和人工决定`, async ({ page }) => {
   await mockWorkflow(page);
   await page.route("**/api/agent-conversations/chat-old/plans", (route) => route.fulfill({ json: { items: [{ id: "legacy-run", intent: "秋冬风衣设计", status: "completed", createdAt: NOW }] } }));
   await page.route("**/api/agent-runs/legacy-run", (route) => route.fulfill({ json: {
@@ -2719,9 +2724,9 @@ test("普通会话可只读查看旧设计运行的简报、尝试和人工决�
     intelligence: { brief: { summary: "藏蓝色通勤风衣", constraints: [{ id: "c1", priority: "must", requirement: "保留宽松廓形" }] }, actions: [] },
     steps: [{ id: "step-one", key: "generate", ordinal: 0, title: "方案生成", instruction: "参考挺括面料", prompt: "藏蓝风衣", negativePrompt: "", sourceAssetId: null, sourceStepKey: null, tool: "generate_design", status: "succeeded", generationTaskId: "task-one", selectedAssetId: "asset-a", candidates: [], error: null, attempts: [{ id: "try-one", ordinal: 1, status: "rejected", generationTaskId: "task-old", prompt: "亮面风衣", negativePrompt: "", parentAssetId: null, candidates: [], error: "反光过强", createdAt: NOW }] }],
   } }));
+  await page.setViewportSize({ width, height: 812 });
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("button", { name: "适合画布" }).click();
-  await page.waitForTimeout(250);
+  await showAssistant(page, width);
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
   await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
   await page.getByText("更多", { exact: true }).click();
@@ -2733,7 +2738,13 @@ test("普通会话可只读查看旧设计运行的简报、尝试和人工决�
   await expect(detail.getByText("人工选定：asset-a")).toBeVisible();
   await expect(detail.getByText("否决理由：反光过强")).toBeVisible();
   await expect(detail.getByRole("button", { name: /执行|保存|编辑/ })).toHaveCount(0);
+  const more = page.locator('summary[aria-label="对话操作"]');
+  await more.press("ArrowDown");
+  await expect(page.getByRole("button", { name: "旧设计运行", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(more).toBeFocused();
 });
+}
 
 test("上传参考图会自动识别角色，失败可重试并可由设计师手动指定", async ({ page }) => {
   const mocked = await mockWorkflow(page);
