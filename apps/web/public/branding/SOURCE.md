@@ -8,7 +8,7 @@
 | logo-original-transparent-256.webp | 浅色背景的小尺寸品牌标识 |
 | logo-original-transparent-1024.webp | 登录页彩色标识，桌面显示 240–360px，手机 64px |
 
-浏览器图标通过 Next.js 文件约定接入：压缩包的 `favicon.ico`（16/32/48/64px）对应 `src/app/favicon.ico`；`favicon-32.png` 对应 `src/app/icon.png`；`favicon-192.png` 对应 `src/app/apple-icon.png`。未新增应用安装功能。
+浏览器图标通过 Next.js 文件约定接入：`src/app/favicon.ico` 包含 16/32/48/64px，`src/app/icon.png` 为 32px，`src/app/apple-icon.png` 为 192px。2026-10-26 按用户要求将原包深绿底图标替换为浅色版本：直接使用上表的原始彩色透明标识，等比缩放并承托于森织纸面色 `#fffefa`；不重绘或改变标识颜色。默认页面标题与应用名称为“森织设计工作室”。未新增应用安装功能。
 
 这些文件是透明位图试用版，不是矢量源文件。原包说明指出：透明背景由颜色分离得到，边缘抗锯齿和浅色裙摆透明度存在近似。应在实际背景和尺寸下复核；1024px 为文件像素尺寸，不代表同等原生绘制细节。后续精修应替换资产并保持当前命名及比例。
 

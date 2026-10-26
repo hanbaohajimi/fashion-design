@@ -10,7 +10,7 @@ import "./globals.css";
 import "tldraw/tldraw.css";
 
 export const metadata: Metadata = {
-  applicationName: "森织",
+  applicationName: "森织设计工作室",
   category: "design",
   description: "专业服装设计师的创作工作台",
   formatDetection: {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     index: false,
   },
   title: {
-    default: "森织",
+    default: "森织设计工作室",
     template: "%s · 森织",
   },
 };
