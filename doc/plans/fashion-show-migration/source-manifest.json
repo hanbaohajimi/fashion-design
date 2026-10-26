@@ -1,0 +1,240 @@
+{
+  "capturedAt": "2026-10-26",
+  "sourceRoot": "G:\\学校\\顾晓玲老师项目\\服装秀",
+  "head": "da2f90d306cd7f79743a0efbaa5cb05a38d81895",
+  "sourceFiles": [
+    {
+      "path": "djangotutorial/chat/__init__.py",
+      "sha256": "dba5166ad9db9ba648c1032ebbd34dcd0d085b50023b839ef5c68ca1db93a563",
+      "sizeBytes": 4
+    },
+    {
+      "path": "djangotutorial/chat/apps.py",
+      "sha256": "96359408b07279249b952bb32a5e64b3ccb7ed55a49e22cf0d1de052beefbd8b",
+      "sizeBytes": 150
+    },
+    {
+      "path": "djangotutorial/chat/checkpointer_utils.py",
+      "sha256": "1a77e7bcb548d7e837d0eac5467ff0edab0d417d5e3196b7a1a3822f80c2b146",
+      "sizeBytes": 3962
+    },
+    {
+      "path": "djangotutorial/chat/migrations/0001_initial.py",
+      "sha256": "56c6806f69a057749dbf56b56355ba0286d91833c44eefa693394cf69388b04a",
+      "sizeBytes": 7486
+    },
+    {
+      "path": "djangotutorial/chat/migrations/0002_chatsession_current_thread_id_and_more.py",
+      "sha256": "80fe70f70e596604177b56c17fbecb19ba01f7b73acccc8313b401635340c6b4",
+      "sizeBytes": 847
+    },
+    {
+      "path": "djangotutorial/chat/migrations/0003_chatsession_edit_images_chatsession_edit_index_and_more.py",
+      "sha256": "3f6165de0e10e0f5a7775c6a9c770469b9d2bd4d730e7f3701701c8b38042c6f",
+      "sizeBytes": 1637
+    },
+    {
+      "path": "djangotutorial/chat/migrations/__init__.py",
+      "sha256": "ad51433a862cc7306d27463b28d44edf07928ef8b990123a6c3b84f3afb6132a",
+      "sizeBytes": 21
+    },
+    {
+      "path": "djangotutorial/chat/models.py",
+      "sha256": "534e73a1c650871b1f22e5761a3ee93cb0d18b2c465be85059b4ce54415cf1fa",
+      "sizeBytes": 10044
+    },
+    {
+      "path": "djangotutorial/chat/templates/chat/chat.html",
+      "sha256": "a4dd480d9f133cbf9d943f49a420e1656c41eb9c16c28767d18725023403f0fb",
+      "sizeBytes": 432369
+    },
+    {
+      "path": "djangotutorial/chat/templates/chat/chat_unified_stream_handler.js",
+      "sha256": "c9b10372d119c7e4e98a008a33e0ce18b08584ab574c18fa616895071e9e2f67",
+      "sizeBytes": 191
+    },
+    {
+      "path": "djangotutorial/chat/urls.py",
+      "sha256": "3ad5694655068d2e14e165848f24b832c4ccf8987cd0cf4c94c4e3e47d74c06f",
+      "sizeBytes": 915
+    },
+    {
+      "path": "djangotutorial/chat/views.py",
+      "sha256": "630f7fdcf5a6a7f8d8796b5c31980d1c030ced8c6adec07e3028901153f1e3c9",
+      "sizeBytes": 244753
+    },
+    {
+      "path": "djangotutorial/home_page/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "djangotutorial/home_page/admin.py",
+      "sha256": "a7ac68a753eeb831b6530bf71bf6917e577139f0734d17cc6a8666391564ab25",
+      "sizeBytes": 66
+    },
+    {
+      "path": "djangotutorial/home_page/apps.py",
+      "sha256": "5724dcc96fc53070d68906955acb0c24c58038008a1af27ba8bbaf77a9efa39c",
+      "sizeBytes": 155
+    },
+    {
+      "path": "djangotutorial/home_page/migrations/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "djangotutorial/home_page/models.py",
+      "sha256": "e0e54c7030f1f5f56004427dd41edd7cc106d8d8b52d148b24e2b322454fb0aa",
+      "sizeBytes": 60
+    },
+    {
+      "path": "djangotutorial/home_page/templates/home_page/home.html",
+      "sha256": "d93a7fd592548b5d27f591d2e59f5f41e8e756c6e264bf3a0dc5d9a7134e61df",
+      "sizeBytes": 9421
+    },
+    {
+      "path": "djangotutorial/home_page/tests.py",
+      "sha256": "dae0da7efdcdb3a7fb572d5e914b60631099122d4a4727ac6434c016161c5fe1",
+      "sizeBytes": 63
+    },
+    {
+      "path": "djangotutorial/home_page/urls.py",
+      "sha256": "40da8a9efdfd87aad7501dc8fcee66d53c8409482e84d2dbe7d28edf4e5915a7",
+      "sizeBytes": 123
+    },
+    {
+      "path": "djangotutorial/home_page/views.py",
+      "sha256": "9c04f726bf7ca81151cd41913a5a9704787406fe01866083cdb30f4d3c179653",
+      "sizeBytes": 1461
+    },
+    {
+      "path": "djangotutorial/manage.py",
+      "sha256": "75b3d2326484ec38299eb8b7e69037a940e40057396237fb4865886e48a88e81",
+      "sizeBytes": 855
+    },
+    {
+      "path": "djangotutorial/mysite/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "djangotutorial/mysite/asgi.py",
+      "sha256": "90a3e16ba0ddb6eb11dee761d2ed3ccd800cf393b05c5755bf62c38354967f08",
+      "sizeBytes": 405
+    },
+    {
+      "path": "djangotutorial/mysite/settings.py",
+      "sha256": "3871c34f6276be48164853674dcac2cbfb1d2f88418cf31bbc77c8420862c9f4",
+      "sizeBytes": 3426
+    },
+    {
+      "path": "djangotutorial/mysite/urls.py",
+      "sha256": "b49d3530b34c444d82a81d030abff0a8febf9224fda14c135608d1a25043bb78",
+      "sizeBytes": 1469
+    },
+    {
+      "path": "djangotutorial/mysite/wsgi.py",
+      "sha256": "632535741342bc4f718a5a592f415da6b5d778dcd0a6c6a40b7d9affed6cea67",
+      "sizeBytes": 405
+    },
+    {
+      "path": "runway/langgraph.json",
+      "sha256": "a8a6a9b6c7ecc576d489dea0c8f46ba24f5c97ad2845ef3b453311b2735e886c",
+      "sizeBytes": 112
+    },
+    {
+      "path": "runway/LICENSE",
+      "sha256": "a01dcffdc1291b4043f2a81d249a9f3e45c9036f2308c9cdfeefe18371371e80",
+      "sizeBytes": 1066
+    },
+    {
+      "path": "runway/pyproject.toml",
+      "sha256": "b029a7105e87ef501c411777a884a151a65d3b97084b894b32a1d5db6c28a261",
+      "sizeBytes": 1633
+    },
+    {
+      "path": "runway/README.md",
+      "sha256": "c49e6c0222d2d690aaab488c0cb654f1aeb0c3ef85dbc11b4e628418144d9ada",
+      "sizeBytes": 5736
+    },
+    {
+      "path": "runway/src/react_agent/__init__.py",
+      "sha256": "06a101ecbc06b81513e5f739a27300ad8f8201b8259fc6edb07cb94d8856867e",
+      "sizeBytes": 177
+    },
+    {
+      "path": "runway/src/react_agent/agents/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sizeBytes": 0
+    },
+    {
+      "path": "runway/src/react_agent/agents/background.py",
+      "sha256": "62620a61a6a2553d5293f24ea9aef614586a7e0e2fdc8f5b3d79ab3a5c5d321b",
+      "sizeBytes": 9004
+    },
+    {
+      "path": "runway/src/react_agent/agents/image_agent.py",
+      "sha256": "e5497362266037ec8477ab6ce981f2f77eec8fb10f162fa7e96dc84dfffb6a03",
+      "sizeBytes": 15966
+    },
+    {
+      "path": "runway/src/react_agent/agents/LLM.py",
+      "sha256": "22468467090a482693bd4d939d32573b54d0684946d66f5c35c718ef209920a2",
+      "sizeBytes": 776
+    },
+    {
+      "path": "runway/src/react_agent/agents/multi_image_agent.py",
+      "sha256": "0ba012ba1e7ee7bbbf24c6579004e8fb469be0dbbc454ccd7e997ab9c3667d99",
+      "sizeBytes": 8541
+    },
+    {
+      "path": "runway/src/react_agent/agents/music.py",
+      "sha256": "4016099b39fae5050bea945c85fa79a679172e9826446abc63486af4e77c5747",
+      "sizeBytes": 17040
+    },
+    {
+      "path": "runway/src/react_agent/agents/tryon.py",
+      "sha256": "5172f10b3a82d3d2933ae6cc74987f804bdcbef4eb3ae1d8b2ea3039fa8f39a8",
+      "sizeBytes": 10623
+    },
+    {
+      "path": "runway/src/react_agent/agents/video_agent.py",
+      "sha256": "84dd992558653e40b21da1237d188e8419f257d8eb9f45bb3fe88d16b2feed55",
+      "sizeBytes": 11761
+    },
+    {
+      "path": "runway/src/react_agent/graph.py",
+      "sha256": "8992ade528f708cd59f17754b00c4751bd2bd8e05cb5a02e4c06a2b855491ab9",
+      "sizeBytes": 44305
+    },
+    {
+      "path": "runway/tests/integration_tests/__init__.py",
+      "sha256": "8a7f7e2ef440f249bf8386d5f34a7bca4356f5df49c870b2627ba6205e79cea0",
+      "sizeBytes": 63
+    },
+    {
+      "path": "runway/tests/integration_tests/test_graph.py",
+      "sha256": "133890bfa5b5702fc7b4a6c23d938c6ea2c252acd08ff58d5a5b4ab64e12505e",
+      "sizeBytes": 462
+    },
+    {
+      "path": "runway/tests/unit_tests/__init__.py",
+      "sha256": "b1a2d1776f2b31d77dfa055e7271d0daeb5a01b1cc5768bb58de10df63b6535c",
+      "sizeBytes": 60
+    },
+    {
+      "path": "runway/tests/unit_tests/test_configuration.py",
+      "sha256": "d45dfb2a195c466c8a8be51fd32e6924010a84e4bc85bf6feae3fc407ad58399",
+      "sizeBytes": 567
+    }
+  ],
+  "exclusions": [
+    ".env",
+    "db.sqlite3",
+    "output/",
+    "media/",
+    "__pycache__/",
+    "*.egg-info/"
+  ]
+}

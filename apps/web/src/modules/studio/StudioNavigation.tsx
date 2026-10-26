@@ -2,7 +2,7 @@
 
 /* Refactoring UI §2.1/§2.4/§3.6: three common tasks first; specialist groups disclosed on demand.
  * Navigation uses --workspace-nav-width; controls use --control-height. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { STUDIO_GROUPS, type StudioTab } from "./studio-navigation";
 import styles from "./studio.module.css";
 
@@ -16,17 +16,16 @@ export function StudioNavigation({
   readonly onChange: (value: StudioTab) => void;
 }) {
   const [focused, setFocused] = useState<StudioTab | null>(null);
-  const [expanded, setExpanded] = useState<readonly string[]>([]);
-  const visibleTabs = STUDIO_GROUPS.flatMap((group) =>
-    group.label === "常用" ||
-    expanded.includes(group.label) ||
-    group.items.some((item) => item.value === value)
-      ? [...group.items]
-      : [],
-  );
+  useEffect(() => {
+    const selected = document.getElementById(`${id}-tab-${value}`);
+    if (selected?.getBoundingClientRect().height)
+      selected.scrollIntoView({ block: "nearest" });
+  }, [id, value]);
+  const visibleTabs = STUDIO_GROUPS.flatMap((group) => [...group.items]);
   return (
     <div
       className={styles.workspaceNavigation}
+      data-studio-hierarchy
       role="tablist"
       aria-label="设计工作室功能"
       aria-orientation="vertical"
@@ -36,37 +35,14 @@ export function StudioNavigation({
       }}
     >
       {STUDIO_GROUPS.map((group) => {
-        const active = group.items.some((item) => item.value === value);
-        const open =
-          group.label === "常用" || active || expanded.includes(group.label);
         return (
           <div
             className={styles.navigationGroup}
             key={group.label}
             role="presentation"
           >
-            {group.label === "常用" ? (
-              <span className={styles.navigationLabel}>{group.label}</span>
-            ) : (
-              <button
-                type="button"
-                className={styles.navigationDisclosure}
-                aria-expanded={open}
-                aria-controls={`${id}-group-${group.label}`}
-                disabled={active}
-                onClick={() =>
-                  setExpanded((current) =>
-                    open
-                      ? current.filter((label) => label !== group.label)
-                      : [...current, group.label],
-                  )
-                }
-              >
-                {group.label}
-                <span aria-hidden="true">{open ? "−" : "+"}</span>
-              </button>
-            )}
-            <div id={`${id}-group-${group.label}`} hidden={!open}>
+            <span className={styles.navigationLabel}>{group.label}</span>
+            <div id={`${id}-group-${group.label}`}>
               {group.items.map((item) => (
                 <button
                   key={item.value}

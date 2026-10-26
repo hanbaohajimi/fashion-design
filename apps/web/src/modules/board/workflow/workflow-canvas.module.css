@@ -2422,6 +2422,27 @@
   white-space: pre-wrap;
   line-height: var(--leading-relaxed);
 }
+.proposalReview[data-proposal-status="pending"] {
+  background: var(--assistant-review-surface);
+  border: 1px solid var(--assistant-review-border);
+}
+.proposalReview[data-proposal-status="pending"] > header {
+  padding: var(--space-3) var(--space-4);
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-action);
+  color: var(--color-action-on);
+}
+.proposalReview[data-proposal-status="pending"] > header > span {
+  color: var(--color-action-on);
+}
+@media (min-width: 768px) and (min-height: 700px) {
+  .proposalReview[data-proposal-status="pending"] > header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+}
 .proposalError {
   color: var(--color-status-error);
 }
@@ -2448,6 +2469,19 @@
   aspect-ratio: 3 / 4;
   object-fit: contain;
 }
+.proposalResult {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.proposalResult > button:first-child { flex: 1; }
+.proposalResult span, .proposalResult small { overflow-wrap: anywhere; }
+.proposalReview .suggestionActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.proposalReview .suggestionActions > .actionPrimary { grid-column: 1 / -1; }
 .adjustmentContext {
   margin-bottom: var(--space-3);
   color: var(--color-ink-secondary);
@@ -2489,6 +2523,9 @@
   padding: var(--space-3);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
+  max-height: 60%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .composer textarea,
 .assistantBody:has(.assistantConversation[data-empty="true"])
@@ -2501,6 +2538,7 @@
 }
 .composerActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
@@ -2721,6 +2759,16 @@
   .assistantBody {
     padding: var(--space-3);
   }
+  .assistantConversation {
+    padding-block: var(--space-2);
+  }
+  .workflowMessage:last-child {
+    padding-bottom: var(--space-2);
+  }
+  .composer textarea,
+  .assistantBody:has(.assistantConversation[data-empty="true"]) .composer textarea {
+    max-height: 96px;
+  }
   .workspace[data-mobile-view="assistant"] .assistantBody {
     padding-left: calc(var(--space-3) + env(safe-area-inset-left, 0px));
     padding-right: calc(var(--space-3) + env(safe-area-inset-right, 0px));
@@ -2734,6 +2782,16 @@
   }
   .addPopover {
     width: min(340px, calc(100vw - 32px));
+  }
+}
+@media (max-width: 767px), (any-pointer: coarse) {
+  .sidebar {
+    --control-height: var(--control-height-touch);
+    --control-height-compact: var(--control-height-touch);
+    --control-height-primary: var(--control-height-touch);
+  }
+  .sidebar.sidebar button {
+    min-height: var(--control-height-touch);
   }
 }
 @media (max-width: 767px) and (max-height: 600px) {
@@ -2751,6 +2809,7 @@
   .workspace[data-mobile-view="assistant"] .assistantBody {
     gap: var(--space-1);
     padding-top: var(--space-2);
+    overflow-y: auto;
   }
   .assistantConversation,
   .assistantConversation[data-empty="true"] {
@@ -2767,6 +2826,7 @@
   }
   .composer {
     padding: var(--space-2);
+    max-height: none;
   }
   .composer textarea,
   .assistantBody:has(.assistantConversation[data-empty="true"])
@@ -2782,6 +2842,18 @@
   .composerActions {
     justify-content: space-between;
   }
+}
+@media (min-width: 560px) and (max-width: 767px) and (max-height: 600px) {
+  .composer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-3);
+  }
+  .composer > * { grid-column: 1 / -1; }
+  .composer > label { order: 2; }
+  .composer > textarea { order: 3; grid-column: 1; }
+  .composer > .composerActions { order: 3; grid-column: 2; align-self: center; }
+  .composer > p[id] { order: 4; margin-bottom: 0; }
 }
 .arrivalNotice {
   position: absolute;
@@ -2826,8 +2898,8 @@
 /* 共享侧栏提供跨模块导航，顶部只保留当前项目和真实操作状态。 */
 .brandGroup { flex: 1; }
 .projectName { font-size: var(--text-lg); color: var(--color-ink); }
-@media (max-width: 767px) {
-  .shell { height: calc(100dvh - 64px); min-height: 420px; }
+@media (max-width: 1199px) {
+  .shell { height: calc(100dvh - var(--workspace-mobile-nav-height)); min-height: 420px; }
   .projectName { font-size: var(--text-base); }
 }
 

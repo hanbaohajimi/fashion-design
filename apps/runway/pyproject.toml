@@ -1,0 +1,42 @@
+[project]
+name = "fashion-runway"
+version = "0.1.0"
+description = "Persistent fashion show generation worker"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "boto3>=1.40,<2",
+  "google-genai>=1.30,<2",
+  "langgraph>=0.6,<0.7",
+  "langgraph-checkpoint-postgres>=2,<3",
+  "openai>=1.100,<3",
+  "pillow>=11,<13",
+  "pillow-heif>=1.1,<2",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic>=2.11,<3",
+  "requests>=2.32.4,<3",
+  "volcengine>=1.0.200,<2",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "ruff>=0.12,<1"]
+
+[project.scripts]
+fashion-runway = "fashion_runway.cli:main"
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fashion_runway", "src/runway"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires PostgreSQL and S3"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

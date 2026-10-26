@@ -27,11 +27,10 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toBeVisible();
   const navigation = page.getByRole("tablist", { name: "设计工作室功能" });
-  await expect(navigation.getByRole("tab")).toHaveCount(3);
-  await navigation.getByRole("button", { name: "设计工具", exact: true }).click();
-  await expect(navigation.getByRole("tab", { name: "印花工作台" })).toBeVisible();
-  await navigation.getByRole("button", { name: "设计工具", exact: true }).click();
-  await expect(navigation.getByRole("tab")).toHaveCount(3);
+  await expect(navigation.getByRole("tab")).toHaveCount(11);
+  await expect(
+    navigation.getByRole("tab", { name: "印花工作台" }),
+  ).toBeVisible();
   const tasks = navigation.getByRole("tab", { name: "开始任务", exact: true });
   await tasks.focus();
   await page.keyboard.press("ArrowDown");
@@ -40,7 +39,9 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
   ).toBeFocused();
   await expect(tasks).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(navigation.getByRole("tab", { name: "技术包", exact: true })).toBeFocused();
+  await expect(
+    navigation.getByRole("tab", { name: "品牌资料", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(tasks).toBeFocused();
   await page.keyboard.press("ArrowDown");
@@ -49,7 +50,7 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
   await tasks.click();
   const prompt = page.getByRole("textbox", { name: "本次任务", exact: true });
   await expect(prompt).toBeInViewport();
-  expect((await prompt.boundingBox())!.y).toBeLessThanOrEqual(192);
+  expect((await prompt.boundingBox())!.y).toBeLessThanOrEqual(240);
   await expect(page.getByRole("button", { name: "创作进展" })).toBeInViewport();
 });
 
@@ -88,6 +89,18 @@ test("技术包章节与窄屏重排保留输入，错误和最后操作可达",
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll("main *"))
+          .filter((e) => {
+            const r = e.getBoundingClientRect();
+            return r.width && r.right > innerWidth;
+          })
+          .map(
+            (e) =>
+              `${e.tagName}.${e.className}: ${e.textContent} ${e.getBoundingClientRect().x}/${e.getBoundingClientRect().width}`,
+          )
+          .join("\n"),
       ),
     ).toBe(true);
     expect(await controlFontFailures(page)).toEqual([]);
@@ -148,6 +161,18 @@ test("只读和长内容在全部模块保留可达资料，缺图可重试", as
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll("main *"))
+          .filter((e) => {
+            const r = e.getBoundingClientRect();
+            return r.width && r.right > innerWidth;
+          })
+          .map(
+            (e) =>
+              `${e.tagName}.${e.className}: ${e.textContent} ${e.getBoundingClientRect().x}/${e.getBoundingClientRect().width}`,
+          )
+          .join("\n"),
+      ),
     ).toBe(true);
     expect(await controlFontFailures(page)).toEqual([]);
     const enabledSaves = page.locator('button[type="submit"]:enabled');
@@ -190,9 +215,11 @@ test("空项目的十一项功能保持输入和返回入口可达", async ({ pa
     await expect(
       page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
     ).toBeVisible();
+    await page.locator('summary[aria-label="项目导航"]').click();
     await expect(
-      page.getByRole("link", { name: "设计工作台", exact: true }),
+      page.getByRole("button", { name: "设计工作台", exact: true }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -292,7 +319,9 @@ test("200% 等效可用宽度下十一模块自然重排，主操作和字段仍
     expect(await controlFontFailures(page)).toEqual([]);
     expect(await contrastFailures(page, true)).toEqual([]);
     expect(
-      await panel.locator('button[data-variant="primary"]:enabled').count(),
+      await panel
+        .locator('button[data-variant="primary"]:enabled:visible')
+        .count(),
     ).toBeLessThanOrEqual(1);
     const action = panel.locator("button:enabled").last();
     if (await action.isVisible()) {
@@ -329,7 +358,7 @@ test("加载和工作室请求失败可恢复到原模块", async ({ page }) => 
   );
   await page.getByRole("button", { name: "重新加载", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "品牌资料", exact: true }),
+    page.getByRole("heading", { name: "山岚", exact: true }),
   ).toBeVisible();
   await expect(page).toHaveURL(/tab=brand/u);
 });

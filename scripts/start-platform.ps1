@@ -206,6 +206,7 @@ try {
     Write-Host "同步 .env 中的本地 Supabase 地址与公钥"
     Write-Host "pnpm db:deploy"
     Write-Host "检查实际数据库结构与 Prisma schema 是否一致"
+    Write-Host "若 RUNWAY_ENABLED=true，初始化检查点并启动服装秀 Python 执行器"
     Write-Host "pnpm dev"
     return
   }
@@ -282,6 +283,15 @@ try {
     "--filter", "@fashion/db", "exec", "prisma", "migrate", "diff",
     "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"
   )
+
+  $runwayConfig = ConvertFrom-EnvOutput -Lines @(
+    Get-Content -LiteralPath $envFile -Encoding utf8 |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+  )
+  if ($runwayConfig.ContainsKey("RUNWAY_ENABLED") -and $runwayConfig["RUNWAY_ENABLED"] -match "^(true|1|yes)$") {
+    Write-Step "初始化并启动服装秀 Python 执行器"
+    Invoke-Native $pnpm "runway:up"
+  }
 
   $webUrl = "http://localhost:3000"
   $apiHealthUrl = "http://localhost:3001/health/ready"

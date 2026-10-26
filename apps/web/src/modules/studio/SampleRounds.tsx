@@ -41,6 +41,8 @@ import {
 } from "../../components/workspace-ui";
 import { AssetAnchor } from "./AssetAnchor";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 type Sample = Extract<StudioDocumentInput, { type: "SAMPLE_ROUND" }>["payload"];
 const categories = {
@@ -91,25 +93,27 @@ export function SampleRounds(
   };
   return (
     <div className={styles.section}>
-      <div className={styles.recordHeader}>
-        <div>
-          <h2>样衣反馈</h2>
-        </div>
-        <Button
-          disabled={!props.canEdit}
-          onClick={() =>
-            void (async () => {
-              if (await props.beforeChange()) {
-                setId(null);
-                setDraftVersion((current) => current + 1);
-                setSeed(null);
-              }
-            })()
-          }
-        >
-          建立样衣轮次
-        </Button>
-      </div>
+      <StudioPageHeader
+        title={String(existing?.currentRevision.payload.name ?? "新样衣轮次")}
+        type="样衣反馈"
+        description="整理本轮照片，定位问题并跟进处理"
+        actions={
+          <Button
+            disabled={!props.canEdit}
+            onClick={() =>
+              void (async () => {
+                if (await props.beforeChange()) {
+                  setId(null);
+                  setDraftVersion((current) => current + 1);
+                  setSeed(null);
+                }
+              })()
+            }
+          >
+            建立样衣轮次
+          </Button>
+        }
+      />
       <div className={styles.split}>
         {props.data.samples.length > 1 ? (
           <ObjectSwitcher
@@ -319,7 +323,7 @@ function SampleEditor({
   };
   return (
     <form
-      className={styles.form}
+      className={`${styles.form} ${styles.sampleWorkspace}`}
       onInvalidCapture={(event) =>
         revealInvalidField(event, () =>
           setSelectedIssueId(
@@ -356,72 +360,89 @@ function SampleEditor({
         data={data}
         revisionId={techPackStyleRevision(data, draft.techPackRevisionId)}
       />
-      <fieldset
-        className={styles.form}
-        disabled={!canEdit || form.busy || uploading}
-      >
-        <div className={styles.formGrid}>
-          <Field label="轮次名称">
-            <Input
-              required
-              maxLength={120}
-              value={draft.name}
-              onChange={(event) => update("name", event.target.value)}
-            />
-          </Field>
-          <Field label="打样轮次">
-            <Input
-              required
-              disabled={!!existing}
-              value={draft.round}
-              type="number"
-              min={1}
-              max={1000}
-              onChange={(event) => update("round", Number(event.target.value))}
-            />
-          </Field>
-        </div>
-        <Field label="对应技术包修订">
-          <Select
-            required
-            disabled={!!existing}
-            value={draft.techPackRevisionId}
-            onChange={(event) =>
-              update("techPackRevisionId", event.target.value)
-            }
-          >
-            <option value="">选择技术包修订</option>
-            {data.techPacks.flatMap((pack) =>
-              pack.revisions.map((revision) => (
-                <option key={revision.id} value={revision.id}>
-                  {revision.payload.name} · r{revision.revision}
-                </option>
-              )),
-            )}
-          </Select>
-        </Field>
-        <Field label="上传样衣照片">
-          <UploadInput
-            label="上传样衣照片"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            disabled={draft.photoAssetIds.length >= 30}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void upload(file);
-              event.target.value = "";
-            }}
-          />
-        </Field>
-        <FormSection
-          title="本轮照片"
-          summary={`${draft.photoAssetIds.length} 张 · 上传和选择不改变问题坐标`}
-          defaultOpen={!draft.photoAssetIds.length}
+      <div className={styles.sampleBody}>
+        <StudioEditSection
+          persistent
+          title="编辑轮次与照片"
+          summary={`${draft.name || "新样衣"} · 第 ${draft.round} 轮 · ${draft.photoAssetIds.length} 张照片`}
+          defaultOpen={!existing}
+          save={canEdit}
+          busy={form.busy || uploading}
+          error={form.error}
         >
+          <fieldset
+            className={styles.form}
+            disabled={!canEdit || form.busy || uploading}
+          >
+            <div className={styles.formGrid}>
+              <Field label="轮次名称">
+                <Input
+                  required
+                  maxLength={120}
+                  value={draft.name}
+                  onChange={(event) => update("name", event.target.value)}
+                />
+              </Field>
+              <Field label="打样轮次">
+                <Input
+                  required
+                  disabled={!!existing}
+                  value={draft.round}
+                  type="number"
+                  min={1}
+                  max={1000}
+                  onChange={(event) =>
+                    update("round", Number(event.target.value))
+                  }
+                />
+              </Field>
+            </div>
+            <Field label="对应技术包修订">
+              <Select
+                required
+                disabled={!!existing}
+                value={draft.techPackRevisionId}
+                onChange={(event) =>
+                  update("techPackRevisionId", event.target.value)
+                }
+              >
+                <option value="">选择技术包修订</option>
+                {data.techPacks.flatMap((pack) =>
+                  pack.revisions.map((revision) => (
+                    <option key={revision.id} value={revision.id}>
+                      {revision.payload.name} · r{revision.revision}
+                    </option>
+                  )),
+                )}
+              </Select>
+            </Field>
+          </fieldset>
+        </StudioEditSection>
+        <fieldset
+          className={`${styles.form} ${styles.samplePhotos}`}
+          disabled={!canEdit || form.busy || uploading}
+        >
+          <h3>本轮照片</h3>
+          <p className={styles.muted}>
+            上传或选择照片后，再为具体位置记录问题。照片上已有问题时，需先处理关联问题才能移除。
+          </p>
+          <Field label="上传样衣照片">
+            <UploadInput
+              label="上传样衣照片"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              disabled={draft.photoAssetIds.length >= 30}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void upload(file);
+                event.target.value = "";
+              }}
+            />
+          </Field>
           <AssetPicker
             assets={assets}
             selected={draft.photoAssetIds}
             max={30}
-            label="本轮照片"
+            label="选择本轮照片"
             onChange={(ids) => {
               const removed = draft.photoAssetIds.filter(
                 (id) => !ids.includes(id),
@@ -437,7 +458,12 @@ function SampleEditor({
               update("photoAssetIds", ids);
             }}
           />
-        </FormSection>
+        </fieldset>
+      </div>
+      <fieldset
+        className={`${styles.form} ${styles.sampleIssues}`}
+        disabled={!canEdit || form.busy || uploading}
+      >
         <section className={styles.section}>
           <div className={styles.recordHeader}>
             <h3>问题记录</h3>
@@ -473,7 +499,7 @@ function SampleEditor({
                 aria-pressed={currentIssueId === issue.id}
                 onClick={() => setSelectedIssueId(issue.id)}
               >
-                问题 {index + 1} ·{" "}
+                {issue.text || `问题 ${index + 1}`} ·{" "}
                 {issue.status === "VERIFIED"
                   ? "已复核"
                   : issue.status === "FIXED"
@@ -637,18 +663,22 @@ function SampleEditor({
             </fieldset>
           ))}
         </section>
-        <Field label="本轮补充说明">
-          <Textarea
-            rows={3}
-            maxLength={2000}
-            value={draft.notes}
-            onChange={(event) => update("notes", event.target.value)}
-          />
-        </Field>
+        <FormSection title="本轮补充说明" summary={draft.notes || "未填写"}>
+          <Field label="本轮补充说明">
+            <Textarea
+              rows={3}
+              maxLength={2000}
+              value={draft.notes}
+              onChange={(event) => update("notes", event.target.value)}
+            />
+          </Field>
+        </FormSection>
       </fieldset>
       <SaveBar
         busy={form.busy || uploading}
-        dirty={form.dirty || !existing}
+        dirty={form.dirty}
+        isNew={!existing}
+        hint={!draft.techPackRevisionId ? "保存前需关联技术包修订" : undefined}
         canEdit={canEdit}
       >
         {existing ? (

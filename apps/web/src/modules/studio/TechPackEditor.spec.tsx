@@ -39,6 +39,7 @@ it("小数中间态与非法草稿跨章节保留，失败输入不会保存旧�
   fireEvent.click(screen.getByRole("button", { name: "添加材料" }));
   fireEvent.change(screen.getByLabelText("BOM 1 名称"), { target: { value: "主料" } });
   const quantity = screen.getByLabelText("BOM 1 用量") as HTMLInputElement;
+  quantity.scrollIntoView = vi.fn();
   fireEvent.change(quantity, { target: { value: "1." } });
   expect(quantity.value).toBe("1.");
   fireEvent.click(screen.getByLabelText("BOM 1 已复核"));

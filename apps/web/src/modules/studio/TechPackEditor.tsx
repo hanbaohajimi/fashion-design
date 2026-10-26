@@ -38,6 +38,8 @@ import { BomTable, PomTable } from "./TechPackTables";
 import { AssetAnchor } from "./AssetAnchor";
 import { TechPackExportButton } from "./TechPackExportButton";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 export function TechPackEditor(
   props: StudioPanelProps & {
@@ -58,11 +60,11 @@ export function TechPackEditor(
   const existing = props.data.techPacks.find((item) => item.id === id);
   return (
     <div className={styles.section}>
-      <div className={styles.recordHeader}>
-        <div className={styles.row}>
-          <h2>
-            技术包 · {existing?.currentRevision.payload.name ?? "新建资料"}
-          </h2>
+      <StudioPageHeader
+        title={String(existing?.currentRevision.payload.name ?? "新建技术包")}
+        type="技术包"
+        description="逐章整理制作资料，人工复核后发布"
+        status={
           <Badge>
             {existing ? `已保存 r${existing.currentRevision.revision} · ` : ""}
             {(existing?.currentRevision.payload as StudioTechPack | undefined)
@@ -70,21 +72,23 @@ export function TechPackEditor(
               ? "已发布"
               : "草稿"}
           </Badge>
-        </div>
-        <Button
-          disabled={!props.canEdit}
-          onClick={() =>
-            void (async () => {
-              if (await props.beforeChange()) {
-                setId(null);
-                setDraftVersion((current) => current + 1);
-              }
-            })()
-          }
-        >
-          新建技术包
-        </Button>
-      </div>
+        }
+        actions={
+          <Button
+            disabled={!props.canEdit}
+            onClick={() =>
+              void (async () => {
+                if (await props.beforeChange()) {
+                  setId(null);
+                  setDraftVersion((current) => current + 1);
+                }
+              })()
+            }
+          >
+            新建技术包
+          </Button>
+        }
+      />
       <div className={styles.split}>
         {props.data.techPacks.length > 1 ? (
           <ObjectSwitcher
@@ -279,6 +283,8 @@ function TechPackForm({
             element instanceof HTMLInputElement &&
             element.value === draft.name),
       );
+      // Use the same disclosure/focus path as native constraint validation.
+      input?.dispatchEvent(new Event("invalid", { cancelable: true }));
       input?.focus();
     });
   };
@@ -322,19 +328,34 @@ function TechPackForm({
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
       <BoundStyleContext data={data} revisionId={draft.styleRevisionId} />
-      <Field label="技术包名称">
-        <Input
-          aria-invalid={invalidField === "技术包名称" || undefined}
-          aria-describedby={
-            invalidField === "技术包名称" ? validationId : undefined
-          }
-          value={draft.name}
-          disabled={disabled}
-          required
-          maxLength={120}
-          onChange={(event) => update("name", event.target.value)}
-        />
-      </Field>
+      <StudioEditSection
+        persistent
+        title="编辑技术包资料"
+        summary={
+          <span>
+            {draft.name || "新建技术包"} ·{" "}
+            {readiness.length ? `${readiness.length} 项待复核` : "可进入复核"}
+          </span>
+        }
+        defaultOpen={!existing}
+        save={canEdit}
+        busy={form.busy}
+        error={form.error}
+      >
+        <Field label="技术包名称">
+          <Input
+            aria-invalid={invalidField === "技术包名称" || undefined}
+            aria-describedby={
+              invalidField === "技术包名称" ? validationId : undefined
+            }
+            value={draft.name}
+            disabled={disabled}
+            required
+            maxLength={120}
+            onChange={(event) => update("name", event.target.value)}
+          />
+        </Field>
+      </StudioEditSection>
       <EditorChapters
         active={chapter}
         onChange={setChapter}
@@ -348,7 +369,7 @@ function TechPackForm({
           { value: "review", label: "复核发布" },
         ]}
       />
-      {chapter === "basics" || chapter === "review" ? (
+      {chapter === "review" ? (
         <section className={styles.reviewReadiness} aria-label="发布准备情况">
           <h3>
             {readiness.length
@@ -854,7 +875,13 @@ function TechPackForm({
       </section>
       <SaveBar
         busy={form.busy}
-        dirty={form.dirty || !existing}
+        dirty={form.dirty}
+        isNew={!existing}
+        hint={
+          !draft.styleRevisionId
+            ? "保存前需关联款式修订"
+            : `${readiness.length} 项待复核`
+        }
         canEdit={canEdit}
         primary={form.dirty || !existing}
       >

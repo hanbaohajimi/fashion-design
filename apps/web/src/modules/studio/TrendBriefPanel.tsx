@@ -19,6 +19,8 @@ import {
 } from "../../components/ui";
 import styles from "./trend-brief.module.css";
 import { ActionBar, FormSection } from "../../components/workspace-ui";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 export function buildTrendBrief(
   goal: string,
   articles: readonly TrendItem[],
@@ -181,59 +183,93 @@ export function TrendBriefPanel({
   };
   return (
     <section className={styles.panel}>
-      <div>
-        <h2>趋势简报</h2>
-        <p>
-          选择来源，填写本轮目标和探索方向。品牌规则、原始链接和未知项会一同保存到画布。
-        </p>
-      </div>
+      <StudioPageHeader
+        title="趋势简报"
+        description="选择来源，填写本轮目标和探索方向。品牌规则、原始链接和未知项会一同保存到画布。"
+      />
       {loading ? <p role="status">正在读取趋势档案…</p> : null}
       <div className={styles.layout}>
-        <div className={styles.sources}>
-          {articles.map((article) => (
-            <label key={article.id}>
-              <input
-                type="checkbox"
-                disabled={
-                  !canEdit ||
-                  busy ||
-                  (!selected.includes(article.id) && selected.length >= 6)
-                }
-                checked={selected.includes(article.id)}
-                onChange={(event) =>
-                  setSelected((current) =>
-                    event.target.checked
-                      ? [...current, article.id]
-                      : current.filter((id) => id !== article.id),
-                  )
-                }
-              />
-              {article.coverImageUrl ? (
-                <span className={styles.sourceImage}>
-                  <ImagePreview
-                    retryable={false}
-                    src={article.coverImageUrl}
-                    alt=""
-                    fit="cover"
+        <div>
+          <FormSection
+            title="选择趋势来源"
+            summary={`已选 ${selected.length} 篇，最多 6 篇`}
+            defaultOpen
+          >
+            <div className={styles.sources}>
+              {articles.map((article) => (
+                <label key={article.id}>
+                  <input
+                    type="checkbox"
+                    disabled={
+                      !canEdit ||
+                      busy ||
+                      (!selected.includes(article.id) && selected.length >= 6)
+                    }
+                    checked={selected.includes(article.id)}
+                    onChange={(event) =>
+                      setSelected((current) =>
+                        event.target.checked
+                          ? [...current, article.id]
+                          : current.filter((id) => id !== article.id),
+                      )
+                    }
                   />
-                </span>
+                  {article.coverImageUrl ? (
+                    <span className={styles.sourceImage}>
+                      <ImagePreview
+                        retryable={false}
+                        src={article.coverImageUrl}
+                        alt=""
+                        fit="cover"
+                      />
+                    </span>
+                  ) : null}
+                  <span>
+                    <strong>{article.title}</strong>
+                    <small>
+                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} ·{" "}
+                      <a
+                        href={article.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        查看原文
+                      </a>
+                    </small>
+                    <p>{article.summary}</p>
+                  </span>
+                </label>
+              ))}
+              {!loading && !articles.length ? (
+                <p>
+                  尚无可用来源。先到趋势档案添加或等待资料更新；没有来源时不会自动编造简报。
+                </p>
               ) : null}
-              <span>
-                <strong>{article.title}</strong>
-                <small>
-                  {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} ·{" "}
-                  <a href={article.sourceUrl} target="_blank" rel="noreferrer">
-                    查看原文
-                  </a>
-                </small>
-                <p>{article.summary}</p>
-              </span>
-            </label>
-          ))}
-          {!loading && !articles.length ? (
-            <p>
-              尚无可用来源。先到趋势档案添加或等待资料更新；没有来源时不会自动编造简报。
-            </p>
+            </div>
+          </FormSection>
+          {selected.length ? (
+            <section className={styles.reading} aria-label="本轮趋势简报">
+              <h3>{goal || "本轮设计目标待填写"}</h3>
+              <p>{directions || "选择来源后，写下希望探索的设计方向。"}</p>
+              {articles
+                .filter((article) => selected.includes(article.id))
+                .map((article) => (
+                  <article key={article.id}>
+                    <h4>{article.title}</h4>
+                    <p>{article.summary}</p>
+                    <small>
+                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} ·{" "}
+                      <a
+                        href={article.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        查看原文
+                      </a>
+                    </small>
+                  </article>
+                ))}
+            </section>
           ) : null}
         </div>
         <form
@@ -242,54 +278,65 @@ export function TrendBriefPanel({
             void save();
           }}
         >
-          <label>
-            设计任务
-            <Input
-              required
-              disabled={!canEdit || busy}
-              value={goal}
-              maxLength={120}
-              placeholder="例如：为春夏通勤系列开发轻薄衬衫"
-              onChange={(event) => setGoal(event.target.value)}
-            />
-          </label>
-          <FormSection
-            title="品牌关联"
-            summary={
-              brandId
-                ? `已关联：${brands.find((brand) => brand.id === brandId)?.currentRevision.payload.name ?? "当前品牌"}`
-                : "未关联品牌"
-            }
+          <StudioEditSection
+            persistent
+            title="编辑简报方向"
+            summary={goal || "填写本轮目标"}
+            defaultOpen
+            save={canEdit}
+            busy={busy}
+            error={error}
           >
             <label>
-              采用的品牌资料
-              <Select
+              设计任务
+              <Input
+                required
                 disabled={!canEdit || busy}
-                value={brandId}
-                onChange={(event) => setBrandId(event.target.value)}
-              >
-                <option value="">本次不指定品牌规则</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.currentRevision.payload.name} · 修订 {brand.version}
-                  </option>
-                ))}
-              </Select>
+                value={goal}
+                maxLength={120}
+                placeholder="例如：为春夏通勤系列开发轻薄衬衫"
+                onChange={(event) => setGoal(event.target.value)}
+              />
             </label>
-          </FormSection>
-          <label>
-            本轮探索方向，每行一个
-            <Textarea
-              disabled={!canEdit || busy}
-              value={directions}
-              rows={5}
-              maxLength={2000}
-              onChange={(event) => setDirections(event.target.value)}
-              placeholder="写出希望探索的廓形、配色或面料；这些是设计建议，不是来源事实"
-            />
-          </label>
+            <FormSection
+              title="品牌关联"
+              summary={
+                brandId
+                  ? `已关联：${brands.find((brand) => brand.id === brandId)?.currentRevision.payload.name ?? "当前品牌"}`
+                  : "未关联品牌"
+              }
+            >
+              <label>
+                采用的品牌资料
+                <Select
+                  disabled={!canEdit || busy}
+                  value={brandId}
+                  onChange={(event) => setBrandId(event.target.value)}
+                >
+                  <option value="">本次不指定品牌规则</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.currentRevision.payload.name} · 修订{" "}
+                      {brand.version}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            </FormSection>
+            <label>
+              本轮探索方向，每行一个
+              <Textarea
+                disabled={!canEdit || busy}
+                value={directions}
+                rows={5}
+                maxLength={2000}
+                onChange={(event) => setDirections(event.target.value)}
+                placeholder="写出希望探索的廓形、配色或面料；这些是设计建议，不是来源事实"
+              />
+            </label>
+          </StudioEditSection>
           <details>
-            <summary>预览将保存的完整简报</summary>
+            <summary>查看来源与完整简报</summary>
             <pre>{text}</pre>
           </details>
           {canEdit ? (

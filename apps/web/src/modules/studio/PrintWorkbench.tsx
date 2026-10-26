@@ -11,6 +11,9 @@ import { privateFetch } from "../auth/private-fetch";
 import { Button, Input, Select, Textarea } from "../../components/ui";
 import { ActionBar, FormSection } from "../../components/workspace-ui";
 import styles from "./print-workbench.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
+import { useStudioAssetName } from "./studio-object-context";
 type Pattern = (typeof studioPrintPatternSchema)["_output"];
 const CONTROLS = [
   { key: "scale", label: "重复尺度", min: 0.1, max: 5, step: 0.1 },
@@ -36,6 +39,7 @@ export function PrintWorkbench({
   onDirty?: (dirty: boolean) => void;
   beforeChange?: () => Promise<boolean>;
 }) {
+  const assetName = useStudioAssetName();
   const savedPattern = studioPrintPatternSchema.safeParse(
     documents[0]?.currentRevision.payload,
   );
@@ -160,12 +164,11 @@ export function PrintWorkbench({
   );
   return (
     <section className={styles.panel} aria-label="印花工作台">
-      <div>
-        <h2>印花方案</h2>
-        <p>
-          原始图案保持独立，平铺预览和应用参数按修订保存。比例属于屏幕视觉设定，生产尺寸需要另行确认。
-        </p>
-      </div>
+      <StudioPageHeader
+        title={value.name || "新印花方案"}
+        type="印花工作台"
+        description={`${editing ? `修订 ${editing.version}` : "新方案"} · 调整重复效果并人工核对`}
+      />
       <div className={styles.layout}>
         <div
           className={styles.preview}
@@ -207,30 +210,42 @@ export function PrintWorkbench({
             void save();
           }}
         >
-          <label>
-            方案名称
-            <Input
-              required
-              disabled={!canEdit || busy}
-              value={value.name}
-              onChange={(event) => update("name", event.target.value)}
-            />
-          </label>
-          <label>
-            原始图案
-            <Select
-              disabled={!canEdit || busy}
-              value={value.sourceAssetId}
-              onChange={(event) => update("sourceAssetId", event.target.value)}
-            >
-              <option value="pending">选择项目图片</option>
-              {assets.map((asset, index) => (
-                <option key={asset.id} value={asset.id}>
-                  素材 {index + 1} · {asset.id.slice(-6)}
-                </option>
-              ))}
-            </Select>
-          </label>
+          <StudioEditSection
+            persistent
+            title="编辑图案资料"
+            summary={value.name}
+            defaultOpen={!editing}
+            save={canEdit}
+            busy={busy}
+            error={error}
+          >
+            <label>
+              方案名称
+              <Input
+                required
+                disabled={!canEdit || busy}
+                value={value.name}
+                onChange={(event) => update("name", event.target.value)}
+              />
+            </label>
+            <label>
+              原始图案
+              <Select
+                disabled={!canEdit || busy}
+                value={value.sourceAssetId}
+                onChange={(event) =>
+                  update("sourceAssetId", event.target.value)
+                }
+              >
+                <option value="pending">选择项目图片</option>
+                {assets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {assetName(asset.id)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </StudioEditSection>
           {CONTROLS.slice(0, 2).map(slider)}
           <FormSection
             title="高级调整"
@@ -246,6 +261,7 @@ export function PrintWorkbench({
                 : "宽高待确认"
             }
           >
+            <p>这里的比例属于屏幕视觉设定，生产尺寸需要另行确认。</p>
             <label>
               生产重复宽度（cm，待确认可留空）
               <Input
@@ -306,7 +322,13 @@ export function PrintWorkbench({
           </label>
           {canEdit ? (
             <ActionBar
-              status={signature !== baseline ? "有未保存的修改" : "已保存"}
+              status={
+                signature !== baseline
+                  ? "有未保存的修改"
+                  : editing
+                    ? "已保存"
+                    : "新方案尚未保存"
+              }
             >
               <Button
                 type="submit"

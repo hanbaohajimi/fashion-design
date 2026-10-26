@@ -14,6 +14,8 @@
 
 ## 按用途查找
 
+- [服装秀子功能迁移与实施](plans/fashion-show-migration/README.md)：2026-10-26，含来源基线、分阶段验收及模型可用性边界。
+
 | 目录 | 内容与时间边界 |
 | --- | --- |
 | [architecture/](architecture/) | Agent 架构，以及[交互开发线与白板功能迁移](architecture/interaction-lines-and-migration.md)记录；后者核查日期为 2026-10-23 |

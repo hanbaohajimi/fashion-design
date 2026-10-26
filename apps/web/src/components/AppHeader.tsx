@@ -12,6 +12,7 @@ export function AppHeader(props: {
   readonly account?: ReactNode;
   readonly navigation?: ReactNode;
   readonly hideProjectReturn?: boolean;
+  readonly currentIsParent?: boolean;
 }) {
   return (
     <ArchiveNavigation {...props} account={props.account ?? <Account />} />

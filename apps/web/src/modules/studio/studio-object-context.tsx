@@ -35,7 +35,13 @@ export function StudioAssetNames({
   readonly data: StudioSummary;
   readonly children: ReactNode;
 }) {
-  const names = useMemo(() => studioAssetNames(data), [data]);
+  const names = useMemo(() => {
+    const result = studioAssetNames(data);
+    data.assets.forEach((asset, index) => {
+      if (!result.has(asset.id)) result.set(asset.id, `设计图片 ${index + 1}`);
+    });
+    return result;
+  }, [data]);
   return <AssetNames.Provider value={names}>{children}</AssetNames.Provider>;
 }
 

@@ -268,7 +268,6 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
   await page
     .getByRole("textbox", { name: "本次任务", exact: true })
     .fill("尚未保存的风衣要求");
-  await page.getByRole("button", { name: "开发交付", exact: true }).click();
   await page.getByRole("tab", { name: "系列规划", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();

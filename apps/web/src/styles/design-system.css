@@ -1,26 +1,27 @@
 /**
  * 新时尚 AI 设计平台 — 设计系统
  *
- * 视觉主张：织物档案。森林绿导航、暖纸编辑区；作品、当前对象和下一步优先。
+ * 视觉主张：织物档案。暖白导航与编辑区、深绿重点；作品、当前对象和下一步优先。
  * §2.1/§2.8/§5.2：品牌、动作、选中、焦点和状态分别命名。
  * 本文件是唯一运行时主题；颜色清单和预览从这里导出。
  */
 
 :root {
   color-scheme: light;
-  --color-navigation: #183f35;
-  --color-navigation-ink: #f2f6ec;
-  --color-navigation-muted: #c2d6c9;
-  --color-navigation-hover: #234c40;
-  --color-navigation-selected: #315d4e;
-  --color-navigation-border: #426557;
+  --color-navigation: #fffefa;
+  --color-navigation-ink: #20332e;
+  --color-navigation-muted: #586a60;
+  --color-navigation-hover: #f7f8f2;
+  --color-navigation-selected: #e7eee2;
+  --color-navigation-border: #e0e4db;
   --control-height: 36px;
   --control-height-compact: 32px;
   --control-height-primary: 40px;
   --control-height-touch: 44px;
   --studio-header-height: 56px;
   --app-header-height: 56px;
-  --workspace-nav-width: 204px;
+  --workspace-nav-width: 184px;
+  --workspace-mobile-nav-height: 64px;
   --inspector-width: 320px;
   --editor-header-height: 64px;
   --text-page-title: 32px;
@@ -30,6 +31,17 @@
   --content-max-width: 1600px;
   --page-gutter: 32px;
   --image-stage-background: #e7e9e2;
+  /* 设计助手分区：对话工具、引用对象、生成确认；不表示运行状态。 */
+  --assistant-tools-surface: #e5eee3;
+  --assistant-reference-surface: #f3e7d6;
+  --assistant-reference-ink: #664727;
+  --assistant-review-surface: #e0eee5;
+  --assistant-review-border: #a5bfb1;
+  /* 子功能区域色：不改变服装图片，不代替业务状态。 */
+  --studio-work-surface: #e8eee7;
+  --studio-reference-surface: #eee8dc;
+  --studio-artwork-surface: #ececea;
+  --studio-navigation-width: var(--workspace-nav-width);
 
   /* 旧组件只引用别名，所有视觉值以本文件为准。 */
   --surface-base: var(--color-canvas);

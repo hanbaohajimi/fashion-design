@@ -33,6 +33,8 @@ import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import { AssetAnchor } from "./AssetAnchor";
 import { errorMessage } from "./studio-ui";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 type MemberRole = "EDITOR" | "REVIEWER" | "VIEWER";
 type Comment = Extract<StudioDocumentInput, { type: "COMMENT" }>["payload"];
@@ -65,19 +67,22 @@ export function CollaborationPanel(
   }, [memberDirty, reviewDirty, onDirty]);
   return (
     <div className={styles.section}>
-      <div className={`${styles.recordHeader} ${styles.reviewHeader}`}>
-        <h2 title="批注与审批绑定明确修订。后续修改需要重新评审。">团队评审</h2>
-        <Tabs
-          id={tabsId}
-          label="团队工作"
-          value={section}
-          options={[
-            { value: "review", label: "修订评审" },
-            { value: "members", label: "成员管理" },
-          ]}
-          onChange={setSection}
-        />
-      </div>
+      <StudioPageHeader
+        title="团队评审"
+        description="批注与审批绑定明确修订，后续修改需要重新评审"
+        actions={
+          <Tabs
+            id={tabsId}
+            label="团队工作"
+            value={section}
+            options={[
+              { value: "review", label: "修订评审" },
+              { value: "members", label: "成员管理" },
+            ]}
+            onChange={setSection}
+          />
+        }
+      />
       <TabPanel
         tabsId={tabsId}
         value="review"
@@ -405,50 +410,60 @@ function ReviewForm({
               : ""
         }
       />
-      <div className={styles.formGrid}>
-        <Field label="资料类型">
-          <Select
-            value={draft.targetType}
-            onChange={(event) => {
-              const targetType = event.target
-                .value as ReviewDraft["targetType"];
-              setDraft((current) => ({
-                ...current,
-                targetType,
-                targetRevisionId:
-                  targetType === "STYLE"
-                    ? (data.styles[0]?.currentRevision.id ?? "")
-                    : (data.techPacks[0]?.currentRevision.id ?? ""),
-                assetId: "",
-                anchored: false,
-              }));
-            }}
-          >
-            <option value="STYLE">款式</option>
-            <option value="TECH_PACK">技术包</option>
-          </Select>
-        </Field>
-        <Field label="被评审修订">
-          <Select
-            value={draft.targetRevisionId}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                targetRevisionId: event.target.value,
-                anchored: false,
-                assetId: "",
-              }))
-            }
-          >
-            <option value="">选择修订</option>
-            {targetOptions.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
+      <StudioEditSection
+        persistent
+        title="切换评审对象"
+        summary={
+          targetOptions.find((item) => item.id === draft.targetRevisionId)
+            ?.label ?? "选择需要评审的修订"
+        }
+        defaultOpen={!draft.targetRevisionId}
+      >
+        <div className={styles.reviewTarget}>
+          <Field label="资料类型">
+            <Select
+              value={draft.targetType}
+              onChange={(event) => {
+                const targetType = event.target
+                  .value as ReviewDraft["targetType"];
+                setDraft((current) => ({
+                  ...current,
+                  targetType,
+                  targetRevisionId:
+                    targetType === "STYLE"
+                      ? (data.styles[0]?.currentRevision.id ?? "")
+                      : (data.techPacks[0]?.currentRevision.id ?? ""),
+                  assetId: "",
+                  anchored: false,
+                }));
+              }}
+            >
+              <option value="STYLE">款式</option>
+              <option value="TECH_PACK">技术包</option>
+            </Select>
+          </Field>
+          <Field label="被评审修订">
+            <Select
+              value={draft.targetRevisionId}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  targetRevisionId: event.target.value,
+                  anchored: false,
+                  assetId: "",
+                }))
+              }
+            >
+              <option value="">选择修订</option>
+              {targetOptions.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      </StudioEditSection>
       <div className={styles.reviewWorkspace}>
         <div className={styles.reviewImage}>
           {previewUrl ? (
@@ -502,7 +517,11 @@ function ReviewForm({
               );
             })}
             {!comments.length && !reviews.length ? (
-              <p className={styles.muted}>此修订还没有批注和评审记录。</p>
+              <p className={styles.muted}>
+                {draft.targetRevisionId
+                  ? "此修订还没有批注和评审记录。"
+                  : "先选择已保存修订，再提交批注或审批。"}
+              </p>
             ) : null}
           </div>
           {data.capabilities.edit || data.capabilities.review ? (

@@ -235,6 +235,7 @@ export function ProjectCard({
                 </button>
                 <button
                   aria-busy={duplicating}
+                  aria-describedby={`duplicate-runway-note-${project.id}`}
                   disabled={duplicating}
                   onClick={(event) => {
                     event.currentTarget
@@ -246,6 +247,9 @@ export function ProjectCard({
                 >
                   {duplicating ? "复制中…" : "创建副本"}
                 </button>
+                <small id={`duplicate-runway-note-${project.id}`} className={styles.duplicateNote}>
+                  服装秀作品、执行历史及活动任务保留在原项目。
+                </small>
                 <button
                   onClick={(event) => {
                     event.currentTarget

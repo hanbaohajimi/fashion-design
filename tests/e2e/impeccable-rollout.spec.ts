@@ -31,8 +31,9 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
   await expect(object).toContainText("长款通勤风衣");
   await expect(object).toContainText("款式修订 r3");
   await page.getByLabel("技术包名称", { exact: true }).fill("风衣生产资料草稿");
-  await page.getByRole("link", { name: "设计工作台", exact: true }).click();
-  const guard = page.getByRole("dialog");
+  await page.locator('summary[aria-label="项目导航"]').click();
+  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await expect(guard).toBeVisible();
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
   await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue(
@@ -50,6 +51,10 @@ test("修订深链恢复到对应技术包，待复核项可定位原章节", as
     "褶线夹克技术资料",
   );
   const readiness = page.getByRole("region", { name: "发布准备情况" });
+  await page
+    .getByRole("navigation", { name: "技术包章节" })
+    .getByRole("button", { name: "复核发布", exact: true })
+    .click();
   await readiness.getByRole("button", { name: /BOM/ }).click();
   await expect(
     page.getByRole("heading", { name: "材料与辅料 · BOM", exact: true }),
@@ -76,9 +81,18 @@ for (const viewport of [
     );
     for (const path of ["/", `/${PROJECT}/studio?tab=tech`]) {
       await page.goto(path);
-      await expect(
-        page.getByRole("navigation", { name: "工作区导航", exact: true }),
-      ).toBeVisible();
+      if (path === "/")
+        await expect(
+          page.getByRole("navigation", { name: "工作区导航", exact: true }),
+        ).toBeVisible();
+      else if (viewport.width < 1200)
+        await expect(
+          page.getByLabel("当前功能", { exact: true }),
+        ).toBeVisible();
+      else
+        await expect(
+          page.getByRole("tablist", { name: "设计工作室功能" }),
+        ).toBeVisible();
       await expect(page.locator("main h1, main h2").first()).toBeVisible();
       expect(
         await page.evaluate(

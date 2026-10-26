@@ -1,0 +1,85 @@
+# 服装秀迁移实施记录
+
+日期：2026-10-26。本文只记录实际验证，不将计划条目视为完成。
+
+## 阶段 0：基线
+
+- 当前 Git HEAD：`da2f90d306cd7f79743a0efbaa5cb05a38d81895`。
+- 已保存迁移前 Git status（NUL 分隔原始记录）及完整 tracked diff：`output/runway-migration/baseline/`。
+- 已记录旧项目 45 个源码/模板/配置资料的 SHA256，排除 `.env`、数据库、历史成果、缓存和安装产物。
+- 旧项目 LICENSE 为 MIT（Copyright 2024 LangChain）；迁入 Python 模块保留许可证与来源说明。
+- 旧目录保持只读；新功能不读取旧 `.env` 或硬编码凭据。
+
+| 旧能力 | 新模块 | 验收依据 |
+| --- | --- | --- |
+| Prompt_improve / supervisor | Python 编排与阶段守卫 | 输入快照、合法阶段、无空成果成功 |
+| ModelImgNode / ClothImgNode / BackgroundImgNode | 图片适配器与逐项尝试 | 文本/参考起步，单项失败重试 |
+| SelectImagesNode | 稳定媒体 ID 配对 | 重复/失效中断拒绝，重启后恢复 |
+| TryOnNode / runwayImgNode | 试衣与分镜节点 | 配对保留、生成结果可追溯 |
+| revise | 逐图修改与人工确认 | 保留历史、只改选中图片 |
+| videoNode | 即梦提交/查询/下载 | 供应商任务 ID 持久化 |
+| concate | FFmpeg 标准化与拼接 | H264/AAC、ffprobe、完整服装画面 |
+| musicNode | MiniMax 与时长匹配 | 音乐失败保留无配乐成片 |
+| Django 会话/检查点重跑 | 作品、运行、分支、事件 | 不迁旧数据库，旧成果不覆盖 |
+
+## 已实施的阶段 1–5
+
+- 独立 Python 执行器、Python3.11/bookworm runtime/test 镜像、uv0.8.22 与冻结锁文件已建立。依赖按实际导入维护，未迁入 Django、旧本地文件和旧凭据。
+- 新增 7 类业务对象、项目权限 API、数据库命令领取、持续心跳、租约/执行代次、PostgreSQL 检查点、持久化 SSE 和私有媒体 Range 播放。
+- 图片流程覆盖文本或已有素材起步、配对、试衣、分镜和逐图修改；恢复以尝试记录和对象存储为依据。
+- 上传后、媒体登记前崩溃使用确定性媒体 ID/对象键恢复；媒体和尝试结果原子提交。人工等待和命令完成原子发布，避免界面刚显示可操作却发生旧命令冲突。
+- 视频异步任务 ID 持久化；超时继续查询原任务，明确失败后的显式重试才建立新任务。已成功镜头不会重复生成。
+- FFmpeg 合成、封面、音乐与时长匹配、无配乐版本、取消意图和历史分支已实现。选择一个试衣/分镜/视频镜头重做时保留其余镜头与原成片。
+- 旧版自动模型比例检查保留为有视觉配置时的可选步骤，最多一次缩小；不可用时记录原因并保留人工分镜审核。
+- 新增工作室「服装秀」、款式修订入口、原生六阶段视图、输入来源、不可变需求快照、历史详情与深链。只读用户可查看和下载。
+- 界面按运行版本单调合并，旧请求不能切走另一份草稿；队列/执行中不显示旧确认操作。背景为一张共享场景图，替换选择不会静默忽略多余背景。
+- mock/live 使用配置快照并隔离 Worker 领取与能力心跳；模拟 Worker 不会切换为真实调用。
+- 未增加服装秀额度或计费。真实端到端测试确认原图片生成计数不变。
+
+增量迁移：`20261026000100_runway` 和 `20261026000200_runway_attempt_outputs`。第一项应用后未改写，数组非空约束通过第二项补充。已应用 checksum 与文件一致，Prisma diff 无差异。
+
+## 阶段 6 验证
+
+| 检查 | 实际结果与证据 |
+| --- | --- |
+| Python 冻结容器单元/契约/媒体/恢复 | 49 条通过；`output/runway-migration/python-acceptance.log` |
+| Python 真实 PostgreSQL / saver / MinIO / FFmpeg | 6 条通过，含重启恢复、上传崩溃、撤权、执行代次、锁竞争与模式隔离；`pipeline-acceptance.log` |
+| HTTP → 数据库 → Python → MinIO | 1 条完整流程通过，含输入快照、逐图修改、配对、配乐成片、Range、权限及单镜头分支；同上日志 |
+| API 行为测试 | 19 条通过，含幂等、中断、快照、取消和模式能力匹配 |
+| 同一组跨语言 JSON 契约 | TypeScript / Python 各 19 个场景通过，使用同一 fixture |
+| Web 定向回归 | 服装秀 22 条、项目卡 3 条通过；Web 类型与目标 ESLint 通过 |
+| 浏览器 | 真实 Next.js + 明确标记的 API fixture，4 条通过；1440/390 无水平溢出 |
+| 界面独立复核 | 五项原始问题均 resolved，disposition ship 仅覆盖这五项修复；`output/runway-ui-review.md` |
+| 原目录保护 | 45 个文件重新计算哈希均未改变；迁入模块凭据模式扫描无命中 |
+| 平台全量门禁 | `pnpm check` 退出0：审计、lint、类型、schema、应用测试、数据库测试、生产构建全部通过；`platform-check-acceptance.log` |
+| 平台应用与数据库测试 | API 720、Web 349、Worker 117 条通过；数据库3条通过。两项按设计跳过的显式真实/跨服务用例由各自专用命令验收 |
+| 本机一键启动 | `pnpm local:start -SkipInstall -NoBrowser` 已实际启动；Web `/login` 与 API `/health/ready` 均200，Python 容器 healthy |
+| 本机 doctor 与认证入口 | doctor退出0：数据库、业务表、检查点、MinIO、FFmpeg、Worker 全部通过；API与Web代理匿名服装秀请求均401 |
+
+完整门禁前两轮出现现有商品展示选择用例的 5 秒超时；首轮另有既有工作流时序失败。两者单独复跑通过。商品展示测试只改为一次收集 13 个选择按钮，再点击前 12 个；保留数量上限、取消选择和查看大图的全部断言，并增加按钮数断言，没有放宽超时或修改产品行为。
+
+验收过程中发现过测试容器缺少 `RUNWAY_INTEGRATION=1` 导致集成用例跳过，已显式加入测试服务环境并重新运行，最终记录为 **6 条实际执行通过**，不采用早期跳过结果。
+
+真实 Windows 启动还发现新读取分支将 `.env` 空行传入 PowerShell mandatory string[] 绑定，已只在该分支过滤空行后重新启动通过；原 Supabase 配置解析行为不变。最终启动证据见 `local-start-final.log`，doctor见 `doctor.log`，启动检查15条再次通过。
+
+本机运行地址：`http://localhost:3000`，API `http://localhost:3001`。保持 Web/API/原 Worker 和服装秀 mock Worker 运行；独立 `fashion-runway-test` 容器已停止，测试数据卷保留。真实模型配置没有被自动替换。
+
+截图：`output/playwright/runway-workspace-{desktop,mobile}.png` 和 `runway-input-snapshot-{desktop,mobile}.png`。截图为模拟 API 图形，不代表真实模型质量。
+
+启动与发布配置包括 Compose、Windows 一键启动条件分支、根 runway:* 命令、Turbo 环境透传和 CI。Linux 冒烟命令按宿主 UID/GID 写入证据绑定目录，避免容器 UID10001 的权限不匹配。本机 `.env` 已启用 **mock**；提交的 `.env.example` 仍默认关闭。
+
+## 真实供应商状态
+
+| 能力 | 状态 | 说明 |
+| --- | --- | --- |
+| OpenRouter 文本 | 受阻 | 原配置实测 HTTP403 PermissionDeniedError；未自动替换模型/供应商 |
+| 图片网关 | 单项通过 | 文本生图成功，另一次单参考图改色成功；1024×1024，已人工查看保持完整人物与衣服 |
+| 即梦视频 | 单项通过 | 原 req_key 成功生成约5.042秒视频；首次等待超时后复用原任务 ID 取回，没有重新提交 |
+| MiniMax 音乐 | 受阻 | 未在独立 dotenv 中找到可用配置，未提取源码硬编码凭据；无真实音乐调用 |
+| 可选视觉检查 | 未实测 | 单元验证完成，未增加额外真实视觉请求 |
+
+本轮单项冒烟只在子进程环境临时使用旧 `.env` 的独立服务配置；没有将密钥抄入新源码、报告或提交文件。证据、脱敏 manifest 和样本位于 `output/runway-migration/smoke/`。文字诊断在 `llm-diagnostic/manifest.json`，视频恢复记录在 `video/poll-resume.json`，图片编辑在 `image-reference-edit/`。
+
+视频冒烟使用确定性示例参考图，只证明旧接口及下载/解码可用，不证明真实服装运动质量。完整的“两套服装、人工配对、修改、视频、配乐”真实供应商闭环尚未通过，须先恢复文字服务访问并补充有效音乐配置，再显式验收。
+
+真实供应商未通过前，不报告完整真实迁移完成。

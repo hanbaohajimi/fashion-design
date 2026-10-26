@@ -375,6 +375,7 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
   await page.getByLabel("展示包名称", { exact: true }).fill("春夏商品展示");
   await page.getByRole("button", { name: "选择图片 1", exact: true }).click();
   await page.getByRole("button", { name: "选择图片 2", exact: true }).click();
+  await page.getByRole("button", { name: "逐图核对", exact: true }).click();
   await page
     .getByRole("combobox", { name: "图片 1 视图", exact: true })
     .selectOption("front");
@@ -409,7 +410,7 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
     },
   });
   await expect(
-    page.getByText("r1 · 已核对", { exact: true }).first(),
+    page.getByText("已核对", { exact: true }).first(),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "导出此修订 PDF", exact: true })
@@ -470,7 +471,6 @@ test("未保存内容可继续编辑，确认丢弃后新建和切换功能会�
   await expect(
     page.getByRole("tabpanel", { name: "款式档案", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "设计工具", exact: true }).click();
   await page.getByRole("tab", { name: "商品展示", exact: true }).click();
   await expect(page.getByLabel("展示包名称", { exact: true })).toHaveValue("");
   expect(mocked.savedDocuments).toHaveLength(0);

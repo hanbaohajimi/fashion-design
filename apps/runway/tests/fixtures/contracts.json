@@ -1,0 +1,21 @@
+[
+  {"name":"draft defaults","schema":"draft","valid":true,"input":{"prompt":"春夏服装秀"},"expected":{"prompt":"春夏服装秀","modelCount":6,"withMusic":true,"inputs":[]}},
+  {"name":"draft trim and source","schema":"draft","valid":true,"input":{"prompt":"  自然光秀场  ","modelCount":2,"withMusic":false,"inputs":[{"kind":"cloth","sourceType":"style_revision","sourceId":"revision-1"}]},"expected":{"prompt":"自然光秀场","modelCount":2,"withMusic":false,"inputs":[{"kind":"cloth","sourceType":"style_revision","sourceId":"revision-1"}]}},
+  {"name":"blank prompt","schema":"draft","valid":false,"input":{"prompt":"   "}},
+  {"name":"zero model count","schema":"draft","valid":false,"input":{"prompt":"秀场","modelCount":0}},
+  {"name":"boolean model count","schema":"draft","valid":false,"input":{"prompt":"秀场","modelCount":true}},
+  {"name":"string model count","schema":"draft","valid":false,"input":{"prompt":"秀场","modelCount":"2"}},
+  {"name":"fraction model count","schema":"draft","valid":false,"input":{"prompt":"秀场","modelCount":1.5}},
+  {"name":"unknown draft field","schema":"draft","valid":false,"input":{"prompt":"秀场","quota":10}},
+  {"name":"one shared background","schema":"draft","valid":false,"input":{"prompt":"秀场","inputs":[{"kind":"background","sourceType":"asset","sourceId":"background-1"},{"kind":"background","sourceType":"asset","sourceId":"background-2"}]}},
+  {"name":"unknown source type","schema":"draft","valid":false,"input":{"prompt":"秀场","inputs":[{"kind":"cloth","sourceType":"url","sourceId":"https://example.test"}]}},
+  {"name":"valid confirmation","schema":"action","valid":true,"input":{"kind":"confirm","requestKey":"confirm-1","expectedVersion":1,"interruptId":"interrupt-1"}},
+  {"name":"valid pairing","schema":"action","valid":true,"input":{"kind":"pair","requestKey":"pair-1","expectedVersion":2,"interruptId":"interrupt-2","pairings":[{"modelMediaId":"model-1","clothMediaId":"cloth-1"}]}},
+  {"name":"valid image edit","schema":"action","valid":true,"input":{"kind":"edit","requestKey":"edit-1","expectedVersion":3,"interruptId":"interrupt-3","mediaId":"image-1","instruction":"保持轮廓，修改配色"}},
+  {"name":"zero expected version","schema":"action","valid":false,"input":{"kind":"confirm","requestKey":"confirm-2","expectedVersion":0}},
+  {"name":"pairing required","schema":"action","valid":false,"input":{"kind":"pair","requestKey":"pair-2","expectedVersion":1}},
+  {"name":"empty pairings","schema":"action","valid":false,"input":{"kind":"pair","requestKey":"pair-3","expectedVersion":1,"pairings":[]}},
+  {"name":"edit instruction required","schema":"action","valid":false,"input":{"kind":"edit","requestKey":"edit-2","expectedVersion":1,"mediaId":"image-1","instruction":"  "}},
+  {"name":"invalid action stage","schema":"action","valid":false,"input":{"kind":"retry","requestKey":"retry-1","expectedVersion":1,"stage":"model"}},
+  {"name":"unknown action field","schema":"action","valid":false,"input":{"kind":"retry","requestKey":"retry-2","expectedVersion":1,"apiKey":"forbidden"}}
+]

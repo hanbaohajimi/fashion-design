@@ -4,6 +4,8 @@
 
 ## 日常开发与验收
 
+服装秀工具入口为 `runway.mjs`：`pnpm runway:doctor`、`runway:up`、`runway:down`、`runway:test`、`runway:test:integration` 与显式真实调用 `runway:smoke --provider ...`。运行环境与隔离边界见 [服装秀运行手册](../doc/plans/fashion-show-migration/OPERATIONS.md)。
+
 | 入口或脚本 | 用途 |
 | --- | --- |
 | `pnpm local:start` / `start-platform.ps1` | Windows 本地启动；支持 `-DryRun`、`-SkipInstall`、`-NoBrowser` |

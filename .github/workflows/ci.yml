@@ -107,6 +107,12 @@ jobs:
       - name: Build production artifacts
         run: pnpm build
 
+      - name: Test runway Python contracts and media processing
+        run: pnpm runway:test
+
+      - name: Test runway persistence and private storage in isolation
+        run: pnpm runway:test:integration
+
       - name: Resolve Playwright version
         id: playwright-version
         run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"

@@ -1028,3 +1028,11 @@
  .cardMeta { flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
  .continueProject { min-height: 44px; }
 }
+.duplicateNote {
+  display: block;
+  max-width: 240px;
+  padding: 4px 12px 12px;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}

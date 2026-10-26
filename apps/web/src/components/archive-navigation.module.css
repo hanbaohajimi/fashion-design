@@ -2,6 +2,7 @@
   padding-left: var(--workspace-nav-width);
 }
 .rail {
+  --control-height: var(--control-height-touch);
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 30;
@@ -9,38 +10,41 @@
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: 28px 16px 20px;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-3);
   background: var(--color-navigation);
   color: var(--color-navigation-ink);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--color-navigation-muted) var(--color-navigation);
+  border-right: 1px solid var(--color-navigation-border);
 }
 .rail a {
   text-decoration: none;
 }
 .rail :focus-visible {
-  outline: 2px solid var(--color-navigation-ink);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
 .brand {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  min-height: 56px;
+  padding: 0 var(--space-2);
   color: inherit;
-  padding: 0 10px 12px;
 }
 .navigation {
+  flex: none;
+  min-width: 0;
+}
+.desktopLinks {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 .navigation a {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  padding: 10px 12px;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   color: var(--color-navigation-muted);
   font-size: var(--text-base);
@@ -53,63 +57,57 @@
   background: var(--color-navigation-hover);
 }
 .navigation a[aria-current="page"] {
-  color: var(--color-navigation-ink);
+  color: var(--color-selection-ink);
   background: var(--color-navigation-selected);
   font-weight: var(--font-semibold);
 }
+.navigation a[data-current-parent] {
+  background: transparent;
+  font-weight: 500;
+}
 .project {
+  flex: none;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   border-top: 1px solid var(--color-navigation-border);
-  padding: var(--space-5) 10px 0;
+  padding: var(--space-3) var(--space-3) 0;
+  min-width: 0;
 }
 .project > span {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--color-navigation-muted);
 }
 .project strong {
   font-size: var(--text-base);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .projectNavigation {
+  min-height: 0;
   min-width: 0;
-  border-top: 1px solid var(--color-navigation-border);
-  padding-top: var(--space-4);
-}
-.resources {
-  border-top: 1px solid var(--color-navigation-border);
-  padding-top: var(--space-2);
-  color: var(--color-navigation-muted);
-  font-size: var(--text-sm);
-}
-.resources summary {
-  min-height: 44px;
-  padding: 12px 10px;
-  cursor: pointer;
-}
-.resources a {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 8px 12px;
-  color: inherit;
-}
-.resources a:hover {
-  background: var(--color-navigation-hover);
-  color: var(--color-navigation-ink);
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-control-border) var(--color-navigation);
 }
 .account {
+  flex: none;
   margin-top: auto;
   min-width: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
+  border-top: 1px solid var(--color-navigation-border);
+  padding-top: var(--space-3);
 }
 .account > div {
   min-width: 0;
 }
-.account summary {
+.rail .account summary {
   color: var(--color-navigation-ink);
-  background: transparent;
+  background: var(--color-navigation);
   border-color: var(--color-navigation-border);
+  min-height: 44px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -121,85 +119,84 @@
   right: 0;
   min-width: 160px;
 }
-@media (max-width: 767px) {
+.mobileMenu {
+  display: none;
+}
+.menuProject {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-ink-secondary);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1199px) {
   :global(.app-root):has(.rail) {
     padding-left: 0;
   }
   .rail {
     position: relative;
-    width: 100%;
-    height: auto;
-    padding: 10px 16px;
+    inset: auto;
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    overflow: visible;
+    align-items: center;
+    width: 100%;
+    height: var(--workspace-mobile-nav-height);
+    padding: var(--space-2) var(--space-4);
+    gap: var(--space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-navigation-border);
   }
   .brand {
+    min-height: 44px;
     padding: 0;
+  }
+  .brand img {
+    width: 32px;
+    height: 32px;
+  }
+  .brand > span > span {
+    display: none;
+  }
+  .desktopLinks,
+  .project,
+  .projectNavigation {
+    display: none;
+  }
+  .navigation {
+    flex: 1;
+  }
+  .mobileMenu {
+    display: block;
+  }
+  .rail .mobileMenu summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-height: 44px;
+    color: var(--color-navigation-ink);
+    background: var(--color-navigation);
+    border-color: var(--color-navigation-border);
+  }
+  .mobileMenu details > div {
+    left: 0;
+    right: auto;
+    width: min(280px, calc(100vw - 32px));
+    max-height: calc(100dvh - 88px);
+    overflow-y: auto;
+  }
+  .navigation a {
     min-height: 44px;
   }
   .account {
     margin: 0 0 0 auto;
-    align-self: center;
-    max-width: 140px;
+    padding: 0;
+    border: 0;
   }
-  .account summary {
-    max-width: 140px;
+  .rail .account summary {
     min-height: 44px;
   }
   .account details > div {
     top: calc(100% + 4px);
     bottom: auto;
-  }
-  .navigation {
-    order: 3;
-    display: flex;
-    width: 100%;
-    gap: 4px;
-    overflow-x: auto;
-  }
-  .navigation a {
-    flex: 1 0 auto;
-    justify-content: center;
-    padding: 8px 10px;
-    font-size: var(--text-base);
-    gap: 6px;
-  }
-  .project,
-  .projectNavigation,
-  .resources {
-    display: none;
-  }
-}
-
-@media (max-width: 767px) {
-  .rail {
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .brand {
-    display: none;
-  }
-  .navigation {
-    order: 0;
-    width: auto;
-    min-width: 0;
-    flex: 1;
-  }
-  .navigation svg {
-    display: none;
-  }
-  .navigation a {
-    padding-inline: 8px;
-  }
-  .account {
-    flex: none;
-    max-width: 56px;
-  }
-  .account summary {
-    max-width: 56px;
   }
 }
 @media print {

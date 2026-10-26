@@ -39,7 +39,6 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   });
   await page.getByRole("link", { name: "继续创作", exact: true }).click();
   await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "款式与交付", exact: true }).click();
-  await page.getByRole("button", { name: "设计工具", exact: true }).click();
   await page.getByRole("tab", { name: "色料实验", exact: true }).click();
   await page.getByRole("button", { name: "创作进展" }).click();
   await expect(page.getByRole("region", { name: "创作进展" })).toBeVisible();
@@ -127,7 +126,7 @@ test("引用显式加入且不自动发送，新结果提示不移动画布且�
     })
     .click();
   await expect(
-    page.getByRole("textbox", { name: "向设计助手描述下一步", exact: true }),
+    page.getByRole("textbox", { name: "描述设计需求", exact: true }),
   ).toHaveValue("");
   await expect(page.getByRole("button", { name: "移除引用 藏蓝通勤外套" })).toBeVisible();
   expect(writes).toBe(beforeSuggestion);

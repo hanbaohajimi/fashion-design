@@ -1,31 +1,27 @@
 /** Existing URL values are a public navigation contract. */
 export const STUDIO_GROUPS = [
   {
-    label: "常用",
+    label: "创作",
     items: [
       { value: "tasks", label: "开始任务" },
       { value: "styles", label: "款式档案" },
-      { value: "tech", label: "技术包" },
-    ],
-  },
-  {
-    label: "设计工具",
-    items: [
       { value: "experiments", label: "色料实验" },
       { value: "patterns", label: "印花工作台" },
       { value: "presentation", label: "商品展示" },
+      { value: "runway", label: "服装秀" },
     ],
   },
   {
-    label: "开发交付",
+    label: "交付",
     items: [
       { value: "planning", label: "系列规划" },
+      { value: "tech", label: "技术包" },
       { value: "samples", label: "样衣反馈" },
       { value: "team", label: "团队评审" },
     ],
   },
   {
-    label: "项目资料",
+    label: "资料",
     items: [
       { value: "trends", label: "趋势简报" },
       { value: "brand", label: "品牌资料" },

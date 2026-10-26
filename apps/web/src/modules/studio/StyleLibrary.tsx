@@ -26,6 +26,8 @@ import { AssetPicker, SaveBar } from "./studio-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import { ObjectSwitcher, FormSection } from "../../components/workspace-ui";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 const STATUS_LABELS: Record<StudioStyleInput["status"], string> = {
   DESIGNING: "设计中",
@@ -52,6 +54,7 @@ export function StyleLibrary(
     readonly initialAssetId?: string | undefined;
     readonly onExplore?: (assetId: string) => void;
     readonly onTechPack?: (revisionId: string) => void;
+    readonly onRunway?: (revisionId: string) => void;
   },
 ) {
   const assetName = useStudioAssetName();
@@ -73,23 +76,24 @@ export function StyleLibrary(
   };
   return (
     <div className={styles.section}>
-      <div className={styles.recordHeader}>
-        <div className={styles.row}>
-          <h2>款式档案</h2>
-          <h3>{selected ? selected.name : "建立新款式"}</h3>
-          {selected ? (
-            <Badge>r{selected.currentRevision.revision}</Badge>
-          ) : null}
-        </div>
-        <div className={styles.toolbar}>
-          <Button onClick={() => setComparisonOpen(true)}>
-            比较候选并选款（选择 2–4 张）
-          </Button>
-          {props.canEdit ? (
-            <Button onClick={() => void selectStyle(null)}>新建款式</Button>
-          ) : null}
-        </div>
-      </div>
+      <StudioPageHeader
+        title={selected?.name ?? "建立新款式"}
+        type="款式档案"
+        description="选择主设计图，整理款式资料与视图"
+        status={
+          selected ? <Badge>r{selected.currentRevision.revision}</Badge> : null
+        }
+        actions={
+          <>
+            <Button onClick={() => setComparisonOpen(true)}>
+              比较候选并选款（选择 2–4 张）
+            </Button>
+            {props.canEdit ? (
+              <Button onClick={() => void selectStyle(null)}>新建款式</Button>
+            ) : null}
+          </>
+        }
+      />
       {comparisonOpen ? (
         <Dialog
           className={styles.dialog}
@@ -253,6 +257,11 @@ export function StyleLibrary(
               继续技术包
             </Button>
           ) : null}
+          {props.canEdit && props.onRunway ? (
+            <Button onClick={() => props.onRunway?.(selected.currentRevision.id)}>
+              制作服装秀
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -286,6 +295,7 @@ function StyleEditor({
     : { ...blankStyle(), sourceAssetId: adoptedId };
   const form = useStudioForm(initial, onDirty);
   const { draft, setDraft } = form;
+  const [viewAssetId, setViewAssetId] = useState("");
   const update = <K extends keyof StudioStyleInput>(
     key: K,
     value: StudioStyleInput[K],
@@ -319,7 +329,7 @@ function StyleEditor({
   };
   return (
     <form
-      className={styles.form}
+      className={`${styles.form} ${styles.styleForm}`}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -343,208 +353,277 @@ function StyleEditor({
         </Notice>
       ) : null}
       {form.saved ? <Notice tone="success">款式修订已保存。</Notice> : null}
-      <fieldset disabled={!canEdit || form.busy} className={styles.form}>
-        <div className={styles.recordVisual}>
+      <div className={styles.styleVisuals}>
+        {draft.sourceAssetId ? (
           <span className={styles.assetImage}>
             <ImagePreview
               src={
-                data.assets.find((asset) => asset.id === draft.sourceAssetId)
-                  ?.url
+                data.assets.find(
+                  (asset) => asset.id === (viewAssetId || draft.sourceAssetId),
+                )?.url
               }
               alt="当前款式主设计图"
             />
           </span>
-          <AssetPicker
-            compact
-            assets={data.assets}
-            selected={draft.sourceAssetId ? [draft.sourceAssetId] : []}
-            onChange={(ids) => update("sourceAssetId", ids[0] ?? "")}
-            label="主设计图（必选）"
-          />
+        ) : (
+          <div className={styles.workIntro}>
+            <h3>从主设计图建立款式</h3>
+            <p>
+              选择一张真实图片，再补充款号、名称和品类。候选比较不会改变已保存的修订。
+            </p>
+          </div>
+        )}
+        <AssetPicker
+          assets={data.assets}
+          selected={draft.sourceAssetId ? [draft.sourceAssetId] : []}
+          disabled={!canEdit || form.busy}
+          onChange={(ids) => {
+            update("sourceAssetId", ids[0] ?? "");
+            setViewAssetId("");
+          }}
+          label="主设计图（必选）"
+        />
+        <div>
+          <nav className={styles.viewStrip} aria-label="款式视图">
+            {[
+              ...new Set([
+                draft.sourceAssetId,
+                ...draft.views.map((view) => view.assetId),
+              ]),
+            ]
+              .filter(Boolean)
+              .map((id, index) => (
+                <Button
+                  key={id}
+                  aria-label={`查看款式视图 ${index + 1}`}
+                  aria-pressed={(viewAssetId || draft.sourceAssetId) === id}
+                  onClick={() => setViewAssetId(id)}
+                >
+                  <ImagePreview
+                    retryable={false}
+                    src={data.assets.find((asset) => asset.id === id)?.url}
+                    alt={`款式视图 ${index + 1}`}
+                  />
+                </Button>
+              ))}
+          </nav>
+          <p className={styles.documentSummary}>
+            {[
+              draft.code,
+              draft.category,
+              draft.season,
+              STATUS_LABELS[existing?.status ?? draft.status],
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <p className={styles.documentSummary}>
+            {draft.description || "尚未填写设计说明"}
+          </p>
         </div>
-        <div className={styles.formGrid}>
-          <Field label="款号">
-            <Input
-              value={draft.code}
-              onChange={(event) => update("code", event.target.value)}
-              required
-              maxLength={60}
-              placeholder="例如：AW-026-JK01"
-            />
-          </Field>
-          <Field label="款式名称">
-            <Input
-              value={draft.name}
-              onChange={(event) => update("name", event.target.value)}
-              required
-              maxLength={120}
-            />
-          </Field>
-          <Field label="品类">
-            <Input
-              value={draft.category}
-              onChange={(event) => update("category", event.target.value)}
-              required
-              maxLength={120}
-              placeholder="例如：夹克"
-            />
-          </Field>
-          <Field label="季节">
-            <Input
-              value={draft.season}
-              onChange={(event) => update("season", event.target.value)}
-              maxLength={120}
-              placeholder="例如：2027 春夏"
-            />
-          </Field>
-          <Field
-            label="状态"
-            hint={
-              existing?.status === "APPROVED"
-                ? "已定稿款式的后续修订需要重新评审。"
-                : "审批状态由团队评审产生。"
-            }
-          >
-            <Select
-              value={draft.status}
-              onChange={(event) =>
-                update(
-                  "status",
-                  event.target.value as StudioStyleInput["status"],
-                )
+      </div>
+      <StudioEditSection
+        persistent
+        title="编辑款式资料"
+        summary={
+          form.dirty
+            ? "有未保存的修改"
+            : `${draft.name || "新款式"} · ${draft.views.length} 个视图`
+        }
+        defaultOpen={!existing}
+        save={canEdit}
+        busy={form.busy}
+        error={form.error}
+      >
+        <fieldset disabled={!canEdit || form.busy} className={styles.form}>
+          <div className={styles.formGrid}>
+            <Field label="款号">
+              <Input
+                value={draft.code}
+                onChange={(event) => update("code", event.target.value)}
+                required
+                maxLength={60}
+                placeholder="例如：AW-026-JK01"
+              />
+            </Field>
+            <Field label="款式名称">
+              <Input
+                value={draft.name}
+                onChange={(event) => update("name", event.target.value)}
+                required
+                maxLength={120}
+              />
+            </Field>
+            <Field label="品类">
+              <Input
+                value={draft.category}
+                onChange={(event) => update("category", event.target.value)}
+                required
+                maxLength={120}
+                placeholder="例如：夹克"
+              />
+            </Field>
+            <Field label="季节">
+              <Input
+                value={draft.season}
+                onChange={(event) => update("season", event.target.value)}
+                maxLength={120}
+                placeholder="例如：2027 春夏"
+              />
+            </Field>
+            <Field
+              label="状态"
+              hint={
+                existing?.status === "APPROVED"
+                  ? "已定稿款式的后续修订需要重新评审。"
+                  : "审批状态由团队评审产生。"
               }
             >
-              {Object.entries(STATUS_LABELS)
-                .filter(([value]) => value !== "APPROVED")
-                .map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-            </Select>
-          </Field>
-        </div>
-        <Field label="设计说明">
-          <Textarea
-            rows={3}
-            value={draft.description}
-            onChange={(event) => update("description", event.target.value)}
-            maxLength={2000}
-          />
-        </Field>
-
-        <FormSection title="视图资料" summary={`${draft.views.length} 个视图`}>
-          {draft.views.map((view, index) => (
-            <div className={styles.record} key={index}>
-              <div className={styles.formGrid}>
-                <Field label={"视图 " + (index + 1)}>
-                  <Select
-                    value={view.kind}
-                    onChange={(event) =>
-                      update(
-                        "views",
-                        draft.views.map((item, at) =>
-                          at === index
-                            ? {
-                                ...item,
-                                kind: event.target.value as typeof view.kind,
-                              }
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="front">正面</option>
-                    <option value="back">背面</option>
-                    <option value="detail">细节</option>
-                  </Select>
-                </Field>
-                <Field label="说明">
-                  <Input
-                    value={view.label}
-                    onChange={(event) =>
-                      update(
-                        "views",
-                        draft.views.map((item, at) =>
-                          at === index
-                            ? { ...item, label: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                  />
-                </Field>
-                <Field label="关联图片">
-                  <Select
-                    value={view.assetId}
-                    onChange={(event) =>
-                      update(
-                        "views",
-                        draft.views.map((item, at) =>
-                          at === index
-                            ? {
-                                ...item,
-                                assetId: event.target.value,
-                                reviewed: false,
-                              }
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    {data.assets.map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.id.slice(0, 12)}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-              </div>
-              <Button
-                size="small"
-                onClick={() =>
+              <Select
+                value={draft.status}
+                onChange={(event) =>
                   update(
-                    "views",
-                    draft.views.filter((_, at) => at !== index),
+                    "status",
+                    event.target.value as StudioStyleInput["status"],
                   )
                 }
               >
-                移除此视图
-              </Button>
-            </div>
-          ))}
-          <Button
-            disabled={!data.assets.length || draft.views.length >= 20}
-            onClick={() =>
-              update("views", [
-                ...draft.views,
-                {
-                  kind: "detail",
-                  assetId: draft.sourceAssetId || data.assets[0]?.id || "",
-                  label: "",
-                  reviewed: false,
-                },
-              ])
-            }
+                {Object.entries(STATUS_LABELS)
+                  .filter(([value]) => value !== "APPROVED")
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="设计说明">
+            <Textarea
+              rows={3}
+              value={draft.description}
+              onChange={(event) => update("description", event.target.value)}
+              maxLength={2000}
+            />
+          </Field>
+
+          <FormSection
+            title="视图资料"
+            summary={`${draft.views.length} 个视图`}
           >
-            添加视图
-          </Button>
-        </FormSection>
-        <Field
-          label={existing ? "本次修改说明" : "采用理由"}
-          hint="记录为什么选择这个方案，以及本次修改了什么。"
-        >
-          <Textarea
-            value={draft.changeNote}
-            onChange={(event) => update("changeNote", event.target.value)}
-            rows={3}
-            maxLength={2000}
-          />
-        </Field>
-      </fieldset>
+            {draft.views.map((view, index) => (
+              <div className={styles.record} key={index}>
+                <div className={styles.formGrid}>
+                  <Field label={"视图 " + (index + 1)}>
+                    <Select
+                      value={view.kind}
+                      onChange={(event) =>
+                        update(
+                          "views",
+                          draft.views.map((item, at) =>
+                            at === index
+                              ? {
+                                  ...item,
+                                  kind: event.target.value as typeof view.kind,
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="front">正面</option>
+                      <option value="back">背面</option>
+                      <option value="detail">细节</option>
+                    </Select>
+                  </Field>
+                  <Field label="说明">
+                    <Input
+                      value={view.label}
+                      onChange={(event) =>
+                        update(
+                          "views",
+                          draft.views.map((item, at) =>
+                            at === index
+                              ? { ...item, label: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
+                  <Field label="关联图片">
+                    <Select
+                      value={view.assetId}
+                      onChange={(event) =>
+                        update(
+                          "views",
+                          draft.views.map((item, at) =>
+                            at === index
+                              ? {
+                                  ...item,
+                                  assetId: event.target.value,
+                                  reviewed: false,
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      {data.assets.map((asset) => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.id.slice(0, 12)}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <Button
+                  size="small"
+                  onClick={() =>
+                    update(
+                      "views",
+                      draft.views.filter((_, at) => at !== index),
+                    )
+                  }
+                >
+                  移除此视图
+                </Button>
+              </div>
+            ))}
+            <Button
+              disabled={!data.assets.length || draft.views.length >= 20}
+              onClick={() =>
+                update("views", [
+                  ...draft.views,
+                  {
+                    kind: "detail",
+                    assetId: draft.sourceAssetId || data.assets[0]?.id || "",
+                    label: "",
+                    reviewed: false,
+                  },
+                ])
+              }
+            >
+              添加视图
+            </Button>
+          </FormSection>
+          <Field
+            label={existing ? "本次修改说明" : "采用理由"}
+            hint="记录为什么选择这个方案，以及本次修改了什么。"
+          >
+            <Textarea
+              value={draft.changeNote}
+              onChange={(event) => update("changeNote", event.target.value)}
+              rows={3}
+              maxLength={2000}
+            />
+          </Field>
+        </fieldset>
+      </StudioEditSection>
       <SaveBar
         busy={form.busy}
-        dirty={form.dirty || !existing}
+        dirty={form.dirty}
+        isNew={!existing}
         canEdit={canEdit}
       />
       {existing ? (

@@ -50,6 +50,9 @@ import {
   type WorkflowOutbox,
   type AgentTurn,
   type AgentPlanRevision,
+  type RunwayShow,
+  type RunwayRun,
+  type RunwayMedia,
 } from "../generated/prisma/client.js";
 
 const globalForPrisma = globalThis as typeof globalThis & {
@@ -97,6 +100,9 @@ export {
   SimilarityAnalysisStatus,
 };
 export type {
+  RunwayShow,
+  RunwayRun,
+  RunwayMedia,
   AgentRun,
   AgentRunStep,
   AgentRunStepAttempt,

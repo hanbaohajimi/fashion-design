@@ -1,5 +1,7 @@
 "use client";
 
+import { StudioPageHeader } from "./StudioPageHeader";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为本次任务与母图；任务类型和品牌为次级。唯一主操作提交当前任务，使用共享控件与 24/16/8px 间距。 */
 
 import { useRef, useState } from "react";
@@ -12,6 +14,7 @@ import {
   Textarea,
   UploadInput,
   Menu,
+  ImagePreview,
 } from "../../components/ui";
 import {
   fetchWorkflow,
@@ -324,7 +327,11 @@ export function TaskEntry(
           body?.message ?? "节点已建立，执行未成功。重试将继续原任务。",
         );
       }
-      markMotion(`node:${current.toolId}`, "needle", `execute:${current.executeMutationId}`);
+      markMotion(
+        `node:${current.toolId}`,
+        "needle",
+        `execute:${current.executeMutationId}`,
+      );
     });
     if (succeeded) {
       props.onDirty(false);
@@ -375,25 +382,26 @@ export function TaskEntry(
       }}
     >
       <div className={styles.taskContent}>
-        <div className={styles.taskHeading}>
-          <div>
-            <h2>{currentTask.name}</h2>
-            <p className={styles.muted}>{currentTask.description}</p>
-          </div>
-          <Menu label="选择任务类型" trigger="切换任务类型">
-            {TASKS.map((task) => (
-              <button
-                type="button"
-                key={task.kind}
-                disabled={form.busy || uploading}
-                aria-pressed={draft.kind === task.kind}
-                onClick={() => chooseTask(task.kind)}
-              >
-                {task.name}
-              </button>
-            ))}
-          </Menu>
-        </div>
+        <StudioPageHeader
+          title={currentTask.name}
+          type="开始任务"
+          description={currentTask.description}
+          actions={
+            <Menu label="选择任务类型" trigger="切换任务类型">
+              {TASKS.map((task) => (
+                <button
+                  type="button"
+                  key={task.kind}
+                  disabled={form.busy || uploading}
+                  aria-pressed={draft.kind === task.kind}
+                  onClick={() => chooseTask(task.kind)}
+                >
+                  {task.name}
+                </button>
+              ))}
+            </Menu>
+          }
+        />
         {form.error ? <Notice tone="error">{form.error}</Notice> : null}
         <fieldset
           className={styles.form}
@@ -466,35 +474,55 @@ export function TaskEntry(
             ) : null}
           </div>
           <div className={styles.taskSource}>
-            <UploadInput
-              aria-label="上传草图或参考图"
-              label="上传草图或参考图"
-              hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void upload(file);
-                event.target.value = "";
-              }}
-            />
-            {assets.length > 0 ? (
-              <AssetPicker
-                compact
-                assets={assets}
-                selected={draft.assetIds}
-                max={
-                  draft.kind === "combine" || draft.kind === "brief" ? 12 : 1
-                }
-                label={
-                  draft.kind === "brief"
-                    ? "可选设计参考"
-                    : "第一张为母图，其余为参考"
-                }
-                onChange={(ids) =>
-                  setDraft((current) => ({ ...current, assetIds: ids }))
-                }
+            <div className={styles.taskStage} aria-label="本次任务参考">
+              {draft.assetIds.length ? (
+                draft.assetIds.map((id, index) => (
+                  <ImagePreview
+                    key={id}
+                    src={assets.find((asset) => asset.id === id)?.url}
+                    alt={index === 0 ? "本次任务母图" : `任务参考 ${index + 1}`}
+                  />
+                ))
+              ) : (
+                <p className={styles.muted}>
+                  选择草图或参考图，作为本次任务的起点。
+                </p>
+              )}
+            </div>
+            <FormSection
+              title="选择或上传参考"
+              summary={`已选 ${draft.assetIds.length} 张`}
+              defaultOpen={!draft.assetIds.length}
+            >
+              <UploadInput
+                aria-label="上传草图或参考图"
+                label="上传草图或参考图"
+                hint="支持 JPG、PNG、WebP、HEIC，最大 50MB。"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void upload(file);
+                  event.target.value = "";
+                }}
               />
-            ) : null}
+              {assets.length > 0 ? (
+                <AssetPicker
+                  assets={assets}
+                  selected={draft.assetIds}
+                  max={
+                    draft.kind === "combine" || draft.kind === "brief" ? 12 : 1
+                  }
+                  label={
+                    draft.kind === "brief"
+                      ? "可选设计参考"
+                      : "第一张为母图，其余为参考"
+                  }
+                  onChange={(ids) =>
+                    setDraft((current) => ({ ...current, assetIds: ids }))
+                  }
+                />
+              ) : null}
+            </FormSection>
           </div>
         </fieldset>
         <div className={styles.note}>

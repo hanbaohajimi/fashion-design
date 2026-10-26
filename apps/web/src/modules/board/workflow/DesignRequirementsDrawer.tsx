@@ -32,11 +32,11 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
   const inactive = entries.filter(({ item }) => item.status === "inactive");
   const scopeLabel = hasDraftReferences ? "已保存讨论对象" : "当前讨论对象";
   const renderItem = (item: WorkflowContextItem, preference: boolean) => <li key={item.id} data-status={item.status}>
-    <span>{item.text}</span><small>{item.status === "inactive" ? "已停用" : item.origin === "inferred" ? "助手推测 · 未确认" : item.origin === "explicit" ? "明确提出" : "来源未标注"}{item.scope === "branch" ? " · 分支范围" : " · 整个项目"}</small>
+    <span>{item.text}</span><small>{item.status === "inactive" ? "已停用" : item.origin === "inferred" ? "助手推测 · 未确认" : item.origin === "explicit" ? "明确提出" : "来源未标注"}{item.scope === "branch" ? " · 指定方案及其后续设计" : " · 整个项目"}</small>
     {item.status !== "inactive" ? <small>{item.scope === "branch" ? context?.scopedMemory?.find((entry) => entry.id === item.id)?.applicable === true ? `${scopeLabel}适用` : context?.scopedMemory?.find((entry) => entry.id === item.id)?.applicable === false ? `${scopeLabel}不适用` : "适用状态未记录" : "各会话均适用"}</small> : null}
     {item.sourceQuote ? <blockquote>{item.sourceQuote}</blockquote> : null}
     {item.sourceMessageId ? <small>来源：项目对话</small> : null}
-    {item.scope === "branch" ? <small>作用分支：{(item.branchNodeIds ?? []).map((id) => graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点").join("、") || "来源未标注"}</small> : null}
+    {item.scope === "branch" ? <small>适用对象：{(item.branchNodeIds ?? []).map((id) => graph.nodes.find((node) => node.id === id)?.title ?? "已移除对象").join("、") || "来源未标注"}。仅在讨论这些对象所在的设计分支时生效。</small> : null}
     {[...new Set([...(item.sourceNodeIds ?? []), ...(item.branchNodeIds ?? [])])].map((id) => <button className={styles.nodeLink} disabled={!graph.nodes.some((node) => node.id === id)} key={id} onClick={() => onLocate(id)} type="button">定位 {graph.nodes.find((node) => node.id === id)?.title ?? "已移除节点"}</button>)}
     {preference && item.status !== "inactive" ? <button className={styles.actionQuiet} disabled={saving} onClick={() => void onUpdate({ disabledPreferenceIds: [item.id] })} type="button">停用这条偏好</button> : null}
     {item.status !== "inactive" ? <button className={styles.actionSecondary} disabled={saving} onClick={() => { setEditingItem(item.id); setItemText(item.text); setItemScope(item.scope ?? "project"); }} type="button">{preference ? "更正这条偏好" : "更正这条要求"}</button> : null}
@@ -44,7 +44,7 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
     {editingItem === item.id ? <form className={styles.proposalEditor} onSubmit={(event) => { event.preventDefault(); void onUpdate({ updatedItems: [{ id: item.id, text: itemText.trim(), scope: itemScope, confirm: true }] }).then((saved) => { if (saved) setEditingItem(null); }); }}><label>更正内容<textarea aria-label="更正内容" maxLength={600} rows={2} value={itemText} onChange={(event) => setItemText(event.target.value)} /></label><label>作用范围<select aria-label="作用范围" value={itemScope} onChange={(event) => setItemScope(event.target.value as "project" | "branch")}><option value="project">整个项目</option><option disabled={!item.branchNodeIds?.length} value="branch">原分支</option></select></label><button className={styles.actionPrimary} disabled={saving || !itemText.trim()} type="submit">保存更正</button><button className={styles.actionQuiet} onClick={() => setEditingItem(null)} type="button">取消更正</button></form> : null}
   </li>;
 
-  return <Dialog label="设计要求与偏好" onClose={onClose} returnFocusSelector='summary[aria-label="对话操作"]' className={ui.drawer}>
+  return <Dialog label="设计要求与偏好" onClose={onClose} returnFocusSelector="[data-assistant-requirements-trigger]" className={ui.drawer}>
     <header className={ui.drawerHeader}><h2>设计要求与偏好</h2><button className={styles.actionQuiet} onClick={onClose} type="button" aria-label="关闭设计要求与偏好">关闭</button></header>
     <div className={`${styles.contextContents} ${ui.drawerContents}`}>
       <p>让助手记住这个项目的设计要求。修改会影响后续讨论，已有设计结果保持不变。</p>

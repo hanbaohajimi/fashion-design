@@ -98,7 +98,89 @@ services:
       S3_BUCKET: ${S3_BUCKET:-fashion-assets}
       S3_HEALTHCHECK_OBJECT_KEY: ${S3_HEALTHCHECK_OBJECT_KEY:-.health/ready}
 
+  runway-worker:
+    profiles: ["runway"]
+    build:
+      context: ./apps/runway
+      target: runtime
+    image: fashion-runway:local
+    command: ["python", "-m", "runway", "worker"]
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: &runway-environment
+      RUNWAY_ENABLED: ${RUNWAY_ENABLED:-false}
+      RUNWAY_PROVIDER_MODE: ${RUNWAY_PROVIDER_MODE:-mock}
+      RUNWAY_DATABASE_URL: ${RUNWAY_CONTAINER_DATABASE_URL:-postgresql://${POSTGRES_USER:-fashion}:${POSTGRES_PASSWORD:-fashion_dev}@postgres:5432/${POSTGRES_DB:-fashion_design}}
+      RUNWAY_CHECKPOINT_SCHEMA: ${RUNWAY_CHECKPOINT_SCHEMA:-runway_checkpoints}
+      RUNWAY_WORKER_CONCURRENCY: ${RUNWAY_WORKER_CONCURRENCY:-1}
+      RUNWAY_TEMP_DIR: /tmp/runway
+      RUNWAY_FFMPEG_PATH: ffmpeg
+      RUNWAY_FFPROBE_PATH: ffprobe
+      RUNWAY_LLM_BASE_URL: ${RUNWAY_LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      RUNWAY_LLM_MODEL: ${RUNWAY_LLM_MODEL:-openai/gpt-4o}
+      RUNWAY_LLM_API_KEY: ${RUNWAY_LLM_API_KEY:-}
+      RUNWAY_IMAGE_BASE_URL: ${RUNWAY_IMAGE_BASE_URL:-https://api.closeai-proxy.xyz/google}
+      RUNWAY_IMAGE_MODEL: ${RUNWAY_IMAGE_MODEL:-google/gemini-3-pro-image}
+      RUNWAY_IMAGE_API_KEY: ${RUNWAY_IMAGE_API_KEY:-}
+      RUNWAY_VISION_BASE_URL: ${RUNWAY_VISION_BASE_URL:-https://api.closeai-proxy.xyz/v1}
+      RUNWAY_VISION_MODEL: ${RUNWAY_VISION_MODEL:-gpt-4o}
+      RUNWAY_VISION_API_KEY: ${RUNWAY_VISION_API_KEY:-}
+      RUNWAY_VIDEO_PROVIDER: jimeng
+      RUNWAY_VOLC_AK: ${RUNWAY_VOLC_AK:-}
+      RUNWAY_VOLC_SK: ${RUNWAY_VOLC_SK:-}
+      RUNWAY_VIDEO_REQ_KEY: ${RUNWAY_VIDEO_REQ_KEY:-jimeng_i2v_first_v30}
+      RUNWAY_VIDEO_FRAMES: ${RUNWAY_VIDEO_FRAMES:-121}
+      RUNWAY_VIDEO_TIMEOUT_SECONDS: ${RUNWAY_VIDEO_TIMEOUT_SECONDS:-900}
+      RUNWAY_POLL_INTERVAL_SECONDS: ${RUNWAY_POLL_INTERVAL_SECONDS:-3}
+      RUNWAY_MUSIC_BASE_URL: ${RUNWAY_MUSIC_BASE_URL:-https://api.minimaxi.com}
+      RUNWAY_MUSIC_MODEL: ${RUNWAY_MUSIC_MODEL:-music-2.6}
+      RUNWAY_MUSIC_API_KEY: ${RUNWAY_MUSIC_API_KEY:-}
+      RUNWAY_REQUEST_TIMEOUT_SECONDS: ${RUNWAY_REQUEST_TIMEOUT_SECONDS:-180}
+      LANGSMITH_TRACING: "false"
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-fashion-assets}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-fashion_minio}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-fashion_minio_dev_secret}
+      S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - runway_cache:/tmp/runway
+    healthcheck:
+      test: ["CMD", "python", "-m", "runway", "health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 30s
+      retries: 4
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
+  runway-tests:
+    profiles: ["runway-test"]
+    build:
+      context: ./apps/runway
+      target: test
+    image: fashion-runway-test:local
+    environment:
+      <<: *runway-environment
+      RUNWAY_INTEGRATION: "1"
+    command: ["python", "-m", "pytest", "-q", "-m", "integration"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
 volumes:
   minio_data:
   postgres_data:
   redis_data:
+  runway_cache:

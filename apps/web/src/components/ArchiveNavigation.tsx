@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandLockup } from "./BrandLockup";
+import { Menu } from "./ui";
 import styles from "./archive-navigation.module.css";
 
 export type ArchiveSection =
@@ -59,7 +60,7 @@ export function ArchiveNavigation({
   projectName,
   account,
   navigation,
-  hideProjectReturn = false,
+  currentIsParent = false,
 }: {
   readonly current: ArchiveSection;
   readonly projectId?: string | undefined;
@@ -67,6 +68,7 @@ export function ArchiveNavigation({
   readonly account?: ReactNode;
   readonly navigation?: ReactNode;
   readonly hideProjectReturn?: boolean;
+  readonly currentIsParent?: boolean;
 }) {
   const context = projectId
     ? `?from=board&boardId=${encodeURIComponent(projectId)}`
@@ -86,48 +88,67 @@ export function ArchiveNavigation({
             href: `/${encodeURIComponent(projectId)}/studio`,
           },
         ]
-      : [
-          { id: "fabrics" as const, title: "面料库", href: "/fabrics" },
-          {
-            id: "trends" as const,
-            title: "趋势档案",
-            href: "/trends?from=projects",
-          },
-        ]),
+      : []),
+    { id: "fabrics", title: "面料库", href: `/fabrics${context}` },
+    {
+      id: "trends",
+      title: "趋势档案",
+      href: `/trends${context || "?from=projects"}`,
+    },
   ];
-  // Resource pages keep their current location visible while retaining project return links.
-  if (projectId && (current === "fabrics" || current === "trends"))
-    entries.push({
-      id: current,
-      title: current === "fabrics" ? "面料库" : "趋势档案",
-      href: `/${current}${context}`,
-    });
+  const links = entries.map((entry) => (
+    <Link
+      key={entry.id}
+      href={entry.href}
+      aria-current={current === entry.id ? "page" : undefined}
+      data-current-parent={current === entry.id && currentIsParent || undefined}
+    >
+      <NavigationIcon name={entry.id} />
+      <span>{entry.title}</span>
+    </Link>
+  ));
   return (
     <aside
       className={styles.rail}
       data-archive-navigation
       aria-label="工作区目录"
     >
-      <Link
-        href="/"
-        className={styles.brand}
-        aria-label="森织 设计工作室 首页"
-      >
-        <BrandLockup tone="light" size={44} />
+      <Link href="/" className={styles.brand} aria-label="森织 设计工作室 首页">
+        <BrandLockup tone="color" size={44} />
       </Link>
       <nav aria-label="工作区导航" className={styles.navigation}>
-        {entries.map((entry) => (
-          <Link
-            key={entry.id}
-            href={entry.href}
-            aria-current={current === entry.id ? "page" : undefined}
+        <div className={styles.desktopLinks}>{links}</div>
+        <div className={styles.mobileMenu}>
+          <Menu
+            label="切换工作区"
+            trigger={
+              <>
+                <span>
+                  {entries.find((entry) => entry.id === current)?.title ??
+                    "导航"}
+                </span>
+                <svg
+                  aria-hidden="true"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </>
+            }
           >
-            <NavigationIcon name={entry.id} />
-            <span>{entry.title}</span>
-          </Link>
-        ))}
+            {projectName ? (
+              <span className={styles.menuProject}>{projectName}</span>
+            ) : null}
+            {links}
+          </Menu>
+        </div>
       </nav>
-      {projectName && !navigation ? (
+      {projectName ? (
         <div className={styles.project}>
           <span>当前项目</span>
           <strong title={projectName}>{projectName}</strong>
@@ -135,17 +156,6 @@ export function ArchiveNavigation({
       ) : null}
       {navigation ? (
         <div className={styles.projectNavigation}>{navigation}</div>
-      ) : null}
-      {projectId ? (
-        <details className={styles.resources}>
-          <summary>资料库</summary>
-          <Link href={`/fabrics${context}`}>面料库</Link>
-          <Link href={`/trends${context}`}>趋势档案</Link>
-          {!hideProjectReturn &&
-          (current === "fabrics" || current === "trends") ? (
-            <Link href={`/${encodeURIComponent(projectId)}`}>返回设计画布</Link>
-          ) : null}
-        </details>
       ) : null}
       <div className={styles.account}>{account}</div>
     </aside>

@@ -29,6 +29,7 @@ import { ExperimentPanel } from "./ExperimentPanel";
 import { PrintWorkbench } from "./PrintWorkbench";
 import { PresentationSets } from "./PresentationSets";
 import { TrendBriefPanel } from "./TrendBriefPanel";
+import { RunwayWorkspace } from "../runway/RunwayWorkspace";
 import styles from "./studio.module.css";
 import { CreativeProgress } from "./CreativeProgress";
 import { useAuth } from "../auth/AuthProvider";
@@ -53,22 +54,27 @@ export function StudioWorkspace({
   initialAssetId,
   initialTab,
   initialStyleRevisionId,
+  initialShowId,
+  initialRunId,
 }: {
   readonly projectId: string;
   readonly initialAssetId?: string | undefined;
   readonly initialTab?: string | undefined;
   readonly initialStyleRevisionId?: string | undefined;
+  readonly initialShowId?: string | undefined;
+  readonly initialRunId?: string | undefined;
 }) {
   const { session } = useAuth();
   const [preferredRevision, setPreferredRevision] = useState(
     initialStyleRevisionId,
   );
+  const [runwayEntry, setRunwayEntry] = useState({ showId: initialShowId, runId: initialRunId });
   const [data, setData] = useState<StudioSummary | null>(null);
   const [name, setName] = useState("设计项目");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(
-    initialAssetId ? "styles" : isStudioTab(initialTab) ? initialTab : "tasks",
+    initialTab === "runway" ? "runway" : initialAssetId ? "styles" : isStudioTab(initialTab) ? initialTab : "tasks",
   );
   const [experimentMode, setExperimentMode] =
     useState<ExperimentCreateInput["mode"]>("color");
@@ -119,6 +125,7 @@ export function StudioWorkspace({
       setDirty(false);
       setTab(next);
       const url = new URL(window.location.href);
+      if (next === "runway") setRunwayEntry({ showId: url.searchParams.get("showId") ?? undefined, runId: url.searchParams.get("runId") ?? undefined });
       url.searchParams.set("tab", next);
       if (next !== "styles") url.searchParams.delete("assetId");
       window.history.replaceState(window.history.state, "", url);
@@ -141,6 +148,7 @@ export function StudioWorkspace({
     <>
       <AppHeader
         current="studio"
+        currentIsParent
         projectId={projectId}
         projectName={name}
         hideProjectReturn
@@ -154,6 +162,7 @@ export function StudioWorkspace({
       />
       <main
         data-studio-motion
+        data-studio-page={tab}
         className={styles.shell}
         onInvalidCapture={(event) => {
           const input = event.target;
@@ -168,10 +177,34 @@ export function StudioWorkspace({
       >
         <div className={styles.workspaceMain}>
           <header className={styles.header}>
+            <h1 className={styles.accessibleTitle}>{name} · 款式与交付</h1>
             <div>
-              <h1 className={styles.workspaceTitle} title={name}>
-                {name}
-              </h1>
+              <Menu label="项目导航" trigger={name}>
+                {[
+                  ["项目库", "/"],
+                  ["设计工作台", `/${encodeURIComponent(projectId)}`],
+                  [
+                    "面料库",
+                    `/fabrics?from=board&boardId=${encodeURIComponent(projectId)}`,
+                  ],
+                  [
+                    "趋势档案",
+                    `/trends?from=board&boardId=${encodeURIComponent(projectId)}`,
+                  ],
+                ].map(([label, href]) => (
+                  <Button
+                    key={label}
+                    onClick={() => {
+                      void (async () => {
+                        if (href && (await guard.confirmLeave()))
+                          window.location.assign(href);
+                      })();
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Menu>
               <span className={styles.projectCaption}>款式与交付</span>
             </div>
             <div className={styles.toolbar}>
@@ -262,6 +295,23 @@ export function StudioWorkspace({
                       {...props}
                       data={data}
                       initialAssetId={initialAssetId}
+                      onRunway={(revisionId) => {
+                        void (async () => {
+                          if (!(await guard.confirmLeave())) return;
+                          setDirty(false);
+                          setPreferredRevision(revisionId);
+                          setTab("runway");
+                          setRunwayEntry({ showId: undefined, runId: undefined });
+                          const url = new URL(window.location.href);
+                          url.searchParams.set("tab", "runway");
+                          url.searchParams.set("styleRevisionId", revisionId);
+                          url.searchParams.delete("assetId");
+                          url.searchParams.delete("showId");
+                          url.searchParams.delete("runId");
+                          window.history.replaceState(window.history.state, "", url);
+                          if (session) rememberCreativeVisit(session.user.id, projectId, url.pathname + url.search);
+                        })();
+                      }}
                       onTechPack={(revisionId) => {
                         void (async () => {
                           if (!(await guard.confirmLeave())) return;
@@ -348,10 +398,20 @@ export function StudioWorkspace({
                     <PresentationSets
                       {...props}
                       data={data}
+                      onOpenStyles={() => void changeTab("styles")}
                       onGenerate={() => {
                         setExperimentMode("presentation");
                         void changeTab("experiments");
                       }}
+                    />
+                  </TabPanel>
+                  <TabPanel tabsId={tabsId} value="runway" activeValue={tab}>
+                    <RunwayWorkspace
+                      {...props}
+                      data={data}
+                      initialShowId={runwayEntry.showId}
+                      initialRunId={runwayEntry.runId}
+                      initialStyleRevisionId={preferredRevision}
                     />
                   </TabPanel>
                   <TabPanel tabsId={tabsId} value="brand" activeValue={tab}>

@@ -19,6 +19,7 @@ import {
 import styles from "./studio.module.css";
 import { useStudioAssetName } from "./studio-object-context";
 import { userFacingError } from "../../components/user-facing-error";
+import { PresentationPreview as AssetPreview } from "./PresentationGallery";
 
 export interface StudioAsset {
   readonly id: string;
@@ -47,6 +48,7 @@ export function AssetPicker({
   readonly compact?: boolean;
 }) {
   const [limit, setLimit] = useState(false);
+  const [preview, setPreview] = useState<StudioAsset | null>(null);
   const assetName = useStudioAssetName();
   return (
     <div className={styles.stack}>
@@ -58,36 +60,50 @@ export function AssetPicker({
       </div>
       {assets.length ? (
         <div
-          className={`${styles.previewGrid} ${compact ? styles.compactPicker : ""}`}
+          className={`${styles.materialGrid} ${compact ? styles.materialCompact : ""}`}
         >
           {assets.map((asset, index) => (
-            <button
-              aria-label={"选择图片 " + (index + 1)}
-              title={assetName(asset.id)}
-              aria-pressed={selected.includes(asset.id)}
-              className={styles.assetButton}
-              disabled={disabled}
-              key={asset.id}
-              onClick={() => {
-                if (selected.includes(asset.id)) {
-                  onChange(selected.filter((id) => id !== asset.id));
-                  setLimit(false);
-                } else if (selected.length < max) {
-                  onChange([...selected, asset.id]);
-                  setLimit(false);
-                } else setLimit(true);
-              }}
-              type="button"
-            >
-              <span className={styles.assetImage}>
-                <ImagePreview
-                  retryable={false}
-                  src={asset.thumbnailUrl ?? asset.url}
-                  alt={assetName(asset.id)}
-                />
-              </span>
-              <span className={styles.assetLabel}>{assetName(asset.id)}</span>
-            </button>
+            <article className={styles.materialCard} key={asset.id}>
+              <button
+                aria-label={"选择图片 " + (index + 1)}
+                title={assetName(asset.id)}
+                aria-pressed={selected.includes(asset.id)}
+                className={styles.assetButton}
+                disabled={disabled}
+                onClick={() => {
+                  if (selected.includes(asset.id)) {
+                    onChange(selected.filter((id) => id !== asset.id));
+                    setLimit(false);
+                  } else if (selected.length < max) {
+                    onChange([...selected, asset.id]);
+                    setLimit(false);
+                  } else setLimit(true);
+                }}
+                type="button"
+              >
+                <span className={styles.assetImage}>
+                  <ImagePreview
+                    retryable={false}
+                    src={asset.thumbnailUrl ?? asset.url}
+                    alt={assetName(asset.id)}
+                  />
+                </span>
+                <span className={styles.assetLabel}>{assetName(asset.id)}</span>
+                <span className={styles.selectionLabel}>
+                  {selected.includes(asset.id)
+                    ? `已选 · 第 ${selected.indexOf(asset.id) + 1} 张`
+                    : "选择图片"}
+                </span>
+              </button>
+              <Button
+                variant="ghost"
+                size="small"
+                aria-label={`查看大图：${assetName(asset.id)}`}
+                onClick={() => setPreview(asset)}
+              >
+                查看大图
+              </Button>
+            </article>
           ))}
         </div>
       ) : (
@@ -97,6 +113,13 @@ export function AssetPicker({
       )}
       {limit ? (
         <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice>
+      ) : null}
+      {preview ? (
+        <AssetPreview
+          name={assetName(preview.id)}
+          src={preview.url}
+          onClose={() => setPreview(null)}
+        />
       ) : null}
     </div>
   );
@@ -111,6 +134,8 @@ export function SaveBar({
   primary = true,
   label = "保存修订",
   error,
+  isNew = false,
+  hint,
 }: {
   readonly busy: boolean;
   readonly dirty: boolean;
@@ -120,11 +145,13 @@ export function SaveBar({
   readonly primary?: boolean;
   readonly label?: string;
   readonly error?: ReactNode;
+  readonly isNew?: boolean;
+  readonly hint?: ReactNode;
 }) {
   return (
     <ActionBar
       status={
-        <>
+        <div className={styles.saveStatus}>
           <span role="status">
             {busy
               ? "正在保存…"
@@ -132,10 +159,13 @@ export function SaveBar({
                 ? "只读资料"
                 : dirty
                   ? "有未保存的修改"
-                  : "已保存"}
+                  : isNew
+                    ? "新资料尚未保存"
+                    : "已保存"}
           </span>
+          {hint ? <span className={styles.muted}>{hint}</span> : null}
           {error ? <Notice tone="error">{error}</Notice> : null}
-        </>
+        </div>
       }
       secondary={children}
     >
@@ -144,7 +174,7 @@ export function SaveBar({
         form={formId}
         variant={primary ? "primary" : "secondary"}
         loading={busy}
-        disabled={!canEdit || !dirty}
+        disabled={!canEdit || (!dirty && !isNew)}
       >
         {busy ? "正在保存…" : label}
       </Button>

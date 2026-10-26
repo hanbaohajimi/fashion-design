@@ -22,6 +22,8 @@ import { saveStudioDocument } from "./studio-api";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import { SaveBar } from "./studio-ui";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 type Slot = Extract<
   StudioDocumentInput,
@@ -50,77 +52,104 @@ export function PlanningBoard(
   const [editorOpen, setEditorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const existing = props.data.slots.find((slot) => slot.id === id);
+  const closeEditor = () => {
+    setEditorOpen(false);
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`studio-slot-${id}`)
+        ?.focus({ preventScroll: true }),
+    );
+  };
   return (
     <div className={styles.section}>
-      <div className={styles.recordHeader}>
-        <div className={styles.row}>
-          <h2>系列规划</h2>
-          <span className={styles.muted}>
-            {props.data.collections.find(
-              (collection) => collection.id === collectionId,
-            )?.name ?? "先建立系列，再安排款式位置"}
-          </span>
-        </div>
-        <Button
-          disabled={!props.canEdit}
-          onClick={() =>
-            void (async () => {
-              if (await props.beforeChange()) {
-                setId(null);
-                setEditorOpen(true);
-                setDraftVersion((current) => current + 1);
-              }
-            })()
-          }
-        >
-          新增计划位置
-        </Button>
-      </div>
-      <div className={styles.summary}>
-        {Object.entries(states).map(([value, label]) => (
-          <div key={value}>
-            <strong>
-              {
-                props.data.slots.filter(
-                  (slot) =>
-                    (slot.currentRevision.payload as Slot).status === value &&
-                    (!collectionId ||
-                      (slot.currentRevision.payload as Slot).collectionId ===
-                        collectionId),
-                ).length
-              }
-            </strong>
-            <small>{label}</small>
-          </div>
-        ))}
-      </div>
-      {!props.data.collections.length ? (
-        <div className={styles.note}>
-          <p>先从一张核心设计图建立系列，再安排品类和款式位置。</p>
+      <StudioPageHeader
+        title={
+          props.data.collections.find(
+            (collection) => collection.id === collectionId,
+          )?.name ?? "建立设计系列"
+        }
+        type="系列规划"
+        description="安排款式位置，查看系列中的角色与进度"
+        actions={
           <Button
-            disabled={!props.canEdit || !props.data.assets.length}
-            loading={creating}
-            onClick={() => {
-              const asset = props.data.assets[0];
-              if (!asset) return;
-              setCreating(true);
-              setError(null);
-              void createCollection(asset.id)
-                .then(props.onSaved)
-                .catch((cause: unknown) =>
-                  setError(
-                    cause instanceof Error ? cause.message : "系列创建失败",
-                  ),
-                )
-                .finally(() => setCreating(false));
-            }}
+            disabled={!props.canEdit}
+            onClick={() =>
+              void (async () => {
+                if (await props.beforeChange()) {
+                  setId(null);
+                  setEditorOpen(true);
+                  setDraftVersion((current) => current + 1);
+                }
+              })()
+            }
           >
-            用第一张设计图建立系列
+            新增计划位置
           </Button>
-          {error ? <Notice tone="error">{error}</Notice> : null}
+        }
+      />
+      {props.data.collections.length ? (
+        <div className={styles.summary}>
+          {Object.entries(states).map(([value, label]) => (
+            <div key={value}>
+              <strong>
+                {
+                  props.data.slots.filter(
+                    (slot) =>
+                      (slot.currentRevision.payload as Slot).status === value &&
+                      (!collectionId ||
+                        (slot.currentRevision.payload as Slot).collectionId ===
+                          collectionId),
+                  ).length
+                }
+              </strong>
+              <small>{label}</small>
+            </div>
+          ))}
         </div>
       ) : null}
-      <div className={styles.split}>
+      {!props.data.collections.length ? (
+        <div className={styles.planningStart}>
+          {props.data.assets[0] ? (
+            <span className={styles.assetImage}>
+              <ImagePreview
+                src={props.data.assets[0].url}
+                alt="建立系列使用的第一张设计图"
+              />
+            </span>
+          ) : null}
+          <div>
+            <h3>从核心设计图建立系列</h3>
+            <p>
+              以项目第一张设计图为起点，再安排品类、主推款与基础款位置。创建后可关联明确的款式修订。
+            </p>
+            <Button
+              disabled={!props.canEdit || !props.data.assets.length}
+              loading={creating}
+              onClick={() => {
+                const asset = props.data.assets[0];
+                if (!asset) return;
+                setCreating(true);
+                setError(null);
+                void createCollection(asset.id)
+                  .then(props.onSaved)
+                  .catch((cause: unknown) =>
+                    setError(
+                      cause instanceof Error ? cause.message : "系列创建失败",
+                    ),
+                  )
+                  .finally(() => setCreating(false));
+              }}
+            >
+              用第一张设计图建立系列
+            </Button>
+            {error ? <Notice tone="error">{error}</Notice> : null}
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={styles.planningWorkspace}
+        data-editing={editorOpen || undefined}
+      >
         {props.data.collections.length > 1 ? (
           <Field label="当前系列">
             <Select
@@ -165,10 +194,11 @@ export function PlanningBoard(
                   type="button"
                   className={styles.planningCard}
                   key={slot.id}
+                  id={`studio-slot-${slot.id}`}
                   aria-pressed={id === slot.id}
                   onClick={() =>
                     void (async () => {
-                      if (await props.beforeChange()) {
+                      if (slot.id === id || (await props.beforeChange())) {
                         setId(slot.id);
                         setEditorOpen(true);
                       }
@@ -199,14 +229,17 @@ export function PlanningBoard(
               );
             })}
         </aside>
-        {editorOpen ? (
+        <StudioEditSection
+          title="编辑系列位置"
+          open={editorOpen}
+          onOpenChange={(next) => (next ? setEditorOpen(true) : closeEditor())}
+          hideTrigger
+        >
           <section className={styles.slotEditor}>
             <Button
               variant="ghost"
               onClick={() => {
-                void (async () => {
-                  if (await props.beforeChange()) setEditorOpen(false);
-                })();
+                closeEditor();
               }}
             >
               关闭位置编辑
@@ -225,11 +258,12 @@ export function PlanningBoard(
               collectionId={collectionId}
             />
           </section>
-        ) : (
+        </StudioEditSection>
+        {!editorOpen && props.data.collections.length > 0 ? (
           <p className={styles.muted}>
             选择一个款式位置进行编辑，或新增计划位置。
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -407,7 +441,8 @@ function SlotEditor({
       </fieldset>
       <SaveBar
         busy={form.busy}
-        dirty={form.dirty || !existing}
+        dirty={form.dirty}
+        isNew={!existing}
         canEdit={canEdit && !!data.collections.length}
       />
     </form>

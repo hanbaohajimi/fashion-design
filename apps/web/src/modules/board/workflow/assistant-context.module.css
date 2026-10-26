@@ -1,4 +1,4 @@
-/* Quiet, inline context; only the requirements drawer uses a separate surface. */
+/* Colored regions distinguish references, tools, and requirements. */
 .drawer.drawer {
   width: min(480px, calc(100vw - 32px));
   height: calc(100dvh - 32px);
@@ -16,41 +16,368 @@
   border-bottom: 1px solid var(--color-border);
   z-index: 1;
 }
-.drawerHeader h2 { margin: 0; font-size: var(--text-lg); }
-.drawerContents.drawerContents { max-height: none; overflow: visible; padding: var(--space-4); }
-.drawerContents li { padding-block: var(--space-2); overflow-wrap: anywhere; }
+.drawerHeader h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.drawerContents.drawerContents {
+  max-height: none;
+  overflow: visible;
+  padding: var(--space-4);
+}
+.drawerContents li {
+  padding-block: var(--space-2);
+  overflow-wrap: anywhere;
+}
 .discussion {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
   font-size: var(--text-sm);
-  color: var(--color-ink-secondary);
+  color: var(--assistant-reference-ink);
+  background: var(--assistant-reference-surface);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
 }
-.discussion > button { order: 3; margin-left: auto; }
-.discussion button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
-.discussionReferences { display: flex; flex: 1 1 120px; order: 2; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); max-height: 72px; overflow: auto; overscroll-behavior: contain; padding: var(--space-1); }
-.discussionReferences > span { min-width: 0; max-width: 100%; }
-.referenceChip { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; border-radius: var(--radius-sm); background: var(--color-selection-bg); }
-.referenceChip button { color: var(--color-selection-ink); }
-.referenceChip > button:first-child { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.referenceChip .removeReference { flex: none; min-width: var(--control-height); min-height: var(--control-height); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; text-align: center; cursor: pointer; }
-.referenceChip .removeReference:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
-.referenceChip .removeReference:disabled { color: var(--color-disabled-ink); cursor: not-allowed; }
-.referenceChip .removeReference:hover:enabled { background: var(--color-action-subtle); }
-@media (pointer: coarse) {
-  .referenceChip .removeReference { min-width: var(--control-height-touch); min-height: var(--control-height-touch); }
+.discussion > button {
+  order: 3;
+  margin-left: auto;
 }
-.referenceRecord { font-size: var(--text-sm); color: var(--color-ink-secondary); margin-top: var(--space-2); overflow-wrap: anywhere; }
-.referenceRecord summary, .drawerContents summary { cursor: pointer; padding-block: var(--space-2); }
-.referenceRecord h4 { margin: var(--space-3) 0 var(--space-1); font-size: inherit; font-weight: 600; }
-.referenceRecord p { margin: var(--space-1) 0; line-height: 1.6; }
-.referenceRecord ul { margin: 0; padding-left: var(--space-4); }
-.referenceRecord small { display: block; color: var(--color-ink-tertiary); }
-.referenceRecord summary:focus-visible, .drawerContents summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.discussion button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.discussionReferences {
+  display: flex;
+  flex: 1 1 0;
+  order: 2;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  max-height: 72px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-1);
+}
+.discussionReferences > span {
+  min-width: 0;
+  max-width: 100%;
+}
+.referenceChip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--color-selection-bg);
+}
+.referenceChip button {
+  color: var(--color-selection-ink);
+}
+.referenceChip > button:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.referenceChip .removeReference {
+  flex: none;
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.referenceChip .removeReference:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+.referenceChip .removeReference:disabled {
+  color: var(--color-disabled-ink);
+  cursor: not-allowed;
+}
+.referenceChip .removeReference:hover:enabled {
+  background: var(--color-action-subtle);
+}
+@media (pointer: coarse) {
+  .referenceChip .removeReference {
+    min-width: var(--control-height-touch);
+    min-height: var(--control-height-touch);
+  }
+}
+.referenceRecord {
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  margin-top: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.referenceRecord summary,
+.drawerContents summary {
+  cursor: pointer;
+  padding-block: var(--space-2);
+}
+.referenceRecord h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: inherit;
+  font-weight: 600;
+}
+.referenceRecord p {
+  margin: var(--space-1) 0;
+  line-height: 1.6;
+}
+.referenceRecord ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+.referenceRecord small {
+  display: block;
+  color: var(--color-ink-tertiary);
+}
+.toolbar {
+  flex: none;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--assistant-tools-surface);
+  border-radius: var(--radius-lg);
+}
+.conversationTitle {
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.toolbarActions button {
+  flex: 1 1 auto;
+}
+.history {
+  flex: none;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+}
+.history select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-height-touch);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font: inherit;
+}
+.startSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  list-style-position: inside;
+  padding-left: 0;
+  margin: var(--space-4) 0;
+  font-size: var(--text-base);
+  color: var(--color-ink-secondary);
+}
+.fieldLabel {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.helper,
+.keyboardHint {
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  line-height: var(--leading-normal);
+}
+.helper {
+  margin: var(--space-2) 0 var(--space-3);
+}
+.keyboardHint {
+  display: block;
+  margin-top: var(--space-2);
+  text-align: right;
+}
+.draftNotice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}
+.menuHint {
+  max-width: 24ch;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+}
+.referencePicker {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+}
+.referencePicker[open] {
+  display: flex;
+  flex-direction: column;
+}
+.referencePicker .drawerHeader,
+.pickerFooter {
+  flex: none;
+  flex-wrap: wrap;
+}
+.referencePicker .drawerHeader {
+  background: var(--assistant-tools-surface);
+}
+.pickerContents {
+  padding: var(--space-4);
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.referenceList {
+  display: grid;
+  gap: var(--space-1);
+}
+.referenceList summary {
+  min-height: var(--control-height-touch);
+  padding-block: var(--space-3);
+  cursor: pointer;
+}
+.referenceOption {
+  display: grid;
+  grid-template-columns: 20px 40px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.referenceOption:hover {
+  background: var(--color-surface);
+}
+.referenceOption:has(input:checked) {
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+}
+.referenceOption:has(input:disabled) {
+  color: var(--color-disabled-ink);
+  cursor: not-allowed;
+}
+.referenceOption input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-action);
+}
+.referenceOption img,
+.referencePlaceholder {
+  width: 40px;
+  height: 52px;
+  object-fit: contain;
+  background: var(--image-stage-background);
+  border-radius: var(--radius-sm);
+}
+.referencePlaceholder {
+  display: grid;
+  place-items: center;
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+}
+.referenceOption strong,
+.referenceOption small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.referenceOption strong {
+  font-size: var(--text-base);
+  font-weight: 400;
+}
+.referenceOption small {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+}
+.pickerFooter {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.history select:focus-visible,
+.referenceOption input:focus-visible,
+.referenceList summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+@media (max-width: 767px), (any-pointer: coarse) {
+  .referencePicker,
+  .drawer {
+    --control-height: var(--control-height-touch);
+    --control-height-compact: var(--control-height-touch);
+    --control-height-primary: var(--control-height-touch);
+  }
+  .toolbarActions.toolbarActions button,
+  .referencePicker.referencePicker button,
+  .drawer.drawer button {
+    min-height: var(--control-height-touch);
+  }
+  .referenceChip .removeReference {
+    min-width: var(--control-height-touch);
+  }
+  .keyboardHint {
+    display: none;
+  }
+}
+@media (max-width: 767px) and (max-height: 600px) {
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-bottom: var(--space-1);
+  }
+  .conversationTitle {
+    flex: 1 1 100px;
+  }
+  .toolbarActions {
+    flex: 1 1 240px;
+  }
+}
+.referenceRecord summary:focus-visible,
+.drawerContents summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 @media (max-width: 600px) {
-  .drawer.drawer { margin: 8px; width: calc(100vw - 16px); max-width: calc(100vw - 16px); height: calc(100dvh - 16px); }
-  .drawerHeader, .drawerContents.drawerContents { padding: var(--space-3); }
-  .discussion { gap: 2px 6px; }
+  .drawer.drawer {
+    margin: 8px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+  .drawerHeader,
+  .drawerContents.drawerContents {
+    padding: var(--space-3);
+  }
+  .discussion {
+    gap: 2px 6px;
+  }
 }

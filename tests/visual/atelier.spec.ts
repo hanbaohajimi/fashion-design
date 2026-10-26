@@ -284,6 +284,8 @@ test("task request failure retains the complete draft", async ({ page }) => {
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toHaveValue("保持夹克廓形并调整袖口");
   await settleImages(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   expect(await contrastFailures(page, true)).toEqual([]);
   await expect(page).toHaveScreenshot("workspace-task-request-failure.png", {
     fullPage: true,
@@ -344,7 +346,7 @@ test.describe("studio touch", () => {
   }) => {
     await page.goto(`/${PROJECT}`);
     await page.getByRole("button", { name: "助手", exact: true }).click();
-    const send = page.getByRole("button", { name: "发送 ↑", exact: true });
+    const send = page.getByRole("button", { name: "发送需求", exact: true });
     await expect(send).toBeInViewport({ ratio: 1 });
     const minimum = await page.evaluate(() =>
       parseFloat(
@@ -356,18 +358,16 @@ test.describe("studio touch", () => {
     for (const target of [
       send,
       page.getByRole("button", { name: "收起设计助手" }),
-      page.getByText("更多", { exact: true }),
-      page.getByRole("link", { name: "项目库", exact: true }),
+      page.getByRole("button", { name: "历史对话", exact: true }),
+      page.getByRole("navigation", { name: "工作区导航", exact: true }).locator("summary"),
     ]) {
       const bounds = await target.boundingBox();
       expect(bounds!.width).toBeGreaterThanOrEqual(minimum);
       expect(bounds!.height).toBeGreaterThanOrEqual(minimum);
     }
     await expect(page).toHaveScreenshot("studio-assistant-touch.png");
-    await page.getByText("更多", { exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "新建设计对话", exact: true }),
-    ).toBeInViewport({ ratio: 1 });
+    await page.getByRole("button", { name: "历史对话", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "历史对话", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(page).toHaveScreenshot("studio-menu-touch.png");
   });
 });

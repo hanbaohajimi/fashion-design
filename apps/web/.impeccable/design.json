@@ -1,8 +1,25 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-25T11:24:12.827221+00:00",
+  "generatedAt": "2026-10-25T16:29:24.542Z",
   "title": "Design System: 森织设计工作室 · 织物档案",
   "extensions": {
+    "studioHierarchyRollout": {
+      "scope": "/studio 的 11 个子功能；用户在商品展示包样板后明确要求推广；不影响全应用构图。",
+      "updatedAt": "2026-10-26",
+      "source": "apps/web/src/modules/studio/",
+      "navigation": "仅工作室：StudioWorkspace 传入 currentIsParent，父级“款式与交付”保留 aria-current 路径语义及选择文字色，但 data-current-parent 改为透明底、500 字重。StudioNavigation 的 data-studio-hierarchy 将分组内子功能左缩进8px，实际选中子页保留浅绿底、600 字重；其他全局当前项沿用共享样式。",
+      "layout": {
+        "stylesSamplesBrand": "minmax(0, 1fr) 296px；max-width:1099px 单列",
+        "experimentsPlanningEditing": "minmax(0, 1fr) 340px；max-width:1099px 单列；系列未编辑时单列",
+        "tasksTrends": "minmax(0, 1fr) 320px；max-width:1099px 改280px；max-width:767px 单列；趋势表单在手机来源前",
+        "presentation": "1fr + 296px；max-width:1399px 改280px；max-width:1099px 工作区单列、资料两列；max-width:767px 资料单列",
+        "patterns": "1fr + var(--inspector-width)（320px）；max-width:760px 单列，保留平铺画布",
+        "tech": "min-width:1200px 为160px章节目录 + 1fr，目录top16px sticky；窄屏章节回正常流",
+        "team": "保留对象、作品与意见结构；不强制固定资料栏"
+      },
+      "provenance": "只使用既有项目素材与品牌资产，无新生产位图；fixture SVG 仅用于布局测试。",
+      "detector": "同步前 detector.json 为15条advisory、0 primary：12字号、2圆角、1颜色。新增28/18/22px按工作室局部角色记入DESIGN.md，既存16/17/23px、10px圆角、#0002不借此全局规范化。"
+    },
     "colorMeta": {
       "image-stage-background": {
         "role": "neutral",
@@ -873,102 +890,164 @@
         ]
       },
       "navigation": {
-        "role": "primary",
-        "displayName": "档案深绿",
+        "role": "neutral",
+        "displayName": "暖白目录",
         "tonalRamp": [
-          "oklch(15.00% 0.0217 174.01)",
-          "oklch(26.43% 0.0354 174.01)",
-          "oklch(37.86% 0.0445 174.01)",
-          "oklch(49.29% 0.0479 174.01)",
-          "oklch(60.71% 0.0452 174.01)",
-          "oklch(72.14% 0.0368 174.01)",
-          "oklch(83.57% 0.0236 174.01)",
-          "oklch(95.00% 0.0075 174.01)"
+          "oklch(15.00% 0.0024 95.10)",
+          "oklch(26.43% 0.0040 95.10)",
+          "oklch(37.86% 0.0050 95.10)",
+          "oklch(49.29% 0.0054 95.10)",
+          "oklch(60.71% 0.0051 95.10)",
+          "oklch(72.14% 0.0041 95.10)",
+          "oklch(83.57% 0.0027 95.10)",
+          "oklch(95.00% 0.0008 95.10)"
         ]
       },
       "navigation-ink": {
-        "role": "primary",
-        "displayName": "目录亮字",
+        "role": "neutral",
+        "displayName": "目录深绿文字",
         "tonalRamp": [
-          "oklch(15.00% 0.0063 124.55)",
-          "oklch(26.43% 0.0102 124.55)",
-          "oklch(37.86% 0.0129 124.55)",
-          "oklch(49.29% 0.0138 124.55)",
-          "oklch(60.71% 0.0131 124.55)",
-          "oklch(72.14% 0.0106 124.55)",
-          "oklch(83.57% 0.0068 124.55)",
-          "oklch(95.00% 0.0022 124.55)"
+          "oklch(15.00% 0.0120 176.18)",
+          "oklch(26.43% 0.0195 176.18)",
+          "oklch(37.86% 0.0245 176.18)",
+          "oklch(49.29% 0.0264 176.18)",
+          "oklch(60.71% 0.0249 176.18)",
+          "oklch(72.14% 0.0202 176.18)",
+          "oklch(83.57% 0.0130 176.18)",
+          "oklch(95.00% 0.0041 176.18)"
         ]
       },
       "navigation-muted": {
-        "role": "primary",
-        "displayName": "目录次要字",
+        "role": "neutral",
+        "displayName": "目录次要文字",
         "tonalRamp": [
-          "oklch(15.00% 0.0127 157.28)",
-          "oklch(26.43% 0.0206 157.28)",
-          "oklch(37.86% 0.0259 157.28)",
-          "oklch(49.29% 0.0279 157.28)",
-          "oklch(60.71% 0.0263 157.28)",
-          "oklch(72.14% 0.0214 157.28)",
-          "oklch(83.57% 0.0138 157.28)",
-          "oklch(95.00% 0.0044 157.28)"
+          "oklch(15.00% 0.0122 160.98)",
+          "oklch(26.43% 0.0198 160.98)",
+          "oklch(37.86% 0.0249 160.98)",
+          "oklch(49.29% 0.0268 160.98)",
+          "oklch(60.71% 0.0253 160.98)",
+          "oklch(72.14% 0.0206 160.98)",
+          "oklch(83.57% 0.0132 160.98)",
+          "oklch(95.00% 0.0042 160.98)"
         ]
       },
       "navigation-hover": {
-        "role": "primary",
-        "displayName": "navigation-hover",
+        "role": "neutral",
+        "displayName": "目录悬停表面",
         "tonalRamp": [
-          "oklch(15.00% 0.0232 172.16)",
-          "oklch(26.43% 0.0377 172.16)",
-          "oklch(37.86% 0.0474 172.16)",
-          "oklch(49.29% 0.0510 172.16)",
-          "oklch(60.71% 0.0482 172.16)",
-          "oklch(72.14% 0.0392 172.16)",
-          "oklch(83.57% 0.0252 172.16)",
-          "oklch(95.00% 0.0080 172.16)"
+          "oklch(15.00% 0.0036 114.22)",
+          "oklch(26.43% 0.0059 114.22)",
+          "oklch(37.86% 0.0074 114.22)",
+          "oklch(49.29% 0.0080 114.22)",
+          "oklch(60.71% 0.0075 114.22)",
+          "oklch(72.14% 0.0061 114.22)",
+          "oklch(83.57% 0.0039 114.22)",
+          "oklch(95.00% 0.0012 114.22)"
         ]
       },
       "navigation-selected": {
         "role": "primary",
-        "displayName": "navigation-selected",
+        "displayName": "目录浅灰绿选中",
         "tonalRamp": [
-          "oklch(15.00% 0.0252 169.59)",
-          "oklch(26.43% 0.0409 169.59)",
-          "oklch(37.86% 0.0514 169.59)",
-          "oklch(49.29% 0.0554 169.59)",
-          "oklch(60.71% 0.0523 169.59)",
-          "oklch(72.14% 0.0425 169.59)",
-          "oklch(83.57% 0.0273 169.59)",
-          "oklch(95.00% 0.0087 169.59)"
+          "oklch(15.00% 0.0080 131.88)",
+          "oklch(26.43% 0.0130 131.88)",
+          "oklch(37.86% 0.0163 131.88)",
+          "oklch(49.29% 0.0176 131.88)",
+          "oklch(60.71% 0.0166 131.88)",
+          "oklch(72.14% 0.0135 131.88)",
+          "oklch(83.57% 0.0087 131.88)",
+          "oklch(95.00% 0.0028 131.88)"
         ]
       },
       "navigation-border": {
-        "role": "primary",
-        "displayName": "navigation-border",
+        "role": "neutral",
+        "displayName": "目录分隔线",
         "tonalRamp": [
-          "oklch(15.00% 0.0211 167.41)",
-          "oklch(26.43% 0.0343 167.41)",
-          "oklch(37.86% 0.0432 167.41)",
-          "oklch(49.29% 0.0465 167.41)",
-          "oklch(60.71% 0.0439 167.41)",
-          "oklch(72.14% 0.0357 167.41)",
-          "oklch(83.57% 0.0230 167.41)",
-          "oklch(95.00% 0.0073 167.41)"
+          "oklch(15.00% 0.0058 126.38)",
+          "oklch(26.43% 0.0094 126.38)",
+          "oklch(37.86% 0.0119 126.38)",
+          "oklch(49.29% 0.0128 126.38)",
+          "oklch(60.71% 0.0121 126.38)",
+          "oklch(72.14% 0.0098 126.38)",
+          "oklch(83.57% 0.0063 126.38)",
+          "oklch(95.00% 0.0020 126.38)"
+        ]
+      },
+      "studio-work-surface": {
+        "role": "neutral",
+        "displayName": "工作室灰绿操作区",
+        "tonalRamp": [
+          "oklch(15.00% 0.0051 141.26)",
+          "oklch(26.43% 0.0083 141.26)",
+          "oklch(37.86% 0.0105 141.26)",
+          "oklch(49.29% 0.0113 141.26)",
+          "oklch(60.71% 0.0106 141.26)",
+          "oklch(72.14% 0.0087 141.26)",
+          "oklch(83.57% 0.0056 141.26)",
+          "oklch(95.00% 0.0018 141.26)"
+        ]
+      },
+      "studio-reference-surface": {
+        "role": "neutral",
+        "displayName": "工作室暖沙资料区",
+        "tonalRamp": [
+          "oklch(15.00% 0.0078 84.59)",
+          "oklch(26.43% 0.0128 84.59)",
+          "oklch(37.86% 0.0160 84.59)",
+          "oklch(49.29% 0.0173 84.59)",
+          "oklch(60.71% 0.0163 84.59)",
+          "oklch(72.14% 0.0133 84.59)",
+          "oklch(83.57% 0.0085 84.59)",
+          "oklch(95.00% 0.0027 84.59)"
+        ]
+      },
+      "studio-artwork-surface": {
+        "role": "neutral",
+        "displayName": "工作室中性作品区",
+        "tonalRamp": [
+          "oklch(15.00% 0.0012 106.45)",
+          "oklch(26.43% 0.0020 106.45)",
+          "oklch(37.86% 0.0025 106.45)",
+          "oklch(49.29% 0.0027 106.45)",
+          "oklch(60.71% 0.0025 106.45)",
+          "oklch(72.14% 0.0020 106.45)",
+          "oklch(83.57% 0.0013 106.45)",
+          "oklch(95.00% 0.0004 106.45)"
         ]
       }
     },
     "typographyMeta": {
+      "studio-heading": {
+        "displayName": "工作室对象页头",
+        "purpose": "仅 /studio；StudioPageHeader 与商品展示包独立页头，继承现有无衬线字体。"
+      },
+      "studio-heading-mobile": {
+        "displayName": "工作室手机对象页头",
+        "purpose": "仅 /studio；max-width:767px 的对象标题。"
+      },
+      "studio-section": {
+        "displayName": "工作室主区域与常驻资料标题",
+        "purpose": "仅 /studio；persistent 资料、素材工作区标题，不替换全局 section。"
+      },
+      "studio-label": {
+        "displayName": "工作室资料摘要与选择说明",
+        "purpose": "仅 /studio；常驻资料摘要和素材选择状态，页头说明有独立行高。"
+      },
+      "studio-planning-start": {
+        "displayName": "系列空态引导标题",
+        "purpose": "仅 PlanningBoard 尚未建立系列时的引导；不是通用标题档。"
+      },
       "headline": {
         "displayName": "headline",
         "purpose": "项目库页面标题"
       },
       "title": {
         "displayName": "title",
-        "purpose": "共享 WorkspaceHeader 与 Studio 模块标题"
+        "purpose": "共享 WorkspaceHeader；工作室对象页头另用局部 studio-heading"
       },
       "section": {
         "displayName": "section",
-        "purpose": "Studio 区块标题"
+        "purpose": "既有 20px 区块档；本轮工作室主区域标题另用局部 studio-section"
       },
       "body": {
         "displayName": "body",
@@ -1139,16 +1218,12 @@
     ],
     "breakpoints": [
       {
-        "name": "archive-mobile-max",
-        "value": "767px"
+        "name": "workspace-menu-bar-max",
+        "value": "1199px"
       },
       {
         "name": "studio-single-column-max",
         "value": "600px"
-      },
-      {
-        "name": "studio-content-gutter-max",
-        "value": "1023px"
       },
       {
         "name": "studio-chapter-flow-min-width",
@@ -1159,12 +1234,24 @@
         "value": "640px"
       },
       {
-        "name": "technical-object-column-min",
+        "name": "wide-page-gutter-min",
+        "value": "1600px"
+      },
+      {
+        "name": "workspace-sidebar-and-studio-chapters-min",
         "value": "1200px"
       },
       {
-        "name": "wide-page-gutter-min",
-        "value": "1600px"
+        "name": "studio-function-selector-max",
+        "value": "1199px"
+      },
+      {
+        "name": "studio-tablet-min",
+        "value": "768px"
+      },
+      {
+        "name": "studio-mobile-modal-max",
+        "value": "767px"
       }
     ],
     "sources": {
@@ -1187,16 +1274,35 @@
         "apps/web/src/modules/studio/studio-navigation.ts",
         "apps/web/src/modules/studio/TechPackEditor.tsx",
         "apps/web/src/modules/projects/ProjectLibrary.tsx",
-        "apps/web/src/modules/projects/projects.module.css"
+        "apps/web/src/modules/projects/projects.module.css",
+        "apps/web/src/modules/studio/StudioNavigation.tsx",
+        "apps/web/src/modules/studio/StudioEditSection.tsx",
+        "apps/web/src/modules/studio/studio-edit-section.module.css",
+        "apps/web/src/modules/studio/StyleLibrary.tsx",
+        "apps/web/src/modules/studio/TaskEntry.tsx",
+        "apps/web/src/modules/studio/ExperimentPanel.tsx",
+        "apps/web/src/modules/studio/PrintWorkbench.tsx",
+        "apps/web/src/modules/studio/PresentationSets.tsx",
+        "apps/web/src/modules/studio/PlanningBoard.tsx",
+        "apps/web/src/modules/studio/SampleRounds.tsx",
+        "apps/web/src/modules/studio/CollaborationPanel.tsx",
+        "apps/web/src/modules/studio/TrendBriefPanel.tsx",
+        "apps/web/src/modules/studio/BrandLibrary.tsx",
+        "apps/web/src/components/BrandLockup.tsx",
+        "apps/web/src/app/(auth)/login/forest-login.module.css"
       ],
       "authority": [
         "apps/web/PRODUCT.md",
         "doc/impeccable/设计契约.md",
-        "apps/web/.impeccable/surfaces/redesign-comparison.md"
+        "apps/web/.impeccable/surfaces/redesign-comparison.md",
+        "doc/impeccable/工作室子功能设计契约.md",
+        "doc/impeccable/统一浅色导航契约.md"
       ],
       "review": [
         "output/impeccable-redesign/production-finish-review/review.md",
-        "output/impeccable-redesign/production-finish-review/verdict-1.md"
+        "output/impeccable-redesign/production-finish-review/verdict-1.md",
+        "output/studio-redesign/review-final/",
+        "output/unified-navigation/finish-review.md"
       ],
       "rampMethod": "Eight synthetic OKLCH preview steps, not runtime tokens; alpha is omitted in preview ramps."
     }
@@ -1254,9 +1360,9 @@
       "name": "ArchiveNavigation / 共享目录",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "src/components/ArchiveNavigation.tsx 与 archive-navigation.module.css：全局导航链接的现行视觉，保留真实路由和 aria-current。预览省略固定定位以适应面板。",
-      "html": "<nav class=\"ds-nav\" aria-label=\"工作区导航\"><a href=\"/\" aria-current=\"page\">项目库</a><a href=\"/fabrics\">面料库</a><a href=\"/trends?from=projects\">趋势档案</a></nav>",
-      "css": ".ds-nav{display:grid;gap:var(--space-2, 8px);padding:16px;width:204px;background:var(--color-navigation, #183f35);font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif)}.ds-nav a{display:flex;align-items:center;gap:var(--space-3, 12px);min-height:44px;padding:10px 12px;border-radius:var(--radius-md, 6px);color:var(--color-navigation-muted, #c2d6c9);font-size:var(--text-base, 14px);text-decoration:none}.ds-nav a:hover{color:var(--color-navigation-ink, #f2f6ec);background:var(--color-navigation-hover, #234c40)}.ds-nav a[aria-current=\"page\"]{color:var(--color-navigation-ink, #f2f6ec);background:var(--color-navigation-selected, #315d4e);font-weight:var(--font-semibold, 600)}.ds-nav a:focus-visible{outline:2px solid var(--color-navigation-ink, #f2f6ec);outline-offset:3px}@media(max-width:767px){.ds-nav{display:flex;width:auto;overflow-x:auto;gap:4px;padding:10px 16px}.ds-nav a{flex:1 0 auto;justify-content:center;padding:8px}}"
+      "description": "src/components/ArchiveNavigation.tsx 与 archive-navigation.module.css：统一暖白导航，桌面 184px，<1200px 为 64px 菜单栏。预览为无项目的三项入口，省略彩色 Logo、账户和固定定位以适应面板；真实菜单的 Escape 与焦点管理由共享 Menu 提供。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"工作区导航\"><div class=\"ds-nav-links\"><a href=\"/\" aria-current=\"page\">项目库</a><a href=\"/fabrics\">面料库</a><a href=\"/trends?from=projects\">趋势档案</a></div><details class=\"ds-nav-menu\"><summary aria-label=\"切换工作区\"><span>项目库</span><svg aria-hidden=\"true\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><div class=\"ds-nav-popup\"><a href=\"/\" aria-current=\"page\">项目库</a><a href=\"/fabrics\">面料库</a><a href=\"/trends?from=projects\">趋势档案</a></div></details></nav>",
+      "css": ".ds-nav,.ds-nav a,.ds-nav-menu summary,.ds-nav-popup{box-sizing:border-box}.ds-nav{width:var(--workspace-nav-width,184px);padding:var(--space-5,20px) var(--space-3,12px);background:var(--color-navigation,#fffefa);color:var(--color-navigation-ink,#20332e);border-right:1px solid var(--color-navigation-border,#e0e4db);font:400 var(--text-base,14px)/var(--leading-normal,1.5) var(--font-sans,system-ui,sans-serif)}.ds-nav-links{display:grid;gap:var(--space-1,4px)}.ds-nav a{display:flex;align-items:center;gap:var(--space-2,8px);min-height:40px;padding:var(--space-2,8px) var(--space-3,12px);border-radius:var(--radius-md,6px);color:var(--color-navigation-muted,#586a60);font-size:var(--text-base,14px);text-decoration:none}.ds-nav a:hover{color:var(--color-navigation-ink,#20332e);background:var(--color-navigation-hover,#f7f8f2)}.ds-nav a[aria-current=\"page\"]{color:var(--color-selection-ink,#1c4c3d);background:var(--color-navigation-selected,#e7eee2);font-weight:var(--font-semibold,600)}.ds-nav :focus-visible{outline:2px solid var(--color-focus-ring,#2b7058);outline-offset:3px}.ds-nav-menu{display:none;position:relative}.ds-nav-menu summary{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2,8px);min-height:44px;padding:6px 10px;border:1px solid var(--color-navigation-border,#e0e4db);border-radius:var(--radius-md,6px);background:var(--color-navigation,#fffefa);color:var(--color-navigation-ink,#20332e);font-size:var(--text-base,14px);cursor:pointer;list-style:none}.ds-nav-menu summary::-webkit-details-marker{display:none}.ds-nav-popup{position:absolute;z-index:1;top:calc(100% + 8px);left:0;width:min(280px,calc(100vw - 32px));max-height:calc(100dvh - 88px);overflow-y:auto;min-width:176px;padding:6px;border:1px solid var(--color-border,#d8ddd3);border-radius:var(--radius-lg,8px);background:var(--color-paper,#fffefa);box-shadow:var(--shadow-popup)}@media(max-width:1199px){.ds-nav{display:flex;align-items:center;width:auto;height:var(--workspace-mobile-nav-height,64px);padding:var(--space-2,8px) var(--space-4,16px);border-right:0;border-bottom:1px solid var(--color-navigation-border,#e0e4db)}.ds-nav-links{display:none}.ds-nav-menu{display:block;flex:1}.ds-nav a{min-height:44px}}"
     },
     {
       "name": "Planning card",
@@ -1264,7 +1370,7 @@
       "refersTo": "planning-card",
       "description": "studio.module.css 的 planningCard；选中态为外轮廓，源码无独立 hover/active 视觉，不制造额外动画。",
       "html": "<button class=\"ds-planning-card\" aria-pressed=\"true\" type=\"button\"><strong>通勤外套</strong><span>当前款式</span></button>",
-      "css": ".ds-planning-card{display:grid;align-content:start;gap:var(--space-3, 12px);padding:var(--space-4, 16px);border:1px solid var(--color-border, #d8ddd3);border-radius:var(--radius-lg, 8px);background:var(--color-paper, #fffefa);text-align:left;color:var(--color-ink, #20332e);cursor:pointer;font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif);font-size:var(--text-base, 14px);}.ds-planning-card[aria-pressed=\"true\"],.ds-planning-card:focus-visible{outline:2px solid var(--color-focus-ring, #2b7058);outline-offset:2px;}"
+      "css": ".ds-planning-card{display:grid;align-content:start;gap:var(--space-3, 12px);padding:var(--space-3, 12px);border:0;border-radius:var(--radius-lg, 8px);background:var(--color-paper, #fffefa);text-align:left;color:var(--color-ink, #20332e);cursor:pointer;font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif);font-size:var(--text-base, 14px);}.ds-planning-card[aria-pressed=\"true\"],.ds-planning-card:focus-visible{outline:2px solid var(--color-focus-ring, #2b7058);outline-offset:2px;}"
     },
     {
       "name": "Segmented control",
@@ -1281,19 +1387,33 @@
       "description": "projects.module.css 的档案行结构；预览以文字占位说明服装区，不伪造素材。真实图片按原比例 contain。",
       "html": "<article class=\"ds-record\"><div class=\"ds-record-image\">服装原图区域</div><div class=\"ds-record-body\"><h2>通勤外套</h2><p>当前项目 · 已保存修订</p><a href=\"/\">继续项目</a></div></article>",
       "css": ".ds-record{display:grid;grid-template-columns:200px minmax(0,1fr);border:1px solid var(--color-border, #d8ddd3);border-radius:var(--radius-lg, 8px);background:var(--color-paper, #fffefa);color:var(--color-ink, #20332e);font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif)}.ds-record-image{min-height:180px;background:var(--color-surface, #f7f8f2);border-radius:var(--radius-lg, 8px) 0 0 var(--radius-lg, 8px);display:grid;place-items:center;color:var(--color-ink-secondary, #586a60);font-size:var(--text-sm, 12px)}.ds-record-body{display:flex;flex-direction:column;gap:var(--space-3, 12px);padding:var(--space-5, 20px) var(--space-6, 24px);min-width:0}.ds-record-body h2{font-size:var(--text-section-title, 20px);font-weight:var(--font-semibold, 600)}.ds-record-body p{font-size:var(--text-sm, 12px);color:var(--color-ink-secondary, #586a60)}.ds-record-body a{display:inline-flex;align-items:center;align-self:flex-start;min-height:40px;margin-top:auto;color:var(--color-action, #286452);font-size:var(--text-base, 14px);font-weight:var(--font-semibold, 600);text-decoration:none}.ds-record-body a:hover{text-decoration:underline}.ds-record-body a:focus-visible{outline:2px solid var(--color-focus-ring, #2b7058);outline-offset:2px}@media(max-width:767px){.ds-record{grid-template-columns:96px minmax(0,1fr)}.ds-record-image{min-height:170px}.ds-record-body{padding:var(--space-3, 12px);gap:var(--space-2, 8px)}.ds-record-body h2{font-size:var(--text-lg, 16px)}.ds-record-body a{min-height:44px}}.ds-record:hover{transform:none;border-color:var(--color-border-strong, #a6b2a7);box-shadow:none}"
+    },
+    {
+      "name": "ArchiveNavigation / 工作室分组功能",
+      "kind": "nav",
+      "refersTo": "studio-navigation",
+      "description": "共享暖白目录中嵌入的 StudioNavigation，保留全部 11 项及选中视觉。真实页面在 ≥1200px 的项目功能区独立滚动，选中项 nearest 滚入可见范围；<1200px 改用内容区功能选择器。预览省略全局入口、Logo、账户、固定定位和响应式隐藏；方向键与切换由 React 提供。",
+      "html": "<div class=\"ds-studio-nav\" role=\"tablist\" aria-label=\"设计工作室功能\" aria-orientation=\"vertical\"><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">创作</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>开始任务</span></button><button type=\"button\" role=\"tab\" aria-selected=\"true\" tabindex=\"0\"><span>款式档案</span><span aria-hidden=\"true\">›</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>色料实验</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>印花工作台</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>商品展示</span></button></div><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">交付</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>系列规划</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>技术包</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>样衣反馈</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>团队评审</span></button></div><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">资料</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>趋势简报</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>品牌资料</span></button></div></div>",
+      "css": ".ds-studio-nav{box-sizing:border-box;display:grid;gap:var(--space-3,12px);width:var(--workspace-nav-width,184px);padding:var(--space-5,20px) var(--space-3,12px);background:var(--color-navigation,#fffefa);color:var(--color-ink-secondary,#586a60);border-right:1px solid var(--color-navigation-border,#e0e4db);font:400 var(--text-base,14px)/var(--leading-normal,1.5) var(--font-sans,system-ui,sans-serif)}.ds-studio-group{display:grid}.ds-studio-group-label{margin-top:var(--space-2,8px);padding:var(--space-1,4px) var(--space-3,12px);font-size:var(--text-xs,12px)}.ds-studio-nav button{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2,8px);min-height:40px;width:100%;padding:var(--space-1,4px) var(--space-3,12px);border:0;border-radius:var(--radius-md,6px);background:transparent;color:var(--color-ink-secondary,#586a60);font:inherit;text-align:left;cursor:pointer}.ds-studio-nav button:hover{background:var(--color-surface,#f7f8f2);color:var(--color-ink,#20332e)}.ds-studio-nav button[aria-selected=\"true\"]{background:var(--color-selection-bg,#e7eee2);color:var(--color-selection-ink,#1c4c3d);font-weight:var(--font-semibold,600);box-shadow:none}.ds-studio-nav button:focus-visible{outline:2px solid var(--color-focus-ring,#2b7058);outline-offset:3px}"
     }
   ],
   "narrative": {
     "northStar": "织物档案",
     "componentNotes": {
-      "StudioWorkspace / Loading / Motion": "完整流程画布在低缩放时将端口命中区置于节点外，视觉连接点仍贴节点边缘；选中连线临时提升绘制层，使重连手柄可拖动，不改变节点与连线的常态层级。"
+      "Studio / Hierarchy Rollout Evidence": "2026-10-26 层级推广依据 apps/web/.impeccable/surfaces/studio-workspace.md 与 doc/impeccable/工作室层级推广实施记录.md。output/studio-rollout/before-*-1440.png 与 after-*-1440.png 为 10 个推广页面的真实项目，只有四张服装图、无已保存资料；fixture-*-{width}.png 为既有模拟 API/SVG 的 11 页 × 7 宽布局矩阵，不是真实服装数据。独立结论以 output/studio-rollout/finish-review.md 为准；F1 品牌名称去重已修复，终审视觉 ship，重采图片的采集也已确认有效，最终生产构建通过。未新增 shipping raster，无真实保存/生成/导出执行证明。",
+      "StudioWorkspace / Loading / Motion": "完整流程画布在低缩放时将端口命中区置于节点外，视觉连接点仍贴节点边缘；选中连线临时提升绘制层，使重连手柄可拖动，不改变节点与连线的常态层级。",
+      "Studio / Artwork and Editing": "11 个工作室模块共享对象、主工作面、辅助资料的层级，分别保留素材工作面、平铺画布、制作章节、系列看板、来源阅读和品牌规则；不是全应用统一双栏。推广的 10 页使用 StudioPageHeader，商品展示包保留独立同层级页头。名称在对象页头集中呈现，邻近摘要不重复大标题。\n\nStudioEditSection persistent 输出正常文档流中的 section，字段常驻且手机不启用模态；草稿归所属表单，不表示自动保存。款式、实验、印花、技术包、样衣、评审对象、趋势与品牌采用此模式。兼容的非 persistent 模式仍保留挂载、主动/受控展开、<768px 原生全屏 dialog、Escape 和触发焦点返回。\n\nAssetPicker 分开选择与查看大图，保留完整图片、素材名、aria-pressed、已选顺序和上限提示。SaveBar 区分新资料尚未保存、实际未保存修改、保存中、已保存和只读；长表单保存操作保持可达，保存、生成、人工核对及发布继续显式执行。技术包完整检查仍在复核发布章节，系列位置隐藏后保留草稿且切换经过保护，样衣定位依据真实图片。",
+      "Studio / State Layers": "工作室状态分为页面加载/读取错误、对象选择/编辑草稿、权限、请求进行中/失败、保存修订与复核导出；反馈归属对应层级，区域底色不代替状态。刷新失败保留已有资料并显示错误；主动刷新确认离开后才重载和重建面板。项目选项显示角色，缺少编辑权限时显示只读工作区；模块继续依据 capabilities 控制操作。",
+      "Studio / Documentation Evidence": "工作室增量依据 `../../doc/impeccable/工作室子功能设计契约.md` 与当前 `src/modules/studio/`。截图记录位于 `../../output/studio-redesign/review-final/`；该目录是模拟项目的页面采集，不能据此推断真实用户反馈或全套验收通过。",
+      "Navigation / Documentation Evidence": "统一导航依据 `../../doc/impeccable/统一浅色导航契约.md`、`ArchiveNavigation` 与当前主题。`../../output/unified-navigation/finish-review.md` 的 ship 仅覆盖统一导航 UI 与指定首屏的 27 张截图；不覆盖登录、流程画布的独立视觉验收、Docker 基线批准或真实业务链路。本次合并仅同步文档与 sidecar，没有重新运行 context、detector、浏览器或应用测试。",
+      "Navigation / Shared Shell": "`ArchiveNavigation` 是全平台现行共享目录，`current` 只决定当前入口，不再决定颜色变体。无项目时显示项目库/面料库/趋势档案；项目内按项目库/设计工作台/款式与交付/面料库/趋势档案排列，资料库直接可达，资源页保留当前位置及返回上下文。当前项使用 aria-current=page、深绿选择文字、浅灰绿选中底与 600 字重；键盘焦点用 `focus-ring` 轮廓。桌面彩色 Logo 在顶部，账户在底部；窄屏使用同一组入口的工作区菜单，Escape 关闭后恢复触发焦点。\n\n工作室在同一全局目录的项目区域中插入 `StudioNavigation`，直接显示创作（开始任务、款式档案、色料实验、印花工作台、商品展示）、交付（系列规划、技术包、样衣反馈、团队评审）、资料（趋势简报、品牌资料）共 11 项，不再折叠专业入口。该区域独立滚动，进入页面或切换功能时，选中项以 nearest 滚动到可见范围。选中项使用浅绿表面、600 字重和箭头，没有旧内侧线；按钮最小高 40px，padding 4px 12px，继承共享目录的焦点轮廓。导航继续保留项目、URL 参数及原有离开保护。\n\nTabs 手动激活：方向键/Home/End 移焦，不自动启动昂贵面板；TabPanel 用 hidden 控制。Studio 的窄屏功能选择器与桌面目录保持同一 tab 值，不另造 URL 协议。"
     },
-    "overview": "本系统记录用户选定 A「织物档案」后落地的生产界面。深青绿目录提供稳定位置，暖白纸面承托工作内容，服装与素材保持自身颜色和完整轮廓。中文无衬线、清楚的对象名称、已保存修订和紧凑索引共同支持持续创作。\n\n这是专业设计工具的工作世界：作品、当前任务和可执行的下一步优先；模块之间延续同一项目与对象。层级依靠表面、细线、字号和留白，材料投影仅服务作品与素材，交互动画用于回应状态变化。",
+    "overview": "本系统记录用户选定 A「织物档案」后落地的生产界面，并合并用户于 2026-10-26 选定第二张参考图、推广至全平台的暖白导航。共享目录使用暖白底、深绿文字、浅灰绿当前项与原彩色 Logo，页面切换保持同一外框。暖白纸面承托工作内容，服装与素材保持自身颜色和完整轮廓。中文无衬线、清楚的对象名称、已保存修订和紧凑索引共同支持持续创作。\n\n这是专业设计工具的工作世界：作品、当前任务和可执行的下一步优先；模块之间延续同一项目与对象。层级依靠表面、细线、字号和留白，材料投影仅服务作品与素材，交互动画用于回应状态变化。",
     "keyCharacteristics": [
-      "深青绿单列目录与暖白工作面。",
+      "全平台统一暖白单列目录、深绿文字、浅灰绿选中与彩色 Logo。",
       "动作、选择、焦点、状态和品牌分别命名。",
       "作品保持原比例；对象名称与已保存修订随任务保留。",
-      "桌面稳定目录、手机单行导航与按需展开工具。"
+      "桌面稳定目录与底部账户，窄屏统一工作区菜单栏；工作室保留分组功能选择器与按需编辑。"
     ],
     "rules": [
       {

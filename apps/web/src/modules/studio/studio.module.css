@@ -996,32 +996,865 @@
   }
 }
 
-/* 织物档案：项目功能并入唯一导航，编辑区保留全宽。 */
-.workspaceTitle { max-width: min(620px, 65vw); font-size: var(--text-lg); }
-.workspaceNavigation { gap: var(--space-3); }
-.navigationLabel, .workspaceNavigation button, .workspaceNavigation .navigationDisclosure { color: var(--color-navigation-muted); }
-.workspaceNavigation button { min-height: 40px; }
-.workspaceNavigation button:hover { color: var(--color-navigation-ink); background: var(--color-navigation-hover); }
-.workspaceNavigation button[aria-selected="true"] { color: var(--color-navigation-ink); background: var(--color-navigation-selected); box-shadow: inset 2px 0 var(--color-navigation-ink); }
-.form details > summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
-.reviewReadiness { border: 1px solid var(--color-border); background: var(--color-surface); padding: var(--space-4); border-radius: var(--radius-md); }
-.reviewReadiness h3 { font-size: var(--text-lg); margin-bottom: var(--space-2); }
-.reviewReadiness ul { margin: 0; padding-left: var(--space-5); }
-.reviewReadiness button { min-height: 36px; color: var(--color-action); text-align: left; background: none; border: 0; font: inherit; text-decoration: underline; cursor: pointer; }
-.compare article { display: flex; flex-direction: column; }
-.compare article > button { order: -1; align-self: flex-start; }
-.compare .assetImage { height: 320px; }
+/* 工作室：内容优先，功能导航常驻且不嵌套。 */
+.workspaceTitle {
+  max-width: min(620px, 65vw);
+  font-size: var(--text-lg);
+}
+.workspaceNavigation {
+  gap: var(--space-3);
+}
+.navigationLabel,
+.workspaceNavigation button,
+.workspaceNavigation .navigationDisclosure {
+  color: var(--color-ink-secondary);
+}
+.workspaceNavigation button {
+  min-height: 40px;
+}
+.workspaceNavigation button:hover {
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+.workspaceNavigation button[aria-selected="true"] {
+  color: var(--color-selection-ink);
+  background: var(--color-selection-bg);
+  box-shadow: none;
+}
+.workspaceNavigation[data-studio-hierarchy] .navigationGroup > div {
+  padding-left: var(--space-2);
+}
 @media (max-width: 767px) {
-  .workspaceTitle { font-size: var(--text-base); }
-  .reviewReadiness button { min-height: 44px; }
+  .shell[data-studio-page] .header {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    padding-block: 8px;
+    gap: 8px;
+    min-height: 56px;
+    border: 0;
+  }
+  .shell[data-studio-page] .header > div:not(.toolbar) {
+    min-width: 0;
+    max-width: 42%;
+  }
+  .shell[data-studio-page] .header .toolbar {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .shell[data-studio-page] .mobileFunction {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+}
+.form details > summary {
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+}
+.reviewReadiness {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+}
+.reviewReadiness h3 {
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-2);
+}
+.reviewReadiness ul {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+.reviewReadiness button {
+  min-height: 36px;
+  color: var(--color-action);
+  text-align: left;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.compare article {
+  display: flex;
+  flex-direction: column;
+}
+.compare article > button {
+  order: -1;
+  align-self: flex-start;
+}
+.compare .assetImage {
+  height: 320px;
+}
+@media (max-width: 767px) {
+  .workspaceTitle {
+    font-size: var(--text-base);
+  }
+  .reviewReadiness button {
+    min-height: 44px;
+  }
 }
 
-.compareSelection summary { cursor: pointer; min-height: 44px; padding-block: 12px; }
-@media (min-width: 1200px) {
- .chapterForm { display: grid; grid-template-columns: 200px minmax(0, 1fr); column-gap: var(--space-6); align-items: start; }
- .chapterForm > * { grid-column: 2; }
- .chapterForm > [data-object-context] { grid-column: 1; grid-row: 1 / span 12; position: sticky; top: var(--space-4); display: flex; flex-direction: column; align-items: stretch; border: 0; padding: 0; }
- .chapterForm > [data-object-context] > div:first-child { width: 100%; height: 260px; }
- .chapterForm > [data-object-context] > div:last-child { height: auto; }
+.compareSelection summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding-block: 12px;
 }
-@media (min-width: 768px) and (max-width: 1023px) { .mobileNavigation { display: none; } }
+.workspaceMain {
+  padding-inline: var(--space-8);
+}
+.section,
+.form {
+  gap: var(--space-4);
+}
+.form > fieldset.form {
+  padding: 0;
+  background: transparent;
+}
+.recordHeader {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.recordHeader h3 {
+  font-size: var(--text-lg);
+}
+.navigationLabel {
+  margin-top: var(--space-2);
+}
+.note {
+  border-left-width: 1px;
+}
+.documentSummary {
+  max-width: 72ch;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.documentSummary {
+  margin: 0;
+}
+.body [data-object-context] {
+  padding-block: var(--space-2);
+  gap: var(--space-3);
+  border-top: 0;
+}
+.body [data-object-context] > div:first-child:has(img) {
+  width: 36px;
+  height: 44px;
+  flex: 0 0 36px;
+}
+.body [data-object-context] strong {
+  font-size: var(--text-base);
+}
+.body [data-object-context] > div:has(> strong) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.presentationStrip button {
+  flex-basis: 100px;
+}
+.presentationStrip img {
+  height: 56px;
+  width: 56px;
+  object-fit: contain;
+}
+.presentationItem {
+  padding-top: 0;
+  border-top: 0;
+}
+.issueRecord {
+  padding: 0 !important;
+  background: transparent;
+}
+.projectCaption {
+  display: none !important;
+}
+.accessibleTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.body [data-object-context] {
+  background: var(--studio-reference-surface);
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+}
+.imageWorkspace > .assetImage,
+.presentationItem > .assetImage,
+.reviewImage,
+.taskStage {
+  background: var(--studio-artwork-surface);
+}
+.imageWorkspace > div,
+.reviewWorkspace > .section,
+.taskBrief {
+  background: var(--studio-work-surface);
+  padding: var(--space-5);
+  border-radius: var(--radius-sm);
+}
+.chapterForm > fieldset {
+  background: var(--color-paper) !important;
+  padding: var(--space-5) !important;
+}
+.chapterForm > nav {
+  background: var(--studio-reference-surface);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.brandSummary {
+  background: var(--studio-reference-surface);
+}
+.brandReading {
+  padding: var(--space-5);
+  background: var(--color-paper);
+}
+.taskStage:has(> p) {
+  min-height: 0;
+  background: transparent;
+}
+.taskStage > p {
+  padding: 0;
+}
+.brandReading h3 {
+  font-size: var(--text-lg);
+}
+.imageWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+  gap: var(--space-6);
+  align-items: start;
+}
+.imageWorkspace > .assetImage {
+  height: clamp(360px, 65dvh, 720px);
+}
+.imageWorkspace > div {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+.viewStrip {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+}
+.viewStrip button {
+  padding: 4px;
+  flex: 0 0 72px;
+}
+.viewStrip img {
+  width: 64px;
+  height: 80px;
+  object-fit: contain;
+}
+.presentationItem {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+}
+.presentationItem > .assetImage {
+  height: clamp(360px, 60dvh, 640px);
+}
+.presentationItem > .formGrid {
+  grid-template-columns: 1fr;
+}
+.issueRecord {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+}
+.issueRecord .issuePhoto {
+  grid-column: 1;
+  grid-row: 2 / span 6;
+}
+.issueRecord > :not(.issuePhoto):not(.recordHeader) {
+  grid-column: 2;
+}
+.issuePhoto img {
+  max-height: 65dvh;
+}
+.brandReading {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+  max-width: 960px;
+}
+.brandReading p {
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.taskContent > fieldset.form {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 34%);
+}
+.taskSource {
+  grid-column: 1;
+  grid-row: 1;
+}
+.taskBrief {
+  grid-column: 2;
+  grid-row: 1;
+}
+.taskStage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  place-items: center;
+  min-height: 260px;
+  background: var(--image-stage-background);
+}
+.taskStage img {
+  width: 100%;
+  height: 360px;
+  object-fit: contain;
+}
+.taskStage p {
+  padding: var(--space-5);
+}
+.slotEditor[hidden] {
+  display: none;
+}
+.reviewImage {
+  min-height: 440px;
+}
+.presentationItem > .assetImage {
+  grid-row: 1 / span 4;
+}
+@media (min-width: 1200px) {
+  .styleForm {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 32%);
+    gap: var(--space-4) var(--space-6);
+    align-items: start;
+  }
+  .styleForm > .imageWorkspace {
+    display: contents;
+  }
+  .styleForm > .imageWorkspace > .assetImage {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+  }
+  .styleForm > .imageWorkspace > div,
+  .styleForm > [data-studio-edit-section],
+  .styleForm > .actions {
+    grid-column: 2;
+  }
+  .styleForm > .record {
+    grid-column: 1 / -1;
+  }
+  .chapterForm {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: var(--space-4) var(--space-6);
+    align-items: start;
+  }
+  .chapterForm > * {
+    grid-column: 2;
+  }
+  .chapterForm > nav {
+    grid-column: 1;
+    grid-row: 1 / span 12;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    position: sticky;
+    top: var(--space-4);
+    border: 0;
+  }
+  .chapterForm > nav button {
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+}
+@media (max-width: 1199px) {
+  .mobileNavigation {
+    display: block;
+    padding-block: var(--space-3);
+  }
+  .workspaceMain {
+    padding-inline: var(--space-5);
+  }
+}
+@media (min-width: 768px) and (max-width: 1199px) {
+  .shell[data-studio-page] .mobileFunction {
+    display: grid;
+    gap: var(--space-2);
+  }
+}
+@media (max-width: 767px) {
+  .workspaceMain {
+    padding-inline: var(--space-4);
+  }
+  .header {
+    gap: var(--space-2);
+  }
+  .header > div:first-child {
+    min-width: 0;
+    max-width: 50%;
+  }
+  .header summary {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .imageWorkspace,
+  .presentationItem,
+  .issueRecord,
+  .brandReading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .imageWorkspace > .assetImage,
+  .presentationItem > .assetImage {
+    height: 48dvh;
+  }
+  .issueRecord .issuePhoto,
+  .issueRecord > :not(.issuePhoto):not(.recordHeader) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .form input,
+  .form textarea,
+  .form select {
+    font-size: 16px;
+  }
+  .taskContent > fieldset.form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .taskSource,
+  .taskBrief {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .taskSource {
+    order: -1;
+  }
+  .taskStage {
+    min-height: 160px;
+  }
+  .taskStage img {
+    height: 220px;
+  }
+  .issueRecord {
+    display: grid;
+  }
+  .issueRecord > .issuePhoto {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .issueRecord > .formGrid {
+    grid-column: 1;
+  }
+  .presentationItem > .assetImage,
+  .presentationItem > :not(.assetImage) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* Validated studio hierarchy: shared identity, task-specific working surfaces. */
+.surfaceHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin: 12px 0 16px;
+}
+.surfaceHeading > div {
+  min-width: 0;
+}
+.surfaceTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.surfaceHeading .surfaceTitle h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.35;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.surfaceHeading p {
+  margin: 8px 0 0;
+  max-width: 76ch;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.surfaceTools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.workIntro h3 {
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+.workIntro p {
+  max-width: 68ch;
+  color: var(--color-ink-secondary);
+  line-height: 1.7;
+}
+.materialGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+  gap: 20px 16px;
+}
+.materialCard {
+  min-width: 0;
+  max-width: 320px;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 4px;
+}
+.materialCard .assetButton {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.materialCard .assetButton[aria-pressed="true"] {
+  box-shadow: none;
+  background: transparent;
+}
+.materialCard .assetImage {
+  height: 240px;
+  background: var(--image-stage-background);
+  border-radius: 6px;
+}
+.materialCard .assetButton[aria-pressed="true"] .assetImage {
+  outline: 2px solid var(--color-selection-border);
+  outline-offset: 2px;
+}
+.materialCard .assetLabel {
+  padding: 4px 0 0;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.materialCard .selectionLabel {
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.materialCard .assetButton[aria-pressed="true"] .selectionLabel {
+  color: var(--color-action);
+}
+.materialCompact .assetImage {
+  height: 180px;
+}
+.styleForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 24px 28px;
+  align-items: start;
+}
+.styleForm > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.styleForm > .styleVisuals {
+  grid-column: 1;
+}
+.styleForm > [data-studio-settings] {
+  grid-column: 2;
+}
+.styleVisuals {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.styleVisuals > .assetImage {
+  height: clamp(300px, 48dvh, 520px);
+}
+.styleVisuals > div {
+  min-width: 0;
+}
+.styleForm [data-studio-settings] .formGrid {
+  grid-template-columns: 1fr;
+}
+.sampleBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 28px;
+  align-items: start;
+}
+.sampleBody > [data-studio-settings] {
+  grid-column: 2;
+  grid-row: 1;
+}
+.sampleBody > .samplePhotos {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.sampleBody [data-studio-settings] .formGrid {
+  grid-template-columns: minmax(0, 1fr) 88px;
+}
+.sampleIssues {
+  padding: 24px !important;
+  background: var(--color-paper) !important;
+  border-radius: 8px;
+}
+.samplePhotos h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.samplePhotos p {
+  margin: 0;
+  line-height: 1.7;
+}
+.brandFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 24px 28px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.brandFields > :nth-child(1) {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+}
+.brandFields > .formGrid {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.brandFields > .stack {
+  grid-column: 1;
+  grid-row: 3;
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.brandFields > :nth-child(4) {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  align-self: start;
+}
+.brandReferences {
+  grid-column: 1 / -1;
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.brandFields .stack > button {
+  justify-self: start;
+}
+.brandSummary {
+  background: transparent;
+  padding: 0;
+}
+.planningStart {
+  display: grid;
+  grid-template-columns: minmax(220px, 380px) minmax(0, 560px);
+  gap: 40px;
+  align-items: center;
+  padding: 32px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.planningStart .assetImage {
+  height: 360px;
+  background: var(--image-stage-background);
+}
+.planningStart h3 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+.planningStart p {
+  line-height: 1.8;
+  margin: 0 0 24px;
+  color: var(--color-ink-secondary);
+}
+.planningWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+.planningWorkspace[data-editing] {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.planningWorkspace > label {
+  grid-column: 1 / -1;
+  max-width: 420px;
+}
+.planningGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 24px;
+}
+.planningGrid:empty {
+  display: none;
+}
+.planningCard {
+  background: var(--color-paper);
+  border: 0;
+  padding: 12px;
+}
+.planningCard .assetImage {
+  height: 240px;
+}
+.reviewTarget {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 16px;
+  max-width: 760px;
+}
+.reviewWorkspace > .section {
+  padding: 0;
+  background: transparent;
+}
+.reviewImage:has(> p) {
+  min-height: 280px;
+}
+.chapterForm > [data-studio-settings] {
+  max-width: 560px;
+}
+.chapterForm > nav {
+  background: transparent;
+  padding: 0;
+}
+.body [data-object-context] {
+  background: var(--color-surface);
+  padding: 12px 16px;
+}
+.taskContent > fieldset.form {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  align-items: start;
+}
+.taskBrief {
+  padding: 0;
+  background: transparent;
+}
+.taskSource {
+  padding: 24px;
+  background: var(--color-paper);
+  border-radius: 8px;
+}
+.taskStage:has(> p) {
+  min-height: 0;
+}
+.taskStage > p {
+  padding: 0 0 16px;
+}
+.body footer {
+  scroll-margin-bottom: 24px;
+}
+.saveStatus {
+  display: grid;
+  gap: 4px;
+}
+.form:has(> [data-studio-settings]) > footer,
+.taskContent > footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+.styleForm > footer,
+.sampleWorkspace > footer,
+.chapterForm > footer {
+  grid-column: 1 / -1;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+@media (max-width: 1099px) {
+  .styleForm,
+  .sampleBody,
+  .brandFields,
+  .planningWorkspace[data-editing] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .styleForm > [data-studio-settings],
+  .styleForm > .styleVisuals,
+  .sampleBody > [data-studio-settings],
+  .sampleBody > .samplePhotos,
+  .brandFields > :nth-child(n) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .sampleBody > .samplePhotos {
+    order: -1;
+  }
+  .styleForm [data-studio-settings] .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .brandFields > .formGrid {
+    order: -1;
+  }
+  .taskContent > fieldset.form {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+@media (max-width: 767px) {
+  .surfaceHeading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .surfaceHeading .surfaceTitle h2 {
+    font-size: 24px;
+  }
+  .surfaceTools {
+    justify-content: flex-start;
+  }
+  .materialGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 12px;
+  }
+  .materialCard .assetImage {
+    height: 200px;
+  }
+  .styleVisuals,
+  .sampleBody > .samplePhotos,
+  .brandFields > .formGrid,
+  .brandFields > .stack,
+  .taskSource {
+    padding: 16px;
+  }
+  .styleForm [data-studio-settings] .formGrid,
+  .reviewTarget,
+  .planningStart,
+  .taskContent > fieldset.form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .planningStart {
+    padding: 20px;
+    gap: 20px;
+  }
+  .planningStart .assetImage {
+    height: 280px;
+  }
+  .sampleIssues {
+    padding: 16px !important;
+  }
+  .taskSource,
+  .taskBrief {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}

@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+  runwayShows RunwayShow[]
+  runwayRuns RunwayRun[]
   id                 String                @id @default(cuid(2))
   authId             String?               @unique @map("auth_id")
   email              String                @unique
@@ -404,6 +406,9 @@ model Workspace {
 }
 
 model Project {
+  runwayShows RunwayShow[]
+  runwayRuns RunwayRun[]
+  runwayMedia RunwayMedia[]
   id                 String              @id @default(cuid(2))
   wsId               String              @map("ws_id")
   name               String
@@ -442,6 +447,141 @@ model Project {
   @@unique([wsId, idempotencyKey])
   @@index([wsId])
   @@map("projects")
+}
+
+model RunwayShow {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  ownerId String @map("owner_id")
+  title String
+  draft Json
+  version Int @default(1)
+  archived Boolean @default(false)
+  requestKey String @map("request_key")
+  mutations Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  runs RunwayRun[]
+  @@unique([projectId, ownerId, requestKey])
+  @@index([projectId, updatedAt])
+  @@map("runway_shows")
+}
+
+model RunwayRun {
+  id String @id @default(uuid())
+  showId String @map("show_id")
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  status String @default("QUEUED")
+  stage String @default("prepare")
+  inputSnapshot Json @map("input_snapshot")
+  modelSnapshot Json @default("{}") @map("model_snapshot")
+  state Json @default("{}")
+  pendingInput Json? @map("pending_input")
+  version Int @default(1)
+  eventSequence Int @default(0) @map("event_sequence")
+  requestKey String @map("request_key")
+  parentRunId String? @map("parent_run_id")
+  parentStage String? @map("parent_stage")
+  cancelRequestedAt DateTime? @map("cancel_requested_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  finishedAt DateTime? @map("finished_at")
+  show RunwayShow @relation(fields: [showId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  commands RunwayCommand[]
+  attempts RunwayStepAttempt[]
+  media RunwayMedia[]
+  events RunwayEvent[]
+  @@unique([showId, userId, requestKey])
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt])
+  @@map("runway_runs")
+}
+
+model RunwayCommand {
+  id String @id @default(uuid())
+  runId String @map("run_id")
+  kind String
+  payload Json @default("{}")
+  requestKey String @map("request_key")
+  status String @default("QUEUED")
+  leaseOwner String? @map("lease_owner")
+  leaseUntil DateTime? @map("lease_until")
+  executionEpoch Int @default(0) @map("execution_epoch")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+  errorCode String? @map("error_code")
+  run RunwayRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, requestKey])
+  @@index([status, leaseUntil, createdAt])
+  @@map("runway_commands")
+}
+
+model RunwayStepAttempt {
+  id String @id @default(uuid())
+  runId String @map("run_id")
+  operationKey String @map("operation_key")
+  stage String
+  status String @default("PENDING")
+  provider String
+  providerJobId String? @map("provider_job_id")
+  providerData Json @default("{}") @map("provider_data")
+  input Json @default("{}")
+  outputMediaIds String[] @default([]) @map("output_media_ids")
+  errorCode String? @map("error_code")
+  executionEpoch Int @default(0) @map("execution_epoch")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  run RunwayRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, operationKey])
+  @@index([runId, stage])
+  @@map("runway_step_attempts")
+}
+
+model RunwayMedia {
+  id String @id @default(uuid())
+  runId String @map("run_id")
+  projectId String @map("project_id")
+  kind String
+  objectKey String @unique @map("object_key")
+  mimeType String @map("mime_type")
+  originalName String @map("original_name")
+  sizeBytes Int @map("size_bytes")
+  sha256 String
+  width Int?
+  height Int?
+  durationMs Int? @map("duration_ms")
+  source Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  run RunwayRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([runId, kind, createdAt])
+  @@map("runway_media")
+}
+
+model RunwayEvent {
+  id String @id @default(uuid())
+  runId String @map("run_id")
+  sequence Int
+  type String
+  data Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  run RunwayRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  @@unique([runId, sequence])
+  @@map("runway_events")
+}
+
+model RunwayWorkerHeartbeat {
+  id String @id
+  mode String
+  capabilities Json @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("runway_worker_heartbeats")
 }
 
 model Collection {

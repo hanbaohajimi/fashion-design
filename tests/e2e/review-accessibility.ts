@@ -18,9 +18,9 @@ export async function tabTo(page: Page, target: Locator, limit = 120) {
 }
 
 /** WCAG relative luminance, compositing the actual foreground and ancestor backgrounds. */
-export async function contrastFailures(page: Page, includeOffscreen = false) {
+export async function contrastFailures(page: Page, includeOffscreen = false, scope?: string) {
   return page.evaluate(
-    ({ includeOffscreen }) => {
+    ({ includeOffscreen, scope }) => {
       const rgba = (color: string) => {
         const numbers = color.match(/[\d.]+/g)?.map(Number) ?? [];
         return [
@@ -61,6 +61,7 @@ export async function contrastFailures(page: Page, includeOffscreen = false) {
         selector: string;
       }> = [];
       const walker = document.createTreeWalker(
+        (scope ? document.querySelector(scope) : null) ??
         Array.from(document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]'))
           .filter((element) => element.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true }))
           .at(-1) ??
@@ -132,14 +133,14 @@ export async function contrastFailures(page: Page, includeOffscreen = false) {
       }
       return failures;
     },
-    { includeOffscreen },
+    { includeOffscreen, scope },
   );
 }
 
-export async function controlFontFailures(page: Page) {
-  return page
+export async function controlFontFailures(page: Page, scope = page.locator("main")) {
+  return scope
     .locator(
-      'main button,main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),main textarea,main select,main summary,main nav a',
+      'button,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select,summary,nav a',
     )
     .evaluateAll((elements) =>
       elements

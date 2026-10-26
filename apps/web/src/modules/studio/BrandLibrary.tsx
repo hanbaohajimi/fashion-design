@@ -23,6 +23,8 @@ import { AssetPicker, SaveBar } from "./studio-ui";
 import { ObjectSwitcher, FormSection } from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
 import styles from "./studio.module.css";
+import { StudioEditSection } from "./StudioEditSection";
+import { StudioPageHeader } from "./StudioPageHeader";
 
 type Brand = Extract<StudioDocumentInput, { type: "BRAND_PROFILE" }>["payload"];
 function blank(): Brand {
@@ -90,25 +92,27 @@ export function BrandLibrary(
   const existing = props.data.brandProfiles.find((item) => item.id === id);
   return (
     <div className={styles.section}>
-      <div className={styles.recordHeader}>
-        <div>
-          <h2>品牌资料</h2>
-        </div>
-        {props.canEdit ? (
-          <Button
-            onClick={() =>
-              void (async () => {
-                if (await props.beforeChange()) {
-                  setId(null);
-                  setDraftVersion((current) => current + 1);
-                }
-              })()
-            }
-          >
-            新建品牌
-          </Button>
-        ) : null}
-      </div>
+      <StudioPageHeader
+        title={String(existing?.currentRevision.payload.name ?? "新品牌资料")}
+        type="品牌资料"
+        description="整理设计规则、品牌色与认可案例"
+        actions={
+          props.canEdit ? (
+            <Button
+              onClick={() =>
+                void (async () => {
+                  if (await props.beforeChange()) {
+                    setId(null);
+                    setDraftVersion((current) => current + 1);
+                  }
+                })()
+              }
+            >
+              新建品牌
+            </Button>
+          ) : null
+        }
+      />
       <div className={styles.split}>
         {props.data.brandProfiles.length > 1 ? (
           <ObjectSwitcher
@@ -341,7 +345,6 @@ function BrandEditor({
       {existing ? (
         <section className={styles.brandSummary} aria-label="当前品牌修订摘要">
           <div>
-            <strong>{draft.name}</strong>
             <p className={styles.muted}>
               {draft.silhouettes.join(" · ") || "尚未填写常用廓形"}
             </p>
@@ -356,114 +359,128 @@ function BrandEditor({
           </div>
         </section>
       ) : null}
-      <fieldset disabled={!canEdit || form.busy} className={styles.form}>
-        <Field label="品牌名称">
-          <Input
-            required
-            maxLength={120}
-            value={draft.name}
-            onChange={(event) => update("name", event.target.value)}
-          />
-        </Field>
-        <div className={styles.formGrid}>
-          {(
-            [
-              ["silhouettes", "常用廓形"],
-              ["signatureDetails", "标志性细节"],
-              ["fabricPreferences", "面料偏好"],
-              ["avoid", "避免事项"],
-            ] as const
-          ).map(([key, label]) => (
-            <Field key={key} label={label} hint="每行填写一项。">
-              <Textarea
-                rows={4}
-                value={draft[key].join("\n")}
-                onChange={(event) => update(key, lines(event.target.value))}
-              />
-            </Field>
-          ))}
-        </div>
-        <div className={styles.stack}>
-          <h3>品牌色</h3>
-          {draft.colors.map((color, index) => (
-            <div className={styles.row} key={index}>
-              <Input
-                aria-label={"颜色 " + (index + 1) + " 名称"}
-                required
-                value={color.name}
-                onChange={(event) =>
-                  update(
-                    "colors",
-                    draft.colors.map((item, at) =>
-                      at === index
-                        ? { ...item, name: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-              />
-              <Input
-                aria-label={"颜色 " + (index + 1) + " 色值"}
-                type="color"
-                value={color.hex}
-                onChange={(event) =>
-                  update(
-                    "colors",
-                    draft.colors.map((item, at) =>
-                      at === index
-                        ? { ...item, hex: event.target.value }
-                        : item,
-                    ),
-                  )
-                }
-              />
-              <Button
-                size="small"
-                onClick={() =>
-                  update(
-                    "colors",
-                    draft.colors.filter((_, at) => at !== index),
-                  )
-                }
-              >
-                移除
-              </Button>
-            </div>
-          ))}
-          <Button
-            disabled={draft.colors.length >= 30}
-            onClick={() =>
-              update("colors", [...draft.colors, { name: "", hex: "#5a5149" }])
-            }
-          >
-            添加品牌色
-          </Button>
-        </div>
-        <Field label="补充说明">
-          <Textarea
-            rows={3}
-            maxLength={2000}
-            value={draft.notes}
-            onChange={(event) => update("notes", event.target.value)}
-          />
-        </Field>
-        <FormSection
-          title="认可的设计案例"
-          summary={`${draft.referenceAssetIds.length} 张实际参考图`}
+      <StudioEditSection
+        persistent
+        title="设计规则与案例"
+        summary={`${draft.referenceAssetIds.length} 个认可案例`}
+        defaultOpen={!existing}
+        save={canEdit}
+        busy={form.busy}
+        error={form.error}
+      >
+        <fieldset
+          disabled={!canEdit || form.busy}
+          className={styles.brandFields}
         >
-          <AssetPicker
-            compact
-            assets={data.assets}
-            selected={draft.referenceAssetIds}
-            max={12}
-            onChange={(ids) => update("referenceAssetIds", ids)}
-            label="认可的设计案例"
-          />
-        </FormSection>
-      </fieldset>
+          <Field label="品牌名称">
+            <Input
+              required
+              maxLength={120}
+              value={draft.name}
+              onChange={(event) => update("name", event.target.value)}
+            />
+          </Field>
+          <div className={styles.formGrid}>
+            {(
+              [
+                ["silhouettes", "常用廓形"],
+                ["signatureDetails", "标志性细节"],
+                ["fabricPreferences", "面料偏好"],
+                ["avoid", "避免事项"],
+              ] as const
+            ).map(([key, label]) => (
+              <Field key={key} label={label} hint="每行填写一项。">
+                <Textarea
+                  rows={4}
+                  value={draft[key].join("\n")}
+                  onChange={(event) => update(key, lines(event.target.value))}
+                />
+              </Field>
+            ))}
+          </div>
+          <div className={styles.stack}>
+            <h3>品牌色</h3>
+            {draft.colors.map((color, index) => (
+              <div className={styles.row} key={index}>
+                <Input
+                  aria-label={"颜色 " + (index + 1) + " 名称"}
+                  required
+                  value={color.name}
+                  onChange={(event) =>
+                    update(
+                      "colors",
+                      draft.colors.map((item, at) =>
+                        at === index
+                          ? { ...item, name: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                <Input
+                  aria-label={"颜色 " + (index + 1) + " 色值"}
+                  type="color"
+                  value={color.hex}
+                  onChange={(event) =>
+                    update(
+                      "colors",
+                      draft.colors.map((item, at) =>
+                        at === index
+                          ? { ...item, hex: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+                <Button
+                  size="small"
+                  onClick={() =>
+                    update(
+                      "colors",
+                      draft.colors.filter((_, at) => at !== index),
+                    )
+                  }
+                >
+                  移除
+                </Button>
+              </div>
+            ))}
+            <Button
+              disabled={draft.colors.length >= 30}
+              onClick={() =>
+                update("colors", [
+                  ...draft.colors,
+                  { name: "", hex: "#5a5149" },
+                ])
+              }
+            >
+              添加品牌色
+            </Button>
+          </div>
+          <Field label="补充说明">
+            <Textarea
+              rows={3}
+              maxLength={2000}
+              value={draft.notes}
+              onChange={(event) => update("notes", event.target.value)}
+            />
+          </Field>
+          <section className={styles.brandReferences}>
+            <AssetPicker
+              compact
+              assets={data.assets}
+              selected={draft.referenceAssetIds}
+              max={12}
+              onChange={(ids) => update("referenceAssetIds", ids)}
+              label="认可的设计案例"
+            />
+          </section>
+        </fieldset>
+      </StudioEditSection>
       <SaveBar
         busy={form.busy}
-        dirty={form.dirty || !existing}
+        dirty={form.dirty}
+        isNew={!existing}
         canEdit={canEdit}
       >
         <Button

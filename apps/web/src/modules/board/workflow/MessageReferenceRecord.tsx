@@ -41,7 +41,7 @@ export function MessageReferenceRecord({ context, graph, onLocate }: {
     <summary>查看引用记录</summary>
     <>
       <p>记录本轮引用的对象与传入图片，不代表全部回答依据。</p>
-      {group("本轮显式引用", explicit, "本轮没有显式引用")}
+      {group("本次引用", explicit, "本次没有添加引用")}
       {group("讨论对象", discussion, "整个项目")}
       {group("传入图片", images, "本轮没有传入图片")}
       {visual || coverage ? <details>

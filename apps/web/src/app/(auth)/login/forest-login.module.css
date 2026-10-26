@@ -50,7 +50,7 @@
   justify-content: center;
   min-width: 0;
   padding: 48px clamp(24px, 3.3vw, 64px);
-  background: var(--color-navigation);
+  background: var(--color-brand-bg);
 }
 
 .formPanel {

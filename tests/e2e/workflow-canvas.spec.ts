@@ -6,9 +6,190 @@ import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
 async function openDesignRequirements(page: Page) {
-  await page.getByLabel("对话操作", { exact: true }).click();
-  await page.getByRole("button", { name: "设计要求与偏好", exact: true }).click();
+  await page.getByRole("button", { name: "设计要求", exact: true }).click();
   return page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
+}
+
+test("助手入口：引用选择、对话草稿恢复与显式发送", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await expect(page.getByRole("button", { name: "历史对话", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "填入示例" }).click();
+  await expect(input).toHaveValue(/秋冬通勤风衣/);
+  expect(mocked.workflowRequests).toHaveLength(0);
+  await input.fill("保留立领，只调整袖型");
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
+  await picker.getByRole("textbox", { name: "搜索项目对象" }).fill("候选 B");
+  await picker.getByRole("checkbox", { name: /候选 B/ }).check();
+  await picker.getByRole("button", { name: "使用所选引用" }).click();
+  await expect(page.getByRole("button", { name: "添加引用", exact: true })).toBeFocused();
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("本次发送的引用");
+  await page.getByRole("button", { name: "新建对话", exact: true }).click();
+  await expect(input).toHaveValue("");
+  await input.fill("新对话自己的草稿");
+  await page.getByRole("button", { name: "历史对话", exact: true }).click();
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("workflow-current");
+  await expect(input).toHaveValue("保留立领，只调整袖型");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("候选 B");
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
+  await expect.poll(() => mocked.workflowRequests.length).toBe(1);
+  expect(mocked.workflowRequests[0]).toMatchObject({ referencedNodeIds: ["candidate-b"], focusNodeIds: ["candidate-b"] });
+  expect(mocked.getExecuteCount()).toBe(0);
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-new");
+  await expect(input).toHaveValue("新对话自己的草稿");
+});
+
+test("助手入口：发送、调整、确认、查看结果再继续修改", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await input.fill("请调整风衣袖型");
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  await page.getByRole("checkbox", { name: /候选 A/ }).check();
+  await page.getByRole("button", { name: "使用所选引用" }).click();
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
+  await input.fill("保留立领，缩短袖长");
+  await page.getByRole("button", { name: "发送修改要求", exact: true }).click();
+  await expect.poll(() => mocked.workflowRequests.length).toBe(2);
+  expect(mocked.workflowRequests[1]?.respondingToProposalId).toBe("proposal-0");
+  expect(mocked.getExecuteCount()).toBe(0);
+  await expect(page.getByRole("button", { name: "确认并生成 1 张", exact: true })).toHaveCount(1);
+  await mkdir("output/playwright/assistant", { recursive: true });
+  await page.getByRole("complementary", { name: "设计助手", exact: true }).screenshot({ path: "output/playwright/assistant/confirmation-panel.png" });
+  await page.getByRole("button", { name: "确认并生成 1 张", exact: true }).click();
+  await expect.poll(() => mocked.getExecuteCount()).toBe(1);
+  const tool = mocked.getGraph().nodes.find((item) => item.id === "edit-proposed-2");
+  if (!tool) throw new Error("缺少已确认的修改工具");
+  tool.status = "completed";
+  mocked.getGraph().nodes.push(node("new-result", "asset", "candidate", "新袖型方案", 0, 0, { assetId: "asset-new", imageUrl: "/api/design-assets/asset-new/thumbnail" }));
+  mocked.getGraph().edges.push(edge("new-result-edge", tool.id, "new-result", "source"));
+  mocked.getGraph().revision += 1;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  // The existing workbench opens a single arriving result automatically.
+  await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
+  await page.getByRole("button", { name: "查看大图：新袖型方案" }).click();
+  await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
+  await input.fill("下一轮要保留的细节");
+  await page.getByRole("button", { name: "继续修改：新袖型方案" }).click();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("下一轮要保留的细节");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("新袖型方案");
+  expect(mocked.workflowRequests).toHaveLength(2);
+  expect(mocked.getExecuteCount()).toBe(1);
+});
+
+test("助手入口：恢复失效确认草稿时保留正文并要求重新核对", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  await page.goto(`/${PROJECT_ID}`);
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await input.fill("修改风衣袖型");
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
+  await input.fill("保留这条修改草稿");
+  await page.getByRole("button", { name: "新建对话", exact: true }).click();
+  mocked.setMessages([{ id: "assistant-0", role: "assistant", status: "completed", content: "这条要求已有新版本", proposal: { id: "proposal-0", status: "superseded", toolNodeId: "old", operations: [], referencedNodeIds: [] } }]);
+  await page.getByRole("button", { name: "历史对话", exact: true }).click();
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("workflow-current");
+  await expect(input).toHaveValue("保留这条修改草稿");
+  await expect(page.getByText("这条确认要求已失效或无法核实，请取消后重新描述需求。")).toBeVisible();
+  await expect(page.getByRole("button", { name: "发送修改要求", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "取消修改", exact: true }).click();
+  await expect(input).toHaveValue("保留这条修改草稿");
+  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeEnabled();
+  expect(mocked.workflowRequests).toHaveLength(1);
+});
+
+test("助手入口：手机从引用选择跳转添加素材，返回仍保留草稿", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  mocked.getGraph().nodes = [];
+  mocked.getGraph().edges = [];
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "助手", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await input.fill("等我添加面料参考");
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  await expect(page.getByText("项目中还没有素材或服装方案。")).toBeVisible();
+  await page.getByRole("button", { name: "去添加素材", exact: true }).click();
+  await expect(page.getByText("添加设计素材", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-workflow-add-menu] > button").first()).toBeFocused();
+  await page.getByRole("button", { name: "关闭菜单", exact: true }).click();
+  await page.getByRole("button", { name: "助手", exact: true }).click();
+  await expect(input).toHaveValue("等我添加面料参考");
+  expect(mocked.workflowRequests).toHaveLength(0);
+});
+
+test("助手入口：等待回复可准备下一条草稿，失效引用阻止发送", async ({ page }) => {
+  const mocked = await mockWorkflow(page, "workbench");
+  mocked.setMessages([{ id: "pending", role: "assistant", status: "pending", content: "" }]);
+  await page.goto(`/${PROJECT_ID}`);
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await input.fill("下一条需求");
+  await expect(input).toBeEnabled();
+  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  await page.getByRole("checkbox", { name: /候选 A/ }).check();
+  await page.getByRole("button", { name: "使用所选引用" }).click();
+  mocked.setMessages([{ id: "pending", role: "assistant", status: "completed", content: "已完成分析" }]);
+  mocked.getGraph().nodes = mocked.getGraph().nodes.filter((node) => node.id !== "candidate-a");
+  mocked.getGraph().revision += 1;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  await expect(page.getByRole("button", { name: "清除失效引用" })).toBeVisible();
+  await expect(input).toHaveValue("下一条需求");
+  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "清除失效引用" }).click();
+  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeEnabled();
+});
+
+for (const width of [1440, 1280, 390, 320]) {
+  test(`助手入口：${width}px 入口、引用选择与焦点可达`, async ({ page }) => {
+    await mockWorkflow(page, "workbench");
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/${PROJECT_ID}`);
+    if (width < 768) await page.getByRole("button", { name: "助手", exact: true }).click();
+    const input = page.getByRole("textbox", { name: "描述设计需求" });
+    await expect(input).toBeVisible();
+    if (width < 768) {
+      expect(await input.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16);
+    }
+    for (const name of ["历史对话", "新建对话", "设计要求", "添加引用", "发送需求"]) {
+      await expect(page.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+      if (width < 768) {
+        const bounds = await page.getByRole("button", { name, exact: true }).boundingBox();
+        expect(bounds?.height, `${name}的触控高度`).toBeGreaterThanOrEqual(44);
+      }
+    }
+    await page.getByRole("button", { name: "设计要求", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "添加引用", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "搜索项目对象" })).toBeFocused();
+    if (width < 768) {
+      for (const name of ["取消", "去添加素材", "使用所选引用"]) {
+        const bounds = await page.getByRole("dialog", { name: "添加引用", exact: true }).getByRole("button", { name, exact: true }).boundingBox();
+        expect(bounds?.height, `${name}的触控高度`).toBeGreaterThanOrEqual(44);
+      }
+    }
+    expect(await controlFontFailures(page, page.getByRole("dialog", { name: "添加引用", exact: true }))).toEqual([]);
+    expect(await contrastFailures(page)).toEqual([]);
+    await mkdir("output/playwright/assistant", { recursive: true });
+    await page.screenshot({ path: `output/playwright/assistant/reference-picker-${width}.png` });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "添加引用", exact: true })).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await controlFontFailures(page, page.getByRole("complementary", { name: "设计助手", exact: true }))).toEqual([]);
+    expect(await contrastFailures(page, false, 'aside[aria-label="设计助手"]')).toEqual([]);
+    await mkdir("output/playwright/assistant", { recursive: true });
+    await page.screenshot({ path: `output/playwright/assistant/assistant-${width}.png` });
+  });
 }
 
 test("讨论对象与发送一致：引用优先、失败保留、清空保留正文及切换会话隔离", async ({ page }) => {
@@ -18,7 +199,7 @@ test("讨论对象与发送一致：引用优先、失败保留、清空保留�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   const discussion = page.getByLabel("正在讨论", { exact: true });
-  const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
   await expect(discussion).toContainText("候选 A");
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
   await expect(discussion).toContainText("候选 A");
@@ -35,7 +216,7 @@ test("讨论对象与发送一致：引用优先、失败保留、清空保留�
     if (rejectSend) { rejectSend = false; return route.fulfill({ status: 503, json: { message: "发送失败，请重试" } }); }
     return route.fallback();
   });
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect(input).toHaveValue("@候选 B 保留衣领");
   await expect(discussion).toContainText("候选 B");
   let rejectClear = true;
@@ -43,20 +224,19 @@ test("讨论对象与发送一致：引用优先、失败保留、清空保留�
     if (route.request().method() === "PATCH" && rejectClear) { rejectClear = false; return route.fulfill({ status: 409, json: { message: "讨论对象版本已更新，请重试" } }); }
     return route.fallback();
   });
-  await page.getByRole("button", { name: "讨论整个项目", exact: true }).click();
+  await page.getByRole("button", { name: "改为讨论整个项目", exact: true }).click();
   await expect(page.getByText("讨论对象版本已更新，请重试", { exact: false }).first()).toBeVisible();
   await expect(input).toHaveValue("@候选 B 保留衣领");
   expect(mocked.getContext().focusNodeIds).toEqual(["candidate-a"]);
-  await page.getByRole("button", { name: "讨论整个项目", exact: true }).click();
+  await page.getByRole("button", { name: "改为讨论整个项目", exact: true }).click();
   await expect(discussion).toContainText("整个项目");
   await expect(input).toHaveValue(" 保留衣领");
   expect(mocked.contextPatches.at(-1)).toMatchObject({ focusNodeIds: [], summaryRevision: 0 });
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
   expect(mocked.workflowRequests[0]).toMatchObject({ content: "保留衣领", referencedNodeIds: [], focusNodeIds: [] });
   await input.fill("@候选 B 新会话不应继承这条引用");
-  await page.getByLabel("对话操作", { exact: true }).click();
-  await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
+  await page.getByRole("button", { name: "新建对话", exact: true }).click();
   await expect(discussion).toContainText("整个项目");
   await expect(input).toHaveValue("");
   await expect(page.getByRole("button", { name: "移除引用 候选 B", exact: true })).toHaveCount(0);
@@ -69,20 +249,20 @@ test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读�
   await page.route("**/api/agent-conversations/*/context", (route) => blockContext
     ? route.fulfill({ status: 503, json: { message: "讨论对象读取暂不可用" } }) : route.fallback());
   await page.goto(`/${PROJECT_ID}`);
-  const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
   const discussion = page.getByLabel("正在讨论", { exact: true });
   await expect(discussion).toContainText("候选 A");
   await input.fill("比较两张风衣图 @候选 B");
   blockContext = true;
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect(discussion).toContainText("讨论对象读取失败");
   await expect(discussion).not.toContainText("候选 A");
   await input.fill("比较两张风衣图，继续");
-  await expect(page.getByRole("button", { name: "发送 ↑" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "发送需求" })).toBeDisabled();
   blockContext = false;
   await page.getByRole("button", { name: "重新读取", exact: true }).click();
   await expect(discussion).toContainText("候选 B");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]).toMatchObject({ referencedNodeIds: [], focusNodeIds: ["candidate-b"] });
 });
@@ -130,7 +310,7 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `output/playwright/context/requirements-${width}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press("Escape");
-    await expect(page.getByLabel("对话操作", { exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
     expect(await conversation.evaluate((element) => element.scrollTop)).toBe(before);
   });
 }
@@ -159,7 +339,7 @@ for (const width of [1440, 1280, 889, 390]) {
     if (width >= 1100) {
       const assistant = page.getByRole("complementary", { name: "设计助手", exact: true });
       await expect(assistant).toBeVisible();
-      await assistant.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("助手输入保持独立");
+      await assistant.getByRole("textbox", { name: "描述设计需求" }).fill("助手输入保持独立");
     }
     await mkdir("output/playwright/detail-workspace", { recursive: true });
     await page.screenshot({ path: `output/playwright/detail-workspace/tool-${width}.png` });
@@ -197,7 +377,7 @@ test("聚焦工作区：候选重绘与变体分别保留，手机助手切换�
   await closeNodeDetails(page);
   await page.getByRole("button", { name: "助手", exact: true }).click();
   await expect(workspace).toBeHidden();
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("助手自己的草稿");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("助手自己的草稿");
   await page.getByRole("button", { name: "画布", exact: true }).click();
   await page.locator('[data-type="candidate"]').first().dblclick();
   await expect(workspace.getByRole("textbox", { name: "变体修改说明" })).toHaveValue("尝试两种领型");
@@ -319,7 +499,7 @@ test("聚焦工作区：Escape 层级、助手独立与快速反向切换", asyn
   await target.dblclick();
   const workspace = page.getByRole("region", { name: "节点详情工作区", exact: true });
   const assistant = page.getByRole("complementary", { name: "设计助手", exact: true });
-  await assistant.getByRole("textbox", { name: "向设计助手描述下一步" }).press("Escape");
+  await assistant.getByRole("textbox", { name: "描述设计需求" }).press("Escape");
   await expect(workspace).toBeVisible();
   await workspace.getByRole("button", { name: "从工作流移除节点", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "确认移除节点", exact: true });
@@ -384,7 +564,7 @@ test.describe("P1 宽屏触控", () => {
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto(`/${PROJECT_ID}`);
     await page.getByRole("button", { name: "展开设计助手" }).click();
-    const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    const input = page.getByRole("textbox", { name: "描述设计需求" });
     await expect(input).toHaveCSS("font-size", "16px");
     const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
     expect(viewport).toContain("viewport-fit=cover");
@@ -617,7 +797,7 @@ for (const width of [1280, 375]) {
     await mkdir("output/playwright/simplification", { recursive: true });
     await page.screenshot({ path: `output/playwright/simplification/empty-canvas-${width}.png` });
     await welcome.getByRole("button", { name: "开始设计", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeFocused();
+    await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeFocused();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await showCanvas(page, width);
     await page.getByText("资料与更多", { exact: true }).click();
@@ -646,9 +826,9 @@ for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
     await showAssistant(page, width);
-    const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    const composer = page.getByRole("textbox", { name: "描述设计需求" });
     await composer.fill("请以 @候选 A 为基础设计一件藏蓝风衣，保留肩线。");
-    await page.getByRole("button", { name: "发送 ↑" }).click();
+    await page.getByRole("button", { name: "发送需求" }).click();
     const card = page.getByRole("region", { name: "方案确认" });
     await expect(card).toContainText("藏蓝风衣");
     expect(requests).toHaveLength(0);
@@ -785,9 +965,9 @@ test("统一工作区在桌面、抽屉及手机视图保持操作可达", async
     }
     await page.screenshot({ path: `output/playwright/atelier/studio-${viewport.width}.png` });
     await showAssistant(page, viewport.width);
-    await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "发送 ↑", exact: true })).toBeInViewport({ ratio: 1 });
-    const send = await page.getByRole("button", { name: "发送 ↑", exact: true }).boundingBox();
+    await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeInViewport({ ratio: 1 });
+    const send = await page.getByRole("button", { name: "发送需求", exact: true }).boundingBox();
     const license = page.getByRole("button", { name: "Get a license for production", exact: true });
     // Canvas visibility can remove the SDK badge between two locator reads.
     const badge = await license.evaluateAll((elements) => {
@@ -802,7 +982,7 @@ test("统一工作区在桌面、抽屉及手机视图保持操作可达", async
     await page.screenshot({ path: `output/playwright/atelier/assistant-${viewport.width}.png` });
     const actions = page.getByText("更多", { exact: true });
     await actions.click();
-    const actionBounds = await page.getByRole("button", { name: "暂停设计协作", exact: true }).boundingBox();
+    const actionBounds = await page.getByRole("button", { name: "暂停本项目设计助手", exact: true }).boundingBox();
     if (!actionBounds) throw new Error("协作操作菜单未显示");
     expect(actionBounds.y).toBeGreaterThanOrEqual(0);
     expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(viewport.height);
@@ -1091,7 +1271,7 @@ test("作品工作台：空项目直接开始，失败任务可恢复且默认�
   await page.goto(`/${PROJECT_ID}`);
   const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
   await work.getByRole("button", { name: "开始设计", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeFocused();
   const failed = node("failed-gen", "tool", "generate_design", "风衣方案生成", 0, 0, { params: { prompt: "藏蓝风衣", count: 2 } });
   failed.status = "failed";
   mocked.getGraph().nodes.push(failed);
@@ -1190,13 +1370,13 @@ for (const width of [1366, 1280, 375]) {
     await page.goto(`/${PROJECT_ID}`);
     await page.getByRole("button", { name: "以候选 A继续设计", exact: true }).click();
     const conversation = page.getByLabel("设计对话", { exact: true });
-    const confirm = page.getByRole("button", { name: "确认并生成", exact: true });
+    const confirm = page.getByRole("button", { name: /^确认并生成 \d+ 张$/ });
     await expect(confirm).toBeInViewport({ ratio: 1 });
     const discussion = page.getByLabel("正在讨论", { exact: true });
-    await expect(discussion).toContainText("待发送引用");
+    await expect(discussion).toContainText("本次发送的引用");
     await expect(discussion.getByRole("button", { name: "候选 A", exact: true })).toHaveCount(1);
     await expect(discussion).toHaveCSS("font-size", "12px");
-    const input = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    const input = page.getByRole("textbox", { name: "描述设计需求" });
     await input.evaluate((element) => { element.style.height = "180px"; });
     await expect(confirm).toBeInViewport({ ratio: 1 });
     await expect(input).toHaveCSS("outline-style", "none");
@@ -1523,9 +1703,9 @@ test("方案确认显示数量与保留项，一次确认更新原节点并执�
   expect(mocked.getExecuteCount()).toBe(0);
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/fig8-collaboration-review.png" });
-  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
   await expect(page.getByRole("button", { name: "取消修改", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
+  await page.getByRole("button", { name: /^确认并生成 \d+ 张$/ }).click();
   await expect.poll(() => draft.payload.params).toMatchObject({ count: 4 });
   expect(mocked.getGraph().nodes).toHaveLength(10);
   expect({ x: draft.x, y: draft.y }).toEqual({ x: 1080, y: 1050 });
@@ -1538,13 +1718,13 @@ test("修改要求复用输入框与引用，关联原提案并覆盖旧引用",
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选 A 的袖型");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
-  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
   await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
-  await page.getByRole("button", { name: "更新方案 ↑", exact: true }).click();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
+  await page.getByRole("button", { name: "发送修改要求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]).toMatchObject({ respondingToProposalId: "proposal-0", referencedNodeIds: ["candidate-b"] });
   expect(mocked.workflowRequests[1]?.content).toContain("生成3张");
@@ -1564,10 +1744,10 @@ test("后台结果持续恢复，移除重复工作计划后不再轮询计划",
   mocked.appendMessage({ id: "result-1", role: "assistant", status: "completed", content: "已完成本次执行，共两个候选。", origin: "execution_result", executionId: "execution-1", sourceEventId: "event-1" });
   mocked.appendMessage({ id: "analysis-1", role: "assistant", status: "pending", content: "正在比较两个候选的肩线。", origin: "background_analysis", executionId: "execution-1" });
   await expect(page.getByText("已完成本次执行，共两个候选。", { exact: true })).toBeVisible();
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("比较两张风衣图，先保留现有方案");
-  await expect(page.getByRole("button", { name: "发送 ↑" })).toBeEnabled();
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await expect(page.getByRole("button", { name: "发送需求" })).toBeEnabled();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -1582,13 +1762,13 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
-  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("请修改 @候选 A 的袖型");
+  await page.getByRole("button", { name: "发送需求" }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
   await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
   mocked.failMessageOnce();
-  await page.getByRole("button", { name: "更新方案 ↑", exact: true }).click();
+  await page.getByRole("button", { name: "发送修改要求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -1615,16 +1795,15 @@ test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重
   expect(mocked.contextPatches[0]).toMatchObject({ updatedItems: [{ id: "must-navy", text: "保留深藏蓝色，避免纯黑", scope: "project", confirm: true }] });
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
   await page.getByText("更多", { exact: true }).click();
-  await page.getByRole("button", { name: "暂停设计协作", exact: true }).click();
-  await expect(page.getByText("设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toHaveCount(0);
+  await page.getByRole("button", { name: "暂停本项目设计助手", exact: true }).click();
+  await expect(page.getByText("本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await expect(page.getByText("设计协作已暂停。历史消息和已有执行仍保留，可在“更多”中重新启用。", { exact: true })).toBeVisible();
-  await page.getByText("更多", { exact: true }).click();
-  await page.getByRole("button", { name: "启用设计协作", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeEnabled();
+  await expect(page.getByText("本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "恢复设计助手", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeEnabled();
 });
 
 test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行归属", async ({ page }) => {
@@ -1656,9 +1835,9 @@ test("一次跳过建议，不再出现重复确认表单且不触发执行", as
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请优化袖型");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
-  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("请优化袖型");
+  await page.getByRole("button", { name: "发送需求" }).click();
+  await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
   await expect.poll(() => mocked.rejectionRequests.length).toBe(1);
   expect(mocked.rejectionRequests[0]).not.toHaveProperty("reason");
   await expect(page.getByRole("textbox", { name: "跳过理由" })).toHaveCount(0);
@@ -1938,16 +2117,16 @@ test("@节点提案先以虚线预览，确认后保留分支并直接执行", a
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(page.getByText("保持藏蓝与宽松廓形，给我两种通勤风衣方案。")).toHaveCount(0);
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /候选 A/ }).click();
+  await page.getByRole("button", { name: /@候选 A/ }).click();
   await expect(composer).toHaveValue("请修改 @候选 A ");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.locator('[data-role="user"]').getByText("请修改 @候选 A", { exact: false })).toBeVisible();
   await expect(page.locator('[data-type="edit_design"][data-status="proposed"]')).toBeVisible();
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a"]);
   expect(mocked.getExecuteCount()).toBe(0);
-  await page.getByRole("button", { name: "确认并生成", exact: true }).click();
+  await page.getByRole("button", { name: /^确认并生成 \d+ 张$/ }).click();
   await expect(page.locator('[data-type="edit_design"][data-status="running"]')).toBeVisible();
   expect(mocked.getGraph().edges.some((item) => item.id === "edit-source")).toBe(true);
   await expect.poll(() => mocked.getExecuteCount()).toBe(1);
@@ -2107,15 +2286,14 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   const appearance = (control: Locator) => control.evaluate((element) => {
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, borderColor: style.borderTopColor, borderWidth: Number.parseFloat(style.borderTopWidth) };
   });
-  const menu = page.getByLabel("对话操作", { exact: true });
+  const menu = page.getByRole("button", { name: "设计要求", exact: true });
   await menu.focus();
-  await menu.press("ArrowDown");
-  await page.getByRole("button", { name: "设计要求与偏好", exact: true }).press("Enter");
+  await page.getByRole("button", { name: "设计要求", exact: true }).press("Enter");
   const drawer = page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
   await expect(drawer).toBeVisible();
   await page.keyboard.press("Escape");
@@ -2126,7 +2304,7 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await expect(composer).toBeVisible();
   await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("整个项目");
   expect(mocked.contextPatches).toHaveLength(0);
-  const reference = page.getByRole("button", { name: /引用「候选 A」/ });
+  const reference = page.getByRole("button", { name: /引用选中对象「候选 A」/ });
   const referenceStyle = await appearance(reference);
   expect(referenceStyle.borderWidth).toBeGreaterThan(0);
   expect(referenceStyle.background).not.toBe("rgba(0, 0, 0, 0)");
@@ -2134,12 +2312,12 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await expect(composer).toBeVisible();
   await closeNodeDetails(page);
   await expect(composer).toHaveValue("保留这段输入草稿");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual([]);
-  const primaryStyle = await appearance(page.getByRole("button", { name: "确认并生成", exact: true }));
-  const secondaryStyle = await appearance(page.getByRole("button", { name: "修改要求", exact: true }));
-  const quietStyle = await appearance(page.getByRole("button", { name: "跳过", exact: true }));
+  const primaryStyle = await appearance(page.getByRole("button", { name: /^确认并生成 \d+ 张$/ }));
+  const secondaryStyle = await appearance(page.getByRole("button", { name: "修改生成要求", exact: true }));
+  const quietStyle = await appearance(page.getByRole("button", { name: "不采用此方案", exact: true }));
   expect(primaryStyle.background).not.toBe(secondaryStyle.background);
   expect(secondaryStyle.borderWidth).toBeGreaterThan(0);
   expect(secondaryStyle.borderColor).not.toBe("rgba(0, 0, 0, 0)");
@@ -2147,19 +2325,19 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   expect(quietStyle.borderColor).toBe("rgba(0, 0, 0, 0)");
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/workflow-assistant-actions-desktop.png" });
-  await page.getByRole("button", { name: "修改要求", exact: true }).click();
+  await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
   await expect(composer).toBeFocused();
   await composer.fill("保留领口");
-  await expect.poll(async () => (await appearance(page.getByRole("button", { name: "更新方案 ↑", exact: true }))).background).toBe(primaryStyle.background);
+  await expect.poll(async () => (await appearance(page.getByRole("button", { name: "发送修改要求", exact: true }))).background).toBe(primaryStyle.background);
   await page.getByRole("button", { name: "取消修改", exact: true }).click();
-  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
   await expect(page.getByRole("button", { name: "确认跳过", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: /引用「候选 A」/ }).click();
+  await page.getByRole("button", { name: /引用选中对象「候选 A」/ }).click();
   await composer.fill("修改领口");
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
   await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
   await expect(composer).toHaveValue("修改领口");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(2);
   expect(mocked.proposalRequests[1]?.referencedNodeIds).toEqual(["candidate-a"]);
   expect(mocked.getExecuteCount()).toBe(0);
@@ -2171,7 +2349,7 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="candidate"]').first().click();
-  const longReference = page.getByRole("button", { name: `＋ 引用「${longTitle}」`, exact: true });
+  const longReference = page.getByRole("button", { name: `引用选中对象「${longTitle}」`, exact: true });
   await expect(longReference).toBeVisible();
   expect(await longReference.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
@@ -2285,7 +2463,7 @@ test("固定浅色与三种宽度保持画布布局，PNG 导出包含曲线", a
     await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
     await showAssistant(page, width);
-    await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();
     await showCanvas(page, width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     await page.screenshot({ path: `output/playwright/workflow-light-${width}.png` });
@@ -2346,7 +2524,7 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.getByRole("button", { name: "助手", exact: true }).click();
-  const initialSend = page.getByRole("button", { name: "发送 ↑", exact: true });
+  const initialSend = page.getByRole("button", { name: "发送需求", exact: true });
   await expect(initialSend).toBeDisabled();
   await expect(initialSend).toBeInViewport({ ratio: 1 });
   const disabledBackground = await initialSend.evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -2369,33 +2547,32 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   const more = page.getByText("更多", { exact: true });
   const moreMenu = more.locator("..");
   await expect(page.getByText("持续设计协作", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" }).locator("..").getByText("更多", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" }).locator("..").getByText("更多", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "新对话", exact: true })).toHaveCount(0);
   await more.focus();
   await more.press("Enter");
   await expect(moreMenu).toHaveAttribute("open", "");
-  await expect(moreMenu.getByRole("button")).toHaveText(["设计要求与偏好", "历史会话", "新建设计对话", "暂停设计协作"]);
+  await expect(moreMenu.getByRole("button")).toHaveText(["暂停本项目设计助手"]);
   await expect.poll(() => moreMenu.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
     const bounds = button.getBoundingClientRect();
     return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
   }))).toBe(true);
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/workflow-assistant-menu-mobile.png" });
-  await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
-  await page.getByText("更多", { exact: true }).click();
-  await page.getByRole("button", { name: "历史会话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-old");
+  await page.getByRole("button", { name: "新建对话", exact: true }).click();
+  await page.getByRole("button", { name: "历史对话", exact: true }).click();
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
   await expect(page.getByText("历史消息")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await more.click();
-  await expect(moreMenu.getByRole("button")).toHaveText(["历史会话", "新建设计对话", "旧设计运行", "暂停设计协作"]);
+  await expect(moreMenu.getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
   await more.press("Space");
   await expect(moreMenu).not.toHaveAttribute("open");
-  await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-new");
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-new");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图");
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.getByText("已收到，继续设计。")).toBeVisible();
-  const sendBox = await page.getByRole("button", { name: "发送 ↑" }).boundingBox();
+  const sendBox = await page.getByRole("button", { name: "发送需求" }).boundingBox();
   if (!sendBox) throw new Error("发送按钮未显示");
   expect(sendBox.x).toBeGreaterThanOrEqual(0);
   expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(390);
@@ -2507,18 +2684,18 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选 A ");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("alert")).toContainText("请从 @列表选择准确节点");
   expect(mocked.proposalRequests).toHaveLength(0);
   await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /候选 A/ }).last().click();
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: /@候选 A/ }).last().click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a-branch"]);
   expect(mocked.workflowRequests[0]?.focusNodeIds).toEqual(["candidate-a-branch"]);
-  await page.getByRole("button", { name: "跳过", exact: true }).click();
+  await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2527,7 +2704,7 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   expect(mocked.contextPatches).toHaveLength(0);
   expect(mocked.getContext().focusNodeIds).toEqual(["candidate-a-branch"]);
   await composer.fill("比较两张风衣图，继续说明这个分支的袖型");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]?.referencedNodeIds).toEqual([]);
   expect(mocked.workflowRequests[1]?.focusNodeIds).toEqual(["candidate-a-branch"]);
@@ -2545,9 +2722,8 @@ test("普通会话可只读查看旧设计运行的简报、尝试和人工决�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByText("更多", { exact: true }).click();
-  await page.getByRole("button", { name: "历史会话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史会话" }).selectOption("chat-old");
+  await page.getByRole("button", { name: "历史对话", exact: true }).click();
+  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
   await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "旧设计运行", exact: true }).click();
   const history = page.getByRole("region", { name: "旧设计运行历史" });
@@ -2628,27 +2804,26 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByText("更多", { exact: true }).click();
-  await page.getByRole("button", { name: "新建设计对话", exact: true }).click();
+  await page.getByRole("button", { name: "新建对话", exact: true }).click();
   const context = await openDesignRequirements(page);
   const preference = context.locator("li").filter({ hasText: "该分支偏好银灰色" });
   await expect(preference).toBeVisible();
   await expect(preference).toContainText("当前讨论对象不适用");
-  await expect(preference).toContainText("作用分支：候选 B");
+  await expect(preference).toContainText("适用对象：候选 B");
   await expect(preference.getByRole("button", { name: "定位 候选 B", exact: true })).toBeVisible();
   expect(mocked.getContext().preferences.some((item) => item.id === "prefer-silver")).toBe(false);
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
   expect(mocked.contextPatches).toHaveLength(0);
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图 @候选 B");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图 @候选 B");
+  await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.getContext().focusNodeIds).toEqual(["candidate-b"]);
   await openDesignRequirements(page);
   await expect(preference).toContainText("当前讨论对象适用");
   await preference.getByRole("button", { name: "确认这条理解" }).click();
   await expect(preference).toContainText("明确提出");
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
-  await page.getByRole("button", { name: "讨论整个项目" }).click();
+  await page.getByRole("button", { name: "改为讨论整个项目" }).click();
   await expect.poll(() => mocked.getContext().focusNodeIds).toEqual([]);
   await openDesignRequirements(page);
   await expect(preference).toContainText("当前讨论对象不适用");
@@ -2696,7 +2871,7 @@ test("设计要求抽屉更正失败保留输入，重试后刷新恢复且返�
   await mkdir("output/playwright/context", { recursive: true });
   await page.screenshot({ path: "output/playwright/context/requirements-desktop.png" });
   await page.keyboard.press("Escape");
-  await expect(page.getByLabel("对话操作", { exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
   expect(await conversation.evaluate((element) => element.scrollTop)).toBe(scrollBefore);
   expect(mocked.contextPatches.every((value) => typeof value.baseRevision === "number" && typeof value.mutationId === "string")).toBe(true);
   await page.reload();
@@ -2710,19 +2885,19 @@ test("持续助手刷新后保留消息和待确认提案，不重复或自动�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("请修改 @候选 A 的袖型");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
-  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("请修改 @候选 A 的袖型");
+  await page.getByRole("button", { name: "发送需求" }).click();
+  await expect(page.getByRole("button", { name: /^确认并生成 \d+ 张$/ })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^确认并生成 \d+ 张$/ })).toBeVisible();
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
   await expect(page.locator('[data-role="assistant"]')).toHaveCount(1);
   expect(mocked.proposalRequests).toHaveLength(1);
   expect(mocked.getExecuteCount()).toBe(0);
-  await page.getByRole("button", { name: "跳过", exact: true }).click();
-  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^确认并生成 \d+ 张$/ })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
@@ -2735,11 +2910,11 @@ test("项目中其他会话的待确认提案不会自动出现在当前对话�
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(page.getByLabel("对话操作", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "向设计助手描述下一步" })).toBeEnabled();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeEnabled();
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "确认并生成", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^确认并生成 \d+ 张$/ })).toHaveCount(0);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
@@ -2749,8 +2924,8 @@ test("失败的设计回复可用原请求和上下文重试，消息不重复�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("textbox", { name: "向设计助手描述下一步" }).fill("比较两张风衣图 @候选 A");
-  await page.getByRole("button", { name: "发送 ↑" }).click();
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图 @候选 A");
+  await page.getByRole("button", { name: "发送需求" }).click();
   await page.getByRole("button", { name: "重试这条回复" }).click();
   await expect(page.getByText("已收到，继续设计。", { exact: true })).toBeVisible();
   await expect(page.locator('[data-role="user"]')).toHaveCount(1);
@@ -2999,7 +3174,7 @@ test("服务器决定节点能否移除，允许移除时先确认关联连线",
 test("同账号后台认证与临时服务故障不会清空设计助手草稿", async ({ page }) => {
   await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
-  const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+  const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("保留袖口，下一步比较面料");
   await page.route("**/api/me", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -3176,7 +3351,7 @@ for (const crossTab of [false, true]) {
     await install(page);
     await page.goto(`/${PROJECT_ID}`);
     await expect(page.getByText("账号 A 的私有对话", { exact: true })).toBeVisible();
-    const composer = page.getByRole("textbox", { name: "向设计助手描述下一步" });
+    const composer = page.getByRole("textbox", { name: "描述设计需求" });
     await composer.fill("账号 A 尚未发送的草稿");
     expect(await page.locator('img[src*="asset-a"]').count()).toBeGreaterThan(0);
     if (crossTab) {

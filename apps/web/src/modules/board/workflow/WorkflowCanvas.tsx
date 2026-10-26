@@ -1706,7 +1706,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             </div>
             </> : null}
             {menuTab ? (
-              <div className={styles.addPopover}>
+              <div className={styles.addPopover} data-workflow-add-menu>
                 <header>
                   <strong>
                     {menuTab === "assets" ? "添加设计素材" : "添加设计工具"}
@@ -1873,6 +1873,12 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 else openDetails(nodeId);
               }}
               onConversationChange={setActiveConversationId}
+              onAddMaterial={() => {
+                setMobileView("canvas");
+                if (layoutMode !== "docked") setSidebarOpen(false);
+                setMenuTab("assets");
+                requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-workflow-add-menu] > button")?.focus());
+              }}
               onGraphChange={commitGraph}
               onNotice={setNotice}
               onError={setError}
