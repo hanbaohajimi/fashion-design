@@ -635,6 +635,7 @@ export function Menu({
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const panelId = useId();
   const [open, setOpen] = useState(false);
   const [portalTarget, setPortalTarget] = useState<Element | null>(null);
   const closeMenu = () => {
@@ -722,6 +723,9 @@ export function Menu({
   const content = (
     <div
       className={styles.menuPanel}
+      id={panelId}
+      role="group"
+      aria-label={`${label}选项`}
       ref={panel}
       style={
         portal
@@ -761,7 +765,7 @@ export function Menu({
           onKeyDown(event);
       }}
     >
-      <summary aria-label={label} ref={triggerRef}>
+      <summary aria-label={label} aria-controls={panelId} ref={triggerRef}>
         {trigger ?? label}
       </summary>
       {portal

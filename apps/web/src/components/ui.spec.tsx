@@ -81,6 +81,7 @@ describe("shared controls", () => {
     trigger.focus();
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     const history = await screen.findByRole("button", { name: "旧设计运行" });
+    expect(trigger.getAttribute("aria-controls")).toBe(screen.getByRole("group", { name: "对话操作选项" }).id);
     expect(container.contains(history)).toBe(false);
     await waitFor(() => expect(document.activeElement).toBe(history));
     fireEvent.keyDown(history, { key: "ArrowDown" });

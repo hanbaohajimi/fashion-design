@@ -2550,14 +2550,15 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await page.getByRole("button", { name: "助手", exact: true }).click();
   const more = page.getByText("更多", { exact: true });
   const moreMenu = more.locator("..");
+  const menuPanel = page.getByRole("group", { name: "对话操作选项", exact: true });
   await expect(page.getByText("持续设计协作", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "描述设计需求" }).locator("..").getByText("更多", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "新对话", exact: true })).toHaveCount(0);
   await more.focus();
   await more.press("Enter");
   await expect(moreMenu).toHaveAttribute("open", "");
-  await expect(moreMenu.getByRole("button")).toHaveText(["暂停本项目设计助手"]);
-  await expect.poll(() => moreMenu.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
+  await expect(menuPanel.getByRole("button")).toHaveText(["暂停本项目设计助手"]);
+  await expect.poll(() => menuPanel.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
     const bounds = button.getBoundingClientRect();
     return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
   }))).toBe(true);
@@ -2569,7 +2570,7 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await expect(page.getByText("历史消息")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await more.click();
-  await expect(moreMenu.getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
+  await expect(menuPanel.getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
   await more.press("Space");
   await expect(moreMenu).not.toHaveAttribute("open");
   await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-new");
