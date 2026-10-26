@@ -8,12 +8,14 @@ export function StudioPageHeader({
   description,
   status,
   actions,
+  objectSwitcher,
 }: {
   readonly title: string;
   readonly type?: string;
   readonly description?: string;
   readonly status?: ReactNode;
   readonly actions?: ReactNode;
+  readonly objectSwitcher?: ReactNode;
 }) {
   return (
     <header className={styles.surfaceHeading}>
@@ -25,6 +27,7 @@ export function StudioPageHeader({
         {type || description ? (
           <p>{[type, description].filter(Boolean).join(" · ")}</p>
         ) : null}
+        {objectSwitcher}
       </div>
       {actions ? <div className={styles.surfaceTools}>{actions}</div> : null}
     </header>

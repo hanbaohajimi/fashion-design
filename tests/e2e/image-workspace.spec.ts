@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
 import { seedVisualApp, PROJECT, NOW } from "../visual/fixtures";
 import type {
   WorkflowGraph,
@@ -131,6 +132,56 @@ async function setup(page: Page) {
   ).toBeVisible();
   return { append, submitted, feedback: () => feedback };
 }
+
+test.describe("图片手势与复制反馈", () => {
+
+  test("三张同批方案可跟手切换，放大后拖动保留当前方案", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
+    const app = await setup(page);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    app.append("gesture-a"); app.append("gesture-b"); app.append("gesture-c");
+    const workspace = page.getByRole("dialog", { name: "图片工作区" });
+    await expect(workspace.getByRole("navigation", { name: "本次生成结果" }).getByRole("button")).toHaveCount(3);
+    await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-a", { exact: true })).toBeVisible();
+    const view = workspace.getByLabel("图片查看区域");
+    const box = await view.boundingBox();
+    if (!box) throw new Error("缺少看图区域");
+    await page.mouse.move(box.x + box.width * .8, box.y + box.height * .5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * .35, box.y + box.height * .5, { steps: 14 });
+    expect(await view.evaluate((element) => parseFloat(getComputedStyle(element).getPropertyValue("--gallery-x")))).toBeLessThan(-30);
+    await page.mouse.up();
+    await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-b", { exact: true })).toBeVisible();
+    await workspace.getByLabel("缩放比例").selectOption("200");
+    await page.mouse.move(box.x + box.width * .8, box.y + box.height * .5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * .3, box.y + box.height * .5, { steps: 14 });
+    await page.mouse.up();
+    await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-b", { exact: true })).toBeVisible();
+    await expect(workspace.getByLabel("缩放比例")).toHaveValue("200");
+    await expect.poll(() => view.evaluate((element) => parseFloat(getComputedStyle(element).getPropertyValue("--gallery-x")))).toBe(0);
+    await workspace.screenshot({ path: "output/playwright/workflow-motion-results/gallery-pan.png" });
+  });
+
+  test("分享链接复制成功原位变勾，剪贴板失败不会误报成功", async ({ page }) => {
+    const app = await setup(page);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    app.append("copy-look");
+    const workspace = page.getByRole("dialog", { name: "图片工作区" });
+    await expect(workspace).toBeVisible();
+    await workspace.getByRole("button", { name: "分享", exact: true }).click();
+    await workspace.getByRole("button", { name: "创建只读链接" }).click();
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => undefined } }));
+    await workspace.getByRole("button", { name: "复制链接", exact: true }).click();
+    await expect(workspace.getByRole("button", { name: /已复制/ })).toHaveAttribute("data-copied", "true");
+    await workspace.screenshot({ path: "output/playwright/workflow-motion-results/copy-success.png" });
+    await expect(workspace.getByRole("button", { name: "复制链接", exact: true })).toBeVisible();
+    await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("blocked"); } } }));
+    await workspace.getByRole("button", { name: "复制链接", exact: true }).click();
+    await expect(workspace.getByRole("alert")).toContainText("未能复制链接");
+    await expect(workspace.getByRole("button", { name: "复制链接", exact: true })).toHaveAttribute("data-copied", "false");
+  });
+});
 
 test("首张自动打开，同批追加不抢图，标注评论和分享可完成", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });

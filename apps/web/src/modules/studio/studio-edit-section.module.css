@@ -126,3 +126,6 @@
     font-size: 16px;
   }
 }
+.panel[open] { animation: studio-editor-in var(--motion-status, 180ms) var(--ease-enter, ease-out); }
+@keyframes studio-editor-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .panel[open] { animation: none; } }

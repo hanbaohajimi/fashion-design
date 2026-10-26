@@ -1,10 +1,18 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProposalReview } from "./ProposalReview";
 import type { WorkflowGraph, WorkflowProposal } from "./workflow-api";
 
-afterEach(cleanup);
+const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  if (originalAnimate) Object.defineProperty(Element.prototype, "animate", originalAnimate);
+  else Reflect.deleteProperty(Element.prototype, "animate");
+});
 const graph = { nodes: [], edges: [] } as unknown as WorkflowGraph;
 function review(proposal: WorkflowProposal, currentGraph = graph) {
   render(
@@ -140,4 +148,110 @@ it("旧版修改提案展示即将应用的数量和要求，不显示原节点�
   expect(card.textContent).toContain("3 张方案");
   expect(card.textContent).toContain("保留肩线");
   expect(card.textContent).not.toContain("原版型");
+});
+
+function motionReview() {
+  const proposal = {
+    id: "submission-proposal",
+    status: "pending",
+    toolNodeId: "tool",
+    operations: [],
+    referencedNodeIds: [],
+    content: "设计藏蓝风衣",
+  } as unknown as WorkflowProposal;
+  const currentGraph = {
+    nodes: [{ id: "tool", kind: "tool", type: "generate_design", status: "ready", payload: { params: {} } }],
+    edges: [],
+  } as unknown as WorkflowGraph;
+  return {
+    proposal,
+    graph: currentGraph,
+    disabled: false,
+    onAccept: vi.fn(),
+    onReject: vi.fn(),
+    onAdjust: vi.fn(),
+    onOpenResult: vi.fn(),
+    onContinue: vi.fn(),
+  };
+}
+
+function mockReceiptMotion(reduced = false) {
+  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+    matches: reduced && query === "(prefers-reduced-motion: reduce)",
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })));
+  const cancel = vi.fn();
+  const animate = vi.fn(() => ({ cancel }));
+  Object.defineProperty(Element.prototype, "animate", { configurable: true, value: animate });
+  return { animate, cancel };
+}
+
+it("确认立即调用业务，提交超过 300ms 后显示匹配该提案的等待装饰", () => {
+  vi.useFakeTimers();
+  const props = motionReview();
+  const view = render(<ProposalReview {...props} />);
+  fireEvent.click(screen.getByRole("button", { name: "确认并生成 2 张" }));
+  expect(props.onAccept).toHaveBeenCalledTimes(1);
+  view.rerender(<ProposalReview {...props} submitting />);
+  const button = screen.getByRole("button", { name: "提交中…" }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+  expect(button.dataset.feedback).toBe("pending");
+  expect(button.querySelector('[data-phase="pending"]')).toBeNull();
+  act(() => { vi.advanceTimersByTime(299); });
+  expect(button.querySelector('[data-phase="pending"]')).toBeNull();
+  act(() => { vi.advanceTimersByTime(1); });
+  expect(button.querySelector('[data-phase="pending"]')).not.toBeNull();
+  fireEvent.click(button);
+  expect(props.onAccept).toHaveBeenCalledTimes(1);
+});
+
+it("本次待确认到受理只描一次 350ms 小勾，立即运行与后续轮询不延迟或重播", () => {
+  vi.useFakeTimers();
+  const { animate, cancel } = mockReceiptMotion();
+  const props = motionReview();
+  const view = render(<ProposalReview {...props} />);
+  const receipt = view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]");
+  if (!receipt) throw new Error("Missing acceptance receipt");
+  expect(receipt.hidden).toBe(true);
+  const accepted = { ...props.proposal, status: "accepted" } as WorkflowProposal;
+  const running = { ...props.graph, nodes: props.graph.nodes.map((node) => ({ ...node, status: "running" })) } as WorkflowGraph;
+  view.rerender(<ProposalReview {...props} proposal={accepted} graph={running} />);
+  expect(receipt.hidden).toBe(false);
+  expect(receipt.textContent).toContain("已受理");
+  expect(view.container.querySelector('header [role="status"]')?.textContent).toBe("生成中");
+  expect(screen.queryByText("已完成")).toBeNull();
+  expect(animate).toHaveBeenCalledTimes(1);
+  expect(animate).toHaveBeenCalledWith([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], expect.objectContaining({ duration: 350 }));
+  view.rerender(<ProposalReview {...props} proposal={{ ...accepted }} graph={{ ...running }} />);
+  expect(animate).toHaveBeenCalledTimes(1);
+  expect(props.onAccept).not.toHaveBeenCalled();
+  act(() => { vi.advanceTimersByTime(1000); });
+  expect(receipt.hidden).toBe(true);
+  view.unmount();
+  expect(cancel).toHaveBeenCalledTimes(1);
+});
+
+it("历史已受理初载和替换为另一已受理提案均不播放成功确认", () => {
+  const { animate } = mockReceiptMotion();
+  const props = motionReview();
+  const accepted = { ...props.proposal, status: "accepted" } as WorkflowProposal;
+  const view = render(<ProposalReview {...props} proposal={accepted} />);
+  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(true);
+  expect(screen.getByRole("status").textContent).toBe("已保存，待执行");
+  view.rerender(<ProposalReview {...props} />);
+  view.rerender(<ProposalReview {...props} proposal={{ ...accepted, id: "another" }} />);
+  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(true);
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it("减弱动态时受理结果立即可见，不描勾或等待动画", () => {
+  const { animate } = mockReceiptMotion(true);
+  const props = motionReview();
+  const view = render(<ProposalReview {...props} />);
+  view.rerender(<ProposalReview {...props} proposal={{ ...props.proposal, status: "accepted" }} />);
+  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(false);
+  expect(screen.getByRole("status").textContent).toBe("已保存，待执行");
+  expect(animate).not.toHaveBeenCalled();
 });

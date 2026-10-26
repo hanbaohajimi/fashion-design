@@ -53,9 +53,7 @@ export function ConfirmClient() {
         };
         announceSessionChange();
         router.replace(
-          body.projectId
-            ? `/${encodeURIComponent(body.projectId)}`
-            : "/",
+          body.projectId ? `/${encodeURIComponent(body.projectId)}` : "/",
         );
         router.refresh();
       } catch {
@@ -67,13 +65,19 @@ export function ConfirmClient() {
   }, [router, tokenHash]);
 
   return (
-    <main className={styles.page}><section className={styles.card}>
-      <span className={styles.brand}>森织 设计工作室</span>
-      <h1>{error ? "链接未能确认" : "正在打开设计台…"}</h1>
-      <p data-error={Boolean(error)} role="status">
-        {error ?? "正在验证一次性登录链接，请勿关闭页面。"}
-      </p>
-      {error ? <Link href="/login">重新发送登录链接</Link> : null}
-    </section></main>
+    <main className={styles.page}>
+      <section className={styles.card}>
+        <span className={styles.brand}>森织 设计工作室</span>
+        <h1>{error ? "链接未能确认" : "正在打开设计台…"}</h1>
+        <p
+          data-error={Boolean(error)}
+          role={error ? "alert" : "status"}
+          aria-live={error ? "assertive" : "polite"}
+        >
+          {error ?? "正在验证一次性登录链接，请勿关闭页面。"}
+        </p>
+        {error ? <Link href="/login">重新发送登录链接</Link> : null}
+      </section>
+    </main>
   );
 }

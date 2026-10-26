@@ -1,5 +1,7 @@
 "use client";
 
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为真实款式位置与当前编辑对象；状态统计和历史为次级。保存为主操作，网格不引入排序行为。 */
 
 import { useState } from "react";
@@ -24,6 +26,7 @@ import { SaveBar } from "./studio-ui";
 import styles from "./studio.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
+import { StudioCount } from "./StudioCount";
 
 type Slot = Extract<
   StudioDocumentInput,
@@ -40,6 +43,12 @@ const states = {
 export function PlanningBoard(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const [id, setId] = useState<string | null>(props.data.slots[0]?.id ?? null);
   const [draftVersion, setDraftVersion] = useState(0);
   const [creating, setCreating] = useState(false);
@@ -75,7 +84,7 @@ export function PlanningBoard(
             disabled={!props.canEdit}
             onClick={() =>
               void (async () => {
-                if (await props.beforeChange()) {
+                if (await beforeChange()) {
                   setId(null);
                   setEditorOpen(true);
                   setDraftVersion((current) => current + 1);
@@ -92,7 +101,7 @@ export function PlanningBoard(
           {Object.entries(states).map(([value, label]) => (
             <div key={value}>
               <strong>
-                {
+                <StudioCount value={
                   props.data.slots.filter(
                     (slot) =>
                       (slot.currentRevision.payload as Slot).status === value &&
@@ -100,7 +109,7 @@ export function PlanningBoard(
                         (slot.currentRevision.payload as Slot).collectionId ===
                           collectionId),
                   ).length
-                }
+                } />
               </strong>
               <small>{label}</small>
             </div>
@@ -157,7 +166,7 @@ export function PlanningBoard(
               onChange={(event) => {
                 const value = event.target.value;
                 void (async () => {
-                  if (await props.beforeChange()) {
+                  if (await beforeChange()) {
                     setCollectionId(value);
                     setId(
                       props.data.slots.find(
@@ -198,7 +207,7 @@ export function PlanningBoard(
                   aria-pressed={id === slot.id}
                   onClick={() =>
                     void (async () => {
-                      if (slot.id === id || (await props.beforeChange())) {
+                      if (slot.id === id || (await beforeChange())) {
                         setId(slot.id);
                         setEditorOpen(true);
                       }
@@ -225,6 +234,11 @@ export function PlanningBoard(
                   <small>
                     {roles[payload.role]} · {states[payload.status]}
                   </small>
+                  {id === slot.id && editorOpen ? (
+                    <small className={styles.currentPosition}>
+                      正在编辑此位置
+                    </small>
+                  ) : null}
                 </button>
               );
             })}
@@ -236,6 +250,11 @@ export function PlanningBoard(
           hideTrigger
         >
           <section className={styles.slotEditor}>
+            <h3>
+              {existing
+                ? (existing.currentRevision.payload as Slot).name
+                : "新系列位置"}
+            </h3>
             <Button
               variant="ghost"
               onClick={() => {
@@ -253,6 +272,8 @@ export function PlanningBoard(
                 draftVersion
               }
               {...props}
+          feedback={feedback}
+          beforeChange={beforeChange}
               existing={existing}
               onCreated={setId}
               collectionId={collectionId}
@@ -277,6 +298,7 @@ function SlotEditor({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   onCreated,
   collectionId,
 }: StudioPanelProps & {
@@ -295,7 +317,7 @@ function SlotEditor({
         status: "PLANNED",
         notes: "",
       };
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { feedback });
   const { draft, setDraft } = form;
   const update = <K extends keyof Slot>(key: K, value: Slot[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -440,6 +462,7 @@ function SlotEditor({
         </Field>
       </fieldset>
       <SaveBar
+        feedback={feedback?.snapshot}
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}

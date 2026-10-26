@@ -29,8 +29,6 @@ export function TrendBoardPickerDialog({
     [projectsQuery.data],
   );
 
-  if (!open) return null;
-
   const createAndSelect = async (): Promise<void> => {
     if (busy) return;
     const trimmed = name.trim();
@@ -52,6 +50,7 @@ export function TrendBoardPickerDialog({
 
   return (
     <Dialog
+      open={open}
       label="选择存入位置"
       className={styles.boardDialog}
       onClose={() => {

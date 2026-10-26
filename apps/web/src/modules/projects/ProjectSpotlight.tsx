@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
+import { ImagePreview } from "../../components/ui";
 import type { Project } from "./project-types";
 import { readCreativeVisit } from "./creative-memory";
 import styles from "./project-spotlight.module.css";
+import effects from "../../components/interactions/pointer-effects.module.css";
+import { useMagnetic, usePointerSpotlight } from "../../components/interactions/pointer-effects";
 const subscribe = (listener: () => void) => {
   window.addEventListener("storage", listener);
   return () => window.removeEventListener("storage", listener);
@@ -20,29 +23,23 @@ export function ProjectSpotlight({
     () => readCreativeVisit(userId)?.path ?? "",
     () => "",
   );
-  const [failedCover, setFailedCover] = useState<string | null>(null);
+  const { hostRef, ...spotlight } = usePointerSpotlight();
+  const { visualRef, ...magnetic } = useMagnetic();
   const recent =
     projects.find((project) => project.id === visitPath.split("/")[1]) ??
     projects[0];
   if (!recent) return null;
   const resume = visitPath.split("/")[1] === recent.id;
   return (
-    <section className={styles.spotlight} aria-label="继续创作">
+    <section ref={hostRef} {...spotlight} className={styles.spotlight} aria-label="继续创作">
+      <span aria-hidden="true" className={styles.spotlightGlow} />
       <Link
         className={styles.visual}
         href={`/${recent.id}`}
         tabIndex={-1}
         aria-hidden="true"
       >
-        {recent.coverUrl && failedCover !== recent.coverUrl ? (
-          // Authenticated project covers use the same-origin file endpoint.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={recent.coverUrl}
-            alt=""
-            onError={() => setFailedCover(recent.coverUrl)}
-          />
-        ) : (
+        {recent.coverUrl ? <ImagePreview src={recent.coverUrl} alt="" retryable={false} /> : (
           <span className={styles.paper}>A</span>
         )}
       </Link>
@@ -54,9 +51,13 @@ export function ProjectSpotlight({
       </div>
       <Link
         className={styles.primary}
+        {...magnetic}
+        data-interaction="magnetic"
         href={resume ? visitPath : `/${recent.id}`}
       >
-        继续创作 <span aria-hidden="true">→</span>
+        <span ref={visualRef} className={`${styles.primaryVisual} ${effects.magneticVisual}`}>
+          继续创作 <span aria-hidden="true">→</span>
+        </span>
       </Link>
     </section>
   );

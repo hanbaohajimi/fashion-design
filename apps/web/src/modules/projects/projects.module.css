@@ -205,18 +205,19 @@
 
 .statusFilters {
   display: inline-grid;
-  border: 1px solid var(--color-border);
+  gap: var(--space-2);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
   grid-template-columns: 1fr 1fr;
 }
 
 .statusFilter,
 .statusFilterActive {
   min-height: var(--control-height-primary);
-  border: 0;
+  border: 1px solid var(--color-control-border);
   padding: 0 var(--space-4);
-  background: transparent;
+  background: var(--color-canvas);
+  box-shadow: var(--shadow-soft-raised);
   color: var(--color-ink);
   cursor: pointer;
   font: inherit;
@@ -233,17 +234,33 @@
 .statusFilter + .statusFilterActive,
 .statusFilterActive + .statusFilter,
 .statusFilterActive + .statusFilterActive {
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-control-border);
 }
 
 .statusFilter:hover {
-  background: var(--color-surface);
+  color: var(--color-action-hover);
 }
 
-.statusFilterActive {
-  background: var(--color-selection-bg);
+.statusFilterActive,
+.statusFilter:active {
+  background: var(--color-canvas);
   color: var(--color-selection-ink);
-  box-shadow: inset 0 -2px var(--color-selection-border);
+  box-shadow: var(--shadow-soft-inset);
+}
+.statusFilterActive {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.statusFilters:has(> span[aria-hidden="true"]) .statusFilterActive { text-decoration: none; }
+@media (forced-colors: active) {
+  .statusFilter,
+  .statusFilterActive,
+  .statusFilter:active {
+    border-color: ButtonText;
+    box-shadow: none;
+  }
+  .statusFilters .statusFilterActive { text-decoration: underline; }
 }
 
 .search {
@@ -969,7 +986,7 @@
   width: min(560px, calc(100vw - 32px));
 }
 .projectSkeleton {
-  aspect-ratio: 4 / 3;
+  min-width: 0;
 }
 .createDialog .dialog {
   width: 100%;
@@ -1008,25 +1025,118 @@
   }
 }
 
-/* 以服装预览和项目资料组成档案行，继续操作始终可见。 */
-.projectGrid, .skeletonGrid { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
-.projectCard { display: grid; grid-template-columns: 200px minmax(0, 1fr); border-radius: var(--radius-lg); }
-.projectOpen { min-width: 0; display: flex; }
-.projectCover { width: 100%; height: 100%; min-height: 180px; aspect-ratio: auto; border-radius: var(--radius-lg) 0 0 var(--radius-lg); background: var(--color-surface); }
-.coverImage { object-fit: contain; padding: var(--space-3); }
-.cardBody { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--space-6); min-width: 0; }
-.cardHeading h2 { font-size: var(--text-section-title); }
-.cardMeta { justify-content: flex-start; gap: var(--space-6); margin: 0; }
-.cardTags { margin: 0; }
-.continueProject { display: inline-flex; align-items: center; gap: var(--space-6); align-self: flex-start; min-height: 40px; margin-top: auto; color: var(--color-action); font-size: var(--text-base); font-weight: var(--font-semibold); text-decoration: none; }
-.continueProject:hover { text-decoration: underline; }
+/* §2.1/§3.3/§7.4：作品优先，资料与继续入口固定在作品下方。 */
+.projectGrid,
+.skeletonGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+.projectCard {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+}
+.projectOpen {
+  min-width: 0;
+  display: flex;
+}
+.projectCover {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--image-stage-background);
+}
+.coverImage {
+  object-fit: contain;
+  padding: var(--space-4);
+}
+.projectCover > img { width: 100%; height: 100%; object-fit: contain; padding: var(--space-4); }
+.cardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  min-width: 0;
+}
+.cardHeading h2 {
+  font-size: var(--text-section-title);
+}
+.cardMeta {
+  justify-content: flex-start;
+  gap: var(--space-6);
+  margin: 0;
+}
+.cardTags {
+  margin: 0;
+}
+.continueProject {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  align-self: flex-start;
+  min-height: 40px;
+  margin-top: auto;
+  color: var(--color-action);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  text-decoration: none;
+}
+.continueProject:hover {
+  text-decoration: underline;
+}
+.projectSkeleton {
+  aspect-ratio: auto;
+  animation: none;
+  overflow: hidden;
+  min-height: 320px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  background: var(--color-paper);
+}
+.projectSkeleton .cardBody > div {
+  min-height: 18px;
+}
+.projectSkeleton .cardBody > div:last-child {
+  max-width: 60%;
+}
+@media (min-width: 1600px) {
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 @media (max-width: 767px) {
- .projectCard { grid-template-columns: 96px minmax(0, 1fr); }
- .projectCover { min-height: 170px; }
- .cardBody { padding: var(--space-3); gap: var(--space-2); }
- .cardHeading h2 { font-size: var(--text-lg); }
- .cardMeta { flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
- .continueProject { min-height: 44px; }
+  .projectGrid,
+  .skeletonGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+  .projectCover {
+    min-height: 0;
+  }
+  .cardBody {
+    padding: var(--space-4);
+    gap: var(--space-2);
+  }
+  .cardHeading h2 {
+    font-size: var(--text-lg);
+  }
+  .cardMeta {
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+  }
+  .continueProject {
+    min-height: 44px;
+  }
+  .statusFilter,
+  .statusFilterActive {
+    padding-inline: var(--space-2);
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
 }
 .duplicateNote {
   display: block;

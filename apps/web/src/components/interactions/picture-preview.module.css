@@ -1,0 +1,24 @@
+.dialog { width: min(1180px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); padding: 16px; color: var(--ink-primary, #20332e); background: transparent; border: 1px solid transparent; border-radius: 12px; isolation: isolate; }
+.surface { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--paper-base, #fffefa); border: 1px solid var(--control-border, #7c8d81); pointer-events: none; }
+.dialog::backdrop { background: rgb(13 24 20 / var(--picture-shade, .9)); }
+.dialog[data-closing]::backdrop, .dialog[data-closing] .surface { animation: picture-fade-out var(--picture-close, 500ms) var(--ease-exit, ease-in) forwards; }
+.dialog[data-closing] .header, .dialog[data-closing] .tools, .dialog[data-closing] .help { opacity: 0; transition: opacity 150ms ease-in; pointer-events: none; }
+.header, .tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.header h3 { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 16px; }
+.stage { position: relative; height: min(70dvh, 760px); min-height: 180px; margin: 16px 0; overflow: hidden; background: var(--paper-base, #fffefa); touch-action: none; user-select: none; }
+.track { position: absolute; inset: 0; transform: translate3d(var(--picture-slide, 0px), var(--picture-dismiss, 0px), 0) scale(var(--picture-dismiss-scale, 1)); }
+.slot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.previous { transform: translateX(-100%); }
+.next { transform: translateX(100%); }
+.picture { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 100%; transform-origin: center; border-radius: var(--picture-dismiss-radius, 0px); }
+.zoom { max-width: 100%; max-height: 100%; display: flex; transform: translate3d(var(--picture-x, 0px), var(--picture-y, 0px), 0) scale(var(--picture-scale, 1)); transform-origin: center; }
+.image { display: block; width: auto; height: auto; max-width: 100%; max-height: min(70dvh, 760px); object-fit: contain; }
+.error { padding: 24px; text-align: center; }
+.tools { justify-content: center; }
+.toolGroup { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.help { margin: 12px 0 0; font-size: 13px; text-align: center; }
+.live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@keyframes picture-fade-out { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dialog[data-closing]::backdrop, .dialog[data-closing] .surface { animation: none; } }
+@media (max-width: 767px) { .dialog { padding: 12px; width: calc(100vw - 16px); max-height: calc(100dvh - 16px); } .stage { height: 62dvh; } .image { max-height: 62dvh; } .tools { gap: 8px; } }
+@media (forced-colors: active) { .dialog { border: 2px solid CanvasText; background: Canvas; } .stage { background: Canvas; } }

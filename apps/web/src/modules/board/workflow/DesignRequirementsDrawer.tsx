@@ -8,7 +8,8 @@ import type { WorkflowGraph } from "./workflow-api";
 import styles from "./workflow-canvas.module.css";
 import ui from "./assistant-context.module.css";
 
-export function DesignRequirementsDrawer({ context, error, graph, saving, hasDraftReferences = false, onLocate, onUpdate, onRetry, onClose }: {
+export function DesignRequirementsDrawer({ context, error, graph, saving, hasDraftReferences = false, open = true, onLocate, onUpdate, onRetry, onClose }: {
+  readonly open?: boolean;
   readonly context: WorkflowConversationContext | null;
   readonly error: string | null;
   readonly graph: WorkflowGraph;
@@ -24,6 +25,8 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [itemText, setItemText] = useState("");
   const [itemScope, setItemScope] = useState<"project" | "branch">("project");
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) { setWasOpen(open); if (open) { setEditingGoal(false); setEditingItem(null); } }
   const entries = [
     ...(context?.state?.requirements ?? context?.requirements ?? []).map((item) => ({ item, preference: false })),
     ...(context?.state?.preferences ?? context?.preferences ?? []).map((item) => ({ item, preference: true })),
@@ -44,7 +47,7 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
     {editingItem === item.id ? <form className={styles.proposalEditor} onSubmit={(event) => { event.preventDefault(); void onUpdate({ updatedItems: [{ id: item.id, text: itemText.trim(), scope: itemScope, confirm: true }] }).then((saved) => { if (saved) setEditingItem(null); }); }}><label>更正内容<textarea aria-label="更正内容" maxLength={600} rows={2} value={itemText} onChange={(event) => setItemText(event.target.value)} /></label><label>作用范围<select aria-label="作用范围" value={itemScope} onChange={(event) => setItemScope(event.target.value as "project" | "branch")}><option value="project">整个项目</option><option disabled={!item.branchNodeIds?.length} value="branch">原分支</option></select></label><button className={styles.actionPrimary} disabled={saving || !itemText.trim()} type="submit">保存更正</button><button className={styles.actionQuiet} onClick={() => setEditingItem(null)} type="button">取消更正</button></form> : null}
   </li>;
 
-  return <Dialog label="设计要求与偏好" onClose={onClose} returnFocusSelector="[data-assistant-requirements-trigger]" className={ui.drawer}>
+  return <Dialog open={open} label="设计要求与偏好" onClose={onClose} returnFocusSelector="[data-assistant-requirements-trigger]" className={ui.drawer}>
     <header className={ui.drawerHeader}><h2>设计要求与偏好</h2><button className={styles.actionQuiet} onClick={onClose} type="button" aria-label="关闭设计要求与偏好">关闭</button></header>
     <div className={`${styles.contextContents} ${ui.drawerContents}`}>
       <p>让助手记住这个项目的设计要求。修改会影响后续讨论，已有设计结果保持不变。</p>

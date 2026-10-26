@@ -1,5 +1,7 @@
 "use client";
 
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前品牌摘要与分组字段；共享库和历史为次级。保存为主操作，参考图使用完整预览。 */
 
 import { useRef, useState } from "react";
@@ -48,6 +50,12 @@ const lines = (value: string) =>
 export function BrandLibrary(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const [id, setId] = useState<string | null>(
     props.data.brandProfiles[0]?.id ?? null,
   );
@@ -68,7 +76,7 @@ export function BrandLibrary(
     }
   };
   const reuse = async (brand: StudioDocumentView) => {
-    if (!(await props.beforeChange())) return;
+    if (!(await beforeChange())) return;
     setBusy(true);
     setError(null);
     const revisionId = brand.currentRevision.id;
@@ -93,6 +101,36 @@ export function BrandLibrary(
   return (
     <div className={styles.section}>
       <StudioPageHeader
+        objectSwitcher={
+          props.data.brandProfiles.length > 0 ? (
+            <ObjectSwitcher
+              label="切换对象"
+              current={
+                <>
+                  切换资料 ·{" "}
+                  {existing?.currentRevision.payload.name ?? "新建资料"}
+                </>
+              }
+            >
+              <aside className={styles.rail} aria-label="品牌列表">
+                {props.data.brandProfiles.map((item) => (
+                  <Button
+                    aria-pressed={id === item.id}
+                    key={item.id}
+                    onClick={() =>
+                      void (async () => {
+                        if (await beforeChange()) setId(item.id);
+                      })()
+                    }
+                  >
+                    <strong>{item.currentRevision.payload.name}</strong>
+                    <small>r{item.currentRevision.revision}</small>
+                  </Button>
+                ))}
+              </aside>
+            </ObjectSwitcher>
+          ) : null
+        }
         title={String(existing?.currentRevision.payload.name ?? "新品牌资料")}
         type="品牌资料"
         description="整理设计规则、品牌色与认可案例"
@@ -101,7 +139,7 @@ export function BrandLibrary(
             <Button
               onClick={() =>
                 void (async () => {
-                  if (await props.beforeChange()) {
+                  if (await beforeChange()) {
                     setId(null);
                     setDraftVersion((current) => current + 1);
                   }
@@ -114,34 +152,6 @@ export function BrandLibrary(
         }
       />
       <div className={styles.split}>
-        {props.data.brandProfiles.length > 1 ? (
-          <ObjectSwitcher
-            label="切换对象"
-            current={
-              <>
-                切换资料 ·{" "}
-                {existing?.currentRevision.payload.name ?? "新建资料"}
-              </>
-            }
-          >
-            <aside className={styles.rail} aria-label="品牌列表">
-              {props.data.brandProfiles.map((item) => (
-                <Button
-                  aria-pressed={id === item.id}
-                  key={item.id}
-                  onClick={() =>
-                    void (async () => {
-                      if (await props.beforeChange()) setId(item.id);
-                    })()
-                  }
-                >
-                  <strong>{item.currentRevision.payload.name}</strong>
-                  <small>r{item.currentRevision.revision}</small>
-                </Button>
-              ))}
-            </aside>
-          </ObjectSwitcher>
-        ) : null}
         <BrandEditor
           key={
             (existing?.id ?? "new") +
@@ -151,6 +161,8 @@ export function BrandLibrary(
             draftVersion
           }
           {...props}
+          feedback={feedback}
+          beforeChange={beforeChange}
           existing={existing}
           onCreated={setId}
         />
@@ -194,6 +206,7 @@ function BrandEditor({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   existing,
   onCreated,
 }: StudioPanelProps & {
@@ -204,6 +217,7 @@ function BrandEditor({
   const form = useStudioForm(
     existing ? (existing.currentRevision.payload as Brand) : blank(),
     onDirty,
+    { feedback },
   );
   const { draft, setDraft } = form;
   const pendingApply = useRef<{
@@ -311,7 +325,7 @@ function BrandEditor({
       });
       pendingApply.current = null;
       setApplied(true);
-    });
+    }, "apply");
   };
   return (
     <form
@@ -468,6 +482,7 @@ function BrandEditor({
           <section className={styles.brandReferences}>
             <AssetPicker
               compact
+              disabled={!canEdit || form.busy}
               assets={data.assets}
               selected={draft.referenceAssetIds}
               max={12}
@@ -478,6 +493,7 @@ function BrandEditor({
         </fieldset>
       </StudioEditSection>
       <SaveBar
+        feedback={feedback?.snapshot}
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}
@@ -486,6 +502,8 @@ function BrandEditor({
         <Button
           disabled={!existing || form.dirty || !canEdit}
           loading={form.busy}
+          feedback={feedback?.snapshot}
+          feedbackAction="apply"
           onClick={() => void apply()}
         >
           将此修订加入画布

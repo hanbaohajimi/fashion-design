@@ -1,0 +1,13 @@
+.tray { position: absolute; inset: auto auto 12px 12px; z-index: 10; width: min(420px, calc(100% - 24px)); max-height: 240px; overflow: auto; padding: 8px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-paper); box-shadow: var(--shadow-popup); }
+.item { display: flex; align-items: center; gap: 8px; padding: 8px; }
+.preview { position: relative; display: grid; place-items: center; flex: none; width: 48px; height: 56px; overflow: hidden; background: var(--color-surface); border-radius: 4px; font-size: 11px; }
+.preview img { width: 100%; height: 100%; object-fit: contain; }
+.shade { position: absolute; inset: 0; background: rgba(32,51,46,.24); transform-origin: top; transition: transform 140ms var(--ease-enter); pointer-events: none; }
+.description { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; font-size: var(--text-sm); }
+.description strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.description progress { width: 100%; height: 4px; accent-color: var(--color-action); }
+.item button { border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-paper); color: var(--color-ink); min-height: 36px; cursor: pointer; }
+.check { position: absolute; inset: auto 0 0 auto; background: var(--color-paper); color: var(--color-action); padding: 2px 4px; animation: confirm 300ms var(--ease-enter); }
+@keyframes confirm { from { transform: scale(.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (pointer: coarse) { .item button { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .shade { transition: none; } .check { animation: none; } }

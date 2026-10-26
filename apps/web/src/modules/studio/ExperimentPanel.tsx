@@ -1,7 +1,7 @@
 "use client";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为稳定结果矩阵；320px 配置区提供母图与参数。保存计划为主操作，显式提交才启动生成。 */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   experimentCreateSchema,
   type ExperimentCreateInput,
@@ -89,6 +89,15 @@ export function ExperimentPanel({
   initialSourceAssetId?: string;
 }) {
   const assetName = useStudioAssetName();
+  const surfaceId = useId();
+  const [resultFilter, setResultFilter] = useState("all");
+  const matchesResult = (status: string) =>
+    resultFilter === "all" ||
+    (resultFilter === "active"
+      ? ["draft", "queued", "dispatching", "running"].includes(status)
+      : resultFilter === "failed"
+        ? ["failed", "not_admitted"].includes(status)
+        : status === resultFilter);
   const base =
     "/api/projects/" + encodeURIComponent(projectId) + "/experiments";
   const [mode, setMode] = useState<ExperimentCreateInput["mode"]>(initialMode);
@@ -320,7 +329,11 @@ export function ExperimentPanel({
         }
       />
       <div className={styles.workspace}>
-        <div className={styles.configuration}>
+        <nav className={styles.sectionLinks} aria-label="实验区域">
+          <a href={`#${surfaceId}-results`}>查看结果</a>
+          <a href={`#${surfaceId}-settings`}>调整设置</a>
+        </nav>
+        <div id={`${surfaceId}-settings`} className={styles.configuration}>
           {!canEdit ? (
             <p role="status">当前角色可查看实验结果，提交生成需要编辑权限。</p>
           ) : (
@@ -495,7 +508,11 @@ export function ExperimentPanel({
             </form>
           )}
         </div>
-        <div className={styles.results} aria-label="实验计划与结果">
+        <div
+          id={`${surfaceId}-results`}
+          className={styles.results}
+          aria-label="实验计划与结果"
+        >
           {batches.length > 1 ? (
             <label className={styles.batchSelector}>
               当前实验批次
@@ -601,6 +618,45 @@ export function ExperimentPanel({
                     </div>
                   ) : null}
                 </div>
+                <div className={styles.resultFilters} aria-label="实验状态筛选">
+                  {[
+                    ["all", "全部"],
+                    ["active", "待完成"],
+                    ["succeeded", "已完成"],
+                    ["failed", "失败或未接纳"],
+                    ["canceled", "已取消"],
+                  ].map(([value, label]) => (
+                    <Button
+                      size="small"
+                      key={value}
+                      aria-pressed={resultFilter === value}
+                      onClick={() => setResultFilter(value ?? "all")}
+                    >
+                      {label} ·{" "}
+                      {
+                        batch.items.filter(
+                          (item) =>
+                            value === "all" ||
+                            (value === "active"
+                              ? [
+                                  "draft",
+                                  "queued",
+                                  "dispatching",
+                                  "running",
+                                ].includes(item.status)
+                              : value === "failed"
+                                ? ["failed", "not_admitted"].includes(
+                                    item.status,
+                                  )
+                                : item.status === value),
+                        ).length
+                      }
+                    </Button>
+                  ))}
+                </div>
+                {!batch.items.some((item) => matchesResult(item.status)) ? (
+                  <p role="status">当前筛选下没有方案。原款仍保留用于对照。</p>
+                ) : null}
                 <div className={styles.matrix}>
                   <article className={styles.sourceItem}>
                     <div className={styles.preview}>
@@ -618,116 +674,123 @@ export function ExperimentPanel({
                       <span className={styles.state}>本轮比较基准</span>
                     </div>
                   </article>
-                  {batch.items.map((item) => (
-                    <article
-                      key={item.id}
-                      className={styles.item}
-                      data-status={item.status}
-                    >
-                      <div className={styles.preview}>
-                        {item.assets[0] ? (
-                          <ImagePreview
-                            src={
-                              item.assets[0].thumbnailUrl ?? item.assets[0].url
-                            }
-                            alt={item.title}
-                          />
-                        ) : viewingItemId === item.id &&
-                          isTaskActive(item.status) ? (
-                          <TaskFeedback
-                            taskId={`${projectId}:${item.id}:${item.attempt}`}
-                            status={item.status}
-                            compact
-                            operation={
-                              batch.mode === "material"
-                                ? "material"
-                                : batch.mode === "color"
-                                  ? "color"
-                                  : "edit"
-                            }
-                          />
-                        ) : (
-                          <span>{stateLabel[item.status]}</span>
-                        )}
-                      </div>
-                      <div className={styles.itemBody}>
-                        <Badge
-                          tone={
-                            item.status === "succeeded"
-                              ? "success"
-                              : ["failed", "not_admitted"].includes(item.status)
-                                ? "error"
-                                : isTaskActive(item.status)
-                                  ? "running"
-                                  : "neutral"
-                          }
-                        >
-                          {stateLabel[item.status]}
-                          {item.attempt ? " · 重试 " + item.attempt : ""}
-                        </Badge>
-                        <h4>{item.title}</h4>
-                        {item.color ? (
-                          <span className={styles.color}>
-                            <i style={{ background: item.color.hex }} />
-                            {item.color.hex}
-                          </span>
-                        ) : null}
-                        {item.error ? (
-                          <p role="status">
-                            {userFacingError(
-                              item.error,
-                              "此方案未完成，可重试失败项",
-                            )}
-                          </p>
-                        ) : null}
-                        {canEdit &&
-                        ["failed", "not_admitted"].includes(item.status) ? (
-                          <Button
-                            disabled={busy}
-                            onClick={() => void act(batch, "retry", [item.id])}
-                          >
-                            重试此方案
-                          </Button>
-                        ) : null}
-                        {isTaskActive(item.status) ? (
-                          <Button
-                            size="small"
-                            aria-pressed={viewingItemId === item.id}
-                            onClick={() =>
-                              setViewingItemId(
-                                viewingItemId === item.id ? null : item.id,
-                              )
+                  {batch.items
+                    .filter((item) => matchesResult(item.status))
+                    .map((item) => (
+                      <article
+                        key={item.id}
+                        className={styles.item}
+                        data-status={item.status}
+                      >
+                        <div className={styles.preview}>
+                          {item.assets[0] ? (
+                            <ImagePreview
+                              src={
+                                item.assets[0].thumbnailUrl ??
+                                item.assets[0].url
+                              }
+                              alt={item.title}
+                            />
+                          ) : viewingItemId === item.id &&
+                            isTaskActive(item.status) ? (
+                            <TaskFeedback
+                              taskId={`${projectId}:${item.id}:${item.attempt}`}
+                              status={item.status}
+                              compact
+                              operation={
+                                batch.mode === "material"
+                                  ? "material"
+                                  : batch.mode === "color"
+                                    ? "color"
+                                    : "edit"
+                              }
+                            />
+                          ) : (
+                            <span>{stateLabel[item.status]}</span>
+                          )}
+                        </div>
+                        <div className={styles.itemBody}>
+                          <Badge
+                            tone={
+                              item.status === "succeeded"
+                                ? "success"
+                                : ["failed", "not_admitted"].includes(
+                                      item.status,
+                                    )
+                                  ? "error"
+                                  : isTaskActive(item.status)
+                                    ? "running"
+                                    : "neutral"
                             }
                           >
-                            {viewingItemId === item.id
-                              ? "收起生成状态"
-                              : "查看生成状态"}
-                          </Button>
-                        ) : null}
-                        <details>
-                          <summary>修改要求与来源</summary>
-                          <p>{item.prompt}</p>
-                          <small>母图：{batch.sourceAssetId}</small>
-                          {item.fabric ? (
-                            <p>面料快照：{item.fabric.tags.join(" / ")}</p>
+                            {stateLabel[item.status]}
+                            {item.attempt ? " · 重试 " + item.attempt : ""}
+                          </Badge>
+                          <h4>{item.title}</h4>
+                          {item.color ? (
+                            <span className={styles.color}>
+                              <i style={{ background: item.color.hex }} />
+                              {item.color.hex}
+                            </span>
                           ) : null}
-                        </details>
-                        {item.assets.map((asset) => (
-                          <a
-                            key={asset.id}
-                            href={
-                              "/" +
-                              encodeURIComponent(projectId) +
-                              "/studio?tab=styles&assetId=" +
-                              encodeURIComponent(asset.id)
-                            }
-                          >
-                            比较并保存为款式
-                          </a>
-                        ))}
-                      </div>
-                    </article>
-                  ))}
+                          {item.error ? (
+                            <p role="status">
+                              {userFacingError(
+                                item.error,
+                                "此方案未完成，可重试失败项",
+                              )}
+                            </p>
+                          ) : null}
+                          {canEdit &&
+                          ["failed", "not_admitted"].includes(item.status) ? (
+                            <Button
+                              disabled={busy}
+                              onClick={() =>
+                                void act(batch, "retry", [item.id])
+                              }
+                            >
+                              重试此方案
+                            </Button>
+                          ) : null}
+                          {isTaskActive(item.status) ? (
+                            <Button
+                              size="small"
+                              aria-pressed={viewingItemId === item.id}
+                              onClick={() =>
+                                setViewingItemId(
+                                  viewingItemId === item.id ? null : item.id,
+                                )
+                              }
+                            >
+                              {viewingItemId === item.id
+                                ? "收起生成状态"
+                                : "查看生成状态"}
+                            </Button>
+                          ) : null}
+                          <details>
+                            <summary>修改要求与来源</summary>
+                            <p>{item.prompt}</p>
+                            <small>母图：{batch.sourceAssetId}</small>
+                            {item.fabric ? (
+                              <p>面料快照：{item.fabric.tags.join(" / ")}</p>
+                            ) : null}
+                          </details>
+                          {item.assets.map((asset) => (
+                            <a
+                              key={asset.id}
+                              href={
+                                "/" +
+                                encodeURIComponent(projectId) +
+                                "/studio?tab=styles&assetId=" +
+                                encodeURIComponent(asset.id)
+                              }
+                            >
+                              比较并保存为款式
+                            </a>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
                 </div>
               </section>
             ))}

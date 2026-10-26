@@ -290,6 +290,10 @@
   --shadow-hairline: 0 0 0 1px var(--color-border);
   --shadow-ui: 0 1px 2px rgba(24, 24, 24, 0.05);
 
+  /* 仅用于项目状态切换与继续创作入口，不替代材料及浮层投影。 */
+  --shadow-soft-raised: -3px -3px 8px rgba(255, 255, 255, 0.85), 3px 3px 8px rgba(32, 51, 46, 0.12);
+  --shadow-soft-inset: inset -2px -2px 4px rgba(255, 255, 255, 0.85), inset 2px 2px 4px rgba(32, 51, 46, 0.12);
+
   /* 画布素材专用 —— 模拟纸张 / 卡纸的物理厚度。
      三层叠加：接触阴影（贴住台面）+ 近距投影（厚度）+ 远距环境影（离台高度）。
      单一阴影会让纸片看起来像贴纸；三层才有"被放在桌上"的重量。
@@ -335,6 +339,27 @@
   --duration-fast: 140ms;
   --duration-normal: 180ms;
   --duration-result: 280ms;
+  --motion-status: 180ms;
+  --motion-tooltip-enter: 150ms;
+  --motion-tooltip-exit: 120ms;
+  --motion-menu-enter: 300ms;
+  --motion-menu-exit: 200ms;
+  --motion-dialog-enter: 350ms;
+  --motion-dialog-exit: 250ms;
+  --motion-sheet-enter: 400ms;
+  --motion-sheet-exit: 300ms;
+  --motion-indicator: 350ms;
+  --motion-content-enter: 400ms;
+  --motion-image-reveal: 300ms;
+  --motion-feedback: 300ms;
+  --motion-feedback-check: 350ms;
+  --motion-picture-expand: 500ms;
+  --motion-gallery: 350ms;
+  --motion-gallery-reset: 280ms;
+  --motion-picture-dismiss-reset: 400ms;
+  --motion-reorder: 200ms;
+  --motion-drop: 250ms;
+  --motion-shimmer: 1500ms;
   --duration-slow: 180ms;
 
   /* ============================================================

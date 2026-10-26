@@ -209,3 +209,16 @@
     padding: 24px 20px;
   }
 }
+.validation {
+  min-height: 1.5em;
+  color: var(--color-error);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.validation[data-error="true"] { animation: validation-enter 220ms var(--ease-enter); }
+.validation[data-valid="true"] { color: var(--color-success); }
+.validation span { display: inline-flex; gap: 5px; align-items: center; }
+.validation path { stroke-dasharray: 1; animation: validation-check var(--motion-feedback-check) var(--ease-enter) both; }
+@keyframes validation-check { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes validation-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .validation[data-error="true"], .validation path { animation: none; } }

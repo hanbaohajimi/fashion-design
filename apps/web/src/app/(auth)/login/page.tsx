@@ -1,9 +1,11 @@
 "use client";
 
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { Button, Input } from "../../../components/ui";
 import { BrandLockup } from "../../../components/BrandLockup";
+import { useSubmitFeedback } from "../../../components/interactions/use-submit-feedback";
+import { motionEase, motionTime } from "../../../components/interactions/motion-policy";
 import { readErrorMessage } from "../../../modules/auth/auth-api";
 import styles from "./forest-login.module.css";
 
@@ -15,15 +17,38 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [sentEmail, setSentEmail] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const [formatError, setFormatError] = useState<string | null>(null);
+  const [formatValid, setFormatValid] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const feedback = useSubmitFeedback();
+  const flight = useRef(false);
+  const validate = () => {
+    const valid = emailInputRef.current?.validity.valid ?? false;
+    const message = valid ? null : "请输入有效的邮箱地址。";
+    setFormatError(message);
+    setFormatValid(valid);
+    return valid;
+  };
+  useEffect(() => {
+    if (composing || !email.trim()) return;
+    const timer = setTimeout(() => {
+      const valid = emailInputRef.current?.validity.valid ?? false;
+      setFormatError(valid ? null : "请输入有效的邮箱地址。");
+      setFormatValid(valid);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [email, composing]);
 
   async function sendLoginLink(targetEmail: string): Promise<void> {
-    if (state === "sending") {
+    if (flight.current || state === "sending") {
       return;
     }
 
     const normalizedEmail = targetEmail.trim().toLowerCase();
     setError(null);
     setState("sending");
+    flight.current = true;
+    const receipt = feedback.begin("login");
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -40,20 +65,26 @@ export default function LoginPage() {
           await readErrorMessage(response, "登录邮件发送失败，请稍后重试。"),
         );
         setState("idle");
+        receipt.fail();
         return;
       }
 
       setEmail(normalizedEmail);
       setSentEmail(normalizedEmail);
       setState("sent");
+      receipt.succeed();
     } catch {
       setError("无法连接认证服务，请检查网络后重试。");
       setState("idle");
+      receipt.fail();
+    } finally {
+      flight.current = false;
     }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!validate()) return;
     void sendLoginLink(email);
   }
 
@@ -61,6 +92,9 @@ export default function LoginPage() {
     setError(null);
     setSentEmail(null);
     setState("idle");
+    setFormatError(null);
+    setFormatValid(false);
+    feedback.reset();
     window.setTimeout(() => emailInputRef.current?.focus(), 0);
   }
 
@@ -100,8 +134,9 @@ export default function LoginPage() {
             <label htmlFor="email">邮箱地址</label>
             <Input
               aria-describedby={
-                error ? "login-error" : sentEmail ? "login-status" : undefined
+                [formatError || formatValid ? "login-format" : null, error ? "login-error" : null, sentEmail ? "login-status" : null].filter(Boolean).join(" ") || undefined
               }
+              aria-invalid={Boolean(formatError) || undefined}
               autoCapitalize="none"
               autoComplete="email"
               autoFocus
@@ -110,7 +145,18 @@ export default function LoginPage() {
               id="email"
               inputMode="email"
               name="email"
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => { setEmail(event.target.value); setError(null); setFormatValid(!composing && Boolean(formatError) && event.target.validity.valid); if (!composing && (event.target.validity.valid || !event.target.value)) setFormatError(null); }}
+              onBlur={() => { if (!composing && email) validate(); }}
+              onCompositionStart={() => { setComposing(true); setFormatValid(false); }}
+              onCompositionEnd={() => setComposing(false)}
+              onInvalid={(event) => {
+                event.preventDefault();
+                setFormatError("请输入有效的邮箱地址。");
+                setFormatValid(false);
+                event.currentTarget.focus();
+                const duration = motionTime("--motion-content-enter", 400);
+                if (duration) event.currentTarget.animate?.([0, -4, 4, -2, 2, 0].map(x => ({ transform: `translateX(${x}px)` })), { duration, easing: motionEase() });
+              }}
               placeholder="designer@example.com"
               ref={emailInputRef}
               required
@@ -118,10 +164,14 @@ export default function LoginPage() {
               type="email"
               value={email}
             />
+            <small id="login-format" className={styles.validation} data-error={Boolean(formatError)} data-valid={formatValid} role={formatError ? "alert" : undefined}>{formatError ?? (formatValid ? <span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="m4 10 4 4 8-9" pathLength="1" stroke="currentColor" strokeWidth="1.5" /></svg>邮箱格式有效</span> : null)}</small>
             <Button
               variant="primary"
               disabled={state === "sending" || state === "sent"}
               type="submit"
+              loading={state === "sending"}
+              feedback={feedback.snapshot}
+              feedbackAction="login"
             >
               {state === "sending"
                 ? "正在发送…"

@@ -19,7 +19,12 @@ import type { Fabric } from "./fabric-types";
 import { canManageFabric } from "./fabric-filters";
 import styles from "./fabrics.module.css";
 import { useCoutureMotion } from "../../components/motion/use-couture-motion";
-import { createFabricDetailsDraft, parseFabricDetailsDraft, FabricDetailsEditor, FabricDetailsSummary } from "./FabricDetailsEditor";
+import {
+  createFabricDetailsDraft,
+  parseFabricDetailsDraft,
+  FabricDetailsEditor,
+  FabricDetailsSummary,
+} from "./FabricDetailsEditor";
 
 const FABRIC_IMAGE_ACCEPT =
   "image/jpeg,image/png,image/webp,image/heic,image/heif";
@@ -63,20 +68,23 @@ export function FabricUploadPanel({
     if (fileInput.current) fileInput.current.value = "";
   };
 
-  const chooseFile = useCallback((nextFile: File | undefined): void => {
-    if (!nextFile || submitting) return;
-    const nextError = validateFabricUpload({
-      file: nextFile,
-      tags: ["待填写"],
-    });
-    if (nextError) {
-      setError(nextError);
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    setFile(nextFile);
-  }, [submitting]);
+  const chooseFile = useCallback(
+    (nextFile: File | undefined): void => {
+      if (!nextFile || submitting) return;
+      const nextError = validateFabricUpload({
+        file: nextFile,
+        tags: ["待填写"],
+      });
+      if (nextError) {
+        setError(nextError);
+        return;
+      }
+      setError(null);
+      setSuccess(null);
+      setFile(nextFile);
+    },
+    [submitting],
+  );
 
   useEffect(() => {
     const belongsToPanel = (event: DragEvent): boolean => {
@@ -107,7 +115,10 @@ export function FabricUploadPanel({
   const submit = async (): Promise<void> => {
     if (submitting) return;
     const parsed = parseFabricDetailsDraft(detailsDraft);
-    if (!parsed.success) { setError(parsed.error); return; }
+    if (!parsed.success) {
+      setError(parsed.error);
+      return;
+    }
     const input: FabricUploadInput = {
       file,
       details: parsed.details,
@@ -126,7 +137,10 @@ export function FabricUploadPanel({
       setSuccess("面料已加入面料库");
       reset();
       onUploaded(created);
-      play("material", { anchor: panel.current, eventKey: `fabric-upload:${created.id}` });
+      play("material", {
+        anchor: panel.current,
+        eventKey: `fabric-upload:${created.id}`,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "面料上传失败，请重试");
     } finally {
@@ -188,9 +202,7 @@ export function FabricUploadPanel({
             <span aria-hidden="true">＋</span>
             添加面料
           </strong>
-          <span>
-            {dragging ? "松开以上传" : "选择图片或拖放到这里"}
-          </span>
+          <span>{dragging ? "松开以上传" : "选择图片或拖放到这里"}</span>
         </button>
       ) : (
         <form
@@ -205,7 +217,11 @@ export function FabricUploadPanel({
               // eslint-disable-next-line @next/next/no-img-element
               <img alt="待上传面料预览" src={previewUrl} />
             ) : null}
-            <button disabled={submitting} onClick={() => fileInput.current?.click()} type="button">
+            <button
+              disabled={submitting}
+              onClick={() => fileInput.current?.click()}
+              type="button"
+            >
               更换图片
             </button>
           </div>
@@ -224,7 +240,11 @@ export function FabricUploadPanel({
             <p className={styles.tagHelp}>
               最多 12 个标签，每个不超过 30 个字。
             </p>
-            <FabricDetailsEditor value={detailsDraft} onChange={setDetailsDraft} disabled={submitting} />
+            <FabricDetailsEditor
+              value={detailsDraft}
+              onChange={setDetailsDraft}
+              disabled={submitting}
+            />
           </div>
           <div className={styles.fabricUploadActions}>
             <button disabled={submitting} onClick={reset} type="button">
@@ -252,6 +272,8 @@ export function FabricUploadPanel({
 }
 
 interface FabricCardProps {
+  readonly adding?: boolean;
+  readonly addDisabled?: boolean;
   readonly compact?: boolean;
   readonly fabric: Fabric;
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
@@ -259,20 +281,29 @@ interface FabricCardProps {
 }
 
 export function FabricCard({
+  adding = false,
+  addDisabled = false,
   compact = false,
   fabric: sourceFabric,
   onAdd,
   onChanged,
 }: FabricCardProps) {
   const [updatedFabric, setUpdatedFabric] = useState<Fabric | null>(null);
-  const fabric = updatedFabric && updatedFabric.id === sourceFabric.id && new Date(updatedFabric.updatedAt) >= new Date(sourceFabric.updatedAt) ? updatedFabric : sourceFabric;
+  const fabric =
+    updatedFabric &&
+    updatedFabric.id === sourceFabric.id &&
+    new Date(updatedFabric.updatedAt) >= new Date(sourceFabric.updatedAt)
+      ? updatedFabric
+      : sourceFabric;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editTagText, setEditTagText] = useState(fabric.tags.join("、"));
-  const [editDetails, setEditDetails] = useState(() => createFabricDetailsDraft(fabric.details));
+  const [editDetails, setEditDetails] = useState(() =>
+    createFabricDetailsDraft(fabric.details),
+  );
   const label = fabric.details?.name || fabric.tags.join("、") || "面料";
   const manageable = canManageFabric(fabric);
   const scopeLabel = fabric.scope === "preset" ? "系统内置" : "用户上传";
@@ -308,16 +339,24 @@ export function FabricCard({
     }
 
     const parsed = parseFabricDetailsDraft(editDetails);
-    if (!parsed.success) { setActionError(parsed.error); return; }
+    if (!parsed.success) {
+      setActionError(parsed.error);
+      return;
+    }
     setActionError(null);
     setSaving(true);
     try {
-      const updated = await updateFabric(fabric.id, { tags, details: parsed.details });
+      const updated = await updateFabric(fabric.id, {
+        tags,
+        details: parsed.details,
+      });
       setUpdatedFabric(updated);
       setEditing(false);
       onChanged?.();
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : "面料档案保存失败");
+      setActionError(
+        cause instanceof Error ? cause.message : "面料档案保存失败",
+      );
     } finally {
       setSaving(false);
     }
@@ -346,20 +385,35 @@ export function FabricCard({
       onDragStart={beginDrag}
     >
       <div className={styles.cardVisual}>
-        <ImagePreview alt={label} src={fabric.mainImageUrl} fit="cover" retryable={false} draggable={false} />
+        <ImagePreview
+          alt={label}
+          src={fabric.mainImageUrl}
+          fit="cover"
+          retryable={false}
+          draggable={false}
+        />
         <span className={styles.dragHint}>拖至白板</span>
         <button
-            aria-label={`${manageable ? "管理" : "查看"}面料：${label}`}
-            className={styles.fabricManageButton}
-            onClick={openManager}
-            type="button"
-          >
-            {manageable ? "管理" : "详情"}
-          </button>
+          aria-label={`${manageable ? "管理" : "查看"}面料：${label}`}
+          className={styles.fabricManageButton}
+          onClick={openManager}
+          type="button"
+        >
+          {manageable ? "管理" : "详情"}
+        </button>
       </div>
       <div className={styles.cardBody}>
         <h3>{fabric.details?.name || "未命名面料"}</h3>
-        <p className={styles.cardSpec}>{[fabric.details?.code, fabric.details?.weightGsm ? `${fabric.details.weightGsm} g/m²` : null].filter(Boolean).join(" · ") || "规格未填写"}</p>
+        <p className={styles.cardSpec}>
+          {[
+            fabric.details?.code,
+            fabric.details?.weightGsm
+              ? `${fabric.details.weightGsm} g/m²`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || "规格未填写"}
+        </p>
         <div className={styles.fabricTags}>
           <span className={styles.categoryPill} data-scope={fabric.scope}>
             {scopeLabel}
@@ -370,124 +424,136 @@ export function FabricCard({
         </div>
         {onAdd ? (
           <div className={styles.fabricCardActions}>
-            <button onClick={() => onAdd(fabric)} type="button">
-              添加到白板
+            <button
+              disabled={addDisabled}
+              aria-busy={adding}
+              onClick={() => onAdd(fabric)}
+              type="button"
+            >
+              {adding ? "正在加入…" : "加入当前项目"}
             </button>
           </div>
         ) : null}
       </div>
 
       {dialogOpen ? (
-              <Dialog
-                busy={saving}
-                label={manageable ? "管理或删除面料" : "面料档案"}
-                className={styles.fabricDialog}
-                onClose={() => { if (!saving) setDialogOpen(false); }}
-              >
-                <header>
-                  <h2>{manageable ? "管理面料" : "面料档案"}</h2>
-                  <button
-                    aria-label="关闭"
-                    disabled={saving}
-                    onClick={() => setDialogOpen(false)}
-                    type="button"
-                  >
-                    ×
-                  </button>
-                </header>
-                <div className={styles.fabricDialogImage}>
-                  <ImagePreview alt={label} src={fabric.mainImageUrl} />
-                </div>
-                {editing ? (
-                  <form
-                    className={styles.fabricEditForm}
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void saveTags();
-                    }}
-                  >
-                    <label>
-                      <span>标签</span>
-                      <input
-                        autoFocus
-                        disabled={saving}
-                        onChange={(event) =>
-                          setEditTagText(event.currentTarget.value)
-                        }
-                        placeholder="使用逗号分隔多个标签"
-                        value={editTagText}
-                      />
-                    </label>
-                    <FabricDetailsEditor value={editDetails} onChange={setEditDetails} disabled={saving} />
-                    <footer>
-                      <button
-                        disabled={saving}
-                        onClick={() => { setEditing(false); setEditTagText(fabric.tags.join("、")); setEditDetails(createFabricDetailsDraft(fabric.details)); setActionError(null); }}
-                        type="button"
-                      >
-                        取消
-                      </button>
-                      <button disabled={saving} type="submit">
-                        {saving ? "保存中…" : "保存档案"}
-                      </button>
-                    </footer>
-                  </form>
-                ) : (
+        <Dialog
+          busy={saving}
+          label={manageable ? "管理或删除面料" : "面料档案"}
+          className={styles.fabricDialog}
+          onClose={() => {
+            if (!saving) setDialogOpen(false);
+          }}
+        >
+          <header>
+            <h2>{manageable ? "管理面料" : "面料档案"}</h2>
+            <button
+              aria-label="关闭"
+              disabled={saving}
+              onClick={() => setDialogOpen(false)}
+              type="button"
+            >
+              ×
+            </button>
+          </header>
+          <div className={styles.fabricDialogImage}>
+            <ImagePreview alt={label} src={fabric.mainImageUrl} />
+          </div>
+          {editing ? (
+            <form
+              className={styles.fabricEditForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveTags();
+              }}
+            >
+              <label>
+                <span>标签</span>
+                <input
+                  autoFocus
+                  disabled={saving}
+                  onChange={(event) =>
+                    setEditTagText(event.currentTarget.value)
+                  }
+                  placeholder="使用逗号分隔多个标签"
+                  value={editTagText}
+                />
+              </label>
+              <FabricDetailsEditor
+                value={editDetails}
+                onChange={setEditDetails}
+                disabled={saving}
+              />
+              <footer>
+                <button
+                  disabled={saving}
+                  onClick={() => {
+                    setEditing(false);
+                    setEditTagText(fabric.tags.join("、"));
+                    setEditDetails(createFabricDetailsDraft(fabric.details));
+                    setActionError(null);
+                  }}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button disabled={saving} type="submit">
+                  {saving ? "保存中…" : "保存档案"}
+                </button>
+              </footer>
+            </form>
+          ) : (
+            <>
+              <div className={styles.fabricDialogTags}>
+                {fabric.tags.map((tag) => (
+                  <span key={tag}>#{tag}</span>
+                ))}
+              </div>
+              <FabricDetailsSummary details={fabric.details} />
+              <footer className={styles.fabricDialogActions}>
+                {manageable && deleteConfirm ? (
                   <>
-                    <div className={styles.fabricDialogTags}>
-                      {fabric.tags.map((tag) => (
-                        <span key={tag}>#{tag}</span>
-                      ))}
-                    </div>
-                    <FabricDetailsSummary details={fabric.details} />
-                    <footer className={styles.fabricDialogActions}>
-                      {manageable && deleteConfirm ? (
-                        <>
-                          <span>
-                            确认删除这张面料？删除后将不再显示在面料库中。
-                          </span>
-                          <button
-                            disabled={saving}
-                            onClick={() => setDeleteConfirm(false)}
-                            type="button"
-                          >
-                            取消
-                          </button>
-                          <button
-                            disabled={saving}
-                            onClick={() => void removeFabric()}
-                            type="button"
-                          >
-                            {saving ? "删除中…" : "确认删除"}
-                          </button>
-                        </>
-                      ) : manageable ? (
-                        <>
-                          <button
-                            onClick={() => setEditing(true)}
-                            type="button"
-                          >
-                            编辑档案
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(true)}
-                            type="button"
-                          >
-                            删除
-                          </button>
-                        </>
-                      ) : <span>此面料为只读资料</span>}
-                    </footer>
+                    <span>确认删除这张面料？删除后将不再显示在面料库中。</span>
+                    <button
+                      disabled={saving}
+                      onClick={() => setDeleteConfirm(false)}
+                      type="button"
+                    >
+                      取消
+                    </button>
+                    <button
+                      disabled={saving}
+                      onClick={() => void removeFabric()}
+                      type="button"
+                    >
+                      {saving ? "删除中…" : "确认删除"}
+                    </button>
                   </>
+                ) : manageable ? (
+                  <>
+                    <button onClick={() => setEditing(true)} type="button">
+                      编辑档案
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirm(true)}
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  </>
+                ) : (
+                  <span>此面料为只读资料</span>
                 )}
-                {actionError ? (
-                  <p className={styles.fabricUploadError} role="alert">
-                    {actionError}
-                  </p>
-                ) : null}
-              </Dialog>
-          )
-        : null}
+              </footer>
+            </>
+          )}
+          {actionError ? (
+            <p className={styles.fabricUploadError} role="alert">
+              {actionError}
+            </p>
+          ) : null}
+        </Dialog>
+      ) : null}
     </article>
   );
 }

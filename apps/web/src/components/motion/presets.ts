@@ -23,10 +23,6 @@ export function composeEffect(
   const width = host.clientWidth;
   const height = host.clientHeight;
   const ink = colors[0] ?? "#323232";
-  const paper =
-    getComputedStyle(document.documentElement)
-      .getPropertyValue("--color-paper")
-      .trim() || "#fff";
   const easing = getComputedStyle(document.documentElement)
     .getPropertyValue("--ease-enter")
     .trim();
@@ -149,30 +145,6 @@ export function composeEffect(
       corners(3);
       line(width / 2, 1, width, 0);
       line(width - 1, height / 2, height, 90, 65);
-      for (const side of [-1, 1]) {
-        const mask = document.createElement("div");
-        Object.assign(mask.style, {
-          position: "absolute",
-          inset: "0",
-          background: paper,
-          opacity: "0.28",
-          clipPath:
-            side < 0
-              ? "polygon(0 0, 100% 0, 0 100%)"
-              : "polygon(100% 0, 100% 100%, 0 100%)",
-        });
-        host.append(mask);
-        items.push(
-          new mo.Html({
-            el: mask,
-            x: { 0: side * 32 },
-            y: { 0: side * 14 },
-            opacity: { 0.28: 0 },
-            duration,
-            easing: ease,
-          }),
-        );
-      }
       break;
     case "seal":
       shape({

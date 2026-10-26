@@ -35,6 +35,8 @@
 
 ## 手工验证：manual/
 
+- [verify-ui-motion-upload.mjs](manual/verify-ui-motion-upload.mjs)：运行 `node scripts/manual/verify-ui-motion-upload.mjs`，使用本地 `.env`、已启动的 Web 与 MinIO 验证实际浏览器原图上传进度及校验和。只写入并删除本次唯一验证对象，不调用模型；结果写入 `output/ui-motion/minio-upload.json`。
+
 - [test-amux-response-check.ts](manual/test-amux-response-check.ts)：单参考图与多参考图服务诊断。显式配置供应商环境后，可从根目录运行 `node apps/api/node_modules/tsx/dist/cli.mjs scripts/manual/test-amux-response-check.ts`；该操作会调用配置的图片服务，不属于目录整理验收。
 - [test-multi-reference.sh](manual/test-multi-reference.sh)：历史人工操作检查清单，需要 Bash，按脚本提示手动操作已启动的系统。脚本中的业务描述保留原有时间背景。
 

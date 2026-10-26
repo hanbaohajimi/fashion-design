@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 
 import {
@@ -15,7 +15,8 @@ import { TrendCard, trendCategoryLabel } from "./TrendCard";
 import type { TrendItem } from "./trend-types";
 import { WeeklyDigestCard } from "./WeeklyDigestCard";
 import styles from "./trends.module.css";
-import { Skeleton } from "../../components/ui";
+import { Button, Skeleton, SkeletonGroup } from "../../components/ui";
+import { motionEase, motionTime, observeMotionCancellation } from "../../components/interactions/motion-policy";
 import { userFacingError } from "../../components/user-facing-error";
 
 export function TrendArchive({
@@ -24,6 +25,22 @@ export function TrendArchive({
   readonly projectId?: string | undefined;
 }) {
   const trends = useTrends();
+  const grid = useRef<HTMLDivElement>(null);
+  const firstLoad = useRef({ waiting: false, revealed: false });
+  useLayoutEffect(() => {
+    if (trends.isLoading && !trends.items.length) firstLoad.current.waiting = true;
+    if (trends.isLoading || !trends.items.length || firstLoad.current.revealed) return;
+    firstLoad.current.revealed = true;
+    if (!firstLoad.current.waiting) return;
+    const duration = motionTime("--motion-content-enter", 400);
+    const animations: Animation[] = [];
+    if (duration && !document.hidden) [...(grid.current?.children ?? [])].slice(0, 6).forEach((item, index) => {
+      if (item instanceof HTMLElement && item.getBoundingClientRect().top < innerHeight && item.animate) animations.push(item.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration, delay: index * 60, easing: motionEase(), fill: "backwards" }));
+    });
+    const cancel = () => animations.forEach(animation => animation.cancel());
+    const stop = observeMotionCancellation(cancel);
+    return () => { cancel(); stop(); };
+  }, [trends.isLoading, trends.items.length]);
   const motionRoot = useRef<HTMLElement>(null);
   const play = useCoutureMotion();
   const digest = useCurrentTrendDigest();
@@ -177,17 +194,18 @@ export function TrendArchive({
           ) : null}
         </p>
       ) : null}
-      {trends.isLoading ? (
-        <div className={styles.archiveGrid} role="status" aria-label="正在读取趋势档案">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} label="正在加载趋势" className={styles.archiveSkeleton} />)}</div>
-      ) : trends.error ? (
+      {trends.error && trends.items.length ? <div className={styles.archiveState}><p role="alert">{userFacingError(trends.error, "更新未完成，仍显示已加载的趋势")}</p><Button loading={trends.isRefreshing} onClick={trends.refresh}>重试更新档案</Button></div> : null}
+      {trends.isLoading && !trends.items.length ? (
+        <div role="status" aria-label="正在读取趋势档案"><SkeletonGroup className={styles.archiveGrid ?? ""}>{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} label="正在加载趋势" className={styles.archiveSkeleton} />)}</SkeletonGroup></div>
+      ) : trends.error && !trends.items.length ? (
         <div className={styles.archiveState}>
           <p role="alert">{userFacingError(trends.error, "趋势暂时无法加载，请重试")}</p>
-          <button onClick={trends.refresh} type="button">
+          <Button loading={trends.isRefreshing} onClick={trends.refresh}>
             重新加载档案
-          </button>
+          </Button>
         </div>
       ) : items.length ? (
-        <div className={styles.archiveGrid}>
+        <div ref={grid} className={styles.archiveGrid}>
           {items.map((trend) => (
             <TrendCard
               disabled={Boolean(importingId)}

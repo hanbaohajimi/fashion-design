@@ -3,7 +3,8 @@
   --tl-color-selection-stroke: var(--color-selection-border);
 }
 /* A selected connection owns its reconnect handle even at overview zoom. */
-.canvasSection :global(.tl-shape):has([data-workflow-edge][data-selected="true"]) {
+.canvasSection
+  :global(.tl-shape):has([data-workflow-edge][data-selected="true"]) {
   z-index: 2147483647 !important;
 }
 .shell {
@@ -20,7 +21,10 @@
 
 .nativeDialog {
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(
+    100dvh - 32px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
   margin: auto;
   padding: 0;
   border: 0;
@@ -207,23 +211,74 @@
   background-position: center;
 }
 
-.canvasBackdrop { position: absolute; inset: 0; }
-.canvasBackdrop[data-detail-open="true"] { opacity: 0.45; pointer-events: none; }
+.canvasBackdrop {
+  position: absolute;
+  inset: 0;
+}
+.canvasBackdrop[data-detail-open="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 /* 选中节点的详情入口不能被相邻图片遮住；仅改变临时绘制层级。 */
-.canvas :global(.tl-shape):has([data-node-selected="true"]) { z-index: 100000 !important; }
-.viewSwitch { position: absolute; top: var(--space-3); left: var(--space-4); z-index: 5; }
-.canvasSection[data-canvas-view="workbench"] { background: var(--color-canvas); }
-.canvasSection[data-canvas-view="workbench"] .viewSwitch { top: 0; left: 0; right: 0; display: flex; align-items: center; height: var(--space-12); padding: var(--space-1) var(--space-4); background: var(--color-canvas); border-bottom: 1px solid var(--color-divider); }
-.canvasSection[data-canvas-view="workbench"] .canvasHeading { display: none; }
-.canvasSection[data-canvas-view="workflow"] .edgeLegend { top: calc(var(--control-height) + var(--space-6)); }
+.canvas :global(.tl-shape):has([data-node-selected="true"]) {
+  z-index: 100000 !important;
+}
+.viewSwitch {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-4);
+  z-index: 5;
+}
+.canvasSection[data-canvas-view="workbench"] {
+  background: var(--color-canvas);
+}
+.canvasSection[data-canvas-view="workbench"] .viewSwitch {
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  height: var(--space-12);
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-canvas);
+  border-bottom: 1px solid var(--color-divider);
+}
+.canvasSection[data-canvas-view="workbench"] .canvasHeading {
+  display: none;
+}
+.canvasSection[data-canvas-view="workflow"] .edgeLegend {
+  top: calc(var(--control-height) + var(--space-6));
+}
 
-.detailScroll[data-workspace="true"] { max-width: 800px; height: auto; margin: auto; padding: var(--space-6); }
-.detailScroll[data-workspace="true"] > .detailSection:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
-.detailScroll[data-workspace="true"] .toolActions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.detailScroll[data-workspace="true"] .toolActions > button { width: auto; min-width: 140px; padding-inline: var(--space-5); }
-.detailScroll[data-workspace="true"] .toolActions > p { flex-basis: 100%; }
-.detailScroll[data-workspace="true"] .detailImage { max-height: calc(100dvh - 240px); background: var(--color-surface); }
+.detailScroll[data-workspace="true"] {
+  max-width: 800px;
+  height: auto;
+  margin: auto;
+  padding: var(--space-6);
+}
+.detailScroll[data-workspace="true"] > .detailSection:first-child {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+.detailScroll[data-workspace="true"] .toolActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.detailScroll[data-workspace="true"] .toolActions > button {
+  width: auto;
+  min-width: 140px;
+  padding-inline: var(--space-5);
+}
+.detailScroll[data-workspace="true"] .toolActions > p {
+  flex-basis: 100%;
+}
+.detailScroll[data-workspace="true"] .detailImage {
+  max-height: calc(100dvh - 240px);
+  background: var(--color-surface);
+}
 
 /* 画布角落：一个极弱的定位标签。
    画布是工作区，不是落地页——标语和副标题都不该出现在这里。 */
@@ -1222,14 +1277,18 @@
 .canvasNotice {
   position: absolute;
   z-index: 7;
-  bottom: 96px;
-  left: 50%;
+  top: 76px;
+  left: 16px;
   width: max-content;
-  max-width: calc(100% - 32px);
-  transform: translateX(-50%);
+  max-width: min(480px, calc(100% - 32px));
+  pointer-events: none;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-paper);
+}
+
+.canvasNotice button {
+  pointer-events: auto;
 }
 
 .errorNotice button,
@@ -1823,8 +1882,19 @@
   font-size: var(--text-base);
   line-height: 1.8;
   /* 消息入场：淡入 + 轻微上移 */
-  animation: messageEnter var(--dur-standard) var(--ease-enter) backwards;
+  animation: none;
 }
+.workflowMessage[data-new="true"] { animation: messageEnter 250ms var(--ease-enter); }
+.assistantReply[data-revealed="true"] { animation: replyReveal 200ms var(--ease-enter); }
+.thinking { display: flex; align-items: center; gap: 6px; }
+.thinking > span { display: inline-flex; gap: 4px; }
+.thinking i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: thinking 1.2s var(--ease-enter) infinite; animation-play-state: var(--assistant-play-state, running); }
+.thinking i:nth-child(2) { animation-delay: 160ms; }
+.thinking i:nth-child(3) { animation-delay: 320ms; }
+@keyframes thinking { 0%, 70%, 100% { transform: scale(.75); opacity: .45; } 35% { transform: translateY(-4px) scale(1); opacity: .8; } }
+@keyframes replyReveal { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .workflowMessage[data-new="true"], .assistantReply[data-revealed="true"], .thinking i, .proposalState { animation: none !important; } }
+@media (forced-colors: active) { .thinking i { background: CanvasText; animation: none; opacity: 1; } .proposalState { animation: none; } }
 
 @keyframes messageEnter {
   from {
@@ -2158,7 +2228,9 @@
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 0;
 }
-.composer textarea:focus-visible { outline: none; }
+.composer textarea:focus-visible {
+  outline: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .designContext > summary::after,
@@ -2446,6 +2518,8 @@
 .proposalError {
   color: var(--color-status-error);
 }
+.proposalState { display: inline-block; animation: proposalState 180ms var(--ease-enter); }
+@keyframes proposalState { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .proposalResults {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2475,13 +2549,30 @@
   gap: var(--space-2);
   min-width: 0;
 }
-.proposalResult > button:first-child { flex: 1; }
-.proposalResult span, .proposalResult small { overflow-wrap: anywhere; }
+.proposalResult > button:first-child {
+  flex: 1;
+}
+.proposalResult span,
+.proposalResult small {
+  overflow-wrap: anywhere;
+}
 .proposalReview .suggestionActions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.proposalReview .suggestionActions > .actionPrimary { grid-column: 1 / -1; }
+.proposalReview .suggestionActions > .actionPrimary {
+  grid-column: 1 / -1;
+  min-height: var(--control-height);
+  min-width: 0;
+  border-radius: 5px;
+  padding: 5px var(--space-2);
+  font: 600 14px/1.4 var(--font-sans);
+}
+@media (pointer: coarse) {
+  .proposalReview .suggestionActions > .actionPrimary {
+    min-height: var(--control-height-touch);
+  }
+}
 .adjustmentContext {
   margin-bottom: var(--space-3);
   color: var(--color-ink-secondary);
@@ -2605,10 +2696,22 @@
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-ui);
 }
-.bottomMenu .zoomControls { border: 0; border-radius: 0; box-shadow: none; }
-.topActions .saveFeedback { display: inline-flex; flex: none; font-size: var(--text-sm); letter-spacing: 0; color: var(--color-ink-tertiary); }
+.bottomMenu .zoomControls {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.topActions .saveFeedback {
+  display: inline-flex;
+  flex: none;
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+  color: var(--color-ink-tertiary);
+}
 .saveFeedback[data-save-state="dirty"] > span,
-.saveFeedback[data-save-state="saving"] > span { background: var(--color-status-warning); }
+.saveFeedback[data-save-state="saving"] > span {
+  background: var(--color-status-warning);
+}
 .bottomMenu button,
 .zoomControls button {
   min-height: var(--control-height);
@@ -2669,9 +2772,13 @@
 }
 @media (max-width: 767px) {
   .topbar {
-    min-height: calc(var(--studio-header-height) + env(safe-area-inset-top, 0px));
+    min-height: calc(
+      var(--studio-header-height) + env(safe-area-inset-top, 0px)
+    );
     height: calc(var(--studio-header-height) + env(safe-area-inset-top, 0px));
-    padding: env(safe-area-inset-top, 0px) calc(var(--space-3) + env(safe-area-inset-right, 0px)) 0 calc(var(--space-3) + env(safe-area-inset-left, 0px));
+    padding: env(safe-area-inset-top, 0px)
+      calc(var(--space-3) + env(safe-area-inset-right, 0px)) 0
+      calc(var(--space-3) + env(safe-area-inset-left, 0px));
   }
   .libraryDialog > form {
     grid-template-columns: minmax(0, 1fr);
@@ -2766,7 +2873,9 @@
     padding-bottom: var(--space-2);
   }
   .composer textarea,
-  .assistantBody:has(.assistantConversation[data-empty="true"]) .composer textarea {
+  .assistantBody:has(.assistantConversation[data-empty="true"])
+    .composer
+    textarea {
     max-height: 96px;
   }
   .workspace[data-mobile-view="assistant"] .assistantBody {
@@ -2849,11 +2958,25 @@
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: var(--space-3);
   }
-  .composer > * { grid-column: 1 / -1; }
-  .composer > label { order: 2; }
-  .composer > textarea { order: 3; grid-column: 1; }
-  .composer > .composerActions { order: 3; grid-column: 2; align-self: center; }
-  .composer > p[id] { order: 4; margin-bottom: 0; }
+  .composer > * {
+    grid-column: 1 / -1;
+  }
+  .composer > label {
+    order: 2;
+  }
+  .composer > textarea {
+    order: 3;
+    grid-column: 1;
+  }
+  .composer > .composerActions {
+    order: 3;
+    grid-column: 2;
+    align-self: center;
+  }
+  .composer > p[id] {
+    order: 4;
+    margin-bottom: 0;
+  }
 }
 .arrivalNotice {
   position: absolute;
@@ -2896,11 +3019,39 @@
 }
 
 /* 共享侧栏提供跨模块导航，顶部只保留当前项目和真实操作状态。 */
-.brandGroup { flex: 1; }
-.projectName { font-size: var(--text-lg); color: var(--color-ink); }
+.brandGroup {
+  flex: 1;
+}
+.projectName {
+  font-size: var(--text-lg);
+  color: var(--color-ink);
+}
 @media (max-width: 1199px) {
-  .shell { height: calc(100dvh - var(--workspace-mobile-nav-height)); min-height: 420px; }
-  .projectName { font-size: var(--text-base); }
+  .shell {
+    height: calc(100dvh - var(--workspace-mobile-nav-height));
+    min-height: 420px;
+  }
+  .projectName {
+    font-size: var(--text-base);
+  }
 }
 
-@media (max-width: 767px) { .mobileViews { padding-block: 4px; } }
+@media (max-width: 767px) {
+  .mobileViews {
+    padding-block: 4px;
+  }
+}
+.chatMessages .assistantReply {
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+  white-space: normal;
+}
+.chatMessages .assistantReply p {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border-radius: 0;
+  color: var(--color-ink);
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+}

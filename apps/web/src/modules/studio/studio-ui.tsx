@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Dialog, ImagePreview, Notice } from "../../components/ui";
+import {
+  Button,
+  Dialog,
+  ImagePreview,
+  Input,
+  Notice,
+} from "../../components/ui";
 import { ActionBar } from "../../components/workspace-ui";
 import {
   HISTORY_POSITION,
@@ -20,6 +26,7 @@ import styles from "./studio.module.css";
 import { useStudioAssetName } from "./studio-object-context";
 import { userFacingError } from "../../components/user-facing-error";
 import { PresentationPreview as AssetPreview } from "./PresentationGallery";
+import type { SubmitFeedbackSnapshot } from "../../components/interactions/use-submit-feedback";
 
 export interface StudioAsset {
   readonly id: string;
@@ -38,6 +45,7 @@ export function AssetPicker({
   label = "选择设计图片",
   disabled = false,
   compact = false,
+  selectionPreview = true,
 }: {
   readonly assets: readonly StudioAsset[];
   readonly selected: readonly string[];
@@ -46,10 +54,82 @@ export function AssetPicker({
   readonly label?: string;
   readonly disabled?: boolean;
   readonly compact?: boolean;
+  readonly selectionPreview?: boolean;
 }) {
   const [limit, setLimit] = useState(false);
   const [preview, setPreview] = useState<StudioAsset | null>(null);
+  const [previewSource, setPreviewSource] = useState<HTMLElement | null>(null);
+  const [previewKeyboard, setPreviewKeyboard] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
   const assetName = useStudioAssetName();
+  const visibleAssets = (
+    selected.length && (max === 1 || selected.length > 4)
+      ? assets.filter((asset) => selected.includes(asset.id))
+      : assets
+  ).slice(0, 4);
+  const toggle = (
+    id: string,
+    ids: readonly string[],
+    change: (ids: string[]) => void,
+  ) => {
+    if (ids.includes(id)) {
+      change(ids.filter((value) => value !== id));
+      setLimit(false);
+    } else if (ids.length < max) {
+      change([...ids, id]);
+      setLimit(false);
+    } else if (max === 1) {
+      change([id]);
+      setLimit(false);
+    } else setLimit(true);
+  };
+  const choices = (
+    items: readonly StudioAsset[],
+    ids: readonly string[],
+    change: (ids: string[]) => void,
+  ) => (
+    <div
+      className={`${styles.materialGrid} ${styles.pickerGrid} ${compact ? styles.materialCompact : ""}`}
+    >
+      {items.map((asset) => (
+        <article className={styles.materialCard} key={asset.id}>
+          <button
+            aria-label={"选择图片 " + (assets.indexOf(asset) + 1)}
+            title={assetName(asset.id)}
+            aria-pressed={ids.includes(asset.id)}
+            className={styles.assetButton}
+            disabled={disabled}
+            onClick={() => toggle(asset.id, ids, change)}
+            type="button"
+          >
+            <span className={styles.assetImage}>
+              <ImagePreview
+                retryable={false}
+                src={asset.thumbnailUrl ?? asset.url}
+                alt={assetName(asset.id)}
+              />
+            </span>
+            <span className={styles.assetLabel}>{assetName(asset.id)}</span>
+            <span className={styles.selectionLabel}>
+              {ids.includes(asset.id)
+                ? `已选 · 第 ${ids.indexOf(asset.id) + 1} 张`
+                : "选择图片"}
+            </span>
+          </button>
+          <Button
+            variant="ghost"
+            size="small"
+            aria-label={`查看大图：${assetName(asset.id)}`}
+            onClick={(event) => { setPreviewKeyboard(event.detail === 0); setPreviewSource(event.currentTarget.closest("article")?.querySelector("img") ?? event.currentTarget); setPreview(asset); }}
+          >
+            查看大图
+          </Button>
+        </article>
+      ))}
+    </div>
+  );
   return (
     <div className={styles.stack}>
       <div className={styles.recordHeader}>
@@ -59,53 +139,36 @@ export function AssetPicker({
         </small>
       </div>
       {assets.length ? (
-        <div
-          className={`${styles.materialGrid} ${compact ? styles.materialCompact : ""}`}
+        <Button
+          disabled={disabled}
+          onClick={() => {
+            setDraft([...selected]);
+            setSearch("");
+            setLimit(false);
+            setBrowsing(true);
+          }}
         >
-          {assets.map((asset, index) => (
-            <article className={styles.materialCard} key={asset.id}>
-              <button
-                aria-label={"选择图片 " + (index + 1)}
-                title={assetName(asset.id)}
-                aria-pressed={selected.includes(asset.id)}
-                className={styles.assetButton}
-                disabled={disabled}
-                onClick={() => {
-                  if (selected.includes(asset.id)) {
-                    onChange(selected.filter((id) => id !== asset.id));
-                    setLimit(false);
-                  } else if (selected.length < max) {
-                    onChange([...selected, asset.id]);
-                    setLimit(false);
-                  } else setLimit(true);
-                }}
-                type="button"
-              >
-                <span className={styles.assetImage}>
-                  <ImagePreview
-                    retryable={false}
-                    src={asset.thumbnailUrl ?? asset.url}
-                    alt={assetName(asset.id)}
-                  />
-                </span>
-                <span className={styles.assetLabel}>{assetName(asset.id)}</span>
-                <span className={styles.selectionLabel}>
-                  {selected.includes(asset.id)
-                    ? `已选 · 第 ${selected.indexOf(asset.id) + 1} 张`
-                    : "选择图片"}
-                </span>
-              </button>
+          {selected.length ? "更换或添加图片" : "浏览全部图片"} ·{" "}
+          {assets.length}
+        </Button>
+      ) : null}
+      {assets.length ? (
+        selected.length && !selectionPreview ? (
+          <div className={styles.selectedAssetSummary}>
+            {visibleAssets.map((asset) => (
               <Button
+                key={asset.id}
                 variant="ghost"
-                size="small"
+                onClick={(event) => { setPreviewKeyboard(event.detail === 0); setPreviewSource(event.currentTarget); setPreview(asset); }}
                 aria-label={`查看大图：${assetName(asset.id)}`}
-                onClick={() => setPreview(asset)}
               >
-                查看大图
+                {assetName(asset.id)} · 查看大图
               </Button>
-            </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          choices(visibleAssets, selected, onChange)
+        )
       ) : (
         <p className={styles.note}>
           还没有设计图片。先从任务入口上传草图或在画布生成候选。
@@ -114,10 +177,69 @@ export function AssetPicker({
       {limit ? (
         <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice>
       ) : null}
+      {browsing ? (
+        <Dialog
+          label={label}
+          className={styles.assetPickerDialog}
+          onClose={() => {
+            setBrowsing(false);
+            setLimit(false);
+          }}
+        >
+          <div className={styles.recordHeader}>
+            <h2>{label}</h2>
+            <Button onClick={() => setBrowsing(false)}>关闭</Button>
+          </div>
+          <Input
+            aria-label="搜索设计图片"
+            placeholder="按图片或款式名称搜索"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <p className={styles.muted} role="status">
+            已选 {draft.length} / {max} 张，确认后应用到当前资料。
+          </p>
+          {choices(
+            assets.filter((asset) =>
+              assetName(asset.id)
+                .toLocaleLowerCase()
+                .includes(search.trim().toLocaleLowerCase()),
+            ),
+            draft,
+            setDraft,
+          )}
+          {!assets.some((asset) =>
+            assetName(asset.id)
+              .toLocaleLowerCase()
+              .includes(search.trim().toLocaleLowerCase()),
+          ) ? (
+            <p>没有匹配的图片，请调整搜索。</p>
+          ) : null}
+          {limit ? (
+            <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice>
+          ) : null}
+          <div className={styles.pickerActions}>
+            <Button onClick={() => setBrowsing(false)}>取消</Button>
+            <Button
+              variant="primary"
+              disabled={disabled}
+              onClick={() => {
+                onChange(draft);
+                setBrowsing(false);
+                setLimit(false);
+              }}
+            >
+              确认选择 · {draft.length} 张
+            </Button>
+          </div>
+        </Dialog>
+      ) : null}
       {preview ? (
         <AssetPreview
           name={assetName(preview.id)}
           src={preview.url}
+          sourceElement={previewSource}
+          keyboardOpened={previewKeyboard}
           onClose={() => setPreview(null)}
         />
       ) : null}
@@ -136,6 +258,8 @@ export function SaveBar({
   error,
   isNew = false,
   hint,
+  feedback,
+  feedbackAction = "save",
 }: {
   readonly busy: boolean;
   readonly dirty: boolean;
@@ -147,6 +271,8 @@ export function SaveBar({
   readonly error?: ReactNode;
   readonly isNew?: boolean;
   readonly hint?: ReactNode;
+  readonly feedback?: SubmitFeedbackSnapshot | undefined;
+  readonly feedbackAction?: string;
 }) {
   return (
     <ActionBar
@@ -172,8 +298,11 @@ export function SaveBar({
       <Button
         type="submit"
         form={formId}
+        interaction="ripple"
         variant={primary ? "primary" : "secondary"}
         loading={busy}
+        feedback={feedback}
+        feedbackAction={feedbackAction}
         disabled={!canEdit || (!dirty && !isNew)}
       >
         {busy ? "正在保存…" : label}

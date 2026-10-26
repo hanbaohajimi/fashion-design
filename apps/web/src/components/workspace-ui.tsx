@@ -141,20 +141,29 @@ export function EditorChapters({
   active,
   onChange,
 }: {
-  readonly chapters: readonly { value: string; label: string }[];
+  readonly chapters: readonly {
+    value: string;
+    label: string;
+    pending?: number;
+  }[];
   readonly active: string;
   readonly onChange: (value: string) => void;
 }) {
   const id = useId();
   return (
     <nav className={styles.chapters} aria-label="技术包章节" id={id}>
-      {chapters.map(({ value, label }) => (
+      {chapters.map(({ value, label, pending }) => (
         <Button
           key={value}
+          aria-label={label}
+          aria-describedby={pending ? `${id}-${value}-pending` : undefined}
           aria-current={active === value ? "step" : undefined}
           onClick={() => onChange(value)}
         >
           {label}
+          {pending ? (
+            <small id={`${id}-${value}-pending`}> · {pending} 待复核</small>
+          ) : null}
         </Button>
       ))}
     </nav>

@@ -1,5 +1,8 @@
 "use client";
-import { Button, Menu } from "../../../components/ui";
+import { Button, Menu, Notice, Skeleton } from "../../../components/ui";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import prose from "../../../components/reading.module.css";
 import { STUDIO_LAYOUT } from "../../../components/ui-config";
 import { userFacingError } from "../../../components/user-facing-error";
 import { useSerialPolling } from "../../use-serial-polling";
@@ -96,6 +99,9 @@ type ConversationDraft = {
   referencedIds: readonly string[];
   adjustment: WorkflowProposal | null;
 };
+type LocalSubmission = { conversationId: string; clientRequestId: string; content: string; phase: "sending" | "uncertain" };
+const messageDisplayKey = (conversationId: string, message: Pick<WorkflowMessageView, "role" | "clientRequestId" | "id">) =>
+  message.role === "user" && message.clientRequestId ? `request:${conversationId}:${message.clientRequestId}` : message.id;
 
 export function WorkflowAssistantPanel({
   graph,
@@ -120,6 +126,28 @@ export function WorkflowAssistantPanel({
   >([]);
   const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<readonly WorkflowMessageView[]>([]);
+  const [localSubmission, setLocalSubmission] = useState<LocalSubmission | null>(null);
+  const acknowledgedRequests = useRef(new Set<string>());
+  const freshMessages = useRef(new Set<string>());
+  const scrollFrame = useRef(0);
+  const expectedScroll = useRef(0);
+  const followedConversation = useRef("");
+  const stopScroll = useCallback(() => { cancelAnimationFrame(scrollFrame.current); scrollFrame.current = 0; }, []);
+  const scrollToLatest = useCallback((view: HTMLElement) => {
+    stopScroll();
+    const target = Math.max(0, view.scrollHeight - view.clientHeight);
+    const start = view.scrollTop;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(target - start) < 1) { view.scrollTop = target; return; }
+    const at = performance.now();
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - at) / 180);
+      expectedScroll.current = start + (target - start) * (1 - (1 - progress) ** 3);
+      view.scrollTop = expectedScroll.current;
+      scrollFrame.current = progress < 1 ? requestAnimationFrame(step) : 0;
+    };
+    scrollFrame.current = requestAnimationFrame(step);
+  }, [stopScroll]);
+  useEffect(() => stopScroll, [stopScroll]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [context, setContext] = useState<WorkflowConversationContext | null>(
     null,
@@ -162,6 +190,17 @@ export function WorkflowAssistantPanel({
   const contextEpoch = useRef(0);
   const requestIds = useRef(new Map<string, string>());
   const conversationView = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const view = conversationView.current;
+    if (!view) return;
+    let visible = true;
+    const update = () => view.style.setProperty("--assistant-play-state", visible && !document.hidden ? "running" : "paused");
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entry]) => { visible = Boolean(entry?.isIntersecting); update(); });
+    observer?.observe(view);
+    document.addEventListener("visibilitychange", update);
+    update();
+    return () => { observer?.disconnect(); document.removeEventListener("visibilitychange", update); };
+  }, []);
   const composerSurface = useRef<HTMLDivElement>(null);
   const conversationSize = useRef({ width: 0, height: 0 });
   const readingAnchor = useRef<{ id: string; offset: number } | null>(null);
@@ -256,6 +295,7 @@ export function WorkflowAssistantPanel({
       initializedMessages.current = "";
       contextEpoch.current += 1;
       activeId.current = id;
+      freshMessages.current.clear();
       setConversationId(id);
       setMessages([]);
       setCursor(null);
@@ -405,7 +445,15 @@ export function WorkflowAssistantPanel({
           signal,
         );
         signal.throwIfAborted();
-        setMessages((current) => mergeMessages(current, page.items));
+        for (const message of page.items) if (message.role === "user" && message.clientRequestId) acknowledgedRequests.current.add(message.clientRequestId);
+        const initialized = initializedMessages.current === conversationId;
+        setMessages((current) => {
+          if (initialized) {
+            const known = new Set(current.map((message) => message.id));
+            for (const message of page.items) if (!known.has(message.id)) freshMessages.current.add(message.id);
+          }
+          return mergeMessages(current, page.items);
+        });
         if (initializedMessages.current !== conversationId) {
           initializedMessages.current = conversationId;
           setCursor(page.nextCursor);
@@ -447,12 +495,15 @@ export function WorkflowAssistantPanel({
     })
     .join("|");
   useEffect(() => {
-    if (followMessages.current && conversationView.current)
-      conversationView.current.scrollTop = messages.length
-        ? conversationView.current.scrollHeight
-        : 0;
+    if (followMessages.current && conversationView.current) {
+      if (followedConversation.current !== conversationId) {
+        stopScroll();
+        conversationView.current.scrollTop = conversationView.current.scrollHeight;
+        if (messages.length) followedConversation.current = conversationId;
+      } else scrollToLatest(conversationView.current);
+    }
     else setNewMessages(true);
-  }, [latestMessageKey, messages.length, pendingReply, proposalResultKey]);
+  }, [latestMessageKey, messages.length, pendingReply, proposalResultKey, localSubmission, scrollToLatest, conversationId, stopScroll]);
 
   // §2.1/§3.6: resizing the composer must not hide the current confirmation or
   // pull a reader away from history. Scroll events caused by reflow keep intent.
@@ -567,6 +618,9 @@ export function WorkflowAssistantPanel({
     followMessages.current = true;
     setNewMessages(false);
     setSending(true);
+    const proposedRequestId = localSubmission?.conversationId === conversationId && localSubmission.content === content ? localSubmission.clientRequestId : crypto.randomUUID();
+    let attemptedRequestId = proposedRequestId;
+    setLocalSubmission({ conversationId, clientRequestId: proposedRequestId, content, phase: "sending" });
     onError(null);
     try {
       const targetId = conversationId || (await createConversation(true));
@@ -578,8 +632,10 @@ export function WorkflowAssistantPanel({
         focus,
         proposalId: adjustment?.id,
       });
-      const requestId = requestIds.current.get(key) ?? crypto.randomUUID();
+      const requestId = requestIds.current.get(key) ?? proposedRequestId;
+      attemptedRequestId = requestId;
       requestIds.current.set(key, requestId);
+      setLocalSubmission({ conversationId: targetId, clientRequestId: requestId, content, phase: "sending" });
       const turn = await sendWorkflowMessage(targetId, {
         clientRequestId: requestId,
         content,
@@ -589,7 +645,10 @@ export function WorkflowAssistantPanel({
       });
       draftStore.current.delete(`${projectId}:${targetId}`);
       requestIds.current.delete(key);
+      acknowledgedRequests.current.add(requestId);
       if (activeId.current !== targetId) return;
+      freshMessages.current.add(turn.userMessage.id);
+      freshMessages.current.add(turn.assistantMessage.id);
       setMessages((current) =>
         mergeMessages(
           current.map((message) =>
@@ -611,7 +670,8 @@ export function WorkflowAssistantPanel({
       setDraftNotice(null);
       reloadContextAfterTurn(targetId);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "设计消息发送失败");
+      setLocalSubmission((current) => current ? { ...current, phase: "uncertain" } : current);
+      if (!acknowledgedRequests.current.has(attemptedRequestId)) onError(error instanceof Error ? error.message : "发送结果尚未确认，请重试");
     } finally {
       setSending(false);
     }
@@ -894,11 +954,18 @@ export function WorkflowAssistantPanel({
       ) : null}
       <div
         ref={conversationView}
+        onWheel={stopScroll}
+        onPointerDown={stopScroll}
+        onKeyDown={stopScroll}
         aria-label="设计对话"
         aria-live="polite"
         className={styles.assistantConversation}
         onScroll={(event) => {
           const view = event.currentTarget;
+          if (scrollFrame.current) {
+            if (Math.abs(view.scrollTop - expectedScroll.current) <= 2) return;
+            stopScroll();
+          }
           if (
             view.clientWidth !== conversationSize.current.width ||
             view.clientHeight !== conversationSize.current.height
@@ -926,39 +993,42 @@ export function WorkflowAssistantPanel({
         data-empty={!loading && messages.length === 0}
       >
         {messageSync.error ? (
-          <p role="status">
+          <Notice tone="warning">
             {userFacingError(messageSync.error, "设计对话暂时无法同步")}
-            <button
+            <Button
               onClick={() => {
                 messageSync.retry();
               }}
               type="button"
             >
               重试同步
-            </button>
-          </p>
+            </Button>
+          </Notice>
         ) : null}
         {legacyMessageError ? (
-          <p role="alert">
+          <Notice tone="error">
             {legacyMessageError}
             <Button onClick={() => setLegacyReload((value) => value + 1)}>
               重新读取消息
             </Button>
-          </p>
+          </Notice>
         ) : null}
         {conversationError ? (
-          <p role="alert">
+          <Notice tone="error">
             {conversationError}
             <Button onClick={() => setConversationReload((value) => value + 1)}>
               重新读取对话
             </Button>
-          </p>
+          </Notice>
         ) : null}
         {loading ? (
-          <p className={styles.chatEmpty}>正在恢复设计对话…</p>
+          <div className={styles.chatEmpty}>
+            <Skeleton label="正在恢复设计对话…" />
+            <Skeleton label="正在读取历史消息" />
+          </div>
         ) : !conversationError &&
           !legacyMessageError &&
-          messages.length === 0 ? (
+          messages.length === 0 && !(localSubmission && localSubmission.conversationId === conversationId) ? (
           <div className={styles.assistantWelcome}>
             <h3>
               {legacy
@@ -1023,12 +1093,22 @@ export function WorkflowAssistantPanel({
             读取更早消息
           </button>
         ) : null}
-        {messages.map((message) => (
+        {([...messages.map((message) => ({ kind: "server" as const, message })),
+          ...(localSubmission && localSubmission.conversationId === conversationId && !messages.some((message) => message.role === "user" && message.clientRequestId === localSubmission.clientRequestId)
+            ? [{ kind: "local" as const, submission: localSubmission }] : []),
+        ]).map((row) => {
+          if (row.kind === "local") return <article className={styles.workflowMessage} data-role="user" data-new="true" key={`request:${conversationId}:${row.submission.clientRequestId}`}>
+            <div className={styles.userExample}>{row.submission.content}</div>
+            <small role="status">{row.submission.phase === "sending" ? "正在发送…" : "发送结果尚未确认，可用下方发送按钮重试。"}</small>
+          </article>;
+          const message = row.message;
+          return (
           <article
             className={styles.workflowMessage}
             data-role={message.role}
             data-message-id={message.id}
-            key={message.id}
+            data-new={freshMessages.current.has(message.id)}
+            key={messageDisplayKey(conversationId, message)}
           >
             {message.kind === "clarify" ? (
               <span className={styles.messageKind}>需要补充</span>
@@ -1038,17 +1118,24 @@ export function WorkflowAssistantPanel({
             ) : message.origin === "background_analysis" ? (
               <span className={styles.messageKind}>结果分析 · 可继续输入</span>
             ) : null}
-            <p
+            <div
+              data-revealed={message.role === "assistant" && message.status !== "pending" && freshMessages.current.has(message.id)}
               className={
                 message.role === "user"
                   ? styles.userExample
-                  : styles.assistantReply
+                  : `${styles.assistantReply} ${prose.prose}`
               }
             >
-              {message.content}
-            </p>
+              {message.role === "assistant" ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                  {message.content}
+                </ReactMarkdown>
+              ) : (
+                message.content
+              )}
+            </div>
             {message.status === "pending" ? (
-              <small role="status">正在分析设计需求…</small>
+              <small role="status" className={styles.thinking}>正在分析设计需求<span aria-hidden="true"><i /><i /><i /></span></small>
             ) : null}
             {message.error ? (
               <small role="alert">
@@ -1105,7 +1192,7 @@ export function WorkflowAssistantPanel({
               />
             ) : null}
           </article>
-        ))}
+        ); })}
       </div>
       {newMessages ? (
         <button
@@ -1114,8 +1201,7 @@ export function WorkflowAssistantPanel({
             followMessages.current = true;
             setNewMessages(false);
             if (conversationView.current)
-              conversationView.current.scrollTop =
-                conversationView.current.scrollHeight;
+              scrollToLatest(conversationView.current);
           }}
           type="button"
         >
@@ -1362,7 +1448,13 @@ export function WorkflowAssistantPanel({
               添加引用
             </Button>
           ) : null}
-          <Menu label="对话操作" trigger="更多" placement="top" align="start" portal>
+          <Menu
+            label="对话操作"
+            trigger="更多"
+            placement="top"
+            align="start"
+            portal
+          >
             {legacy ? (
               <button
                 onClick={() => setLegacyRunsOpen((value) => !value)}
@@ -1413,8 +1505,8 @@ export function WorkflowAssistantPanel({
           </small>
         ) : null}
       </div>
-      {pickerOpen ? (
         <AssistantReferencePicker
+          open={pickerOpen}
           graph={graph}
           selectedIds={draftReferences.ids}
           onApply={(ids) => {
@@ -1434,9 +1526,8 @@ export function WorkflowAssistantPanel({
           }}
           onClose={() => setPickerOpen(false)}
         />
-      ) : null}
-      {requirementsOpen ? (
         <DesignRequirementsDrawer
+          open={requirementsOpen}
           key={conversationId}
           hasDraftReferences={draftReferences.ids.length > 0}
           context={context}
@@ -1453,7 +1544,6 @@ export function WorkflowAssistantPanel({
           onRetry={retryContext}
           onClose={() => setRequirementsOpen(false)}
         />
-      ) : null}
     </div>
   );
 }

@@ -8,6 +8,34 @@ import { workspaceFixture, experimentFixture } from "./workspace-fixture";
 
 test.beforeEach(async ({ page }) => seedVisualApp(page));
 
+for (const width of [1440, 375]) {
+  test(`素材选择器 ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
+      route.fulfill({ json: workspaceFixture() }),
+    );
+    await page.goto(`/${PROJECT}/studio?tab=styles`);
+    await page
+      .getByRole("button", { name: /更换或添加图片/ })
+      .first()
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await settleImages(page);
+    await expect(page).toHaveScreenshot(`asset-picker-${width}.png`);
+  });
+  test(`分享失效 ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("**/api/image-shares/*", (route) =>
+      route.fulfill({ status: 410, json: {} }),
+    );
+    await page.goto(`/share/${"a".repeat(43)}`);
+    await expect(
+      page.getByRole("heading", { name: "暂时无法查看这份设计" }),
+    ).toBeVisible();
+    await expect(page).toHaveScreenshot(`share-expired-${width}.png`);
+  });
+}
+
 for (const viewport of [
   { width: 1280, height: 800 },
   { width: 1440, height: 900 },
@@ -25,6 +53,7 @@ for (const viewport of [
       "experiments",
       "patterns",
       "presentation",
+      "runway",
       "brand",
       "planning",
       "tech",
@@ -39,7 +68,9 @@ for (const viewport of [
         await page.route(`**/api/projects/${PROJECT}/experiments`, (route) =>
           route.fulfill({ json: experimentFixture(PROJECT) }),
         );
-        await page.goto(`/${PROJECT}/studio?tab=${tab}`);
+        await page.goto(
+          `/${PROJECT}/studio?tab=${tab}${tab === "runway" ? "&showId=show-1&runId=run-1" : ""}`,
+        );
         await expect(
           page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
         ).toBeVisible();
@@ -84,6 +115,7 @@ for (const viewport of [
       "fabrics",
       "trends",
       "invalid-link",
+      "share",
     ]) {
       test(`${screen} ${viewport.width}`, async ({ page }) => {
         await page.setViewportSize(viewport);
@@ -92,7 +124,9 @@ for (const viewport of [
             ? "/"
             : screen === "invalid-link"
               ? "/auth/confirm"
-              : `/${screen}`,
+              : screen === "share"
+                ? `/share/${"a".repeat(43)}`
+                : `/${screen}`,
         );
         await expect(page.locator("main")).toBeVisible();
         if (screen === "projects")
@@ -147,7 +181,7 @@ for (const viewport of [
               }),
           ).toEqual([]);
         await expect(page).toHaveScreenshot(`${screen}-${viewport.width}.png`, {
-          fullPage: true,
+          fullPage: screen !== "fabrics",
         });
       });
     }
@@ -285,7 +319,12 @@ test("task request failure retains the complete draft", async ({ page }) => {
   ).toHaveValue("保持夹克廓形并调整袖口");
   await settleImages(page);
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   expect(await contrastFailures(page, true)).toEqual([]);
   await expect(page).toHaveScreenshot("workspace-task-request-failure.png", {
     fullPage: true,
@@ -359,7 +398,9 @@ test.describe("studio touch", () => {
       send,
       page.getByRole("button", { name: "收起设计助手" }),
       page.getByRole("button", { name: "历史对话", exact: true }),
-      page.getByRole("navigation", { name: "工作区导航", exact: true }).locator("summary"),
+      page
+        .getByRole("navigation", { name: "工作区导航", exact: true })
+        .locator("summary"),
     ]) {
       const bounds = await target.boundingBox();
       expect(bounds!.width).toBeGreaterThanOrEqual(minimum);
@@ -367,7 +408,9 @@ test.describe("studio touch", () => {
     }
     await expect(page).toHaveScreenshot("studio-assistant-touch.png");
     await page.getByRole("button", { name: "历史对话", exact: true }).click();
-    await expect(page.getByRole("combobox", { name: "历史对话", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(
+      page.getByRole("combobox", { name: "历史对话", exact: true }),
+    ).toBeInViewport({ ratio: 1 });
     await expect(page).toHaveScreenshot("studio-menu-touch.png");
   });
 });
@@ -396,9 +439,7 @@ test("studio, sketch, asset and export", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.locator('[data-type="candidate"]').focus();
   await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("dialog", { name: "图片工作区" }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "图片工作区" })).toBeVisible();
   await settleImages(page);
   await expect(page).toHaveScreenshot("asset-preview.png");
   expect(await controlFontFailures(page)).toEqual([]);
@@ -411,7 +452,9 @@ test("studio, sketch, asset and export", async ({ page }) => {
   await expect(page.getByRole("region", { name: "版本时间线" })).toBeVisible();
   await expect(page).toHaveScreenshot("asset-history-empty.png");
   await image.getByRole("button", { name: "图像", exact: true }).click();
-  await image.getByRole("button", { name: "更多导出选项", exact: true }).click();
+  await image
+    .getByRole("button", { name: "更多导出选项", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "开始导出", exact: true }),
   ).toBeVisible();

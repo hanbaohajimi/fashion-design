@@ -294,18 +294,15 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
   await expect(
     comparison.getByRole("button", { name: "采用为新款式" }),
   ).toHaveCount(2);
-  await comparison
-    .getByRole("button", { name: "选择图片 3", exact: true })
-    .click();
-  await comparison
-    .getByRole("button", { name: "选择图片 4", exact: true })
-    .click();
-  await comparison
-    .getByRole("button", { name: "选择图片 5", exact: true })
-    .click();
-  await expect(
-    comparison.getByText("最多选择 4 张，请先取消一张。"),
-  ).toBeVisible();
+  await comparison.getByRole("button", { name: /更换或添加图片/ }).click();
+  const picker = page
+    .getByRole("dialog", { name: "候选比较", exact: false })
+    .last();
+  await picker.getByRole("button", { name: "选择图片 3", exact: true }).click();
+  await picker.getByRole("button", { name: "选择图片 4", exact: true }).click();
+  await picker.getByRole("button", { name: "选择图片 5", exact: true }).click();
+  await expect(picker.getByText("最多选择 4 张，请先取消一张。")).toBeVisible();
+  await picker.getByRole("button", { name: /确认选择/ }).click();
   await expect(
     comparison.getByRole("button", { name: "采用为新款式" }),
   ).toHaveCount(4);
@@ -409,9 +406,7 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
       ],
     },
   });
-  await expect(
-    page.getByText("已核对", { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByText("已核对", { exact: true }).first()).toBeVisible();
   await page
     .getByRole("button", { name: "导出此修订 PDF", exact: true })
     .first()

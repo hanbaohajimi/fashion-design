@@ -1,6 +1,10 @@
 "use client";
 
-import { createTechPackRowId, type BomDraft, type PomDraft } from "./tech-pack-draft";
+import {
+  createTechPackRowId,
+  type BomDraft,
+  type PomDraft,
+} from "./tech-pack-draft";
 import { Button, Input, Select } from "../../components/ui";
 import styles from "./studio.module.css";
 
@@ -68,7 +72,7 @@ export function BomTable({
         </Button>
       </div>
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table className={`${styles.table} ${styles.responsiveTable}`}>
           <thead>
             <tr>
               <th>名称</th>
@@ -84,7 +88,7 @@ export function BomTable({
           <tbody>
             {rows.map((row, index) => (
               <tr key={row.uiId}>
-                <td>
+                <td data-label="名称">
                   <Input
                     aria-label={"BOM " + (index + 1) + " 名称"}
                     {...errorProps("BOM " + (index + 1) + " 名称", error)}
@@ -97,7 +101,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="材料说明">
                   <Input
                     aria-label={"BOM " + (index + 1) + " 材料"}
                     {...errorProps("BOM " + (index + 1) + " 材料", error)}
@@ -109,7 +113,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="用量">
                   <Input
                     aria-label={"BOM " + (index + 1) + " 用量"}
                     {...errorProps("BOM " + (index + 1) + " 用量", error)}
@@ -122,7 +126,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="单位">
                   <Input
                     aria-label={"BOM " + (index + 1) + " 单位"}
                     {...errorProps("BOM " + (index + 1) + " 单位", error)}
@@ -135,7 +139,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="供应商">
                   <Input
                     aria-label={"BOM " + (index + 1) + " 供应商"}
                     {...errorProps("BOM " + (index + 1) + " 供应商", error)}
@@ -147,7 +151,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="依据">
                   <Select
                     aria-label={"BOM " + (index + 1) + " 依据"}
                     {...errorProps("BOM " + (index + 1) + " 依据", error)}
@@ -166,7 +170,7 @@ export function BomTable({
                     ))}
                   </Select>
                 </td>
-                <td>
+                <td data-label="人工复核">
                   <input
                     aria-label={"BOM " + (index + 1) + " 已复核"}
                     {...errorProps("BOM " + (index + 1) + " 已复核", error)}
@@ -178,7 +182,7 @@ export function BomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="操作">
                   <Button
                     size="small"
                     disabled={disabled}
@@ -253,7 +257,7 @@ export function PomTable({
         </Button>
       </div>
       <div className={styles.tableWrap}>
-        <table className={styles.table}>
+        <table className={`${styles.table} ${styles.responsiveTable}`}>
           <thead>
             <tr>
               <th>部位</th>
@@ -268,7 +272,7 @@ export function PomTable({
           <tbody>
             {rows.map((row, index) => (
               <tr key={row.uiId}>
-                <td>
+                <td data-label="部位">
                   <Input
                     aria-label={"POM " + (index + 1) + " 部位"}
                     {...errorProps("POM " + (index + 1) + " 部位", error)}
@@ -281,7 +285,7 @@ export function PomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="尺寸">
                   <Input
                     aria-label={"POM " + (index + 1) + " 尺寸"}
                     {...errorProps("POM " + (index + 1) + " 尺寸", error)}
@@ -294,7 +298,7 @@ export function PomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="单位">
                   <Select
                     aria-label={"POM " + (index + 1) + " 单位"}
                     {...errorProps("POM " + (index + 1) + " 单位", error)}
@@ -311,7 +315,7 @@ export function PomTable({
                     <option value="in">in</option>
                   </Select>
                 </td>
-                <td>
+                <td data-label="允许公差 ±">
                   <Input
                     aria-label={"POM " + (index + 1) + " 公差"}
                     {...errorProps("POM " + (index + 1) + " 公差", error)}
@@ -324,7 +328,7 @@ export function PomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="依据">
                   <Select
                     aria-label={"POM " + (index + 1) + " 依据"}
                     {...errorProps("POM " + (index + 1) + " 依据", error)}
@@ -343,7 +347,7 @@ export function PomTable({
                     ))}
                   </Select>
                 </td>
-                <td>
+                <td data-label="人工复核">
                   <input
                     aria-label={"POM " + (index + 1) + " 已复核"}
                     {...errorProps("POM " + (index + 1) + " 已复核", error)}
@@ -355,7 +359,7 @@ export function PomTable({
                     }
                   />
                 </td>
-                <td>
+                <td data-label="操作">
                   <Button
                     size="small"
                     disabled={disabled}

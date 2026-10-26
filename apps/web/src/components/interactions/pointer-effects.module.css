@@ -1,0 +1,57 @@
+.rippleLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.rippleInk {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--interaction-ripple-ink, rgb(40 100 82 / 14%));
+  pointer-events: none;
+  animation: ripple var(--duration-result) var(--ease-enter) forwards;
+}
+
+@keyframes ripple {
+  from {
+    transform: scale(0.02);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.magneticVisual {
+  position: relative;
+  pointer-events: none;
+  transition: transform var(--duration-normal) var(--ease-enter);
+}
+
+.magneticVisual[data-magnetic-tracking] {
+  transition-duration: var(--duration-fast);
+}
+
+.magneticVisual[data-magnetic-pressed] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .rippleLayer {
+    display: none;
+  }
+  .magneticVisual {
+    transform: none !important;
+    transition: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .magneticVisual {
+    transform: none !important;
+    transition: none;
+  }
+}

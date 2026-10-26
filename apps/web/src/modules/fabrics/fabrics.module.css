@@ -1412,6 +1412,16 @@
 .filterChips:empty {
   display: none;
 }
+.filterSheet { width: 100%; padding: 0 20px calc(20px + env(safe-area-inset-bottom, 0px)); }
+.filterHandle { display: flex; justify-content: center; padding: 12px; touch-action: none; user-select: none; }
+.filterHandle > span { width: 36px; height: 4px; border-radius: 4px; background: var(--color-border-strong); }
+.filterSheetHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.filterSheetHeader h2 { margin: 0; font-size: var(--text-xl); }
+.filterSheet .structuredFilters { grid-template-columns: 1fr; margin-top: 12px; }
+.filterSheet .filterActions { flex-wrap: wrap; }
+.filterSheet .filterActions > span { flex-basis: 100%; }
+.filterSheet .structuredFilters input { font-size: 16px; min-height: 44px; }
+.filterSheet .filterError { min-height: 24px; margin: 0; }
 
 .cardVisual > div,
 .fabricDialogImage > div {

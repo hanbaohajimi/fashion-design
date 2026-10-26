@@ -10,6 +10,8 @@ interface FabricVirtualGridProps {
   readonly compact?: boolean;
   readonly fabrics: readonly Fabric[];
   readonly height?: number | string;
+  readonly scrollMode?: "window" | "container";
+  readonly addingId?: string | null;
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
   readonly onChanged?: (() => void) | undefined;
   readonly onNearEnd?: () => void;
@@ -19,6 +21,8 @@ export function FabricVirtualGrid({
   compact = false,
   fabrics,
   height = 680,
+  scrollMode = "container",
+  addingId,
   onAdd,
   onChanged,
   onNearEnd,
@@ -27,7 +31,8 @@ export function FabricVirtualGrid({
     <div className={styles.virtualGridHost}>
       <VirtuosoGrid
         aria-label="面料卡片列表"
-        style={{ height }}
+        useWindowScroll={scrollMode === "window"}
+        style={scrollMode === "container" ? { height } : undefined}
         data={fabrics}
         computeItemKey={(_, fabric) => fabric.id}
         overscan={200}
@@ -41,6 +46,8 @@ export function FabricVirtualGrid({
               fabric={fabric}
               key={fabric.id}
               onAdd={onAdd}
+              adding={addingId === fabric.id}
+              addDisabled={Boolean(addingId)}
               onChanged={onChanged}
             />
           );

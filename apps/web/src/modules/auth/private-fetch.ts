@@ -9,6 +9,11 @@ export function setPrivateRequestUser(userId: string | null): void {
   lifetime = new AbortController();
 }
 
+/** Non-fetch transports share the same account lifetime as authenticated fetches. */
+export function privateRequestSignal(signal?: AbortSignal): AbortSignal {
+  return signal ? AbortSignal.any([lifetime.signal, signal]) : lifetime.signal;
+}
+
 export async function privateFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const signals = [lifetime.signal];
   if (init?.signal) signals.push(init.signal);

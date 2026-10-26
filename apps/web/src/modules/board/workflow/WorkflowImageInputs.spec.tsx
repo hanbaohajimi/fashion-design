@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { WorkflowImageInputs } from "./WorkflowImageInputs";
 const upload = vi.hoisted(() => ({ sign: vi.fn(), ready: vi.fn() }));
 vi.mock("../file-upload-api", () => ({
@@ -10,7 +10,8 @@ vi.mock("../file-upload-api", () => ({
   completeUpload: vi.fn(),
   putOriginal: vi.fn(),
 }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+beforeEach(() => { vi.stubGlobal("URL", class extends URL { static override createObjectURL = vi.fn(() => "blob:preview"); static override revokeObjectURL = vi.fn(); }); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 it("retains uploaded files when node creation fails and retries only that item", async () => {
   upload.sign.mockImplementation(async (_project, file: File) => ({ file: { id: file.name }, upload: null }));

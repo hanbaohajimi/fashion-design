@@ -1,6 +1,7 @@
 import { ProjectCard } from "./ProjectCard";
 import type { Project } from "./project-types";
 import styles from "./projects.module.css";
+import { useProjectGridMotion } from "./use-project-grid-motion";
 
 interface ProjectGridProps {
   readonly duplicatingProjectIds: ReadonlySet<string>;
@@ -10,6 +11,7 @@ interface ProjectGridProps {
   readonly onRename: (project: Project, name: string) => Promise<void>;
   readonly onRestore: (project: Project) => Promise<void>;
   readonly projects: readonly Project[];
+  readonly busy?: boolean;
 }
 
 export function ProjectGrid({
@@ -20,9 +22,11 @@ export function ProjectGrid({
   onRename,
   onRestore,
   projects,
+  busy,
 }: ProjectGridProps) {
+  const root = useProjectGridMotion(projects);
   return (
-    <section aria-label="项目列表" className={styles.projectGrid}>
+    <section ref={root} aria-label="项目列表" aria-busy={busy || undefined} className={styles.projectGrid} style={{ position: "relative" }}>
       {projects.map((project, index) => (
         <ProjectCard
           duplicating={duplicatingProjectIds.has(project.id)}

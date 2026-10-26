@@ -53,6 +53,7 @@ export function CollaborationPanel(
   const [memberDirty, setMemberDirty] = useState(false);
   const [reviewDirty, setReviewDirty] = useState(false);
   const [section, setSection] = useState<"review" | "members">("review");
+  const [sectionChanged, setSectionChanged] = useState(false);
   const tabsId = useId();
   const onMemberDirty = useCallback(
     (dirty: boolean) => setMemberDirty(dirty),
@@ -72,6 +73,7 @@ export function CollaborationPanel(
         description="批注与审批绑定明确修订，后续修改需要重新评审"
         actions={
           <Tabs
+            animated
             id={tabsId}
             label="团队工作"
             value={section}
@@ -79,7 +81,7 @@ export function CollaborationPanel(
               { value: "review", label: "修订评审" },
               { value: "members", label: "成员管理" },
             ]}
-            onChange={setSection}
+            onChange={(next) => { if (next !== section) { setSectionChanged(true); setSection(next); } }}
           />
         }
       />
@@ -88,6 +90,7 @@ export function CollaborationPanel(
         value="review"
         activeValue={section}
         keepMounted
+        className={sectionChanged ? styles.shortPanel : undefined}
       >
         <ReviewForm {...props} onDirty={onReviewDirty} />
       </TabPanel>
@@ -96,6 +99,7 @@ export function CollaborationPanel(
         value="members"
         activeValue={section}
         keepMounted
+        className={sectionChanged ? styles.shortPanel : undefined}
       >
         <MemberManager {...props} onDirty={onMemberDirty} />
       </TabPanel>
@@ -473,7 +477,13 @@ function ReviewForm({
           )}
         </div>
         <div className={styles.section}>
-          <div className={styles.history}>
+          <div className={styles.history} aria-label="当前修订的讨论与决定">
+            <div className={styles.recordHeader}>
+              <h3>修订记录</h3>
+              <small className={styles.muted}>
+                {comments.length} 条批注 · {reviews.length} 项决定
+              </small>
+            </div>
             {reviews.map((item) => {
               const review = item.currentRevision.payload as Review;
               return (

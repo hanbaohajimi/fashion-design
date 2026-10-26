@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { Button, Dialog } from "../../../components/ui";
+import { useUploadFeedback, UploadFeedbackPreview } from "../../../components/interactions/use-upload-feedback";
 import {
   createCollection,
   importDesignAsset,
@@ -47,6 +48,7 @@ export function WorkflowProjectPanels({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
+  const uploadFeedback = useUploadFeedback();
   const load = useCallback(async () => {
     if (panel === "collections")
       setCollections(await listCollections(projectId));
@@ -132,28 +134,44 @@ export function WorkflowProjectPanels({
                     void action(async () => {
                       const invalid = validateImage(file);
                       if (invalid) throw new Error(invalid);
-                      const signed = await signImageUpload(projectId, file);
+                      const upload = uploadFeedback.start(file);
+                      try {
+                      upload.stage("signing");
+                      const signed = await signImageUpload(projectId, file, upload.signal);
+                      upload.stage(signed.upload ? "uploading" : "processing");
                       const processing = signed.upload
-                        ? await putOriginal(signed.upload, file).then(() =>
-                            completeUpload(signed.file.id),
+                        ? await putOriginal(signed.upload, file, { signal: upload.signal, onProgress: upload.onProgress }).then(() => {
+                            upload.stage("processing");
+                            return completeUpload(signed.file.id, upload.signal);
+                          },
                           )
                         : signed.file;
                       const ready = await waitForThumbnail(
                         signed.file.id,
                         processing,
+                        60_000,
+                        upload.signal,
                       );
+                      upload.signal.throwIfAborted();
+                      upload.stage("adding");
                       const asset = await importDesignAsset(
                         projectId,
                         ready.id,
                       );
                       const collection = await createCollection(asset.id);
+                      upload.done(ready.thumbnail256Url ?? ready.thumbnail1024Url);
                       onCollection(collection.id);
                       setPanel(null);
+                      } catch (cause) {
+                        upload.fail();
+                        if (!upload.signal.aborted) throw cause;
+                      }
                     });
                     event.target.value = "";
                   }}
                 />
               </label>
+              <UploadFeedbackPreview preview={uploadFeedback.preview} onCancel={uploadFeedback.preview?.stage === "adding" ? undefined : uploadFeedback.cancel} onClear={uploadFeedback.clear} />
               {collections.map((collection) => (
                 <p key={collection.id}>
                   <Button

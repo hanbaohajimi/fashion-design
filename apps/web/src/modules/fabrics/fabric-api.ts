@@ -138,7 +138,10 @@ async function fetchFabricPage(url: string): Promise<FabricListPage> {
 
 export function useFabrics(query: FabricListQuery) {
   const { session, loading, error: authError, refresh: refreshAuth } = useAuth();
-  const result = useSWRInfinite<FabricListPage>(
+  const ownership = JSON.stringify([session?.user.id, query.scope ?? "all", query.category,
+    query.fiber, query.supplier, query.minWeightGsm, query.maxWeightGsm]);
+  type OwnedPage = FabricListPage & { ownership: string; search: string };
+  const result = useSWRInfinite<OwnedPage>(
     (pageIndex, previousPage) => {
       if (!session) return null;
       if (previousPage && pageIndex >= previousPage.totalPages) return null;
@@ -152,29 +155,35 @@ export function useFabrics(query: FabricListQuery) {
         const value = query[field];
         if (value !== undefined && value !== "") params.set(field, String(value));
       }
-      return `/api/fabrics?${params.toString()}`;
+      return [`/api/fabrics?${params.toString()}`, ownership, query.search?.trim() ?? ""] as const;
     },
-    fetchFabricPage,
+    async ([url, owner, search]: readonly [string, string, string]) => ({
+      ...await fetchFabricPage(url), ownership: owner, search,
+    }),
     {
       keepPreviousData: true,
       revalidateFirstPage: false,
     },
   );
 
-  const items = result.data?.flatMap((page) => page.items) ?? [];
-  const lastPage = result.data?.at(-1);
+  // 只允许同用户、同规格范围的旧搜索结果过渡，不能跨账号或筛选复用。
+  const pages = result.data?.[0]?.ownership === ownership ? result.data : undefined;
+  const items = pages?.flatMap((page) => page.items) ?? [];
+  const lastPage = pages?.at(-1);
   const hasMore = Boolean(lastPage && lastPage.page < lastPage.totalPages);
 
   return {
     error: result.error instanceof Error ? result.error : !session && authError ? new Error(authError) : null,
     hasMore,
-    isLoading: loading || (!session && !authError) || result.isLoading,
-    isLoadingMore: result.isValidating && Boolean(result.data?.length),
+    isLoading: loading || (!session && !authError) || result.isLoading || (!pages && result.isValidating),
+    isPreviousData: Boolean(pages && pages[0]?.search !== (query.search?.trim() ?? "")),
+    isSearching: result.isValidating && Boolean(pages && pages[0]?.search !== (query.search?.trim() ?? "")),
+    isLoadingMore: result.isValidating && Boolean(pages?.length) && pages?.[0]?.search === (query.search?.trim() ?? ""),
     items,
     loadMore: () => {
-      if (hasMore && !result.isValidating) void result.setSize(result.size + 1);
+      if (hasMore && pages?.[0]?.search === (query.search?.trim() ?? "") && !result.isValidating) void result.setSize(result.size + 1);
     },
     refresh: () => { if (!session) void refreshAuth(); else void result.mutate(); },
-    total: result.data?.[0]?.total ?? 0,
+    total: pages?.[0]?.total ?? 0,
   };
 }

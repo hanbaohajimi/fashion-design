@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { taskState } from "../../../components/task-feedback-state";
+import { motionTime, motionEase, observeMotionCancellation } from "../../../components/interactions/motion-policy";
 import styles from "./workflow-detail-workspace.module.css";
 
 export interface DetailOrigin {
@@ -68,13 +69,10 @@ export function WorkflowDetailWorkspace({
     const transform = visibleOrigin
       ? `translate(${origin.x - bounds.x}px, ${origin.y - bounds.y}px) scale(${origin.width / bounds.width}, ${origin.height / bounds.height})`
       : "none";
-    const tokens = getComputedStyle(element);
     const duration = reduced
       ? 0
-      : parseFloat(
-          tokens.getPropertyValue(open ? "--dur-enter" : "--dur-exit"),
-        ) || 0;
-    const ease = tokens.getPropertyValue("--ease-enter").trim() || "ease-out";
+      : motionTime(open ? "--motion-dialog-enter" : "--motion-dialog-exit", open ? 350 : 250);
+    const ease = motionEase(!open);
     const currentSurface = getComputedStyle(surface);
     const interrupted = animations.current.some(
       (animation) => animation.playState === "running",
@@ -117,6 +115,7 @@ export function WorkflowDetailWorkspace({
       fade.cancel();
       if (!open) element.hidden = true;
     };
+    const stopObservingMotion = observeMotionCancellation(resize);
     let initialResize = true;
     const observer = new ResizeObserver(() => {
       if (initialResize) initialResize = false;
@@ -125,6 +124,7 @@ export function WorkflowDetailWorkspace({
     observer.observe(element);
     window.addEventListener("resize", resize);
     return () => {
+      stopObservingMotion();
       observer.disconnect();
       window.removeEventListener("resize", resize);
     };

@@ -68,6 +68,41 @@
 .button:active:enabled {
   transform: none;
 }
+.button[data-interaction="ripple"][data-variant="primary"] {
+  --interaction-ripple-ink: rgb(255 255 255 / 24%);
+}
+.button[data-interaction="magnetic"] {
+  padding: 0;
+  border: 0;
+}
+.button[data-interaction="magnetic"][data-variant],
+.button[data-interaction="magnetic"][data-variant]:is(
+    :hover,
+    :active,
+    :disabled
+  ) {
+  background: transparent;
+}
+.button[data-interaction="magnetic"] > span {
+  width: 100%;
+  min-height: inherit;
+  border-radius: inherit;
+}
+.button[data-interaction="magnetic"]:hover:enabled
+  > span[data-variant="primary"] {
+  background: var(--color-action-hover);
+  border-color: var(--color-action-hover);
+}
+.button[data-interaction="magnetic"]:active:enabled
+  > span[data-variant="primary"] {
+  background: var(--color-action-active);
+  border-color: var(--color-action-active);
+}
+.button[data-interaction="magnetic"]:disabled > span {
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
+}
 .button[aria-busy="true"] {
   cursor: progress;
 }
@@ -79,6 +114,31 @@
   letter-spacing: 1px;
   animation: busy-pulse 1.2s ease-in-out infinite;
 }
+.feedbackLabel {
+  transition: opacity var(--motion-feedback) var(--ease-enter);
+}
+.feedbackLabel[data-hidden] { opacity: 0; }
+.feedbackMark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.feedbackCheck {
+  stroke-dasharray: 1;
+  animation: feedback-check var(--motion-feedback-check) var(--ease-enter) both;
+}
+.feedbackSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: feedback-spin .8s linear infinite;
+}
+@keyframes feedback-check { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes feedback-spin { to { transform: rotate(360deg); } }
 @keyframes busy-pulse {
   50% {
     opacity: 0.35;
@@ -267,6 +327,27 @@ textarea.input {
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
+.skeletonGroup {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  contain: paint;
+}
+.skeletonSweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 60%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(110deg, transparent 20%, rgb(255 255 255 / 12%) 50%, transparent 80%);
+}
+.skeletonGroup[data-sweeping] > .skeletonSweep {
+  opacity: 1;
+  animation: skeleton-sweep var(--motion-shimmer) linear infinite;
+}
+@keyframes skeleton-sweep { to { transform: translateX(270%); } }
 .imageFallback {
   display: grid;
   width: 100%;
@@ -282,6 +363,7 @@ textarea.input {
   text-align: center;
 }
 .segments {
+  position: relative;
   display: inline-flex;
   gap: var(--space-1);
   padding: var(--space-1);
@@ -306,6 +388,7 @@ textarea.input {
   position: relative;
 }
 .tabs {
+  position: relative;
   display: flex;
   gap: var(--space-2);
   border-bottom: 1px solid var(--color-border);
@@ -328,6 +411,9 @@ textarea.input {
   background: var(--color-selection-bg);
   border-bottom-color: var(--color-selection-border);
 }
+.tabs[data-animated] button[aria-selected="true"] { border-bottom-color: transparent; }
+.tabPanel[data-enter] { animation: panel-enter var(--motion-status) var(--ease-enter); }
+@keyframes panel-enter { from { opacity: 0; } to { opacity: 1; } }
 .tabs button:hover:enabled {
   background: var(--color-surface);
 }
@@ -402,6 +488,9 @@ textarea.input {
   background: var(--color-paper);
   box-shadow: var(--shadow-popup);
 }
+.menu:not([open]) > .menuPanel {
+  display: none;
+}
 .menu[data-placement="top"] > div {
   top: auto;
   bottom: calc(100% + var(--space-2));
@@ -445,7 +534,10 @@ textarea.input {
 }
 .dialog {
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  max-height: calc(
+    100dvh - 32px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
   margin: auto;
   padding: 0;
   border: 1px solid var(--color-border);
@@ -457,6 +549,27 @@ textarea.input {
 }
 .dialog::backdrop {
   background: var(--color-scrim-soft);
+  opacity: var(--sheet-dim, 1);
+}
+.dialog[data-phase="opening"]::backdrop { animation: backdrop-in var(--motion-dialog-enter) var(--ease-enter) both; }
+.dialog[data-phase="closing"]::backdrop { animation: backdrop-in var(--motion-dialog-exit) var(--ease-exit) reverse both; }
+.dialog[data-variant="sheet"] {
+  margin: auto auto 0;
+  width: min(100% - 16px, 640px);
+  max-height: calc(90dvh - env(safe-area-inset-top, 0px));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+.dialog [data-sheet-handle] { touch-action: none; user-select: none; cursor: grab; }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .feedbackLabel { transition: none; }
+  .feedbackSpinner, .feedbackCheck, .skeletonGroup > .skeletonSweep, .tabPanel[data-enter],
+  .dialog[data-phase]::backdrop { animation: none; }
+  .skeletonGroup > .skeletonSweep { display: none; }
+}
+@media (forced-colors: active) {
+  .skeletonGroup > .skeletonSweep { display: none; }
+  .dialog { border-color: CanvasText; box-shadow: none; }
 }
 .dialog:not([open]) {
   display: none;

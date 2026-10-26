@@ -17,6 +17,8 @@ import {
   type ImageFeedback,
 } from "@fashion/shared";
 import { ImageViewer, type ImageSize } from "./ImageViewer";
+import { ImageZoomControl, type ImageZoomControlHandle } from "./ImageZoomControl";
+import { CopyImageLinkButton } from "./CopyImageLinkButton";
 import { Button, IconButton } from "../../../components/ui";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import { LegacyAssetTools } from "./LegacyAssetTools";
@@ -98,6 +100,8 @@ function ImageWorkspace({
     "inpaint" | "variation" | "erase" | "history" | null
   >(null);
   const [zoom, setZoom] = useState<number | null>(null);
+  const zoomControl = useRef<ImageZoomControlHandle>(null);
+  const previewZoom = useCallback((percent: number | null) => zoomControl.current?.previewZoom(percent), []);
   const [size, setSize] = useState<ImageSize | null>(null);
   const [feedback, setFeedback] = useState<ImageFeedback>(empty);
   const [baseline, setBaseline] = useState(JSON.stringify(empty));
@@ -166,6 +170,9 @@ function ImageWorkspace({
       ? [current]
       : [];
   const title = current?.title ?? "生成图片";
+  const siblingIndex = siblings.findIndex((node) => node.payload.assetId === assetId);
+  const canSwipe = mode === "view" && !dirty && !busy && !menu && siblings.length >= 3;
+  const siblingUrl = (index: number) => { const id = siblings[index]?.payload.assetId; return typeof id === "string" ? `/api/design-assets/${encodeURIComponent(id)}/content` : undefined; };
   const base = `/api/design-assets/${encodeURIComponent(assetId)}`;
   const setImageSize = useCallback((next: ImageSize) => {
     setSize((previous) => {
@@ -488,34 +495,7 @@ function ImageWorkspace({
           ) : null}
         </div>
         <div className={styles.topActions}>
-          <select
-            aria-label="缩放比例"
-            value={zoom ?? "fit"}
-            onChange={(e) =>
-              setZoom(e.target.value === "fit" ? null : Number(e.target.value))
-            }
-          >
-            <option value="fit">适合窗口</option>
-            {[
-              ...new Set([
-                10,
-                25,
-                50,
-                75,
-                100,
-                150,
-                200,
-                400,
-                ...(zoom === null ? [] : [zoom]),
-              ]),
-            ]
-              .sort((a, b) => a - b)
-              .map((z) => (
-                <option key={z} value={z}>
-                  {Math.round(z)}%
-                </option>
-              ))}
-          </select>
+          <ImageZoomControl ref={zoomControl} zoom={zoom} onChange={setZoom} />
           <button
             disabled={busy}
             aria-label="下载原图"
@@ -618,6 +598,10 @@ function ImageWorkspace({
           title={title}
           zoom={zoom}
           onZoom={setZoom}
+          onZoomPreview={previewZoom}
+          previousUrl={canSwipe ? siblingUrl(siblingIndex - 1) : undefined}
+          nextUrl={canSwipe ? siblingUrl(siblingIndex + 1) : undefined}
+          onNavigate={canSwipe ? (direction) => { const id = siblings[siblingIndex + direction]?.payload.assetId; if (typeof id === "string") onSelectAsset?.(id); } : undefined}
           onSize={setImageSize}
           annotations={feedback.annotations}
           comments={feedback.comments}
@@ -1125,16 +1109,7 @@ function ImageWorkspace({
                 {shareUrl ? (
                   <>
                     <input aria-label="分享链接" value={shareUrl} readOnly />
-                    <button
-                      onClick={() =>
-                        void act(async () => {
-                          await navigator.clipboard.writeText(shareUrl);
-                          setNotice("链接已复制");
-                        })
-                      }
-                    >
-                      复制链接
-                    </button>
+                    <CopyImageLinkButton value={shareUrl} onError={setError} />
                   </>
                 ) : null}
                 {shares.map((share) => (

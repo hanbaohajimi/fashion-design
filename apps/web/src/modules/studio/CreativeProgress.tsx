@@ -1,5 +1,5 @@
 "use client";
-import NumberFlow from "@number-flow/react";
+import { StudioCount } from "./StudioCount";
 import type { StudioSummary } from "@fashion/shared";
 import { creativeProgress } from "./creative-progress";
 import styles from "./creative-progress.module.css";
@@ -82,7 +82,7 @@ export function CreativeProgress({
               type="button"
               onClick={() => onNavigate(item.tab)}
             >
-              {item.label} <NumberFlow value={item.count} />
+              {item.label} <StudioCount value={item.count} />
             </button>
           ))}
         </nav>

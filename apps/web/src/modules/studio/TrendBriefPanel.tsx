@@ -236,7 +236,6 @@ export function TrendBriefPanel({
                         查看原文
                       </a>
                     </small>
-                    <p>{article.summary}</p>
                   </span>
                 </label>
               ))}

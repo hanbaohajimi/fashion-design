@@ -52,8 +52,15 @@
   border-radius: var(--radius-md);
   box-shadow: none;
 }
-.topbar button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
-.workspace svg { flex: none; }
+.topbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.workspace svg {
+  flex: none;
+}
 .topActions {
   display: flex;
   gap: 8px;
@@ -88,8 +95,16 @@
 .menu span {
   color: var(--color-ink-secondary);
 }
-.menu button { justify-content: flex-start; border: 0; background: transparent; text-align: left; }
-.menu button:hover:enabled, .menu a:hover { background: var(--color-overlay); }
+.menu button {
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.menu button:hover:enabled,
+.menu a:hover {
+  background: var(--color-overlay);
+}
 .menu a {
   color: inherit;
   padding: 10px;
@@ -126,6 +141,23 @@
 .imageMedia {
   position: absolute;
 }
+.galleryNeighbors { position: absolute; inset: 0; pointer-events: none; transform: translateX(var(--gallery-x, 0px)); }
+.galleryNeighbors img { position: absolute; top: 0; width: 100%; height: 100%; padding: 16px; object-fit: contain; }
+.galleryNeighbors img[data-side="previous"] { left: -100%; }
+.galleryNeighbors img[data-side="next"] { left: 100%; }
+.copyFeedback { display: inline-flex; align-items: center; gap: 6px; }
+.copyIcon { opacity: 1; transform-origin: center; transition: opacity 250ms var(--ease-enter), transform 250ms var(--ease-enter); }
+.copyCheck { opacity: 0; stroke-dasharray: 1; stroke-dashoffset: 1; transition: opacity 250ms var(--ease-enter), stroke-dashoffset 300ms var(--ease-enter); }
+.copyFeedback[data-copied="true"] .copyIcon { opacity: 0; transform: scale(.6); }
+.copyFeedback[data-copied="true"] .copyCheck { opacity: 1; stroke-dashoffset: 0; }
+.copyLabel { display: inline-grid; }
+.copyLabel > span { grid-area: 1 / 1; }
+.copyLabel > span[aria-hidden] { visibility: hidden; }
+.copyFeedback[data-copied="true"] .copyLabel > span:last-child { animation: copyText 200ms var(--ease-enter); }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes copyText { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .copyIcon, .copyCheck { transition: none; } .copyFeedback[data-copied="true"] .copyLabel > span:last-child { animation: none; } }
+@media (forced-colors: active) { .copyFeedback[data-copied="true"] { outline: 1px solid Highlight; } }
 .imageMedia > img {
   position: absolute;
   width: 100%;
@@ -204,7 +236,9 @@
   line-height: 1.6;
   margin: 0;
 }
-.panel small { font-size: var(--text-sm); }
+.panel small {
+  font-size: var(--text-sm);
+}
 .panel label {
   display: flex;
   flex-direction: column;
@@ -265,7 +299,10 @@
   max-width: calc(100% - 24px);
   overflow-x: auto;
 }
-.toolbar[data-surface="inverse"] { background: var(--color-inverse); color: var(--color-on-inverse); }
+.toolbar[data-surface="inverse"] {
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+}
 .workspace .toolbar button {
   display: flex;
   align-items: center;
@@ -281,7 +318,10 @@
   color: var(--color-on-inverse);
   box-shadow: inset 0 0 0 1px var(--color-on-inverse);
 }
-.workspace .toolbar button:focus-visible { outline-color: var(--color-on-inverse); outline-offset: -2px; }
+.workspace .toolbar button:focus-visible {
+  outline-color: var(--color-on-inverse);
+  outline-offset: -2px;
+}
 .filmstrip {
   display: flex;
   gap: 8px;
@@ -394,19 +434,96 @@
   }
 }
 
-.currentImage { min-width: 0; display: grid; gap: 2px; margin-right: auto; }
-.currentImage strong { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-base); }
-.currentImage span { font-size: var(--text-sm); color: var(--color-ink-secondary); }
-.saveStyle { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); color: var(--color-action); text-decoration: none; font-size: var(--text-base); white-space: nowrap; }
+.currentImage {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin-right: auto;
+}
+.currentImage strong {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-base);
+}
+.currentImage span {
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+}
+.saveStyle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-action);
+  text-decoration: none;
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
 @media (max-width: 767px) {
- .topbar { flex-wrap: wrap; height: auto; min-height: var(--studio-header-height); }
- .currentImage { flex: 1 1 45%; }
- .currentImage strong { max-width: 200px; }
- .saveStyle { min-height: 44px; }
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--studio-header-height);
+  }
+  .currentImage {
+    flex: 1 1 45%;
+  }
+  .currentImage strong {
+    max-width: 200px;
+  }
+  .saveStyle {
+    min-height: 44px;
+  }
 }
 
-.shareMessage { margin: auto; padding: var(--space-6); max-width: 560px; line-height: var(--leading-relaxed); }
-.shareMessage h1 { font-size: var(--text-module-title); margin-bottom: var(--space-4); }
-.shareMessage a { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-action); }
+.shareMessage {
+  margin: auto;
+  padding: var(--space-6);
+  max-width: 560px;
+  line-height: var(--leading-relaxed);
+}
+.shareMessage h1 {
+  font-size: var(--text-module-title);
+  margin-bottom: var(--space-4);
+}
+.shareMessage a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--color-action);
+}
 
-.workspace .fit { font-size: var(--text-base); }
+.workspace .fit {
+  font-size: var(--text-base);
+}
+.sharedArtwork {
+  display: grid;
+  place-items: center;
+  height: calc(100dvh - 72px);
+  min-height: 0;
+  padding: var(--space-5);
+  background: var(--color-surface);
+}
+.sharedArtwork > div {
+  width: 100%;
+  height: 100%;
+}
+.sharedArtwork img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  object-fit: contain;
+}
+.sharedSkeleton {
+  max-width: 660px;
+}
+
+.shareMessage button {
+  margin-right: var(--space-3);
+}

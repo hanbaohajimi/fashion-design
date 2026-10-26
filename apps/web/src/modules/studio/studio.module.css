@@ -123,6 +123,9 @@
 .mobileNavigation {
   display: none;
 }
+.mobileProgress {
+  display: none;
+}
 .header {
   display: flex;
   align-items: center;
@@ -1035,7 +1038,7 @@
   }
   .shell[data-studio-page] .header > div:not(.toolbar) {
     min-width: 0;
-    max-width: 42%;
+    max-width: none;
   }
   .shell[data-studio-page] .header .toolbar {
     flex-wrap: nowrap;
@@ -1043,9 +1046,9 @@
   }
   .shell[data-studio-page] .mobileFunction {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
+    gap: var(--space-1);
   }
 }
 .form details > summary {
@@ -1459,9 +1462,9 @@
 .surfaceHeading {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  margin: 12px 0 16px;
+  align-items: flex-start;
+  gap: var(--space-6);
+  margin: var(--space-2) 0 var(--space-3);
 }
 .surfaceHeading > div {
   min-width: 0;
@@ -1474,7 +1477,7 @@
 }
 .surfaceHeading .surfaceTitle h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: var(--text-module-title);
   line-height: 1.35;
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -1767,6 +1770,138 @@
   display: grid;
   gap: 4px;
 }
+.assetPickerDialog {
+  width: min(880px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+}
+.assetPickerDialog h2 {
+  margin: 0;
+  font-size: var(--text-module-title);
+}
+.pickerGrid {
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: var(--space-3);
+}
+.pickerGrid .materialCard .assetImage {
+  height: 128px;
+}
+.pickerGrid .materialCard {
+  min-width: 0;
+}
+.pickerGrid .assetLabel {
+  overflow-wrap: anywhere;
+}
+.pickerActions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-3) 0;
+  background: var(--color-paper);
+}
+.issueNavigation {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  max-height: 240px;
+  overflow: auto;
+  gap: var(--space-2);
+  padding: var(--space-1);
+}
+.issueNavigation button {
+  justify-content: flex-start;
+  text-align: left;
+  min-width: 0;
+}
+.issueNavigation button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issueNavigation button[aria-pressed="true"] {
+  background: var(--color-selection-bg);
+  border-color: var(--color-selection-border);
+  color: var(--color-selection-ink);
+}
+@media (max-width: 1199px) {
+  .header {
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+  }
+  .header > div:not(.toolbar):not(.mobileNavigation) {
+    display: none;
+  }
+  .header .mobileNavigation {
+    order: -1;
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+  }
+  .header .mobileFunction {
+    display: grid;
+    gap: var(--space-1);
+  }
+  .header .mobileFunction > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+  }
+  .header .desktopProgress {
+    display: none;
+  }
+  .mobileProgress {
+    display: inline-flex;
+  }
+}
+@media (max-width: 767px) {
+  .responsiveTable,
+  .responsiveTable tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .responsiveTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .responsiveTable tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--color-paper);
+    border-bottom: 1px solid var(--color-divider);
+  }
+  .responsiveTable td {
+    display: grid;
+    align-content: start;
+    gap: var(--space-1);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .responsiveTable td::before {
+    content: attr(data-label);
+    font-size: var(--text-sm);
+    color: var(--color-ink-secondary);
+  }
+  .responsiveTable td[colspan] {
+    grid-column: 1 / -1;
+  }
+  .assetPickerDialog {
+    padding: var(--space-4);
+  }
+  .surfaceHeading {
+    margin-top: 0;
+  }
+}
 .form:has(> [data-studio-settings]) > footer,
 .taskContent > footer {
   position: sticky;
@@ -1858,3 +1993,43 @@
     grid-row: auto;
   }
 }
+.currentPosition {
+  color: var(--color-action);
+  font-weight: var(--font-semibold);
+}
+.history article {
+  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.history article p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.8;
+  max-width: 70ch;
+}
+.surfaceHeading:has(details) > div:first-child {
+  flex: 1;
+}
+.surfaceHeading details {
+  margin-top: var(--space-3);
+  max-width: 560px;
+}
+.surfaceHeading details summary {
+  min-height: 44px;
+}
+.selectedAssetSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.selectedAssetSummary button {
+  white-space: normal;
+  text-align: left;
+}
+.receiptChange { animation: studio-receipt 180ms cubic-bezier(0,0,.2,1); }
+@keyframes studio-receipt { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .receiptChange { animation: none; } }
+.shortPanel:not([hidden]) { animation: short-panel-in 180ms cubic-bezier(0,0,.2,1); }
+@keyframes short-panel-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .shortPanel:not([hidden]) { animation: none; } }

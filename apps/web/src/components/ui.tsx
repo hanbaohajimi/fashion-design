@@ -2,6 +2,8 @@
 
 import {
   cloneElement,
+  Children,
+  isValidElement,
   useEffect,
   useLayoutEffect,
   useId,
@@ -15,18 +17,41 @@ import {
   type TextareaHTMLAttributes,
   type Ref,
   type KeyboardEvent,
+  type SyntheticEvent,
 } from "react";
 import styles from "./ui.module.css";
-import { motionDuration, UI_TIMING } from "./ui-config";
+import effects from "./interactions/pointer-effects.module.css";
+import { useMagnetic, useRipple } from "./interactions/pointer-effects";
+import type { SubmitFeedbackSnapshot } from "./interactions/use-submit-feedback";
+import { useSlidingIndicator } from "./interactions/use-sliding-indicator";
+import { motionEase, motionTime, observeMotionCancellation } from "./interactions/motion-policy";
+import { useAnimatedPresence } from "./interactions/use-animated-presence";
+import { useMenuMotion } from "./interactions/use-menu-motion";
+import { afterSurfaceMotion, placeFloatingPanel } from "./interactions/floating-position";
+import { UI_TIMING } from "./ui-config";
 import { createPortal } from "react-dom";
 import { userFacingError } from "./user-facing-error";
 import { useTooltipGroup } from "./tooltip-group";
 export { TooltipGroup } from "./tooltip-group";
 
+function withDecoration<E extends SyntheticEvent>(
+  external: ((event: E) => void) | undefined,
+  decorate: (event: E) => void,
+  cleanup = false,
+) {
+  return (event: E) => {
+    external?.(event);
+    if (cleanup || !event.defaultPrevented) decorate(event);
+  };
+}
+
 export function Button({
   variant = "secondary",
   size = "default",
   loading = false,
+  interaction = "none",
+  feedback,
+  feedbackAction = "save",
   className = "",
   children,
   disabled,
@@ -36,8 +61,20 @@ export function Button({
   readonly variant?: "primary" | "secondary" | "ghost" | "danger";
   readonly size?: "default" | "small";
   readonly loading?: boolean;
+  readonly interaction?: "none" | "ripple" | "magnetic";
+  readonly feedback?: SubmitFeedbackSnapshot | undefined;
+  readonly feedbackAction?: string | undefined;
+  readonly ref?: Ref<HTMLButtonElement>;
 }) {
   const [waiting, setWaiting] = useState(false);
+  const {
+    layerRef,
+    onPointerDown: rippleDown,
+    onPointerCancel: rippleCancel,
+  } = useRipple(interaction === "ripple", Boolean(disabled || loading));
+  const { visualRef, ...magnetic } = useMagnetic(
+    interaction === "magnetic" && !disabled && !loading,
+  );
   useEffect(() => {
     if (!loading) return;
     const timer = setTimeout(() => setWaiting(true), UI_TIMING.busyFeedback);
@@ -46,21 +83,94 @@ export function Button({
       setWaiting(false);
     };
   }, [loading]);
+  const feedbackPhase = feedback?.actionKey === feedbackAction ? feedback.phase : "idle";
+  const showFeedback = Boolean(feedback && ((loading && waiting && feedbackPhase === "pending") || feedbackPhase === "success"));
+  const content = (
+    <>
+      {feedback ? <span className={styles.feedbackLabel} data-hidden={showFeedback || undefined}>{children}</span> : children}
+      {showFeedback ? (
+        <span aria-hidden="true" className={styles.feedbackMark} key={feedback?.revision} data-phase={feedbackPhase}>
+          {feedbackPhase === "success" ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path className={styles.feedbackCheck} d="m5 12 4 4L19 6" pathLength="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> : <i className={styles.feedbackSpinner} />}
+        </span>
+      ) : null}
+      {!feedback && loading && waiting ? (
+        <span aria-hidden="true" className={styles.busyMark}>
+          ···
+        </span>
+      ) : null}
+    </>
+  );
   return (
     <button
       {...props}
+      {...(interaction === "ripple"
+        ? {
+            onPointerDown: withDecoration(props.onPointerDown, rippleDown),
+            onPointerCancel: withDecoration(
+              props.onPointerCancel,
+              rippleCancel,
+              true,
+            ),
+          }
+        : interaction === "magnetic"
+          ? {
+              onPointerEnter: withDecoration(
+                props.onPointerEnter,
+                magnetic.onPointerEnter,
+              ),
+              onPointerMove: withDecoration(
+                props.onPointerMove,
+                magnetic.onPointerMove,
+              ),
+              onPointerDown: withDecoration(
+                props.onPointerDown,
+                magnetic.onPointerDown,
+              ),
+              onPointerUp: withDecoration(
+                props.onPointerUp,
+                magnetic.onPointerUp,
+              ),
+              onPointerLeave: withDecoration(
+                props.onPointerLeave,
+                magnetic.onPointerLeave,
+                true,
+              ),
+              onPointerCancel: withDecoration(
+                props.onPointerCancel,
+                magnetic.onPointerCancel,
+                true,
+              ),
+              onBlur: withDecoration(props.onBlur, magnetic.onBlur, true),
+              onFocus: withDecoration(props.onFocus, magnetic.onFocus, true),
+            }
+          : {})}
       aria-busy={loading || undefined}
       className={`${styles.button} ${className}`}
       data-size={size}
       data-variant={variant}
+      data-interaction={interaction === "none" ? undefined : interaction}
+      data-feedback={feedback ? feedbackPhase : undefined}
       disabled={disabled || loading}
       type={type}
     >
-      {children}
-      {loading && waiting ? (
-        <span aria-hidden="true" className={styles.busyMark}>
-          ···
+      {interaction === "magnetic" ? (
+        <span
+          ref={visualRef}
+          className={`${styles.button} ${effects.magneticVisual}`}
+          data-size={size}
+          data-variant={variant}
+        >
+          {content}
         </span>
+      ) : (
+        content
+      )}
+      {interaction === "ripple" ? (
+        <span
+          ref={layerRef}
+          aria-hidden="true"
+          className={effects.rippleLayer}
+        />
       ) : null}
     </button>
   );
@@ -115,14 +225,34 @@ export function Field({
   readonly hint?: string;
   readonly error?: string;
 }) {
+  const descriptionId = useId();
+  const described = Boolean(error || hint);
+  const controls = Children.map(children, (child) => {
+    if (
+      !isValidElement<InputHTMLAttributes<HTMLInputElement>>(child) ||
+      !["input", "select", "textarea", Input, Select, Textarea].includes(
+        child.type as typeof Input,
+      )
+    )
+      return child;
+    return cloneElement(child, {
+      "aria-describedby":
+        [child.props["aria-describedby"], described ? descriptionId : undefined]
+          .filter(Boolean)
+          .join(" ") || undefined,
+      "aria-invalid": error ? true : child.props["aria-invalid"],
+    });
+  });
   return (
     <label className={styles.field}>
       <span>{label}</span>
-      {children}
+      {controls}
       {error ? (
-        <small role="alert">{error}</small>
+        <small id={descriptionId} role="alert">
+          {error}
+        </small>
       ) : hint ? (
-        <small>{hint}</small>
+        <small id={descriptionId}>{hint}</small>
       ) : null}
     </label>
   );
@@ -270,6 +400,14 @@ export function ImagePreview({
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const explicitRetry = useRef<string | null>(null);
+  const image = useRef<HTMLImageElement | null>(null);
+  const cached = useRef(false);
+  const reveal = useRef<Animation | null>(null);
+  useEffect(() => {
+    const cancel = () => reveal.current?.cancel();
+    const stop = observeMotionCancellation(cancel);
+    return () => { cancel(); stop(); };
+  }, []);
   return !src || failedSource === src ? (
     <div className={styles.imageFallback}>
       <span aria-label={alt} role="img">
@@ -300,24 +438,34 @@ export function ImagePreview({
     // Signed private images retain their original URL and aspect ratio.
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      ref={(element) => {
+        image.current = element;
+        if (!element) return;
+        cached.current = element.complete && element.naturalWidth > 0;
+        if (cached.current) element.style.removeProperty("opacity");
+        else element.style.opacity = "0";
+      }}
       alt={alt}
       loading="lazy"
       draggable={draggable}
       key={`${src}:${attempt}`}
-      onError={() => setFailedSource(src)}
+      onError={() => { reveal.current?.cancel(); setFailedSource(src); }}
       onLoad={(event) => {
-        if (explicitRetry.current !== src) return;
+        const element = event.currentTarget;
+        const fromCache = cached.current && explicitRetry.current !== src;
         explicitRetry.current = null;
-        if (document.visibilityState !== "visible") return;
-        const duration = motionDuration("fast");
-        if (duration)
-          event.currentTarget.animate?.([{ opacity: 0 }, { opacity: 1 }], {
-            duration,
-            easing:
-              getComputedStyle(event.currentTarget)
-                .getPropertyValue("--ease-enter")
-                .trim() || "cubic-bezier(0.23,1,0.32,1)",
-          });
+        const show = () => {
+          if (image.current !== element || !element.isConnected) return;
+          reveal.current?.cancel();
+          element.style.removeProperty("opacity");
+          const opacity = getComputedStyle(element).opacity || "1";
+          const duration = motionTime("--motion-image-reveal", 300);
+          if (!fromCache && duration && !document.hidden) reveal.current = element.animate?.(
+            [{ opacity: 0 }, { opacity }], { duration, easing: motionEase() },
+          ) ?? null;
+        };
+        if (element.decode) void element.decode().then(show, show);
+        else show();
       }}
       src={src}
       style={{ objectFit: fit }}
@@ -341,23 +489,49 @@ export function Skeleton({
   );
 }
 
+/** One moving highlight per loading region; placeholders retain real geometry. */
+export function SkeletonGroup({ children, className = "", active = true }: {
+  readonly children: ReactNode;
+  readonly className?: string | undefined;
+  readonly active?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [sweeping, setSweeping] = useState(false);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => setSweeping(true), 300);
+    const observer = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(([entry]) => setVisible(Boolean(entry?.isIntersecting)));
+    if (ref.current) observer?.observe(ref.current);
+    const update = () => { if (document.hidden) setVisible(false); else if (ref.current) setVisible(ref.current.getBoundingClientRect().bottom > 0); };
+    if (!observer) update();
+    document.addEventListener("visibilitychange", update);
+    return () => { clearTimeout(timer); observer?.disconnect(); document.removeEventListener("visibilitychange", update); setSweeping(false); };
+  }, [active]);
+  return <div ref={ref} className={`${styles.skeletonGroup} ${className}`} data-sweeping={active && sweeping && visible || undefined} aria-busy={active || undefined}>{children}<span aria-hidden="true" className={styles.skeletonSweep} /></div>;
+}
+
 export function SegmentedControl<T extends string>({
   label,
   value,
   options,
   onChange,
+  animated = false,
 }: {
   readonly label: string;
   readonly value: T;
   readonly options: readonly { value: T; label: string }[];
   readonly onChange: (value: T) => void;
+  readonly animated?: boolean;
 }) {
+  const indicator = useSlidingIndicator(value, animated);
   return (
-    <div aria-label={label} className={styles.segments} role="group">
+    <div ref={indicator} aria-label={label} className={styles.segments} role="group" data-animated={animated || undefined}>
       {options.map((option, index) => (
         <button
           aria-pressed={value === option.value}
           key={option.value}
+          data-indicator-value={option.value}
           onClick={() => onChange(option.value)}
           onKeyDown={(event) => {
             const direction =
@@ -392,6 +566,7 @@ export function Tabs<T extends string>({
   options,
   onChange,
   className = "",
+  animated = false,
 }: {
   readonly id: string;
   readonly label: string;
@@ -399,12 +574,16 @@ export function Tabs<T extends string>({
   readonly options: readonly { value: T; label: string; disabled?: boolean }[];
   readonly onChange: (value: T) => void;
   readonly className?: string | undefined;
+  readonly animated?: boolean;
 }) {
   const [focused, setFocused] = useState<T | null>(null);
+  const indicator = useSlidingIndicator(value, animated);
   return (
     <div
       aria-label={label}
       className={`${styles.tabs} ${className}`}
+      ref={indicator}
+      data-animated={animated || undefined}
       role="tablist"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null))
@@ -418,6 +597,7 @@ export function Tabs<T extends string>({
           disabled={option.disabled}
           id={`${id}-tab-${option.value}`}
           key={option.value}
+          data-indicator-value={option.value}
           onClick={() => onChange(option.value)}
           onKeyDown={(event) => {
             if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
@@ -494,9 +674,13 @@ export function Tooltip({
 }) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
-  const tip = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
+  const tip = useRef<HTMLSpanElement>(null);
+  const presence = useAnimatedPresence<HTMLSpanElement>(open, tip, {
+    enter: { opacity: 0, transform: "translateY(2px)" },
+    enterToken: "--motion-tooltip-enter", exitToken: "--motion-tooltip-exit", enterMs: 150, exitMs: 120,
+  });
   const group = useTooltipGroup();
   const shown = useRef(false);
   const touchFocus = useRef(false);
@@ -540,17 +724,20 @@ export function Tooltip({
         parseFloat(
           getComputedStyle(tip.current).getPropertyValue("--space-2"),
         ) || 0;
-      tip.current.style.left = `${Math.max(gap, Math.min(trigger.left + (trigger.width - box.width) / 2, innerWidth - box.width - gap))}px`;
-      tip.current.style.top = `${trigger.top >= box.height + gap ? trigger.top - box.height - gap : trigger.bottom + gap}px`;
+      placeFloatingPanel(tip.current,
+        Math.max(gap, Math.min(trigger.left + (trigger.width - box.width) / 2, innerWidth - box.width - gap)),
+        trigger.top >= box.height + gap ? trigger.top - box.height - gap : trigger.bottom + gap);
     };
     place();
+    const stopSurface = afterSurfaceMotion(tip.current, place);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
+      stopSurface();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [anchor, open]);
+  }, [anchor, open, tip, presence.present]);
   return (
     <span
       className={styles.tooltipAnchor}
@@ -597,7 +784,8 @@ export function Tooltip({
         ? createPortal(
             <span
               className={styles.tooltip}
-              hidden={!open}
+              hidden={!presence.present}
+              aria-hidden={!open || undefined}
               id={id}
               ref={tip}
               role="tooltip"
@@ -664,17 +852,20 @@ export function Menu({
         preferredTop < gap || preferredTop + size.height > innerHeight - gap
           ? fallbackTop
           : preferredTop;
-      popup.style.left = `${Math.max(gap, Math.min(left, innerWidth - size.width - gap))}px`;
-      popup.style.top = `${Math.max(gap, Math.min(top, innerHeight - size.height - gap))}px`;
+      placeFloatingPanel(popup, Math.max(gap, Math.min(left, innerWidth - size.width - gap)), Math.max(gap, Math.min(top, innerHeight - size.height - gap)));
+      popup.dataset.actualPlacement = top < bounds.top ? "top" : "bottom";
     };
     position();
+    const stopSurface = afterSurfaceMotion(panel.current, position);
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
     return () => {
+      stopSurface();
       window.removeEventListener("resize", position);
       window.removeEventListener("scroll", position, true);
     };
   }, [portal, open, placement, align]);
+  useMenuMotion(open, panel, placement);
   useEffect(() => {
     const close = (event: PointerEvent) => {
       if (
@@ -807,101 +998,4 @@ export function DialogView({
   );
 }
 
-export function Dialog({
-  open = true,
-  label,
-  children,
-  onClose,
-  returnFocusSelector,
-  busy = false,
-  className = "",
-}: {
-  readonly open?: boolean;
-  readonly label: string;
-  readonly children: ReactNode;
-  readonly onClose: () => void;
-  readonly returnFocusSelector?: string;
-  readonly busy?: boolean;
-  readonly className?: string | undefined;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const title = useId();
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.activeElement;
-    const dialog = ref.current;
-    dialog?.showModal();
-    (
-      dialog?.querySelector<HTMLElement>("[autofocus]") ??
-      dialog?.querySelector<HTMLElement>(
-        "input:not(:disabled),textarea:not(:disabled),select:not(:disabled)",
-      ) ??
-      dialog?.querySelector<HTMLElement>("button:not(:disabled)") ??
-      dialog
-    )?.focus();
-    return () => {
-      dialog?.close();
-      const target = returnFocusSelector
-        ? document.querySelector(returnFocusSelector)
-        : previous;
-      if (target instanceof HTMLElement && target.isConnected) target.focus();
-    };
-  }, [open, returnFocusSelector]);
-  return (
-    <dialog
-      aria-label={label}
-      aria-busy={busy || undefined}
-      className={`${styles.dialog} ${className}`}
-      data-dialog-id={title}
-      ref={ref}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          const box = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX < box.left ||
-            event.clientX > box.right ||
-            event.clientY < box.top ||
-            event.clientY > box.bottom
-          )
-            onClose();
-        }
-      }}
-      onKeyDownCapture={(event) => {
-        if (event.key !== "Tab") return;
-        event.stopPropagation();
-        const dialog = event.currentTarget;
-        const items = Array.from(
-          dialog.querySelectorAll<HTMLElement>(
-            'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),textarea:not(:disabled),select:not(:disabled),summary,[tabindex]:not([tabindex="-1"])',
-          ),
-        ).filter(
-          (element) =>
-            element.getClientRects().length > 0 && !element.closest("[inert]"),
-        );
-        const first = items[0];
-        const last = items.at(-1);
-        if (!first || !last) {
-          event.preventDefault();
-          dialog.focus();
-          return;
-        }
-        if (
-          !dialog.contains(document.activeElement) ||
-          document.activeElement === dialog ||
-          (event.shiftKey
-            ? document.activeElement === first
-            : document.activeElement === last)
-        ) {
-          event.preventDefault();
-          (event.shiftKey ? last : first).focus();
-        }
-      }}
-    >
-      {children}
-    </dialog>
-  );
-}
+export { MotionDialog as Dialog } from "./interactions/motion-dialog";

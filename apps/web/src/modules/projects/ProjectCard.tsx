@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Button, Menu } from "../../components/ui";
+import { Button, ImagePreview, Menu } from "../../components/ui";
 import { userFacingError } from "../../components/user-facing-error";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { Project } from "./project-types";
 import styles from "./projects.module.css";
+import motion from "./project-motion.module.css";
+import { useProjectNameValidation } from "./project-name";
 
 interface ProjectCardProps {
   readonly duplicating: boolean;
@@ -60,7 +62,6 @@ export function ProjectCard({
   onRestore,
   project,
 }: ProjectCardProps) {
-  const [coverFailed, setCoverFailed] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -72,6 +73,7 @@ export function ProjectCard({
   const renameInput = useRef<HTMLInputElement>(null);
   const menuTrigger = useRef<HTMLElement>(null);
   const restoreFocus = useRef(false);
+  const validation = useProjectNameValidation(name, renaming);
   useLayoutEffect(() => {
     if (!renaming && restoreFocus.current) {
       restoreFocus.current = false;
@@ -83,24 +85,20 @@ export function ProjectCard({
     if (renameFlight.current) return;
     setName(project.name);
     setRenameError(null);
+    validation.reset();
     finishRename();
   };
 
   const submitRename = async (): Promise<void> => {
     if (renameFlight.current) return;
     const trimmed = name.trim();
-    const length = trimmed.length;
 
     if (trimmed === project.name) {
       setRenameError(null);
       finishRename();
       return;
     }
-    if (length < 3 || length > 80) {
-      setRenameError("项目名称需为 3–80 个字");
-      renameInput.current?.focus();
-      return;
-    }
+    if (!validation.validate(renameInput.current)) return;
     setRenameError(null);
     renameFlight.current = true;
     setRenamePending(true);
@@ -150,17 +148,11 @@ export function ProjectCard({
         href={`/${project.id}`}
       >
         <div
-          aria-label={
-            project.coverUrl && !coverFailed ? `${project.name} 封面` : `${project.name} 暂无封面`
-          }
           className={styles.projectCover}
-          data-has-cover={project.coverUrl && !coverFailed ? "true" : undefined}
-          role="img"
+          data-has-cover={project.coverUrl ? "true" : undefined}
         >
-          {project.coverUrl && !coverFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt={`${project.name} 封面`} className={styles.coverImage} src={project.coverUrl} onError={() => setCoverFailed(true)} />
-          ) : <span className={styles.coverFallback}><span aria-hidden="true">▱</span><small>{coverFailed ? "封面暂时无法加载" : "暂无封面"}</small></span>}
+          {project.coverUrl ? <ImagePreview src={project.coverUrl} alt={`${project.name} 封面`} retryable={false} />
+            : <span className={styles.coverFallback}><span aria-hidden="true">▱</span><small>暂无封面</small></span>}
         </div>
       </Link>
 
@@ -168,6 +160,7 @@ export function ProjectCard({
         <div className={styles.cardHeading}>
           {renaming ? (
             <form
+              noValidate
               className={styles.renameForm}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -185,16 +178,19 @@ export function ProjectCard({
               </label>
               <input
                 aria-describedby={
-                  renameError ? `rename-error-${project.id}` : undefined
+                  renameError || validation.error ? `rename-error-${project.id}` : undefined
                 }
-                aria-invalid={Boolean(renameError)}
+                aria-invalid={Boolean(validation.error)}
                 autoFocus
                 ref={renameInput}
                 readOnly={renamePending}
                 id={`rename-${project.id}`}
                 maxLength={80}
                 minLength={3}
-                onChange={(event) => setName(event.target.value)}
+                onBlur={validation.onBlur}
+                onCompositionStart={validation.onCompositionStart}
+                onCompositionEnd={validation.onCompositionEnd}
+                onChange={(event) => { setName(event.target.value); setRenameError(null); }}
                 value={name}
               />
               <Button size="small" loading={renamePending} type="submit">保存</Button>
@@ -206,11 +202,9 @@ export function ProjectCard({
               >
                 取消
               </Button>
-              {renameError ? (
-                <small id={`rename-error-${project.id}`} role="alert">
-                  {renameError}
-                </small>
-              ) : null}
+              <small className={motion.fieldFeedback} id={`rename-error-${project.id}`} role={renameError || validation.error ? "alert" : undefined}>
+                {renameError ?? validation.error}
+              </small>
             </form>
           ) : (
             <h2>
@@ -221,10 +215,7 @@ export function ProjectCard({
           {!project.optimistic && !renaming ? (
             <Menu triggerRef={menuTrigger} className={styles.cardMenu} label={`${project.name} 项目操作`} trigger={<span aria-hidden="true">•••</span>}>
                 <button
-                  onClick={(event) => {
-                    event.currentTarget
-                      .closest("details")
-                      ?.removeAttribute("open");
+                  onClick={() => {
                     setName(project.name);
                     setRenameError(null);
                     setRenaming(true);
@@ -237,10 +228,7 @@ export function ProjectCard({
                   aria-busy={duplicating}
                   aria-describedby={`duplicate-runway-note-${project.id}`}
                   disabled={duplicating}
-                  onClick={(event) => {
-                    event.currentTarget
-                      .closest("details")
-                      ?.removeAttribute("open");
+                  onClick={() => {
                     void onDuplicate(project);
                   }}
                   type="button"
@@ -251,10 +239,7 @@ export function ProjectCard({
                   服装秀作品、执行历史及活动任务保留在原项目。
                 </small>
                 <button
-                  onClick={(event) => {
-                    event.currentTarget
-                      .closest("details")
-                      ?.removeAttribute("open");
+                  onClick={() => {
                     void (project.archived
                       ? onRestore(project)
                       : onArchive(project));
@@ -265,10 +250,7 @@ export function ProjectCard({
                 </button>
                 <button
                   className={styles.deleteAction}
-                  onClick={(event) => {
-                    event.currentTarget
-                      .closest("details")
-                      ?.removeAttribute("open");
+                  onClick={() => {
                     setDeleteError(null);
                     setConfirmingDelete(true);
                   }}

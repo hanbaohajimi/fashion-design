@@ -1,6 +1,11 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
+import { useId, useRef, useState, type CSSProperties } from "react";
+import { PresentationOrder } from "./PresentationOrder";
+import { usePresentationUndo } from "./use-presentation-undo";
+import { StudioCount } from "./StudioCount";
 import {
   studioPresentationSchema,
   type StudioDocumentView,
@@ -44,16 +49,29 @@ type Props = StudioPanelProps & {
   readonly data: StudioSummary;
   readonly onGenerate: () => void;
   readonly onOpenStyles?: () => void;
+  readonly initialStyleRevisionId?: string | undefined;
 };
 
 export function PresentationSets(props: Props) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const [id, setId] = useState<string | null>(
-    props.data.presentationSets[0]?.id ?? null,
+    (props.initialStyleRevisionId
+      ? props.data.presentationSets.find(
+          (item) =>
+            studioPresentationSchema.parse(item.currentRevision.payload)
+              .styleRevisionId === props.initialStyleRevisionId,
+        )?.id
+      : props.data.presentationSets[0]?.id) ?? null,
   );
   const [draftVersion, setDraftVersion] = useState(0);
   const existing = props.data.presentationSets.find((item) => item.id === id);
   const changeObject = async (next: string | null) => {
-    if (!(await props.beforeChange())) return;
+    if (!(await beforeChange())) return;
     setId(next);
     if (!next) setDraftVersion((current) => current + 1);
   };
@@ -61,6 +79,8 @@ export function PresentationSets(props: Props) {
     <PresentationForm
       key={`${existing?.id ?? "new"}:${existing?.version ?? 0}:${draftVersion}`}
       {...props}
+      feedback={feedback}
+      beforeChange={beforeChange}
       existing={existing}
       onCreated={setId}
       onChangeObject={(next) => void changeObject(next)}
@@ -75,11 +95,13 @@ function PresentationForm({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   onGenerate,
   onOpenStyles,
   existing,
   onCreated,
   onChangeObject,
+  initialStyleRevisionId,
 }: Props & {
   readonly existing: StudioDocumentView | undefined;
   readonly onCreated: (id: string) => void;
@@ -89,21 +111,28 @@ function PresentationForm({
     ? studioPresentationSchema.parse(existing.currentRevision.payload)
     : {
         name: "",
-        styleRevisionId: data.styles[0]?.currentRevision.id ?? "",
+        styleRevisionId:
+          initialStyleRevisionId ?? data.styles[0]?.currentRevision.id ?? "",
         status: "DRAFT",
         channel: "marketplace",
         items: [],
         notes: "",
       };
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { feedback });
   const { draft, setDraft } = form;
   const errorRef = useRef<HTMLDivElement>(null);
+  const workspace = useRef<HTMLFormElement>(null);
   const uid = useId();
   const [view, setView] = useState<"organize" | "review">("organize");
+  const [viewChanged, setViewChanged] = useState(false);
+  const changeView = (next: "organize" | "review") => { if (view !== next) { setViewChanged(true); setView(next); } };
   const [selectedAssetId, setSelectedAssetId] = useState(
     initial.items[0]?.assetId ?? "",
   );
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewSource, setPreviewSource] = useState<HTMLElement | null>(null);
+  const [previewIds, setPreviewIds] = useState<readonly string[]>([]);
+  const [previewKeyboard, setPreviewKeyboard] = useState(false);
   const currentAssetId = draft.items.some(
     (item) => item.assetId === selectedAssetId,
   )
@@ -163,6 +192,13 @@ function PresentationForm({
         at === index ? { ...item, ...patch } : item,
       ),
     );
+  const undo = usePresentationUndo(draft.items, (items) => update("items", items));
+  const preview = (id: string, source?: HTMLElement, review = false, keyboard = false) => {
+    setPreviewKeyboard(keyboard);
+    setPreviewSource(source ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null));
+    setPreviewIds(review ? draft.items.map((item) => item.assetId) : data.assets.map((item) => item.id));
+    setPreviewId(id);
+  };
   const focusError = () =>
     requestAnimationFrame(() => errorRef.current?.focus());
   const save = async (ready = false) => {
@@ -197,6 +233,7 @@ function PresentationForm({
       return;
     }
     let savedId = "";
+    undo.clear();
     if (
       await form.submit(async (key) => {
         const saved = await saveStudioDocument(
@@ -206,7 +243,7 @@ function PresentationForm({
           existing,
         );
         savedId = saved.id;
-      })
+      }, ready ? "complete" : "save")
     ) {
       await onSaved();
       onCreated(savedId);
@@ -215,6 +252,7 @@ function PresentationForm({
 
   return (
     <form
+      ref={workspace}
       className={styles.workspace}
       aria-label="商品展示包工作区"
       onInvalidCapture={(event) =>
@@ -296,30 +334,31 @@ function PresentationForm({
         <section className={styles.content} aria-label="展示素材工作区">
           <div className={styles.workHeader}>
             <SegmentedControl
+              animated
               label="展示工作视图"
               value={view}
-              onChange={setView}
+              onChange={changeView}
               options={[
                 { value: "organize", label: "整理素材" },
                 { value: "review", label: "逐图核对" },
               ]}
             />
             <p className={styles.count} aria-live="polite">
-              已选 {draft.items.length}/12<span aria-hidden="true"> · </span>
+              已选 <StudioCount value={draft.items.length} />/12<span aria-hidden="true"> · </span>
               {draft.items.length
                 ? `已核对 ${reviewed}/${draft.items.length}`
                 : "待选图"}
             </p>
           </div>
           <section
-            className={styles.organize}
+            className={`${styles.organize} ${viewChanged ? styles.viewPanel : ""}`}
             hidden={view !== "organize"}
             aria-label="整理素材"
           >
             <div className={styles.sectionIntro}>
               <div>
                 <h3>挑选本次展示的图片</h3>
-                <p>按加入顺序保存；取消后重新加入会排在末尾。</p>
+                <p>选择图片后可调整展示顺序；说明与核对记录随图片保留。</p>
               </div>
               <div className={styles.generate}>
                 <Button disabled={disabled} onClick={onGenerate}>
@@ -333,13 +372,10 @@ function PresentationForm({
               items={draft.items}
               assetName={assetName}
               disabled={disabled}
-              onPreview={setPreviewId}
+              onPreview={(id, source, keyboard) => preview(id, source, false, keyboard)}
               onToggle={(id) => {
                 if (draft.items.some((item) => item.assetId === id))
-                  update(
-                    "items",
-                    draft.items.filter((item) => item.assetId !== id),
-                  );
+                  undo.remove(id);
                 else if (draft.items.length < 12)
                   update("items", [
                     ...draft.items,
@@ -347,6 +383,7 @@ function PresentationForm({
                   ]);
               }}
             />
+            {draft.items.length ? <PresentationOrder ids={draft.items.map((item) => item.assetId)} assets={data.assets} currentId={currentAssetId} assetName={assetName} disabled={disabled} onSelect={(id) => { setSelectedAssetId(id); changeView("review"); }} onReorder={(ids) => update("items", ids.flatMap((id) => { const item = draft.items.find((entry) => entry.assetId === id); return item ? [item] : []; }))} /> : null}
             {draft.items.length ? (
               <div className={styles.continueRow}>
                 <p>
@@ -354,16 +391,16 @@ function PresentationForm({
                     ? "全部图片已核对，可检查资料并保存。"
                     : "选好图片后，逐张检查视图、说明与服装细节。"}
                 </p>
-                <Button onClick={() => setView("review")}>开始逐图核对</Button>
+                <Button onClick={() => changeView("review")}>开始逐图核对</Button>
               </div>
             ) : null}
           </section>
-          <section hidden={view !== "review"} aria-label="逐图核对">
+          <section className={viewChanged ? styles.viewPanel : undefined} hidden={view !== "review"} aria-label="逐图核对">
             {!draft.items.length ? (
               <div className={styles.empty}>
                 <h3>先选入需要展示的图片</h3>
                 <p>选入后，可逐张填写说明并人工核对。</p>
-                <Button onClick={() => setView("organize")}>
+                <Button onClick={() => changeView("organize")}>
                   返回整理素材
                 </Button>
               </div>
@@ -405,12 +442,12 @@ function PresentationForm({
                       <h3>{assetName(item.assetId)}</h3>
                       <Button
                         variant="ghost"
-                        onClick={() => setPreviewId(item.assetId)}
+                        onClick={(event) => preview(item.assetId, event.currentTarget, true, event.detail === 0)}
                       >
                         查看大图
                       </Button>
                     </div>
-                    <div className={styles.reviewImage}>
+                    <div className={styles.reviewImage} data-picture-source={item.assetId}>
                       <ImagePreview
                         src={asset(item.assetId)?.url}
                         alt={`展示图片 ${index + 1}`}
@@ -597,6 +634,8 @@ function PresentationForm({
         <div className={styles.actionButtons}>
           <Button
             variant={completePrimary ? "primary" : "secondary"}
+            feedback={feedback?.snapshot}
+            feedbackAction="complete"
             disabled={disabled}
             loading={form.busy}
             onClick={() => void save(true)}
@@ -605,6 +644,7 @@ function PresentationForm({
           </Button>
           <Button
             type="submit"
+            feedback={feedback?.snapshot}
             variant={
               !exportPrimary && !completePrimary ? "primary" : "secondary"
             }
@@ -624,6 +664,7 @@ function PresentationForm({
           ) : null}
         </div>
       </footer>
+      {undo.count && !disabled ? <div className={styles.undoBar} role="status" onMouseEnter={undo.pause} onMouseLeave={(event) => { if (!event.currentTarget.contains(document.activeElement)) undo.resume(); }} onFocusCapture={undo.pause} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.matches(":hover")) undo.resume(); }}><span>已移出 {undo.count} 张展示图片</span><Button disabled={!undo.canRestore} onClick={undo.restore}>撤销移出</Button>{!undo.canRestore ? <span>已达 12 张上限，请先留出位置。</span> : null}<Button variant="ghost" onClick={undo.clear}>关闭提示</Button><span key={`${undo.revision}:${undo.remaining}`} aria-hidden="true" className={styles.undoProgress} style={{ "--undo-time": `${undo.remaining}ms`, animationPlayState: undo.paused ? "paused" : "running" } as CSSProperties} /></div> : null}
       {existing ? (
         <section className={styles.history} aria-label="已保存的展示素材">
           <h3>已保存的展示素材</h3>
@@ -663,6 +704,11 @@ function PresentationForm({
         <PresentationPreview
           name={assetName(previewId)}
           src={asset(previewId)?.url}
+          pictures={previewIds.map((id) => ({ id, src: asset(id)?.url, name: assetName(id) }))}
+          initialIndex={Math.max(0, previewIds.indexOf(previewId))}
+          sourceElement={previewSource}
+          keyboardOpened={previewKeyboard}
+          getSourceElement={(id) => [...(workspace.current?.querySelectorAll<HTMLElement>("[data-picture-source]") ?? [])].find((element) => element.dataset.pictureSource === id && element.getBoundingClientRect().width > 0) ?? null}
           onClose={() => setPreviewId(null)}
         />
       ) : null}

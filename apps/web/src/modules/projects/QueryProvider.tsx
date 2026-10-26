@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
+import { type ReactNode, useEffect, useInsertionEffect, useLayoutEffect, useState } from "react";
 import { SWRConfig } from "swr";
 import { useAuth } from "../auth/AuthProvider";
 import { setActiveBoardUser } from "../trends/active-board";
@@ -16,7 +16,9 @@ export function QueryProvider({ children }: QueryProviderProps) {
   const { session } = useAuth();
   const userId = session?.user.id ?? "anonymous";
   useLayoutEffect(installNavigationHistory, []);
-  useLayoutEffect(() => {
+  // Establish request identity before descendants' SWR layout effects can fetch.
+  // No DOM or React state is changed here; SSR/first-render content stays intact.
+  useInsertionEffect(() => {
     setPrivateRequestUser(session?.user.id ?? null);
     setActiveBoardUser(session?.user.id ?? null);
   }, [session?.user.id]);

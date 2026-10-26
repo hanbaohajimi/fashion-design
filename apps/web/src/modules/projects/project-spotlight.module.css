@@ -1,5 +1,7 @@
 /* §2.4/§3.3: continuation is secondary; the project grid stays in view. */
 .spotlight {
+  position: relative;
+  isolation: isolate;
   margin: 0 auto var(--space-6);
   width: min(calc(100% - 2 * var(--page-gutter)), var(--content-max-width));
   display: flex;
@@ -8,6 +10,23 @@
   padding: var(--space-4);
   background: var(--color-paper);
   border-radius: var(--radius-lg);
+}
+.spotlightGlow {
+  position: absolute;
+  contain: paint;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle 200px at var(--spot-x, 50%) var(--spot-y, 50%), rgba(40, 100, 82, 0.08), transparent 100%);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-enter);
+}
+.spotlight[data-spotlight-active] .spotlightGlow {
+  opacity: 1;
+  /* Keep the moving gradient on this small paint layer only while hovered. */
+  will-change: opacity;
+  transition-duration: var(--duration-fast);
 }
 .visual {
   width: var(--space-16);
@@ -44,17 +63,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
   flex: none;
   min-height: var(--control-height-touch);
-  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   color: var(--color-ink);
   font-size: var(--text-base);
   text-decoration: none;
 }
-.primary:hover {
-  background: var(--color-surface);
+.primaryVisual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: inherit;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-control-border);
+  border-radius: inherit;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-soft-raised);
+}
+.primary:active .primaryVisual {
+  box-shadow: var(--shadow-soft-inset);
 }
 .primary:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -72,6 +102,12 @@
   .primary {
     width: 100%;
     justify-content: space-between;
-    background: var(--color-surface);
   }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active), (hover: none), (pointer: coarse) {
+  .spotlightGlow { display: none; }
+}
+@media (forced-colors: active) {
+  .primaryVisual { border-color: ButtonText; box-shadow: none; }
+  .primary:active .primaryVisual { box-shadow: none; }
 }

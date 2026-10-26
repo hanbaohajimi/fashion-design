@@ -1,0 +1,50 @@
+.undoNotice {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: min(356px, calc(100vw - 32px));
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  box-shadow: var(--shadow-popup);
+  overflow: hidden;
+}
+.undoNotice > span:first-child { flex: 1; }
+.undoNotice button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.undoNotice button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.undoNotice button:disabled { opacity: .6; cursor: wait; }
+.undoNotice small { flex-basis: 100%; }
+.undoTime { position: absolute; inset: auto 0 0; height: 2px; background: currentColor; transform-origin: left; }
+.skeletonCard { display: grid; gap: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.skeletonCover { width: 100%; aspect-ratio: 4 / 3; background: var(--color-surface); }
+.skeletonBody { padding: 20px; display: grid; gap: 12px; }
+.skeletonLine { height: 16px; width: 65%; background: var(--color-surface); border-radius: 3px; }
+.skeletonLine:nth-child(2) { width: 85%; }
+.skeletonAction { margin-top: 8px; width: 104px; height: 40px; background: var(--color-surface); border-radius: var(--radius-md); }
+.fieldFeedback { min-height: 24px; margin: 0; color: var(--color-error); font-size: var(--text-sm); }
+.fieldFeedback[data-valid="true"] { color: var(--color-action); }
+.fieldFeedback > span { display: block; animation: field-enter 220ms var(--ease-enter); }
+.shake { animation: field-shake 400ms cubic-bezier(.36,.07,.19,.97); }
+@keyframes field-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes field-shake { 0%, 100% { transform: none; } 15%, 45% { transform: translateX(-4px); } 30%, 60% { transform: translateX(4px); } 75% { transform: translateX(-2px); } 90% { transform: translateX(2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .undoTime { display: none; }
+  .fieldFeedback > span, .shake { animation: none; }
+}
+@media (forced-colors: active) {
+  .undoNotice { background: Canvas; color: CanvasText; box-shadow: none; }
+  .undoTime { background: CanvasText; }
+}

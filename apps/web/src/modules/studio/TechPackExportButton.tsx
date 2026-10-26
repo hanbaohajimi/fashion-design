@@ -210,7 +210,7 @@ function RevisionExport({
         导出此修订 PDF
       </Button>
       {waiting ? (
-        <p role="status">
+        <p key={task.status} role="status" className={styles.receiptChange}>
           {task.status === "queued" ? "导出排队中" : "正在生成 PDF"}
           ，离开页面后仍会继续。
         </p>

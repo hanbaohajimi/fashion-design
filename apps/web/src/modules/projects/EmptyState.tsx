@@ -26,6 +26,6 @@ export function EmptyState({
   }
 
   return (
-    <SharedEmptyState title="从第一个系列开始" action={<Button variant="primary" onClick={onCreate}>创建第一个项目</Button>}>创建一个项目，把灵感、面料、草图与生成方案整理在同一张设计白板上。</SharedEmptyState>
+    <SharedEmptyState title="从第一个系列开始" action={<Button interaction="magnetic" variant="primary" onClick={onCreate}>创建第一个项目</Button>}>创建一个项目，把灵感、面料、草图与生成方案整理在同一张设计白板上。</SharedEmptyState>
   );
 }

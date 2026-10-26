@@ -32,7 +32,9 @@ export function AssistantReferencePicker({
   onApply,
   onAddMaterial,
   onClose,
+  open = true,
 }: {
+  readonly open?: boolean;
   readonly graph: WorkflowGraph;
   readonly selectedIds: readonly string[];
   readonly onApply: (ids: readonly string[]) => void;
@@ -43,6 +45,11 @@ export function AssistantReferencePicker({
   const [ids, setIds] = useState(() =>
     selectedIds.filter((id) => graph.nodes.some((node) => node.id === id)),
   );
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) { setQuery(""); setIds(selectedIds.filter((id) => graph.nodes.some((node) => node.id === id))); }
+  }
   const availableIds = ids.filter((id) =>
     graph.nodes.some((node) => node.id === id),
   );
@@ -89,6 +96,7 @@ export function AssistantReferencePicker({
 
   return (
     <Dialog
+      open={open}
       label="添加引用"
       onClose={onClose}
       returnFocusSelector="[data-assistant-reference-trigger]"

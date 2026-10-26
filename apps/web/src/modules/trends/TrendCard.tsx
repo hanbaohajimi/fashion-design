@@ -1,6 +1,7 @@
 "use client";
 
-import { ImagePreview } from "../../components/ui";
+import { useState } from "react";
+import { Button, ImagePreview } from "../../components/ui";
 import { ColorStrip } from "./ColorStrip";
 import type { TrendItem } from "./trend-types";
 import styles from "./trends.module.css";
@@ -70,6 +71,7 @@ export function TrendCard({
   onImport,
   trend,
 }: TrendCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const platform = platformLabel(trend.platform);
   const keywords = trend.extracted?.keywords.length
     ? trend.extracted.keywords
@@ -94,21 +96,16 @@ export function TrendCard({
       className={styles.trendCard}
       data-has-cover={trend.coverImageUrl ? "true" : "false"}
     >
-      <div className={styles.cardVisual}>
-        {trend.coverImageUrl ? (
-          <ImagePreview alt="" src={trend.coverImageUrl} fit="cover" />
-        ) : (
-          <div
-            aria-label="暂无代表图"
-            className={styles.visualFallback}
-            role="img"
-          >
-            <span>NO VISUAL</span>
-            <i />
-          </div>
-        )}
-        <span className={styles.platformBadge}>{platform}</span>
-      </div>
+      {trend.coverImageUrl ? (
+        <div className={styles.cardVisual}>
+          <ImagePreview
+            alt={trend.title}
+            src={trend.coverImageUrl}
+            fit="contain"
+          />
+          <span className={styles.platformBadge}>{platform}</span>
+        </div>
+      ) : null}
 
       <div className={styles.cardBody}>
         <span className={styles.cardCategory}>
@@ -130,7 +127,22 @@ export function TrendCard({
             <span aria-hidden="true">⚠</span>
             <strong>AI整理，建议结合原文判断</strong>
           </div>
-          <p>{trend.summary}</p>
+          <p
+            className={styles.summaryText}
+            data-expanded={expanded || trend.summary.length <= 160}
+          >
+            {trend.summary}
+          </p>
+          {trend.summary.length > 160 ? (
+            <Button
+              size="small"
+              variant="ghost"
+              aria-expanded={expanded}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? "收起摘要" : "展开摘要"}
+            </Button>
+          ) : null}
           <ColorStrip colors={trend.extracted?.keyColors ?? []} />
           {keywords.length > 0 ? (
             <div aria-label="趋势关键词" className={styles.tagList}>

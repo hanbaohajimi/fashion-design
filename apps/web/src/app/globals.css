@@ -1,6 +1,12 @@
 /* 引入统一设计系统 */
 @import "../styles/design-system.css";
 
+html[data-motion-visibility="hidden"] *,
+html[data-motion-visibility="hidden"] *::before,
+html[data-motion-visibility="hidden"] *::after {
+  animation-play-state: paused !important;
+}
+
 html,
 body {
   margin: 0;

@@ -1,5 +1,7 @@
 "use client";
 
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
 import {
   BoundStyleContext,
   techPackStyleRevision,
@@ -63,6 +65,12 @@ const states = {
 export function SampleRounds(
   props: StudioPanelProps & { readonly data: StudioSummary },
 ) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const [id, setId] = useState<string | null>(
     props.data.samples[0]?.id ?? null,
   );
@@ -70,7 +78,7 @@ export function SampleRounds(
   const [seed, setSeed] = useState<Sample | null>(null);
   const existing = props.data.samples.find((item) => item.id === id);
   const nextRound = async (payload: Sample) => {
-    if (!(await props.beforeChange())) return;
+    if (!(await beforeChange())) return;
     setId(null);
     setDraftVersion((current) => current + 1);
     setSeed({
@@ -94,6 +102,50 @@ export function SampleRounds(
   return (
     <div className={styles.section}>
       <StudioPageHeader
+        objectSwitcher={
+          props.data.samples.length > 0 ? (
+            <ObjectSwitcher
+              label="切换对象"
+              current={
+                <>
+                  切换资料 ·{" "}
+                  {existing?.currentRevision.payload.name ?? "新建资料"}
+                </>
+              }
+            >
+              <aside className={styles.rail}>
+                {props.data.samples.map((item) => {
+                  const sample = item.currentRevision.payload as Sample;
+                  return (
+                    <Button
+                      key={item.id}
+                      aria-pressed={id === item.id}
+                      onClick={() =>
+                        void (async () => {
+                          if (await beforeChange()) {
+                            setId(item.id);
+                            setSeed(null);
+                          }
+                        })()
+                      }
+                    >
+                      <strong>{sample.name}</strong>
+                      <small>
+                        第 {sample.round} 轮 ·{" "}
+                        {
+                          sample.issues.filter(
+                            (issue) => issue.status !== "VERIFIED",
+                          ).length
+                        }{" "}
+                        个待复核问题
+                      </small>
+                    </Button>
+                  );
+                })}
+              </aside>
+            </ObjectSwitcher>
+          ) : null
+        }
         title={String(existing?.currentRevision.payload.name ?? "新样衣轮次")}
         type="样衣反馈"
         description="整理本轮照片，定位问题并跟进处理"
@@ -102,7 +154,7 @@ export function SampleRounds(
             disabled={!props.canEdit}
             onClick={() =>
               void (async () => {
-                if (await props.beforeChange()) {
+                if (await beforeChange()) {
                   setId(null);
                   setDraftVersion((current) => current + 1);
                   setSeed(null);
@@ -115,48 +167,6 @@ export function SampleRounds(
         }
       />
       <div className={styles.split}>
-        {props.data.samples.length > 1 ? (
-          <ObjectSwitcher
-            label="切换对象"
-            current={
-              <>
-                切换资料 ·{" "}
-                {existing?.currentRevision.payload.name ?? "新建资料"}
-              </>
-            }
-          >
-            <aside className={styles.rail}>
-              {props.data.samples.map((item) => {
-                const sample = item.currentRevision.payload as Sample;
-                return (
-                  <Button
-                    key={item.id}
-                    aria-pressed={id === item.id}
-                    onClick={() =>
-                      void (async () => {
-                        if (await props.beforeChange()) {
-                          setId(item.id);
-                          setSeed(null);
-                        }
-                      })()
-                    }
-                  >
-                    <strong>{sample.name}</strong>
-                    <small>
-                      第 {sample.round} 轮 ·{" "}
-                      {
-                        sample.issues.filter(
-                          (issue) => issue.status !== "VERIFIED",
-                        ).length
-                      }{" "}
-                      个待复核问题
-                    </small>
-                  </Button>
-                );
-              })}
-            </aside>
-          </ObjectSwitcher>
-        ) : null}
         <SampleEditor
           key={
             (existing?.id ?? "new") +
@@ -168,6 +178,8 @@ export function SampleRounds(
             (seed?.round ?? 0)
           }
           {...props}
+          feedback={feedback}
+          beforeChange={beforeChange}
           existing={existing}
           seed={seed}
           onCreated={(nextId) => {
@@ -189,6 +201,7 @@ function SampleEditor({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   onCreated,
   seed,
   onNextRound,
@@ -209,16 +222,20 @@ function SampleEditor({
         issues: [],
         notes: "",
       });
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { feedback });
   const { draft, setDraft } = form;
   const [selectedIssueId, setSelectedIssueId] = useState(
     initial.issues[0]?.id ?? "",
   );
-  const currentIssueId = draft.issues.some(
+  const [issueFilter, setIssueFilter] = useState("all");
+  const filteredIssues = draft.issues.filter(
+    (issue) => issueFilter === "all" || issue.status === issueFilter,
+  );
+  const currentIssueId = filteredIssues.some(
     (issue) => issue.id === selectedIssueId,
   )
     ? selectedIssueId
-    : draft.issues[0]?.id;
+    : filteredIssues[0]?.id;
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<StudioAsset[]>([]);
   const assets = [
@@ -276,7 +293,7 @@ function SampleEditor({
           existing,
         );
         id = result.id;
-      })
+      }, "verify")
     ) {
       await onSaved();
       onCreated(id);
@@ -325,15 +342,16 @@ function SampleEditor({
     <form
       className={`${styles.form} ${styles.sampleWorkspace}`}
       onInvalidCapture={(event) =>
-        revealInvalidField(event, () =>
+        revealInvalidField(event, () => {
+          setIssueFilter("all");
           setSelectedIssueId(
             (event.target as HTMLElement).closest<HTMLElement>(
               "[data-sample-issue]",
             )?.dataset.sampleIssue ??
               currentIssueId ??
               "",
-          ),
-        )
+          );
+        })
       }
       onSubmit={(event) => {
         event.preventDefault();
@@ -420,7 +438,7 @@ function SampleEditor({
         </StudioEditSection>
         <fieldset
           className={`${styles.form} ${styles.samplePhotos}`}
-          disabled={!canEdit || form.busy || uploading}
+          disabled={form.busy || uploading}
         >
           <h3>本轮照片</h3>
           <p className={styles.muted}>
@@ -430,7 +448,7 @@ function SampleEditor({
             <UploadInput
               label="上传样衣照片"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              disabled={draft.photoAssetIds.length >= 30}
+              disabled={!canEdit || draft.photoAssetIds.length >= 30}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void upload(file);
@@ -439,6 +457,7 @@ function SampleEditor({
             />
           </Field>
           <AssetPicker
+            disabled={!canEdit || form.busy || uploading}
             assets={assets}
             selected={draft.photoAssetIds}
             max={30}
@@ -462,17 +481,20 @@ function SampleEditor({
       </div>
       <fieldset
         className={`${styles.form} ${styles.sampleIssues}`}
-        disabled={!canEdit || form.busy || uploading}
+        disabled={form.busy || uploading}
       >
         <section className={styles.section}>
           <div className={styles.recordHeader}>
             <h3>问题记录</h3>
             <Button
               disabled={
-                !draft.photoAssetIds.length || draft.issues.length >= 100
+                !canEdit ||
+                !draft.photoAssetIds.length ||
+                draft.issues.length >= 100
               }
               onClick={() => {
                 const issueId = crypto.randomUUID();
+                setIssueFilter("all");
                 setSelectedIssueId(issueId);
                 update("issues", [
                   ...draft.issues,
@@ -492,14 +514,37 @@ function SampleEditor({
               添加问题
             </Button>
           </div>
+          <Field label="筛选问题状态">
+            <Select
+              value={issueFilter}
+              onChange={(event) => setIssueFilter(event.target.value)}
+            >
+              <option value="all">全部问题 · {draft.issues.length}</option>
+              {Object.entries(states).map(([value, label]) => (
+                <option value={value} key={value}>
+                  {label} ·{" "}
+                  {
+                    draft.issues.filter((issue) => issue.status === value)
+                      .length
+                  }
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {draft.issues.length > 0 && !filteredIssues.length ? (
+            <p role="status">当前状态下没有问题记录。</p>
+          ) : null}
           <nav className={styles.issueNavigation} aria-label="样衣问题切换">
-            {draft.issues.map((issue, index) => (
+            {filteredIssues.map((issue) => (
               <Button
                 key={issue.id}
                 aria-pressed={currentIssueId === issue.id}
                 onClick={() => setSelectedIssueId(issue.id)}
               >
-                {issue.text || `问题 ${index + 1}`} ·{" "}
+                <span>
+                  {draft.issues.indexOf(issue) + 1}.{" "}
+                  {categories[issue.category]} · {issue.text || "尚未填写说明"}
+                </span>{" "}
                 {issue.status === "VERIFIED"
                   ? "已复核"
                   : issue.status === "FIXED"
@@ -514,7 +559,8 @@ function SampleEditor({
               hidden={currentIssueId !== issue.id}
               className={`${styles.record} ${styles.issueRecord}`}
               disabled={
-                issue.status === "VERIFIED" && !data.capabilities.review
+                !canEdit ||
+                (issue.status === "VERIFIED" && !data.capabilities.review)
               }
               key={issue.id}
             >
@@ -675,6 +721,7 @@ function SampleEditor({
         </FormSection>
       </fieldset>
       <SaveBar
+        feedback={feedback?.snapshot}
         busy={form.busy || uploading}
         dirty={form.dirty}
         isNew={!existing}
@@ -692,6 +739,8 @@ function SampleEditor({
         {existing && data.capabilities.review && !canEdit ? (
           <Button
             loading={form.busy}
+            feedback={feedback?.snapshot}
+            feedbackAction="verify"
             disabled={!draft.issues.some((issue) => issue.status === "FIXED")}
             onClick={() => void verifyFixed()}
           >

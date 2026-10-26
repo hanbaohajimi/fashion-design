@@ -6,6 +6,7 @@ import {
   type ImageComment,
 } from "@fashion/shared";
 import styles from "./image-workspace.module.css";
+import { useImageViewport } from "./use-image-viewport";
 
 export interface ImageSize {
   width: number;
@@ -35,6 +36,10 @@ export function ImageViewer({
   onFrame,
   crop,
   onCrop,
+  onZoomPreview,
+  previousUrl,
+  nextUrl,
+  onNavigate,
 }: {
   url: string;
   title: string;
@@ -64,9 +69,15 @@ export function ImageViewer({
     | undefined;
   crop?: ImageRect | undefined;
   onCrop?: ((crop: ImageRect) => void) | undefined;
+  onZoomPreview?: ((percent: number | null) => void) | undefined;
+  previousUrl?: string | undefined;
+  nextUrl?: string | undefined;
+  onNavigate?: ((direction: -1 | 1) => void) | undefined;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const media = useRef<HTMLDivElement>(null);
+  const frameElement = useRef<HTMLDivElement>(null);
+  const readout = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState<ImageSize>({ width: 768, height: 1024 });
   const [bounds, setBounds] = useState({ width: 800, height: 600 });
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -105,6 +116,7 @@ export function ImageViewer({
     1,
   );
   const scale = zoom === null ? Math.max(0.01, fit) : zoom / 100;
+  const viewport = useImageViewport({ enabled: mode === "view", url, scale, fit: Math.max(.01, fit), size: display, bounds, host, frame: frameElement, readout, onCommit: (next, nextPan, fitted) => { setPan({ x: nextPan.x, y: nextPan.y }); onZoom(fitted ? null : next * 100); }, onPreview: onZoomPreview, previous: Boolean(previousUrl), next: Boolean(nextUrl), onNavigate });
   useEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -136,7 +148,9 @@ export function ImageViewer({
       className={styles.viewport}
       ref={host}
       aria-label="图片查看区域"
+      onDoubleClick={(event) => { if (!(event.target instanceof Element && event.target.closest("button"))) viewport.onDoubleClick(event); }}
       onWheel={(event) => {
+        if (viewport.onWheel(event)) return;
         if (mode === "annotate" || mode === "comment") return;
         onZoom(
           Math.max(
@@ -146,6 +160,7 @@ export function ImageViewer({
         );
       }}
       onPointerDown={(event) => {
+        if (viewport.onPointerDown(event)) return;
         if (event.target instanceof Element && event.target.closest("button"))
           return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -178,6 +193,7 @@ export function ImageViewer({
         };
       }}
       onPointerMove={(event) => {
+        if (viewport.onPointerMove(event)) return;
         if (!pointers.current.has(event.pointerId)) return;
         pointers.current.set(event.pointerId, {
           x: event.clientX,
@@ -214,6 +230,7 @@ export function ImageViewer({
         });
       }}
       onPointerUp={(event) => {
+        if (viewport.onPointerUp(event)) return;
         pointers.current.delete(event.pointerId);
         gesture.current = null;
         if (drawing.current) {
@@ -223,18 +240,27 @@ export function ImageViewer({
         }
       }}
       onPointerCancel={(event) => {
+        if (viewport.onPointerCancel()) return;
         pointers.current.delete(event.pointerId);
         gesture.current = null;
         drawing.current = null;
         setDraft(null);
       }}
+      onLostPointerCapture={() => viewport.onPointerCancel()}
     >
+      {mode === "view" && onNavigate ? <div className={styles.galleryNeighbors} aria-hidden="true" data-gallery-neighbors>
+        {/* eslint-disable @next/next/no-img-element */}
+        {previousUrl ? <img src={previousUrl} alt="" draggable={false} data-side="previous" /> : null}
+        {nextUrl ? <img src={nextUrl} alt="" draggable={false} data-side="next" /> : null}
+        {/* eslint-enable @next/next/no-img-element */}
+      </div> : null}
       <div
         className={styles.frame}
+        ref={frameElement}
         style={{
           width: display.width,
           height: display.height,
-          transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          transform: `translate(-50%, -50%) translate(calc(var(--image-x, ${pan.x}px) + var(--gallery-x, 0px)), var(--image-y, ${pan.y}px)) scale(var(--image-scale, ${scale}))`,
         }}
       >
         <div
@@ -466,11 +492,12 @@ export function ImageViewer({
       <button
         className={styles.fit}
         onClick={() => {
+          if (mode === "view") { viewport.fit(); return; }
           onZoom(null);
           setPan({ x: 0, y: 0 });
         }}
       >
-        适合窗口 · {Math.round(scale * 100)}%
+        适合窗口 · <span ref={readout}>{Math.round(scale * 100)}%</span>
       </button>
       {error ? (
         <div className={styles.loadError} role="alert">

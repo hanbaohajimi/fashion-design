@@ -1,0 +1,39 @@
+.indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-action);
+  border-radius: 1px;
+  pointer-events: none;
+  transform-origin: left center;
+}
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 0;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.connection::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.connection[data-connected="true"] { color: var(--color-success); }
+.connectionFull { display: inline; }
+.connectionShort { display: none; }
+@media (max-width: 1199px) {
+  .connectionFull { display: none; }
+  .connectionShort { display: inline; }
+}
+@media (forced-colors: active) {
+  .indicator { background: Highlight; }
+  .connection { color: CanvasText; }
+}

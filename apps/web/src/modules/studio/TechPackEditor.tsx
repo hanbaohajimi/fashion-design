@@ -1,5 +1,7 @@
 "use client";
 
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
 
 import { BoundStyleContext } from "./studio-object-context";
@@ -47,6 +49,12 @@ export function TechPackEditor(
     readonly initialStyleRevisionId?: string | undefined;
   },
 ) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const [id, setId] = useState<string | null>(
     (props.initialStyleRevisionId
       ? props.data.techPacks.find(
@@ -61,6 +69,37 @@ export function TechPackEditor(
   return (
     <div className={styles.section}>
       <StudioPageHeader
+        objectSwitcher={
+          props.data.techPacks.length > 0 ? (
+            <ObjectSwitcher
+              label="切换技术包"
+              current={existing?.currentRevision.payload.name ?? "新建资料"}
+            >
+              <aside className={styles.rail}>
+                {props.data.techPacks.map((item) => (
+                  <Button
+                    key={item.id}
+                    aria-pressed={id === item.id}
+                    onClick={() =>
+                      void (async () => {
+                        if (await beforeChange()) setId(item.id);
+                      })()
+                    }
+                  >
+                    <strong>{item.currentRevision.payload.name}</strong>
+                    <small>
+                      r{item.currentRevision.revision} ·{" "}
+                      {(item.currentRevision.payload as StudioTechPack)
+                        .status === "PUBLISHED"
+                        ? "已发布"
+                        : "草稿"}
+                    </small>
+                  </Button>
+                ))}
+              </aside>
+            </ObjectSwitcher>
+          ) : null
+        }
         title={String(existing?.currentRevision.payload.name ?? "新建技术包")}
         type="技术包"
         description="逐章整理制作资料，人工复核后发布"
@@ -78,7 +117,7 @@ export function TechPackEditor(
             disabled={!props.canEdit}
             onClick={() =>
               void (async () => {
-                if (await props.beforeChange()) {
+                if (await beforeChange()) {
                   setId(null);
                   setDraftVersion((current) => current + 1);
                 }
@@ -90,35 +129,6 @@ export function TechPackEditor(
         }
       />
       <div className={styles.split}>
-        {props.data.techPacks.length > 1 ? (
-          <ObjectSwitcher
-            label="切换技术包"
-            current={existing?.currentRevision.payload.name ?? "新建资料"}
-          >
-            <aside className={styles.rail}>
-              {props.data.techPacks.map((item) => (
-                <Button
-                  key={item.id}
-                  aria-pressed={id === item.id}
-                  onClick={() =>
-                    void (async () => {
-                      if (await props.beforeChange()) setId(item.id);
-                    })()
-                  }
-                >
-                  <strong>{item.currentRevision.payload.name}</strong>
-                  <small>
-                    r{item.currentRevision.revision} ·{" "}
-                    {(item.currentRevision.payload as StudioTechPack).status ===
-                    "PUBLISHED"
-                      ? "已发布"
-                      : "草稿"}
-                  </small>
-                </Button>
-              ))}
-            </aside>
-          </ObjectSwitcher>
-        ) : null}
         <TechPackForm
           key={
             (existing?.id ?? "new") +
@@ -128,6 +138,8 @@ export function TechPackEditor(
             draftVersion
           }
           {...props}
+          feedback={feedback}
+          beforeChange={beforeChange}
           existing={existing}
           onCreated={setId}
         />
@@ -144,6 +156,7 @@ function TechPackForm({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   onCreated,
   initialStyleRevisionId,
 }: StudioPanelProps & {
@@ -174,7 +187,7 @@ function TechPackForm({
         reviewConfirmed: false,
       };
   const [initialDraft] = useState(() => createTechPackDraft(initial));
-  const form = useStudioForm(initialDraft, onDirty);
+  const form = useStudioForm(initialDraft, onDirty, { feedback });
   const formElement = useRef<HTMLFormElement>(null);
   const { draft, setDraft } = form;
   const [viewsChanged, setViewsChanged] = useState(false);
@@ -200,6 +213,65 @@ function TechPackForm({
             : issue.includes("工艺")
               ? "annotations"
               : "review";
+  const locateIssue = (issue: string) => {
+    const next = issueChapter(issue);
+    setChapter(next);
+    requestAnimationFrame(() => {
+      const regions = Array.from(
+        formElement.current?.querySelectorAll<HTMLElement>(
+          `[data-tech-chapter="${next}"]`,
+        ) ?? [],
+      );
+      const region = regions[0];
+      let label: string | undefined;
+      if (next === "bom") {
+        const index = draft.bom.findIndex(
+          (row) =>
+            !row.material ||
+            !row.quantity.trim() ||
+            row.source === "ai" ||
+            !row.reviewed,
+        );
+        const row = draft.bom[index];
+        if (row)
+          label = `BOM ${index + 1} ${!row.material ? "材料" : !row.quantity.trim() ? "用量" : row.source === "ai" ? "依据" : "已复核"}`;
+      } else if (next === "pom") {
+        const index = draft.pom.findIndex(
+          (row) =>
+            !row.value.trim() ||
+            !row.tolerance.trim() ||
+            row.source === "ai" ||
+            !row.reviewed,
+        );
+        const row = draft.pom[index];
+        if (row)
+          label = `POM ${index + 1} ${!row.value.trim() ? "尺寸" : !row.tolerance.trim() ? "公差" : row.source === "ai" ? "依据" : "已复核"}`;
+      }
+      const controls = regions.flatMap((item) =>
+        Array.from(
+          item.querySelectorAll<HTMLElement>(
+            "input:not(:disabled),select:not(:disabled),textarea:not(:disabled),button:not(:disabled)",
+          ),
+        ),
+      );
+      const control =
+        (label
+          ? controls.find((item) => item.getAttribute("aria-label") === label)
+          : undefined) ??
+        controls.find(
+          (item) =>
+            item instanceof HTMLInputElement &&
+            item.type === "checkbox" &&
+            !item.checked,
+        ) ??
+        controls[0];
+      (control ?? region)?.scrollIntoView({
+        block: "center",
+        behavior: "instant",
+      });
+      control?.focus({ preventScroll: true });
+    });
+  };
   const update = <K extends keyof TechPackDraft>(
     key: K,
     value: TechPackDraft[K],
@@ -248,7 +320,7 @@ function TechPackForm({
           existing,
         );
         id = result.id;
-      })
+      }, publish ? "publish" : "save")
     ) {
       const normalized = createTechPackDraft(payload);
       form.reset({
@@ -367,7 +439,12 @@ function TechPackForm({
           { value: "pom", label: "POM" },
           { value: "colors", label: "配色" },
           { value: "review", label: "复核发布" },
-        ]}
+        ].map((item) => ({
+          ...item,
+          pending: readiness.filter(
+            (issue) => issueChapter(issue) === item.value,
+          ).length,
+        }))}
       />
       {chapter === "review" ? (
         <section className={styles.reviewReadiness} aria-label="发布准备情况">
@@ -380,10 +457,7 @@ function TechPackForm({
             <ul>
               {readiness.map((issue) => (
                 <li key={issue}>
-                  <button
-                    type="button"
-                    onClick={() => setChapter(issueChapter(issue))}
-                  >
+                  <button type="button" onClick={() => locateIssue(issue)}>
                     {issue}
                   </button>
                 </li>
@@ -874,6 +948,7 @@ function TechPackForm({
         </div>
       </section>
       <SaveBar
+        feedback={feedback?.snapshot}
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}
@@ -894,6 +969,8 @@ function TechPackForm({
               : "secondary"
           }
           loading={form.busy}
+          feedback={feedback?.snapshot}
+          feedbackAction="publish"
           disabled={
             !data.capabilities.review ||
             (!canEdit && !existing) ||

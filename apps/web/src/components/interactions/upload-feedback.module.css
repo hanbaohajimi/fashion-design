@@ -1,0 +1,8 @@
+.card { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-paper); min-width: 0; }
+.picture { position: relative; display: grid; place-items: center; width: 72px; height: 88px; flex: none; overflow: hidden; background: var(--image-stage-background); color: var(--color-ink-secondary); font-size: 12px; }
+.picture img { width: 100%; height: 100%; object-fit: contain; }
+.mask { position: absolute; inset: 0; background: rgb(32 51 46 / 25%); transform-origin: top; pointer-events: none; }
+.details { display: grid; justify-items: start; gap: 6px; min-width: 0; font-size: 13px; }
+.details strong { overflow-wrap: anywhere; }
+.details span { color: var(--color-ink-secondary); }
+@media (forced-colors: active) { .mask { display: none; } .card { border-color: CanvasText; } }

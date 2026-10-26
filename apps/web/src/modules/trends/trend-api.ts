@@ -81,6 +81,7 @@ export function useTrends() {
     hasMore: Boolean(lastPage?.hasMore),
     isLoading: loading || (!session && !authError) || query.isLoading,
     isLoadingMore: query.isValidating && Boolean(query.data?.length),
+    isRefreshing: query.isValidating,
     items,
     loadMore: () => {
       if (lastPage?.hasMore && !query.isValidating) {

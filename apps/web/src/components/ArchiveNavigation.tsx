@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandLockup } from "./BrandLockup";
 import { Menu } from "./ui";
+import { ConnectionNotice } from "./interactions/ConnectionNotice";
 import styles from "./archive-navigation.module.css";
 
 export type ArchiveSection =
@@ -157,7 +158,7 @@ export function ArchiveNavigation({
       {navigation ? (
         <div className={styles.projectNavigation}>{navigation}</div>
       ) : null}
-      <div className={styles.account}>{account}</div>
+      <div className={styles.account}><ConnectionNotice />{account}</div>
     </aside>
   );
 }

@@ -2,7 +2,7 @@
   display: grid;
   gap: 24px;
   min-width: 0;
-  padding: 24px;
+  padding: 0;
   color: var(--color-ink);
 }
 .loading {
@@ -384,8 +384,8 @@
 }
 @media (max-width: 767px) {
   .shell {
-    padding: 20px 16px;
-    gap: 20px;
+    padding: 0;
+    gap: var(--space-4);
   }
   .draft,
   .review {
@@ -420,7 +420,14 @@
     font-size: 16px;
   }
   .stages {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: var(--space-2);
+  }
+  .stages li {
+    flex: 0 0 144px;
+    scroll-snap-align: start;
   }
   .stages button {
     min-height: 64px;
@@ -434,6 +441,22 @@
     height: 84px;
   }
   .gallery {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5) var(--space-3);
   }
+}
+.statusChange { display: inline-block; animation: runway-status 180ms cubic-bezier(0,0,.2,1); }
+.mediaStage { position: relative; }
+.bufferOverlay { position: absolute; inset: 0 0 44px; display: grid; place-items: center; opacity: 0; background: rgb(0 0 0 / 28%); transition: opacity 150ms cubic-bezier(.4,0,1,1); pointer-events: none; }
+.bufferOverlay[data-buffering] { opacity: 1; transition-duration: 300ms; }
+.bufferOverlay > span { width: 40px; height: 40px; border: 3px solid rgb(255 255 255 / 25%); border-top-color: rgb(255 255 255 / 80%); border-radius: 50%; }
+.bufferOverlay[data-buffering] > span { animation: runway-buffer 800ms linear infinite; }
+.bufferStatus { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@keyframes runway-buffer { to { transform: rotate(360deg); } }
+@keyframes runway-status { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .statusChange, .bufferOverlay[data-buffering] > span { animation: none; } .bufferOverlay { transition: none; } }
+@media (forced-colors: active) {
+  .bufferOverlay { background: transparent; }
+  .bufferOverlay > span { border-color: GrayText; border-top-color: Highlight; background: Canvas; }
+  .bufferStatus { position: static; width: auto; height: auto; clip-path: none; color: CanvasText; }
 }

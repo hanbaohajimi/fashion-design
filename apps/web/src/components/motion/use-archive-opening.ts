@@ -7,6 +7,7 @@ import { useCoutureMotion } from "./use-couture-motion";
 export function useArchiveOpening(
   root: RefObject<HTMLElement | null>,
   ready: boolean,
+  animateCards = true,
 ) {
   const opened = useRef(false);
   const play = useCoutureMotion();
@@ -26,6 +27,7 @@ export function useArchiveOpening(
         anchor: root.current.querySelector("h1"),
         eventKey: `archive:${crypto.randomUUID()}`,
       });
+      if (!animateCards) return;
       const cards = [
         ...root.current.querySelectorAll<HTMLElement>("[data-project-card]"),
       ]
@@ -58,5 +60,5 @@ export function useArchiveOpening(
       document.removeEventListener("visibilitychange", stop);
       preference?.removeEventListener("change", stop);
     };
-  }, [ready, root, play]);
+  }, [ready, root, play, animateCards]);
 }

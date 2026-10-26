@@ -8,6 +8,7 @@ import {
   EmptyState,
   Notice,
   Skeleton,
+  SkeletonGroup,
   Dialog,
   TabPanel,
   Select,
@@ -68,13 +69,22 @@ export function StudioWorkspace({
   const [preferredRevision, setPreferredRevision] = useState(
     initialStyleRevisionId,
   );
-  const [runwayEntry, setRunwayEntry] = useState({ showId: initialShowId, runId: initialRunId });
+  const [runwayEntry, setRunwayEntry] = useState({
+    showId: initialShowId,
+    runId: initialRunId,
+  });
   const [data, setData] = useState<StudioSummary | null>(null);
   const [name, setName] = useState("设计项目");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(
-    initialTab === "runway" ? "runway" : initialAssetId ? "styles" : isStudioTab(initialTab) ? initialTab : "tasks",
+    initialTab === "runway"
+      ? "runway"
+      : initialAssetId
+        ? "styles"
+        : isStudioTab(initialTab)
+          ? initialTab
+          : "tasks",
   );
   const [experimentMode, setExperimentMode] =
     useState<ExperimentCreateInput["mode"]>("color");
@@ -125,7 +135,11 @@ export function StudioWorkspace({
       setDirty(false);
       setTab(next);
       const url = new URL(window.location.href);
-      if (next === "runway") setRunwayEntry({ showId: url.searchParams.get("showId") ?? undefined, runId: url.searchParams.get("runId") ?? undefined });
+      if (next === "runway")
+        setRunwayEntry({
+          showId: url.searchParams.get("showId") ?? undefined,
+          runId: url.searchParams.get("runId") ?? undefined,
+        });
       url.searchParams.set("tab", next);
       if (next !== "styles") url.searchParams.delete("assetId");
       window.history.replaceState(window.history.state, "", url);
@@ -210,6 +224,7 @@ export function StudioWorkspace({
             <div className={styles.toolbar}>
               {data ? (
                 <Button
+                  className={styles.desktopProgress}
                   size="small"
                   variant="ghost"
                   onClick={() => setProgressOpen(true)}
@@ -218,6 +233,14 @@ export function StudioWorkspace({
                 </Button>
               ) : null}
               <Menu label="项目选项" trigger="项目选项">
+                {data ? (
+                  <Button
+                    className={styles.mobileProgress}
+                    onClick={() => setProgressOpen(true)}
+                  >
+                    创作进展
+                  </Button>
+                ) : null}
                 {data ? <Badge>{ROLE_LABELS[data.role]}</Badge> : null}
 
                 <Button
@@ -240,10 +263,32 @@ export function StudioWorkspace({
                 <span className={styles.muted}>只读工作区</span>
               ) : null}
             </div>
+            <div className={styles.mobileNavigation}>
+              <label className={styles.mobileFunction}>
+                <span title={name}>{name}</span>
+                <Select
+                  aria-label="当前功能"
+                  value={tab}
+                  onChange={(event) =>
+                    void changeTab(event.target.value as Tab)
+                  }
+                >
+                  {STUDIO_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map((item) => (
+                        <option value={item.value} key={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </Select>
+              </label>
+            </div>
           </header>
           {error ? <Notice tone="error">{error}</Notice> : null}
-          {loading ? (
-            <div className={styles.section}>
+          {loading || (!data && refreshing) ? (
+            <SkeletonGroup className={styles.section}>
               <Skeleton
                 className={styles.skeleton}
                 label="正在加载工作室资料"
@@ -252,31 +297,9 @@ export function StudioWorkspace({
                 className={styles.skeleton}
                 label="正在加载款式与修订"
               />
-            </div>
+            </SkeletonGroup>
           ) : data ? (
             <>
-              <div className={styles.mobileNavigation}>
-                <label className={styles.mobileFunction}>
-                  当前功能
-                  <Select
-                    aria-label="当前功能"
-                    value={tab}
-                    onChange={(event) =>
-                      void changeTab(event.target.value as Tab)
-                    }
-                  >
-                    {STUDIO_GROUPS.map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.items.map((item) => (
-                          <option value={item.value} key={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </Select>
-                </label>
-              </div>
               <StudioAssetNames data={data}>
                 <div className={styles.body} key={panelVersion}>
                   <TabPanel tabsId={tabsId} value="trends" activeValue={tab}>
@@ -295,21 +318,56 @@ export function StudioWorkspace({
                       {...props}
                       data={data}
                       initialAssetId={initialAssetId}
+                      onPresentation={(revisionId) => {
+                        void (async () => {
+                          if (!(await guard.confirmLeave())) return;
+                          setDirty(false);
+                          setPreferredRevision(revisionId);
+                          setTab("presentation");
+                          const url = new URL(window.location.href);
+                          url.searchParams.set("tab", "presentation");
+                          url.searchParams.set("styleRevisionId", revisionId);
+                          url.searchParams.delete("assetId");
+                          window.history.replaceState(
+                            window.history.state,
+                            "",
+                            url,
+                          );
+                          if (session)
+                            rememberCreativeVisit(
+                              session.user.id,
+                              projectId,
+                              url.pathname + url.search,
+                            );
+                        })();
+                      }}
                       onRunway={(revisionId) => {
                         void (async () => {
                           if (!(await guard.confirmLeave())) return;
                           setDirty(false);
                           setPreferredRevision(revisionId);
                           setTab("runway");
-                          setRunwayEntry({ showId: undefined, runId: undefined });
+                          setRunwayEntry({
+                            showId: undefined,
+                            runId: undefined,
+                          });
                           const url = new URL(window.location.href);
                           url.searchParams.set("tab", "runway");
                           url.searchParams.set("styleRevisionId", revisionId);
                           url.searchParams.delete("assetId");
                           url.searchParams.delete("showId");
                           url.searchParams.delete("runId");
-                          window.history.replaceState(window.history.state, "", url);
-                          if (session) rememberCreativeVisit(session.user.id, projectId, url.pathname + url.search);
+                          window.history.replaceState(
+                            window.history.state,
+                            "",
+                            url,
+                          );
+                          if (session)
+                            rememberCreativeVisit(
+                              session.user.id,
+                              projectId,
+                              url.pathname + url.search,
+                            );
                         })();
                       }}
                       onTechPack={(revisionId) => {
@@ -396,8 +454,10 @@ export function StudioWorkspace({
                     activeValue={tab}
                   >
                     <PresentationSets
+                      key={preferredRevision ?? "presentation"}
                       {...props}
                       data={data}
+                      initialStyleRevisionId={preferredRevision}
                       onOpenStyles={() => void changeTab("styles")}
                       onGenerate={() => {
                         setExperimentMode("presentation");
@@ -439,7 +499,7 @@ export function StudioWorkspace({
           ) : (
             <EmptyState
               title="工作室暂时无法打开"
-              action={<Button onClick={() => void reload()}>重新加载</Button>}
+              action={<Button loading={refreshing} onClick={() => void reload()}>重新加载</Button>}
             >
               检查网络和项目访问权限后重试。
             </EmptyState>

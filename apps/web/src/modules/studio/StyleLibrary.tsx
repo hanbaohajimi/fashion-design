@@ -1,5 +1,7 @@
 "use client";
 
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前修订的设计图与资料；对象切换和历史为次级。保存为主操作，比较在独立弹窗完成。 */
 
 import { useStudioAssetName } from "./studio-object-context";
@@ -55,8 +57,15 @@ export function StyleLibrary(
     readonly onExplore?: (assetId: string) => void;
     readonly onTechPack?: (revisionId: string) => void;
     readonly onRunway?: (revisionId: string) => void;
+    readonly onPresentation?: (revisionId: string) => void;
   },
 ) {
+  const feedback = useSubmitFeedback();
+  const beforeChange = async () => {
+    const allowed = await props.beforeChange();
+    if (allowed) feedback.reset();
+    return allowed;
+  };
   const assetName = useStudioAssetName();
   const comparisonPicker = useRef<HTMLDetailsElement>(null);
   const [draftVersion, setDraftVersion] = useState(0);
@@ -68,7 +77,7 @@ export function StyleLibrary(
   const [adoptedId, setAdoptedId] = useState(props.initialAssetId ?? "");
   const selected = props.data.styles.find((style) => style.id === selectedId);
   const selectStyle = async (id: string | null) => {
-    if (await props.beforeChange()) {
+    if (await beforeChange()) {
       setSelectedId(id);
       setDraftVersion((current) => current + 1);
       setAdoptedId("");
@@ -77,6 +86,50 @@ export function StyleLibrary(
   return (
     <div className={styles.section}>
       <StudioPageHeader
+        objectSwitcher={
+          props.data.styles.length > 0 ? (
+            <ObjectSwitcher
+              label="切换对象"
+              current={<>切换款式 · {selected?.name ?? "建立新款式"}</>}
+            >
+              <aside
+                className={`${styles.rail} ${styles.styleRail}`}
+                aria-label="已有款式"
+              >
+                {props.data.styles.map((style) => (
+                  <Button
+                    aria-pressed={selectedId === style.id}
+                    key={style.id}
+                    onClick={() => void selectStyle(style.id)}
+                  >
+                    <span className={styles.styleThumbnail}>
+                      <ImagePreview
+                        retryable={false}
+                        src={
+                          style.currentRevision.views[0]?.thumbnailUrl ??
+                          style.currentRevision.views[0]?.url
+                        }
+                        alt=""
+                      />
+                    </span>
+                    <strong>
+                      {style.code} · {style.name}
+                    </strong>
+                    <small>
+                      {STATUS_LABELS[style.status]} · r
+                      {style.currentRevision.revision}
+                    </small>
+                  </Button>
+                ))}
+                {!props.data.styles.length ? (
+                  <p className={styles.muted}>
+                    还没有款式。选择一张已有候选保存第一款。
+                  </p>
+                ) : null}
+              </aside>
+            </ObjectSwitcher>
+          ) : null
+        }
         title={selected?.name ?? "建立新款式"}
         type="款式档案"
         description="选择主设计图，整理款式资料与视图"
@@ -150,7 +203,7 @@ export function StyleLibrary(
                         disabled={!props.canEdit}
                         onClick={() =>
                           void (async () => {
-                            if (await props.beforeChange()) {
+                            if (await beforeChange()) {
                               setSelectedId(null);
                               setDraftVersion((current) => current + 1);
                               setAdoptedId(id);
@@ -173,71 +226,6 @@ export function StyleLibrary(
           </div>
         </Dialog>
       ) : null}
-      <div className={styles.split}>
-        {props.data.styles.length > 1 ? (
-          <ObjectSwitcher
-            label="切换对象"
-            current={<>切换款式 · {selected?.name ?? "建立新款式"}</>}
-          >
-            <aside
-              className={`${styles.rail} ${styles.styleRail}`}
-              aria-label="已有款式"
-            >
-              {props.data.styles.map((style) => (
-                <Button
-                  aria-pressed={selectedId === style.id}
-                  key={style.id}
-                  onClick={() => void selectStyle(style.id)}
-                >
-                  <span className={styles.styleThumbnail}>
-                    <ImagePreview
-                      retryable={false}
-                      src={
-                        style.currentRevision.views[0]?.thumbnailUrl ??
-                        style.currentRevision.views[0]?.url
-                      }
-                      alt=""
-                    />
-                  </span>
-                  <strong>
-                    {style.code} · {style.name}
-                  </strong>
-                  <small>
-                    {STATUS_LABELS[style.status]} · r
-                    {style.currentRevision.revision}
-                  </small>
-                </Button>
-              ))}
-              {!props.data.styles.length ? (
-                <p className={styles.muted}>
-                  还没有款式。选择一张已有候选保存第一款。
-                </p>
-              ) : null}
-            </aside>
-          </ObjectSwitcher>
-        ) : null}
-        {props.canEdit || selected ? (
-          <StyleEditor
-            key={
-              (selected?.id ?? "new") +
-              ":" +
-              (selected?.version ?? 0) +
-              ":" +
-              draftVersion +
-              ":" +
-              adoptedId
-            }
-            {...props}
-            existing={selected}
-            adoptedId={adoptedId}
-            onCreated={setSelectedId}
-          />
-        ) : (
-          <EmptyState title="款式档案还是空白">
-            编辑成员建立款式后，可在这里查看。
-          </EmptyState>
-        )}
-      </div>
       {selected && props.onExplore ? (
         <div className={styles.toolbar}>
           <span>
@@ -257,13 +245,50 @@ export function StyleLibrary(
               继续技术包
             </Button>
           ) : null}
+
+          {props.onPresentation ? (
+            <Button
+              onClick={() =>
+                props.onPresentation?.(selected.currentRevision.id)
+              }
+            >
+              继续商品展示
+            </Button>
+          ) : null}
           {props.canEdit && props.onRunway ? (
-            <Button onClick={() => props.onRunway?.(selected.currentRevision.id)}>
+            <Button
+              onClick={() => props.onRunway?.(selected.currentRevision.id)}
+            >
               制作服装秀
             </Button>
           ) : null}
         </div>
       ) : null}
+      <div className={styles.split}>
+        {props.canEdit || selected ? (
+          <StyleEditor
+            key={
+              (selected?.id ?? "new") +
+              ":" +
+              (selected?.version ?? 0) +
+              ":" +
+              draftVersion +
+              ":" +
+              adoptedId
+            }
+            {...props}
+            feedback={feedback}
+            beforeChange={beforeChange}
+            existing={selected}
+            adoptedId={adoptedId}
+            onCreated={setSelectedId}
+          />
+        ) : (
+          <EmptyState title="款式档案还是空白">
+            编辑成员建立款式后，可在这里查看。
+          </EmptyState>
+        )}
+      </div>
     </div>
   );
 }
@@ -275,6 +300,7 @@ function StyleEditor({
   onDirty,
   onSaved,
   beforeChange,
+  feedback,
   existing,
   adoptedId,
   onCreated,
@@ -293,7 +319,7 @@ function StyleEditor({
             : existing.currentRevision.payload.status,
       }
     : { ...blankStyle(), sourceAssetId: adoptedId };
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { feedback });
   const { draft, setDraft } = form;
   const [viewAssetId, setViewAssetId] = useState("");
   const update = <K extends keyof StudioStyleInput>(
@@ -382,6 +408,7 @@ function StyleEditor({
             setViewAssetId("");
           }}
           label="主设计图（必选）"
+          selectionPreview={false}
         />
         <div>
           <nav className={styles.viewStrip} aria-label="款式视图">
@@ -621,6 +648,7 @@ function StyleEditor({
         </fieldset>
       </StudioEditSection>
       <SaveBar
+        feedback={feedback?.snapshot}
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}

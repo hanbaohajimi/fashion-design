@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
 import { CreativeContinuity } from "../modules/projects/CreativeContinuity";
+import { MotionEnvironment } from "../components/interactions/MotionEnvironment";
 
 import "./globals.css";
 import "tldraw/tldraw.css";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="zh-CN">
       <body>
+        <MotionEnvironment />
         <a className="skip-link" href="#main-content">
           跳到主要内容
         </a>

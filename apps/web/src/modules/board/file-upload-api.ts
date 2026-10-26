@@ -1,4 +1,4 @@
-import { privateFetch as fetch } from "../auth/private-fetch";
+import { privateFetch as fetch, privateRequestSignal } from "../auth/private-fetch";
 import { readErrorMessage } from "../auth/auth-api";
 
 export const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -77,8 +77,10 @@ export async function sha256Hex(file: File): Promise<string> {
 export async function signImageUpload(
   projectId: string,
   file: File,
+  signal?: AbortSignal,
 ): Promise<SignUploadResponse> {
   const response = await fetch("/api/files/sign-upload", {
+    ...(signal ? { signal } : {}),
     method: "POST",
     body: JSON.stringify({
       mimeType: imageMimeType(file),
@@ -99,22 +101,56 @@ export async function signImageUpload(
 export async function putOriginal(
   upload: NonNullable<SignUploadResponse["upload"]>,
   file: File,
+  options?: {
+    signal?: AbortSignal;
+    onProgress?: (progress: { loaded: number; total: number; lengthComputable: boolean }) => void;
+  },
 ): Promise<void> {
+  if (options?.onProgress) {
+    const signal = privateRequestSignal(options.signal);
+    signal.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const cleanup = () => {
+        signal.removeEventListener("abort", abort);
+        xhr.upload.onprogress = null;
+        xhr.onload = xhr.onerror = xhr.onabort = null;
+      };
+      const fail = (error: unknown) => { cleanup(); reject(error); };
+      const abort = () => { xhr.abort(); fail(signal.reason ?? new DOMException("已取消上传", "AbortError")); };
+      xhr.open(upload.method, upload.url);
+      // 只发送签名返回的头；浏览器自行设置 Content-Length，不附加账号凭据。
+      for (const [name, value] of Object.entries(upload.headers)) xhr.setRequestHeader(name, value);
+      xhr.upload.onprogress = (event) => options.onProgress?.({ loaded: event.loaded, total: event.total, lengthComputable: event.lengthComputable });
+      xhr.onload = () => {
+        if (signal.aborted) { fail(signal.reason); return; }
+        if (xhr.status >= 200 && xhr.status < 300) { cleanup(); resolve(); }
+        else fail(new Error("原图直传失败，请检查网络后重试"));
+      };
+      xhr.onerror = () => fail(new Error("原图直传失败，请检查网络后重试"));
+      xhr.onabort = () => fail(signal.reason ?? new DOMException("已取消上传", "AbortError"));
+      signal.addEventListener("abort", abort, { once: true });
+      try { xhr.send(file); } catch (error) { fail(error); }
+    });
+    return;
+  }
   const response = await fetch(upload.url, {
     method: upload.method,
     body: file,
     headers: upload.headers,
+    ...(options?.signal ? { signal: options.signal } : {}),
   });
   if (!response.ok) {
     throw new Error("原图直传失败，请检查网络后重试");
   }
 }
 
-export async function completeUpload(fileId: string): Promise<UploadedFile> {
+export async function completeUpload(fileId: string, signal?: AbortSignal): Promise<UploadedFile> {
   const response = await fetch(
     `/api/files/${encodeURIComponent(fileId)}/complete`,
     {
       method: "POST",
+      ...(signal ? { signal } : {}),
       credentials: "include",
     },
   );
@@ -124,9 +160,10 @@ export async function completeUpload(fileId: string): Promise<UploadedFile> {
   return (await response.json()) as UploadedFile;
 }
 
-export async function fetchUploadedFile(fileId: string): Promise<UploadedFile> {
+export async function fetchUploadedFile(fileId: string, signal?: AbortSignal): Promise<UploadedFile> {
   const response = await fetch(`/api/files/${encodeURIComponent(fileId)}`, {
     cache: "no-store",
+    ...(signal ? { signal } : {}),
     credentials: "include",
   });
   if (!response.ok) {
@@ -139,20 +176,27 @@ export async function waitForThumbnail(
   fileId: string,
   initial?: UploadedFile,
   timeoutMs = 60_000,
+  signal?: AbortSignal,
 ): Promise<UploadedFile> {
   const startedAt = Date.now();
   let current = initial;
 
   while (Date.now() - startedAt < timeoutMs) {
-    current ??= await fetchUploadedFile(fileId);
+    signal?.throwIfAborted();
+    current ??= await fetchUploadedFile(fileId, signal);
     if (current.status === "READY") {
       return current;
     }
     if (current.status === "FAILED") {
       throw new Error(current.error || "缩略图生成失败，请重试");
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 350));
-    current = await fetchUploadedFile(fileId);
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => { window.clearTimeout(timer); reject(signal?.reason); };
+      const timer = window.setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, 350);
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
+    });
+    current = await fetchUploadedFile(fileId, signal);
   }
   throw new Error("缩略图生成超时，请稍后重试");
 }

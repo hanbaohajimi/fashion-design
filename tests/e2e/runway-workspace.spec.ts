@@ -7,6 +7,7 @@ import {
 } from "../../packages/shared/src/runway";
 import {
   runwayRunFixture,
+  runwayMediaFixture,
   runwayShowFixture,
   RUNWAY_TEST_NOW,
 } from "../../apps/web/src/modules/runway/runway-test-fixtures";
@@ -19,6 +20,43 @@ const base = "/api/projects/project-1/runway";
 const image =
   '<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750"><rect width="500" height="750" fill="#e7e9e2"/><path d="M180 150 90 210 65 370 140 390 155 280 155 620 345 620 345 280 360 390 435 370 410 210 320 150 280 195 250 170 220 195Z" fill="#586a60"/></svg>';
 test.setTimeout(60_000);
+test.use({ video: { mode: "on", size: { width: 1280, height: 900 } } });
+
+test.describe("本地视频缓冲反馈", () => {
+  test("真实本地媒体保留原生操作，等待反馈不触发自动播放", async ({ page }) => {
+    await prepare(page);
+    const run = runwayRunFixture({ status: "SUCCEEDED", stage: "finished", pendingInput: null, media: [{
+      ...runwayMediaFixture("buffer-preview", "final_video"), mimeType: "video/webm", contentUrl: "/painting-loaders/irises.webm",
+    }] });
+    await page.route("**/api/projects/project-1/runway/runs/run-1", route => route.fulfill({ json: run }));
+    await page.route("**/api/projects/project-1/runway/shows/show-1", route => route.fulfill({ json: runwayShowFixture({ runs: [run] }) }));
+    await page.goto("/project-1/studio?tab=runway&showId=show-1&runId=run-1");
+    const video = page.locator("video").first();
+    await expect(video).toBeVisible();
+    await video.evaluate(async element => { element.muted = true; await element.play(); });
+    await expect.poll(() => video.evaluate(element => element.videoWidth)).toBeGreaterThan(0);
+    await expect(video).toHaveAttribute("controls", "");
+    await video.evaluate(element => {
+      Object.defineProperty(element, "readyState", { configurable: true, get: () => 1 });
+      element.dispatchEvent(new Event("waiting"));
+    });
+    await expect(page.getByText("视频正在缓冲，保留当前画面", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "output/ui-motion/video-buffering.png" });
+    await page.emulateMedia({ forcedColors: "active" });
+    await expect(page.getByText("视频正在缓冲，保留当前画面", { exact: true })).toHaveCSS("position", "static");
+    await page.screenshot({ path: "output/ui-motion/video-buffering-high-contrast.png" });
+    await page.emulateMedia({ forcedColors: "none" });
+    await video.evaluate(element => {
+      Reflect.deleteProperty(element, "readyState");
+      element.dispatchEvent(new Event("playing"));
+    });
+    await expect(page.getByText("视频正在缓冲，保留当前画面")).not.toBeVisible();
+    await video.evaluate(element => { element.pause(); element.dispatchEvent(new Event("waiting")); });
+    await page.waitForTimeout(350);
+    expect(await video.evaluate(element => element.paused)).toBe(true);
+    await expect(page.getByText("视频正在缓冲，保留当前画面")).not.toBeVisible();
+  });
+});
 
 // Real Next.js UI with isolated API fixtures. No database, model or queue claim.
 async function prepare(

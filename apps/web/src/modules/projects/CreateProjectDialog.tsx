@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { Button, Dialog, Input } from "../../components/ui";
 import styles from "./projects.module.css";
+import motion from "./project-motion.module.css";
+import { PROJECT_NAME_HINT, useProjectNameValidation } from "./project-name";
 
 interface CreateProjectDialogProps {
   readonly onClose: () => void;
@@ -18,21 +20,16 @@ export function CreateProjectDialog({
   const [submitting, setSubmitting] = useState(false);
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  const validation = useProjectNameValidation(name, open);
   const close = () => {
     if (!pending.current) {
-      setName("");
-      setError(null);
       onClose();
     }
   };
   const submit = async () => {
     if (pending.current) return;
     const value = name.trim();
-    if (Array.from(value).length < 3 || Array.from(value).length > 80) {
-      setError("项目名称需为 3–80 个字");
-      input.current?.focus();
-      return;
-    }
+    if (!validation.validate(input.current)) return;
     pending.current = true;
     setSubmitting(true);
     setError(null);
@@ -49,14 +46,16 @@ export function CreateProjectDialog({
       setSubmitting(false);
     }
   };
-  if (!open) return null;
   return (
     <Dialog
+      open={open}
+      onAfterClose={() => { setName(""); setError(null); validation.reset(); }}
       label="给新系列一个名字"
       onClose={close}
       className={styles.createDialog}
     >
       <form
+        noValidate
         className={styles.dialog}
         aria-busy={submitting}
         onSubmit={(event) => {
@@ -66,20 +65,23 @@ export function CreateProjectDialog({
       >
         <h2>给新系列一个名字</h2>
         <p id="create-project-help">
-          稍后可以随时重命名。名称长度为 3–80 个字。
+          稍后可以随时重命名。{PROJECT_NAME_HINT}
         </p>
         <label htmlFor="project-name">项目名称</label>
         <Input
           autoFocus
           ref={input}
           id="project-name"
-          aria-invalid={Boolean(error)}
+          aria-invalid={Boolean(validation.error)}
           aria-describedby={
-            error
+            error || validation.error
               ? "create-project-help create-project-error"
               : "create-project-help"
           }
           maxLength={80}
+          onBlur={validation.onBlur}
+          onCompositionStart={validation.onCompositionStart}
+          onCompositionEnd={validation.onCompositionEnd}
           onChange={(event) => {
             setName(event.target.value);
             setError(null);
@@ -88,20 +90,14 @@ export function CreateProjectDialog({
           readOnly={submitting}
           value={name}
         />
-        {error ? (
-          <p
-            className={styles.fieldError}
-            id="create-project-error"
-            role="alert"
-          >
-            {error}
-          </p>
-        ) : null}
+        <p className={motion.fieldFeedback} id="create-project-error" aria-live="polite" data-valid={validation.valid && !error || undefined}>
+          {error || validation.error ? <span>{error ?? validation.error}</span> : validation.valid ? <span>✓ 名称格式有效</span> : null}
+        </p>
         <div className={styles.dialogActions}>
           <Button disabled={submitting} onClick={close}>
             取消
           </Button>
-          <Button variant="primary" loading={submitting} type="submit">
+          <Button interaction="ripple" variant="primary" loading={submitting} type="submit">
             {submitting ? "正在创建…" : "创建项目"}
           </Button>
         </div>

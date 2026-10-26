@@ -5,6 +5,7 @@ import { StudioPageHeader } from "./StudioPageHeader";
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为本次任务与母图；任务类型和品牌为次级。唯一主操作提交当前任务，使用共享控件与 24/16/8px 间距。 */
 
 import { useRef, useState } from "react";
+import { UploadFeedbackPreview, useUploadFeedback } from "../../components/interactions/use-upload-feedback";
 import type { StudioSummary } from "@fashion/shared";
 import {
   Button,
@@ -240,6 +241,8 @@ export function TaskEntry(
   const { draft, setDraft } = form;
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const uploadFeedback = useUploadFeedback();
+  const uploadFlight = useRef(false);
   const [uploaded, setUploaded] = useState<StudioSummary["assets"]>([]);
   const packet = useRef<{
     signature: string;
@@ -339,22 +342,31 @@ export function TaskEntry(
     }
   };
   const upload = async (file: File) => {
+    if (uploadFlight.current || !props.canEdit) return;
     const error = validateImage(file);
     if (error) {
       form.setError(error);
       return;
     }
     setUploading(true);
+    uploadFlight.current = true;
+    const transfer = uploadFeedback.start(file);
     form.setError(null);
     try {
-      const signed = await signImageUpload(props.projectId, file);
-      const processing = signed.upload
-        ? await putOriginal(signed.upload, file).then(() =>
-            completeUpload(signed.file.id),
-          )
-        : signed.file;
-      const ready = await waitForThumbnail(signed.file.id, processing);
+      transfer.stage("signing");
+      const signed = await signImageUpload(props.projectId, file, transfer.signal);
+      let processing = signed.file;
+      if (signed.upload) {
+        transfer.stage("uploading");
+        await putOriginal(signed.upload, file, { signal: transfer.signal, onProgress: transfer.onProgress });
+        transfer.stage("processing");
+        processing = await completeUpload(signed.file.id, transfer.signal);
+      }
+      transfer.stage("processing");
+      const ready = await waitForThumbnail(signed.file.id, processing, 60_000, transfer.signal);
+      transfer.signal.throwIfAborted(); transfer.stage("adding");
       const asset = await importDesignAsset(props.projectId, ready.id);
+      transfer.signal.throwIfAborted();
       const url =
         "/api/design-assets/" + encodeURIComponent(asset.id) + "/content";
       setUploaded((items) => [
@@ -365,10 +377,13 @@ export function TaskEntry(
         ...current,
         assetIds: [...current.assetIds.slice(0, 11), asset.id],
       }));
+      transfer.done(ready.thumbnail256Url ?? url);
       await props.onSaved();
     } catch (cause) {
-      form.setError(cause instanceof Error ? cause.message : "图片上传失败");
+      transfer.fail();
+      if (!transfer.signal.aborted) form.setError(cause instanceof Error ? cause.message : "图片上传失败");
     } finally {
+      uploadFlight.current = false;
       setUploading(false);
     }
   };
@@ -507,6 +522,7 @@ export function TaskEntry(
               />
               {assets.length > 0 ? (
                 <AssetPicker
+                  selectionPreview={false}
                   assets={assets}
                   selected={draft.assetIds}
                   max={
@@ -525,6 +541,7 @@ export function TaskEntry(
             </FormSection>
           </div>
         </fieldset>
+        <UploadFeedbackPreview preview={uploadFeedback.preview} onCancel={uploadFeedback.preview?.stage === "adding" ? undefined : uploadFeedback.cancel} onClear={uploadFeedback.clear} />
         <div className={styles.note}>
           {draft.kind === "brief"
             ? "将建立需求分析任务，本步骤不生成图片。"

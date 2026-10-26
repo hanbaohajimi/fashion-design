@@ -2,6 +2,7 @@
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为图案大预览；320px 参数区支持调整与生产规格确认。保存为主操作，平铺与坐标计算保持原值。 */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 import {
   studioPrintPatternSchema,
   type StudioAssetView,
@@ -39,6 +40,7 @@ export function PrintWorkbench({
   onDirty?: (dirty: boolean) => void;
   beforeChange?: () => Promise<boolean>;
 }) {
+  const feedback = useSubmitFeedback();
   const assetName = useStudioAssetName();
   const savedPattern = studioPrintPatternSchema.safeParse(
     documents[0]?.currentRevision.payload,
@@ -89,12 +91,14 @@ export function PrintWorkbench({
       active = false;
     };
   }, [asset, previewAttempt]);
-  const update = <K extends keyof Pattern>(key: K, next: Pattern[K]) =>
+  const update = <K extends keyof Pattern>(key: K, next: Pattern[K]) => {
+    if (feedback.snapshot.phase === "success" || feedback.snapshot.phase === "error") feedback.reset();
     setValue((current) => ({
       ...current,
       [key]: next,
       reviewed: key === "reviewed" ? Boolean(next) : false,
     }));
+  };
   const save = async () => {
     setError(null);
     setNotice(null);
@@ -118,6 +122,7 @@ export function PrintWorkbench({
     if (pending.current?.body !== body)
       pending.current = { body, key: crypto.randomUUID() };
     setBusy(true);
+    const receipt = feedback.begin("save");
     try {
       const response = await privateFetch(
         "/api/projects/" + encodeURIComponent(projectId) + "/studio/documents",
@@ -141,8 +146,10 @@ export function PrintWorkbench({
       onDirty?.(false);
       pending.current = null;
       setNotice("印花参数已保存为修订 " + saved.version);
+      receipt.succeed();
       onRefresh?.();
     } catch (cause) {
+      receipt.fail();
       setError(cause instanceof Error ? cause.message : "印花保存失败");
     } finally {
       setBusy(false);
@@ -150,13 +157,20 @@ export function PrintWorkbench({
   };
   const slider = (control: (typeof CONTROLS)[number]) => (
     <label key={control.key}>
-      {control.label} · {value[control.key]}
+      {control.label} ·{" "}
+      {control.key === "rotation"
+        ? `${value[control.key]}°`
+        : control.key === "offsetX" || control.key === "offsetY"
+          ? `${Math.round(value[control.key] * 100)} px`
+          : `${value[control.key]} 倍`}
       <input
+        aria-label={control.label}
         type="range"
         disabled={!canEdit || busy}
         min={control.min}
         max={control.max}
         step={control.step}
+        style={{ "--range-fill": `${((value[control.key] - control.min) / (control.max - control.min)) * 100}%` } as CSSProperties}
         value={value[control.key]}
         onChange={(event) => update(control.key, Number(event.target.value))}
       />
@@ -247,6 +261,23 @@ export function PrintWorkbench({
             </label>
           </StudioEditSection>
           {CONTROLS.slice(0, 2).map(slider)}
+          <Button
+            disabled={!canEdit || busy}
+            onClick={() => {
+              setValue((current) => ({
+                ...current,
+                scale: 1,
+                rotation: 0,
+                brightness: 1,
+                offsetX: 0,
+                offsetY: 0,
+                reviewed: false,
+              }));
+              setNotice("画布参数已重置。保存后将更新印花修订。");
+            }}
+          >
+            重置画布参数
+          </Button>
           <FormSection
             title="高级调整"
             summary={`亮度 ${value.brightness} · 位置 ${value.offsetX}, ${value.offsetY}`}
@@ -333,6 +364,7 @@ export function PrintWorkbench({
               <Button
                 type="submit"
                 loading={busy}
+                feedback={feedback.snapshot}
                 variant="primary"
                 disabled={Boolean(editing) && signature === baseline}
               >
@@ -358,6 +390,7 @@ export function PrintWorkbench({
               onClick={() =>
                 void (async () => {
                   if (beforeChange && !(await beforeChange())) return;
+                  feedback.reset();
                   const parsed = studioPrintPatternSchema.safeParse(
                     document.currentRevision.payload,
                   );

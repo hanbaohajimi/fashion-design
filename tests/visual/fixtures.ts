@@ -1,5 +1,9 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { studioFixture } from "../../apps/web/src/modules/studio/studio-test-fixtures";
+import {
+  runwayRunFixture,
+  runwayShowFixture,
+} from "../../apps/web/src/modules/runway/runway-test-fixtures";
 
 export const NOW = "2026-10-20T02:00:00.000Z";
 export const PROJECT = "atelier-visual";
@@ -122,6 +126,36 @@ export async function seedVisualApp(page: Page) {
     if (path === `/projects/${PROJECT}/studio`)
       return route.fulfill({ json: studioFixture({ assets: [] }) });
     const json = (data: unknown) => route.fulfill({ json: data });
+    if (path === `/projects/${PROJECT}/runway/capabilities`)
+      return json({
+        enabled: true,
+        workerOnline: true,
+        mode: "mock",
+        canEdit: true,
+        capabilities: { image: true, video: true, music: true },
+      });
+    if (path === `/projects/${PROJECT}/runway/shows`)
+      return json([
+        runwayShowFixture({
+          projectId: PROJECT,
+          runs: [runwayRunFixture({ projectId: PROJECT })],
+        }),
+      ]);
+    if (path === `/projects/${PROJECT}/runway/shows/show-1`)
+      return json(
+        runwayShowFixture({
+          projectId: PROJECT,
+          runs: [runwayRunFixture({ projectId: PROJECT })],
+        }),
+      );
+    if (path === `/projects/${PROJECT}/runway/runs/run-1`)
+      return json(runwayRunFixture({ projectId: PROJECT }));
+    if (path === `/projects/${PROJECT}/runway/runs/run-1/events`)
+      return route.fulfill({ status: 204, body: "" });
+    if (path.includes("/runway/media/"))
+      return route.fulfill({ contentType: "image/svg+xml", body: garment });
+    if (path.startsWith("/image-shares/"))
+      return json({ imageUrl: "/visual-garment.svg" });
     if (path === "/me")
       return json({
         user: {
@@ -197,7 +231,8 @@ export async function seedVisualApp(page: Page) {
       (path.endsWith("/content") || path.endsWith("/thumbnail"))
     )
       return route.fulfill({ contentType: "image/svg+xml", body: garment });
-    if (/^\/design-assets\/[^/]+\/feedback$/u.test(path)) return json({ revision: 0, annotations: [], comments: [] });
+    if (/^\/design-assets\/[^/]+\/feedback$/u.test(path))
+      return json({ revision: 0, annotations: [], comments: [] });
     if (/^\/design-assets\/[^/]+\/shares$/u.test(path)) return json([]);
     if (path.endsWith("/versions"))
       return json({ items: [], nextCursor: null });

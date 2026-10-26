@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { StudioCount } from "../studio/StudioCount";
 import type {
   RunwayAction,
   RunwayMediaView,
@@ -77,6 +78,20 @@ export function RunwayRunPanel({
   const [forkStage, setForkStage] = useState<RunwayStage>("storyboard");
   const packet = useRef<{ signature: string; requestKey: string } | null>(null);
   const flight = useRef(false);
+  const stagesRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const strip = stagesRef.current;
+    const active = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (strip && active && strip.scrollWidth > strip.clientWidth) {
+      strip.scrollTo({
+        left:
+          active.offsetLeft -
+          strip.offsetLeft -
+          (strip.clientWidth - active.clientWidth) / 2,
+        behavior: "instant",
+      });
+    }
+  }, [section, run.stage]);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -168,11 +183,14 @@ export function RunwayRunPanel({
           <p>
             运行于 {new Date(run.createdAt).toLocaleString("zh-CN")}{" "}
             {run.parentRunId ? "· 来自历史阶段的新分支" : ""}
+            {run.modelSnapshot.mode === "mock"
+              ? " · 模拟运行，成果仅用于流程验证"
+              : ""}
           </p>
         </div>
-        <Badge tone={tone}>{RUNWAY_STATUS_LABELS[run.status]}</Badge>
+        <span key={`${run.id}:${run.status}`} className={styles.statusChange}><Badge tone={tone}>{RUNWAY_STATUS_LABELS[run.status]}</Badge></span>
       </div>
-      <ol className={styles.stages} aria-label="服装秀制作阶段">
+      <ol ref={stagesRef} className={styles.stages} aria-label="服装秀制作阶段">
         {RUNWAY_SECTIONS.map((entry, index) => (
           <li key={entry.label}>
             <button
@@ -192,7 +210,7 @@ export function RunwayRunPanel({
       </ol>
       <div className={styles.toolbar}>
         <span className={styles.muted}>
-          视频镜头已完成 {stageMedia(run, "video").length} / {expectedVideos}
+          视频镜头已完成 <StudioCount value={stageMedia(run, "video").length} /> / {expectedVideos}
         </span>
         {section !== sectionFor(run.stage) ? (
           <Button
@@ -229,11 +247,6 @@ export function RunwayRunPanel({
         <Notice tone="warning">
           供应商可能已经接纳上一次请求，当前无法确认结果。请先检查已有成果；明确重试会建立新的生成尝试。
         </Notice>
-      ) : null}
-      {run.modelSnapshot.mode === "mock" ? (
-        <p className={styles.muted}>
-          这次运行使用模拟生成服务，成果仅用于流程验证。
-        </p>
       ) : null}
       {run.status === "FAILED" ? (
         <Notice tone="error">
@@ -528,7 +541,7 @@ export function RunwayRunPanel({
   );
 }
 
-function MediaPreview({
+export function MediaPreview({
   media,
   label,
 }: {
@@ -537,18 +550,39 @@ function MediaPreview({
 }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [buffering, setBuffering] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
+  const waiting = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFrame = useRef(false);
+  const clearBuffer = () => {
+    if (waiting.current) clearTimeout(waiting.current);
+    waiting.current = null; setBuffering(false);
+  };
+  const waitForMedia = () => {
+    if (!hasFrame.current || video.current?.paused || waiting.current) return;
+    waiting.current = setTimeout(() => { waiting.current = null; if (video.current && !video.current.paused && video.current.readyState < 3) setBuffering(true); }, 250);
+  };
+  useEffect(() => () => { if (waiting.current) clearTimeout(waiting.current); }, []);
   return (
     <>
       <div className={styles.mediaStage}>
         {media.mimeType.startsWith("video/") ? (
           <video
+            ref={video}
             key={attempt}
             controls
             preload="metadata"
             playsInline
             src={media.contentUrl}
             aria-label={label}
-            onError={() => setFailed(true)}
+            onLoadedData={() => { hasFrame.current = true; }}
+            onWaiting={waitForMedia}
+            onStalled={waitForMedia}
+            onPlaying={clearBuffer}
+            onCanPlay={clearBuffer}
+            onPause={clearBuffer}
+            onEnded={clearBuffer}
+            onError={() => { clearBuffer(); setFailed(true); }}
           />
         ) : media.mimeType.startsWith("audio/") ? (
           <audio
@@ -562,7 +596,9 @@ function MediaPreview({
         ) : (
           <ImagePreview src={media.contentUrl} alt={label} />
         )}
+        {media.mimeType.startsWith("video/") ? <span aria-hidden="true" className={styles.bufferOverlay} data-buffering={buffering && !failed || undefined}><span /></span> : null}
       </div>
+      {buffering && !failed ? <span className={styles.bufferStatus} role="status">视频正在缓冲，保留当前画面</span> : null}
       {failed ? (
         <div className={styles.playbackError}>
           <p>媒体暂时无法播放，可以重试加载或下载文件后查看。</p>
@@ -570,6 +606,7 @@ function MediaPreview({
             size="small"
             onClick={() => {
               setFailed(false);
+              clearBuffer(); hasFrame.current = false;
               setAttempt((current) => current + 1);
             }}
           >

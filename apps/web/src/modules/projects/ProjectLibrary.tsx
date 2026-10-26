@@ -4,12 +4,15 @@ import Link from "next/link";
 import { markMotion } from "../../components/motion/events";
 import { useArchiveOpening } from "../../components/motion/use-archive-opening";
 import { AppHeader } from "../../components/AppHeader";
-import { Button, Notice, Skeleton } from "../../components/ui";
+import { Button, Notice, Skeleton, SkeletonGroup } from "../../components/ui";
+import { useSlidingIndicator } from "../../components/interactions/use-sliding-indicator";
 import { notifyOperation } from "../../components/operation-notice";
 import controls from "../../components/ui.module.css";
 import { userFacingError } from "../../components/user-facing-error";
 import { useGuardedRouter as useRouter } from "../use-guarded-router";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchQuery } from "./use-search-query";
+import { useProjectArchiveUndo } from "./project-archive-undo";
 
 import { useAuth } from "../auth/AuthProvider";
 import { CreateProjectDialog } from "./CreateProjectDialog";
@@ -52,9 +55,13 @@ export function ProjectLibrary() {
     ReadonlySet<string>
   >(() => new Set());
   const duplicateFlightsRef = useRef(new Map<string, Promise<void>>());
-  const removalFocus = useRef<{ id: string; next: HTMLElement | null } | null>(null);
+  const removalFocus = useRef<{ id: string; next: HTMLElement | null } | null>(
+    null,
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const deferredSearch = useDeferredValue(search.trim());
+  const searchState = useSearchQuery(search);
+  const deferredSearch = searchState.query;
+  const indicator = useSlidingIndicator(projectStatus, true);
   const projectsQuery = useProjects(
     deferredSearch,
     projectStatus,
@@ -62,6 +69,9 @@ export function ProjectLibrary() {
   );
   const createMutation = useCreateProject();
   const updateMutation = useUpdateProject();
+  const recordArchive = useProjectArchiveUndo((project) => updateMutation.mutateAsync({
+    id: project.id, input: { archived: false }, source: project,
+  }));
   const deleteMutation = useDeleteProject();
   const duplicateMutation = useDuplicateProject();
   const projects = useMemo(
@@ -70,7 +80,11 @@ export function ProjectLibrary() {
   );
   const total = projectsQuery.data?.pages[0]?.total ?? 0;
   const motionRoot = useRef<HTMLElement>(null);
-  useArchiveOpening(motionRoot, Boolean(session) && !authLoading && projectsQuery.isSuccess);
+  useArchiveOpening(
+    motionRoot,
+    Boolean(session) && !authLoading && projectsQuery.isSuccess,
+    false,
+  );
   useEffect(() => {
     const pending = removalFocus.current;
     if (!pending || projects.some((item) => item.id === pending.id)) return;
@@ -80,11 +94,19 @@ export function ProjectLibrary() {
     else searchInputRef.current?.focus();
   }, [projects]);
   const prepareRemovalFocus = (project: Project) => {
-    const cards = Array.from(motionRoot.current?.querySelectorAll<HTMLElement>("[data-project-id]") ?? []);
-    const index = cards.findIndex((card) => card.dataset.projectId === project.id);
+    const cards = Array.from(
+      motionRoot.current?.querySelectorAll<HTMLElement>("[data-project-id]") ??
+        [],
+    );
+    const index = cards.findIndex(
+      (card) => card.dataset.projectId === project.id,
+    );
     if (index < 0 || !cards[index]?.contains(document.activeElement)) return;
     const next = cards[index + 1] ?? cards[index - 1];
-    removalFocus.current = { id: project.id, next: next?.querySelector<HTMLElement>("summary,a[href]") ?? null };
+    removalFocus.current = {
+      id: project.id,
+      next: next?.querySelector<HTMLElement>("summary,a[href]") ?? null,
+    };
   };
 
   useEffect(() => {
@@ -134,6 +156,7 @@ export function ProjectLibrary() {
       await updateMutation.mutateAsync({
         id: project.id,
         input: { name },
+        source: project,
       });
     } catch (error) {
       throw new Error(errorMessage(error));
@@ -145,14 +168,15 @@ export function ProjectLibrary() {
     prepareRemovalFocus(project);
 
     try {
-      await updateMutation.mutateAsync({
+      const archived = await updateMutation.mutateAsync({
         id: project.id,
         input: { archived: true },
+        source: project,
       });
       if (readActiveBoardId() === project.id) {
         clearActiveBoardId();
       }
-      notifyOperation({ id: `archive:${project.id}`, title: "项目已归档" });
+      recordArchive(archived);
     } catch (error) {
       setNotice(errorMessage(error));
     }
@@ -166,6 +190,7 @@ export function ProjectLibrary() {
       await updateMutation.mutateAsync({
         id: project.id,
         input: { archived: false },
+        source: project,
       });
       notifyOperation({ id: `restore:${project.id}`, title: "项目已恢复" });
     } catch (error) {
@@ -205,7 +230,10 @@ export function ProjectLibrary() {
         projectId: project.id,
       })
       .then(() => {
-        notifyOperation({ id: `duplicate:${project.id}`, title: "已复制当前设计；历史对话和执行记录保留在原项目" });
+        notifyOperation({
+          id: `duplicate:${project.id}`,
+          title: "已复制当前设计；历史对话和执行记录保留在原项目",
+        });
       })
       .catch((error: unknown) => {
         setNotice(errorMessage(error));
@@ -259,7 +287,10 @@ export function ProjectLibrary() {
   }
 
   return (
-    <main ref={motionRoot} className={`${styles.library} ${controls.controlSurface}`}>
+    <main
+      ref={motionRoot}
+      className={`${styles.library} ${controls.controlSurface}`}
+    >
       <AppHeader current="projects" />
 
       <section className={styles.dashboard} aria-label="项目库">
@@ -267,9 +298,10 @@ export function ProjectLibrary() {
       </section>
 
       <section className={styles.toolbar} aria-label="项目工具栏">
-        <div className={styles.statusFilters} aria-label="项目状态">
+        <div ref={indicator} style={{ position: "relative" }} className={styles.statusFilters} aria-label="项目状态">
           <button
             aria-pressed={projectStatus === "active"}
+            data-indicator-value="active"
             className={
               projectStatus === "active"
                 ? styles.statusFilterActive
@@ -282,6 +314,7 @@ export function ProjectLibrary() {
           </button>
           <button
             aria-pressed={projectStatus === "archived"}
+            data-indicator-value="archived"
             className={
               projectStatus === "archived"
                 ? styles.statusFilterActive
@@ -300,6 +333,8 @@ export function ProjectLibrary() {
             aria-keyshortcuts="Control+K Meta+K"
             maxLength={80}
             onChange={(event) => setSearch(event.target.value)}
+            onCompositionStart={searchState.onCompositionStart}
+            onCompositionEnd={searchState.onCompositionEnd}
             placeholder="搜索项目名称"
             ref={searchInputRef}
             type="search"
@@ -307,9 +342,13 @@ export function ProjectLibrary() {
           />
         </label>
         <span aria-live="polite" className={styles.projectCount} role="status">
-          {total} 个{projectStatus === "archived" ? "归档项目" : "项目"}
+          {searchState.pending || projectsQuery.isPlaceholderData ? "正在搜索，暂显示上次结果…" : `${total} 个${projectStatus === "archived" ? "归档项目" : "项目"}`}
         </span>
-        <Button variant={projects.length ? "primary" : "secondary"} onClick={() => setCreateOpen(true)}>
+        <Button
+          interaction="ripple"
+          variant={projects.length ? "primary" : "secondary"}
+          onClick={() => setCreateOpen(true)}
+        >
           <span aria-hidden="true">＋</span>
           新建项目
         </Button>
@@ -332,28 +371,42 @@ export function ProjectLibrary() {
         </Notice>
       ) : null}
 
+      {projectsQuery.isError && projectsQuery.data ? (
+        <Notice tone="error">
+          项目列表刷新失败，仍显示上次载入的资料。
+          <Button size="small" loading={projectsQuery.isFetching} onClick={() => void projectsQuery.refetch()}>
+            重新加载
+          </Button>
+        </Notice>
+      ) : null}
       {projectsQuery.isPending ? (
-        <section className={styles.skeletonGrid} aria-label="正在加载项目">
+        <section aria-label="正在加载项目"><SkeletonGroup className={styles.skeletonGrid ?? ""}>
           {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton
-              key={index}
-              label="正在加载项目卡片"
-              className={styles.projectSkeleton}
-            />
+            <div className={styles.projectSkeleton} key={index}>
+              <Skeleton
+                label="正在加载项目作品"
+                className={styles.projectCover}
+              />
+              <div className={styles.cardBody}>
+                <Skeleton label="正在加载项目名称" />
+                <Skeleton label="正在加载项目资料" />
+              </div>
+            </div>
           ))}
-        </section>
-      ) : projectsQuery.isError ? (
+        </SkeletonGroup></section>
+      ) : projectsQuery.isError && !projectsQuery.data ? (
         <section className={styles.errorState}>
           <p>{errorMessage(projectsQuery.error)}</p>
-          <button
+          <Button
             className={styles.secondaryButton}
+            loading={projectsQuery.isFetching}
             onClick={() => void projectsQuery.refetch()}
             type="button"
           >
             重新加载
-          </button>
+          </Button>
         </section>
-      ) : projects.length > 0 ? (
+      ) : (
         <>
           <ProjectGrid
             duplicatingProjectIds={duplicatingProjectIds}
@@ -363,7 +416,14 @@ export function ProjectLibrary() {
             onRename={runRename}
             onRestore={runRestore}
             projects={projects}
+            busy={searchState.pending || projectsQuery.isFetching}
           />
+          {projects.length === 0 ? <EmptyState
+            archived={projectStatus === "archived"}
+            onClearSearch={() => { setSearch(""); searchInputRef.current?.focus(); }}
+            onCreate={() => setCreateOpen(true)}
+            searching={Boolean(deferredSearch)}
+          /> : null}
           {projectsQuery.hasNextPage ? (
             <div className={styles.loadMore}>
               <button
@@ -379,16 +439,6 @@ export function ProjectLibrary() {
             </div>
           ) : null}
         </>
-      ) : (
-        <EmptyState
-          archived={projectStatus === "archived"}
-          onClearSearch={() => {
-            setSearch("");
-            searchInputRef.current?.focus();
-          }}
-          onCreate={() => setCreateOpen(true)}
-          searching={Boolean(deferredSearch)}
-        />
       )}
 
       <CreateProjectDialog

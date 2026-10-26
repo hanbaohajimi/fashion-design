@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Dialog, ImagePreview } from "../../components/ui";
+import { Button, ImagePreview } from "../../components/ui";
+import { PicturePreview, type PreviewPicture } from "../../components/interactions/picture-preview";
 import type { StudioAsset } from "./studio-ui";
 import styles from "./presentation-sets.module.css";
 
@@ -16,7 +17,7 @@ export function PresentationGallery({
   readonly items: readonly { assetId: string; reviewed: boolean }[];
   readonly assetName: (id: string) => string;
   readonly disabled: boolean;
-  readonly onPreview: (id: string) => void;
+  readonly onPreview: (id: string, source?: HTMLElement, keyboard?: boolean) => void;
   readonly onToggle: (id: string) => void;
 }) {
   if (!assets.length)
@@ -41,8 +42,9 @@ export function PresentationGallery({
             <button
               type="button"
               className={styles.imageButton}
+              data-picture-source={asset.id}
               aria-label={`查看大图：${assetName(asset.id)}`}
-              onClick={() => onPreview(asset.id)}
+              onClick={(event) => onPreview(asset.id, event.currentTarget, event.detail === 0)}
             >
               <ImagePreview
                 retryable={false}
@@ -85,25 +87,20 @@ export function PresentationPreview({
   name,
   src,
   onClose,
+  pictures,
+  initialIndex = 0,
+  sourceElement,
+  getSourceElement,
+  keyboardOpened = false,
 }: {
   readonly name: string;
   readonly src: string | undefined;
   readonly onClose: () => void;
+  readonly pictures?: readonly PreviewPicture[];
+  readonly initialIndex?: number;
+  readonly sourceElement?: HTMLElement | null;
+  readonly getSourceElement?: (id: string) => HTMLElement | null;
+  readonly keyboardOpened?: boolean;
 }) {
-  return (
-    <Dialog
-      label={`查看大图：${name}`}
-      className={styles.previewDialog}
-      onClose={onClose}
-    >
-      <div className={styles.previewHeader}>
-        <h3>{name}</h3>
-        <Button onClick={onClose}>关闭大图</Button>
-      </div>
-      <div className={styles.previewImage}>
-        <ImagePreview src={src} alt={name} />
-      </div>
-      <p>查看原图，不改变当前选择。</p>
-    </Dialog>
-  );
+  return <PicturePreview pictures={pictures ?? [{ id: src ?? name, src, name }]} initialIndex={initialIndex} sourceElement={sourceElement} getSourceElement={getSourceElement} keyboardOpened={keyboardOpened} onClose={onClose} />;
 }

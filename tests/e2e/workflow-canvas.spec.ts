@@ -2,6 +2,7 @@ import { closeNodeDetails, openImageDetails, hideDevelopmentChrome } from "./wor
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "./review-accessibility";
+test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
 
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
@@ -913,6 +914,73 @@ test("阅读历史时新消息不会抢走滚动位置，点击提示后回到�
   await jump.click();
   await expect(jump).toHaveCount(0);
   await expect.poll(() => conversation.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(80);
+});
+
+test.describe("助手和上传的真实状态动效", () => {
+
+  test("发送暂存气泡与先到轮询按请求ID归并，同时保留其他消息", async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let releasePoll = () => {};
+    const pollGate = new Promise<void>((resolve) => { releasePoll = resolve; });
+    let requests = 0;
+    await page.route("**/api/agent-conversations/workflow-current/workflow-messages", async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      requests++;
+      const body = route.request().postDataJSON() as { clientRequestId: string; content: string };
+      const user = { id: "delayed-user", role: "user", status: "completed", clientRequestId: body.clientRequestId, content: body.content, createdAt: NOW, context: null };
+      const assistant = { id: "delayed-assistant", role: "assistant", status: "completed", content: "收到，保留原版型。", createdAt: NOW, context: null };
+      await pollGate;
+      mocked.appendMessage(user);
+      mocked.appendMessage({ id: "other-result", role: "assistant", status: "completed", content: "另一条已完成的分析", createdAt: NOW });
+      await gate;
+      mocked.appendMessage(assistant);
+      await route.fulfill({ status: 201, json: { userMessage: user, assistantMessage: assistant } });
+    });
+    await page.goto(`/${PROJECT_ID}`);
+    await page.getByRole("textbox", { name: "描述设计需求" }).fill("只讨论保留原版型，不执行生成");
+    await page.getByRole("button", { name: "发送需求", exact: true }).click();
+    const conversation = page.getByLabel("设计对话", { exact: true });
+    await expect(conversation.getByText("正在发送…", { exact: true })).toBeVisible();
+    await expect(conversation.getByText("只讨论保留原版型，不执行生成", { exact: true })).toHaveCount(1);
+    releasePoll();
+    await expect(conversation.getByText("另一条已完成的分析", { exact: true })).toBeVisible();
+    await expect(conversation.getByText("只讨论保留原版型，不执行生成", { exact: true })).toHaveCount(1);
+    release();
+    await expect(conversation.getByText("收到，保留原版型。", { exact: true })).toBeVisible();
+    expect(requests).toBe(1);
+    expect(mocked.getExecuteCount()).toBe(0);
+    await conversation.screenshot({ path: "output/playwright/workflow-motion-results/message-reconciled.png" });
+  });
+
+  test("图片选择后立即预览，上传与处理阶段独立并只创建一个素材", async ({ page }) => {
+    const mocked = await mockWorkflow(page);
+    let releaseUpload = () => {};
+    const gate = new Promise<void>((resolve) => { releaseUpload = resolve; });
+    let ready = false;
+    let putCount = 0;
+    const asset = { id: "motion-file", name: "motion.png", mimeType: "image/png", size: 68, width: 1, height: 1, error: null, thumbnail256Url: "/assets/motion-thumb.png", thumbnail1024Url: "/assets/motion-thumb.png", status: "PROCESSING" };
+    const pixels = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jQ1sAAAAASUVORK5CYII=", "base64");
+    await page.route("**/assets/motion-thumb.png", (route) => route.fulfill({ contentType: "image/png", body: pixels }));
+    await page.route("**/api/files/sign-upload", (route) => route.fulfill({ json: { deduplicated: false, file: asset, upload: { method: "PUT", url: "http://127.0.0.1:3000/motion-original", headers: { "Content-Type": "image/png" } } } }));
+    await page.route("**/motion-original", async (route) => { putCount++; await gate; await route.fulfill({ status: 200 }); });
+    await page.route("**/api/files/motion-file/complete", (route) => route.fulfill({ json: asset }));
+    await page.route("**/api/files/motion-file", (route) => route.fulfill({ json: { ...asset, status: ready ? "READY" : "PROCESSING" } }));
+    await page.goto(`/${PROJECT_ID}`);
+    await page.locator('input[type="file"][multiple]').setInputFiles({ name: "motion.png", mimeType: "image/png", buffer: pixels });
+    const tray = page.getByLabel("图片上传", { exact: true });
+    await expect(tray.locator('img[src^="blob:"]')).toBeVisible();
+    await expect(tray.getByText("正在上传", { exact: true })).toBeVisible();
+    releaseUpload();
+    await expect(tray.getByText("图片处理中", { exact: true })).toBeVisible();
+    expect(mocked.getGraph().nodes.filter((node) => node.payload.fileAssetId === asset.id)).toHaveLength(0);
+    ready = true;
+    await expect(tray.getByText("已加入项目", { exact: true })).toBeVisible();
+    await expect.poll(() => mocked.getGraph().nodes.filter((node) => node.payload.fileAssetId === asset.id).length).toBe(1);
+    expect(putCount).toBe(1);
+    await tray.screenshot({ path: "output/playwright/workflow-motion-results/upload-ready.png" });
+  });
 });
 
 test("工作室详情草稿在对话切换和同步后保留；侧栏支持键盘调整", async ({ page }) => {
@@ -2761,7 +2829,7 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   await expect.poll(() => mocked.getGraph().nodes.filter((item) => item.type === "reference_image").length).toBe(1);
   const uploaded = mocked.getGraph().nodes.find((item) => item.type === "reference_image");
   expect(uploaded?.payload).toMatchObject({ fileAssetId: "sketch-file", role: "style_ref", roleSource: "default", roleInferenceState: "pending" });
-  await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("alert")).toContainText("角色识别暂不可用");
+  await expect(page.getByRole("alert").filter({ hasText: "角色识别暂不可用" })).toBeVisible();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="reference_image"]').dblclick();

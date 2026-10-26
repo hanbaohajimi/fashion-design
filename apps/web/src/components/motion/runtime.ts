@@ -20,6 +20,7 @@ export function motionAllowed(): boolean {
     typeof window.matchMedia === "function" &&
     document.visibilityState === "visible" &&
     !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    && !window.matchMedia("(forced-colors: active)").matches
   );
 }
 

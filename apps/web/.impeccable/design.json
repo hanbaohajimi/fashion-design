@@ -3,6 +3,45 @@
   "generatedAt": "2026-10-25T16:29:24.542Z",
   "title": "Design System: 森织设计工作室 · 织物档案",
   "extensions": {
+    "pointerInteractions": {
+      "updatedAt": "2026-10-26",
+      "api": "Button.interaction: none（默认）| ripple | magnetic，互斥；保留原事件、ref、form、type及链接语义。",
+      "ripple": {
+        "targets": [
+          "项目库工具栏新建项目",
+          "CreateProjectDialog提交",
+          "SaveBar保存",
+          "ProposalReview主确认"
+        ],
+        "duration": "var(--duration-result) = 280ms",
+        "easing": "var(--ease-enter)",
+        "ink": "primary: rgba(255,255,255,.24); other: rgba(40,100,82,.14)",
+        "limit": 2,
+        "gating": "主指针按下；键盘、disabled/loading、减弱动态、高对比度不生成；取消/动画结束/卸载清理。"
+      },
+      "magnetic": {
+        "targets": [
+          "ProjectSpotlight继续创作链接",
+          "EmptyState创建第一个项目"
+        ],
+        "offsetRatio": 0.12,
+        "maxOffsetPxPerAxis": 4,
+        "follow": "var(--duration-fast) = 140ms / var(--ease-enter)",
+        "reset": "var(--duration-normal) = 180ms / var(--ease-enter); 按下立即归零",
+        "gating": "hover:hover + pointer:fine + 实际mouse；减弱动态与高对比度关闭；固定命中区、内部视觉层移动。"
+      },
+      "softControls": "仅项目状态切换与继续创作入口，同背景色、soft-raised/soft-inset阴影；选中附下划线，保留边界及焦点，高对比度无阴影。",
+      "spotlight": {
+        "target": "仅ProjectSpotlight背景",
+        "radiusPx": 200,
+        "ink": "rgba(40,100,82,.08)",
+        "fadeIn": "140ms",
+        "fadeOut": "180ms，保留最后坐标",
+        "gating": "与磁吸相同；不覆盖封面。"
+      },
+      "performance": "鼠标坐标使用ref/rAF，每帧至多一次写入，无空闲循环；不驱动React逐帧state。",
+      "excluded": "不引入便当盒或卡片翻面；不推广到项目列表、虚拟列表和画布节点。"
+    },
     "studioHierarchyRollout": {
       "scope": "/studio 的 11 个子功能；用户在商品展示包样板后明确要求推广；不影响全应用构图。",
       "updatedAt": "2026-10-26",
@@ -1064,6 +1103,16 @@
     },
     "shadows": [
       {
+        "name": "shadow-soft-raised",
+        "value": "-3px -3px 8px rgba(255, 255, 255, 0.85), 3px 3px 8px rgba(32, 51, 46, 0.12)",
+        "purpose": "仅项目状态切换与继续创作入口的浅浮雕"
+      },
+      {
+        "name": "shadow-soft-inset",
+        "value": "inset -2px -2px 4px rgba(255, 255, 255, 0.85), inset 2px 2px 4px rgba(32, 51, 46, 0.12)",
+        "purpose": "仅上述控件的按下与筛选选中状态"
+      },
+      {
         "name": "shadow-none",
         "value": "none",
         "purpose": "UI 基础深度"
@@ -1305,6 +1354,105 @@
         "output/unified-navigation/finish-review.md"
       ],
       "rampMethod": "Eight synthetic OKLCH preview steps, not runtime tokens; alpha is omitted in preview ramps."
+    },
+    "systemMotion": {
+      "source": "ui-motion, professional-tool adaptations",
+      "implementation": "React/CSS Modules/Pointer Events/WAAPI; no new animation dependency",
+      "durationsMs": {
+        "dialog": [
+          350,
+          250
+        ],
+        "menu": [
+          300,
+          200
+        ],
+        "tooltip": [
+          150,
+          120
+        ],
+        "sheet": [
+          400,
+          300
+        ],
+        "indicator": 350,
+        "firstContent": 400,
+        "image": 300,
+        "feedbackWait": 300,
+        "check": 350,
+        "successHold": 1000,
+        "picture": 500,
+        "gallery": 350,
+        "galleryReset": 280,
+        "reorder": 200,
+        "drop": 250,
+        "shimmer": 1500,
+        "undo": 4000,
+        "pictureDismissReset": 400
+      },
+      "stagger": {
+        "maxItems": 6,
+        "maxDelayMs": 60,
+        "maxTotalMs": 700
+      },
+      "optInGroups": [
+        "project status",
+        "presentation organize/review",
+        "collaboration reviews/members"
+      ],
+      "feedback": {
+        "businessOutcomeRequired": true,
+        "defaultButtonUnchanged": true,
+        "preserveNameRefForm": true,
+        "crossRevisionController": true,
+        "singleSavedAnnouncement": true
+      },
+      "loading": {
+        "searchDebounceMs": 300,
+        "imeAware": true,
+        "skeletonDelayMs": 300,
+        "sameUserAndArchivePlaceholder": true,
+        "virtualRowsAndCanvasNodeTransforms": false,
+        "decodedImageOpacityOnly": true,
+        "fabricatedProgress": false
+      },
+      "gestures": {
+        "purePictureZoom": [
+          1,
+          3
+        ],
+        "workbenchZoomPercent": [
+          10,
+          400
+        ],
+        "galleryMinPictures": 3,
+        "galleryDistanceRatio": 0.3,
+        "galleryVelocityPxPerSecond": 500,
+        "galleryMinDistancePx": 24,
+        "dismissDistanceRatio": 0.4,
+        "dismissVelocityPxPerSecond": 1000,
+        "dismissMinDistancePx": 48,
+        "viewFrameUsesRefs": true,
+        "zoomControlMaxHz": 10
+      },
+      "recovery": {
+        "undoPause": [
+          "hover",
+          "focus",
+          "hidden"
+        ],
+        "archiveAfterServerSuccess": true,
+        "cacheRollback": "per-id compensation",
+        "sameIdWrites": "serialized",
+        "networkReplaysWrites": false,
+        "identityBeforeDescendantLayout": true
+      },
+      "accessibility": {
+        "reduced": "no decorative movement/loops; at most 120ms opacity",
+        "forcedColors": "system borders and focus; no spotlight/shadows",
+        "defaultSsrBrowserReads": false
+      },
+      "verification": "output/ui-motion and output/playwright/*-motion*; fixture results are not real model validation"
     }
   },
   "components": [
