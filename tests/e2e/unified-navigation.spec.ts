@@ -52,14 +52,17 @@ for (const width of [1440, 1366, 1024, 390, 375])
         "src",
         /logo-original-transparent/,
       );
-      const account = rail.getByRole("button", { name: "退出登录", exact: true });
+      const account = rail.getByRole("button", { name: "designer@example.com", exact: true });
       await expect(account).toBeInViewport();
       await expect(account).toHaveCSS("min-height", "44px");
+      await account.click();
+      await expect(page.getByRole("button", { name: "退出登录", exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(account).toBeFocused();
       const geometry = await rail.evaluate((element) => {
         const style = getComputedStyle(element),
           bounds = element.getBoundingClientRect();
-        const account = Array.from(element.querySelectorAll("button"))
-          .find((item) => item.textContent?.trim() === "退出登录")
+        const account = element.querySelector('summary[aria-label="designer@example.com"]')
           ?.getBoundingClientRect();
         return {
           background: style.backgroundColor,
@@ -178,8 +181,8 @@ for (const width of [1440, 390])
     await expect(page).toHaveURL(new RegExp(`/${PROJECT}/studio\\?tab=tech`));
     const account = page
       .getByRole("complementary", { name: "工作区目录" })
-      .getByRole("button", { name: "退出登录", exact: true });
-    await account.focus();
+      .getByRole("button", { name: "designer@example.com", exact: true });
+    await account.click();
     await expect(
       page.getByRole("button", { name: "退出登录", exact: true }),
     ).toBeInViewport();

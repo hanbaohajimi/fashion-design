@@ -57,7 +57,7 @@
   aspect-ratio: 1;
   overflow: hidden;
   padding: 5px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   border-radius: 2px;
 }
@@ -127,3 +127,4 @@
     min-height: 44px;
   }
 }
+.taskCount { margin-inline-start: 8px; font-variant-numeric: tabular-nums; }

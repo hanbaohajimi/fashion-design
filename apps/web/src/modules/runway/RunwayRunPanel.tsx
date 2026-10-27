@@ -185,9 +185,9 @@ export function RunwayRunPanel({
           <h3>{RUNWAY_STAGE_LABELS[run.stage]}</h3>
           <p>
             运行于 {new Date(run.createdAt).toLocaleString("zh-CN")}{" "}
-            {run.parentRunId ? "· 来自历史阶段的新分支" : ""}
+            {run.parentRunId ? " 来自历史阶段的新分支" : ""}
             {run.modelSnapshot.mode === "mock"
-              ? " · 模拟运行，成果仅用于流程验证"
+              ? " 模拟运行，成果仅用于流程验证"
               : ""}
           </p>
         </div>
@@ -457,7 +457,7 @@ export function RunwayRunPanel({
               <li key={media.id}>
                 <span>
                   <strong>
-                    {KIND_LABELS[media.kind]} · 记录 {index + 1}
+                    {KIND_LABELS[media.kind]} 记录 {index + 1}
                   </strong>
                   <small>
                     {new Date(media.createdAt).toLocaleString("zh-CN")}

@@ -6,7 +6,7 @@ import type { WorkflowGraph, WorkflowProposal } from "./workflow-api";
 import { useLayoutEffect, useRef } from "react";
 import { getWorkflowToolContract } from "@fashion/shared";
 import { nodeImageUrl } from "./workflow-graph";
-import { Button, ImagePreview } from "../../../components/ui";
+import { Button } from "../../../components/ui";
 import { TaskFeedback } from "../../../components/TaskFeedback";
 import { motionEase, motionTime, observeMotionCancellation } from "../../../components/interactions/motion-policy";
 import styles from "./workflow-canvas.module.css";
@@ -136,7 +136,7 @@ export function ProposalReview({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: "-2px", marginRight: "4px" }}>
               <path d="m5 12 4 4L19 6" pathLength="1" strokeDasharray="1" strokeDashoffset="0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            已受理 · {" "}
+            已受理 {" "}
           </span>
           <span role="status" className={styles.proposalState} key={`${submitting}:${proposal.status}:${node?.status}:${Boolean(error)}`}>
           {submitting
@@ -193,7 +193,7 @@ export function ProposalReview({
               {count} 张方案
               {typeof params.width === "number" &&
               typeof params.height === "number"
-                ? ` · ${params.width} × ${params.height}`
+                ? ` ${params.width} × ${params.height}`
                 : ""}
               <br />
               生成成功后按额度计次。
@@ -203,7 +203,7 @@ export function ProposalReview({
       ) : null}
       {running ? (
         <div><TaskFeedback taskId={proposal.toolNodeId} motionKey={`node:${proposal.toolNodeId}`} status={node?.status ?? "pending"} operation={imageTool ? "generate" : "analysis"} compact title={imageTool ? "生成方案" : "分析要求"} />
-          <p>{imageTool ? "完成后会出现在这里和画布上，可以继续工作。" : "可以继续补充想法。"}</p>
+          <p>{imageTool ? "完成后加入作品区。" : "可以继续补充想法。"}</p>
         </div>
       ) : null}
       {error ? (
@@ -215,8 +215,9 @@ export function ProposalReview({
         <p className={styles.proposalMeta}>{proposal.rejectionReason}</p>
       ) : null}
       {failed && !error ? <p role="alert">本次执行未完成，可以重试。</p> : null}
-      {outputs.length ? (
+      {accepted && outputs.length ? (
         <div className={styles.proposalResults} aria-label="本次结果">
+          <p>已完成 {outputs.length} 项结果</p>
           {outputs.map((result) => (
             <div className={styles.proposalResult} key={result.id}>
               <button
@@ -224,9 +225,6 @@ export function ProposalReview({
                 aria-label={`查看大图：${result.title}`}
                 onClick={() => onOpenResult(result.id)}
               >
-                {nodeImageUrl(result) ? (
-                  <ImagePreview src={nodeImageUrl(result)} alt="" retryable={false} />
-                ) : null}
                 <span>{result.title}</span>
                 <small>查看大图</small>
               </button>

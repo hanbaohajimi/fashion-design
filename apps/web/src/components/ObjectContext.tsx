@@ -38,7 +38,7 @@ export function ObjectContext({
             status,
           ]
             .filter(Boolean)
-            .join(" · ")}
+            .join(" ")}
         </span>
       </div>
       {children ? <div className={styles.actions}>{children}</div> : null}

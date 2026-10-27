@@ -156,7 +156,7 @@ export function ArchiveNavigation({
         </div>
       ) : null}
       {navigation ? (
-        <div className={styles.projectNavigation}>{navigation}</div>
+        <div className={styles.projectNavigation} data-workspace-navigation-scroll>{navigation}</div>
       ) : null}
       <div className={styles.account}><ConnectionNotice />{account}</div>
     </aside>

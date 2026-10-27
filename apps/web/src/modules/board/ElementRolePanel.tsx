@@ -306,7 +306,7 @@ export function ElementRolePanel({
                 <span data-warning="true">非服装或低置信度，请人工确认</span>
               ) : selectedImage?.props.roleSource === "inferred" ? (
                 <span>
-                  自动推断 ·{" "}
+                  自动推断 {" "}
                   {Math.round((selectedImage.props.roleConfidence ?? 0) * 100)}%
                 </span>
               ) : null}

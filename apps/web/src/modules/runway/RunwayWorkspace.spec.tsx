@@ -419,7 +419,7 @@ it("previews the exact style source asset rather than an unrelated first view", 
   );
   expect(
     (
-      screen.getByRole("img", { name: "褶线夹克 · r1" }) as HTMLImageElement
+      screen.getByRole("img", { name: "褶线夹克 r1" }) as HTMLImageElement
     ).getAttribute("src"),
   ).toBe("/images/front.png");
 });

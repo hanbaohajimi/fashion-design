@@ -61,6 +61,8 @@ function createHarness(access?: ProjectAccessPolicy) {
       callback({
         agentConversation: { update: vi.fn().mockResolvedValue(undefined) },
         agentMessage: {
+          findUniqueOrThrow: async () => pendingMessage,
+          update: (input: unknown) => database.agentMessage.update(input),
           create: vi
             .fn()
             .mockResolvedValueOnce(userMessage)
@@ -78,7 +80,8 @@ function createHarness(access?: ProjectAccessPolicy) {
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
-      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findUniqueOrThrow: vi.fn(async () => database.agentMessage.update.mock.results.at(-1)?.value ?? pendingMessage),
+      updateMany: vi.fn(async (input: unknown) => { await database.agentMessage.update(input); return { count: 1 }; }),
     },
     boardElement: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -797,7 +800,7 @@ describe("AgentConversationsService", () => {
     });
 
     expect(result.assistantMessage.status).toBe("completed");
-    expect(harness.database.$transaction).not.toHaveBeenCalled();
+    expect(harness.database.$transaction).toHaveBeenCalledOnce();
     expect(harness.model.generateJson).toHaveBeenCalledOnce();
   });
 

@@ -40,7 +40,7 @@ export function WeeklyDigestCard({
       <span className={styles.digestIndex}>第 {week} 周</span>
       <div className={styles.digestCopy}>
         <div className={styles.digestMeta}>
-          <span>来源综述 · {digest.period}</span>
+          <span>来源综述 {digest.period}</span>
           <span>{digest.itemIds.length} 条来源汇总</span>
         </div>
         <h2>{digest.theme}</h2>

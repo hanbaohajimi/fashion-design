@@ -497,7 +497,7 @@ export function ImageViewer({
           setPan({ x: 0, y: 0 });
         }}
       >
-        适合窗口 · <span ref={readout}>{Math.round(scale * 100)}%</span>
+        适合窗口 <span ref={readout}>{Math.round(scale * 100)}%</span>
       </button>
       {error ? (
         <div className={styles.loadError} role="alert">

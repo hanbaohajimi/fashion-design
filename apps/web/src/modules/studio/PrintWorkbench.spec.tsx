@@ -43,7 +43,7 @@ it("invalidates manual review after a visual parameter changes", async () => {
       onDirty={onDirty}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "细条纹 · 修订 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "细条纹 修订 2" }));
   expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
   fireEvent.change(screen.getByLabelText(/重复尺度/), {
     target: { value: "2" },
@@ -69,7 +69,7 @@ it("stores confirmed production repeat dimensions in a new immutable revision", 
       onRefresh={onRefresh}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "细条纹 · 修订 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "细条纹 修订 2" }));
   fireEvent.change(screen.getByLabelText(/生产重复宽度/), {
     target: { value: "25.5" },
   });
@@ -95,7 +95,7 @@ it("keeps the draft when switching saved patterns is declined", async () => {
   fireEvent.change(screen.getByLabelText("方案名称"), {
     target: { value: "未保存的新方案" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "细条纹 · 修订 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "细条纹 修订 2" }));
   await waitFor(() => expect(beforeChange).toHaveBeenCalledTimes(1));
   expect((screen.getByLabelText("方案名称") as HTMLInputElement).value).toBe(
     "未保存的新方案",

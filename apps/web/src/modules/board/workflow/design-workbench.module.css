@@ -15,7 +15,7 @@
 .pendingGroup { margin-bottom: var(--space-6); }
 .pendingGroup > header { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-3); }
 .pendingGroup > header span { color: var(--color-ink-secondary); font-size: var(--text-sm); }
-.pendingArtwork { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; max-height: calc(var(--upload-preview-height) * 2); border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-ink-secondary); background: var(--color-paper); }
+.pendingArtwork { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); min-width: 0; max-height: calc(var(--upload-preview-height) * 2); border: var(--border-hairline) dashed var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-ink-secondary); background: var(--color-paper); }
 .designGrid[data-single="true"] .pendingArtwork { width: 100%; max-width: 640px; height: min(560px, calc(100dvh - 280px)); max-height: none; aspect-ratio: auto !important; justify-self: center; }
 .pendingArtwork[data-failed="true"] { border-style: solid; }
 .pendingArtwork small { padding: 0 var(--space-3); text-align: center; }
@@ -103,7 +103,7 @@
   color: var(--color-action-on);
 }
 .workbench .primary[data-secondary="true"] {
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   background: transparent;
   color: var(--color-ink);
 }
@@ -151,7 +151,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
 }
@@ -216,7 +216,7 @@
   min-width: 0;
   overflow: hidden;
   background: var(--color-paper);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
 }
 .preview,
@@ -254,7 +254,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
 }
 .caption button,
 .reference {
@@ -300,7 +300,7 @@
   width: 24px;
   height: 24px;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-paper);
 }
@@ -315,7 +315,7 @@
 }
 .notes {
   margin-top: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 .notes summary {
   cursor: pointer;
@@ -342,7 +342,7 @@
 .materials {
   margin-top: var(--space-8);
   padding-top: var(--space-6);
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
 }
 .materials:focus-visible {
   outline: 2px solid var(--color-focus-ring);
@@ -357,7 +357,7 @@
 .materials > header button {
   flex: none;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-paper);
 }
@@ -372,7 +372,7 @@
 .materialPreview {
   aspect-ratio: 1;
   max-height: var(--upload-preview-height);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-3);
 }
@@ -392,7 +392,7 @@
 }
 .empty {
   padding: var(--space-8);
-  border: 1px dashed var(--color-border-strong);
+  border: var(--border-hairline) dashed var(--color-border-strong);
   border-radius: var(--radius-lg);
 }
 .empty p {
@@ -449,7 +449,7 @@
 .caption {
   order: -1;
   border-top: 0;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 @media (max-width: 767px) {
   .designGrid[data-single="true"] .preview {

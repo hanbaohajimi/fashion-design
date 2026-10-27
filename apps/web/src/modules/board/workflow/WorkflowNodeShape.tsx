@@ -139,7 +139,7 @@ export class WorkflowNodeShapeUtil extends BaseBoxShapeUtil<WorkflowNodeShape> {
         )}
         <header className={styles.nodeHeader}>
           {kind !== "tool" ? <span className={styles.eyebrow}>
-            {nodeTypeEyebrow(kind, nodeType)}
+            {nodeTypeEyebrow(kind, nodeType).map((part, index) => <span key={index}>{part}</span>)}
           </span> : null}
           <strong title={title}>{title}</strong>
         </header>
@@ -258,7 +258,7 @@ function WorkflowNodeFrame({
       style={
         exporting
           ? exportStyle
-          : ({ "--enter-index": String(shape.props.enterIndex) } as CSSProperties)
+          : ({ "--enter-index": String(shape.props.enterIndex), pointerEvents: "auto" } as CSSProperties)
       }
       data-highlighted={shape.props.highlighted ? "true" : "false"}
       data-kind={shape.props.kind}
@@ -330,7 +330,7 @@ function WorkflowPort({
     hint?.label ?? (side === "input" ? "连接输入素材" : "连接到工具");
   return (
     <button
-      aria-label={`${shape.props.title} · ${label}`}
+      aria-label={`${shape.props.title} ${label}`}
       className={`${styles.interactivePort} ${side === "input" ? styles.portInput : styles.portOutput}`}
       data-workflow-port={side}
       data-overview={overview ? "true" : undefined}

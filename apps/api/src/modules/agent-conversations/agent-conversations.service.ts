@@ -500,6 +500,7 @@ export class AgentConversationsService {
         const delta = text.slice(streamed.length); streamed = text; if (delta) await observer.delta(delta);
       }) : this.model.generateJson.bind(this.model);
       const decision = await generate({
+        ...(observer?.signal ? { signal: observer.signal } : {}),
         images: imageContext.images,
         instructions: agentInstructions,
         jsonSchema: agentDecisionJsonSchema,
@@ -513,6 +514,11 @@ export class AgentConversationsService {
       await observer?.phase("validating");
 
       await this.access.require(userId, conversation.projectId, "edit");
+      const committed = await this.database.$transaction(async transaction => {
+        await transaction.agentConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
+        const current = await transaction.agentMessage.findUniqueOrThrow({ where: { id: turn.assistantMessage.id } });
+        if (current.status !== AgentMessageStatus.PENDING) return { assistantMessage: current, taskId: current.generationTaskId };
+        observer?.signal?.throwIfAborted();
       let taskId: string | null = null;
       if (decision.action === "generate" && decision.generation) {
         const sourceAssetId = decision.generation.sourceAssetId ?? null;
@@ -553,8 +559,8 @@ export class AgentConversationsService {
         taskId = result.taskId;
       }
 
-      const assistantMessage = await this.database.agentMessage.update({
-        where: { id: turn.assistantMessage.id },
+      const assistantMessage = await transaction.agentMessage.update({
+        where: { id: turn.assistantMessage.id, status: AgentMessageStatus.PENDING },
         data: {
           content: decision.message,
           errorCode: null,
@@ -563,6 +569,9 @@ export class AgentConversationsService {
           status: AgentMessageStatus.COMPLETED,
         },
       });
+        return { assistantMessage, taskId };
+      });
+      const { assistantMessage, taskId } = committed;
       return {
         assistantMessage: toMessage(assistantMessage),
         taskId,
@@ -570,8 +579,8 @@ export class AgentConversationsService {
       };
     } catch (error) {
       const failure = describeAgentRequestFailure(error);
-      const assistantMessage = await this.database.agentMessage.update({
-        where: { id: turn.assistantMessage.id },
+      await this.database.agentMessage.updateMany({
+        where: { id: turn.assistantMessage.id, status: AgentMessageStatus.PENDING },
         data: {
           content: failure.content,
           errorCode: failure.errorCode,
@@ -579,6 +588,7 @@ export class AgentConversationsService {
           status: AgentMessageStatus.FAILED,
         },
       });
+      const assistantMessage = await this.database.agentMessage.findUniqueOrThrow({ where: { id: turn.assistantMessage.id } });
       return {
         assistantMessage: toMessage(assistantMessage),
         taskId: null,

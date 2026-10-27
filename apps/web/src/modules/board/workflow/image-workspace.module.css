@@ -18,7 +18,7 @@
 }
 .workspace button {
   cursor: pointer;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
@@ -68,7 +68,7 @@
 }
 .topActions select {
   background: var(--color-paper);
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   padding: var(--space-2);
   min-height: var(--control-height);
 }
@@ -84,7 +84,7 @@
   display: grid;
   gap: 8px;
   padding: 16px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popup);
@@ -214,7 +214,7 @@
   flex: none;
   overflow: auto;
   padding: var(--space-5);
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
@@ -253,7 +253,7 @@
 .panel textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   padding: var(--space-3);
@@ -273,7 +273,7 @@
   overflow-wrap: anywhere;
 }
 .comment {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   display: grid;
@@ -357,7 +357,7 @@
   gap: 14px;
   padding: 8px 14px;
   background: var(--color-paper);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
 }
 .notice[role="alert"] {
@@ -388,7 +388,7 @@
   height: 100%;
   padding: 0;
   background: transparent;
-  border: 1px dashed var(--color-inverse);
+  border: var(--border-hairline) dashed var(--color-inverse);
   border-radius: 0;
   cursor: move;
 }
@@ -412,7 +412,7 @@
     width: 100%;
     max-height: 45%;
     border-left: 0;
-    border-top: 1px solid var(--color-border);
+    border-top: var(--border-hairline) solid var(--color-border);
     padding: var(--space-4);
   }
   .toolbar {
@@ -457,7 +457,7 @@
   justify-content: center;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   color: var(--color-action);
   text-decoration: none;

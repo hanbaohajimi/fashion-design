@@ -141,6 +141,7 @@ test.describe("图片手势与复制反馈", () => {
     const app = await setup(page);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     app.append("gesture-a"); app.append("gesture-b"); app.append("gesture-c");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
     const workspace = page.getByRole("dialog", { name: "图片工作区" });
     await expect(workspace.getByRole("navigation", { name: "本次生成结果" }).getByRole("button")).toHaveCount(3);
     await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-a", { exact: true })).toBeVisible();
@@ -168,6 +169,7 @@ test.describe("图片手势与复制反馈", () => {
     const app = await setup(page);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     app.append("copy-look");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
     const workspace = page.getByRole("dialog", { name: "图片工作区" });
     await expect(workspace).toBeVisible();
     await workspace.getByRole("button", { name: "分享", exact: true }).click();
@@ -184,11 +186,12 @@ test.describe("图片手势与复制反馈", () => {
   });
 });
 
-test("首张自动打开，同批追加不抢图，标注评论和分享可完成", async ({ page }) => {
+test("首张明确查看，同批追加不抢图，标注评论和分享可完成", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   const app = await setup(page);
   await expect(page.getByRole("dialog", { name: "图片工作区" })).toHaveCount(0);
   app.append("look-a");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
   const workspace = page.getByRole("dialog", { name: "图片工作区" });
   await expect(workspace).toBeVisible();
   await expect(
@@ -232,6 +235,9 @@ test("首张自动打开，同批追加不抢图，标注评论和分享可完�
     intent: "feedback",
     commentIds: [app.feedback().comments[0]?.id],
   });
+  // Receiving a result preserves the currently inspected image until explicitly opened.
+  await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
+  await page.getByRole("button", { name: "打开方案 设计 edited-1", exact: true }).click();
   await expect(
     workspace.getByAltText("设计 edited-1", { exact: true }),
   ).toBeVisible();
@@ -259,6 +265,7 @@ test("手机上支持尺寸调整、扩图参数和匿名分享页面", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   const app = await setup(page);
   app.append("mobile");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
   const workspace = page.getByRole("dialog", { name: "图片工作区" });
   await expect(workspace).toBeVisible();
   await workspace
@@ -272,6 +279,9 @@ test("手机上支持尺寸调整、扩图参数和匿名分享页面", async ({
     width: 300,
     height: 400,
   });
+  // Receiving a result preserves the currently inspected image until explicitly opened.
+  await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
+  await page.getByRole("button", { name: "打开方案 设计 edited-1", exact: true }).click();
   await expect(
     workspace.getByAltText("设计 edited-1", { exact: true }),
   ).toBeVisible();
@@ -283,6 +293,8 @@ test("手机上支持尺寸调整、扩图参数和匿名分享页面", async ({
   await workspace.getByRole("button", { name: "保存为新版本" }).click();
   await expect.poll(() => app.submitted.length).toBe(2);
   expect(app.submitted[1]).toMatchObject({ type: "transform_image", crop: { left: 0, top: 100, width: 600, height: 600 } });
+  await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
+  await page.getByRole("button", { name: "打开方案 设计 edited-2", exact: true }).click();
   await expect(workspace.getByAltText("设计 edited-2", { exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "调整大小", exact: true }).click();
   await chooseValue(workspace.getByLabel("调整方式"), "outpaint");
@@ -293,6 +305,8 @@ test("手机上支持尺寸调整、扩图参数和匿名分享页面", async ({
   await workspace.getByRole("button", { name: "生成扩图版本" }).click();
   await expect.poll(() => app.submitted.length).toBe(3);
   expect(app.submitted[2]).toMatchObject({ type: "edit_design", intent: "outpaint", outpaint: { width: 1024, height: 1024, left: 64, top: 64 } });
+  await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
+  await page.getByRole("button", { name: "打开方案 设计 edited-3", exact: true }).click();
   await expect(workspace.getByAltText("设计 edited-3", { exact: true })).toBeVisible();
   await page.route("**/api/image-shares/*", (route) =>
     route.fulfill({
@@ -308,6 +322,7 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
   await page.setViewportSize({ width: 1440, height: 960 });
   const app = await setup(page);
   app.append("draft");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
   const workspace = page.getByRole("dialog", { name: "图片工作区" });
   await expect(
     workspace.getByAltText("设计 draft", { exact: true }),
@@ -357,8 +372,9 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
   await page.reload();
   await expect(page.getByRole("button", { name: "打开方案 设计 draft", exact: true })).toBeVisible();
   await expect(workspace).toBeHidden();
-  // Refreshed history is a baseline; only a new execution may open automatically.
+  // Refreshed history is a baseline; new executions are offered without opening automatically.
   app.append("fresh-after-reload", "fresh-batch");
+  await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
   await expect(
     workspace.getByAltText("设计 fresh-after-reload", { exact: true }),
   ).toBeVisible();

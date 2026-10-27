@@ -14,7 +14,7 @@
   padding: var(--space-5) var(--space-3);
   background: var(--color-navigation);
   color: var(--color-navigation-ink);
-  border-right: 1px solid var(--color-navigation-border);
+  border-right: var(--border-hairline) solid var(--color-navigation-border);
 }
 .rail a {
   text-decoration: none;
@@ -70,7 +70,7 @@
   flex: none;
   display: grid;
   gap: var(--space-1);
-  border-top: 1px solid var(--color-navigation-border);
+  border-top: var(--border-hairline) solid var(--color-navigation-border);
   padding: var(--space-3) var(--space-3) 0;
   min-width: 0;
 }
@@ -98,7 +98,7 @@
   margin-top: auto;
   min-width: 0;
   font-size: var(--text-base);
-  border-top: 1px solid var(--color-navigation-border);
+  border-top: var(--border-hairline) solid var(--color-navigation-border);
   padding-top: var(--space-3);
 }
 .account > div {
@@ -143,7 +143,7 @@
     padding: var(--space-2) var(--space-4);
     gap: var(--space-3);
     border-right: 0;
-    border-bottom: 1px solid var(--color-navigation-border);
+    border-bottom: var(--border-hairline) solid var(--color-navigation-border);
   }
   .brand {
     min-height: 44px;

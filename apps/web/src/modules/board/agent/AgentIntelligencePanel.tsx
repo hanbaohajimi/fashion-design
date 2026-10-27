@@ -58,9 +58,9 @@ export function AgentDesignBriefPanel({
   return (
     <GridDetails className={styles.brief}>
       <summary>
-        <span>设计简报 · {brief.constraints.length} 项条件</span>
+        <span>设计简报 {brief.constraints.length} 项条件</span>
         <small className={styles.briefPreview}>
-          {focus.length ? `规划条件：${focus.join(" · ")}` : `设计目标：${brief.summary}`}
+          {focus.length ? `规划条件：${focus.join(" ")}` : `设计目标：${brief.summary}`}
         </small>
       </summary>
       <div className={styles.body}>
@@ -140,8 +140,8 @@ function ConstraintGroup({
         {constraints.map((constraint) => (
           <li key={constraint.id}>
             <span className={styles.meta}>
-              {DIMENSION_LABELS[constraint.dimension]} ·{" "}
-              {MODE_LABELS[constraint.mode]} ·{" "}
+              {DIMENSION_LABELS[constraint.dimension]} {" "}
+              {MODE_LABELS[constraint.mode]} {" "}
               {constraint.priority === "must" ? "必须" : "偏好"}
             </span>
             <p>{constraint.requirement}</p>
@@ -245,7 +245,7 @@ export function CandidateAgentCheck({
       aria-label={`结果 ${number} 的领域检查`}
     >
       <div className={styles.actionHeader}>
-        <strong>结果 {number} · 领域检查</strong>
+        <strong>结果 {number} 领域检查</strong>
         {current ? (
           <button
             type="button"

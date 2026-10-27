@@ -20,7 +20,7 @@
   gap: var(--space-2);
   min-height: var(--control-height);
   min-width: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   background: var(--color-paper);
@@ -168,7 +168,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--control-height);
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -198,7 +198,7 @@ textarea.input {
   gap: var(--space-2);
   min-height: var(--control-height-primary);
   padding: var(--space-3);
-  border: 1px dashed var(--color-border-strong);
+  border: var(--border-hairline) dashed var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -272,7 +272,7 @@ textarea.input {
   align-items: start;
   justify-content: space-between;
   gap: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
   color: var(--color-ink-secondary);
@@ -402,7 +402,7 @@ textarea.input {
   position: relative;
   display: flex;
   gap: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
 }
 .tabs button {
@@ -448,7 +448,7 @@ textarea.input {
   z-index: var(--z-tooltip);
   max-width: min(var(--tooltip-max-width), calc(100vw - var(--space-4)));
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-ink);
   color: var(--color-paper);
@@ -479,7 +479,7 @@ textarea.input {
   min-height: var(--control-height);
   min-width: var(--control-height);
   padding: 6px 10px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   list-style: none;
@@ -493,7 +493,7 @@ textarea.input {
   top: calc(100% + 8px);
   z-index: var(--z-dropdown);
   min-width: 176px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 6px;
   background: var(--color-overlay);
@@ -568,7 +568,7 @@ textarea.input {
   );
   margin: auto;
   padding: 0;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-overlay);
   color: var(--color-ink);

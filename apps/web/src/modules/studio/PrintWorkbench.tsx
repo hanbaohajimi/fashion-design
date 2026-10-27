@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../components/drafts/use-persistent-draft";
 
 import { AssetSelect } from "./studio-ui";
 
@@ -62,6 +63,7 @@ export function PrintWorkbench({
   const [editing, setEditing] = useState<StudioDocumentView | null>(
     savedPattern.success ? (documents[0] ?? null) : null,
   );
+  usePersistentDraft({ value, restore: setValue, baseline, objectKey: editing?.id ?? "new" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -157,7 +159,7 @@ export function PrintWorkbench({
   };
   const slider = (control: (typeof CONTROLS)[number]) => (
     <label key={control.key}>
-      {control.label} ·{" "}
+      {control.label} {" "}
       {control.key === "rotation"
         ? `${value[control.key]}°`
         : control.key === "offsetX" || control.key === "offsetY"
@@ -181,7 +183,7 @@ export function PrintWorkbench({
       <StudioPageHeader
         title={value.name || "新印花方案"}
         type="印花工作台"
-        description={`${editing ? `修订 ${editing.version}` : "新方案"} · 调整重复效果并人工核对`}
+        description={`${editing ? `修订 ${editing.version}` : "新方案"} 调整重复效果并人工核对`}
       />
       <div className={styles.layout}>
         <div
@@ -273,7 +275,7 @@ export function PrintWorkbench({
           </Button>
           <FormSection
             title="高级调整"
-            summary={`亮度 ${value.brightness} · 位置 ${value.offsetX}, ${value.offsetY}`}
+            summary={`亮度 ${value.brightness} 位置 ${value.offsetX}, ${value.offsetY}`}
           >
             {CONTROLS.slice(2).map(slider)}
           </FormSection>
@@ -281,7 +283,7 @@ export function PrintWorkbench({
             title="生产规格"
             summary={
               value.tileWidthCm && value.tileHeightCm
-                ? `${value.tileWidthCm} × ${value.tileHeightCm} cm · 需人工确认`
+                ? `${value.tileWidthCm} × ${value.tileHeightCm} cm 需人工确认`
                 : "宽高待确认"
             }
           >
@@ -398,7 +400,7 @@ export function PrintWorkbench({
                 })()
               }
             >
-              {document.currentRevision.payload.name} · 修订 {document.version}
+              {document.currentRevision.payload.name} 修订 {document.version}
             </button>
           ))
         )}

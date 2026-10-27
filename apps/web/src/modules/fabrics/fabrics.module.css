@@ -13,7 +13,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-light, var(--color-border));
+  border-bottom: var(--border-hairline) solid var(--border-light, var(--color-border));
   gap: var(--space-6);
 }
 
@@ -76,7 +76,7 @@
 
 .searchWrap input {
   width: 100%;
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   outline: none;
   padding: 0 52px 0 var(--space-5);
   background: var(--surface-card, var(--color-surface));
@@ -145,7 +145,7 @@
   top: 24px;
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border-top: 1px solid var(--border-primary, var(--color-ink));
+  border-top: var(--border-hairline) solid var(--border-primary, var(--color-ink));
 }
 
 .filterRailTitle {
@@ -173,7 +173,7 @@
 .filterGroup {
   margin: 0;
   border: 0;
-  border-bottom: 1px solid var(--border-light, var(--color-border));
+  border-bottom: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding: var(--space-5) 0;
 }
 
@@ -192,7 +192,7 @@
 
 .filterGroup button {
   min-height: 30px;
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   border-radius: var(--radius-pill, 999px);
   padding: 5px 10px;
   font-size: var(--text-sm);
@@ -299,7 +299,7 @@
 
 .fabricCard {
   overflow: hidden;
-  border: 1px solid transparent;
+  border: var(--border-hairline) solid transparent;
   border-radius: 12px;
   background: var(--surface-card, var(--color-surface));
   color: var(--text-primary, var(--color-ink));
@@ -402,11 +402,11 @@
   top: 10px;
   right: 10px;
   min-height: var(--control-height);
-  border: 1px solid var(--color-paper);
+  border: var(--border-hairline) solid var(--color-paper);
   border-radius: 8px;
   padding: 0 11px;
   background: var(--color-paper);
-  box-shadow: 0 6px 20px var(--color-border);
+  box-shadow: none;
   color: var(--text-primary, var(--color-ink));
   cursor: pointer;
   font-size: var(--text-base);
@@ -464,7 +464,7 @@
   overflow: hidden;
   margin: 11px 0 5px;
   font-family: Georgia, "Songti SC", serif;
-  font-size: clamp(1rem, 1.2vw, 1.25rem);
+  font-size: 16px;
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -530,7 +530,7 @@
   margin-top: 14px;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-light, var(--color-border));
+  border-top: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding-top: 11px;
   color: var(--text-muted, var(--color-ink-secondary));
   font-size: var(--text-sm);
@@ -542,7 +542,7 @@
   width: 100%;
   min-height: 34px;
   margin-top: 13px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-pill, 999px);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -569,7 +569,7 @@
 }
 
 .cardBody .fabricManageButton {
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   background: transparent;
   color: var(--text-primary, var(--color-ink));
 }
@@ -589,7 +589,7 @@
 }
 
 .fabricCard[data-compact="true"] .cardBody h3 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 /* The drawer rail is too narrow for the spec block; the library page is
@@ -603,7 +603,7 @@
 .libraryState {
   display: grid;
   min-height: 420px;
-  border: 1px dashed var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) dashed var(--border-primary, var(--color-ink));
   border-radius: var(--radius-xl, 16px);
   place-content: center;
   text-align: center;
@@ -615,7 +615,7 @@
 
 .libraryState button {
   justify-self: center;
-  border: 1px solid var(--color-action);
+  border: var(--border-hairline) solid var(--color-action);
   border-radius: var(--radius-pill, 999px);
   padding: 9px 14px;
   background: transparent;
@@ -644,7 +644,7 @@
 .fabricUploadPanel {
   margin: 18px var(--space-2) 0;
   overflow: hidden;
-  border: 1px dashed var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) dashed var(--border-primary, var(--color-ink));
   border-radius: 12px;
   background: color-mix(
     in srgb,
@@ -679,7 +679,7 @@
 .fabricUploadTrigger strong {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   gap: 9px;
 }
@@ -701,7 +701,7 @@
 
 .fabricUploadForm {
   display: grid;
-  border-top: 1px solid var(--border-light, var(--color-border));
+  border-top: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding: var(--space-4);
   align-items: start;
   grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
@@ -712,7 +712,7 @@
   position: relative;
   height: 142px;
   overflow: hidden;
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   background: var(--color-border);
 }
 
@@ -726,7 +726,7 @@
   position: absolute;
   right: 8px;
   bottom: 8px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 6px 9px;
   background: var(--color-surface);
   color: var(--color-ink);
@@ -766,7 +766,7 @@
 .fabricUploadFields select {
   width: 100%;
   min-height: var(--control-height);
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   border-radius: 0;
   outline: none;
   padding: 0 10px;
@@ -792,7 +792,7 @@
 
 .fabricUploadActions button {
   min-height: var(--control-height);
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   padding: 0 14px;
   background: transparent;
   color: var(--text-primary, var(--color-ink));
@@ -823,7 +823,7 @@
 .fabricUploadError,
 .fabricUploadSuccess {
   margin: 0;
-  border-top: 1px solid var(--border-light, var(--color-border));
+  border-top: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding: 10px 14px;
   font-size: var(--text-sm);
 }
@@ -852,7 +852,7 @@
 
 .fabricUploadPanel[data-compact="true"] .fabricUploadTrigger strong {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: var(--font-semibold);
 }
 
@@ -884,7 +884,7 @@
 
 .fabricDetailButton {
   min-height: 34px;
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   padding: 0 var(--space-3);
   background: transparent;
   color: var(--text-primary, var(--color-ink));
@@ -907,7 +907,7 @@
   width: min(680px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   background: var(--color-paper);
   box-shadow: 0 24px 70px var(--color-border-strong);
 }
@@ -916,7 +916,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-light, var(--color-border));
+  border-bottom: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding: 18px var(--space-5);
 }
 
@@ -963,8 +963,8 @@
 
 .fabricDetailList > div {
   min-width: 0;
-  border-right: 1px solid var(--border-light, var(--color-border));
-  border-bottom: 1px solid var(--border-light, var(--color-border));
+  border-right: var(--border-hairline) solid var(--border-light, var(--color-border));
+  border-bottom: var(--border-hairline) solid var(--border-light, var(--color-border));
   padding: 14px var(--space-5);
 }
 
@@ -978,7 +978,7 @@
 .fabricDetailList dd {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .fabricDialogActions,
@@ -999,7 +999,7 @@
 .fabricDialogActions button,
 .fabricEditForm button {
   min-height: var(--control-height);
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   padding: 0 14px;
   background: transparent;
   cursor: pointer;
@@ -1031,7 +1031,7 @@
 .fabricEditForm select,
 .fabricEditForm textarea {
   min-width: 0;
-  border: 1px solid var(--border-primary, var(--color-ink));
+  border: var(--border-hairline) solid var(--border-primary, var(--color-ink));
   padding: 9px 10px;
   background: var(--color-paper);
   color: var(--text-primary, var(--color-ink));
@@ -1166,7 +1166,7 @@
   min-width: 0;
   margin: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   border-radius: var(--radius-md);
 }
@@ -1182,7 +1182,7 @@
 .specDisclosure > summary::before {
   content: "›";
   display: inline-block;
-  font-size: 18px;
+  font-size: 16px;
 }
 .uploadDisclosure[open] > summary::before,
 .specDisclosure[open] > summary::before {
@@ -1237,7 +1237,7 @@
   grid-column: 1 / -1;
   margin: 0;
   border: 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   padding: var(--space-4) 0 0;
 }
 
@@ -1285,7 +1285,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--control-height);
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   background: var(--color-paper);
@@ -1310,7 +1310,7 @@
 }
 
 .sourceFields {
-  border-left: 2px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
   padding-left: var(--space-2);
 }
 
@@ -1329,7 +1329,7 @@
 
 .structuredFilters {
   margin: var(--space-4) 0 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   padding-block: var(--space-4);
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -1348,7 +1348,7 @@
 
 .filterActions button {
   min-height: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   padding-inline: var(--space-3);
   background: var(--color-paper);

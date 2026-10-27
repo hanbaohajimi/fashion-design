@@ -17,7 +17,7 @@ afterEach(() => {
 it("delays artwork and never flashes it after a fast completion", () => {
   vi.useFakeTimers();
   const view = render(<TaskFeedback taskId="first" status="running" />);
-  expect(screen.getByRole("status").textContent).toContain("已提交");
+  expect(screen.getByRole("status").textContent).toContain("处理中");
   act(() => vi.advanceTimersByTime(300));
   expect(screen.getByRole("status").textContent).toContain("处理中");
   act(() => vi.advanceTimersByTime(1600));

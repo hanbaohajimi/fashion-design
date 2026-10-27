@@ -5,7 +5,7 @@
   align-items: center;
   gap: 12px;
   width: min(356px, calc(100vw - 32px));
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   background: var(--color-ink);
@@ -18,7 +18,7 @@
   min-width: 44px;
   min-height: 44px;
   padding: 4px 8px;
-  border: 1px solid currentColor;
+  border: var(--border-hairline) solid currentColor;
   border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
@@ -28,7 +28,7 @@
 .undoNotice button:disabled { opacity: .6; cursor: wait; }
 .undoNotice small { flex-basis: 100%; }
 .undoTime { position: absolute; inset: auto 0 0; height: 2px; background: currentColor; transform-origin: left; }
-.skeletonCard { display: grid; gap: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+.skeletonCard { display: grid; gap: 12px; border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
 .skeletonCover { width: 100%; aspect-ratio: 4 / 3; background: var(--color-surface); }
 .skeletonBody { padding: 20px; display: grid; gap: 12px; }
 .skeletonLine { height: 16px; width: 65%; background: var(--color-surface); border-radius: 3px; }

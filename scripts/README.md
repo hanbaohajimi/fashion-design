@@ -1,5 +1,9 @@
 # 辅助脚本目录
 
+隔离完整检查：`pnpm verify:desktop-ui` 使用新PostgreSQL schema与临时Redis容器执行迁移和pnpm check，保留schema作为本轮证据；不会删除配置数据库或调用付费模型。
+
+桌面界面审计：[manual/clip-audit.js](manual/clip-audit.js)，来源desktop-agent-ui技能。完整函数通过浏览器evaluate执行，使用body或目标父级为root；默认、hover、展开和动效终态分别检查，cut须为0，hidden另行核对。自动化入口：`pnpm exec playwright test tests/e2e/desktop-agent-ui.spec.ts`；结果写入`output/desktop-agent-ui/`。
+
 以下命令默认从仓库根目录执行。日常开发优先使用根 `package.json` 中的 pnpm 命令；目录整理保留这些入口和脚本位置。
 
 ## 日常开发与验收

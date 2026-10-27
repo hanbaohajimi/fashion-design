@@ -1,4 +1,5 @@
 import { StudioModule } from "./modules/studio/studio.module";
+import { ProjectTasksModule } from "./modules/project-tasks/project-tasks.module";
 import { RunwayModule } from "./modules/runway/runway.module";
 import { ExperimentsModule } from "./modules/experiments/experiments.module";
 import { Module } from "@nestjs/common";
@@ -35,6 +36,7 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
   imports: [
     SentryModule.forRoot(),
     StudioModule,
+    ProjectTasksModule,
     RunwayModule,
     ExperimentsModule,
     SecurityModule,

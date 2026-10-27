@@ -157,7 +157,7 @@ export interface HealthResponse {
 }
 
 export type AgentMessageRole = "user" | "assistant";
-export type AgentMessageStatus = "pending" | "completed" | "failed";
+export type AgentMessageStatus = "pending" | "completed" | "failed" | "canceled";
 
 export const AGENT_PLAN_MAX_STEPS = 6;
 export const AGENT_RUN_STATUSES = [
@@ -405,3 +405,4 @@ export * from "./fabric-details";
 export * from "./sketch-document";
 export * from "./runway";
 export * from "./assistant-stream";
+export * from "./project-tasks";

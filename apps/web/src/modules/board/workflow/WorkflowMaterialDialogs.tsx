@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 
 import { readSwatchColors } from "@fashion/shared";
 import { useEffect, useState } from "react";
@@ -9,7 +10,7 @@ import { Button, Field, Input, Select } from "../../../components/ui";
 import { PaletteExplorer } from "../../palette/PaletteExplorer";
 import styles from "./workflow-canvas.module.css";
 import { EmbeddedEditor } from "./EmbeddedEditor";
-import { useWorkspaceDraft } from "./workspace-drafts";
+import { useWorkspaceDraft, useWorkspaceDraftOwner } from "./workspace-drafts";
 
 interface LibraryItem {
   readonly id: string;
@@ -28,6 +29,7 @@ export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy
   readonly onAdd: (title: string, payload: Readonly<Record<string, unknown>>) => Promise<void>;
   readonly onClose: () => void;
 }) {
+  const owner = useWorkspaceDraftOwner();
   const [title, setTitle] = useState(initialTitle);
   const [text, setText] = useState(typeof initialPayload?.text === "string" ? initialPayload.text : "");
   const [colors, setColors] = useState(() => initialPayload ? readSwatchColors(initialPayload, initialTitle) : [{ hex: "#40536D", name: "色彩 1" }]);
@@ -36,6 +38,7 @@ export function WorkflowMaterialEntry({ type, initialTitle, initialPayload, busy
   const [baseline, setBaseline] = useState(() => JSON.stringify({ title: initialTitle, text: typeof initialPayload?.text === "string" ? initialPayload.text : "", colors: initialPayload ? readSwatchColors(initialPayload, initialTitle) : [{ hex: "#40536D", name: "色彩 1" }] }));
   const value = { title, text, colors };
   const signature = JSON.stringify(value);
+  usePersistentDraft({ value, baseline, objectKey: `material:${owner ?? type}`, restore: draft => { setTitle(draft.title); setText(draft.text); setColors(draft.colors); } });
   useWorkspaceDraft("material", value, embedded === true && signature !== baseline, saving);
   return <EmbeddedEditor embedded={embedded} label={embedded ? "编辑色卡" : `添加${initialTitle}`} onClose={onClose} returnFocusSelector="[data-material-trigger]">
     <form className={styles.entryDialog} onSubmit={(event) => {
@@ -82,7 +85,7 @@ export function WorkflowLibraryDialog({ kind, onAdd, onClose }: {
         const data = await response.json() as { items: Record<string, unknown>[]; hasMore?: boolean; total?: number; totalPages?: number };
         controller.signal.throwIfAborted();
         const next = data.items.map((item): LibraryItem => ({ id: String(item.id), imageUrl: typeof item.coverImageUrl === "string" ? item.coverImageUrl : typeof item.mainImageUrl === "string" ? item.mainImageUrl : null,
-          label: kind === "trend" ? String(item.title ?? "趋势") : Array.isArray(item.tags) ? item.tags.join(" · ") : "面料参考",
+          label: kind === "trend" ? String(item.title ?? "趋势") : Array.isArray(item.tags) ? item.tags.join(" ") : "面料参考",
           summary: kind === "trend" ? String(item.summary ?? "") : "", ...(typeof item.sourceUrl === "string" ? { sourceUrl: item.sourceUrl } : {}) }));
         setItems((current) => page === 1 ? next : [...current, ...next.filter((item) => !current.some((old) => old.id === item.id))]);
         setHasMore(data.hasMore ?? (data.total !== undefined ? page * 30 < data.total : page < (data.totalPages ?? 1)));

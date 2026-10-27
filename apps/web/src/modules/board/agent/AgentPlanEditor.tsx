@@ -328,17 +328,17 @@ export function AgentPlanEditor({
                         <b>{String(index + 1).padStart(2, "0")}</b>
                         <small>
                           {historicalNode
-                            ? "历史节点 · 已锁定"
+                            ? "历史节点 已锁定"
                             : locked
-                              ? "未执行 · 暂不可编辑"
-                              : "未执行 · 可编辑"}
+                              ? "未执行 暂不可编辑"
+                              : "未执行 可编辑"}
                         </small>
                       </span>
                       <strong>{step.title}</strong>
                       <p>{step.instruction}</p>
                       <small>
                         {step.tool === "edit_design" ? "修改设计" : "生成设计"}
-                        {saved?.selectedAssetId ? " · 已采用结果" : ""}
+                        {saved?.selectedAssetId ? " 已采用结果" : ""}
                       </small>
                     </button>
                     <button
@@ -560,7 +560,7 @@ export function AgentPlanEditor({
                     {historical.attempts.map((attempt) => (
                       <GridDetails key={attempt.id}>
                         <summary>
-                          尝试 {attempt.ordinal} ·{" "}
+                          尝试 {attempt.ordinal} {" "}
                           {attemptStatusLabel(attempt.status)}
                         </summary>
                         <p>
@@ -612,7 +612,7 @@ export function AgentPlanEditor({
               <p>
                 {dirty
                   ? "节点图有未保存修改，执行前请先保存。"
-                  : `${draft.length} 个节点 · 每次只执行一步`}
+                  : `${draft.length} 个节点 每次只执行一步`}
               </p>
             )}
           </div>

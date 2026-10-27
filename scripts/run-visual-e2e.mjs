@@ -66,7 +66,7 @@ try {
   const code = await new Promise((done, fail) => {
     const child = spawn(process.execPath, [pnpm, "exec", "playwright", "test", "--config", "playwright.visual.config.ts", ...process.argv.slice(2)], {
       cwd: root, stdio: "inherit", windowsHide: true,
-      env: { ...process.env, NEXT_PUBLIC_SENTRY_DSN: "", NEXT_PUBLIC_POSTHOG_KEY: "", ATELIER_VISUAL_CDP: endpoint, ATELIER_VISUAL_PORT: String(WEB_PORT), ATELIER_CHROMIUM_VERSION: CHROMIUM_VERSION },
+      env: { ...process.env, NEXT_DIST_DIR: process.env.NEXT_DIST_DIR ?? ".next/visual", NEXT_PUBLIC_SENTRY_DSN: "", NEXT_PUBLIC_POSTHOG_KEY: "", ATELIER_VISUAL_CDP: endpoint, ATELIER_VISUAL_PORT: String(WEB_PORT), ATELIER_CHROMIUM_VERSION: CHROMIUM_VERSION },
     });
     child.on("error", fail); child.on("exit", done);
   });

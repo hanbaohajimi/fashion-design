@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../components/drafts/use-persistent-draft";
 
 import { AssetSelect } from "./studio-ui";
 
@@ -139,6 +140,7 @@ export function ExperimentPanel({
     fabricIds,
   });
   const [baseline, setBaseline] = useState(signature);
+  usePersistentDraft({ value: { mode, sourceAssetId, prompt, preserve, colorText, variations, fabricIds }, baseline, restore: draft => { setMode(draft.mode); setSource(draft.sourceAssetId); setPrompt(draft.prompt); setPreserve(draft.preserve); setColorText(draft.colorText); setVariations(draft.variations); setFabricIds(draft.fabricIds); } });
   useEffect(() => {
     onDirty?.(signature !== baseline);
     return () => onDirty?.(false);
@@ -515,7 +517,7 @@ export function ExperimentPanel({
               >
                 {batches.map((batch, index) => (
                   <option value={batch.id} key={batch.id}>
-                    实验 {batches.length - index} · {batch.items.length} 个方案
+                    实验 {batches.length - index} {batch.items.length} 个方案
                   </option>
                 ))}
               </Select>
@@ -563,7 +565,7 @@ export function ExperimentPanel({
                         : batch.mode === "detail"
                           ? "细节改款"
                           : "色料实验"}{" "}
-                      · {batch.items.length} 个方案
+                      {batch.items.length} 个方案
                     </h3>
                     <small>保留要求：{batch.preserve}</small>
                   </div>
@@ -625,7 +627,7 @@ export function ExperimentPanel({
                       aria-pressed={resultFilter === value}
                       onClick={() => setResultFilter(value ?? "all")}
                     >
-                      {label} ·{" "}
+                      {label} {" "}
                       {
                         batch.items.filter(
                           (item) =>
@@ -717,7 +719,7 @@ export function ExperimentPanel({
                             }
                           >
                             {stateLabel[item.status]}
-                            {item.attempt ? " · 重试 " + item.attempt : ""}
+                            {item.attempt ? " 重试 " + item.attempt : ""}
                           </Badge>
                           <h4>{item.title}</h4>
                           {item.color ? (

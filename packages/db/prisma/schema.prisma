@@ -123,6 +123,7 @@ enum AgentMessageStatus {
   PENDING
   COMPLETED
   FAILED
+  CANCELED
 }
 
 model GenerationTask {

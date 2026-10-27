@@ -17,9 +17,27 @@ export function StudioNavigation({
 }) {
   const [focused, setFocused] = useState<StudioTab | null>(null);
   useEffect(() => {
+    let frame = 0;
+    let active = true;
     const selected = document.getElementById(`${id}-tab-${value}`);
-    if (selected?.getBoundingClientRect().height)
-      selected.scrollIntoView({ block: "nearest" });
+    const container = selected?.closest("[data-workspace-navigation-scroll]");
+    const reveal = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!active || !(container instanceof HTMLElement) || !selected?.getBoundingClientRect().height) return;
+        const bounds = selected.getBoundingClientRect();
+        const viewport = container.getBoundingClientRect();
+        container.scrollTop += bounds.top - viewport.top - (container.clientHeight - bounds.height) / 2;
+      });
+    };
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reveal);
+    if (container) resize?.observe(container);
+    const navigation = selected?.closest("[data-studio-hierarchy]");
+    if (navigation) resize?.observe(navigation);
+    void document.fonts.ready.then(reveal);
+    document.fonts.addEventListener("loadingdone", reveal);
+    reveal();
+    return () => { active = false; cancelAnimationFrame(frame); resize?.disconnect(); document.fonts.removeEventListener("loadingdone", reveal); };
   }, [id, value]);
   const visibleTabs = STUDIO_GROUPS.flatMap((group) => [...group.items]);
   return (

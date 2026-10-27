@@ -151,6 +151,7 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
+  await expect(page.getByRole("dialog", { name: "给新系列一个名字" })).toBeHidden();
   const projectSearch = page.getByRole("searchbox", { name: "搜索项目" });
   await page.keyboard.press("Control+K");
   await expect(projectSearch).toBeFocused();
@@ -477,7 +478,7 @@ test("本地图片从素材菜单上传后保留来源文件 ID 和名称", asyn
     name: "reference.png",
   });
 
-  await expect.poll(() => signedUpload).toMatchObject({
+  await expect.poll(() => signedUpload ?? {}).toMatchObject({
     projectId: "e2e-drop",
     name: "reference.png",
     mimeType: "image/png",
@@ -495,7 +496,7 @@ test("本地图片从素材菜单上传后保留来源文件 ID 和名称", asyn
   });
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   await page.locator('[data-type="reference_image"]').dblclick();
-  await expect(page.getByText(/当前标签：廓形参考 · 模型建议/u)).toBeVisible();
+  await expect(page.getByText(/当前标签：廓形参考\s*模型建议/u)).toBeVisible();
   await page.reload();
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   expect(workflow.semanticMutations).toHaveLength(1);
@@ -807,7 +808,7 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   await page.getByText("执行记录", { exact: true }).click();
   await page.getByRole("button", { name: "读取尝试记录" }).click();
   await expect(page.getByText("来源：秋冬通勤约束、廓形参考")).toBeVisible();
-  await expect(page.getByText("参考角色：silhouette_ref · 权重 0.7")).toBeVisible();
+  await expect(page.getByText("参考角色：silhouette_ref 权重 0.7")).toBeVisible();
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByRole("button", { name: "返回画布" }).click();
   await page.getByRole("button", { name: "适合画布", exact: true }).click();

@@ -115,7 +115,7 @@ async function mockWorkspace(page: Page, status = "running") {
       return route.fulfill({
         json: {
           id: "experience",
-          name: "城市漫步 · 春夏设计",
+          name: "城市漫步 春夏设计",
           archived: false,
           assetCount: 0,
           createdAt: now,
@@ -318,7 +318,7 @@ test("面料规格默认收起，应用后显示条件摘要，空结果可重�
   await page.getByRole("button", { name: "应用筛选", exact: true }).click();
   const summary = page
     .locator("summary")
-    .filter({ hasText: "规格筛选 · 1 项已启用" });
+    .filter({ hasText: /规格筛选.*1 项已启用/ });
   await expect(summary).toBeVisible();
   await expect(
     page.getByRole("button", { name: "移除成分筛选" }),

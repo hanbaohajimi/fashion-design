@@ -56,7 +56,7 @@ export function PresentationGallery({
             <div className={styles.assetCaption}>
               <strong title={assetName(asset.id)}>{assetName(asset.id)}</strong>
               <span className={styles.assetId}>
-                素材 ID · {asset.id.slice(-8)}
+                素材 ID {asset.id.slice(-8)}
               </span>
               <div className={styles.cardActions}>
                 <Button
@@ -66,7 +66,7 @@ export function PresentationGallery({
                   onClick={() => onToggle(asset.id)}
                 >
                   {selected
-                    ? `已选入 · 第 ${order + 1} 张`
+                    ? `已选入 第 ${order + 1} 张`
                     : atLimit
                       ? "已达 12 张上限"
                       : "选入展示包"}

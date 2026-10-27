@@ -93,7 +93,7 @@ export function StyleLibrary(
           props.data.styles.length > 0 ? (
             <ObjectSwitcher
               label="切换对象"
-              current={<>切换款式 · {selected?.name ?? "建立新款式"}</>}
+              current={<>切换款式 {selected?.name ?? "建立新款式"}</>}
             >
               <aside
                 className={`${styles.rail} ${styles.styleRail}`}
@@ -116,10 +116,10 @@ export function StyleLibrary(
                       />
                     </span>
                     <strong>
-                      {style.code} · {style.name}
+                      {style.code} {style.name}
                     </strong>
                     <small>
-                      {STATUS_LABELS[style.status]} · r
+                      {STATUS_LABELS[style.status]} r
                       {style.currentRevision.revision}
                     </small>
                   </Button>
@@ -166,7 +166,7 @@ export function StyleLibrary(
               className={styles.compareSelection}
               open
             >
-              <summary>调整比较对象 · 已选 {comparison.length} 张</summary>
+              <summary>调整比较对象 已选 {comparison.length} 张</summary>
               <AssetPicker
                 assets={props.data.assets}
                 selected={comparison}
@@ -322,7 +322,7 @@ function StyleEditor({
             : existing.currentRevision.payload.status,
       }
     : { ...blankStyle(), sourceAssetId: adoptedId };
-  const form = useStudioForm(initial, onDirty, { feedback });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? `new:${adoptedId}` });
   const { draft, setDraft } = form;
   const [viewAssetId, setViewAssetId] = useState("");
   const update = <K extends keyof StudioStyleInput>(
@@ -445,7 +445,7 @@ function StyleEditor({
               STATUS_LABELS[existing?.status ?? draft.status],
             ]
               .filter(Boolean)
-              .join(" · ")}
+              .join(" ")}
           </p>
           <p className={styles.documentSummary}>
             {draft.description || "尚未填写设计说明"}
@@ -458,7 +458,7 @@ function StyleEditor({
         summary={
           form.dirty
             ? "有未保存的修改"
-            : `${draft.name || "新款式"} · ${draft.views.length} 个视图`
+            : `${draft.name || "新款式"} ${draft.views.length} 个视图`
         }
         defaultOpen={!existing}
         save={canEdit}
@@ -660,7 +660,7 @@ function StyleEditor({
               <article key={revision.id}>
                 <div className={styles.recordHeader}>
                   <strong>
-                    r{revision.revision} · {revision.payload.name}
+                    r{revision.revision} {revision.payload.name}
                   </strong>
                   <Badge>{STATUS_LABELS[revision.payload.status]}</Badge>
                 </div>

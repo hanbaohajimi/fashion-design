@@ -6,9 +6,11 @@ test("登录样式契约、发送和失败状态", async ({ page }) => {
   await page.route("**/api/auth/login", (route) => route.fulfill({ json: { ok: true } }));
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "登录或注册" })).toHaveCSS("font-size", "28px");
+  await expect(page.getByRole("heading", { name: "登录或注册" })).toHaveCSS("font-size", "24px");
   const email = page.getByRole("textbox", { name: "邮箱地址" });
   await expect(email).toHaveCSS("font-size", "16px");
+  // Chromium rounds subpixel borders to one device pixel at DPR 1.
+  expect(await email.evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue("--border-hairline")))).toBe(0.5);
   await expect(email).toHaveCSS("border-bottom-width", "1px");
   await mkdir("output/playwright", { recursive: true });
   await page.screenshot({ path: "output/playwright/review-login-after.png" });
@@ -49,6 +51,7 @@ test("后台会话变更时隔离项目缓存，旧请求不会回填新账号",
 });
 
 test("真实项目封面优先显示，加载失败有可读回退", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/api/me", (route) => route.fulfill({ json: {
     user: { id: "cover-user", email: "covers@example.com", name: "设计师" }, credits: { limit: 600, used: 0, remaining: 600 },
   } }));
@@ -60,23 +63,10 @@ test("真实项目封面优先显示，加载失败有可读回退", async ({ pa
   await page.route("**/review-invalid-cover", (route) => route.fulfill({ status: 404 }));
   await page.goto("/");
   await expect(page.getByRole("img", { name: "封面项目 0 封面", exact: true }).last()).toBeVisible();
-  await expect(page.getByText("封面暂时无法加载", { exact: true })).toBeVisible();
-  const contrastRatios = await page.locator('article [role="img"]').evaluateAll((covers) => {
-    const luminance = (color: string) => {
-      const channels = color.match(/[\d.]+/g)?.slice(0, 3).map((value) => Number(value) / 255) ?? [];
-      return channels.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
-        .reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index]!, 0);
-    };
-    return covers.filter((cover) => !cover.querySelector("img")).map((cover) => {
-      const text = cover.querySelector("small");
-      if (!text) throw new Error("缺少封面回退说明");
-      const foreground = luminance(getComputedStyle(text).color);
-      const background = luminance(getComputedStyle(cover).backgroundColor);
-      return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-    });
-  });
-  expect(contrastRatios).toHaveLength(4);
-  expect(Math.min(...contrastRatios)).toBeGreaterThanOrEqual(4.5);
+  await expect(page.getByText("图片暂时无法加载", { exact: true })).toBeVisible();
+  expect(await contrastFailures(page)).toEqual([]);
+  await expect(page.getByRole("img", { name: "封面项目 1 封面", exact: true })).toContainText("图片暂时无法加载");
+
 });
 
 for (const viewport of REVIEW_VIEWPORTS) {
@@ -110,7 +100,7 @@ for (const viewport of REVIEW_VIEWPORTS) {
       } else {
         await page.route("**/api/projects?*", (route) => route.fulfill({ status: 503, json: { message: "项目服务暂不可用" } }));
         await page.getByRole("searchbox", { name: "搜索项目" }).fill("失败状态验收");
-        await expect(page.getByText("项目服务暂不可用", { exact: true })).toBeVisible();
+        await expect(page.getByText("项目列表刷新失败，仍显示上次载入的资料。", { exact: false })).toBeVisible();
       }
       expect(await contrastFailures(page)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

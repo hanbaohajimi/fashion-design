@@ -230,7 +230,7 @@ test("关联图片在模态内搜索，取消保留绑定，确认才应用", as
   await expect(open).toBeFocused();
   await open.click();
   await picker.getByRole("button", { name: "选择图片 2", exact: true }).click();
-  await picker.getByRole("button", { name: /确认选择 · 1 张/ }).click();
+  await picker.getByRole("button", { name: /确认选择 1 张/ }).click();
   await expect(proxy).toHaveValue("asset-back");
   await noOverflow(page);
   await page.screenshot({

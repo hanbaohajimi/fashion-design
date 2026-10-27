@@ -316,7 +316,7 @@ describe("AgentWorkflowPanel", () => {
     mocks.listAgentRuns.mockResolvedValue({ items: [informed] });
     mocks.fetchAgentRun.mockResolvedValue(informed);
     renderPanel();
-    fireEvent.click(await screen.findByText("设计简报 · 3 项条件"));
+    fireEvent.click(await screen.findByText("设计简报 3 项条件"));
     expect(screen.getByText("你明确提出的要求")).toBeTruthy();
     expect(screen.getByText("Agent 对需求的解释")).toBeTruthy();
     expect(screen.getByText("尚未提供面料性能检测资料")).toBeTruthy();

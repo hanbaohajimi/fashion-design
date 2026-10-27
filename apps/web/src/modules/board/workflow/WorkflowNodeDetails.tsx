@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 
 import { Select } from "../../../components/ui";
 import { GridDetails } from "../../../components/GridDetails";
@@ -102,6 +103,7 @@ export function NodeDetails({
   const [decisionReason, setDecisionReason] = useState("");
   const [toolDirty, setToolDirty] = useState(false);
   useWorkspaceDraft("decision", { decisionKind, decisionReason }, Boolean(decisionReason.trim()));
+  usePersistentDraft({ value: { decisionKind, decisionReason }, baseline: JSON.stringify({ decisionKind: "selected", decisionReason: "" }), objectKey: `decision:${node?.id ?? "new"}`, restore: draft => { setDecisionKind(draft.decisionKind); setDecisionReason(draft.decisionReason); } });
   useEffect(() => {
     onDirtyChange?.(toolDirty || Boolean(decisionReason.trim()));
   }, [decisionReason, onDirtyChange, toolDirty]);
@@ -183,7 +185,7 @@ export function NodeDetails({
             当前标签：
             {String(
               node.payload.roleLabel ?? node.payload.role ?? "待识别",
-            )} ·{" "}
+            )} {" "}
             {node.payload.roleSource === "manual"
               ? "设计师指定"
               : node.payload.roleSource === "inferred"
@@ -241,7 +243,7 @@ export function NodeDetails({
           {brief.constraints.map((constraint) => (
             <div className={styles.constraintRow} key={constraint.id}>
               <span>
-                {constraint.priority === "must" ? "必须" : "偏好"} ·{" "}
+                {constraint.priority === "must" ? "必须" : "偏好"} {" "}
                 {constraint.origin === "explicit" ? "明确提出" : "解释性建议"}
               </span>
               <p>{constraint.requirement}</p>
@@ -275,7 +277,7 @@ export function NodeDetails({
                     : check.status === "concern"
                       ? "! 存疑"
                       : "? 无法判断"}{" "}
-                  · {check.observation}
+                  {check.observation}
                 </p>
               ))}
             </div>
@@ -298,7 +300,7 @@ export function NodeDetails({
       {node.kind === "tool" ? (
         <section className={styles.detailSection}>
           <h4>输入素材</h4>
-          {inputs.length ? inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} · {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>) : <p>尚未连接输入素材。</p>}
+          {inputs.length ? inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>) : <p>尚未连接输入素材。</p>}
         <ToolSettings
           graph={graph}
           inputs={inputs.length}
@@ -312,7 +314,7 @@ export function NodeDetails({
           setError={setError}
         />
           <h4>执行结果</h4>
-          {outputs.length ? outputs.map((edge) => { const result = graph.nodes.find((item) => item.id === edge.targetNodeId); return result ? <p key={edge.id}>{displayNodeTitle(result)} · {nodeSummary(result)}</p> : null; }) : <p>执行完成后，结果会出现在这里和画布中。</p>}
+          {outputs.length ? outputs.map((edge) => { const result = graph.nodes.find((item) => item.id === edge.targetNodeId); return result ? <p key={edge.id}>{displayNodeTitle(result)} {nodeSummary(result)}</p> : null; }) : <p>执行完成后，结果会出现在这里和画布中。</p>}
         </section>
       ) : null}
       {node.type === "candidate" && assetId ? (
@@ -389,7 +391,7 @@ export function NodeDetails({
         </div>
         {inputs.map((edge) => (
           <p key={edge.id}>
-            {PORT_LABELS[edge.targetPort]} ·{" "}
+            {PORT_LABELS[edge.targetPort]} {" "}
             {displayNodeTitle(
               graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? {
                 title: "未知节点",
@@ -568,6 +570,7 @@ function ToolSettings({
         JSON.stringify(draft.referenceInputs) !==
           JSON.stringify(original.referenceInputs)));
   useWorkspaceDraft("tool", draft, dirty, saving || executing);
+  usePersistentDraft({ value: draft, restore: setDraft, baseline: originalSignature, objectKey: `tool:${node.id}`, enabled: canEdit });
   useEffect(() => {
     onDirtyChange?.(canEdit && dirty);
   }, [canEdit, dirty, onDirtyChange]);
@@ -706,7 +709,7 @@ function ToolSettings({
               <span>高级设置</span>
               <small>
                 {" "}
-                · {draft.count} 张 · {draft.width} × {draft.height} ·{" "}
+                {draft.count} 张 {draft.width} × {draft.height} {" "}
                 {draft.quality === "auto"
                   ? "自动质量"
                   : draft.quality === "high"
@@ -918,7 +921,7 @@ function ToolSettings({
               history.map((attempt) => (
                 <li key={attempt.id}>
                   <strong>
-                    第 {attempt.ordinal} 次 · {taskState(attempt.status).label}
+                    第 {attempt.ordinal} 次 {taskState(attempt.status).label}
                   </strong>
                   <span>
                     {new Date(attempt.createdAt).toLocaleString("zh-CN")}
@@ -972,7 +975,7 @@ function ToolSettings({
                       {attempt.request.referenceInputs
                         .map((item: unknown) => {
                           const ref = item as Record<string, unknown>;
-                          return `${String(ref.role ?? "参考")} · 权重 ${String(ref.weight ?? "—")}`;
+                          return `${String(ref.role ?? "参考")} 权重 ${String(ref.weight ?? "—")}`;
                         })
                         .join("；")}
                     </p>

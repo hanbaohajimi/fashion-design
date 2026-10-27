@@ -5,6 +5,14 @@ import { StreamingReply, useAssistantStream } from "./StreamingReply";
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const draft = { text: "甲👩🏽‍🎨乙", animate: true, pending: true, attemptId: "first" };
 describe("流式字素呈现", () => {
+  it("keeps historical stream data stable while unrelated composer state rerenders", () => {
+    const { result, rerender } = renderHook(({ id }) => useAssistantStream(id), { initialProps: { id: "" } });
+    rerender({ id: "history" });
+    const historicalDrafts = result.current.drafts;
+    for (let index = 0; index < 10; index++) rerender({ id: "history" });
+    expect(result.current.drafts).toBe(historicalDrafts);
+    expect(Object.keys(result.current.drafts)).toEqual([]);
+  });
   it("does not synthesize typing when no real text delta arrived", () => {
     const { result } = renderHook(() => useAssistantStream("conversation"));
     const message = { id: "reply", role: "assistant" as const, status: "completed" as const, content: "完整回复", context: null, clientRequestId: null, replyToId: "user", generationTaskId: null, error: null, createdAt: "", updatedAt: "" };

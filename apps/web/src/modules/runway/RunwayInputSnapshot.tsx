@@ -62,9 +62,9 @@ export function RunwayInputSnapshot({
               : revision?.payload.sourceAssetId;
           const source = data.assets.find((asset) => asset.id === assetId);
           const label = revision
-            ? `${revision.payload.name} · r${revision.revision}`
+            ? `${revision.payload.name} r${revision.revision}`
             : input.sourceType === "style_revision"
-              ? `款式修订 · ${input.sourceId.slice(-8)}`
+              ? `款式修订 ${input.sourceId.slice(-8)}`
               : assetId
                 ? assetName(assetId)
                 : `上传参考图 ${index + 1}`;
@@ -84,7 +84,7 @@ export function RunwayInputSnapshot({
                     : input.kind === "cloth"
                       ? "服装"
                       : "背景"}
-                  参考 · {snapshot ? "已保存输入快照" : "输入来源"}
+                  参考 {snapshot ? "已保存输入快照" : "输入来源"}
                 </small>
               </span>
               {snapshot ? (

@@ -157,7 +157,7 @@ function EdgeView({ shape }: { shape: WorkflowEdgeShape }) {
       </g>
       {labelPoint && !interaction?.gesture ? (
         <WorkflowEdgeHoverLabel id={labelId}
-          label={shape.props.proposed ? `${label} · 待确认` : label}
+          label={shape.props.proposed ? `${label} 待确认` : label}
           color={`var(${RELATION_COLORS[shape.props.relation].token})`}
           point={labelPoint} onDismiss={dismissLabel} />
       ) : null}

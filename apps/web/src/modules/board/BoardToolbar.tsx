@@ -28,10 +28,10 @@ interface BoardToolbarProps {
 }
 
 const STATUS_LABELS: Readonly<Record<BoardPersistStatus, string>> = {
-  conflict: "版本冲突 · 待处理",
+  conflict: "版本冲突 待处理",
   error: "加载失败",
   loading: "正在加载",
-  offline: "离线 · 待重试",
+  offline: "离线 待重试",
   ready: "已就绪",
   saved: "已保存",
   saving: "正在保存",

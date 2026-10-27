@@ -42,7 +42,7 @@ export class WorkflowAssistantController {
   @RateLimit({ keyBy: "user", limit: 60, name: "workflow-assistant-turn", windowSeconds: 60 * 60 })
   async send(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Body() body: unknown, @Res() response: Response, @Headers("accept") accept?: string) {
     const conversation = parse(id, conversationId); const input = parse(workflowMessageSchema, body);
-    if (!this.streams?.enabled(accept)) return response.json(await this.assistant.send(user.userId, conversation, input));
+    if (!this.streams?.enabled(accept)) return response.json(await (this.streams ? this.streams.runCancelable(conversation, input.clientRequestId, observer => this.assistant.send(user.userId, conversation, input, observer) as Promise<AssistantTurnView>, () => this.assistant.recoverStream(user.userId, conversation, input.clientRequestId)) : this.assistant.send(user.userId, conversation, input)));
     await this.assistant.authorizeStream(user.userId, conversation);
     return this.streams.start(response, conversation, input.clientRequestId, async (observer) => await this.assistant.send(user.userId, conversation, input, observer) as AssistantTurnView, () => this.assistant.recoverStream(user.userId, conversation, input.clientRequestId), JSON.stringify(input));
   }

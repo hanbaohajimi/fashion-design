@@ -43,7 +43,7 @@
   min-height: 72px;
   align-items: center;
   gap: var(--space-8);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
 .navigation {
@@ -93,7 +93,7 @@
   border: 1.5px solid var(--color-ink);
   place-items: center;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-style: italic;
 }
 
@@ -117,7 +117,7 @@
   display: grid;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   border-radius: 50%;
   background: var(--color-ink);
   color: var(--color-paper);
@@ -159,7 +159,7 @@
   padding: clamp(4rem, 8vw, 7rem) 0 clamp(2rem, 3vw, 3rem);
   grid-template-columns: minmax(0, 1fr) minmax(200px, auto);
   gap: var(--space-8);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
 .kicker {
@@ -199,7 +199,7 @@
 .toolbar {
   display: grid;
   align-items: center;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   grid-template-columns: auto minmax(240px, 480px) 1fr auto;
 }
 
@@ -214,7 +214,7 @@
 .statusFilter,
 .statusFilterActive {
   min-height: var(--control-height-primary);
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   padding: 0 var(--space-4);
   background: var(--color-canvas);
   box-shadow: var(--shadow-soft-raised);
@@ -234,7 +234,7 @@
 .statusFilter + .statusFilterActive,
 .statusFilterActive + .statusFilter,
 .statusFilterActive + .statusFilterActive {
-  border-left: 1px solid var(--color-control-border);
+  border-left: var(--border-hairline) solid var(--color-control-border);
 }
 
 .statusFilter:hover {
@@ -307,7 +307,7 @@
 .secondaryButton {
   display: inline-flex;
   min-height: var(--control-height-primary);
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   border-radius: var(--radius-lg);
   padding: 0 var(--space-5);
   align-items: center;
@@ -380,7 +380,7 @@
 
 .projectCover {
   position: relative;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background-color: var(--color-surface);
   background-position: center;
   background-size: cover;
@@ -461,14 +461,14 @@
   right: 0;
   display: grid;
   min-width: 140px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   overflow: hidden;
 }
 
 .menuPanel button {
   border: 0;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   padding: var(--space-3) var(--space-4);
   background: transparent;
   color: inherit;
@@ -512,7 +512,7 @@
 
 .confirmPanel {
   display: grid;
-  border: 1px solid var(--color-error);
+  border: var(--border-hairline) solid var(--color-error);
   border-top-width: 3px;
   margin-top: var(--space-3);
   padding: var(--space-4);
@@ -545,7 +545,7 @@
 
 .confirmActions button {
   min-height: var(--control-height);
-  border: 1px solid var(--color-error);
+  border: var(--border-hairline) solid var(--color-error);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-error);
@@ -646,7 +646,7 @@
 
 .skeletonGrid > span {
   aspect-ratio: 4 / 3;
-  border: 1px solid var(--color-divider);
+  border: var(--border-hairline) solid var(--color-divider);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
@@ -674,7 +674,7 @@
 
 .dialog {
   width: min(100%, 560px);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   padding: clamp(var(--space-6), 5vw, var(--space-12));
   background: var(--color-paper);
   box-shadow: var(--shadow-modal);
@@ -709,7 +709,7 @@
 
 .dialog input {
   width: 100%;
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   outline: 0;
   padding: var(--space-3);
@@ -748,7 +748,7 @@
 .notice {
   display: flex;
   margin-top: var(--space-4);
-  border-left: 3px solid var(--color-action);
+  border-inline-start: var(--border-hairline) solid var(--color-divider);
   padding: var(--space-3) var(--space-4);
   align-items: center;
   justify-content: space-between;
@@ -923,7 +923,7 @@
   margin-bottom: var(--space-5);
 }
 .search {
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   min-height: var(--control-height);
   background: var(--color-paper);
@@ -936,7 +936,7 @@
   letter-spacing: 0;
 }
 .projectCard {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   overflow: visible;
   background: var(--color-paper);
@@ -960,7 +960,7 @@
     var(--font-sans);
 }
 .coverFallback > span {
-  font-size: 28px;
+  font-size: 24px;
   font-family: var(--font-sans);
   color: var(--color-ink-tertiary);
 }
@@ -998,7 +998,7 @@
   font-size: var(--text-base);
   min-height: var(--control-height);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
 }
 @media (max-width: 767px) {
@@ -1092,7 +1092,7 @@
   animation: none;
   overflow: hidden;
   min-height: 320px;
-  border: 1px solid var(--color-divider);
+  border: var(--border-hairline) solid var(--color-divider);
   border-radius: var(--radius-lg);
   background: var(--color-paper);
 }

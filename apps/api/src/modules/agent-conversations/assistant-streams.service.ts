@@ -1,9 +1,11 @@
+import { prisma, type PrismaClient } from "@fashion/db";
 import { createHash, randomUUID } from "node:crypto";
-import { ConflictException, Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, Logger, OnModuleDestroy, Optional } from "@nestjs/common";
 import { Redis } from "ioredis";
 import type { Response } from "express";
 import type { AssistantStreamEvent, AssistantStreamObserver, AssistantStreamPayload, AssistantTurnView } from "@fashion/shared";
 
+export const ASSISTANT_STREAM_DB = Symbol("ASSISTANT_STREAM_DB");
 export const ASSISTANT_STREAM_REDIS = Symbol("ASSISTANT_STREAM_REDIS");
 const TTL = 24 * 60 * 60;
 type Snapshot = { turn: AssistantTurnView; text: string; terminal: boolean; attemptId: string; eventId: string };
@@ -11,8 +13,10 @@ const terminal = (turn: AssistantTurnView) => turn.assistantMessage.status !== "
 
 @Injectable()
 export class AssistantStreamsService implements OnModuleDestroy {
+  private readonly active = new Map<string, AbortController>();
+  private readonly partials = new Map<string, string>();
   private readonly logger = new Logger(AssistantStreamsService.name);
-  constructor(@Inject(ASSISTANT_STREAM_REDIS) private readonly redis: Redis) {}
+  constructor(@Inject(ASSISTANT_STREAM_REDIS) private readonly redis: Redis, @Optional() @Inject(ASSISTANT_STREAM_DB) private readonly database: Pick<PrismaClient, "agentMessage"> = prisma) {}
   onModuleDestroy() { this.redis.disconnect(); }
   enabled(accept: string | undefined) { return process.env.ASSISTANT_STREAMING_ENABLED === "true" && Boolean(accept?.includes("text/event-stream")); }
   private key(conversationId: string, requestId: string) { return `assistant-stream:${encodeURIComponent(conversationId)}:${encodeURIComponent(requestId)}`; }
@@ -25,6 +29,54 @@ export class AssistantStreamsService implements OnModuleDestroy {
     if (response.destroyed || response.writableEnded) return;
     if (response.writableLength > 1_000_000) { response.destroy(); return; }
     response.write(`id: ${event.eventId}\nevent: assistant\ndata: ${JSON.stringify(event)}\n\n`);
+  }
+
+  async partialText(conversationId: string, requestId: string): Promise<string | null> {
+    const key = this.key(conversationId, requestId);
+    try { await this.ready(); const raw = await this.redis.get(`${key}:snapshot`); if (raw) return (JSON.parse(raw) as Snapshot).text; } catch { /* Durable cancellation remains available without Redis. */ }
+    return this.partials.get(key) ?? null;
+  }
+  async notifyCancellation(conversationId: string, requestId: string) {
+    const key = this.key(conversationId, requestId);
+    this.active.get(key)?.abort(new Error("用户停止回复"));
+    try { await this.ready(); await this.redis.set(`${key}:canceled`, "1", "EX", TTL); } catch { /* Other processes reconcile from the database. */ }
+  }
+  async runCancelable(conversationId: string, requestId: string, run: (observer?: AssistantStreamObserver) => Promise<AssistantTurnView>, recover: () => Promise<AssistantTurnView>, observer?: AssistantStreamObserver) {
+    const key = this.key(conversationId, requestId);
+    const controller = new AbortController();
+    this.active.set(key, controller);
+    let checking = false;
+    let messageId: string | null = null;
+    let checkpointAt = 0;
+    const checkpoint = async (force = false) => {
+      if (!messageId || !force && Date.now() - checkpointAt < 250) return;
+      checkpointAt = Date.now();
+      await this.database.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { content: this.partials.get(key) ?? "" } }).catch(() => undefined);
+    };
+    const watch = setInterval(() => {
+      if (checking) return;
+      checking = true;
+      void recover().then(turn => { if (turn.assistantMessage.status === "canceled") controller.abort(new Error("用户停止回复")); }).catch(() => undefined).finally(() => { checking = false; });
+    }, 750);
+    const relay: AssistantStreamObserver = {
+      signal: controller.signal,
+      accepted: async turn => { messageId = turn.assistantMessage.id; this.partials.set(key, turn.assistantMessage.content); await observer?.accepted(turn); },
+      delta: async text => { controller.signal.throwIfAborted(); this.partials.set(key, (this.partials.get(key) ?? "") + text); await checkpoint(); await observer?.delta(text); },
+      reset: async () => { controller.signal.throwIfAborted(); this.partials.set(key, ""); await checkpoint(true); await observer?.reset(); },
+      phase: async phase => { controller.signal.throwIfAborted(); await observer?.phase(phase); },
+    };
+    let abort: (() => void) | undefined;
+    try {
+      return await Promise.race([run(relay), new Promise<AssistantTurnView>((resolve, reject) => {
+        abort = () => { void recover().then(resolve, reject); };
+        controller.signal.addEventListener("abort", abort, { once: true });
+        if (controller.signal.aborted) abort();
+      })]);
+    } finally {
+      clearInterval(watch); if (abort) controller.signal.removeEventListener("abort", abort);
+      controller.abort(new Error("回复执行已结束"));
+      if (this.active.get(key) === controller) { this.active.delete(key); this.partials.delete(key); }
+    }
   }
 
   async start(response: Response, conversationId: string, requestId: string, run: (observer?: AssistantStreamObserver) => Promise<AssistantTurnView>, recover: () => Promise<AssistantTurnView>, requestBody = "") {
@@ -40,7 +92,7 @@ export class AssistantStreamsService implements OnModuleDestroy {
     } catch (error) {
       if (error instanceof ConflictException) throw error;
       // Never repeat a model call merely because streaming infrastructure is unavailable.
-      response.json(await run()); return;
+      response.json(await this.runCancelable(conversationId, requestId, run, recover)); return;
     }
     this.open(response);
     const heartbeat = setInterval(() => { if (!response.destroyed && !response.writableEnded) response.write(": heartbeat\n\n"); }, 10_000);
@@ -51,7 +103,8 @@ export class AssistantStreamsService implements OnModuleDestroy {
       if (!state) return;
       if (payload.type === "message.delta") state.text += payload.text;
       if (payload.type === "message.reset") state.text = "";
-      if (payload.type === "message.completed" || payload.type === "message.failed") { state.turn = payload.turn; state.terminal = true; state.text = payload.turn.assistantMessage.content; }
+      if (state.terminal && payload.type !== "message.completed" && payload.type !== "message.failed" && payload.type !== "message.canceled") return;
+      if (payload.type === "message.completed" || payload.type === "message.failed" || payload.type === "message.canceled") { state.turn = payload.turn; state.terminal = true; state.text = payload.turn.assistantMessage.content; }
       const base = { ...payload, attemptId, messageId: state.turn.assistantMessage.id };
       let eventId = `${Date.now()}-${++fallbackSequence}`;
       try {
@@ -71,12 +124,12 @@ export class AssistantStreamsService implements OnModuleDestroy {
       phase: (phase) => publish({ type: "phase", phase }),
     };
     try {
-      const result = await run(observer);
+      const result = await this.runCancelable(conversationId, requestId, run, recover, observer);
       if (!state) await observer.accepted(result);
-      await publish({ type: result.assistantMessage.status === "failed" ? "message.failed" : "message.completed", turn: result });
+      await publish({ type: result.assistantMessage.status === "canceled" ? "message.canceled" : result.assistantMessage.status === "failed" ? "message.failed" : "message.completed", turn: result });
     } catch (error) {
       this.logger.warn("助手流请求未完成，客户端可通过消息历史恢复");
-      try { const result = await recover(); if (!state) await observer.accepted(result); await publish({ type: "message.failed", turn: result }); } catch { /* Original failure may precede message reservation. */ }
+      try { const result = await recover(); if (!state) await observer.accepted(result); if (terminal(result)) await publish({ type: result.assistantMessage.status === "canceled" ? "message.canceled" : result.assistantMessage.status === "failed" ? "message.failed" : "message.completed", turn: result }); } catch { /* Original failure may precede message reservation. */ }
       if (!response.destroyed) response.write(`event: error\ndata: ${JSON.stringify({ message: "本轮未完成，请读取消息状态后重试" })}\n\n`);
       void error;
     } finally {
@@ -109,7 +162,7 @@ export class AssistantStreamsService implements OnModuleDestroy {
           for (const [id, fields] of events) {
             const event = { ...JSON.parse(fields[1] ?? "{}"), eventId: id } as AssistantStreamEvent;
             this.write(response, event); cursor = id;
-            if (event.type === "message.completed" || event.type === "message.failed") { response.end(); return; }
+            if (event.type === "message.completed" || event.type === "message.failed" || event.type === "message.canceled") { response.end(); return; }
           }
         }
         if (!snapshot || ticks % 40 === 1) {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useDraftScope } from "../drafts/use-persistent-draft";
+import { setLocalActivity, removeLocalActivity } from "../../modules/tasks/local-activities";
 import { useEffect, useRef, useState } from "react";
 import { Button, ImagePreview } from "../ui";
 import styles from "./upload-feedback.module.css";
@@ -10,6 +12,8 @@ const labels: Record<Stage, string> = { queued: "等待上传", signing: "准备
 
 /** Feedback for existing single-file flows; callers still own business steps and outcomes. */
 export function useUploadFeedback() {
+  const scope = useDraftScope();
+  const activityId = useRef("");
   const [preview, setPreview] = useState<UploadFeedbackState | null>(null);
   const active = useRef<{ controller: AbortController; url?: string; frame?: number | undefined; value: UploadFeedbackState } | null>(null);
   const dispose = () => {
@@ -19,6 +23,7 @@ export function useUploadFeedback() {
     if (record.url) { URL.revokeObjectURL(record.url); delete record.url; }
     if (record.frame !== undefined) cancelAnimationFrame(record.frame);
     active.current = null;
+    removeLocalActivity(activityId.current);
   };
   const clear = () => { dispose(); setPreview(null); };
   useEffect(() => {
@@ -30,8 +35,13 @@ export function useUploadFeedback() {
     dispose();
     const url = typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : undefined;
     const record = { controller: new AbortController(), ...(url ? { url } : {}), value: { name: file.name, src: url, stage: "queued" as Stage, progress: null as number | null }, frame: undefined as number | undefined };
+    activityId.current = crypto.randomUUID();
     active.current = record; setPreview({ ...record.value });
-    const update = () => { if (active.current === record) setPreview({ ...record.value }); };
+    const update = () => { if (active.current === record) {
+      setPreview({ ...record.value });
+      if (scope) setLocalActivity({ id: activityId.current, accountId: scope.accountId, projectId: scope.projectId, name: file.name, stage: record.value.stage, cancel: () => { record.controller.abort(); record.value.stage = "canceled"; update(); } });
+    } };
+    update();
     const release = () => { if (record.url) { URL.revokeObjectURL(record.url); delete record.url; } };
     return {
       signal: record.controller.signal,
@@ -66,7 +76,7 @@ export function UploadFeedbackPreview({ preview, onCancel, onClear }: { readonly
       {preview.src ? <ImagePreview src={preview.src} alt={`${preview.name}本地预览`} retryable={false} /> : <span>图片文件</span>}
       {progress !== null ? <i aria-hidden="true" className={styles.mask} style={{ transform: `scaleY(${1 - progress})` }} /> : null}
     </div>
-    <div className={styles.details}><strong>{preview.name}</strong><span role="status">{labels[preview.stage]}{progress !== null ? ` · ${Math.round(progress * 100)}%` : ""}</span>
+    <div className={styles.details}><strong>{preview.name}</strong><span role="status">{labels[preview.stage]}{progress !== null ? ` ${Math.round(progress * 100)}%` : ""}</span>
       {busy && onCancel ? <Button size="small" onClick={onCancel}>取消上传</Button> : !busy && onClear ? <Button size="small" onClick={onClear}>收起上传状态</Button> : null}
     </div>
   </section>;

@@ -22,6 +22,7 @@
     "test": "node --env-file=.env.example --env-file-if-exists=.env ./node_modules/turbo/bin/turbo run test",
     "test:e2e": "playwright test",
     "test:e2e:visual": "node scripts/run-visual-e2e.mjs",
+    "verify:desktop-ui": "node scripts/manual/verify-desktop-agent-ui.mjs",
     "test:e2e:real": "node scripts/run-trial-e2e.mjs",
     "test:startup": "node --test scripts/check-ports.spec.mjs",
     "check": "pnpm test:startup && pnpm audit:all && pnpm lint && pnpm typecheck && pnpm db:validate && pnpm test && pnpm db:test && pnpm build",

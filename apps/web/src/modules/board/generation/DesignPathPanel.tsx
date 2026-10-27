@@ -143,7 +143,7 @@ export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
                   onClick={() => setSelectedStepId(step.id)}
                 >
                   <span>
-                    步骤 {index + 1} ·{" "}
+                    步骤 {index + 1} {" "}
                     {step.actor === "agent"
                       ? "Agent"
                       : step.actor === "collection"
@@ -242,7 +242,7 @@ export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
                   .filter((item) => item.assetId === assetId)
                   .map((item) => (
                     <li key={item.id}>
-                      {DECISION_LABELS[item.kind]} ·{" "}
+                      {DECISION_LABELS[item.kind]} {" "}
                       {new Date(item.createdAt).toLocaleString("zh-CN")}
                       {item.reason ? `：${item.reason}` : ""}
                     </li>
@@ -265,7 +265,7 @@ function StepDetails({ step }: { readonly step: DesignPathStep }) {
   ] as const;
   return (
     <section className={styles.pathDetails} aria-label="步骤详情">
-      <h4>{TOOL_LABELS[step.tool] ?? step.tool} · 当时的设计条件</h4>
+      <h4>{TOOL_LABELS[step.tool] ?? step.tool} 当时的设计条件</h4>
       <p>{step.intent}</p>
       {!step.snapshotAvailable ? (
         <p>这项历史操作未保存完整输入快照，无法核实当时的全部条件。</p>

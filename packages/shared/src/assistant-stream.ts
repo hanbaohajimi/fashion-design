@@ -10,7 +10,7 @@ export type AssistantStreamPayload =
   | { type: "phase"; phase: "analyzing" | "reading" | "validating" }
   | { type: "message.delta"; text: string }
   | { type: "message.reset" }
-  | { type: "message.completed" | "message.failed"; turn: AssistantTurnView }
+  | { type: "message.completed" | "message.failed" | "message.canceled"; turn: AssistantTurnView }
   | { type: "snapshot"; turn: AssistantTurnView; text: string; terminal: boolean };
 export type AssistantStreamEvent = AssistantStreamPayload & {
   readonly eventId: string;
@@ -18,6 +18,7 @@ export type AssistantStreamEvent = AssistantStreamPayload & {
   readonly messageId: string;
 };
 export interface AssistantStreamObserver {
+  readonly signal?: AbortSignal;
   accepted(turn: AssistantTurnView): Promise<void>;
   delta(text: string): Promise<void>;
   reset(): Promise<void>;
@@ -53,4 +54,12 @@ export class SseDecoder {
     }
     return result;
   }
+}
+
+/** Redis stream IDs are ordered numerically, including after snapshot recovery. */
+export function compareAssistantEventIds(a: string, b: string): number {
+  if (!/^\d+-\d+$/u.test(a) || !/^\d+-\d+$/u.test(b)) return 0;
+  const [at = 0n, as = 0n] = a.split("-").map(BigInt);
+  const [bt = 0n, bs = 0n] = b.split("-").map(BigInt);
+  return at === bt ? as < bs ? -1 : as > bs ? 1 : 0 : at < bt ? -1 : 1;
 }

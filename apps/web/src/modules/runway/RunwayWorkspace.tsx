@@ -520,7 +520,7 @@ export function RunwayWorkspace(
                       {index === 0
                         ? "最近运行"
                         : `历史运行 ${selected.runs.length - index}`}{" "}
-                      · {RUNWAY_STATUS_LABELS[item.status]} ·{" "}
+                      {RUNWAY_STATUS_LABELS[item.status]} {" "}
                       {new Date(item.createdAt).toLocaleString("zh-CN")}
                     </option>
                   ))}

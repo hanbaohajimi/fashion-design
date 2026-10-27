@@ -65,7 +65,7 @@ describe("面料档案编辑", () => {
   it("只读面料可查看来源但没有修改或删除入口", () => {
     render(<FabricCard fabric={{ ...fabric, canManage: false, scope: "preset" }} />);
     fireEvent.click(screen.getByRole("button", { name: "查看面料：棉麻 A17" }));
-    expect(screen.getByText("实测 · 裁片称重")).toBeTruthy();
+    expect(screen.getByText("实测 裁片称重")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "编辑档案" })).toBeNull();
     expect(screen.queryByRole("button", { name: "删除" })).toBeNull();
   });

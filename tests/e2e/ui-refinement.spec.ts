@@ -1,4 +1,4 @@
-import { chooseValue } from "./choice-control";
+import { chooseValue, expectValue } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
 import {
@@ -194,9 +194,9 @@ test("款式入口将确切修订带入商品展示并在刷新后保留", async
   await page.goto(`/${PROJECT}/studio?tab=styles`);
   await page.getByRole("button", { name: "继续商品展示", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`tab=presentation.*styleRevisionId=${revisionId}`));
-  await expect(page.getByLabel("采用款式修订")).toHaveValue(revisionId ?? "");
+  await expectValue(page.getByLabel("采用款式修订"), revisionId ?? "");
   await page.reload();
-  await expect(page.getByLabel("采用款式修订")).toHaveValue(revisionId ?? "");
+  await expectValue(page.getByLabel("采用款式修订"), revisionId ?? "");
 });
 
 test("分享图片失败可重试，失效链接提供恢复入口", async ({ page }) => {

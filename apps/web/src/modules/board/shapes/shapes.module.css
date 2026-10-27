@@ -9,7 +9,7 @@
   min-height: calc(22px * var(--role-badge-scale));
   align-items: center;
   gap: calc(6px * var(--role-badge-scale));
-  border: 1px solid var(--role-color);
+  border: var(--border-hairline) solid var(--role-color);
   border-radius: calc(3px * var(--role-badge-scale));
   padding: calc(3px * var(--role-badge-scale))
     calc(8px * var(--role-badge-scale));
@@ -42,7 +42,7 @@
   width: max-content;
   min-height: calc(22px * var(--annotation-scale, 1));
   align-items: center;
-  border: 1px solid var(--color-surface);
+  border: var(--border-hairline) solid var(--color-surface);
   border-radius: calc(3px * var(--annotation-scale, 1));
   padding: calc(3px * var(--annotation-scale, 1))
     calc(8px * var(--annotation-scale, 1));
@@ -168,7 +168,7 @@
 
 .fabricSwatchEmpty span {
   color: var(--color-surface);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.2em;
 }
@@ -190,7 +190,7 @@
 
 .fabricCaption span {
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -199,7 +199,7 @@
 .fabricCaption strong {
   color: var(--color-scrim);
   font-family: Georgia, "Songti SC", serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   letter-spacing: 0.02em;
 }
@@ -242,7 +242,7 @@
 }
 
 .imagePlaceholder span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;
 }
@@ -363,7 +363,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--color-error);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -403,10 +403,10 @@
   z-index: 3;
   top: 14px;
   right: 14px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 5px 8px;
   background: var(--swatch-turmeric);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
@@ -428,7 +428,7 @@
   display: flex;
   padding: calc(18px * var(--note-content-scale));
   flex-direction: column;
-  border: 1px solid var(--color-scrim);
+  border: var(--border-hairline) solid var(--color-scrim);
   border-radius: calc(6px * var(--note-content-scale));
   background: linear-gradient(
     135deg,
@@ -445,7 +445,7 @@
   right: calc(16px * var(--note-content-scale));
   bottom: calc(15px * var(--note-content-scale));
   left: calc(16px * var(--note-content-scale));
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   content: "";
 }
 
@@ -491,7 +491,7 @@
 .swatchShape {
   --swatch-content-scale: var(--swatch-scale, 1);
 
-  border: 1px solid var(--color-scrim);
+  border: var(--border-hairline) solid var(--color-scrim);
   border-radius: calc(6px * var(--swatch-content-scale));
   background: linear-gradient(
     135deg,
@@ -554,7 +554,7 @@
 .swatchChip {
   position: relative;
   flex: 1;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: calc(2px * var(--swatch-content-scale));
   box-shadow:
     inset 0 1px 3px var(--color-surface),
@@ -608,7 +608,7 @@
 .swatchLabelInput {
   width: 100%;
   border: none;
-  border-bottom: 1px solid var(--color-ink);
+  border-bottom: var(--border-hairline) solid var(--color-ink);
   padding: 0;
   background: transparent;
   color: var(--color-ink);
@@ -630,7 +630,7 @@
   display: grid;
   width: calc(16px * var(--swatch-content-scale));
   height: calc(16px * var(--swatch-content-scale));
-  border: 1px solid var(--color-surface);
+  border: var(--border-hairline) solid var(--color-surface);
   border-radius: 50%;
   padding: 0;
   background: var(--color-action);
@@ -658,7 +658,7 @@
 .swatchAdd {
   display: grid;
   flex: 1;
-  border: 1px dashed var(--color-border-strong);
+  border: var(--border-hairline) dashed var(--color-border-strong);
   border-radius: calc(2px * var(--swatch-content-scale));
   padding: 0;
   background: var(--color-divider);
@@ -703,7 +703,7 @@
   display: flex;
   min-height: 40px;
   align-items: center;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 7px 12px;
   background: var(--color-surface);
   gap: 10px;

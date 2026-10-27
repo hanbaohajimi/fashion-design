@@ -23,7 +23,7 @@
   width: 6px;
   height: 6px;
   flex: none;
-  border: 1px solid currentColor;
+  border: var(--border-hairline) solid currentColor;
   border-radius: 50%;
 }
 .connection[data-connected="true"] { color: var(--color-success); }

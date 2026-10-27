@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { useAuth } from "../modules/auth/AuthProvider";
-import { Button } from "./ui";
+import { Button, Menu } from "./ui";
 import { ArchiveNavigation, type ArchiveSection } from "./ArchiveNavigation";
 
 export function AppHeader(props: {
@@ -19,13 +19,18 @@ export function AppHeader(props: {
   );
 }
 
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
+
 function Account() {
+  const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const { session, logout } = useAuth();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!session) return null;
+  if (!session || !hydrated) return null;
   return (
-    <div aria-label="账户" title={session.user.email}>
+    <Menu label={session.user.email} trigger={session.user.name || session.user.email}>
         <Button
           style={{ minHeight: 44 }}
           loading={pending}
@@ -41,6 +46,6 @@ function Account() {
           退出登录
         </Button>
       {error ? <small role="alert">{error}</small> : null}
-    </div>
+    </Menu>
   );
 }

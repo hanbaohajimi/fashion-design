@@ -89,6 +89,7 @@ export function RunwayDraftEditor({
       },
     },
     reportDirty,
+    { draftKey: existing?.id ?? "new" },
   );
   const { draft, setDraft } = form;
   const [kind, setKind] = useState<InputKind>("cloth");
@@ -108,7 +109,7 @@ export function RunwayDraftEditor({
     ];
     return revisions.map((revision) => ({
       id: revision.id,
-      label: `${style.name} · r${revision.revision}`,
+      label: `${style.name} r${revision.revision}`,
       url:
         data.assets.find((asset) => asset.id === revision.payload.sourceAssetId)
           ?.url ?? null,
@@ -378,7 +379,7 @@ export function RunwayDraftEditor({
                 <span>
                   <strong>{label}</strong>
                   <small>
-                    {KIND_LABELS[input.kind]}参考 ·{" "}
+                    {KIND_LABELS[input.kind]}参考 {" "}
                     {input.sourceType === "style_revision"
                       ? "绑定款式修订"
                       : "图片"}

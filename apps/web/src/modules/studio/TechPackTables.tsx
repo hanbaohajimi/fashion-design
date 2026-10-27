@@ -49,7 +49,7 @@ export function BomTable({
   return (
     <div className={styles.stack}>
       <div className={styles.recordHeader}>
-        <h3>材料与辅料 · BOM</h3>
+        <h3>材料与辅料 BOM</h3>
         <Button
           disabled={disabled || rows.length >= 100}
           onClick={() =>
@@ -235,7 +235,7 @@ export function PomTable({
   return (
     <div className={styles.stack}>
       <div className={styles.recordHeader}>
-        <h3>测量规格 · POM</h3>
+        <h3>测量规格 POM</h3>
         <Button
           disabled={disabled || rows.length >= 100}
           onClick={() =>

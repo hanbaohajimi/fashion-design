@@ -6,6 +6,8 @@ import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
 import { CreativeContinuity } from "../modules/projects/CreativeContinuity";
 import { MotionEnvironment } from "../components/interactions/MotionEnvironment";
+import { WorkspaceShell } from "../components/WorkspaceShell";
+import { Suspense } from "react";
 
 import "./globals.css";
 import "tldraw/tldraw.css";
@@ -26,7 +28,7 @@ export const metadata: Metadata = {
   },
   title: {
     default: "森织设计工作室",
-    template: "%s · 森织",
+    template: "%s 森织",
   },
 };
 
@@ -49,8 +51,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
         </a>
         <div className="app-root" id="main-content" tabIndex={-1}>
           <AuthProvider>
-            <CreativeContinuity />
-            <QueryProvider>{children}</QueryProvider>
+            <Suspense fallback={null}><WorkspaceShell>
+              <CreativeContinuity />
+              <QueryProvider>{children}</QueryProvider>
+            </WorkspaceShell></Suspense>
           </AuthProvider>
         </div>
         {/* 全局通知与本轮浅色工作台使用同一主题。 */}

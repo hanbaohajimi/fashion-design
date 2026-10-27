@@ -220,7 +220,7 @@ test("空项目的十一项功能保持输入和返回入口可达", async ({ pa
       page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "设计工作台", exact: true }),
+      page.getByRole("link", { name: "设计工作台", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     expect(

@@ -21,7 +21,7 @@
 }
 .workspace h3,
 .settingsGroup legend {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.5;
 }
@@ -142,7 +142,7 @@
 }
 .viewLabel {
   padding-top: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -160,7 +160,7 @@
   padding-top: 14px;
 }
 .assetCaption strong {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -185,7 +185,7 @@
   border-color: transparent;
 }
 .cardActions > span {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-ink-secondary);
 }
 .continueRow {
@@ -274,7 +274,7 @@
   gap: 16px;
   padding: 18px 24px max(18px, env(safe-area-inset-bottom));
   background: var(--color-paper);
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
 }
 .actionStatus {
   display: grid;
@@ -317,7 +317,7 @@
   background: var(--color-surface);
   color: var(--color-ink-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 .reviewStrip img {
@@ -435,7 +435,7 @@
 }
 .previewHeader h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   overflow-wrap: anywhere;
 }
 .previewImage {
@@ -506,7 +506,7 @@
     margin-bottom: 20px;
   }
   .count {
-    font-size: 13px;
+    font-size: 14px;
   }
   .organize {
     display: grid;
@@ -546,7 +546,7 @@
     font-size: 14px;
   }
   .generate span {
-    font-size: 13px;
+    font-size: 14px;
   }
   .settings {
     grid-template-columns: minmax(0, 1fr);
@@ -588,15 +588,15 @@
   }
 }
 .orderSection { min-width: 0; margin: 16px 0; }
-.orderSection > p { color: var(--ink-secondary, #52655d); font-size: 13px; }
+.orderSection > p { color: var(--ink-secondary, #52655d); font-size: 14px; }
 .orderStrip { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 12px; padding: 8px 4px 12px; }
-.orderItem { min-width: 0; display: grid; gap: 6px; padding: 8px; background: var(--paper-base, #fffefa); border: 1px solid var(--control-border, #7c8d81); border-radius: 8px; }
+.orderItem { min-width: 0; display: grid; gap: 6px; padding: 8px; background: var(--paper-base, #fffefa); border: var(--border-hairline) solid var(--control-border, #7c8d81); border-radius: 8px; }
 .orderItem[data-grabbed] { border-style: dashed; }
 .orderImage { display: grid; gap: 6px; padding: 0; text-align: left; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .orderImage > :first-child { height: 100px; width: 100%; }
 .orderImage span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
 .orderImage[aria-current="true"] { outline: 2px solid var(--action-primary, #286452); outline-offset: 2px; }
-.orderHandle { touch-action: none; cursor: grab; min-height: 36px; border: 1px solid var(--control-border, #7c8d81); border-radius: 4px; background: transparent; color: inherit; }
+.orderHandle { touch-action: none; cursor: grab; min-height: 36px; border: var(--border-hairline) solid var(--control-border, #7c8d81); border-radius: 4px; background: transparent; color: inherit; }
 .orderHandle:active { cursor: grabbing; }
 .orderHandle:disabled { cursor: default; opacity: .5; }
 .orderButtons { display: flex; gap: 4px; justify-content: space-between; }

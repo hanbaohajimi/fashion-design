@@ -144,6 +144,7 @@ export function Menu({
   return (
     <details className={`${styles.menu} ${className}`} open={open}>
       <summary
+        role="button"
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? id : undefined}

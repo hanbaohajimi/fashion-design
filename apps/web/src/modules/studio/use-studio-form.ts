@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { SubmitFeedbackController } from "../../components/interactions/use-submit-feedback";
 import { StudioApiError } from "./studio-api";
 import { errorMessage } from "./studio-ui";
+import { usePersistentDraft } from "../../components/drafts/use-persistent-draft";
 
 export interface StudioPanelProps {
   readonly projectId: string;
@@ -15,7 +16,7 @@ export interface StudioPanelProps {
 }
 
 /** Keeps a failed request key stable until its exact payload changes or succeeds. */
-export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void, options: { readonly notifySaved?: boolean; readonly feedback?: SubmitFeedbackController | undefined } = {}) {
+export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void, options: { readonly notifySaved?: boolean; readonly feedback?: SubmitFeedbackController | undefined; readonly draftKey?: string } = {}) {
   const [draft, setDraft] = useState(initial);
   const [baseline, setBaseline] = useState(() => JSON.stringify(initial));
   const [busy, setBusy] = useState(false);
@@ -25,6 +26,7 @@ export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void, 
   const packet = useRef<{ signature: string; requestKey: string } | null>(null);
   const flight = useRef(false);
   const dirty = JSON.stringify(draft) !== baseline;
+  const recovery = usePersistentDraft({ value: draft, restore: setDraft, baseline, objectKey: options.draftKey ?? "form" });
   useEffect(() => { onDirty(dirty); return () => onDirty(false); }, [dirty, onDirty]);
   const submit = async (action: (requestKey: string) => Promise<unknown>, actionKey = "save") => {
     if (flight.current) return false;
@@ -52,5 +54,5 @@ export function useStudioForm<T>(initial: T, onDirty: (dirty: boolean) => void, 
     if (options.feedback?.snapshot.phase === "success" || options.feedback?.snapshot.phase === "error") options.feedback.reset();
     setDraft(value);
   };
-  return { draft, setDraft: changeDraft, dirty, busy, error, setError, conflict, saved, submit, reset };
+  return { draft, setDraft: changeDraft, dirty, busy, error, setError, conflict, saved, submit, reset, recovery };
 }

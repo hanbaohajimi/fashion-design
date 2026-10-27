@@ -169,6 +169,7 @@ async function prepare(
     }
     if (path.includes("/runway/media/"))
       return route.fulfill({ contentType: "image/svg+xml", body: image });
+    if (path === "/api/projects/project-1/tasks" && method === "GET") return route.fulfill({ json: { items: [], nextCursor: null, counts: { running: 0, attention: 0 } } });
     unexpected.push(`${method} ${path}`);
     return route.fulfill({
       status: 404,
@@ -220,7 +221,7 @@ test("从款式修订建立服装秀，保存与执行分开", async ({ page }) 
   await expect(page).toHaveURL(/tab=runway.*styleRevisionId=style-r1/);
   await expect(page.getByRole("heading", { name: "建立服装秀" })).toBeVisible();
   await expect(
-    page.getByRole("list").getByText("褶线夹克 · r1", { exact: true }),
+    page.getByRole("list").getByText("褶线夹克 r1", { exact: true }),
   ).toBeVisible();
   await page
     .getByLabel("秀场需求", { exact: true })

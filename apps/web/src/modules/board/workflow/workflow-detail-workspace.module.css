@@ -17,7 +17,7 @@
 .shell {
   position: absolute;
   inset: 0;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-paper);
   box-shadow: var(--shadow-popup);
@@ -37,7 +37,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   flex: none;
 }
 .header h2 {
@@ -84,7 +84,7 @@
 }
 .metadata {
   padding: var(--space-4);
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
 }
 .metadata > summary {
   cursor: pointer;
@@ -114,7 +114,7 @@
 }
 .draftWarning {
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   color: var(--color-ink-secondary);
   font-size: var(--text-sm);
 }

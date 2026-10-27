@@ -25,7 +25,7 @@ export function StudioPageHeader({
           {status}
         </div>
         {type || description ? (
-          <p>{[type, description].filter(Boolean).join(" · ")}</p>
+          <p>{[type, description].filter(Boolean).join(" ")}</p>
         ) : null}
         {objectSwitcher}
       </div>

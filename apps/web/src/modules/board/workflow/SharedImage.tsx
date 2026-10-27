@@ -28,7 +28,7 @@ export function SharedImage({ token }: { token: string }) {
   return (
     <main className={styles.workspace}>
       <header className={styles.topbar}>
-        <strong>森织 · 分享的设计</strong>
+        <strong>森织 分享的设计</strong>
         <Link href="/">进入工作室</Link>
       </header>
       {error ? (

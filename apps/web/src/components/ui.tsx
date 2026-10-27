@@ -101,7 +101,7 @@ export function Button({
       ) : null}
       {!feedback && loading && waiting ? (
         <span aria-hidden="true" className={styles.busyMark}>
-          ···
+          ··
         </span>
       ) : null}
     </>

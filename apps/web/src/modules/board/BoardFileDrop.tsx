@@ -397,7 +397,7 @@ export function BoardFileDrop() {
       {dragging ? (
         <div className={styles.uploadDropZone}>
           <strong>DROP / IMAGE</strong>
-          <span>松开以添加到白板 · 最大 50MB</span>
+          <span>松开以添加到白板 最大 50MB</span>
         </div>
       ) : null}
       {tasks.length > 0 ? (

@@ -112,7 +112,7 @@ it("imports an accessible source revision with a stable retry key", async () => 
   fireEvent.click(
     screen.getByRole("button", { name: "从其他项目复用品牌资料" }),
   );
-  const reuse = await screen.findByRole("button", { name: "山岚 · 修订 2" });
+  const reuse = await screen.findByRole("button", { name: "山岚 修订 2" });
   fireEvent.click(reuse);
   await screen.findByText("响应丢失");
   fireEvent.click(reuse);

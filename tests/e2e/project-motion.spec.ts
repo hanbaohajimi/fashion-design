@@ -57,7 +57,7 @@ test("项目搜索等待IME提交并保留旧结果，归档批次可真实恢�
   for (const id of [PROJECT, "second"]) {
     const card = page.locator(`[data-project-id="${id}"]`);
     await card.locator("summary").click();
-    await card.getByRole("button", { name: "归档", exact: true }).click();
+    await page.getByRole("group", { name: /项目操作选项$/ }).getByRole("button", { name: "归档", exact: true }).click();
   }
   await expect(page.getByText("已归档 2 个项目", { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "项目列表", exact: true }).locator(':scope > [aria-hidden="true"]')).toHaveCount(0);

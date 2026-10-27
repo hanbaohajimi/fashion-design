@@ -10,7 +10,7 @@ export default defineConfig({
   // Review candidates outside the committed baseline before promoting individual images.
   snapshotPathTemplate:
     process.env.ATELIER_VISUAL_REVIEW === "1"
-      ? "{testDir}/../../output/impeccable-redesign/visual-candidates/{testFilePath}/{arg}{ext}"
+      ? `${process.env.ATELIER_VISUAL_REVIEW_DIR ?? "{testDir}/../../output/impeccable-redesign/visual-candidates"}/{testFilePath}/{arg}{ext}`
       : "{testDir}/__screenshots__/{testFilePath}/{arg}{ext}",
   workers: 1,
   retries: 0,

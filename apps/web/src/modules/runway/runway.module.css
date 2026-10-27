@@ -69,7 +69,7 @@
 }
 .formHeader h3,
 .executionHeader h3 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
   margin: 0;
@@ -103,12 +103,12 @@
   margin: 0;
   padding: 20px 0 0;
   border: 0;
-  border-top: 1px solid var(--color-border-strong);
+  border-top: var(--border-hairline) solid var(--color-border-strong);
   min-width: 0;
 }
 .sourcePicker legend {
   font-weight: 600;
-  font-size: 18px;
+  font-size: 16px;
   padding: 0 8px 0 0;
 }
 .sourceControls {
@@ -132,7 +132,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
 }
 .sourceList li > span:nth-child(2) {
   flex: 1;
@@ -181,7 +181,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border-block: 1px solid var(--color-border-strong);
+  border-block: var(--border-hairline) solid var(--color-border-strong);
 }
 .stages li {
   min-width: 0;
@@ -233,7 +233,7 @@
 }
 .review h4 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
 }
 .review > p {
   margin: 0;
@@ -254,7 +254,7 @@
   align-items: center;
   gap: 12px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--color-border-strong);
+  border-bottom: var(--border-hairline) solid var(--color-border-strong);
 }
 .pairImage {
   width: 72px;
@@ -338,7 +338,7 @@
   padding-block: 12px;
 }
 .history {
-  border-top: 1px solid var(--color-border-strong);
+  border-top: var(--border-hairline) solid var(--color-border-strong);
   padding-top: 20px;
 }
 .history summary {
@@ -360,7 +360,7 @@
   gap: 16px;
   align-items: center;
   padding: 12px 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 .mediaHistory li > span {
   display: grid;

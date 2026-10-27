@@ -33,6 +33,7 @@ export function AssistantReferencePicker({
   onApply,
   onAddMaterial,
   onClose,
+  onAfterClose,
   open = true,
 }: {
   readonly open?: boolean;
@@ -41,6 +42,7 @@ export function AssistantReferencePicker({
   readonly onApply: (ids: readonly string[]) => void;
   readonly onAddMaterial: () => void;
   readonly onClose: () => void;
+  readonly onAfterClose?: (() => void) | undefined;
 }) {
   const [query, setQuery] = useState("");
   const [ids, setIds] = useState(() =>
@@ -88,7 +90,7 @@ export function AssistantReferencePicker({
               ? "设计工具"
               : "参考素材"}
           {graph.nodes.filter((item) => item.title === node.title).length > 1
-            ? ` · ${node.id}`
+            ? ` ${node.id}`
             : ""}
         </small>
       </span>
@@ -100,6 +102,7 @@ export function AssistantReferencePicker({
       open={open}
       label="添加引用"
       onClose={onClose}
+      onAfterClose={onAfterClose}
       returnFocusSelector="[data-assistant-reference-trigger]"
       className={ui.referencePicker}
     >

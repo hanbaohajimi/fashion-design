@@ -180,7 +180,7 @@ describe("AgentPlanEditor", () => {
         .disabled,
     ).toBe(true);
     const history = screen.getByRole("region", { name: "节点尝试历史" });
-    expect(within(history).getByText("尝试 1 · 已否决")).toBeTruthy();
+    expect(within(history).getByText("尝试 1 已否决")).toBeTruthy();
     expect(within(history).getByText("original prompt")).toBeTruthy();
     expect(within(history).getByText("袖型不符合预期")).toBeTruthy();
     fireEvent.click(

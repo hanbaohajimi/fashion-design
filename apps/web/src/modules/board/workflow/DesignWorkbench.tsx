@@ -107,7 +107,7 @@ export function DesignWorkbench({
     items.length ? (
       <GridDetails className={styles.notes}>
         <summary>
-          设计说明 <span>要求与评估 · {items.length}</span>
+          设计说明 <span>要求与评估 {items.length}</span>
         </summary>
         {items.map((note) => (
           <section
@@ -145,7 +145,7 @@ export function DesignWorkbench({
           <h2>方案与灵感</h2>
           <p className={styles.summary}>
             {total ? `${total} 个服装方案` : "从一个想法、一张参考图开始。"}
-            <span aria-hidden="true"> · </span>
+            <span aria-hidden="true"> </span>
             <button
               type="button"
               className={styles.materialJump}

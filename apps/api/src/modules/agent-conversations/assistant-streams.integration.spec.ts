@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { prisma } from "@fashion/db";
-import { SseDecoder, type AssistantStreamEvent } from "@fashion/shared";
+import type { Response as ExpressResponse } from "express";
+import { SseDecoder, type AssistantTurnView, type AssistantStreamEvent } from "@fashion/shared";
 import type { AmuxClaudeJsonClient, AmuxClaudeJsonRequest } from "@fashion/ai";
 import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
@@ -8,6 +9,8 @@ import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AgentConversationsController } from "./agent-conversations.controller";
 import { AgentConversationsService } from "./agent-conversations.service";
+import { AssistantCancellationService } from "./assistant-cancellation.service";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { AssistantStreamsService } from "./assistant-streams.service";
 import { WorkflowAssistantController } from "../workflow-runtime/workflow-assistant.controller";
 import { WorkflowAssistantService } from "../workflow-runtime/workflow-assistant.service";
@@ -62,6 +65,7 @@ describe("助手 SSE / PostgreSQL / Redis 联调", () => {
     const conversations = new AgentConversationsService(prisma, model as AmuxClaudeJsonClient, generation as never, {} as never, undefined, assistant);
     const create = async (streamService: AssistantStreamsService) => {
       const module = await Test.createTestingModule({ controllers: [AgentConversationsController, WorkflowAssistantController], providers: [
+        { provide: AssistantCancellationService, useValue: new AssistantCancellationService(prisma, new ProjectAccessPolicy(prisma), streamService) },
         { provide: AgentConversationsService, useValue: conversations }, { provide: WorkflowAssistantService, useValue: assistant }, { provide: AssistantStreamsService, useValue: streamService },
       ] }).overrideGuard(RateLimitGuard).useValue({ canActivate: () => true }).compile();
       const instance = module.createNestApplication({ logger: false });
@@ -105,6 +109,24 @@ describe("助手 SSE / PostgreSQL / Redis 联调", () => {
     const denied = await fetch(`${secondOrigin}${url}/message-streams/${clientRequestId}/events`, { headers: { "x-test-user": crypto.randomUUID() } });
     expect([403, 404]).toContain(denied.status);
   }, 30_000);
+  it("传输异常不能把仍在处理的数据库回复标记为失败", async () => {
+    const chunks: string[] = [];
+    const response = {
+      destroyed: false, writableEnded: false, writableLength: 0,
+      status() { return this; }, set() { return this; }, flushHeaders() {},
+      write(chunk: string) { chunks.push(chunk); }, end() { this.writableEnded = true; },
+    };
+    const pending = { assistantMessage: { id: crypto.randomUUID(), status: "pending", content: "" } } as AssistantTurnView;
+    await streams.start(response as unknown as ExpressResponse, workflowId, crypto.randomUUID(), async observer => {
+      await observer?.accepted(pending);
+      throw new Error("stream transport interrupted");
+    }, async () => pending);
+    const payload = chunks.join("");
+    expect(payload).toContain('"type":"accepted"');
+    expect(payload).not.toContain('"type":"message.failed"');
+    expect(payload).not.toContain('"terminal":true');
+    expect(payload).toContain("event: error");
+  });
   it("streams legacy replies and preserves JSON fallback", async () => {
     const input = { clientRequestId: crypto.randomUUID(), content: "说明亚麻", fileAssetIds: [], shapeIds: [] };
     const url = `${origin}/agent-conversations/${legacyId}/messages`;
@@ -116,6 +138,31 @@ describe("助手 SSE / PostgreSQL / Redis 联调", () => {
     const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" }, body: JSON.stringify({ ...input, clientRequestId: crypto.randomUUID() }) });
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(await response.json()).toMatchObject({ assistantMessage: { content: reply.message, status: "completed" } });
+  });
+  it.each(["workflow", "legacy"])("跨实例停止 %s 回复后，迟到模型输出不能覆盖取消状态", async mode => {
+    vi.stubEnv("ASSISTANT_STREAMING_ENABLED", "true");
+    let resume: () => void = () => undefined;
+    modelGate = new Promise<void>(resolve => { resume = resolve; });
+    const conversationId = mode === "workflow" ? workflowId : legacyId;
+    const clientRequestId = crypto.randomUUID();
+    const input = { clientRequestId, content: "停止竞态验证", ...(mode === "workflow" ? { referencedNodeIds: [] } : { fileAssetIds: [], shapeIds: [] }) };
+    const stream = collect(await fetch(`${origin}/agent-conversations/${conversationId}/${mode === "workflow" ? "workflow-messages" : "messages"}`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" }, body: JSON.stringify(input) }));
+    await vi.waitFor(() => expect(stream.events.some(event => event.type === "message.delta")).toBe(true));
+    const url = `${secondOrigin}/agent-conversations/${conversationId}/message-streams/${clientRequestId}/cancel`;
+    const denied = await fetch(url, { method: "POST", headers: { "x-test-user": crypto.randomUUID() } });
+    expect([403, 404]).toContain(denied.status);
+    const canceled = await fetch(url, { method: "POST" });
+    expect(await canceled.json()).toMatchObject({ status: "canceled", providerStopped: null });
+    expect(await (await fetch(url, { method: "POST" })).json()).toMatchObject({ status: "canceled" });
+    await stream.finished;
+    expect(stream.events.at(-1)?.type).toBe("message.canceled");
+    resume(); modelGate = Promise.resolve();
+    const read = () => prisma.agentMessage.findUniqueOrThrow({ where: { conversationId_clientRequestId: { conversationId, clientRequestId } }, include: { reply: true } });
+    await vi.waitFor(async () => expect((await read()).reply).toMatchObject({ status: "CANCELED", content: "亚麻" }));
+    expect(generation.createFromAgent).not.toHaveBeenCalled();
+    const resumed = collect(await fetch(`${secondOrigin}/agent-conversations/${conversationId}/message-streams/${clientRequestId}/events`));
+    await resumed.finished;
+    expect(resumed.events.at(-1)).toMatchObject({ type: "snapshot", terminal: true, turn: { assistantMessage: { status: "canceled" } } });
   });
   it.runIf(Boolean(process.env.ASSISTANT_PROXY_ORIGIN))("browser receives a delta through the real Next.js proxy before database completion", async () => {
     vi.stubEnv("ASSISTANT_STREAMING_ENABLED", "true");

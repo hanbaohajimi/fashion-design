@@ -2,7 +2,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkflowMaterialEntry } from "./WorkflowMaterialDialogs";
-import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
+import { ProjectTaskCenter } from "../../tasks/ProjectTaskCenter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+vi.mock("../../auth/AuthProvider", () => ({ useAuth: () => ({ session: { user: { id: "owner" } } }) }));
 import type { WorkflowGraph } from "./workflow-api";
 
 HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -27,13 +29,12 @@ it("retries failed tasks through their workflow node and never creates a standal
     const url = String(input); requests.push(`${init?.method ?? "GET"} ${url}`);
     if (url.includes("/history")) return Response.json({ items: [{ generationTaskId: "task" }] });
     if (url.includes("/execute")) return Response.json(graph);
-    return Response.json({ items: [{ id: "task", status: "failed", taskType: "t2i", request: { prompt: "风衣" }, error: null }], nextCursor: null });
+    return Response.json({ items: [{ id: "workflow:task", domain: "workflow", title: "生成", status: "failed", rawStatus: "failed", updatedAt: "2026-10-27T00:00:00Z", createdAt: "2026-10-27T00:00:00Z", href: "/p?nodeId=tool", actions: [{ kind: "retry_workflow", targetId: "tool" }] }], nextCursor: null, counts: { running: 0, attention: 1 } });
   }));
-  const changed = vi.fn();
-  render(<WorkflowProjectPanels projectId="p" graph={graph} onGraph={changed} onLocate={() => undefined} onCollection={() => undefined} />);
-  fireEvent.click(screen.getByRole("button", { name: "任务" }));
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ProjectTaskCenter projectId="p" /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole("button", { name: /^项目任务/ }));
   fireEvent.click(await screen.findByRole("button", { name: "重试执行" }));
-  await waitFor(() => expect(changed).toHaveBeenCalled());
+  await waitFor(() => expect(requests).toContain("POST /api/projects/p/workflow/nodes/tool/execute"));
   expect(requests.some(url => url === "POST /api/projects/p/workflow/nodes/tool/execute")).toBe(true);
   expect(requests.some(url => url.startsWith("POST /api/generations"))).toBe(false);
 });

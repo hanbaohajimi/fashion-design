@@ -14,13 +14,13 @@ export function studioAssetNames(data: Pick<StudioSummary, "styles">) {
       if (source && !names.has(source))
         names.set(
           source,
-          `${revision.payload.name} · r${revision.revision} · 母图`,
+          `${revision.payload.name} r${revision.revision} 母图`,
         );
       for (const view of revision.views) {
         if (!names.has(view.assetId))
           names.set(
             view.assetId,
-            `${revision.payload.name} · r${revision.revision} · ${view.label || view.kind}`,
+            `${revision.payload.name} r${revision.revision} ${view.label || view.kind}`,
           );
       }
     }
@@ -47,7 +47,7 @@ export function StudioAssetNames({
 
 export function useStudioAssetName() {
   const names = useContext(AssetNames);
-  return (id: string) => names.get(id) ?? `设计图片 · ${id.slice(-8)}`;
+  return (id: string) => names.get(id) ?? `设计图片 ${id.slice(-8)}`;
 }
 
 export function BoundStyleContext({

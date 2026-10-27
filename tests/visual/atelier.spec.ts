@@ -310,7 +310,7 @@ test("task request failure retains the complete draft", async ({ page }) => {
     .fill("保持夹克廓形并调整袖口");
   await page.getByLabel(/^必须保留/u).fill("双口袋和肩线");
   await page.getByRole("button", { name: "选择图片 1", exact: true }).click();
-  await page.getByRole("button", { name: "生成效果图", exact: true }).click();
+  await page.getByRole("button", { name: "进入设计工作台", exact: true }).click();
   await expect(
     page.getByText("任务暂时无法提交，请重试", { exact: true }),
   ).toBeVisible();

@@ -1,4 +1,6 @@
 "use client";
+import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import { AssistantComposer } from "../../../components/AssistantComposer";
 
 import type {
   AgentConversationSummary,
@@ -23,6 +25,7 @@ import { CandidateGrid } from "../generation/CandidateGrid";
 import { useGenerationWorkspace } from "../generation/GenerationWorkspace";
 import { resolveRoleBadgeLabel } from "../shapes/RoleBadge";
 import {
+  cancelAssistantReply,
   attachGenerationTaskToConversation,
   createAgentConversation,
   getProjectConversationRequest,
@@ -79,12 +82,31 @@ export function BoardAgentPanel({
   const receiveStream = streaming.receive;
   const streamSignal = streaming.signalFor;
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
-  const [draftShapeIds, setDraftShapeIds] = useState<readonly TLShapeId[]>([]);
+  const [composerDraft, setComposerDraft] = useState({ conversationId: "", prompt: "", shapeIds: [] as readonly TLShapeId[] });
+  const prompt = composerDraft.conversationId === activeConversationId ? composerDraft.prompt : "";
+  const draftShapeIds = useMemo(() => composerDraft.conversationId === activeConversationId ? composerDraft.shapeIds : [], [composerDraft, activeConversationId]);
+  const setPrompt = useCallback((value: React.SetStateAction<string>) => setComposerDraft(previous => {
+    const current = previous.conversationId === activeConversationId ? previous : { conversationId: activeConversationId, prompt: "", shapeIds: [] as readonly TLShapeId[] };
+    return { ...current, prompt: typeof value === "function" ? value(current.prompt) : value };
+  }), [activeConversationId]);
+  const setDraftShapeIds = useCallback((value: React.SetStateAction<readonly TLShapeId[]>) => setComposerDraft(previous => {
+    const current = previous.conversationId === activeConversationId ? previous : { conversationId: activeConversationId, prompt: "", shapeIds: [] as readonly TLShapeId[] };
+    return { ...current, shapeIds: typeof value === "function" ? value(current.shapeIds) : value };
+  }), [activeConversationId]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyTab, setHistoryTab] = useState<"conversations" | "generations">(
     "conversations",
   );
-  const [prompt, setPrompt] = useState("");
+  const promptCurrent = useRef(prompt);
+  const shapeIdsCurrent = useRef(draftShapeIds);
+  const sendFlight = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  useLayoutEffect(() => { promptCurrent.current = prompt; shapeIdsCurrent.current = draftShapeIds; }, [prompt, draftShapeIds]);
+  const localDraft = usePersistentDraft({
+    value: { prompt, shapeIds: draftShapeIds }, baseline: JSON.stringify({ prompt: "", shapeIds: [] }),
+    objectKey: `legacy-assistant:${activeConversationId}`, enabled: Boolean(activeConversationId),
+    restore: value => { setPrompt(value.prompt); setDraftShapeIds(value.shapeIds); },
+  });
   const [mode, setMode] = useState<"chat" | "workflow">("chat");
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -381,7 +403,7 @@ export function BoardAgentPanel({
       },
       { scope: "session", source: "user" },
     );
-  }, [collapsed, editor, onToggle]);
+  }, [collapsed, editor, onToggle, setDraftShapeIds]);
 
   useEffect(
     () =>
@@ -396,7 +418,7 @@ export function BoardAgentPanel({
         },
         { scope: "document" },
       ),
-    [editor],
+    [editor, setDraftShapeIds],
   );
 
   const taskById = useMemo(
@@ -562,14 +584,15 @@ export function BoardAgentPanel({
     async (
       content: string,
       shapeIds: readonly string[],
-      retry?: {
+      requestedRetry?: {
         readonly assistantMessageId: string;
         readonly clientRequestId: string;
         readonly userMessageId: string;
       },
     ): Promise<void> => {
+      const retry = requestedRetry && messages.some(message => message.id === requestedRetry.assistantMessageId && message.status === "pending") ? requestedRetry : undefined;
       const normalized = content.trim();
-      if (!activeConversationBelongsToProject || !activeConversation || sending)
+      if (!activeConversationBelongsToProject || !activeConversation || sendFlight.current || hasPendingMessage)
         return;
       const validationError = validateAgentMessage(content, shapeIds.length);
       if (validationError) {
@@ -632,19 +655,35 @@ export function BoardAgentPanel({
           optimisticAssistant,
         ]);
       }
+      sendFlight.current = true;
       setSending(true);
       setError(null);
       try {
+        const acknowledgeDraft = !retry ? await localDraft.captureAcknowledgement({ prompt: content, shapeIds: shapeIds as readonly TLShapeId[] }) : async () => {};
+        let draftAcceptance: Promise<void> | null = null;
+        const acceptDraft = () => {
+          if (draftAcceptance) return draftAcceptance;
+          if (!retry && projectIdRef.current === targetProjectId && activeConversationIdRef.current === targetConversationId &&
+            promptCurrent.current.trim() === normalized && JSON.stringify(shapeIdsCurrent.current) === JSON.stringify(shapeIds)) {
+            setPrompt("");
+            setDraftShapeIds([]);
+          }
+          draftAcceptance = acknowledgeDraft();
+          return draftAcceptance;
+        };
         const result = await sendAgentMessage(targetConversationId, {
           clientRequestId,
           content: normalized,
           fileAssetIds: [],
           shapeIds,
         }, (event) => {
+          if ("turn" in event) void acceptDraft();
           if (projectIdRef.current !== targetProjectId || activeConversationIdRef.current !== targetConversationId) return;
           receiveStream(event);
+          if (event.type === "accepted") setSending(false);
           if ("turn" in event) setMessages((current) => reconcileAgentTurnMessages(current, [optimisticUser.id, optimisticAssistant.id], event.turn));
         }, streamSignal(targetConversationId));
+        await acceptDraft();
         if (
           projectIdRef.current === targetProjectId &&
           activeConversationIdRef.current === targetConversationId
@@ -663,13 +702,6 @@ export function BoardAgentPanel({
           void generation.track(result.taskId).catch(() => {
             setError("生成任务已创建，状态同步稍有延迟");
           });
-        }
-        if (!retry && projectIdRef.current === targetProjectId) {
-          setPrompt("");
-          setDraftShapeIds([]);
-          if (composerInputRef.current) {
-            composerInputRef.current.style.height = "44px";
-          }
         }
         if (projectIdRef.current !== targetProjectId) return;
         void refreshConversations()
@@ -703,19 +735,24 @@ export function BoardAgentPanel({
         }
         if (!(cause instanceof Error && cause.name === "AbortError")) setError(cause instanceof Error ? cause.message : "消息发送失败");
       } finally {
+        sendFlight.current = false;
         if (projectIdRef.current === targetProjectId) setSending(false);
       }
     },
     [
       activeConversation,
+      messages,
       activeConversationBelongsToProject,
       boardStatus,
       generation,
       projectId,
       refreshConversations,
-      sending,
+      hasPendingMessage,
+      setPrompt,
+      setDraftShapeIds,
       receiveStream,
       streamSignal,
+      localDraft,
     ],
   );
 
@@ -1152,6 +1189,7 @@ export function BoardAgentPanel({
                         {message.context.shapeIds.length} 个白板元素作为上下文
                       </small>
                     ) : null}
+                    {message.status === "canceled" ? <small role="status">已停止后续处理，内容未完成</small> : null}
                     {message.status === "pending" ? (
                       <div className={styles.agentProgress} role="status">
                         <i />
@@ -1242,33 +1280,16 @@ export function BoardAgentPanel({
                 ) : null}
                 <label className={styles.composer}>
                   <span className={styles.srOnly}>编辑描述</span>
-                  <textarea
+                  <AssistantComposer
                     ref={composerInputRef}
                     aria-label="编辑描述"
-                    disabled={sending || !activeConversationId}
+                    disabled={!activeConversationId}
                     maxLength={MAX_AGENT_MESSAGE_LENGTH}
                     onChange={(event) => {
                       setPrompt(event.target.value);
-                      event.target.style.height = "44px";
-                      event.target.style.height = `${Math.min(
-                        132,
-                        Math.max(44, event.target.scrollHeight),
-                      )}px`;
                       if (error) setError(null);
                     }}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" &&
-                        !event.shiftKey &&
-                        !event.nativeEvent.isComposing
-                      ) {
-                        event.preventDefault();
-                        void submit(
-                          prompt,
-                          contextItems.map((item) => item.id),
-                        );
-                      }
-                    }}
+                    onSend={() => void submit(prompt, contextItems.map((item) => item.id))}
                     placeholder="描述你想如何调整这张图…"
                     rows={1}
                     value={prompt}
@@ -1277,7 +1298,7 @@ export function BoardAgentPanel({
                 <button
                   aria-label={sending ? "正在处理" : "发送"}
                   className={styles.sendButton}
-                  disabled={sendUnavailableReason !== null}
+                  disabled={sendUnavailableReason !== null || hasPendingMessage}
                   onClick={() =>
                     void submit(
                       prompt,
@@ -1290,6 +1311,18 @@ export function BoardAgentPanel({
                   {sending ? <i aria-hidden="true" /> : <SendIcon />}
                 </button>
               </div>
+              {hasPendingMessage ? <button type="button" disabled={stopping} onClick={async () => {
+                const pending = messages.find(message => message.role === "assistant" && message.status === "pending" && message.replyToId);
+                const request = messages.find(message => message.id === pending?.replyToId)?.clientRequestId;
+                if (!pending || !request) { setError("回复正在受理，请稍后读取状态。"); return; }
+                setStopping(true);
+                try {
+                  const result = await cancelAssistantReply(activeConversationId, request);
+                  if (result.status === "canceled") streaming.stop(pending.id);
+                  setMessageRevision(current => current + 1);
+                } catch (cause) { setError(cause instanceof Error ? cause.message : "停止结果尚未确认"); }
+                finally { setStopping(false); }
+              }}>{stopping ? "请求停止中" : "停止回复"}</button> : null}
               {error ? (
                 <p className={styles.error} role="alert">
                   {error}
@@ -1380,7 +1413,7 @@ function attachmentFromShape(shape: TLShape): DraftAttachment {
     sourceName: sourceName && sourceName !== label ? sourceName : null,
     summary:
       colors.length > 1
-        ? `${colors.length} 色 · ${colors.map((color) => color.toUpperCase()).join(" · ")}`
+        ? `${colors.length} 色 ${colors.map((color) => color.toUpperCase()).join(" ")}`
         : attachmentSummary(props),
   };
 }
@@ -1676,9 +1709,9 @@ function ElementPreviewPopover({
         <strong>{item.label}</strong>
         <span>
           {item.role}
-          {item.dimensions ? ` · ${item.dimensions}` : ""}
+          {item.dimensions ? ` ${item.dimensions}` : ""}
         </span>
-        {item.sourceName ? <small>源文件 · {item.sourceName}</small> : null}
+        {item.sourceName ? <small>源文件 {item.sourceName}</small> : null}
       </div>
     </aside>,
     document.body,

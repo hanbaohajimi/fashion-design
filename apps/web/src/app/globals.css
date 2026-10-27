@@ -18,6 +18,12 @@ body {
   box-sizing: border-box;
 }
 
+@media (min-width: 768px) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
+
 body {
   min-height: 100dvh;
   margin: 0;
@@ -36,7 +42,7 @@ body {
   padding: 0.7rem 1rem;
   background: var(--color-ink);
   color: var(--color-surface);
-  font-size: 0.85rem;
+  font-size: 14px;
   font-weight: 600;
   opacity: 0;
   pointer-events: none;
@@ -54,6 +60,8 @@ body {
   pointer-events: auto;
   transform: translateY(0);
 }
+
+small { font-size: var(--text-sm); }
 
 button,
 input,

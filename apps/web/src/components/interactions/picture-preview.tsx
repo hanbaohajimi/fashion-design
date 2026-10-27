@@ -300,7 +300,7 @@ export function PicturePreview({ pictures, initialIndex = 0, sourceElement, getS
     </div>
     <div className={styles.tools}>
       {pictures.length > 1 ? <div className={styles.toolGroup}><Button disabled={(targetIndex ?? index) === 0} onClick={() => select(navigationIndex.current - 1)}>上一张</Button><span>{index + 1} / {pictures.length}</span><Button disabled={(targetIndex ?? index) === pictures.length - 1} onClick={() => select(navigationIndex.current + 1)}>下一张</Button></div> : null}
-      <div className={styles.toolGroup}><Button aria-label="缩小图片" disabled={zoom <= 1 || failed} onClick={() => zoomTo(position.current.scale - 0.5)}>−</Button><Button onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}% · 还原</Button><Button aria-label="放大图片" disabled={zoom >= 3 || failed} onClick={() => zoomTo(position.current.scale + 0.5)}>＋</Button></div>
+      <div className={styles.toolGroup}><Button aria-label="缩小图片" disabled={zoom <= 1 || failed} onClick={() => zoomTo(position.current.scale - 0.5)}>−</Button><Button onClick={() => zoomTo(1)}>{Math.round(zoom * 100)}% 还原</Button><Button aria-label="放大图片" disabled={zoom >= 3 || failed} onClick={() => zoomTo(position.current.scale + 0.5)}>＋</Button></div>
     </div>
     <p className={styles.help}>查看原图，不改变当前选择。双击或双指缩放，放大后拖动查看。</p>
     <span className={styles.live} role="status">{current.name}，第 {index + 1} 张，共 {pictures.length} 张</span>

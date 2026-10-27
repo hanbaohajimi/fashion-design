@@ -14,7 +14,7 @@
 .sheetHeading button {
   font: inherit;
   color: var(--color-ink);
-  border: 1px solid var(--color-control-border);
+  border: var(--border-hairline) solid var(--color-control-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   min-height: var(--control-height);
@@ -71,7 +71,7 @@
 }
 .trigger[aria-invalid="true"],
 .radios[aria-invalid="true"] {
-  border: 1px solid var(--color-status-error);
+  border: var(--border-hairline) solid var(--color-status-error);
   border-radius: var(--radius-md);
 }
 .formValue {
@@ -228,7 +228,7 @@
 }
 @media (forced-colors: active) {
   .popup {
-    border: 1px solid CanvasText;
+    border: var(--border-hairline) solid CanvasText;
   }
   .radio[aria-checked="true"],
   .option[aria-selected="true"] {

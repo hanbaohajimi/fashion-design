@@ -49,7 +49,7 @@ function compactLayout(): boolean {
 /** 等比展示完整图片；尺寸只包含原比例图片、58px 标题栏与边框。 */
 export function imageNodeSize(dimensions: ImageDimensions, hasSummary = false) {
   const aspect = validImageDimensions(dimensions) ? dimensions.width / dimensions.height : 1;
-  const captionHeight = 60 + (hasSummary ? 22 : 0);
+  const captionHeight = 58 + (hasSummary ? 22 : 0);
   const compact = compactLayout();
   const maxImageHeight = (compact ? 340 : 460) - captionHeight;
   let width = aspect > 1 ? (compact ? 320 : 400) : compact ? 256 : 340;
@@ -58,9 +58,8 @@ export function imageNodeSize(dimensions: ImageDimensions, hasSummary = false) {
     width *= maxImageHeight / height;
     height = maxImageHeight;
   }
-  // 左侧 3px 类别色条 + 右侧 1px 边框 = 4px。图片只占内容盒，
-  // 少算这 2px 会让图片框比原图比例宽出一点，贴合测试与肉眼都能看出来。
-  return { w: width + 4, h: height + captionHeight };
+  // Hairline以outline绘制，不占内容盒，避免DPR取整改变极端图片比例。
+  return { w: width, h: height + captionHeight };
 }
 
 /** 图片优先使用已加载的实际尺寸，兼容历史节点没有宽高元数据的情况。 */
@@ -170,9 +169,9 @@ const NODE_TYPE_CODES: Readonly<Record<string, string>> = {
  * 英文负责扫视时快速分类，中文负责准确表意——两者同时在场，
  * 既不依赖 hover，也不牺牲可读性。
  */
-export function nodeTypeEyebrow(kind: "asset" | "tool", type: string): string {
+export function nodeTypeEyebrow(kind: "asset" | "tool", type: string): readonly string[] {
   const code = NODE_TYPE_CODES[type] ?? (kind === "tool" ? "TOOL" : "MATERIAL");
-  return `${code} · ${nodeTypeLabel(type)}`;
+  return [code, nodeTypeLabel(type)];
 }
 
 /** 纯哈希 / 十六进制串，以及超长无分隔的紧凑串，都是机器生成的 id。 */
@@ -221,7 +220,7 @@ export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Parti
             ? "保留比较"
             : "";
     if (label)
-      return `${label}${typeof decision.reason === "string" ? ` · ${decision.reason}` : ""}`.slice(
+      return `${label}${typeof decision.reason === "string" ? `：${decision.reason}` : ""}`.slice(
         0,
         180,
       );

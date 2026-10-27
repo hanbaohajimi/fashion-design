@@ -14,7 +14,7 @@
   gap: var(--space-2);
   height: calc(100dvh - var(--app-header-height));
   padding: var(--space-4) var(--space-3);
-  border-right: 1px solid var(--color-divider);
+  border-right: var(--border-hairline) solid var(--color-divider);
   background: var(--color-paper);
   overflow-y: auto;
 }
@@ -132,7 +132,7 @@
   justify-content: space-between;
   gap: var(--space-6);
   min-height: var(--editor-header-height);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 .eyebrow {
   font-family: var(--font-mono);
@@ -191,7 +191,7 @@
   gap: var(--space-2);
   overflow-x: auto;
   padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 .rail button {
   text-align: left;
@@ -299,7 +299,7 @@
   gap: var(--space-4);
 }
 .record {
-  border-top: 1px solid var(--atelier-rule);
+  border-top: var(--border-hairline) solid var(--atelier-rule);
   padding: var(--space-5) 0;
   display: grid;
   gap: var(--space-3);
@@ -319,7 +319,7 @@
   gap: var(--space-4);
 }
 .assetButton {
-  border: 1px solid var(--atelier-rule);
+  border: var(--border-hairline) solid var(--atelier-rule);
   border-radius: var(--radius-md);
   padding: var(--space-2);
   background: var(--atelier-paper);
@@ -396,7 +396,7 @@
 }
 .tableWrap {
   overflow-x: auto;
-  border: 1px solid var(--atelier-rule);
+  border: var(--border-hairline) solid var(--atelier-rule);
   border-radius: var(--radius-md);
 }
 .table {
@@ -408,7 +408,7 @@
 .table th,
 .table td {
   padding: var(--space-3);
-  border-bottom: 1px solid var(--atelier-rule);
+  border-bottom: var(--border-hairline) solid var(--atelier-rule);
   vertical-align: top;
 }
 .table th {
@@ -432,7 +432,7 @@
 .note {
   padding: var(--space-4);
   background: var(--atelier-sheet);
-  border-left: 2px solid var(--color-divider);
+  border-inline-start: var(--border-hairline) solid var(--color-divider);
   font-size: var(--text-body-sm);
   line-height: 1.7;
 }
@@ -466,7 +466,7 @@
 }
 .task {
   padding: var(--space-3);
-  border: 1px solid transparent;
+  border: var(--border-hairline) solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
   text-align: left;
@@ -485,7 +485,7 @@
 }
 .history {
   padding-left: var(--space-5);
-  border-left: 1px solid var(--atelier-rule);
+  border-left: var(--border-hairline) solid var(--atelier-rule);
   display: grid;
   gap: var(--space-4);
 }
@@ -496,7 +496,7 @@
   position: relative;
   display: inline-flex;
   padding: 0;
-  border: 1px solid var(--atelier-rule);
+  border: var(--border-hairline) solid var(--atelier-rule);
   width: fit-content;
   max-width: 100%;
   background: var(--atelier-sheet);
@@ -623,7 +623,7 @@
 .actions {
   position: static;
   background: var(--atelier-paper);
-  border-top: 1px solid var(--atelier-rule);
+  border-top: var(--border-hairline) solid var(--atelier-rule);
   padding: var(--space-4) 0;
   display: flex;
   align-items: center;
@@ -636,7 +636,7 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-block: var(--space-3);
-  border-block: 1px solid var(--color-divider);
+  border-block: var(--border-hairline) solid var(--color-divider);
 }
 .chapterNavigation a,
 .chapterNavigation button {
@@ -671,7 +671,7 @@
   align-content: start;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-paper);
   text-align: left;
@@ -738,7 +738,7 @@
   display: block;
   width: 48px;
   height: 48px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-sm);
 }
 .styleRail {
@@ -831,7 +831,7 @@
   align-items: center;
   min-height: var(--control-height-primary);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-action);
+  border: var(--border-hairline) solid var(--color-action);
   border-radius: var(--radius-md);
   background: var(--color-action);
   color: var(--color-action-on);
@@ -888,7 +888,7 @@
   }
   .rail {
     border-right: 0;
-    border-bottom: 1px solid var(--atelier-rule);
+    border-bottom: var(--border-hairline) solid var(--atelier-rule);
     padding: 0 0 var(--space-5);
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
@@ -1057,7 +1057,7 @@
   cursor: pointer;
 }
 .reviewReadiness {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-surface);
   padding: var(--space-4);
   border-radius: var(--radius-md);
@@ -1497,7 +1497,7 @@
   gap: 8px;
 }
 .workIntro h3 {
-  font-size: 18px;
+  font-size: 16px;
   margin: 0 0 8px;
 }
 .workIntro p {
@@ -1616,7 +1616,7 @@
 }
 .samplePhotos h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
 }
 .samplePhotos p {
   margin: 0;
@@ -1683,7 +1683,7 @@
 }
 .planningStart h3 {
   margin: 0 0 12px;
-  font-size: 22px;
+  font-size: 24px;
 }
 .planningStart p {
   line-height: 1.8;
@@ -1877,7 +1877,7 @@
     gap: var(--space-3);
     padding: var(--space-4);
     background: var(--color-paper);
-    border-bottom: 1px solid var(--color-divider);
+    border-bottom: var(--border-hairline) solid var(--color-divider);
   }
   .responsiveTable td {
     display: grid;
@@ -1999,7 +1999,7 @@
 }
 .history article {
   padding-block: var(--space-4);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 .history article p {
   white-space: pre-wrap;

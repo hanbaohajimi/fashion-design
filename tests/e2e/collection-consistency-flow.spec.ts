@@ -56,7 +56,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
       url: "https://assets.example/collection-look-1.png",
     },
     id: "collection-e2e",
-    name: "系列 · HERO",
+    name: "系列 HERO",
     projectId: "e2e-collection",
     sourceGarmentType,
     updatedAt: createdAt,

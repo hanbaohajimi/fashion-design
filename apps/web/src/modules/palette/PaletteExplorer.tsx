@@ -133,7 +133,7 @@ function PaletteOptions({
         </label>
       </div>
       <div>
-        <h4 className={styles.heading}>原有颜色 · 保留 {colors.length} 色</h4>
+        <h4 className={styles.heading}>原有颜色 保留 {colors.length} 色</h4>
         <ul className={styles.originals} aria-label="原有颜色">
           {colors.map((color, i) => (
             <li key={i}>
@@ -179,7 +179,7 @@ function PalettePreview({
   return (
     <>
       <div>
-        <h4 className={styles.heading}>建议追加 · {suggestions.length} 色</h4>
+        <h4 className={styles.heading}>建议追加 {suggestions.length} 色</h4>
         <ul className={styles.suggestions} aria-label="建议颜色">
           {suggestions.map((color, i) => (
             <li key={color.hex}>
@@ -217,7 +217,7 @@ function PalettePreview({
               {result.warnings.map(({ left, right, deltaE }) => (
                 <li key={`${left}:${right}`}>
                   {left + 1}. {combined[left]?.name} 与 {right + 1}.{" "}
-                  {combined[right]?.name} · ΔE {deltaE.toFixed(1)}
+                  {combined[right]?.name} ΔE {deltaE.toFixed(1)}
                 </li>
               ))}
             </ul>

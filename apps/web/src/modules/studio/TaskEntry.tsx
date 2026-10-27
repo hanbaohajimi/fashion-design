@@ -31,12 +31,13 @@ import {
   waitForThumbnail,
 } from "../board/file-upload-api";
 import { importDesignAsset } from "../board/generation/collection-api";
-import { privateFetch } from "../auth/private-fetch";
+import { useAuth } from "../auth/AuthProvider";
+import { createAgentConversation } from "../board/agent/agent-api";
+import { draftRepository } from "../../components/drafts/draft-repository";
 import { useRouter } from "next/navigation";
 import { AssetPicker } from "./studio-ui";
 import { ActionBar, FormSection } from "../../components/workspace-ui";
 import { useStudioForm, type StudioPanelProps } from "./use-studio-form";
-import { markMotion } from "../../components/motion/events";
 import styles from "./studio.module.css";
 
 type TaskKind = "sketch" | "combine" | "color" | "detail" | "brief";
@@ -240,18 +241,12 @@ export function TaskEntry(
   );
   const { draft, setDraft } = form;
   const router = useRouter();
+  const { session } = useAuth();
   const [uploading, setUploading] = useState(false);
   const uploadFeedback = useUploadFeedback();
   const uploadFlight = useRef(false);
   const [uploaded, setUploaded] = useState<StudioSummary["assets"]>([]);
-  const packet = useRef<{
-    signature: string;
-    mutationId: string;
-    executeMutationId: string;
-    baseRevision: number;
-    toolId: string;
-    operations: WorkflowOperation[];
-  } | null>(null);
+  const packet = useRef<{ signature: string; mutationId: string; sourceIds: string[]; operations: WorkflowOperation[]; conversationId?: string } | null>(null);
   const assets = [
     ...props.data.assets,
     ...uploaded.filter(
@@ -269,77 +264,31 @@ export function TaskEntry(
           ? current.assetIds
           : current.assetIds.slice(0, 1),
     }));
-  const submitLabel =
-    draft.kind === "brief"
-      ? "分析设计需求"
-      : draft.kind === "sketch"
-        ? "生成效果图"
-        : draft.kind === "color"
-          ? "生成配色方案"
-          : "生成改款方案";
+  const submitLabel = "进入设计工作台";
   const start = async () => {
-    const succeeded = await form.submit(async (key) => {
+    let targetConversationId = "";
+    const succeeded = await form.submit(async key => {
+      if (!session) throw new Error("请重新登录后继续");
       const graph = await fetchWorkflow(props.projectId);
       const signature = JSON.stringify(draft);
       if (packet.current?.signature !== signature) {
-        const toolId = crypto.randomUUID();
-        packet.current = {
-          signature,
-          mutationId: key,
-          executeMutationId: crypto.randomUUID(),
-          baseRevision: graph.revision,
-          toolId,
-          operations: compileStudioTask(
-            draft,
-            graph,
-            {
-              toolId,
-              briefId: crypto.randomUUID(),
-              sourceIds: draft.assetIds.map(() => crypto.randomUUID()),
-            },
-            { ...props.data, assets },
-          ),
-        };
+        const sourceIds = draft.assetIds.map(() => crypto.randomUUID());
+        const operations = compileStudioTask(draft, graph, { toolId: crypto.randomUUID(), briefId: crypto.randomUUID(), sourceIds }, { ...props.data, assets })
+          .filter(operation => operation.type === "add_node" && operation.node.kind === "asset" && operation.node.type === "reference_image");
+        packet.current = { signature, mutationId: key, sourceIds, operations };
       }
       const current = packet.current;
-      if (!graph.nodes.some((node) => node.id === current.toolId))
-        await patchWorkflow(props.projectId, {
-          mode: "semantic",
-          mutationId: current.mutationId,
-          baseRevision: current.baseRevision,
-          operations: current.operations,
-        });
-      const response = await privateFetch(
-        "/api/projects/" +
-          encodeURIComponent(props.projectId) +
-          "/workflow/nodes/" +
-          current.toolId +
-          "/execute",
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mutationId: current.executeMutationId }),
-        },
-      );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          message?: string;
-        } | null;
-        throw new Error(
-          body?.message ?? "节点已建立，执行未成功。重试将继续原任务。",
-        );
-      }
-      markMotion(
-        `node:${current.toolId}`,
-        "needle",
-        `execute:${current.executeMutationId}`,
-      );
+      if (current.operations.length && !current.sourceIds.every(id => graph.nodes.some(node => node.id === id)))
+        await patchWorkflow(props.projectId, { mode: "semantic", mutationId: current.mutationId, baseRevision: graph.revision, operations: current.operations });
+      current.conversationId ??= (await createAgentConversation(props.projectId, { mode: "workflow" })).id;
+      targetConversationId = current.conversationId;
+      const brand = props.data.brandProfiles.find(item => item.id === draft.brandId);
+      const prompt = [draft.prompt.trim(), draft.preserve.trim() ? `必须保留：${draft.preserve.trim()}` : "", brand ? `品牌资料 r${brand.currentRevision.revision}：${JSON.stringify(brand.currentRevision.payload)}` : ""].filter(Boolean).join("\\n");
+      const draftKey = JSON.stringify([session.user.id, props.projectId, "workspace", `assistant:${targetConversationId}`]);
+      const previous = await draftRepository.read(draftKey);
+      await draftRepository.write({ key: draftKey, accountId: session.user.id, baseline: JSON.stringify({ prompt: "", referencedIds: [], adjustment: null }), value: { prompt, referencedIds: current.sourceIds, adjustment: null } }, previous?.revision ?? 0);
     });
-    if (succeeded) {
-      props.onDirty(false);
-      await router.push("/" + encodeURIComponent(props.projectId));
-    }
+    if (succeeded) { props.onDirty(false); router.push(`/${encodeURIComponent(props.projectId)}?conversationId=${encodeURIComponent(targetConversationId)}`); }
   };
   const upload = async (file: File) => {
     if (uploadFlight.current || !props.canEdit) return;
@@ -469,7 +418,7 @@ export function TaskEntry(
                     <option value="">本次不关联品牌</option>
                     {props.data.brandProfiles.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.currentRevision.payload.name} · r
+                        {item.currentRevision.payload.name} r
                         {item.currentRevision.revision}
                       </option>
                     ))}
@@ -533,11 +482,9 @@ export function TaskEntry(
         </fieldset>
         <UploadFeedbackPreview preview={uploadFeedback.preview} onCancel={uploadFeedback.preview?.stage === "adding" ? undefined : uploadFeedback.cancel} onClear={uploadFeedback.clear} />
         <div className={styles.note}>
-          {draft.kind === "brief"
-            ? "将建立需求分析任务，本步骤不生成图片。"
-            : "生成成功后按额度计次；尺寸与面料物性需人工确认。"}
+          需求与参考图将带入设计助手，确认方案后生成。
         </div>
-        <ActionBar status={<span>完成后在画布查看进度和结果。</span>}>
+        <ActionBar status={<span>在工作台继续核对需求。</span>}>
           <Button
             type="submit"
             variant="primary"

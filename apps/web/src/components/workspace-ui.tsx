@@ -190,7 +190,7 @@ export function EditorChapters({
         >
           {label}
           {pending ? (
-            <small id={`${id}-${value}-pending`}> · {pending} 待复核</small>
+            <small id={`${id}-${value}-pending`}> {pending} 待复核</small>
           ) : null}
         </Button>
       ))}

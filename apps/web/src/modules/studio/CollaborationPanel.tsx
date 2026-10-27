@@ -116,7 +116,7 @@ function MemberManager({
   onSaved,
 }: StudioPanelProps & { readonly data: StudioSummary }) {
   const initial = { email: "", role: "EDITOR" as MemberRole };
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { draftKey: "members" });
   const add = async () => {
     if (
       await form.submit((key) =>
@@ -323,7 +323,7 @@ function ReviewForm({
     x: 0.5,
     y: 0.5,
   };
-  const form = useStudioForm(initial, onDirty);
+  const form = useStudioForm(initial, onDirty, { draftKey: "review" });
   const { draft, setDraft } = form;
   const [reviewMode, setReviewMode] = useState<"comment" | "decision">(
     data.capabilities.edit ? "comment" : "decision",
@@ -335,16 +335,16 @@ function ReviewForm({
             id: revision.id,
             label:
               style.code +
-              " · " +
+              " " +
               revision.payload.name +
-              " · r" +
+              " r" +
               revision.revision,
           })),
         )
       : data.techPacks.flatMap((pack) =>
           pack.revisions.map((revision) => ({
             id: revision.id,
-            label: revision.payload.name + " · r" + revision.revision,
+            label: revision.payload.name + " r" + revision.revision,
           })),
         );
   const styleRevision = data.styles
@@ -483,7 +483,7 @@ function ReviewForm({
             <div className={styles.recordHeader}>
               <h3>修订记录</h3>
               <small className={styles.muted}>
-                {comments.length} 条批注 · {reviews.length} 项决定
+                {comments.length} 条批注 {reviews.length} 项决定
               </small>
             </div>
             {reviews.map((item) => {
@@ -515,7 +515,7 @@ function ReviewForm({
                   <p>{comment.text}</p>
                   {comment.assetId ? (
                     <small className={styles.muted}>
-                      图片 {comment.assetId.slice(0, 12)} ·{" "}
+                      图片 {comment.assetId.slice(0, 12)} {" "}
                       {Math.round((comment.x ?? 0) * 100)}% /{" "}
                       {Math.round((comment.y ?? 0) * 100)}%
                     </small>

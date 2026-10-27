@@ -1,6 +1,4 @@
-/* 节点 = 台面上的样片。
-   类别靠三重编码同时表达：左侧色条（位置）、染料色（颜色）、等宽大写标签（字形）。
-   任何一条单独存在都不够——必须三条同时在场，扫视时才能在不 hover 的情况下分类。 */
+/* 节点 = 台面上的样片。类别以文字与图标表达，保留可读详情入口。 */
 
 .node {
   position: relative;
@@ -11,9 +9,9 @@
   flex-direction: column;
   overflow: visible;
 
-  /* 类别色条贯穿整卡高度，而不是顶部 2px 的一条短线 */
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--cat-color, var(--swatch-linen));
+  /* 类别用文字与轻量徽标表达，不改变卡片边界 */
+  border: var(--border-hairline) solid var(--color-border);
+  border-inline-start: var(--border-hairline) solid var(--color-border);
   border-radius: 10px;
   padding: 18px 18px 14px;
   background: var(--color-paper);
@@ -37,7 +35,7 @@
   flex-direction: row;
   align-items: center;
   gap: var(--space-2);
-  border-left-width: 1px;
+  border-left-width: var(--border-hairline);
   border-left-color: var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-3);
@@ -46,7 +44,7 @@
 
 .node[data-kind="tool"] .nodeHeader { flex: 1; min-width: 0; border: 0; padding: 0; }
 .node[data-kind="tool"] .nodeHeader strong { font-size: var(--text-base); font-weight: 500; }
-.node[data-kind="tool"][data-status="proposed"] { border-left-width: 1px; }
+.node[data-kind="tool"][data-status="proposed"] { border-left-width: var(--border-hairline); }
 
 .node[data-type="candidate"],
 .node[data-type="reference_image"],
@@ -72,13 +70,12 @@
   --cat-color: var(--swatch-sage);
 }
 
-/* 缩小到 85% 以下：英文类别词与摘要让位给色条与标题，
-   保证在全图视图下仍能靠颜色和轮廓读图。 */
+/* 缩小到 85% 以下隐藏摘要，保留类别和标题；完整信息可在详情中读取。 */
 .node[data-compact="true"] .summary {
   visibility: hidden;
 }
 .node[data-compact="true"] .eyebrow {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 
@@ -106,8 +103,8 @@
 }
 
 .node[data-status="proposed"] {
-  border: 1px dashed var(--swatch-mauve);
-  border-left: 3px dashed var(--swatch-mauve);
+  border: var(--border-hairline) dashed var(--swatch-mauve);
+  border-inline-start: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
 }
 
@@ -116,16 +113,18 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   padding-bottom: var(--space-2);
 }
 
 /* 类别标签常驻可见。它曾经只在 hover 时出现，导致三种节点在没有鼠标时完全无法区分。 */
 .eyebrow {
+  display: flex;
+  gap: 6px;
   overflow: hidden;
   color: var(--color-ink-tertiary);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
   line-height: 1.2;
@@ -139,7 +138,7 @@
   color: var(--color-ink);
   /* 标题用衬线字体，和正文形成清晰层级 */
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.3;
@@ -152,7 +151,7 @@
   overflow: hidden;
   margin: var(--space-2) 0 0;
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
   -webkit-box-orient: vertical;
@@ -186,10 +185,12 @@
 
 /* 独立标题栏避免遮挡服装细节，也让图片素材的名称始终可见。 */
 .node[data-image="true"] {
-  border-top-width: 1px;
+  border: 0;
+  outline: var(--border-hairline) solid var(--color-border);
   padding: 0;
 }
 
+.node[data-image="true"][data-selected="true"] { outline-color: var(--color-selection-border); }
 .node[data-image="true"] .nodeHeader {
   order: 2;
   flex: 0 0 58px;
@@ -198,12 +199,12 @@
   justify-content: center;
   gap: 3px;
   border-bottom: 0;
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   padding: 8px 14px;
 }
 
 .node[data-image="true"] .nodeHeader strong {
-  font-size: 19px;
+  font-size: 16px;
   letter-spacing: -0.02em;
 }
 
@@ -233,7 +234,7 @@
 .swatch {
   flex: 1;
   min-height: var(--control-height-primary);
-  border: 1px solid var(--color-divider);
+  border: var(--border-hairline) solid var(--color-divider);
   border-radius: 4px;
   margin-top: var(--space-2);
 }
@@ -248,7 +249,7 @@
   top: calc(50% - 5px);
   width: 10px;
   height: 10px;
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: 50%;
   background: var(--color-paper);
   opacity: 0;
@@ -350,7 +351,7 @@
   bottom: 30px;
   width: max-content;
   max-width: 200px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 4px;
   padding: var(--space-1) var(--space-2);
   background: var(--color-paper);
@@ -384,7 +385,7 @@
   gap: var(--space-2);
 }
 .nodeActions button {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 5px;
   padding: 5px var(--space-3);
   background: var(--color-paper);

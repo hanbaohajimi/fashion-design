@@ -7,11 +7,15 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { workflowExecuteSchema } from "../../../../api/src/modules/workflow-runtime/workflow-runtime.schemas";
 import { TaskEntry } from "./TaskEntry";
 import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import "fake-indexeddb/auto";
+import { draftRepository } from "../../components/drafts/draft-repository";
+import { createAgentConversation } from "../board/agent/agent-api";
 import { studioFixture } from "./studio-test-fixtures";
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("../auth/AuthProvider", () => ({ useAuth: () => ({ session: { user: { id: "task-owner" } } }) }));
+vi.mock("../board/agent/agent-api", () => ({ createAgentConversation: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../board/workflow/workflow-api", () => ({
   fetchWorkflow: vi.fn(),
@@ -22,7 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
-it("sends a valid independent UUID and reuses it when the execute response is lost", async () => {
+it("将需求与参考图交给统一助手，进入工作台前不执行生成", async () => {
   const graph = {
     projectId: "project-1",
     revision: 3,
@@ -33,16 +37,8 @@ it("sends a valid independent UUID and reuses it when the execute response is lo
   };
   vi.mocked(fetchWorkflow).mockResolvedValue(graph);
   vi.mocked(patchWorkflow).mockResolvedValue({ ...graph, revision: 4 });
-  let attempts = 0;
-  const fetcher = vi.fn(
-    async (_input: RequestInfo | URL, options?: RequestInit) => {
-      const body = JSON.parse(String(options?.body));
-      expect(workflowExecuteSchema.safeParse(body).success).toBe(true);
-      attempts++;
-      if (attempts === 1) throw new Error("执行响应丢失");
-      return new Response(JSON.stringify(graph), { status: 200 });
-    },
-  );
+  vi.mocked(createAgentConversation).mockResolvedValue({ id: "task-chat" } as never);
+  const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
   render(
     <TaskEntry
@@ -61,19 +57,14 @@ it("sends a valid independent UUID and reuses it when the execute response is lo
     target: { value: "保留短衣长与双口袋" },
   });
   fireEvent.click(screen.getByRole("button", { name: "选择图片 1" }));
-  fireEvent.click(screen.getByRole("button", { name: "生成效果图" }));
-  await screen.findByText("执行响应丢失");
-  fireEvent.click(screen.getByRole("button", { name: "生成效果图" }));
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/project-1"));
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  const bodies = fetcher.mock.calls.map(([, options]) =>
-    JSON.parse(String(options?.body)),
-  );
-  expect(bodies[0]).toEqual(bodies[1]);
-  expect(bodies[0].mutationId).not.toBe(
-    vi.mocked(patchWorkflow).mock.calls[0]?.[1].mutationId,
-  );
-  expect(vi.mocked(patchWorkflow).mock.calls[0]).toEqual(
-    vi.mocked(patchWorkflow).mock.calls[1],
-  );
+  fireEvent.click(screen.getByRole("button", { name: "进入设计工作台" }));
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/project-1?conversationId=task-chat"));
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(createAgentConversation).toHaveBeenCalledOnce();
+  const operations = vi.mocked(patchWorkflow).mock.calls[0]?.[1];
+  expect(operations?.mode).toBe("semantic");
+  if (operations?.mode === "semantic") expect(operations.operations.every(operation => operation.type === "add_node" && operation.node.type === "reference_image")).toBe(true);
+  const record = await draftRepository.read<{ prompt: string; referencedIds: string[] }>(JSON.stringify(["task-owner", "project-1", "workspace", "assistant:task-chat"]));
+  expect(record?.value.prompt).toContain("保留短衣长与双口袋");
+  expect(record?.value.referencedIds).toHaveLength(1);
 });

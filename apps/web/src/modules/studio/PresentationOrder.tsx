@@ -157,7 +157,7 @@ export function PresentationOrder({ ids, assets, currentId, assetName, disabled,
       {order.map((id, index) => {
         const asset = assets.find((item) => item.id === id);
         return <article key={id} data-order-id={id} data-grabbed={grabbed === id || undefined} className={styles.orderItem}>
-          <button type="button" className={styles.orderImage} aria-label={`查看第 ${index + 1} 张：${assetName(id)}`} aria-current={currentId === id ? "true" : undefined} onClick={() => onSelect(id)}><ImagePreview retryable={false} src={asset?.thumbnailUrl ?? asset?.url} alt={assetName(id)} /><span>{index + 1} · {assetName(id)}</span></button>
+          <button type="button" className={styles.orderImage} aria-label={`查看第 ${index + 1} 张：${assetName(id)}`} aria-current={currentId === id ? "true" : undefined} onClick={() => onSelect(id)}><ImagePreview retryable={false} src={asset?.thumbnailUrl ?? asset?.url} alt={assetName(id)} /><span>{index + 1} {assetName(id)}</span></button>
           <button type="button" className={styles.orderHandle} disabled={disabled || ids.length < 2} aria-label={`调整${assetName(id)}顺序`} aria-pressed={grabbed === id} onPointerDown={(event) => down(event, id)} onKeyDown={(event) => {
             if (event.key === " " || event.key === "Enter") { event.preventDefault(); if (grabbed === id) stop(true); else { setGrabbed(id); setPreview([...ids]); setAnnouncement(`已提起${assetName(id)}，方向键调整，空格确认，Escape取消`); } }
             if (grabbed === id && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) { event.preventDefault(); shift(id, Math.max(0, Math.min(order.length - 1, index + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1))), true); }

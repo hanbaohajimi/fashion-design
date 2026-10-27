@@ -8,7 +8,7 @@
   gap: 20px;
 }
 .persistent h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
@@ -52,7 +52,7 @@
   color: var(--color-ink);
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
 }
 .panel:not([open]) {
   display: none;
@@ -106,7 +106,7 @@
     z-index: 2;
     padding-block: var(--space-3);
     background: var(--color-paper);
-    border-bottom: 1px solid var(--color-divider);
+    border-bottom: var(--border-hairline) solid var(--color-divider);
     margin-bottom: var(--space-4);
   }
   .panel:modal .footer {
@@ -115,7 +115,7 @@
     background: var(--color-paper);
     padding-block: var(--space-3)
       max(var(--space-3), env(safe-area-inset-bottom));
-    border-top: 1px solid var(--color-divider);
+    border-top: var(--border-hairline) solid var(--color-divider);
   }
   .panel:modal .footer button {
     display: inline-flex;

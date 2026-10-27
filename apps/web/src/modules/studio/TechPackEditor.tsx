@@ -91,7 +91,7 @@ export function TechPackEditor(
                   >
                     <strong>{item.currentRevision.payload.name}</strong>
                     <small>
-                      r{item.currentRevision.revision} ·{" "}
+                      r{item.currentRevision.revision} {" "}
                       {(item.currentRevision.payload as StudioTechPack)
                         .status === "PUBLISHED"
                         ? "已发布"
@@ -108,7 +108,7 @@ export function TechPackEditor(
         description="逐章整理制作资料，人工复核后发布"
         status={
           <Badge>
-            {existing ? `已保存 r${existing.currentRevision.revision} · ` : ""}
+            {existing ? `已保存 r${existing.currentRevision.revision} ` : ""}
             {(existing?.currentRevision.payload as StudioTechPack | undefined)
               ?.status === "PUBLISHED"
               ? "已发布"
@@ -190,7 +190,7 @@ function TechPackForm({
         reviewConfirmed: false,
       };
   const [initialDraft] = useState(() => createTechPackDraft(initial));
-  const form = useStudioForm(initialDraft, onDirty, { feedback });
+  const form = useStudioForm(initialDraft, onDirty, { feedback, draftKey: existing?.id ?? "new" });
   const formElement = useRef<HTMLFormElement>(null);
   const { draft, setDraft } = form;
   const [viewsChanged, setViewsChanged] = useState(false);
@@ -408,7 +408,7 @@ function TechPackForm({
         title="编辑技术包资料"
         summary={
           <span>
-            {draft.name || "新建技术包"} ·{" "}
+            {draft.name || "新建技术包"} {" "}
             {readiness.length ? `${readiness.length} 项待复核` : "可进入复核"}
           </span>
         }
@@ -504,7 +504,7 @@ function TechPackForm({
               {data.styles.flatMap((style) =>
                 style.revisions.map((revision) => (
                   <option value={revision.id} key={revision.id}>
-                    {style.code} · {revision.payload.name} · r
+                    {style.code} {revision.payload.name} r
                     {revision.revision}
                   </option>
                 )),
@@ -983,7 +983,7 @@ function TechPackForm({
             <article className={styles.record} key={revision.id}>
               <div className={styles.recordHeader}>
                 <strong>
-                  r{revision.revision} · {revision.payload.name}
+                  r{revision.revision} {revision.payload.name}
                 </strong>
                 <Badge>
                   {(revision.payload as StudioTechPack).status === "PUBLISHED"

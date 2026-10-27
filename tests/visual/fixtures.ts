@@ -290,6 +290,7 @@ export async function seedVisualApp(page: Page) {
         pageSize: 60,
         hasMore: false,
       });
+    if (/^\/projects\/[^/]+\/tasks$/u.test(path)) return json({ items: [], nextCursor: null, counts: { running: 0, attention: 0 } });
     if (path === "/auth/login") return json({ ok: true });
     throw new Error(
       `视觉测试缺少明确的 API fixture: ${route.request().method()} ${path}`,

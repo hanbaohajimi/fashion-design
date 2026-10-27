@@ -42,7 +42,7 @@ function picker(ids: readonly string[] = []) {
 it("区分同名对象，搜索不会丢失已选引用，确认前不提交", () => {
   const { onApply } = picker();
   fireEvent.click(
-    screen.getByRole("checkbox", { name: "同名风衣 服装方案 · candidate-1" }),
+    screen.getByRole("checkbox", { name: "同名风衣 服装方案 candidate-1" }),
   );
   fireEvent.change(screen.getByRole("textbox", { name: "搜索项目对象" }), {
     target: { value: "方案 3" },

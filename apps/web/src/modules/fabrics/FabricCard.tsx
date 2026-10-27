@@ -412,7 +412,7 @@ export function FabricCard({
               : null,
           ]
             .filter(Boolean)
-            .join(" · ") || "规格未填写"}
+            .join(" ") || "规格未填写"}
         </p>
         <div className={styles.fabricTags}>
           <span className={styles.categoryPill} data-scope={fabric.scope}>

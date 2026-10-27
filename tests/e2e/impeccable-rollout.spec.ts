@@ -25,8 +25,8 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
     route.fulfill({ json: data }),
   );
   await page.goto(`/${PROJECT}/studio?tab=styles`);
-  await page.getByText("切换款式 · 褶线夹克", { exact: true }).click();
-  await page.getByRole("button", { name: /CT-102 · 长款通勤风衣/ }).click();
+  await page.locator("summary").filter({ hasText: "切换款式" }).click();
+  await page.getByRole("button", { name: /CT-102 长款通勤风衣/ }).click();
   await page.getByRole("button", { name: "继续技术包", exact: true }).click();
   await expect(page).toHaveURL(/styleRevisionId=style-second-r3/);
   await expectValue(page.getByLabel("对应款式修订"), "style-second-r3");
@@ -34,7 +34,7 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
   await expect(object).toContainText("长款通勤风衣");
   await expect(object).toContainText("款式修订 r3");
   await page.getByLabel("技术包名称", { exact: true }).fill("风衣生产资料草稿");
-  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("link", { name: "设计工作台", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await expect(guard).toBeVisible();
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
@@ -59,7 +59,7 @@ test("修订深链恢复到对应技术包，待复核项可定位原章节", as
     .click();
   await readiness.getByRole("button", { name: /BOM/ }).click();
   await expect(
-    page.getByRole("heading", { name: "材料与辅料 · BOM", exact: true }),
+    page.getByRole("heading", { name: "材料与辅料 BOM", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "当前关联作品" }),

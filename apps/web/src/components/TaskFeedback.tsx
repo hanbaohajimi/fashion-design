@@ -115,10 +115,8 @@ function TaskFeedbackContent({
           <i aria-hidden="true" />
           {error
             ? userFacingError(error, "任务未完成，请重试")
-            : active && !elapsed
-              ? "已提交"
-              : state.label}
-          {count ? ` · ${completed}/${total}` : ""}
+            : state.label}
+          {count ? <span className={styles.taskCount}>{completed}/{total}</span> : null}
         </p>
         {active && staleAt === staleKey ? (
           <small>暂未收到新状态，可继续处理其他设计。</small>

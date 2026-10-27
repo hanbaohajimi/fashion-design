@@ -71,7 +71,7 @@
   align-items: center;
 }
 .saved {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   padding-top: 18px;
 }
 .saved h3 {
@@ -80,7 +80,7 @@
 .saved button {
   padding: 12px 16px;
   margin: 0 8px 8px 0;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 6px;
   background: var(--color-paper);
   color: inherit;
@@ -101,7 +101,7 @@
     height: 350px;
   }
   .panel h2 {
-    font-size: 23px;
+    font-size: 24px;
   }
 }
 

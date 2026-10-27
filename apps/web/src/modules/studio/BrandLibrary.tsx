@@ -108,7 +108,7 @@ export function BrandLibrary(
               label="切换对象"
               current={
                 <>
-                  切换资料 ·{" "}
+                  切换资料 {" "}
                   {existing?.currentRevision.payload.name ?? "新建资料"}
                 </>
               }
@@ -186,7 +186,7 @@ export function BrandLibrary(
                     disabled={busy}
                     onClick={() => void reuse(brand)}
                   >
-                    {brand.currentRevision.payload.name} · 修订 {brand.version}
+                    {brand.currentRevision.payload.name} 修订 {brand.version}
                   </Button>
                 ))
               ) : (
@@ -218,7 +218,7 @@ function BrandEditor({
   const form = useStudioForm(
     existing ? (existing.currentRevision.payload as Brand) : blank(),
     onDirty,
-    { feedback },
+    { feedback, draftKey: existing?.id ?? "new" },
   );
   const { draft, setDraft } = form;
   const pendingApply = useRef<{
@@ -278,7 +278,7 @@ function BrandEditor({
               id: prefix,
               type: "reference_text",
               kind: "asset",
-              title: "品牌规则 · " + draft.name,
+              title: "品牌规则 " + draft.name,
               payload: {
                 text: content,
                 studioDocumentId: existing.id,
@@ -296,7 +296,7 @@ function BrandEditor({
               id: prefix + "-ref-" + index,
               kind: "asset",
               type: "reference_image",
-              title: draft.name + " · 认可案例 " + (index + 1),
+              title: draft.name + " 认可案例 " + (index + 1),
               payload: {
                 assetId,
                 imageUrl:
@@ -361,7 +361,7 @@ function BrandEditor({
         <section className={styles.brandSummary} aria-label="当前品牌修订摘要">
           <div>
             <p className={styles.muted}>
-              {draft.silhouettes.join(" · ") || "尚未填写常用廓形"}
+              {draft.silhouettes.join(" ") || "尚未填写常用廓形"}
             </p>
           </div>
           <div className={styles.brandColors}>
@@ -516,7 +516,7 @@ function BrandEditor({
           {existing.revisions.map((revision) => (
             <div className={styles.record} key={revision.id}>
               <strong>
-                r{revision.revision} · {revision.payload.name}
+                r{revision.revision} {revision.payload.name}
               </strong>
               <p className={styles.muted}>
                 {(revision.payload as Brand).notes || "未填写补充说明"}

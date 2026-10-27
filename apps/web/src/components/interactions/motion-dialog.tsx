@@ -24,8 +24,10 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   const inert = useRef(new Map<HTMLElement, boolean>());
   const restoreChildren = () => { inert.current.forEach((value, child) => { child.inert = value; }); inert.current.clear(); };
   const returnFocus = () => {
-    if (document.hidden || pathname.current !== location.pathname || document.querySelector("dialog[open]")) return;
+    if (document.hidden || pathname.current !== location.pathname) return;
     const target = (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? previous.current;
+    const activeDialog = [...document.querySelectorAll("dialog[open]")].at(-1);
+    if (activeDialog && (!(target instanceof Node) || !activeDialog.contains(target))) return;
     const fallback = document.querySelector<HTMLElement>("#main-content h1, main h1, #main-content");
     const focus = target instanceof HTMLElement && target.isConnected && !target.closest("[inert],[hidden]") ? target : fallback;
     if (focus) { if (!focus.hasAttribute("tabindex") && focus === fallback) focus.tabIndex = -1; focus.focus(); }
@@ -43,7 +45,7 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
         previous.current = document.activeElement;
         pathname.current = location.pathname;
         dialog.showModal();
-        (dialog.querySelector<HTMLElement>("[autofocus]") ?? dialog.querySelector<HTMLElement>("input:not(:disabled),textarea:not(:disabled),select:not(:disabled),button:not(:disabled)") ?? dialog).focus();
+        (dialog.querySelector<HTMLElement>("[autofocus], [data-autofocus]") ?? dialog.querySelector<HTMLElement>("input:not(:disabled):not([type=hidden]),textarea:not(:disabled),select:not(:disabled)") ?? dialog.querySelector<HTMLElement>("button:not(:disabled)") ?? dialog).focus();
       }
     },
     onClosing() {
@@ -96,7 +98,7 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   useEffect(() => { if (!open || busy) resetDrag(); });
   return <dialog ref={ref} tabIndex={-1} aria-label={label} aria-busy={busy || undefined}
     className={`${styles.dialog} ${className}`} data-dialog-id={title} data-phase={presence.phase} data-variant={variant}
-    onCancel={event => { event.preventDefault(); if (open) onClose(); }}
+    onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (open) onClose(); }}
     onClick={event => {
       if (event.target !== event.currentTarget || !open) return;
       const box = event.currentTarget.getBoundingClientRect();

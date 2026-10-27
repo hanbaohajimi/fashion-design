@@ -15,7 +15,7 @@
   width: min(1400px, calc(100vw - var(--space-8)));
   height: min(900px, calc(100dvh - var(--space-8)));
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-paper);
   box-shadow: var(--shadow-modal);
@@ -28,7 +28,7 @@
   justify-content: space-between;
   gap: 24px;
   padding: 20px 24px;
-  border-bottom: 1px solid var(--color-surface);
+  border-bottom: var(--border-hairline) solid var(--color-surface);
 }
 
 .eyebrow {
@@ -61,7 +61,7 @@
 .importButton {
   min-height: var(--control-height);
   padding: 0 16px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 8px;
   background: var(--color-paper);
   color: var(--color-ink-secondary);
@@ -120,7 +120,7 @@
   gap: 16px;
   min-height: var(--studio-header-height);
   padding: 14px 24px;
-  border-top: 1px solid var(--color-surface);
+  border-top: var(--border-hairline) solid var(--color-surface);
 }
 
 .selection {
@@ -177,7 +177,7 @@
   }
 
   .header h2 {
-    font-size: 20px;
+    font-size: 16px;
   }
 
   .footer {

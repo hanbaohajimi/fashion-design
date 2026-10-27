@@ -112,6 +112,8 @@ export function WorkspaceDraftProvider({
   );
 }
 
+export function useWorkspaceDraftOwner() { return useContext(DraftContext)?.owner; }
+
 /** A remote revision must never silently replace an unsaved edit. */
 export function useWorkspaceDraft(
   mode: string,

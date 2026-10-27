@@ -256,7 +256,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
               <div
                 className={styles.swatchChip}
                 style={{ backgroundColor: entry.color }}
-                title={`${entry.label} · ${entry.color.toUpperCase()}`}
+                title={`${entry.label} ${entry.color.toUpperCase()}`}
               >
                 <input
                   aria-label={`${entry.label} 颜色`}

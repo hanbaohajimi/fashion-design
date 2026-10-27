@@ -172,7 +172,7 @@ test("森织品牌：图标、导航、确认页与公开分享", async ({ page 
   );
   await page.goto("/share/forest-brand");
   await expect(
-    page.getByText("森织 · 分享的设计", { exact: true }),
+    page.getByText("森织 分享的设计", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
   await expect(page.getByRole("link", { name: "进入工作室" })).toHaveAttribute(

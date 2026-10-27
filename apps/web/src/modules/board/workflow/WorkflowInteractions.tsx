@@ -144,7 +144,7 @@ export function WorkflowInteractionProvider({
         );
         return {
           valid: true,
-          label: `${port?.type === "add_edge" ? labels[port.edge.targetPort] : "输入"}${planned.branched ? " · 新分支" : ""}`,
+          label: `${port?.type === "add_edge" ? labels[port.edge.targetPort] : "输入"}${planned.branched ? " 新分支" : ""}`,
         };
       } catch (cause) {
         return {
@@ -412,7 +412,7 @@ export function WorkflowConnectionOverlay({ graph }: { graph: WorkflowGraph }) {
       ) : null}
       {gesture || interaction.status ? (
         <div className={styles.connectionHint} role="status">
-          {interaction.status || "选择另一端的节点 · Esc 取消"}
+          {interaction.status || "选择另一端的节点 Esc 取消"}
         </div>
       ) : null}
       {edge && !gesture ? (

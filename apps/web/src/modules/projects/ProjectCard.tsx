@@ -307,7 +307,7 @@ export function ProjectCard({
         {!project.optimistic && !project.archived ? <Link className={styles.continueProject} href={`/${project.id}`}>继续设计 <span aria-hidden="true">↗</span></Link> : null}
         {confirmingDelete ? (
           <div className={styles.confirmPanel} role="group">
-            <span>DISCARD · 不可撤销</span>
+            <span>DISCARD 不可撤销</span>
             <p>
               {project.assetCount > 0
                 ? `"${project.name}"含 ${project.assetCount} 项设计资产，删除后无法找回。`

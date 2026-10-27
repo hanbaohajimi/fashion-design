@@ -147,7 +147,7 @@ export function TrendArchive({
       <section aria-label="趋势筛选" className={styles.archiveFilters}>
         <div>
           <p>
-            {trends.total} 条来源 · 当前展示 {items.length} 条
+            {trends.total} 条来源 当前展示 {items.length} 条
           </p>
         </div>
         <label className={styles.archiveSearch}>

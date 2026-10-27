@@ -3,7 +3,7 @@
   grid-template-columns: 1.2fr 1fr;
   gap: 32px;
   padding: 26px 0;
-  border-block: 1px solid var(--color-divider);
+  border-block: var(--border-hairline) solid var(--color-divider);
   margin-bottom: 24px;
 }
 .kicker {
@@ -28,7 +28,7 @@
   gap: 10px;
 }
 .actions button {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   color: var(--color-ink);
   border-radius: 6px;
@@ -51,7 +51,7 @@
   transform: scale(0.97);
 }
 .activity {
-  border-left: 1px solid var(--color-divider);
+  border-left: var(--border-hairline) solid var(--color-divider);
   padding-left: 26px;
 }
 .activity h3 {
@@ -105,7 +105,7 @@
   }
 }
 .frame {
-  border-block: 1px solid var(--color-divider);
+  border-block: var(--border-hairline) solid var(--color-divider);
   margin-bottom: 16px;
 }
 .frame > summary {
@@ -143,7 +143,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   padding-top: 16px;
 }
 .directory button {

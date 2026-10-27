@@ -1,5 +1,7 @@
 # 文档目录
 
+本轮桌面工作台重构见 [计划与实施记录](plans/desktop-agent-ui/README.md)（2026-10-27）。
+
 从本页按用途查找资料。历史方案保留原有事实和完成状态；文件日期、当时的截图或“已完成”描述，不代表当前版本已重新验收。
 
 ## 现行入口
@@ -8,6 +10,8 @@
 | --- | --- |
 | [项目 README](../README.md) | 本地启动、功能入口、升级和常用命令 |
 | [Agent 架构](architecture/AGENT_ARCHITECTURE.md) | 当前设计协作框架、领域边界与实现依据 |
+| [本机工作区草稿](architecture/local-workspace-drafts.md) | 本机恢复、冲突、副本与账号隔离边界 |
+| [项目任务与助手取消](architecture/project-tasks.md) | 聚合接口、权限、取消竞态与部署顺序 |
 | [助手流式消息](architecture/assistant-streaming.md) | SSE协议、Redis恢复、发布开关与真实链路验证 |
 | [前端设计规范](../apps/web/DESIGN.md) | 当前界面的视觉与交互规范，结合运行源码阅读 |
 | [选择控件与命令菜单规范](impeccable/选择控件与命令菜单规范.md) | Select/Dropdown 的语义、数量阈值、手机弹层与登记例外 |

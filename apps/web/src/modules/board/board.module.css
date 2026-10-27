@@ -81,7 +81,7 @@
   width: min(calc(100vw - 28px), 920px);
   min-height: 48px;
   align-items: center;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   margin: 12px auto 0;
   background: var(--color-paper);
@@ -103,7 +103,7 @@
   display: grid;
   width: 31px;
   height: 31px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   place-items: center;
   text-decoration: none;
 }
@@ -131,7 +131,7 @@
   bottom: 18px;
   display: grid;
   width: min(390px, calc(100vw - 36px));
-  border: 1px solid var(--color-error);
+  border: var(--border-hairline) solid var(--color-error);
   padding: var(--space-4);
   background: var(--color-error-bg);
   box-shadow: var(--shadow-card);
@@ -167,7 +167,7 @@
   color: white;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -178,9 +178,9 @@
 
 .quotaPill {
   align-items: center;
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
   display: flex;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   padding: 0 12px;
   white-space: nowrap;
@@ -189,13 +189,13 @@
 .shapeActions button {
   min-width: 58px;
   border: 0;
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
   padding: 0 12px;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   transition:
     background-color var(--transition-fast, 120ms),
@@ -205,17 +205,17 @@
 .shapeActions select {
   background: transparent;
   border: 0;
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   max-width: 150px;
   padding: 0 10px;
   transition: background-color var(--transition-fast, 120ms);
 }
 
 .shapeActions button:last-child {
-  border-right: 1px solid var(--color-border);
+  border-right: var(--border-hairline) solid var(--color-border);
 }
 
 .shapeActions button:hover,
@@ -241,7 +241,7 @@
 }
 
 .roleControl > span {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -250,12 +250,12 @@
 .roleControl select {
   width: min(100%, 150px);
   height: 31px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   border-radius: 0;
   background: var(--color-surface);
   color: inherit;
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .boardSkeleton,
@@ -327,7 +327,7 @@
   bottom: 18px;
   margin: 0;
   color: var(--color-ink-secondary);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 
@@ -342,7 +342,7 @@
 
 .boardError p {
   color: var(--color-action);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.18em;
 }
@@ -360,7 +360,7 @@
 
 .boardError button {
   min-height: 42px;
-  border: 1px solid var(--color-action);
+  border: var(--border-hairline) solid var(--color-action);
   margin-top: 2rem;
   padding: 0 20px;
   background: var(--color-action);
@@ -389,14 +389,14 @@
 
 .uploadDropZone span {
   margin-top: 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
 }
 
 .emptyBoardGuide {
   background: var(--color-paper);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   box-shadow: var(--shadow-card);
   left: calc((100vw - var(--board-agent-current-width)) / 2);
   max-width: 430px;
@@ -424,7 +424,7 @@
 
 .emptyBoardGuide > span {
   color: var(--color-action);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.14em;
 }
@@ -437,7 +437,7 @@
 
 .emptyBoardGuide p {
   color: var(--color-ink-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   margin: 0;
 }
@@ -452,8 +452,8 @@
 }
 
 .emptyBoardGuide li {
-  border-top: 1px solid var(--color-border);
-  font-size: 11px;
+  border-top: var(--border-hairline) solid var(--color-border);
+  font-size: 12px;
   padding-top: 8px;
 }
 
@@ -498,7 +498,7 @@
   position: relative;
   display: grid;
   min-height: 58px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 10px 84px 10px 12px;
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -517,13 +517,13 @@
 }
 
 .uploadTray span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .uploadTray small {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .uploadTray button {
@@ -531,7 +531,7 @@
   top: 12px;
   right: 10px;
   min-height: 32px;
-  border: 1px solid var(--color-action);
+  border: var(--border-hairline) solid var(--color-action);
   padding: 0 12px;
   background: var(--color-action);
   color: white;
@@ -554,7 +554,7 @@
 }
 
 .rolePanel.rolePanelEmbedded > header {
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 
 .rolePanel {
@@ -563,7 +563,7 @@
   top: 78px;
   right: 68px;
   width: 276px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-paper);
   box-shadow: var(--shadow-card);
@@ -576,13 +576,13 @@
   display: flex;
   min-height: 54px;
   align-items: center;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   padding: 12px 14px;
 }
 
 .rolePanel > header strong {
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
   letter-spacing: 0.06em;
 }
@@ -593,7 +593,7 @@
 }
 
 .rolePanelEmpty span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -602,7 +602,7 @@
   margin: 12px 0 0;
   color: var(--color-ink-secondary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -618,7 +618,7 @@
   min-height: 30px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 999px;
   padding: 0 11px;
   background: var(--color-paper);
@@ -632,7 +632,7 @@
 }
 
 .roleLabel {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.03em;
   line-height: 1;
@@ -668,7 +668,7 @@
 
 .roleNoteEditor {
   display: grid;
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   padding: 11px 12px 13px;
   background: var(--color-surface);
   gap: 6px;
@@ -676,7 +676,7 @@
 
 .roleNoteEditor > span {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
 }
@@ -684,13 +684,13 @@
 .roleNoteEditor input {
   width: 100%;
   height: 34px;
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   padding: 0 10px;
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -701,7 +701,7 @@
 
 .roleNoteEditor > small {
   color: var(--color-ink-tertiary);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .rolePanel[data-role="avoid"] {
@@ -714,13 +714,13 @@
   padding: 9px 12px;
   align-content: center;
   background: var(--color-surface);
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   gap: 3px;
 }
 
 .rolePanel > footer span {
   color: var(--color-ink-secondary);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -730,7 +730,7 @@
 }
 
 .rolePanel > footer small {
-  font-size: 8px;
+  font-size: 12px;
 }
 
 @keyframes skeleton-pulse {
@@ -753,7 +753,7 @@
     touch-action: pan-x;
     grid-row: 2;
     grid-column: 1 / -1;
-    border-top: 1px solid var(--color-ink);
+    border-top: var(--border-hairline) solid var(--color-ink);
   }
 
   .shapeActions button {
@@ -861,7 +861,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   place-items: center;
   transition:
     background var(--transition-fast, 120ms),
@@ -891,7 +891,7 @@
   background: transparent;
   color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   transition:
@@ -937,7 +937,7 @@
   padding: 0 14px;
   background: var(--color-surface);
   color: var(--color-ink);
-  font-size: 13px;
+  font-size: 14px;
   transition: border-color var(--transition-fast, 120ms);
 }
 
@@ -960,10 +960,10 @@
   padding: 10px 2px 6px;
   justify-content: space-between;
   color: var(--color-ink-secondary);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 
 /* 空/加载/错误状态 */
@@ -987,7 +987,7 @@
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   transition:
     background var(--transition-fast, 120ms),
@@ -1016,7 +1016,7 @@
 
 .fabricDropZone strong {
   color: var(--color-action);
-  font-size: 20px;
+  font-size: 16px;
   letter-spacing: 0.16em;
 }
 

@@ -186,7 +186,9 @@ async function selectNode(page: Page, title: string) {
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   if (await details.isVisible()) await closeNodeDetails(page);
   await page.getByRole("button", { name: "适合画布" }).click();
-  await page.locator("[data-kind]").filter({ has: page.getByText(title, { exact: true }) }).dblclick();
+  const hit = page.locator("[data-kind]").filter({ has: page.getByText(title, { exact: true }) });
+  await expect(hit).toHaveCSS("pointer-events", "auto");
+  await hit.dblclick();
   return details;
 }
 
@@ -227,7 +229,7 @@ test("逐节点执行先保存参数，失败可恢复，选定第二个候选�
   await selectNode(page, "风衣候选 2");
   await openImageDetails(page);
   await details.locator("summary:visible").filter({ hasText: "来源与路径" }).click();
-  await expect(details.getByText("原图 · 生成通勤风衣", { exact: true })).toBeVisible();
+  await expect(details.getByText("原图 生成通勤风衣", { exact: true })).toBeVisible();
   expect(mocked.getGraph().nodes.find((item) => item.id === "candidate-2")?.payload.decision).toBe("selected");
   expect(mocked.executionRequests).toHaveLength(2);
 });
@@ -237,8 +239,8 @@ test("领域评估按真实候选显示约束检查，反馈提案先预览后�
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/" + PROJECT_ID);
   const details = await selectNode(page, "风衣设计约束");
-  await expect(details.getByText("必须 · 明确提出").first()).toBeVisible();
-  await expect(details.getByText("偏好 · 解释性建议")).toBeVisible();
+  await expect(details.getByText("必须 明确提出").first()).toBeVisible();
+  await expect(details.getByText("偏好 解释性建议")).toBeVisible();
   await expect(details.getByText("需实测或规格确认")).toBeVisible();
   await expect(details.getByText("待确认：尚未提供面料性能检测资料")).toBeVisible();
   await selectNode(page, "生成通勤风衣");
@@ -255,8 +257,8 @@ test("领域评估按真实候选显示约束检查，反馈提案先预览后�
   await expect(page.locator('[data-type="evaluation"]')).toHaveCount(1);
   await selectNode(page, "逐候选评估报告");
   await expect(details.getByText("廓形稳定，面料反光需修正")).toBeVisible();
-  await expect(details.getByText("! 存疑 · 衣身出现较强镜面反光，需要减弱")).toBeVisible();
-  await expect(details.getByText("? 无法判断 · 不能单凭图像确认防水性能，需要实测").first()).toBeVisible();
+  await expect(details.getByText("! 存疑 衣身出现较强镜面反光，需要减弱")).toBeVisible();
+  await expect(details.getByText("? 无法判断 不能单凭图像确认防水性能，需要实测").first()).toBeVisible();
   await selectNode(page, "风衣候选 2");
   await openImageDetails(page);
   await chooseValue(valueControl(details, "设计师决定"), "rejected");

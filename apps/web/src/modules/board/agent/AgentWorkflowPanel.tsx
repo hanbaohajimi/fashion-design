@@ -441,7 +441,7 @@ export function AgentWorkflowPanel({
               >
                 {list.data.items.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.intent} · {RUN_LABELS[item.status]}
+                    {item.intent} {RUN_LABELS[item.status]}
                   </option>
                 ))}
               </Select>
@@ -928,7 +928,7 @@ function WorkflowNode({
           {step.attempts.map((attempt) => (
             <section key={attempt.id}>
               <strong>
-                尝试 {attempt.ordinal} · {attemptStatusLabel(attempt.status)}
+                尝试 {attempt.ordinal} {attemptStatusLabel(attempt.status)}
               </strong>
               <p>
                 {attempt.status === "rejected" ? "调整原因：" : ""}

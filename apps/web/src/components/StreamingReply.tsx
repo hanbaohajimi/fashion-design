@@ -7,6 +7,7 @@ import { UI_TIMING } from "./ui-config";
 import styles from "./streaming-reply.module.css";
 
 type Draft = { text: string; animate: boolean; pending: boolean; attemptId: string; phase?: "analyzing" | "reading" | "validating" };
+const emptyDrafts: Record<string, Draft> = Object.freeze({});
 export function assistantPhaseLabel(draft: Draft | undefined) {
   return draft?.phase === "reading" ? "正在补读资料" : draft?.phase === "validating" ? "正在校验回复" : draft?.text ? "正在生成回复" : "正在分析设计需求";
 }
@@ -24,22 +25,27 @@ export function useAssistantStream(conversationId: string) {
     return () => owned?.controller.abort();
   }, [conversationId, signalFor]);
   useEffect(() => () => lifetime.current?.controller.abort(), []);
-  const [state, setState] = useState<{ conversationId: string; drafts: Record<string, Draft> }>({ conversationId, drafts: {} });
+  const [state, setState] = useState<{ conversationId: string; drafts: Record<string, Draft> }>({ conversationId, drafts: emptyDrafts });
   const receive = useCallback((event: AssistantStreamEvent) => setState((previous) => {
     const update = (current: Record<string, Draft>): Record<string, Draft> => {
       const draft = current[event.messageId];
-      if (event.type === "accepted") return { ...current, [event.messageId]: { text: "", animate: true, pending: true, attemptId: event.attemptId } };
+      if (event.type === "accepted") return draft?.attemptId === event.attemptId ? current : { ...current, [event.messageId]: { text: "", animate: true, pending: true, attemptId: event.attemptId } };
       if (event.type === "snapshot") return event.turn ? { ...current, [event.messageId]: { text: event.text, animate: false, pending: !event.terminal, attemptId: event.attemptId } } : current;
       if (!draft || draft.attemptId !== event.attemptId) return current;
+      if (!draft.pending) return current;
       if (event.type === "phase") return { ...current, [event.messageId]: { ...draft, phase: event.phase } };
       if (event.type === "message.delta") return { ...current, [event.messageId]: { ...draft, text: draft.text + event.text } };
       if (event.type === "message.reset") return { ...current, [event.messageId]: { ...draft, text: "", phase: "analyzing" } };
-      if (event.type === "message.completed" || event.type === "message.failed") return { ...current, [event.messageId]: { ...draft, text: event.turn.assistantMessage.content, animate: event.type !== "message.failed" && draft.text.length > 0 && event.turn.assistantMessage.content.startsWith(draft.text), pending: false } };
+      if (event.type === "message.completed" || event.type === "message.failed" || event.type === "message.canceled") return { ...current, [event.messageId]: { ...draft, text: event.type === "message.canceled" && draft.text.startsWith(event.turn.assistantMessage.content) ? draft.text : event.turn.assistantMessage.content, animate: event.type === "message.completed" && draft.text.length > 0 && event.turn.assistantMessage.content.startsWith(draft.text), pending: false } };
       return current;
     };
     return { conversationId, drafts: update(previous.conversationId === conversationId ? previous.drafts : {}) };
   }), [conversationId]);
-  return { drafts: state.conversationId === conversationId ? state.drafts : {}, receive, signalFor };
+  const stop = (messageId: string) => setState(previous => {
+    const draft = previous.drafts[messageId];
+    return draft ? { ...previous, drafts: { ...previous.drafts, [messageId]: { ...draft, pending: false, animate: false } } } : previous;
+  });
+  return { drafts: state.conversationId === conversationId ? state.drafts : emptyDrafts, receive, signalFor, stop };
 }
 
 const readReduced = () => typeof window === "undefined" || document.hidden || Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
@@ -52,6 +58,7 @@ const subscribeReduced = (notify: () => void) => {
 };
 
 type TextNode = { type: string; value?: string; position?: { start: { offset?: number } }; children?: TextNode[]; tagName?: string; properties?: Record<string, unknown> };
+const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 const emptyRecent: ReadonlyMap<number, number> = new Map();
 const MarkdownBlock = memo(function MarkdownBlock({ content, offset, recent }: { content: string; offset: number; recent: ReadonlyMap<number, number> }) {
   const plugin = () => (tree: TextNode) => {
@@ -61,7 +68,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ content, offset, recent }: {
         if (child.type !== "text" || !child.value || !recent.size) { visit(child); return [child]; }
         const start = (child.position?.start.offset ?? 0) + offset;
         const children: TextNode[] = []; let index = start; let stable = "";
-        for (const { segment } of new Intl.Segmenter("zh", { granularity: "grapheme" }).segment(child.value)) {
+        for (const { segment } of graphemes.segment(child.value)) {
           const born = recent.get(index); index += segment.length;
           if (born === undefined) stable += segment;
           else {
@@ -79,7 +86,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ content, offset, recent }: {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={recent.size ? [plugin] : []} skipHtml>{content}</ReactMarkdown>;
 });
 
-export function StreamingReply({ content, draft }: { content: string; draft?: Draft | undefined }) {
+export const StreamingReply = memo(function StreamingReply({ content, draft }: { content: string; draft?: Draft | undefined }) {
   const host = useRef<HTMLDivElement>(null);
   const received = draft?.text ?? content;
   const [shown, setShown] = useState(draft?.animate ? "" : received);
@@ -91,7 +98,7 @@ export function StreamingReply({ content, draft }: { content: string; draft?: Dr
   const reduce = useSyncExternalStore(subscribeReduced, readReduced, serverReduced);
   const animate = Boolean(draft?.animate && !skipped);
   const displayed = received.startsWith(shown) ? shown : "";
-  const working = animate && !reduce && (displayed.length < received.length || Boolean(draft?.pending) || recent.size > 0);
+  const working = animate && !reduce && (displayed.length < received.length || recent.size > 0);
   useLayoutEffect(() => {
     target.current = received;
     if (!animate || reduce) { value.current = received; fresh.current.clear(); }
@@ -103,7 +110,7 @@ export function StreamingReply({ content, draft }: { content: string; draft?: Dr
     const tick = () => {
       const now = performance.now();
       for (const [index, born] of fresh.current) if (now - born >= UI_TIMING.streamReveal) fresh.current.delete(index);
-      const next = new Intl.Segmenter("zh", { granularity: "grapheme" }).segment(target.current.slice(value.current.length))[Symbol.iterator]().next().value?.segment;
+      const next = graphemes.segment(target.current.slice(value.current.length))[Symbol.iterator]().next().value?.segment;
       if (next) { fresh.current.set(value.current.length, now); value.current += next; }
       setShown(value.current);
       setRecent(new Map(fresh.current));
@@ -113,12 +120,6 @@ export function StreamingReply({ content, draft }: { content: string; draft?: Dr
     return () => clearTimeout(timer);
   }, [working, draft?.attemptId]);
   const visible = !animate || reduce ? received : displayed;
-  useLayoutEffect(() => {
-    if (!draft?.pending) return;
-    let view = host.current?.parentElement;
-    while (view && !/(auto|scroll)/u.test(getComputedStyle(view).overflowY)) view = view.parentElement;
-    if (view && view.scrollHeight - view.clientHeight - view.scrollTop < 80) view.scrollTop = view.scrollHeight;
-  }, [visible, draft?.pending]);
   // Complete paragraphs keep their memoized Markdown tree while the tail grows.
   const blocks: { content: string; offset: number }[] = [];
   let offset = 0; let fenced = false; let buffer = ""; let start = 0;
@@ -138,4 +139,4 @@ export function StreamingReply({ content, draft }: { content: string; draft?: Dr
     {typing ? <span className={styles.srOnly} role="status">{draft?.pending ? "设计助手正在生成回复" : received}</span> : null}
     {typing ? <button className={styles.skip} type="button" onClick={() => { setSkipped(true); fresh.current.clear(); setRecent(emptyRecent); }}>立即显示已收到内容</button> : null}
   </>;
-}
+});

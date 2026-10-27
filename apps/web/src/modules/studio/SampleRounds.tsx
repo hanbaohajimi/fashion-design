@@ -87,8 +87,8 @@ export function SampleRounds(
     setSeed({
       ...payload,
       name:
-        payload.name.replace(/ · 第 \d+ 轮$/, "") +
-        " · 第 " +
+        payload.name.replace(/ 第 \d+ 轮$/, "") +
+        " 第 " +
         (payload.round + 1) +
         " 轮",
       round: payload.round + 1,
@@ -111,7 +111,7 @@ export function SampleRounds(
               label="切换对象"
               current={
                 <>
-                  切换资料 ·{" "}
+                  切换资料 {" "}
                   {existing?.currentRevision.payload.name ?? "新建资料"}
                 </>
               }
@@ -134,7 +134,7 @@ export function SampleRounds(
                     >
                       <strong>{sample.name}</strong>
                       <small>
-                        第 {sample.round} 轮 ·{" "}
+                        第 {sample.round} 轮 {" "}
                         {
                           sample.issues.filter(
                             (issue) => issue.status !== "VERIFIED",
@@ -225,7 +225,7 @@ function SampleEditor({
         issues: [],
         notes: "",
       });
-  const form = useStudioForm(initial, onDirty, { feedback });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? "new" });
   const { draft, setDraft } = form;
   const [selectedIssueId, setSelectedIssueId] = useState(
     initial.issues[0]?.id ?? "",
@@ -385,7 +385,7 @@ function SampleEditor({
         <StudioEditSection
           persistent
           title="编辑轮次与照片"
-          summary={`${draft.name || "新样衣"} · 第 ${draft.round} 轮 · ${draft.photoAssetIds.length} 张照片`}
+          summary={`${draft.name || "新样衣"} 第 ${draft.round} 轮 ${draft.photoAssetIds.length} 张照片`}
           defaultOpen={!existing}
           save={canEdit}
           busy={form.busy || uploading}
@@ -431,7 +431,7 @@ function SampleEditor({
                 {data.techPacks.flatMap((pack) =>
                   pack.revisions.map((revision) => (
                     <option key={revision.id} value={revision.id}>
-                      {revision.payload.name} · r{revision.revision}
+                      {revision.payload.name} r{revision.revision}
                     </option>
                   )),
                 )}
@@ -522,10 +522,10 @@ function SampleEditor({
               value={issueFilter}
               onChange={(event) => setIssueFilter(event.target.value)}
             >
-              <option value="all">全部问题 · {draft.issues.length}</option>
+              <option value="all">全部问题 {draft.issues.length}</option>
               {Object.entries(states).map(([value, label]) => (
                 <option value={value} key={value}>
-                  {label} ·{" "}
+                  {label} {" "}
                   {
                     draft.issues.filter((issue) => issue.status === value)
                       .length
@@ -546,7 +546,7 @@ function SampleEditor({
               >
                 <span>
                   {draft.issues.indexOf(issue) + 1}.{" "}
-                  {categories[issue.category]} · {issue.text || "尚未填写说明"}
+                  {categories[issue.category]} {issue.text || "尚未填写说明"}
                 </span>{" "}
                 {issue.status === "VERIFIED"
                   ? "已复核"
@@ -753,7 +753,7 @@ function SampleEditor({
             return (
               <article className={styles.record} key={revision.id}>
                 <strong>
-                  r{revision.revision} · {sample.name}
+                  r{revision.revision} {sample.name}
                 </strong>
                 <p className={styles.muted}>
                   {sample.issues.length} 个问题，

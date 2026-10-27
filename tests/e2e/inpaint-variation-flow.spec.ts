@@ -1,4 +1,4 @@
-import { chooseValue, valueControl } from "./choice-control";
+import { chooseValue, valueControl, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
@@ -136,7 +136,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   const workspace = await openCandidate(page);
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将领口改成窄驳领，保持原有面料");
-  await expect(workspace.getByRole("region", { name: "候选资产工作台", exact: true }).getByRole("combobox")).toHaveValue("");
+  await expectValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 可选"), "");
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
   await expect(workspace.getByRole("alert")).toContainText("请先涂抹需要修改的区域");
   const canvas = workspace.getByLabel("局部重绘掩码画布");
@@ -164,7 +164,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   expect(mocked.executions[0]?.params).not.toHaveProperty("palette");
   expect(mocked.executions[0]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", prompt: "将领口改成窄驳领，保持原有面料", maskImageUrl: "https://signed.example/mask-e2e.png?read=1", width: 768, height: 1024 } });
   await workspace.getByRole("button", { name: "重试执行当前修改节点" }).click();
-  await expect(workspace.getByRole("img", { name: /^(局部重绘|变体)结果 /u })).toBeVisible();
+  await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
   expect(mocked.executions).toHaveLength(2);
@@ -177,10 +177,10 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await openCandidate(page);
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将口袋改成贴袋，保持廓形");
-  await chooseValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 · 可选"), "palette");
+  await chooseValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 可选"), "palette");
   await workspace.getByRole("button", { name: "标记中央区域" }).click();
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
-  await expect(workspace.getByRole("img", { name: /^(局部重绘|变体)结果 /u })).toBeVisible();
+  await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
   expect(mocked.executions[2]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", palette: [{ hex: "#C8AB84", name: "色卡 01" }] } });
@@ -226,7 +226,7 @@ test("变体修改方向与保留项需显式确认，图冲突和执行失败�
   expect(mocked.patchRequests[1]?.operations).toEqual(mocked.patchRequests[0]?.operations);
   expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
   await workspace.getByRole("button", { name: "重试执行当前变体节点" }).click();
-  await expect(workspace.getByRole("img", { name: /^(局部重绘|变体)结果 /u })).toBeVisible();
+  await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
   expect(mocked.executions).toHaveLength(2);
@@ -256,7 +256,7 @@ test("变体分支已提交但响应丢失时，重试认领原节点且只执�
   expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
   expect(mocked.executions).toHaveLength(0);
   await workspace.getByRole("button", { name: "确认生成变体" }).click();
-  await expect(workspace.getByRole("img", { name: /^(局部重绘|变体)结果 /u })).toBeVisible();
+  await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
   expect(mocked.patchRequests).toHaveLength(1);

@@ -7,6 +7,7 @@
  */
 
 :root {
+  --border-hairline: 0.5px;
   color-scheme: light;
   --surface-0: oklch(94.5% 0.008 100);
   --surface-1: oklch(96% 0.008 100);
@@ -29,9 +30,9 @@
   --workspace-mobile-nav-height: 64px;
   --inspector-width: 320px;
   --editor-header-height: 64px;
-  --text-page-title: 32px;
+  --text-page-title: 24px;
   --text-module-title: 24px;
-  --text-section-title: 20px;
+  --text-section-title: 16px;
   --upload-preview-height: 200px;
   --content-max-width: 1600px;
   --page-gutter: 32px;
@@ -231,11 +232,11 @@
   --text-sm: 12px;
   --text-base: 14px;
   --text-lg: 16px;
-  --text-xl: 20px;
+  --text-xl: 16px;
   --text-2xl: 24px;
-  --text-3xl: 32px;
-  --text-4xl: 48px;
-  --text-5xl: 64px;
+  --text-3xl: 24px;
+  --text-4xl: 24px;
+  --text-5xl: 24px;
 
   /* 字重 */
   --font-normal: 400;

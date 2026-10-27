@@ -1,0 +1,15 @@
+.input {
+  display: block;
+  width: 100%;
+  field-sizing: content;
+  min-height: 64px !important;
+  max-height: 240px !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  resize: none;
+}
+.input::-webkit-scrollbar { display: none; }
+@media (max-width: 767px) {
+  .input { max-height: min(160px, 30dvh) !important; font-size: 16px !important; }
+}

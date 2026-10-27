@@ -140,7 +140,7 @@ export function FabricDetailsSummary({ details }: { readonly details?: FabricDet
       const source = details.provenance?.[field.key as FabricSpecField];
       return <div key={field.key}><dt>{field.label}</dt><dd>
         {Array.isArray(value) ? value.map((item) => item.fiber + " " + item.percent + "%").join(" / ") : String(value)}
-        {source ? <small className={styles.sourceNote}>{SOURCE_LABELS[source.source]}{source.note ? " · " + source.note : ""}</small> : null}
+        {source ? <small className={styles.sourceNote}>{SOURCE_LABELS[source.source]}{source.note ? " " + source.note : ""}</small> : null}
       </dd></div>;
     })}
   </dl>;

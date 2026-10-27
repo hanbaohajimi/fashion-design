@@ -13,7 +13,7 @@
   width: min(1160px, 100%);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   margin: auto;
   background: var(--color-surface);
   box-shadow: 12px 12px 0 var(--color-border);
@@ -35,7 +35,7 @@
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  border-bottom: 1px solid var(--color-ink);
+  border-bottom: var(--border-hairline) solid var(--color-ink);
 }
 
 .header > div {
@@ -63,7 +63,7 @@
 .header > button {
   min-width: 80px;
   border: 0;
-  border-left: 1px solid var(--color-ink);
+  border-left: var(--border-hairline) solid var(--color-ink);
   background: transparent;
   color: var(--color-ink);
   cursor: pointer;
@@ -77,11 +77,11 @@
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid var(--color-ink);
+  border-bottom: var(--border-hairline) solid var(--color-ink);
 }
 
 .tabs button {
-  border-right: 1px solid var(--color-ink);
+  border-right: var(--border-hairline) solid var(--color-ink);
   padding: 0 22px;
   background: transparent;
   color: var(--color-ink-secondary);
@@ -97,7 +97,7 @@
 
 .imageStage {
   display: grid;
-  border-right: 1px solid var(--color-ink);
+  border-right: var(--border-hairline) solid var(--color-ink);
   margin: 0;
   place-items: center;
 }
@@ -132,8 +132,8 @@
 
 .previewAside dl {
   display: grid;
-  border-top: 1px solid var(--color-border-strong);
-  border-bottom: 1px solid var(--color-border-strong);
+  border-top: var(--border-hairline) solid var(--color-border-strong);
+  border-bottom: var(--border-hairline) solid var(--color-border-strong);
   margin: 0;
 }
 
@@ -145,7 +145,7 @@
 }
 
 .previewAside dl > div + div {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
 }
 
 .previewAside dt,
@@ -172,7 +172,7 @@
 .primary,
 .notice button {
   min-height: 42px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 0 14px;
   background: transparent;
   color: var(--color-ink);
@@ -200,7 +200,7 @@
 
 .notice,
 .error {
-  border-bottom: 1px solid var(--color-error);
+  border-bottom: var(--border-hairline) solid var(--color-error);
   margin: 0;
   padding: 9px 17px;
   background: var(--color-error-bg);
@@ -218,7 +218,7 @@
 
 .previewAside .error,
 .sketchControls .error {
-  border: 1px solid var(--color-error);
+  border: var(--border-hairline) solid var(--color-error);
   padding: var(--space-2) 10px;
 }
 
@@ -235,7 +235,7 @@
 .sketchCanvasWrap {
   display: grid;
   overflow: hidden;
-  border-right: 1px solid var(--color-ink);
+  border-right: var(--border-hairline) solid var(--color-ink);
   padding: var(--space-5);
   background: var(--color-surface);
   place-items: center;
@@ -246,7 +246,7 @@
   width: min(100%, 540px);
   height: auto;
   aspect-ratio: 1;
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   background: var(--color-paper);
   box-shadow: 5px 5px 0 var(--color-divider);
   cursor: crosshair;
@@ -277,7 +277,7 @@
 
 .sketchControls input:not([type="color"]) {
   min-height: 39px;
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   border-radius: 0;
   padding: 0 10px;
   background: var(--color-paper);
@@ -294,7 +294,7 @@
 .options button {
   min-width: 48px;
   min-height: var(--control-height);
-  border: 1px solid var(--color-ink);
+  border: var(--border-hairline) solid var(--color-ink);
   padding: 0 var(--space-2);
   background: transparent;
   color: var(--color-ink);
@@ -355,7 +355,7 @@
     min-height: 42dvh;
     max-height: 53dvh;
     border-right: 0;
-    border-bottom: 1px solid var(--color-ink);
+    border-bottom: var(--border-hairline) solid var(--color-ink);
   }
   .imageStage img {
     max-height: 53dvh;
@@ -374,7 +374,7 @@
   }
   .sketchCanvasWrap {
     border-right: 0;
-    border-bottom: 1px solid var(--color-ink);
+    border-bottom: var(--border-hairline) solid var(--color-ink);
   }
   .sketchControls {
     padding: var(--space-5);
@@ -385,7 +385,7 @@
 .sketchDialog {
   width: min(1160px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-paper);
   box-shadow: var(--shadow-modal);

@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../components/drafts/use-persistent-draft";
 import { GridDetails } from "../../components/GridDetails";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为简报编辑；来源选择与品牌为次级。存入工作流为唯一主操作，不触发图片生成。 */
@@ -80,6 +81,7 @@ export function TrendBriefPanel({
     JSON.stringify({ selected: [], goal: "", directions: "", brandId: "" }),
   );
   const signature = JSON.stringify({ selected, goal, directions, brandId });
+  usePersistentDraft({ value: { selected, goal, directions, brandId }, baseline, restore: draft => { setSelected(draft.selected); setGoal(draft.goal); setDirections(draft.directions); setBrandId(draft.brandId); } });
   useEffect(() => {
     onDirty?.(signature !== baseline);
     return () => onDirty?.(false);
@@ -228,7 +230,7 @@ export function TrendBriefPanel({
                   <span>
                     <strong>{article.title}</strong>
                     <small>
-                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} ·{" "}
+                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} {" "}
                       <a
                         href={article.sourceUrl}
                         target="_blank"
@@ -258,7 +260,7 @@ export function TrendBriefPanel({
                     <h4>{article.title}</h4>
                     <p>{article.summary}</p>
                     <small>
-                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} ·{" "}
+                      {article.publishedAt?.slice(0, 10) ?? "发布日期未知"} {" "}
                       <a
                         href={article.sourceUrl}
                         target="_blank"
@@ -316,7 +318,7 @@ export function TrendBriefPanel({
                   <option value="">本次不指定品牌规则</option>
                   {brands.map((brand) => (
                     <option key={brand.id} value={brand.id}>
-                      {brand.currentRevision.payload.name} · 修订{" "}
+                      {brand.currentRevision.payload.name} 修订{" "}
                       {brand.version}
                     </option>
                   ))}

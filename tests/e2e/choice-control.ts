@@ -94,6 +94,8 @@ export async function chooseValue(
       .page()
       .getByRole("option", { name: label, exact: true })
       .click();
+    // A mobile selector remains native-modal until its exit transition ends.
+    await expect(control.page().locator('[role="listbox"]:visible')).toHaveCount(0);
   }
 }
 

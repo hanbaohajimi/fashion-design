@@ -501,3 +501,9 @@ async function agentRunRequest<T>(
   }
   return (await response.json()) as T;
 }
+
+export async function cancelAssistantReply(conversationId: string, requestId: string): Promise<{ status: string; messageId: string }> {
+  const response = await fetch(`/api/agent-conversations/${encodeURIComponent(conversationId)}/message-streams/${encodeURIComponent(requestId)}/cancel`, { method: "POST", credentials: "include" });
+  if (!response.ok) throw new Error("停止结果尚未确认，请读取消息状态后重试");
+  return response.json() as Promise<{ status: string; messageId: string }>;
+}

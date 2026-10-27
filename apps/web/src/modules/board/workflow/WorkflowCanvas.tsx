@@ -1,5 +1,7 @@
 "use client";
-import { useSidebarResize } from "./use-sidebar-resize";
+import { discardWorkspaceDrafts } from "../../../components/drafts/draft-repository";
+import { ProjectTaskCenter } from "../../tasks/ProjectTaskCenter";
+import { WorkspaceSplit } from "../../../components/WorkspaceSplit";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
 import { DesignWorkbench } from "./DesignWorkbench";
@@ -31,9 +33,8 @@ import {
   Tooltip,
   TooltipGroup,
 } from "../../../components/ui";
-import { STUDIO_LAYOUT, motionOptions } from "../../../components/ui-config";
+import { motionOptions } from "../../../components/ui-config";
 import controls from "../../../components/ui.module.css";
-import type { CSSProperties } from "react";
 import type { AgentRunView } from "@fashion/shared";
 import {
   getWorkflowToolCatalog,
@@ -744,12 +745,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       /* The view still works without storage. */
     }
   };
-  const {
-    workspaceRef,
-    width: sidebarWidth,
-    maximum: sidebarMaximum,
-    resizerProps,
-  } = useSidebarResize(layoutMode === "docked" && sidebarOpen);
   useEffect(() => {
     const update = () => {
       document.documentElement.dataset.pageHidden = String(document.hidden);
@@ -867,48 +862,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     if (!graph) return;
     const result = imageArrivals.observe(graph);
     if (!result.first) return;
-    const active = document.activeElement;
-    const typing =
-      active instanceof HTMLElement &&
-      (active.matches("input, textarea, [contenteditable=true]") ||
-        Boolean(active.closest("[contenteditable=true]")));
-    const editingImage = () =>
-      [
-        ...document.querySelectorAll<HTMLElement>(
-          '[data-image-editing="true"]',
-        ),
-      ].some((element) => element.checkVisibility());
-    const otherDialog = () =>
-      [
-        ...document.querySelectorAll<HTMLElement>(
-          'dialog[open], [role="dialog"][aria-modal="true"]:not([aria-label="图片工作区"])',
-        ),
-      ].some((element) => element.checkVisibility());
-    if (
-      draftStore.hasDirty() ||
-      editingImage() ||
-      typing ||
-      otherDialog() ||
-      document.hidden ||
-      (detailOpen &&
-        graph.nodes.find((n) => n.id === inspectedId)?.type !== "candidate")
-    )
-      return;
-    const nodeId = result.first.id;
-    requestAnimationFrame(() => {
-      if (
-        graphRef.current?.projectId !== graph.projectId ||
-        draftStore.hasDirty() ||
-        editingImage() ||
-        otherDialog()
-      )
-        return;
-      openDetails(nodeId);
-      setArrivals((ids) =>
-        ids.filter((id) => !result.fresh.some((node) => node.id === id)),
-      );
-    });
-  }, [graph, imageArrivals, draftStore, detailOpen, inspectedId, openDetails]);
+    // Arrivals are offered in place; opening a viewer remains an explicit action.
+    requestAnimationFrame(() => setArrivals(ids => [...new Set([...ids, ...result.fresh.map(node => node.id)])]));
+  }, [graph, imageArrivals]);
   const pendingInputEdits = useRef(
     new Map<
       string,
@@ -1392,6 +1348,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     }
   };
 
+  const locatedRequest = useRef("");
+  useEffect(() => {
+    if (!graph || loading) return;
+    const query = new URLSearchParams(window.location.search);
+    const id = query.get("nodeId");
+    if (id && locatedRequest.current !== id && graph.nodes.some(node => node.id === id)) {
+      locatedRequest.current = id;
+      openDetails(id);
+    }
+  }, [graph, loading, openDetails]);
+
   if (loading) return <BoardSkeleton />;
   if (!graph)
     return (
@@ -1508,6 +1475,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             </span>
           </div>
           <div className={`${styles.topActions} ${controls.controlSurface}`}>
+            <ProjectTaskCenter projectId={projectId} />
             {sync.error || layoutSave.state === "error" ? (
               <details className={styles.syncStatus} open>
                 <summary
@@ -1557,9 +1525,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             )}
             <WorkflowProjectPanels
               projectId={projectId}
-              graph={graph}
-              onGraph={commitGraph}
-              onLocate={openDetails}
               onCollection={setCollectionId}
             />
             <Link href={`/${encodeURIComponent(projectId)}/studio`}>
@@ -1624,12 +1589,12 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             }}
           />
         </div>
-        <div
+        <WorkspaceSplit
           className={styles.workspace}
-          ref={workspaceRef}
-          style={
-            { "--studio-sidebar-width": `${sidebarWidth}px` } as CSSProperties
-          }
+          docked={layoutMode === "docked"}
+          open={sidebarOpen}
+          onOpenChange={setSidebarOpen}
+          projectId={projectId}
           data-mobile-view={mobileView}
           data-sidebar-open={sidebarOpen ? "true" : "false"}
         >
@@ -2032,7 +1997,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 const baseline = detailBaseline(sessionNode);
                 const dirty = draftStore.ownerDirty(id);
                 const conflict = draftStore.ownerConflict(id);
-                const discard = () => {
+                const discard = async () => {
+                  await discardWorkspaceDrafts(key => { const parts = JSON.parse(key) as string[]; return parts[3]?.endsWith(`:${id}`) === true; });
                   draftStore.removeOwner(id);
                   setDetailEpochs((epochs) => ({
                     ...epochs,
@@ -2194,19 +2160,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             </WorkflowDetailWorkspace>
           </section>
 
-          {sidebarOpen && layoutMode === "docked" ? (
-            <div
-              aria-label="调整侧栏宽度"
-              aria-orientation="vertical"
-              aria-valuemin={STUDIO_LAYOUT.sidebarMin}
-              aria-valuemax={sidebarMaximum}
-              aria-valuenow={sidebarWidth}
-              className={styles.sidebarResizer}
-              role="separator"
-              tabIndex={0}
-              {...resizerProps}
-            />
-          ) : null}
           <aside
             aria-label="设计助手"
             className={`${styles.sidebar} ${controls.controlSurface}`}
@@ -2278,7 +2231,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               />
             </div>
           </aside>
-        </div>
+        </WorkspaceSplit>
 
           <Dialog open={Boolean(discardAction)} label="保留未保存的参数" onClose={cancelDiscard}>
             <div className={styles.entryDialog}>
@@ -2288,7 +2241,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 <Button onClick={cancelDiscard}>返回编辑</Button>
                 <Button
                   variant="danger"
-                  onClick={() => {
+                  onClick={async () => {
+                    await discardWorkspaceDrafts(key => !(JSON.parse(key) as string[])[3]?.startsWith("assistant:"));
                     discardReply.current?.(true);
                     discardReply.current = null;
                     discardAction?.();
@@ -2466,7 +2420,7 @@ function LegacyRunHistory({
 
   return (
     <section aria-label="旧设计运行历史" className={styles.legacyRuns}>
-      <h3>旧设计运行 · 只读</h3>
+      <h3>旧设计运行 只读</h3>
       <p>
         这些记录保留原来的目标、步骤、尝试与人工选择。后续设计请在主画布创建新分支。
       </p>
@@ -2482,7 +2436,7 @@ function LegacyRunHistory({
           >
             <strong>{run.intent || "未命名设计目标"}</strong>
             <span>
-              {run.status} · {new Date(run.createdAt).toLocaleString("zh-CN")}
+              {run.status} {new Date(run.createdAt).toLocaleString("zh-CN")}
             </span>
           </button>
         ))}
@@ -2501,7 +2455,7 @@ function LegacyRunHistory({
               <p>{selected.intelligence.brief.summary}</p>
               {selected.intelligence.brief.constraints.map((constraint) => (
                 <p key={constraint.id}>
-                  {constraint.priority === "must" ? "必须" : "偏好"} ·{" "}
+                  {constraint.priority === "must" ? "必须" : "偏好"} {" "}
                   {constraint.requirement}
                 </p>
               ))}
@@ -2513,7 +2467,7 @@ function LegacyRunHistory({
               {selected.steps.map((step) => (
                 <li key={step.id}>
                   <strong>
-                    {step.ordinal + 1}. {step.title} · {step.status}
+                    {step.ordinal + 1}. {step.title} {step.status}
                   </strong>
                   <p>{step.instruction}</p>
                   {step.prompt ? <p>提示词：{step.prompt}</p> : null}
@@ -2526,7 +2480,7 @@ function LegacyRunHistory({
                   {step.attempts?.map((attempt) => (
                     <div className={styles.legacyAttempt} key={attempt.id}>
                       <strong>
-                        尝试 {attempt.ordinal} · {attempt.status}
+                        尝试 {attempt.ordinal} {attempt.status}
                       </strong>
                       <p>提示词：{attempt.prompt}</p>
                       {attempt.parentAssetId ? (
@@ -2561,7 +2515,7 @@ function LegacyRunHistory({
                     {action.kind === "evaluate_candidate"
                       ? "候选评价"
                       : "修订建议"}{" "}
-                    · {action.status}
+                    {action.status}
                   </strong>
                   {action.evaluation ? (
                     <p>{action.evaluation.summary}</p>

@@ -1,4 +1,5 @@
 "use client";
+import { discardWorkspaceDrafts, flushWorkspaceDrafts } from "../../components/drafts/draft-repository";
 
 import {
   useEffect,
@@ -143,7 +144,7 @@ export function AssetPicker({
             <span className={styles.assetLabel}>{nameOf(asset.id)}</span>
             <span className={styles.selectionLabel}>
               {ids.includes(asset.id)
-                ? `已选 · 第 ${ids.indexOf(asset.id) + 1} 张`
+                ? `已选 第 ${ids.indexOf(asset.id) + 1} 张`
                 : "选择图片"}
             </span>
           </button>
@@ -177,7 +178,7 @@ export function AssetPicker({
             setBrowsing(true);
           }}
         >
-          {selected.length ? "更换或添加图片" : "浏览全部图片"} ·{" "}
+          {selected.length ? "更换或添加图片" : "浏览全部图片"} {" "}
           {assets.length}
         </Button>
       ) : null}
@@ -191,7 +192,7 @@ export function AssetPicker({
                 onClick={(event) => { setPreviewKeyboard(event.detail === 0); setPreviewSource(event.currentTarget); setPreview(asset); }}
                 aria-label={`查看大图：${nameOf(asset.id)}`}
               >
-                {nameOf(asset.id)} · 查看大图
+                {nameOf(asset.id)} 查看大图
               </Button>
             ))}
           </div>
@@ -258,7 +259,7 @@ export function AssetPicker({
                 setLimit(false);
               }}
             >
-              确认选择 · {draft.length} 张
+              确认选择 {draft.length} 张
             </Button>
           </div>
         </Dialog>
@@ -351,6 +352,7 @@ export function useStudioLeaveGuard(dirty: boolean) {
     dirtyRef.current = dirty;
   }, [dirty]);
   const confirmLeave = async (): Promise<boolean> => {
+    await flushWorkspaceDrafts();
     if (!dirtyRef.current) return true;
     setOpen(true);
     return new Promise((resolve) => {
@@ -478,7 +480,8 @@ export function useStudioLeaveGuard(dirty: boolean) {
           </Button>
           <Button
             variant="danger"
-            onClick={() => {
+            onClick={async () => {
+              await discardWorkspaceDrafts();
               resolveRef.current?.(true);
               setOpen(false);
             }}

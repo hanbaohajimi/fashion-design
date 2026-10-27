@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 
 import { Select } from "../../../components/ui";
 import { readSwatchColors } from "@fashion/shared";
@@ -136,6 +137,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   const [pendingToolId, setPendingToolId] = useState<string | null>(null);
   const [pendingPatch, setPendingPatch] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
+  usePersistentDraft({ value: { prompts, preserve, paletteId, brushRatio }, baseline: JSON.stringify({ prompts: { inpaint: "", variation: "" }, preserve: "", paletteId: "", brushRatio: 0.06 }), objectKey: `image-tools:${assetId}`, restore: draft => { setPrompts(draft.prompts); setPreserve(draft.preserve); setPaletteId(draft.paletteId); setBrushRatio(draft.brushRatio); } });
   const mask = useRef<MaskCanvasHandle>(null);
   const pendingEditPatch = useRef<PendingEditPatch | null>(null);
   const previewUrl = `/api/design-assets/${encodeURIComponent(assetId)}/content`;
@@ -277,7 +279,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
           baseRevision: latest.revision,
           operations: [
             { type: "add_node", node: {
-              id: toolId, kind: "tool", type: "edit_design", title: `变体 · ${prompt.trim().slice(0, 42)}`,
+              id: toolId, kind: "tool", type: "edit_design", title: `变体 ${prompt.trim().slice(0, 42)}`,
               payload: { toolKey: "edit_design", toolVersion: "1", params: {
                 taskType: "i2i", prompt: `${prompt.trim()}\n保持不变：${preserve.trim()}`,
                 width: generationDimension(dimensions.width), height: generationDimension(dimensions.height),
@@ -329,7 +331,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
                 id: toolId,
                 kind: "tool",
                 type: "edit_design",
-                title: `局部修改 · ${prompt.trim().slice(0, 42)}`,
+                title: `局部修改 ${prompt.trim().slice(0, 42)}`,
                 payload: {
                   toolKey: "edit_design",
                   toolVersion: "1",
@@ -411,8 +413,8 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
               <aside className={generationStyles.inpaintControls}>
                 <div><strong>选择并描述修改</strong></div>
                 <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
-                {palettes.length ? <label><span>参考色卡 · 可选</span><Select searchable disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label> : null}
-                <label><span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
+                {palettes.length ? <label><span>参考色卡 可选</span><Select searchable disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label> : null}
+                <label><span>画笔尺寸 {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
                 <div className={generationStyles.maskActions}><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !dimensions} onClick={() => mask.current?.addCenterRegion()} type="button">标记中央区域</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.undo()} type="button">撤销一笔</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.clear()} type="button">清空</button></div>
                 {submissionStage ? <p role="status">{submissionStage}</p> : null}
                 {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}

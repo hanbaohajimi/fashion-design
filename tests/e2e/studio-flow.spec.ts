@@ -75,7 +75,7 @@ async function mockStudio(page: Page) {
       return route.fulfill({
         json: {
           id: PROJECT_ID,
-          name: "城市漫步 · 春夏设计",
+          name: "城市漫步 春夏设计",
           archived: false,
           createdAt: NOW,
           updatedAt: NOW,
@@ -251,6 +251,7 @@ async function mockStudio(page: Page) {
           downloadUrl: "/api/exports/export-1/content",
         },
       });
+    if (path === `/api/projects/${PROJECT_ID}/tasks` && method === "GET") return route.fulfill({ json: { items: [], nextCursor: null, counts: { running: 0, attention: 0 } } });
     unexpected.push(method + " " + path);
     return route.fulfill({ status: 404, json: { message: "未模拟此 API" } });
   });
@@ -323,7 +324,10 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
     page.getByRole("heading", { name: "城市褶线夹克", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.locator("summary").filter({ hasText: "切换款式" }).click();
+  const styleSwitcher = page.locator("details").filter({ has: page.locator("summary").filter({ hasText: "切换款式" }) }).first();
+  await styleSwitcher.locator("summary").first().click();
+  await expect(styleSwitcher.locator("[data-expanded]").first()).toHaveAttribute("data-expanded", "true");
+  await styleSwitcher.evaluate(async element => { await Promise.allSettled(element.getAnimations({ subtree: true }).filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished)); });
   await page
     .getByRole("complementary", { name: "已有款式" })
     .getByRole("button", { name: /SS-028-JK02/ })
@@ -379,7 +383,7 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
   await page.getByLabel("图片 1 说明", { exact: true }).fill("夹克正面");
   await page.getByRole("checkbox", { name: /已人工核对图片 1/ }).check();
   await page
-    .getByRole("button", { name: "图片 2 · 待复核", exact: true })
+    .getByRole("button", { name: "图片 2 待复核", exact: true })
     .click();
   await chooseValue(valueControl(page, "图片 2 视图"), "back");
   await page.getByLabel("图片 2 说明", { exact: true }).fill("夹克背面");

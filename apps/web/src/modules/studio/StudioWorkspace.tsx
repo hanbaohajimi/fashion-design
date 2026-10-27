@@ -13,6 +13,7 @@ import {
   TabPanel,
   Menu,
 } from "../../components/ui";
+import { ProjectTaskCenter } from "../tasks/ProjectTaskCenter";
 import { AppHeader } from "../../components/AppHeader";
 import { RevisionSaved } from "../../components/motion/RevisionSaved";
 import { fetchProject } from "../projects/projects-api";
@@ -190,38 +191,15 @@ export function StudioWorkspace({
       >
         <div className={styles.workspaceMain}>
           <header className={styles.header}>
-            <h1 className={styles.accessibleTitle}>{name} · 款式与交付</h1>
+            <h1 className={styles.accessibleTitle}>{name} 款式与交付</h1>
             <div>
               <nav aria-label="项目导航" className={styles.toolbar}>
                 <strong>{name}</strong>
-                {[
-                  ["项目库", "/"],
-                  ["设计工作台", `/${encodeURIComponent(projectId)}`],
-                  [
-                    "面料库",
-                    `/fabrics?from=board&boardId=${encodeURIComponent(projectId)}`,
-                  ],
-                  [
-                    "趋势档案",
-                    `/trends?from=board&boardId=${encodeURIComponent(projectId)}`,
-                  ],
-                ].map(([label, href]) => (
-                  <Button
-                    key={label}
-                    onClick={() => {
-                      void (async () => {
-                        if (href && (await guard.confirmLeave()))
-                          window.location.assign(href);
-                      })();
-                    }}
-                  >
-                    {label}
-                  </Button>
-                ))}
               </nav>
               <span className={styles.projectCaption}>款式与交付</span>
             </div>
             <div className={styles.toolbar}>
+              <ProjectTaskCenter projectId={projectId} />
               {data ? (
                 <Button
                   size="small"

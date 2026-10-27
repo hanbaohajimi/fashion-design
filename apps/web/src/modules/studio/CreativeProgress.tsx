@@ -19,7 +19,7 @@ export function CreativeProgress({
       <summary>
         创作进展{" "}
         <span>
-          {progress.styles} 款档案 · {progress.assets} 张候选
+          {progress.styles} 款档案 {progress.assets} 张候选
         </span>
       </summary>
       <section className={styles.progress} aria-label="创作进展">
@@ -35,7 +35,7 @@ export function CreativeProgress({
             </button>
           </div>
           <p>
-            {progress.styles} 款档案 · {progress.assets} 张候选 ·{" "}
+            {progress.styles} 款档案 {progress.assets} 张候选 {" "}
             {progress.packs} 份技术包
           </p>
         </div>
@@ -48,7 +48,7 @@ export function CreativeProgress({
                   <button type="button" onClick={() => onNavigate(record.tab)}>
                     <strong>{record.title}</strong>
                     <span>
-                      {record.detail} ·{" "}
+                      {record.detail} {" "}
                       <time dateTime={record.date}>
                         {new Date(record.date).toLocaleDateString("zh-CN")}
                       </time>

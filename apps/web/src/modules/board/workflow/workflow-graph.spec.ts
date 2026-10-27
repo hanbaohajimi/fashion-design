@@ -39,14 +39,14 @@ describe("workflow graph", () => {
   it("fits landscape, portrait and square images without reserving a portrait frame", () => {
     for (const [width, height] of [[1920, 1080], [768, 1024], [900, 900], [10000, 100], [100, 10000]] as const) {
       const size = imageNodeSize({ width, height });
-      // The caption and border occupy 60 px; the remaining box keeps the photo ratio.
-      expect((size.w - 4) / (size.h - 60)).toBeCloseTo(width / height, 8);
-      // jsdom 的 innerWidth 为 1024，走桌面档：宽度上限 400 + 4px 边框，高度上限 460。
+      // The caption and border occupy 58 px; the remaining box keeps the photo ratio.
+      expect((size.w) / (size.h - 58)).toBeCloseTo(width / height, 8);
+      // jsdom 的 innerWidth 为 1024，走桌面档：宽度上限 400，轮廓不占尺寸，高度上限 460。
       // 窄视口（< 768）的紧凑档在 e2e 的 390px 用例里覆盖。
-      expect(size.w).toBeLessThanOrEqual(404);
+      expect(size.w).toBeLessThanOrEqual(400);
       expect(size.h).toBeLessThanOrEqual(460);
-      expect(size.w).toBeGreaterThan(2);
-      expect(size.h).toBeGreaterThan(60);
+      expect(size.w).toBeGreaterThan(1);
+      expect(size.h).toBeGreaterThan(58);
     }
   });
 
@@ -63,7 +63,7 @@ describe("workflow graph", () => {
     expect(nodeSize(image)).toEqual({ w: plain.w, h: plain.h + 22 });
     const portraitWithSummary = imageNodeSize({ width: 768, height: 1024 }, true);
     expect(portraitWithSummary.h).toBe(460);
-    expect((portraitWithSummary.w - 4) / (portraitWithSummary.h - 82)).toBeCloseTo(768 / 1024, 8);
+    expect((portraitWithSummary.w) / (portraitWithSummary.h - 80)).toBeCloseTo(768 / 1024, 8);
     expect(imageNodeSize({ width: Number.NaN, height: Number.POSITIVE_INFINITY })).toEqual(imageNodeSize({ width: 1, height: 1 }));
     expect(nodeSize(node("brief", "asset", "brief"))).toEqual({ w: 300, h: 200 });
     // 工具节点刻意比素材矮一档：过程不该抢作品的视觉高度。

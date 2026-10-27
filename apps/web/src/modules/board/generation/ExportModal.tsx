@@ -300,7 +300,7 @@ export function ExportModal({
             {recent.length > 0 ? <label>最近导出<Select aria-label="最近导出" value={job?.id ?? ""} onChange={(event) => {
               const id = event.target.value;
               void fetchExportJob(id).then((next) => { setJob(next); setFormat(next.format); setQuality(next.quality); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "导出读取失败"));
-            }}>{recent.map((item) => <option key={item.id} value={item.id}>{item.format.toUpperCase()} · {new Date(item.createdAt).toLocaleString("zh-CN")}</option>)}</Select></label> : null}
+            }}>{recent.map((item) => <option key={item.id} value={item.id}>{item.format.toUpperCase()} {new Date(item.createdAt).toLocaleString("zh-CN")}</option>)}</Select></label> : null}
             {error && job ? <button onClick={() => { failures.current = 0; setPollAttempt((value) => value + 1); }} type="button">重试状态查询</button> : null}
 
             <div className={styles.exportActions}>

@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 
 import { ProjectAccessModule } from "../studio/project-access.module";
 import { AssistantStreamsModule } from "./assistant-streams.module";
+import { AssistantCancellationService, assistantCancellationDatabase } from "./assistant-cancellation.service";
 import { AiModule } from "../ai/ai.module";
 import { AgentRunsModule } from "../agent-runs/agent-runs.module";
 import { WorkflowRuntimeModule } from "../workflow-runtime/workflow-runtime.module";
@@ -34,6 +35,8 @@ import {
     ProjectAgentConversationsController,
   ],
   providers: [
+    AssistantCancellationService,
+    assistantCancellationDatabase,
     AgentConversationsService,
     { provide: AGENT_CONVERSATIONS_DB, useValue: prisma },
   ],

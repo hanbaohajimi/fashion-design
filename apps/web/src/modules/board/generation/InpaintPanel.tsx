@@ -285,7 +285,7 @@ export function InpaintPanel({
           <label className={styles.paletteToggle}>
             <span>
               <strong id={paletteHeadingId}>使用色卡</strong>
-              <small>可选 · 只约束涂抹区域的颜色</small>
+              <small>可选 只约束涂抹区域的颜色</small>
             </span>
             <input
               checked={paletteEnabled}
@@ -351,7 +351,7 @@ export function InpaintPanel({
           )}
         </section>
         <label>
-          <span>画笔尺寸 · {Math.round(brushRatio * 100)}%</span>
+          <span>画笔尺寸 {Math.round(brushRatio * 100)}%</span>
           <input
             aria-label="掩码画笔尺寸"
             disabled={submitting}

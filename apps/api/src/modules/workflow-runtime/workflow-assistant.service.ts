@@ -305,7 +305,7 @@ export class WorkflowAssistantService {
     const initialBudget = { modelCalls: typeof storedBudget.modelCalls === "number" ? storedBudget.modelCalls : 0,
       readRounds: typeof storedBudget.readRounds === "number" ? storedBudget.readRounds : 0, repairUsed: storedBudget.repairUsed === true };
     const result = await this.coordinatorService().run({ userId, projectId, conversationId, request: input.content, referencedNodeIds: input.referencedNodeIds,
-      ...(observer ? { stream: observer } : {}),
+      ...(observer ? { stream: observer, ...(observer.signal ? { signal: observer.signal } : {}) } : {}),
       deadlineAt: turnRecord.leaseExpiresAt?.getTime() ?? Date.now() + TURN_TIMEOUT_MS,
       trigger: observation ? "observation" : "user", previousPlan: previousPlan?.plan, initialBudget,
       reserveBudget: async (budget) => {
@@ -414,7 +414,7 @@ function messageView(row: MessageRow) {
   const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
   if (summary.success) context.referenceSummary = summary.data;
   const evidence = object(row.proposal?.evidence);
-  return { id: row.id, role: row.role === "USER" ? "user" as const : "assistant" as const, status: row.status.toLowerCase() as "pending" | "completed" | "failed", content: row.content,
+  return { id: row.id, role: row.role === "USER" ? "user" as const : "assistant" as const, status: row.status.toLowerCase() as "pending" | "completed" | "failed" | "canceled", content: row.content,
     kind: row.kind ?? null, context, clientRequestId: row.clientRequestId, replyToId: row.replyToId, generationTaskId: row.generationTaskId,
     origin: row.origin ?? "user", executionId: row.executionId ?? null, sourceEventId: row.sourceEventId ?? null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),

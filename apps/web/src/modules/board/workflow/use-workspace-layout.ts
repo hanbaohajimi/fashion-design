@@ -45,9 +45,10 @@ export function useWorkspaceLayout() {
   });
   useEffect(() => {
     const mobile = matchMedia(`(max-width: ${STUDIO_LAYOUT.mobileMax}px)`);
-    const docked = matchMedia(`(min-width: ${STUDIO_LAYOUT.dockedMin}px)`);
+    let surface = document.querySelector("main");
+    const available = () => (surface?.isConnected ? surface : document.querySelector("main"))?.clientWidth ?? window.innerWidth;
     const mode = (): WorkspaceMode =>
-      mobile.matches ? "mobile" : docked.matches ? "docked" : "overlay";
+      mobile.matches ? "mobile" : available() >= STUDIO_LAYOUT.canvasMin + STUDIO_LAYOUT.sidebarMin + 6 ? "docked" : "overlay";
     let initialized = false;
     let focusFrame = 0;
     const update = () => {
@@ -58,7 +59,7 @@ export function useWorkspaceLayout() {
         document.activeElement instanceof HTMLElement
           ? document.activeElement
           : null;
-      setLayout((current) => changeWorkspaceMode(current, next, initial));
+      setLayout((current) => { const result = changeWorkspaceMode(current, next, initial); return initial && new URLSearchParams(window.location.search).has("conversationId") ? { ...result, sidebarOpen: true, mobileView: "assistant" } : result; });
       cancelAnimationFrame(focusFrame);
       if (!initial && focused?.closest("main"))
         focusFrame = requestAnimationFrame(() => {
@@ -81,12 +82,18 @@ export function useWorkspaceLayout() {
     };
     const frame = requestAnimationFrame(update);
     mobile.addEventListener("change", update);
-    docked.addEventListener("change", update);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    if (surface) observer?.observe(surface);
+    const mutation = new MutationObserver(() => { const current = document.querySelector("main"); if (current !== surface) { observer?.disconnect(); surface = current; if (surface) observer?.observe(surface); update(); } });
+    mutation.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", update);
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(focusFrame);
       mobile.removeEventListener("change", update);
-      docked.removeEventListener("change", update);
+      mutation.disconnect();
+      observer?.disconnect();
+      window.removeEventListener("resize", update);
     };
   }, []);
   const setMobileView = useCallback(

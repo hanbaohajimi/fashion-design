@@ -65,7 +65,7 @@
 }
 .prose :is(th, td) {
   padding: var(--space-2);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   text-align: left;
   min-width: 96px;
 }

@@ -239,7 +239,7 @@ export function WorkflowImageInputs({
           if (fabric)
             void onAdd(
               "fabric",
-              fabric.fabricTags.join(" · ").slice(0, 200),
+              fabric.fabricTags.join(" ").slice(0, 200),
               { fabricId: fabric.fabricId, imageUrl: fabric.thumbnailUrl },
               point,
             ).catch((cause) => setError(String(cause)));

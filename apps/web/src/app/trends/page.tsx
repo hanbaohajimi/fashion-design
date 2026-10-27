@@ -56,7 +56,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
           }
         />
 
-        <details className={styles.externalSources}><summary>外部时尚资料 · 8 个来源</summary><section className={styles.sourceLayout}>
+        <details className={styles.externalSources}><summary>外部时尚资料 8 个来源</summary><section className={styles.sourceLayout}>
           <nav aria-label="时尚趋势平台" className={styles.platformIndex}>
             {TREND_PLATFORMS.map((platform, index) => (
               <a

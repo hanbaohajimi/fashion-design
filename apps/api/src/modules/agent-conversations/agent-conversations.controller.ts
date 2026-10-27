@@ -29,6 +29,7 @@ import {
 } from "./agent-conversations.schemas";
 import { AgentConversationsService } from "./agent-conversations.service";
 import { AssistantStreamsService } from "./assistant-streams.service";
+import { AssistantCancellationService } from "./assistant-cancellation.service";
 import type { Response } from "express";
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -89,6 +90,7 @@ export class AgentConversationsController {
     @Inject(AgentConversationsService)
     private readonly conversations: AgentConversationsService,
     @Optional() @Inject(AssistantStreamsService) private readonly streams?: AssistantStreamsService,
+    @Optional() @Inject(AssistantCancellationService) private readonly cancellation?: AssistantCancellationService,
   ) {}
 
   @Patch(":id")
@@ -141,7 +143,7 @@ export class AgentConversationsController {
   ) {
     const id = parseOrThrow(agentIdSchema, conversationId);
     const input = parseOrThrow(sendAgentMessageSchema, body);
-    if (!this.streams?.enabled(accept)) return response.json(await this.conversations.send(user.userId, id, input));
+    if (!this.streams?.enabled(accept)) return response.json(await (this.streams ? this.streams.runCancelable(id, input.clientRequestId, observer => this.conversations.send(user.userId, id, input, observer), () => this.conversations.recoverStream(user.userId, id, input.clientRequestId)) : this.conversations.send(user.userId, id, input)));
     await this.conversations.authorizeStream(user.userId, id, true);
     return this.streams.start(response, id, input.clientRequestId, (observer) => this.conversations.send(user.userId, id, input, observer), () => this.conversations.recoverStream(user.userId, id, input.clientRequestId), JSON.stringify(input));
   }
@@ -152,6 +154,14 @@ export class AgentConversationsController {
     await this.conversations.authorizeStream(user.userId, id);
     if (!this.streams) return response.json(await this.conversations.recoverStream(user.userId, id, request));
     return this.streams.follow(response, id, request, after, () => this.conversations.recoverStream(user.userId, id, request), () => this.conversations.authorizeStream(user.userId, id));
+  }
+
+  @Post(":id/message-streams/:requestId/cancel")
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ keyBy: "user", limit: 120, name: "assistant-cancel", windowSeconds: 60 })
+  cancel(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Param("requestId") requestId: string) {
+    if (!this.cancellation) throw new BadRequestException("停止回复暂不可用");
+    return this.cancellation.cancel(user.userId, parseOrThrow(agentIdSchema, conversationId), parseOrThrow(agentIdSchema, requestId));
   }
 
   @Post(":id/generation-tasks/:taskId")

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { draftRepository } from "../../components/drafts/draft-repository";
 import {
   createContext,
   type ReactNode,
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const id = session?.user.id ?? null;
     if (draftOwner.current && draftOwner.current !== id) {
+      void draftRepository.clearAccount(draftOwner.current).catch(() => undefined);
       try { for (const key of Object.keys(localStorage)) if (key.startsWith(`fashion-sketch:${draftOwner.current}:`)) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
     }
     draftOwner.current = id;

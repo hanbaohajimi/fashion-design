@@ -54,7 +54,7 @@
   flex: none;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
 }
 
@@ -242,7 +242,7 @@
   height: var(--space-12);
   padding: var(--space-1) var(--space-4);
   background: var(--color-canvas);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 .canvasSection[data-canvas-view="workbench"] .canvasHeading {
   display: none;
@@ -342,7 +342,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink-secondary);
@@ -372,7 +372,7 @@
   top: 50%;
   left: 50%;
   width: min(410px, 80%);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   padding: var(--space-8);
   background: var(--color-paper);
@@ -384,7 +384,7 @@
 .emptyState > span {
   color: var(--color-action);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -433,7 +433,7 @@
   gap: 2px;
   margin-left: var(--space-2);
   padding-left: var(--space-2);
-  border-left: 1px solid var(--color-divider);
+  border-left: var(--border-hairline) solid var(--color-divider);
 }
 
 .zoomControls button {
@@ -466,7 +466,7 @@
   min-height: 50px;
   align-items: center;
   gap: var(--space-1);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 14px;
   padding: 5px 6px;
   background: var(--color-paper);
@@ -518,7 +518,7 @@
   padding: 9px 18px;
   background: var(--color-paper);
   color: var(--color-ink);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   font-weight: 600;
 }
 
@@ -533,13 +533,14 @@
 }
 
 .addPopover {
+  --popover-x: 0px;
   position: absolute;
   bottom: calc(100% + 10px);
   left: 0;
   display: flex;
   width: 295px;
   flex-direction: column;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   padding: var(--space-2);
   background: var(--color-paper);
   box-shadow: var(--shadow-popup);
@@ -551,11 +552,11 @@
 @keyframes popFromBottom {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.94);
+    transform: translateX(var(--popover-x)) translateY(12px) scale(0.94);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(var(--popover-x)) translateY(0) scale(1);
   }
 }
 
@@ -630,7 +631,7 @@
 /* 侧栏头部：移除 overline，让 tab 栏直接成为唯一顶部元素 */
 .sidebarHeader {
   flex: none;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
 }
 
 /* overline（DESIGN COPILOT）移除 */
@@ -685,7 +686,7 @@
 .guidanceSwitch {
   display: inline-flex;
   gap: 2px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-full);
   padding: 3px;
   background: var(--color-surface);
@@ -721,7 +722,7 @@
 }
 
 .sessionGoal {
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   margin: var(--space-3) 0 0;
   padding-bottom: 17px;
   color: var(--color-ink-secondary);
@@ -756,7 +757,7 @@
 /* 建议卡片：只有真正存在待处理建议时才成立为卡片。
    无建议时它退化为一段安静说明，不再用边框和阴影占住半屏。 */
 .suggestionCard {
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 14px;
   background: var(--color-paper);
@@ -764,7 +765,7 @@
 
 .suggestionCard[data-empty="true"] {
   border: 0;
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   border-radius: 0;
   padding: var(--space-4) 0;
   background: transparent;
@@ -841,7 +842,7 @@
 .chatToolbar select {
   min-width: 0;
   flex: 1;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   padding: var(--space-2);
   background: var(--color-paper);
@@ -851,7 +852,7 @@
 
 .chatToolbar button {
   flex: none;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   padding: var(--space-2);
   background: var(--color-surface);
@@ -889,7 +890,7 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   margin-top: var(--space-3);
   padding: var(--space-3) 0;
 }
@@ -926,7 +927,7 @@
 .legacyRunList button {
   display: grid;
   gap: 3px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 8px;
   padding: var(--space-2) 10px;
   background: var(--color-paper);
@@ -946,7 +947,7 @@
 }
 
 .legacyRunDetail {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   margin-top: var(--space-3);
   padding-top: var(--space-3);
 }
@@ -960,7 +961,7 @@
 }
 
 .legacyAttempt {
-  border-left: 2px solid var(--swatch-mauve);
+  border-inline-start: var(--border-hairline) solid var(--color-divider);
   margin: 7px 0;
   padding-left: 9px;
 }
@@ -1019,7 +1020,7 @@
   max-height: 174px;
   flex-direction: column;
   overflow: auto;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
   margin-bottom: 7px;
   padding-bottom: 5px;
 }
@@ -1053,7 +1054,7 @@
 
 .detailScroll h3 {
   margin: var(--space-2) 0;
-  font-size: 22px;
+  font-size: 24px;
   letter-spacing: -0.04em;
 }
 
@@ -1078,7 +1079,7 @@
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   margin-top: var(--space-5);
   padding-top: 17px;
   color: var(--color-ink-secondary);
@@ -1090,7 +1091,7 @@
 }
 
 .detailSection {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   margin-top: var(--space-5);
   padding-top: 15px;
 }
@@ -1128,7 +1129,7 @@
 .toolForm input {
   min-width: 0;
   width: 100%;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   padding: var(--space-2);
   background: var(--color-paper);
@@ -1156,7 +1157,7 @@
 }
 
 .constraintRow {
-  border-left: 2px solid var(--swatch-mauve);
+  border-inline-start: var(--border-hairline) solid var(--color-divider);
   margin: 9px 0;
   padding: 3px 0 var(--space-1) 10px;
 }
@@ -1174,7 +1175,7 @@
 .detailSection button,
 .detailSection select {
   width: 100%;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   margin: 3px 0;
   padding: 9px;
@@ -1187,7 +1188,7 @@
 .decisionReason {
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   margin: 5px 0;
   padding: 9px;
@@ -1243,12 +1244,12 @@
 
 .sideEmpty > span {
   color: var(--color-ink-tertiary);
-  font-size: 42px;
+  font-size: 24px;
 }
 
 .sideEmpty h3 {
   margin: var(--space-2) 0 2px;
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .sideEmpty p {
@@ -1262,7 +1263,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   padding: var(--space-3) 18px;
   background: var(--color-error-bg);
   color: var(--color-action-hover);
@@ -1282,7 +1283,7 @@
   width: max-content;
   max-width: min(480px, calc(100% - 32px));
   pointer-events: none;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 6px;
   background: var(--color-paper);
 }
@@ -1312,7 +1313,7 @@
 .entryDialog,
 .libraryDialog {
   width: min(460px, 100%);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 13px;
   padding: 23px;
   background: var(--color-paper);
@@ -1332,13 +1333,13 @@
   background: none;
   color: var(--color-ink-secondary);
   cursor: pointer;
-  font-size: 23px;
+  font-size: 24px;
 }
 
 .entryDialog h2,
 .libraryDialog h2 {
   margin: var(--space-2) 0 17px;
-  font-size: 23px;
+  font-size: 24px;
 }
 
 .entryDialog label {
@@ -1354,7 +1355,7 @@
 .entryDialog input,
 .entryDialog textarea {
   width: 100%;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 7px;
   padding: 10px;
   background: var(--color-paper);
@@ -1379,7 +1380,7 @@
   min-width: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   padding: 0 0 var(--space-3);
   background: var(--color-paper);
   cursor: pointer;
@@ -1399,7 +1400,7 @@
   display: grid;
   place-items: center;
   color: var(--color-ink-tertiary);
-  font-size: 35px;
+  font-size: 24px;
 }
 
 .libraryGrid strong,
@@ -1432,7 +1433,7 @@
   flex-direction: column;
   background: var(--color-canvas);
   color: var(--color-ink-secondary);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .loadError h1 {
@@ -1546,7 +1547,7 @@
 
   .canvasHeading h1 {
     max-width: 230px;
-    font-size: 17px;
+    font-size: 16px;
   }
 
   .canvasHeading p {
@@ -1555,7 +1556,7 @@
 
   .mobileListToggle {
     display: block;
-    border: 1px solid var(--color-border);
+    border: var(--border-hairline) solid var(--color-border);
     border-radius: 7px;
     padding: 7px;
     background: var(--color-paper);
@@ -1581,7 +1582,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    border: 1px solid var(--color-border);
+    border: var(--border-hairline) solid var(--color-border);
     border-radius: 9px;
     padding: 11px;
     background: var(--color-paper);
@@ -1615,6 +1616,7 @@
   }
 
   .addPopover {
+    --popover-x: -50%;
     left: 50%;
     width: min(295px, calc(100vw - 24px));
     max-height: calc(48dvh - 96px);
@@ -1679,7 +1681,7 @@
   .sidebar {
     max-height: 55dvh;
     min-height: 330px;
-    border-top: 1px solid var(--color-border);
+    border-top: var(--border-hairline) solid var(--color-border);
     border-left: 0;
   }
 
@@ -1762,7 +1764,7 @@
 .designContext {
   flex: none;
   margin-top: var(--space-3);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   padding-bottom: 10px;
   font-size: var(--text-sm);
 }
@@ -1790,7 +1792,7 @@
   padding: 6px 0;
 }
 .contextContents section {
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   padding: 10px 0;
 }
 .contextContents h3 {
@@ -1807,7 +1809,7 @@
   white-space: pre-wrap;
 }
 .contextContents blockquote {
-  border-left: 2px solid var(--color-border);
+  border-inline-start: var(--border-hairline) solid var(--color-divider);
   padding-left: var(--space-2);
   font-size: var(--text-sm);
 }
@@ -1834,7 +1836,7 @@
 }
 .contextContents textarea {
   width: 100%;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 5px;
   padding: 7px;
   background: var(--color-paper);
@@ -1851,7 +1853,7 @@
   font-size: var(--text-sm);
 }
 .legacyReadOnly {
-  border-top: 1px solid var(--color-divider);
+  border-top: var(--border-hairline) solid var(--color-divider);
   padding: 10px 0;
   font-size: var(--text-sm);
   line-height: 1.6;
@@ -1968,7 +1970,7 @@
 .proposalEditor select {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 5px;
   padding: 7px;
   background: var(--color-paper);
@@ -2000,7 +2002,7 @@
 .sidebarCollapse {
   max-width: 100%;
   min-width: 0;
-  border: 1px solid transparent;
+  border: var(--border-hairline) solid transparent;
   border-radius: 5px;
   padding: 5px var(--space-2);
   color: var(--color-ink-secondary);
@@ -2169,8 +2171,8 @@
   height: 5px;
   flex: none;
   align-self: center;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
+  border-right: var(--border-hairline) solid currentColor;
+  border-bottom: var(--border-hairline) solid currentColor;
   margin: 0 2px;
   transform: rotate(-45deg);
   transition: transform var(--duration-fast, 140ms);
@@ -2280,7 +2282,7 @@
   align-items: end;
   gap: var(--space-3);
   padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 .libraryDialog {
   border-radius: var(--radius-xl);
@@ -2298,7 +2300,7 @@
 .libraryDialog > button {
   margin: var(--space-4);
   min-height: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   padding: var(--space-2) var(--space-4);
@@ -2358,7 +2360,7 @@
   max-width: none;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--color-border);
+  border-left: var(--border-hairline) solid var(--color-border);
 }
 .sidebarHeader {
   min-height: var(--studio-header-height);
@@ -2419,7 +2421,7 @@
   min-width: 0;
   min-height: var(--control-height);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -2437,7 +2439,7 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-hairline) solid var(--color-border);
   background: var(--color-paper);
   z-index: 2;
 }
@@ -2496,7 +2498,7 @@
 }
 .proposalReview[data-proposal-status="pending"] {
   background: var(--assistant-review-surface);
-  border: 1px solid var(--assistant-review-border);
+  border: var(--border-hairline) solid var(--assistant-review-border);
 }
 .proposalReview[data-proposal-status="pending"] > header {
   padding: var(--space-3) var(--space-4);
@@ -2522,16 +2524,18 @@
 @keyframes proposalState { from { opacity: .4; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .proposalResults {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
 }
 .proposalResults button {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
   min-width: 0;
   min-height: var(--control-height-touch);
   padding: var(--space-2);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-ink);
@@ -2545,7 +2549,7 @@
 }
 .proposalResult {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: var(--space-2);
   min-width: 0;
 }
@@ -2594,7 +2598,7 @@
   flex: 1 1 0;
 }
 .workflowMessage {
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: var(--border-hairline) solid var(--color-divider);
   padding: var(--space-4) 0;
   margin: 0;
 }
@@ -2612,7 +2616,7 @@
 .composer {
   flex: none;
   padding: var(--space-3);
-  border: 1px solid var(--color-border-strong);
+  border: var(--border-hairline) solid var(--color-border-strong);
   border-radius: var(--radius-lg);
   max-height: 60%;
   overflow-y: auto;
@@ -2652,7 +2656,7 @@
 .newMessages {
   align-self: center;
   min-height: var(--control-height);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-paper);
   color: var(--color-action);
@@ -2681,7 +2685,7 @@
   right: 0;
   z-index: var(--z-dropdown);
   width: min(320px, calc(100vw - 32px));
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   background: var(--color-paper);
@@ -2702,7 +2706,7 @@
 .bottomMenu,
 .zoomControls {
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   box-shadow: var(--shadow-ui);
 }
 .bottomMenu .zoomControls {
@@ -2826,7 +2830,7 @@
     display: flex;
     justify-content: center;
     padding: var(--space-2);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: var(--border-hairline) solid var(--color-border);
     background: var(--color-paper);
   }
   .workspace {
@@ -3000,7 +3004,7 @@
   max-width: calc(100% - 32px);
   width: max-content;
   padding: 10px 14px;
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 8px;
   background: var(--color-paper);
   color: var(--color-ink);
@@ -3063,4 +3067,28 @@
   font-size: inherit;
   line-height: inherit;
   white-space: normal;
+}
+.workspace[data-split-docked="true"] .sidebar {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  padding-bottom: 0;
+  box-shadow: none;
+}
+.workspace[data-split-docked="false"] { --studio-sidebar-width: 384px; }
+.workspace[data-split-docked="false"] .sidebar { position: absolute; inset: 0 0 0 auto; width: min(384px, 100%); z-index: 10; }
+@media (max-width: 767px) {
+  .workspace[data-split-docked="false"] .sidebar { inset: 0; width: 100%; }
+}
+.composerActions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-top: 4px;
+  background: var(--color-paper);
+}
+.composer { flex: 0 1 auto; min-height: 0; }
+@media (min-height: 601px) {
+  .assistantConversation:has([data-proposal-status="pending"]) { min-height: 112px; }
 }

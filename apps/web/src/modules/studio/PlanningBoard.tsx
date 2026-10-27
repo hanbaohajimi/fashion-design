@@ -232,7 +232,7 @@ export function PlanningBoard(
                   </span>
                   <strong>{payload.name}</strong>
                   <small>
-                    {roles[payload.role]} · {states[payload.status]}
+                    {roles[payload.role]} {states[payload.status]}
                   </small>
                   {id === slot.id && editorOpen ? (
                     <small className={styles.currentPosition}>
@@ -317,7 +317,7 @@ function SlotEditor({
         status: "PLANNED",
         notes: "",
       };
-  const form = useStudioForm(initial, onDirty, { feedback });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? "new" });
   const { draft, setDraft } = form;
   const update = <K extends keyof Slot>(key: K, value: Slot[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -446,7 +446,7 @@ function SlotEditor({
             {data.styles.flatMap((style) =>
               style.revisions.map((revision) => (
                 <option value={revision.id} key={revision.id}>
-                  {style.code} · {revision.payload.name} · r{revision.revision}
+                  {style.code} {revision.payload.name} r{revision.revision}
                 </option>
               )),
             )}

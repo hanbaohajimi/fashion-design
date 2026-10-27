@@ -119,7 +119,7 @@ function PresentationForm({
         items: [],
         notes: "",
       };
-  const form = useStudioForm(initial, onDirty, { feedback });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? "new" });
   const { draft, setDraft } = form;
   const errorRef = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLFormElement>(null);
@@ -281,10 +281,10 @@ function PresentationForm({
             </Badge>
           </div>
           <p>
-            商品展示包<span aria-hidden="true"> · </span>
+            商品展示包<span aria-hidden="true"> </span>
             {CHANNEL_LABELS[draft.channel]}
             {existing
-              ? ` · 已保存修订 ${existing.currentRevision.revision}`
+              ? ` 已保存修订 ${existing.currentRevision.revision}`
               : ""}
           </p>
         </div>
@@ -299,7 +299,7 @@ function PresentationForm({
               <option value="">新展示包</option>
               {data.presentationSets.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.currentRevision.payload.name} · 修订 {item.version}
+                  {item.currentRevision.payload.name} 修订 {item.version}
                 </option>
               ))}
             </Select>
@@ -345,7 +345,7 @@ function PresentationForm({
               ]}
             />
             <p className={styles.count} aria-live="polite">
-              已选 <StudioCount value={draft.items.length} />/12<span aria-hidden="true"> · </span>
+              已选 <StudioCount value={draft.items.length} />/12<span aria-hidden="true"> </span>
               {draft.items.length
                 ? `已核对 ${reviewed}/${draft.items.length}`
                 : "待选图"}
@@ -412,7 +412,7 @@ function PresentationForm({
                     <button
                       type="button"
                       key={item.assetId}
-                      aria-label={`图片 ${index + 1} · ${item.reviewed ? "已复核" : "待复核"}`}
+                      aria-label={`图片 ${index + 1} ${item.reviewed ? "已复核" : "待复核"}`}
                       aria-current={
                         currentAssetId === item.assetId ? "true" : undefined
                       }
@@ -427,7 +427,7 @@ function PresentationForm({
                         alt={assetName(item.assetId)}
                       />
                       <span>
-                        {index + 1} · {item.reviewed ? "已核对" : "待核对"}
+                        {index + 1} {item.reviewed ? "已核对" : "待核对"}
                       </span>
                     </button>
                   ))}
@@ -531,7 +531,7 @@ function PresentationForm({
               <p className={styles.boundStyle}>
                 <strong>{boundRevision.payload.name}</strong>
                 <span>
-                  {boundStyle?.code} · 修订 {boundRevision.revision}
+                  {boundStyle?.code} 修订 {boundRevision.revision}
                 </span>
               </p>
             ) : null}
@@ -549,7 +549,7 @@ function PresentationForm({
                 {data.styles.flatMap((style) =>
                   style.revisions.map((revision) => (
                     <option key={revision.id} value={revision.id}>
-                      {style.code} · {revision.payload.name} · 修订{" "}
+                      {style.code} {revision.payload.name} 修订{" "}
                       {revision.revision}
                     </option>
                   )),
@@ -678,7 +678,7 @@ function PresentationForm({
                   key={item.assetId}
                   href={`/api/design-assets/${encodeURIComponent(item.assetId)}/content`}
                   download
-                >{`下载图片 ${index + 1} · ${KIND_LABELS[item.kind]}`}</a>
+                >{`下载图片 ${index + 1} ${KIND_LABELS[item.kind]}`}</a>
               ),
             )}
           </div>
@@ -688,7 +688,7 @@ function PresentationForm({
               <article key={revision.id} className={styles.historyRow}>
                 <div>
                   <strong>
-                    修订 {revision.revision} · {revision.payload.name}
+                    修订 {revision.revision} {revision.payload.name}
                   </strong>
                   <p>{new Date(revision.createdAt).toLocaleString("zh-CN")}</p>
                 </div>

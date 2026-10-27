@@ -1,4 +1,5 @@
 "use client";
+import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 
 import { Select } from "../../../components/ui";
 /* Private images must use the authenticated content endpoint without image optimization. */
@@ -158,6 +159,7 @@ function ImageWorkspace({
     operations: WorkflowOperation[];
   } | null>(null);
   const dirty = JSON.stringify(feedback) !== baseline || Boolean(comment);
+  usePersistentDraft({ value: { feedback, comment, mode }, baseline: JSON.stringify({ feedback: JSON.parse(baseline) as ImageFeedback, comment: "", mode: "view" }), enabled: feedbackLoaded, objectKey: `image:${assetId}`, restore: draft => { setFeedback(draft.feedback); setComment(draft.comment); setMode(draft.mode); } });
   useWorkspaceDraft(
     "image-workspace",
     { feedback, comment, mode },
@@ -568,7 +570,7 @@ function ImageWorkspace({
         .map((task) => (
           <div key={task.id} className={styles.notice} role="status">
             <span>
-              {task.title} ·{" "}
+              {task.title} {" "}
               {task.status === "failed"
                 ? "处理失败，输入已保留"
                 : task.status === "queued"
