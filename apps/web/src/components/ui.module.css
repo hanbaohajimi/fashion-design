@@ -6,6 +6,7 @@
 .menuPanel button {
   font: var(--font-medium) var(--text-base)/var(--leading-normal)
     var(--font-sans);
+  font-variant-numeric: tabular-nums;
   transition:
     color var(--duration-fast),
     background-color var(--duration-fast),
@@ -75,6 +76,15 @@
   padding: 0;
   border: 0;
 }
+.button[data-interaction="spring"] { padding: 0; border: 0; background: transparent; }
+.button[data-interaction="spring"][data-variant]:is(:hover, :active, :disabled) { background: transparent; }
+.button[data-interaction="spring"] > span { width: 100%; min-height: inherit; border-radius: inherit; }
+.button[data-interaction="spring"]:hover:enabled > span[data-variant="primary"] { background: var(--color-action-hover); border-color: var(--color-action-hover); }
+.button[data-interaction="spring"]:active:enabled > span[data-variant="primary"] { background: var(--color-action-active); border-color: var(--color-action-active); }
+.button[data-interaction="spring"]:disabled > span { background: var(--color-disabled-bg); color: var(--color-disabled-ink); border-color: var(--color-disabled-border); }
+.inlineIcon { display: inline-flex; flex: none; translate: 0 0.125em; }
+.inlineIcon > svg { display: block; }
+.commandItems :is(button, a) > svg { translate: 0 0.125em; }
 .button[data-interaction="magnetic"][data-variant],
 .button[data-interaction="magnetic"][data-variant]:is(
     :hover,
@@ -275,6 +285,7 @@ textarea.input {
   min-width: 0;
 }
 .statusIcon {
+  translate: 0 0.125em;
   width: 18px;
   height: 18px;
   flex: none;
@@ -485,7 +496,7 @@ textarea.input {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 6px;
-  background: var(--color-paper);
+  background: var(--color-overlay);
   box-shadow: var(--shadow-popup);
 }
 .menu:not([open]) > .menuPanel {
@@ -514,7 +525,10 @@ textarea.input {
 .menu button,
 .menu a,
 .menuPanel button,
-.menuPanel a {
+.menuPanel a,
+.commandItems button,
+.commandItems a {
+  overflow-wrap: anywhere;
   display: block;
   width: 100%;
   border: 0;
@@ -529,8 +543,22 @@ textarea.input {
 .menu button:hover,
 .menu a:hover,
 .menuPanel button:hover,
-.menuPanel a:hover {
+.menuPanel a:hover,
+.commandItems button:hover,
+.commandItems a:hover {
   background: var(--color-surface);
+}
+.commandItems button:disabled {
+  cursor: not-allowed;
+  color: var(--color-disabled-ink);
+}
+.commandItems [aria-current="page"] {
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+  font-weight: 600;
+}
+@media (max-width: 767px), (any-pointer: coarse) {
+  .commandItems button, .commandItems a { min-height: 44px; }
 }
 .dialog {
   max-width: calc(100vw - 32px);
@@ -542,7 +570,7 @@ textarea.input {
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  background: var(--color-paper);
+  background: var(--color-overlay);
   color: var(--color-ink);
   box-shadow: var(--shadow-modal);
   overflow: auto;

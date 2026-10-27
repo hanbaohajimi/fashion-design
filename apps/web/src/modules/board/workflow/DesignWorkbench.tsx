@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../../components/GridDetails";
 
 /* §2.1/§2.4/§3.6: clothing images first, references second, process as annotations.
  * Execution owns primary emphasis; the open assistant has a quiet entry point. */
@@ -104,7 +105,7 @@ export function DesignWorkbench({
     candidates: readonly WorkflowNode[] = [],
   ) =>
     items.length ? (
-      <details className={styles.notes}>
+      <GridDetails className={styles.notes}>
         <summary>
           设计说明 <span>要求与评估 · {items.length}</span>
         </summary>
@@ -129,7 +130,7 @@ export function DesignWorkbench({
             </button>
           </section>
         ))}
-      </details>
+      </GridDetails>
     ) : null;
 
   return (

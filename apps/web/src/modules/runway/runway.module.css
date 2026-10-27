@@ -447,7 +447,7 @@
 }
 .statusChange { display: inline-block; animation: runway-status 180ms cubic-bezier(0,0,.2,1); }
 .mediaStage { position: relative; }
-.bufferOverlay { position: absolute; inset: 0 0 44px; display: grid; place-items: center; opacity: 0; background: rgb(0 0 0 / 28%); transition: opacity 150ms cubic-bezier(.4,0,1,1); pointer-events: none; }
+.bufferOverlay { position: absolute; inset: 0 0 44px; display: grid; place-items: center; opacity: 0; background: rgb(32 51 46 / 28%); transition: opacity 150ms cubic-bezier(.4,0,1,1); pointer-events: none; }
 .bufferOverlay[data-buffering] { opacity: 1; transition-duration: 300ms; }
 .bufferOverlay > span { width: 40px; height: 40px; border: 3px solid rgb(255 255 255 / 25%); border-top-color: rgb(255 255 255 / 80%); border-radius: 50%; }
 .bufferOverlay[data-buffering] > span { animation: runway-buffer 800ms linear infinite; }

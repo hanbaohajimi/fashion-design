@@ -10,7 +10,7 @@ export const STUDIO_LAYOUT = {
   followThreshold: 80,
 } as const;
 
-export const UI_TIMING = { tooltipOpen: 180, tooltipClose: 120, busyFeedback: 300, paintingDelay: 2000, staleTask: 60_000 } as const;
+export const UI_TIMING = { tooltipOpen: 180, tooltipClose: 120, busyFeedback: 300, paintingDelay: 2000, staleTask: 60_000, copyFeedback: 2500, disclosure: 200, streamCharacter: 30, streamReveal: 120 } as const;
 
 /** Source reuse must be cleared before enabling these media in a production deployment. */
 export const PAINTING_LOADERS_ENABLED = process.env.NEXT_PUBLIC_PAINTING_LOADERS === "true" ||

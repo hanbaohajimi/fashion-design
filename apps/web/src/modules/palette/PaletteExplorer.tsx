@@ -95,19 +95,13 @@ function PaletteOptions({
   return (
     <>
       <div className={styles.controls}>
-        <label className={styles.field}>
-          基准色
-          <Select
-            value={baseIndex}
-            onChange={(event) => setBaseIndex(Number(event.target.value))}
-          >
+        <div className={styles.field} role="radiogroup" aria-label="基准色">
             {colors.map((color, i) => (
-              <option key={i} value={i}>
-                {i + 1}. {color.name} · {color.hex.toUpperCase()}
-              </option>
+              <Button key={i} role="radio" aria-checked={baseIndex === i} onClick={() => setBaseIndex(i)}>
+                <ColorChip color={color} /> {color.name}
+              </Button>
             ))}
-          </Select>
-        </label>
+        </div>
         <label className={styles.field}>
           配色策略
           <Select

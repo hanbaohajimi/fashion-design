@@ -1,3 +1,4 @@
+import { valueControl, chooseValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails, hideDevelopmentChrome } from "./workflow-navigation";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -33,14 +34,14 @@ test("助手入口：引用选择、对话草稿恢复与显式发送", async ({
   await expect(input).toHaveValue("");
   await input.fill("新对话自己的草稿");
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("workflow-current");
+  await chooseValue(valueControl(page, "历史对话"), "workflow-current");
   await expect(input).toHaveValue("保留立领，只调整袖型");
   await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("候选 B");
   await page.getByRole("button", { name: "发送需求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
   expect(mocked.workflowRequests[0]).toMatchObject({ referencedNodeIds: ["candidate-b"], focusNodeIds: ["candidate-b"] });
   expect(mocked.getExecuteCount()).toBe(0);
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-new");
+  await chooseValue(valueControl(page, "历史对话"), "chat-new");
   await expect(input).toHaveValue("新对话自己的草稿");
 });
 
@@ -98,7 +99,7 @@ test("助手入口：恢复失效确认草稿时保留正文并要求重新核�
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
   mocked.setMessages([{ id: "assistant-0", role: "assistant", status: "completed", content: "这条要求已有新版本", proposal: { id: "proposal-0", status: "superseded", toolNodeId: "old", operations: [], referencedNodeIds: [] } }]);
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("workflow-current");
+  await chooseValue(valueControl(page, "历史对话"), "workflow-current");
   await expect(input).toHaveValue("保留这条修改草稿");
   await expect(page.getByText("这条确认要求已失效或无法核实，请取消后重新描述需求。")).toBeVisible();
   await expect(page.getByRole("button", { name: "发送修改要求", exact: true })).toBeDisabled();
@@ -427,7 +428,7 @@ test("聚焦工作区：色卡与草图嵌入编辑、返回恢复和放弃草�
   await expect(workspace.getByRole("button", { name: "撤销", exact: true })).toBeDisabled();
   await expect(workspace.getByText("未保存", { exact: true })).toHaveCount(0);
   await workspace.locator("summary:visible").filter({ hasText: /^素材详情与用途$/u }).click();
-  await expect(workspace.getByRole("combobox", { name: "参考图角色" })).toBeVisible();
+  await expect(valueControl(workspace, "参考图角色")).toBeVisible();
   await expect(workspace.getByRole("button", { name: "从工作流移除节点" })).toBeVisible();
 });
 
@@ -684,7 +685,7 @@ for (const width of [1440, 390]) {
     await dialog.getByRole("button", { name: "探索配色", exact: true }).click();
     const preview = dialog.getByRole("region", { name: "配色探索" });
     await expect(preview).toBeVisible();
-    await preview.getByLabel("配色策略").selectOption("analogous");
+    await chooseValue(preview.getByLabel("配色策略"), "analogous");
     await preview.getByLabel("建议色 1 名称").fill("秋日雾蓝");
     expect(mocked.getGraph().nodes.filter((entry) => entry.type === "swatch")).toHaveLength(0);
     const suggestions = await preview.getByRole("list", { name: "建议颜色" }).locator("code").allTextContents();
@@ -1863,7 +1864,6 @@ test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重
   await expect.poll(() => mocked.contextPatches.length).toBe(1);
   expect(mocked.contextPatches[0]).toMatchObject({ updatedItems: [{ id: "must-navy", text: "保留深藏蓝色，避免纯黑", scope: "project", confirm: true }] });
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
-  await page.getByText("更多", { exact: true }).click();
   await page.getByRole("button", { name: "暂停本项目设计助手", exact: true }).click();
   await expect(page.getByText("本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
@@ -1890,7 +1890,7 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: "fig8-manual" })));
   await page.getByText("高级设置", { exact: true }).click();
   await page.getByRole("spinbutton", { name: "候选数量", exact: true }).fill("4");
-  await page.getByRole("combobox", { name: "图像质量", exact: true }).selectOption("auto");
+  await chooseValue(valueControl(page, "图像质量"), "auto");
   await page.getByRole("spinbutton", { name: "参考强度 肩线参考", exact: true }).fill("0.4");
   await page.getByRole("button", { name: "保存工具参数", exact: true }).click();
   await expect.poll(() => draft.payload.params).toMatchObject({ count: 4, quality: "auto", referenceInputs: [{ nodeId: reference.id, role: "detail_ref", weight: 0.4 }] });
@@ -2229,8 +2229,8 @@ async function wirePoint(page: Page, id: string) {
       // crossings, and require a full pixel of clearance for pointer rounding.
       for (const dx of [0, -3, 3, -6, 6]) for (const dy of [0, -3, 3, -6, 6]) {
         const point = { x: Math.round(candidate.x) + dx, y: Math.round(candidate.y) + dy };
-        const hits = [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([x, y]) =>
-          document.elementFromPoint(point.x + x!, point.y + y!)?.closest("[data-workflow-edge]") === curve.closest("[data-workflow-edge]"));
+        const hits = ([[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]] as const).every(([x, y]) =>
+          document.elementFromPoint(point.x + x, point.y + y)?.closest("[data-workflow-edge]") === curve.closest("[data-workflow-edge]"));
         if (hits) return point;
       }
     }
@@ -2616,32 +2616,16 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await page.getByRole("button", { name: "关闭菜单" }).click();
 
   await page.getByRole("button", { name: "助手", exact: true }).click();
-  const more = page.getByText("更多", { exact: true });
-  const moreMenu = more.locator("..");
-  const menuPanel = page.getByRole("group", { name: "对话操作选项", exact: true });
-  await expect(page.getByText("持续设计协作", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: "描述设计需求" }).locator("..").getByText("更多", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "新对话", exact: true })).toHaveCount(0);
-  await more.focus();
-  await more.press("Enter");
-  await expect(moreMenu).toHaveAttribute("open", "");
-  await expect(menuPanel.getByRole("button")).toHaveText(["暂停本项目设计助手"]);
-  await expect.poll(() => menuPanel.getByRole("button").evaluateAll((buttons) => buttons.every((button) => {
-    const bounds = button.getBoundingClientRect();
-    return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
-  }))).toBe(true);
-  await mkdir("output/playwright", { recursive: true });
-  await page.screenshot({ path: "output/playwright/workflow-assistant-menu-mobile.png" });
+  const actions = page.getByLabel("对话操作", { exact: true });
+  await expect(actions.getByRole("button")).toHaveText(["暂停本项目设计助手"]);
+  await expect(page.getByText("更多", { exact: true })).toHaveCount(0);
+  await expect.poll(() => actions.getByRole("button").evaluateAll(buttons => buttons.every(button => { const bounds = button.getBoundingClientRect(); return bounds.left >= 0 && bounds.right <= innerWidth; }))).toBe(true);
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
+  await chooseValue(valueControl(page, "历史对话"), "chat-old");
   await expect(page.getByText("历史消息")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
-  await more.click();
-  await expect(menuPanel.getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
-  await more.press("Space");
-  await expect(moreMenu).not.toHaveAttribute("open");
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-new");
+  await expect(actions.getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
+  await chooseValue(valueControl(page, "历史对话"), "chat-new");
   await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.getByText("已收到，继续设计。")).toBeVisible();
@@ -2797,8 +2781,7 @@ test(`普通会话 ${width} 可只读查看旧设计运行的简报、尝试和�
   await page.goto(`/${PROJECT_ID}`);
   await showAssistant(page, width);
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
-  await page.getByText("更多", { exact: true }).click();
+  await chooseValue(valueControl(page, "历史对话"), "chat-old");
   await page.getByRole("button", { name: "旧设计运行", exact: true }).click();
   const history = page.getByRole("region", { name: "旧设计运行历史" });
   await history.getByRole("button", { name: /秋冬风衣设计/ }).click();
@@ -2837,7 +2820,7 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   await details.getByRole("button", { name: "识别参考角色" }).click();
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.roleSource).toBe("inferred");
   expect(mocked.getInferRoleCount()).toBe(2);
-  await details.getByRole("combobox", { name: "参考图角色" }).selectOption("palette_ref");
+  await chooseValue(valueControl(details, "参考图角色"), "palette_ref");
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.roleSource).toBe("manual");
   expect(mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.role).toBe("palette_ref");
   await expect(details.getByRole("button", { name: /识别参考角色/ })).toHaveCount(0);
@@ -2873,7 +2856,7 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   const drawer = page.getByRole("dialog", { name: "系列 DNA" });
   await expect(drawer).toBeVisible();
   await drawer.getByRole("tab", { name: "Look 扩展" }).click();
-  await expect(drawer.getByRole("combobox", { name: "服装类型", exact: true })).toBeVisible();
+  await expect(valueControl(drawer, "服装类型")).toBeVisible();
   expect(createCalls).toBe(1);
 });
 

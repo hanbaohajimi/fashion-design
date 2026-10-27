@@ -101,7 +101,16 @@ export function ProjectLibrary() {
     const index = cards.findIndex(
       (card) => card.dataset.projectId === project.id,
     );
-    if (index < 0 || !cards[index]?.contains(document.activeElement)) return;
+    const card = cards[index];
+    if (!card) return;
+    const active = document.activeElement;
+    // 菜单挂在卡片外时，通过触发器的 aria-controls 保留焦点归属。
+    const ownsFocus = card.contains(active) || Array.from(
+      card.querySelectorAll<HTMLElement>("[aria-controls]"),
+    ).some((trigger) => trigger.getAttribute("aria-controls")?.split(/\s+/).some(
+      (id) => document.getElementById(id)?.contains(active),
+    ));
+    if (!ownsFocus) return;
     const next = cards[index + 1] ?? cards[index - 1];
     removalFocus.current = {
       id: project.id,

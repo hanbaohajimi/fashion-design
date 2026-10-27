@@ -152,7 +152,7 @@ export function BomTable({
                   />
                 </td>
                 <td data-label="依据">
-                  <Select
+                  <Select compact
                     aria-label={"BOM " + (index + 1) + " 依据"}
                     {...errorProps("BOM " + (index + 1) + " 依据", error)}
                     value={row.source}
@@ -299,7 +299,7 @@ export function PomTable({
                   />
                 </td>
                 <td data-label="单位">
-                  <Select
+                  <Select compact
                     aria-label={"POM " + (index + 1) + " 单位"}
                     {...errorProps("POM " + (index + 1) + " 单位", error)}
                     value={row.unit}
@@ -329,7 +329,7 @@ export function PomTable({
                   />
                 </td>
                 <td data-label="依据">
-                  <Select
+                  <Select compact
                     aria-label={"POM " + (index + 1) + " 依据"}
                     {...errorProps("POM " + (index + 1) + " 依据", error)}
                     value={row.source}

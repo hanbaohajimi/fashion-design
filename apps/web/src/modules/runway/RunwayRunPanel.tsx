@@ -1,5 +1,8 @@
 "use client";
 
+import { AssetSelect } from "../studio/studio-ui";
+import { GridDetails } from "../../components/GridDetails";
+
 import { useEffect, useRef, useState } from "react";
 import { StudioCount } from "../studio/StudioCount";
 import type {
@@ -446,7 +449,7 @@ export function RunwayRunPanel({
         </p>
       ) : null}
       {section === 5 && run.media.length ? (
-        <details className={styles.history}>
+        <GridDetails className={styles.history}>
           <summary>本次运行的全部媒体（{run.media.length}）</summary>
           <p>包含输入快照、修改前的图片与各阶段结果。</p>
           <ul className={styles.mediaHistory}>
@@ -474,7 +477,7 @@ export function RunwayRunPanel({
               </li>
             ))}
           </ul>
-        </details>
+        </GridDetails>
       ) : null}
       {canEdit &&
       (run.status === "FAILED" || run.status === "NEEDS_ATTENTION") ? (
@@ -499,7 +502,7 @@ export function RunwayRunPanel({
         </div>
       ) : null}
       {canEdit && !active && run.media.length ? (
-        <details className={styles.history}>
+        <GridDetails className={styles.history}>
           <summary>从历史阶段重新制作</summary>
           <p>
             建立独立分支，原有成果继续保留。所选阶段及其后续成果将重新生成。
@@ -535,7 +538,7 @@ export function RunwayRunPanel({
               建立新分支并制作
             </Button>
           </div>
-        </details>
+        </GridDetails>
       ) : null}
     </section>
   );
@@ -663,23 +666,17 @@ function Pairing({
               />
             </span>
             <Field label={`模特 ${index + 1} 的服装`}>
-              <Select
+              <AssetSelect
                 value={pairs[model.id] ?? ""}
                 disabled={disabled}
-                onChange={(event) =>
+                onValueChange={(mediaId) =>
                   setPairs((current) => ({
                     ...current,
-                    [model.id]: event.target.value,
+                    [model.id]: mediaId,
                   }))
                 }
-              >
-                <option value="">本次不出场</option>
-                {clothes.map((cloth, clothIndex) => (
-                  <option value={cloth.id} key={cloth.id}>
-                    服装 {clothIndex + 1}
-                  </option>
-                ))}
-              </Select>
+               assets={clothes.map((cloth, clothIndex) => ({ id: cloth.id, url: cloth.contentUrl, thumbnailUrl: null, name: "服装 " + (clothIndex + 1) }))} />
+              <Button variant="ghost" aria-pressed={!pairs[model.id]} disabled={disabled} onClick={() => setPairs((current) => ({ ...current, [model.id]: "" }))}>本次不出场</Button>
             </Field>
             {pairs[model.id] ? (
               <span className={styles.pairImage}>

@@ -1,3 +1,4 @@
+import { valueControl } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import {
@@ -92,13 +93,13 @@ test("系列位置收起后再选同一位置保留草稿", async ({ page }) => 
 for (const [tab, field] of [
   ["tech", "技术包名称"],
   ["samples", "轮次名称"],
-])
+] as const)
   test(`${tab} 必填字段错误会定位并聚焦`, async ({ page }) => {
     await page.goto(`/${PROJECT}/studio?tab=${tab}`);
-    await page.getByLabel(field!, { exact: true }).fill("");
+    await page.getByLabel(field, { exact: true }).fill("");
     await page.getByRole("button", { name: "保存修订", exact: true }).click();
-    await expect(page.getByLabel(field!, { exact: true })).toBeVisible();
-    await expect(page.getByLabel(field!, { exact: true })).toBeFocused();
+    await expect(page.getByLabel(field, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(field, { exact: true })).toBeFocused();
   });
 
 test("手机技术包自定义校验定位 BOM 用量", async ({ page }) => {
@@ -123,7 +124,7 @@ test("手机样衣保存定位问题字段错误", async ({ page }) => {
   await expect(page.locator("dialog:modal")).toHaveCount(0);
 });
 
-for (const [tab, field] of [["samples", "轮次名称"]])
+for (const [tab, field] of [["samples", "轮次名称"]] as const)
   test(`${tab} 只读成员可以查看常驻资料`, async ({ page }) => {
     await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
       route.fulfill({
@@ -135,8 +136,8 @@ for (const [tab, field] of [["samples", "轮次名称"]])
       }),
     );
     await page.goto(`/${PROJECT}/studio?tab=${tab}`);
-    await expect(page.getByLabel(field!, { exact: true })).toBeVisible();
-    await expect(page.getByLabel(field!, { exact: true })).toBeDisabled();
+    await expect(page.getByLabel(field, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(field, { exact: true })).toBeDisabled();
   });
 
 for (const width of [1738, 1440, 1280, 1199, 1024, 390, 720])
@@ -172,7 +173,7 @@ for (const width of [1738, 1440, 1280, 1199, 1024, 390, 720])
       });
       if (width < 1200)
         await expect(
-          page.getByRole("combobox", { name: "当前功能", exact: true }),
+          valueControl(page, "当前功能"),
         ).toBeVisible();
       else
         await expect(

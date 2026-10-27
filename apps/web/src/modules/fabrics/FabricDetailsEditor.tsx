@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../components/ui";
+
 import { fabricDetailsSchema, type FabricDetails, type FabricProvenance, type FabricSpecField } from "@fashion/shared";
 import styles from "./fabrics.module.css";
 
@@ -99,7 +101,7 @@ export function FabricDetailsEditor({ value, onChange, disabled = false }: {
           {"spec" in field && field.spec && hasValue ? <div className={styles.sourceFields}>
             <label>
               <span>{field.label}资料来源</span>
-              <select value={source?.source ?? ""} onChange={(event) => {
+              <Select value={source?.source ?? ""} onChange={(event) => {
                 const nextSources = { ...value.sources };
                 const next = event.currentTarget.value as FabricProvenance["source"] | "";
                 if (!next) nextSources[field.key as FabricSpecField] = undefined;
@@ -111,7 +113,7 @@ export function FabricDetailsEditor({ value, onChange, disabled = false }: {
                 <option value="supplier">供应商资料</option>
                 <option value="measured">实测</option>
                 {field.key === "appearanceNotes" ? <option value="ai_visual">AI 外观建议</option> : null}
-              </select>
+              </Select>
             </label>
             {source ? <label>
               <span>{field.label}来源备注</span>

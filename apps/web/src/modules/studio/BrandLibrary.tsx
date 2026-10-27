@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../components/GridDetails";
 
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
@@ -510,7 +511,7 @@ function BrandEditor({
         </Button>
       </SaveBar>
       {existing ? (
-        <details className={styles.record}>
+        <GridDetails className={styles.record}>
           <summary>品牌修订历史</summary>
           {existing.revisions.map((revision) => (
             <div className={styles.record} key={revision.id}>
@@ -525,7 +526,7 @@ function BrandEditor({
               </small>
             </div>
           ))}
-        </details>
+        </GridDetails>
       ) : null}
     </form>
   );

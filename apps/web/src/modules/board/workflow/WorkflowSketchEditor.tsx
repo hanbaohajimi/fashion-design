@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { sketchDocumentSchema, type SketchDocumentV1 } from "@fashion/shared";
 import { Button, Input } from "../../../components/ui";
@@ -390,37 +392,36 @@ export function WorkflowSketchEditor({
           <Button aria-pressed={eraser} onClick={() => setEraser(true)}>
             局部橡皮
           </Button>
-          <label>
-            画笔颜色
-            <select value={color} onChange={(e) => setColor(e.target.value)}>
+          <div role="radiogroup" aria-label="画笔颜色">
               {["#45423D", "#706B63", "#243441", "#415f8c", "#a66a50"].map(
                 (c) => (
-                  <option key={c}>{c}</option>
+                  <Button key={c} role="radio" aria-checked={color === c} aria-label={`画笔颜色 ${c}`} onClick={() => setColor(c)}>
+                    <span aria-hidden="true" style={{ display: "inline-block", width: 20, height: 20, backgroundColor: c, borderRadius: 4 }} />
+                  </Button>
                 ),
               )}
-            </select>
-          </label>
+          </div>
           <label>
             笔触粗细
-            <select
+            <Select
               value={brush}
               onChange={(e) => setBrush(Number(e.target.value))}
             >
               {[0.42, 1.05, 2.1, 7, 13].map((n) => (
                 <option key={n}>{n}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             橡皮大小
-            <select
+            <Select
               value={radius}
               onChange={(e) => setRadius(Number(e.target.value))}
             >
               {[8, 14, 24].map((n) => (
                 <option key={n}>{n}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <div>
             <Button

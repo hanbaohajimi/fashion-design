@@ -1,6 +1,7 @@
 export * from "./ai.errors";
 export * from "./ai.service";
 export * from "./amux-claude.client";
+export { rootStringFields } from "./stream-json";
 export * from "./env";
 export * from "./provider.interface";
 export * from "./providers/amux.adapter";

@@ -13,25 +13,28 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type ReactElement,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
   type Ref,
-  type KeyboardEvent,
   type SyntheticEvent,
 } from "react";
 import styles from "./ui.module.css";
 import effects from "./interactions/pointer-effects.module.css";
 import { useMagnetic, useRipple } from "./interactions/pointer-effects";
+import { useSpringPress } from "./interactions/use-spring-press";
 import type { SubmitFeedbackSnapshot } from "./interactions/use-submit-feedback";
 import { useSlidingIndicator } from "./interactions/use-sliding-indicator";
 import { motionEase, motionTime, observeMotionCancellation } from "./interactions/motion-policy";
 import { useAnimatedPresence } from "./interactions/use-animated-presence";
-import { useMenuMotion } from "./interactions/use-menu-motion";
+import { Menu } from "./command-menu";
+export { Menu };
 import { afterSurfaceMotion, placeFloatingPanel } from "./interactions/floating-position";
 import { UI_TIMING } from "./ui-config";
 import { createPortal } from "react-dom";
 import { userFacingError } from "./user-facing-error";
 import { useTooltipGroup } from "./tooltip-group";
+import { Select, ChoiceSelect, RadioGroup, Switch } from "./choice-controls";
+export { Select, ChoiceSelect, RadioGroup, Switch };
+export type { ChoiceOption, ChoiceSelectProps, RadioGroupProps } from "./choice-controls";
 export { TooltipGroup } from "./tooltip-group";
 
 function withDecoration<E extends SyntheticEvent>(
@@ -61,12 +64,13 @@ export function Button({
   readonly variant?: "primary" | "secondary" | "ghost" | "danger";
   readonly size?: "default" | "small";
   readonly loading?: boolean;
-  readonly interaction?: "none" | "ripple" | "magnetic";
+  readonly interaction?: "none" | "ripple" | "magnetic" | "spring";
   readonly feedback?: SubmitFeedbackSnapshot | undefined;
   readonly feedbackAction?: string | undefined;
   readonly ref?: Ref<HTMLButtonElement>;
 }) {
   const [waiting, setWaiting] = useState(false);
+  const spring = useSpringPress(interaction === "spring", Boolean(disabled));
   const {
     layerRef,
     onPointerDown: rippleDown,
@@ -85,9 +89,11 @@ export function Button({
   }, [loading]);
   const feedbackPhase = feedback?.actionKey === feedbackAction ? feedback.phase : "idle";
   const showFeedback = Boolean(feedback && ((loading && waiting && feedbackPhase === "pending") || feedbackPhase === "success"));
+  const parts = Children.toArray(children);
+  const label = parts.length > 1 ? parts.map((child, index) => isValidElement(child) && child.type === "svg" ? <InlineIcon key={index}>{child}</InlineIcon> : child) : children;
   const content = (
     <>
-      {feedback ? <span className={styles.feedbackLabel} data-hidden={showFeedback || undefined}>{children}</span> : children}
+      {feedback ? <span className={styles.feedbackLabel} data-hidden={showFeedback || undefined}>{label}</span> : label}
       {showFeedback ? (
         <span aria-hidden="true" className={styles.feedbackMark} key={feedback?.revision} data-phase={feedbackPhase}>
           {feedbackPhase === "success" ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path className={styles.feedbackCheck} d="m5 12 4 4L19 6" pathLength="1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> : <i className={styles.feedbackSpinner} />}
@@ -143,7 +149,15 @@ export function Button({
               onBlur: withDecoration(props.onBlur, magnetic.onBlur, true),
               onFocus: withDecoration(props.onFocus, magnetic.onFocus, true),
             }
-          : {})}
+          : interaction === "spring" ? {
+              onPointerDown: withDecoration(props.onPointerDown, spring.press),
+              onPointerUp: withDecoration(props.onPointerUp, spring.release),
+              onPointerCancel: withDecoration(props.onPointerCancel, spring.reset, true),
+              onPointerLeave: withDecoration(props.onPointerLeave, spring.reset, true),
+              onBlur: withDecoration(props.onBlur, spring.reset, true),
+              onKeyDown: withDecoration(props.onKeyDown, (event) => { if (!event.repeat && [" ", "Enter"].includes(event.key)) spring.press(); }),
+              onKeyUp: withDecoration(props.onKeyUp, (event) => { if ([" ", "Enter"].includes(event.key)) spring.release(); }),
+            } : {})}
       aria-busy={loading || undefined}
       className={`${styles.button} ${className}`}
       data-size={size}
@@ -153,9 +167,9 @@ export function Button({
       disabled={disabled || loading}
       type={type}
     >
-      {interaction === "magnetic" ? (
+      {interaction === "magnetic" || interaction === "spring" ? (
         <span
-          ref={visualRef}
+          ref={interaction === "spring" ? spring.visualRef : visualRef}
           className={`${styles.button} ${effects.magneticVisual}`}
           data-size={size}
           data-variant={variant}
@@ -174,6 +188,10 @@ export function Button({
       ) : null}
     </button>
   );
+}
+
+export function InlineIcon({ children }: { readonly children: ReactNode }) {
+  return <span className={styles.inlineIcon} aria-hidden="true">{children}</span>;
 }
 
 export function IconButton({
@@ -201,11 +219,6 @@ export function Input(
     <input {...props} className={`${styles.input} ${props.className ?? ""}`} />
   );
 }
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select {...props} className={`${styles.input} ${props.className ?? ""}`} />
-  );
-}
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
@@ -227,15 +240,20 @@ export function Field({
 }) {
   const descriptionId = useId();
   const described = Boolean(error || hint);
-  const controls = Children.map(children, (child) => {
+  let labelledControlId: string | undefined;
+  const controls = Children.map(children, (child, index) => {
     if (
       !isValidElement<InputHTMLAttributes<HTMLInputElement>>(child) ||
-      !["input", "select", "textarea", Input, Select, Textarea].includes(
+      !(["input", "select", "textarea", Input, Select, ChoiceSelect, RadioGroup, Textarea].includes(
         child.type as typeof Input,
-      )
+      ) || (typeof child.type !== "string" && "value" in child.props))
     )
       return child;
+    const controlId = child.props.id ?? `${descriptionId}-control-${index}`;
+    labelledControlId ??= controlId;
     return cloneElement(child, {
+      id: controlId,
+      "aria-label": child.props["aria-label"] ?? (typeof label === "string" ? label : undefined),
       "aria-describedby":
         [child.props["aria-describedby"], described ? descriptionId : undefined]
           .filter(Boolean)
@@ -244,8 +262,12 @@ export function Field({
     });
   });
   return (
-    <label className={styles.field}>
-      <span>{label}</span>
+    <div className={styles.field}>
+      <label htmlFor={labelledControlId} onClick={() => {
+        const control = labelledControlId ? document.getElementById(labelledControlId) : null;
+        if (control?.matches('[role="radiogroup"],[data-asset-select]'))
+          (control.querySelector<HTMLButtonElement>('button[aria-checked="true"]:not(:disabled)') ?? control.querySelector<HTMLButtonElement>('button:not(:disabled)'))?.focus();
+      }}>{label}</label>
       {controls}
       {error ? (
         <small id={descriptionId} role="alert">
@@ -254,7 +276,7 @@ export function Field({
       ) : hint ? (
         <small id={descriptionId}>{hint}</small>
       ) : null}
-    </label>
+    </div>
   );
 }
 export function Badge({
@@ -798,173 +820,6 @@ export function Tooltip({
           )
         : null}
     </span>
-  );
-}
-
-/** Native disclosure keeps the trigger available without implementing a second focus system. */
-export function Menu({
-  label,
-  children,
-  trigger,
-  placement = "bottom",
-  align = "end",
-  className = "",
-  triggerRef,
-  portal = false,
-}: {
-  readonly label: string;
-  readonly children: ReactNode;
-  readonly trigger?: ReactNode;
-  readonly placement?: "top" | "bottom";
-  readonly align?: "start" | "end";
-  readonly className?: string | undefined;
-  readonly triggerRef?: Ref<HTMLElement>;
-  readonly portal?: boolean;
-}) {
-  const ref = useRef<HTMLDetailsElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  const panelId = useId();
-  const [open, setOpen] = useState(false);
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
-  const closeMenu = () => {
-    if (ref.current) ref.current.open = false;
-    setOpen(false);
-  };
-  useLayoutEffect(() => {
-    if (!portal || !open) return;
-    const position = () => {
-      const anchor = ref.current?.querySelector("summary");
-      const popup = panel.current;
-      if (!anchor || !popup) return;
-      const bounds = anchor.getBoundingClientRect();
-      const size = popup.getBoundingClientRect();
-      const gap = 8;
-      const left = align === "start" ? bounds.left : bounds.right - size.width;
-      const preferredTop =
-        placement === "top"
-          ? bounds.top - size.height - gap
-          : bounds.bottom + gap;
-      const fallbackTop =
-        placement === "top"
-          ? bounds.bottom + gap
-          : bounds.top - size.height - gap;
-      const top =
-        preferredTop < gap || preferredTop + size.height > innerHeight - gap
-          ? fallbackTop
-          : preferredTop;
-      placeFloatingPanel(popup, Math.max(gap, Math.min(left, innerWidth - size.width - gap)), Math.max(gap, Math.min(top, innerHeight - size.height - gap)));
-      popup.dataset.actualPlacement = top < bounds.top ? "top" : "bottom";
-    };
-    position();
-    const stopSurface = afterSurfaceMotion(panel.current, position);
-    window.addEventListener("resize", position);
-    window.addEventListener("scroll", position, true);
-    return () => {
-      stopSurface();
-      window.removeEventListener("resize", position);
-      window.removeEventListener("scroll", position, true);
-    };
-  }, [portal, open, placement, align]);
-  useMenuMotion(open, panel, placement);
-  useEffect(() => {
-    const close = (event: PointerEvent) => {
-      if (
-        !ref.current?.contains(event.target as Node) &&
-        !panel.current?.contains(event.target as Node)
-      ) {
-        if (ref.current) ref.current.open = false;
-        setOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, []);
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeMenu();
-      ref.current?.querySelector("summary")?.focus();
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (ref.current) ref.current.open = true;
-      if (portal)
-        setPortalTarget(ref.current?.closest("dialog[open]") ?? document.body);
-      setOpen(true);
-      const move = () => {
-        const items = Array.from(
-          panel.current?.querySelectorAll<HTMLElement>(
-            "button:not(:disabled),a[href]",
-          ) ?? [],
-        );
-        const index = items.indexOf(document.activeElement as HTMLElement);
-        const next =
-          index < 0
-            ? event.key === "ArrowDown"
-              ? 0
-              : items.length - 1
-            : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
-              items.length;
-        items[next]?.focus();
-      };
-      if (portal && !open) requestAnimationFrame(move);
-      else move();
-    }
-  };
-  const content = (
-    <div
-      className={styles.menuPanel}
-      id={panelId}
-      role="group"
-      aria-label={`${label}选项`}
-      ref={panel}
-      style={
-        portal
-          ? {
-              position: "fixed",
-              right: "auto",
-              bottom: "auto",
-              maxWidth: "calc(100vw - 16px)",
-              maxHeight: "calc(100dvh - 16px)",
-              overflowY: "auto",
-            }
-          : undefined
-      }
-      onKeyDown={portal ? onKeyDown : undefined}
-      onClick={(event) => {
-        if ((event.target as Element).closest("button,a")) closeMenu();
-      }}
-    >
-      {children}
-    </div>
-  );
-  return (
-    <details
-      className={`${styles.menu} ${className}`}
-      data-placement={placement}
-      data-align={align}
-      ref={ref}
-      onToggle={(event) => {
-        setOpen(event.currentTarget.open);
-        if (portal && event.currentTarget.open)
-          setPortalTarget(
-            event.currentTarget.closest("dialog[open]") ?? document.body,
-          );
-      }}
-      onKeyDown={(event) => {
-        if (!portal || !panel.current?.contains(event.target as Node))
-          onKeyDown(event);
-      }}
-    >
-      <summary aria-label={label} aria-controls={panelId} ref={triggerRef}>
-        {trigger ?? label}
-      </summary>
-      {portal
-        ? open && portalTarget
-          ? createPortal(content, portalTarget)
-          : null
-        : content}
-    </details>
   );
 }
 

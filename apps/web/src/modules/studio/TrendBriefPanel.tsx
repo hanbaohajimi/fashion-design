@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../components/GridDetails";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为简报编辑；来源选择与品牌为次级。存入工作流为唯一主操作，不触发图片生成。 */
 import { useEffect, useRef, useState } from "react";
@@ -307,7 +308,7 @@ export function TrendBriefPanel({
             >
               <label>
                 采用的品牌资料
-                <Select
+                <Select searchable
                   disabled={!canEdit || busy}
                   value={brandId}
                   onChange={(event) => setBrandId(event.target.value)}
@@ -334,10 +335,10 @@ export function TrendBriefPanel({
               />
             </label>
           </StudioEditSection>
-          <details>
+          <GridDetails>
             <summary>查看来源与完整简报</summary>
             <pre>{text}</pre>
-          </details>
+          </GridDetails>
           {canEdit ? (
             <ActionBar status="仅保存简报，不生成图片。">
               <Button type="submit" variant="primary" loading={busy}>

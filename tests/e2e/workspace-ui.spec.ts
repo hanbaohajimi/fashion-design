@@ -1,3 +1,4 @@
+import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { expect, test } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import {
@@ -51,7 +52,9 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
   await tasks.click();
   const prompt = page.getByRole("textbox", { name: "本次任务", exact: true });
   await expect(prompt).toBeInViewport();
-  expect((await prompt.boundingBox())!.y).toBeLessThanOrEqual(240);
+  const promptBounds = await prompt.boundingBox();
+  if (!promptBounds) throw new Error("任务输入框不可见，无法检查首屏位置");
+  expect(promptBounds.y).toBeLessThanOrEqual(240);
   await expect(page.getByRole("button", { name: "创作进展" })).toBeInViewport();
 });
 
@@ -216,7 +219,6 @@ test("空项目的十一项功能保持输入和返回入口可达", async ({ pa
     await expect(
       page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
     ).toBeVisible();
-    await page.locator('summary[aria-label="项目导航"]').click();
     await expect(
       page.getByRole("button", { name: "设计工作台", exact: true }),
     ).toBeVisible();
@@ -277,16 +279,19 @@ test("375px 任务输入先于素材，折叠品牌规则后不丢失选择", as
   await page.goto(`/${PROJECT}/studio?tab=tasks`);
   const prompt = page.getByRole("textbox", { name: "本次任务", exact: true });
   await prompt.fill("保留宽松廓形并调整袖口");
-  expect((await prompt.boundingBox())!.y).toBeLessThan(700);
+  const promptBounds = await prompt.boundingBox();
+  if (!promptBounds) throw new Error("任务输入框不可见，无法检查手机布局");
+  expect(promptBounds.y).toBeLessThan(700);
   const brand = page.locator("summary").filter({ hasText: "品牌关联" });
   await brand.click();
-  const select = page.getByRole("combobox", { name: /品牌/ }).last();
-  const option = await select.locator("option").last().getAttribute("value");
-  await select.selectOption(option!);
+  const select = valueControl(page, /品牌/).last();
+  const option = await select.locator("..").locator("select option").last().getAttribute("value");
+  if (option === null) throw new Error("品牌选择器缺少可选资料");
+  await chooseValue(select, option);
   await brand.click();
   await expect(brand).toContainText("山岚");
   await brand.click();
-  await expect(select).toHaveValue(option!);
+  await expectValue(select, option);
   await expect(prompt).toHaveValue("保留宽松廓形并调整袖口");
 });
 

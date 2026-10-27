@@ -1,5 +1,7 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为稳定结果矩阵；320px 配置区提供母图与参数。保存计划为主操作，显式提交才启动生成。 */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -24,7 +26,6 @@ import { isTaskActive } from "../../components/task-feedback-state";
 import { userFacingError } from "../../components/user-facing-error";
 import styles from "./experiments.module.css";
 import { StudioEditSection } from "./StudioEditSection";
-import { useStudioAssetName } from "./studio-object-context";
 
 interface FabricOption {
   id: string;
@@ -88,7 +89,6 @@ export function ExperimentPanel({
   initialMode?: ExperimentCreateInput["mode"];
   initialSourceAssetId?: string;
 }) {
-  const assetName = useStudioAssetName();
   const surfaceId = useId();
   const [resultFilter, setResultFilter] = useState("all");
   const matchesResult = (status: string) =>
@@ -381,18 +381,11 @@ export function ExperimentPanel({
                     </label>
                     <label>
                       母图
-                      <Select
+                      <AssetSelect
                         required
                         value={sourceAssetId}
-                        onChange={(event) => setSource(event.target.value)}
-                      >
-                        <option value="">选择项目中的真实图片</option>
-                        {assets.map((asset) => (
-                          <option key={asset.id} value={asset.id}>
-                            {assetName(asset.id)}
-                          </option>
-                        ))}
-                      </Select>
+                        onValueChange={(assetId) => setSource(assetId)}
+                       assets={assets} />
                     </label>
                     <label className={styles.wide}>
                       本轮目标
@@ -516,7 +509,7 @@ export function ExperimentPanel({
           {batches.length > 1 ? (
             <label className={styles.batchSelector}>
               当前实验批次
-              <Select
+              <Select searchable
                 value={selectedBatch?.id ?? ""}
                 onChange={(event) => setSelectedBatchId(event.target.value)}
               >

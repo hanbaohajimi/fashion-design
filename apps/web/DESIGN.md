@@ -3,22 +3,22 @@ name: 森织设计工作室 · 织物档案
 description: 用户选定「织物档案」并确认统一浅色导航后的生产视觉系统：暖白目录、深绿文字、浅绿选中、完整服装与可追溯修订。
 colors:
   image-stage-background: '#e7e9e2'
-  canvas: '#f5f4ee'
-  paper: '#fffefa'
-  surface: '#f7f8f2'
-  overlay: '#eef1e9'
+  canvas: 'oklch(94.5% 0.008 100)'
+  paper: 'oklch(97.5% 0.008 100)'
+  surface: 'oklch(96% 0.008 100)'
+  overlay: 'oklch(99% 0.008 100)'
   control-border: '#7c8d81'
   disabled-bg: '#f5f5f5'
   disabled-ink: '#6a6a6a'
   disabled-border: '#d7d7d7'
-  studio-canvas: '#d7d7d7'
-  studio-canvas-edge: '#d7d7d7'
+  studio-canvas: 'oklch(94.5% 0.008 100)'
+  studio-canvas-edge: 'oklch(94.5% 0.008 100)'
   studio-work-surface: '#e8eee7'
   studio-reference-surface: '#eee8dc'
   studio-artwork-surface: '#ececea'
   ink: '#20332e'
   ink-secondary: '#586a60'
-  ink-tertiary: '#627167'
+  ink-tertiary: '#5d6d63'
   action: '#286452'
   action-hover: '#1c4c3d'
   action-active: '#183f35'
@@ -67,10 +67,10 @@ colors:
   workflow-edge-input: '#415879'
   workflow-edge-reference: '#7a5e32'
   workflow-edge-result: '#61476c'
-  navigation: '#fffefa'
+  navigation: 'oklch(97.5% 0.008 100)'
   navigation-ink: '#20332e'
   navigation-muted: '#586a60'
-  navigation-hover: '#f7f8f2'
+  navigation-hover: 'oklch(96% 0.008 100)'
   navigation-selected: '#e7eee2'
   navigation-border: '#e0e4db'
 typography:
@@ -336,7 +336,13 @@ Sidecar 的八级 tonalRamp 是合成 OKLCH 色板预览，非新增生产 token
 
 ### Inputs / Fields
 
-Input、Select、Textarea 共用纸面、控件边界、md 圆角与 body 字体；textarea 可纵向缩放、行高 1.65。aria-invalid 切换错误边框；Field 的错误优先于 hint 并用 role=alert。disabled 保留可读文字，错误和重试对应真实请求状态。
+Input、ChoiceSelect、Textarea 共用纸面、控件边界、md 圆角与 body 字体；textarea 可纵向缩放、行高 1.65。aria-invalid 切换错误边框；Field 的错误优先于 hint 并用 role=alert。disabled 保留可读文字，错误和重试对应真实请求状态。
+
+选择值与执行命令分开：2–4 项数据默认平铺 RadioGroup，5–10 项使用 ChoiceSelect，超过 10 项在面板顶部搜索；立即生效的布尔设置使用 Switch。ChoiceSelect 的 options/value/onValueChange 独立于 Menu；Select 是兼容既有 option/onChange 的桥接层，内部同样使用可控选择界面。原生 select 仅作隐藏的表单值与必填校验代理，不显示系统弹层。占位提示不计数，“全部”“不关联”等真实值计数；搜索结果数量不改变控件形态，不自动选中首项。
+
+系列、品牌、对象、修订与历史属于会增长的记录列表，即使当前不足五项也固定使用搜索式选择器；搜索仅覆盖已加载选项。图片字段与服装秀配对复用可搜索的 AssetPicker，取消保留原绑定、确认才应用暂存选择；图片预览独立于选中。缩放比例直接输入 10%–400%，另有“适合窗口”，手势回显仍按原节流策略。完整规则与例外见 `../../doc/impeccable/选择控件与命令菜单规范.md`。
+
+ObjectSwitcher 保留款式、品牌、样衣及技术包原有对象展开区与缩略图；顶部搜索名称、编号和已加载修订，结果区滚动，搜索与结果整体不超过 264px。筛选本身不改变当前对象，点击结果仍经过原有离开保护。
 
 ### Chips / Status
 
@@ -352,7 +358,7 @@ Badge 的 neutral / success / warning / error / info / running 结合轮廓 SVG 
 
 工作室在同一全局目录的项目区域中插入 `StudioNavigation`，直接显示创作（开始任务、款式档案、色料实验、印花工作台、商品展示）、交付（系列规划、技术包、样衣反馈、团队评审）、资料（趋势简报、品牌资料）共 11 项，不再折叠专业入口。该区域独立滚动，进入页面或切换功能时，选中项以 nearest 滚动到可见范围。选中项使用浅绿表面、600 字重和箭头，没有旧内侧线；按钮最小高 40px，padding 4px 12px，继承共享目录的焦点轮廓。导航继续保留项目、URL 参数及原有离开保护。
 
-Tabs 手动激活：方向键/Home/End 移焦，不自动启动昂贵面板；TabPanel 用 hidden 控制。Studio 的窄屏功能选择器与桌面目录保持同一 tab 值，不另造 URL 协议。
+Tabs 手动激活：方向键/Home/End 移焦，不自动启动昂贵面板；TabPanel 用 hidden 控制。Studio 的窄屏“当前功能”使用带搜索的分组导航 Menu，与桌面目录保持同一 tab 值、URL 和离开保护，不作为表单 Select。项目导航、创作进展、刷新、退出登录及助手暂停/恢复直接显示。
 
 工作室的父级入口是局部例外：`StudioWorkspace` 传入 `currentIsParent`，使“款式与交付”的 `data-current-parent` 使用透明底和 500 字重，保留当前路径语义与选择文字色。`StudioNavigation` 的 `data-studio-hierarchy` 将分组内子功能左缩进 8px，实际选中子页保留浅绿底与 600 字重；其余页面的全局当前项仍使用上面的共享样式。
 
@@ -370,7 +376,9 @@ Tabs 手动激活：方向键/Home/End 移焦，不自动启动昂贵面板；Ta
 
 ### Dialog / Menu / Tooltip
 
-Dialog 使用原生 showModal、初始焦点、Tab 约束、Escape 关闭和触发焦点恢复；最大尺寸扣除视口边距与安全区。未保存确认框宽度为 min(480px, 100vw - 32px)，内边距 24px，继续编辑与丢弃并离开分开。Menu 使用 details，外部点击/选择关闭、Escape 返回 summary、方向键遍历。Tooltip 键盘立即显示，鼠标等待 180ms、关闭延迟 120ms；触摸不触发 hover 提示，原生 dialog 内使用同一模态层。
+Dialog 使用原生 showModal、初始焦点、Tab 约束、Escape 关闭和触发焦点恢复；最大尺寸扣除视口边距与安全区。未保存确认框宽度为 min(480px, 100vw - 32px)，内边距 24px，继续编辑与丢弃并离开分开。Menu 保留 details/summary 触发器，面板通过 AdaptivePopup 挂到所属原生 dialog 或 body，外部点击/选择关闭、Escape 返回 summary、方向键遍历；超过 10 个命令时搜索，导航保留分组与当前项。1–4 个命令默认平铺，重复项目卡片与受限画布工具栏为登记例外。
+
+锚定面板整体（含搜索栏）最高 264px，搜索固定在顶部，列表内部滚动。手机 <768px 在打开时按可见视口判断：触发器中心位于上半区且下方能容纳预估面板时向下展开，否则使用底部 Sheet；展开后不因软键盘或筛选结果改变形态。Sheet 不受 264px 限制，按可见视口、安全区与键盘收缩，沿用既有动效与减弱动态。桌面优先向下，空间不足向上；手机不横向展开。Tooltip 键盘立即显示，鼠标等待 180ms、关闭延迟 120ms；触摸不触发 hover 提示，原生 dialog 内使用同一模态层。
 
 ### 设计助手分区
 
@@ -402,11 +410,11 @@ Button.feedback与interaction分开，默认控件不增加效果。等待超过
 
 项目与面料远程搜索300ms防抖，IME输入中暂停；旧项目结果仅同用户、同归档状态保留，并标明正在搜索。结构骨架先占位、300ms后单加载区1500ms扫光。首次最多六张可见作品400ms/60ms入场，总预算700ms；缓存、历史和后台刷新不重播，虚拟行与画布节点不做逐项FLIP。ImagePreview解码后300ms透明度交接，缓存图直接可见；原图不模糊、染色、裁剪或覆盖显影纸幕。
 
-上传立即出现本地预览，阶段区分排队、签名、字节传输、图片处理、加入工作区和完成。只有XHR真实lengthComputable进度显示百分比；PUT完成不表示素材可用。传输沿用签名headers与账号生命周期取消，添加失败复用已完成文件；本地URL随所属操作清理。助手使用已有clientRequestId归并本地与服务端用户消息，整段Markdown到达后淡入，不伪装token流。
+上传立即出现本地预览，阶段区分排队、签名、字节传输、图片处理、加入工作区和完成。只有XHR真实lengthComputable进度显示百分比；PUT完成不表示素材可用。传输沿用签名headers与账号生命周期取消，添加失败复用已完成文件；本地URL随所属操作清理。助手使用已有clientRequestId归并本地与服务端用户消息。开启服务端流式开关时，旧版与工作流助手展示真实结构化模型正文增量；关闭时完整 Markdown 直接呈现。正文候选、已校验消息与可确认提案分开，重连不重新提交。
 
 纯图片预览500ms从真实图片区域展开，支持1–3倍中点缩放、受限平移；三张起横滑翻页350ms，宽度30%或500px/s并至少24px触发。竖屏、1倍、纯图片区才允许下滑关闭，阈值40%高度或1000px/s并至少48px。预览不改变选图结果。完整图片工具保留10%–400%、标注坐标和详情来源动画；view的帧更新只写统一frame，缩放控件最多10Hz局部更新，编辑模式不启用新切图/关闭手势。
 
-展示包最多12张的完整item可把手拖排或键盘前后移动，浮起1.05、让位200ms、落位250ms，取消回原序，保存沿用有序items。项目归档和展示草稿移出提供4秒撤销，hover/focus/隐藏时暂停；归档立即提交、成功后才提供恢复，永久删除无撤销。项目缓存按ID补偿并串行同ID写入，失败不能覆盖其他项目成功结果。
+展示包最多12张的完整item可把手拖排或键盘前后移动，浮起1.05；让位、落位与纯图片预览回位使用 stiffness 1200、damping 80、mass 1 的无回弹弹簧，取消回原序，保存沿用有序items。项目归档和展示草稿移出提供4秒撤销，hover/focus/隐藏时暂停；归档立即提交、成功后才提供恢复，永久删除无撤销。项目缓存按ID补偿并串行同ID写入，失败不能覆盖其他项目成功结果。
 
 连接提示位于账户区，只报告离线/恢复连接，不自动重放写入或声称已同步。秀场保留原生视频操作，waiting/stalled超过250ms才显示局部28%压暗与等待，恢复150ms淡出且不主动play。分叉/回退阶段与PDF导出只显示真实状态，不虚构进度。计数复用NumberFlow，首次、版本号、ID、精确输入不滚动。
 
@@ -429,6 +437,16 @@ Button.feedback与interaction分开，默认控件不增加效果。等待超过
 印花参数标明角度、倍数与屏幕位移单位，重置只改画布草稿并取消复核。系列当前编辑位置与评审记录数量均有明确标记。服装秀阶段在手机单行滚动，当前查看阶段自动进入可见范围。公共分享使用完整图片、结构化加载占位、链接失败恢复和图片重试。
 
 验收候选图、前后对照与逐页清单位于 `../../output/ui-refinement/`；固定 Chromium 的视觉候选图位于 `../../output/impeccable-redesign/visual-candidates/`。截图中的模拟资料只证明前端布局与交互，不代表真实模型或生产数据。
+
+### 2026-10-27 全平台精修补充
+
+- 中性背景固定四层 `--surface-0…3`：OKLCH L 为 94.5%、96%、97.5%、99%，C=0.008、h=100。相邻层相差1.5个百分点，页面/画布、工作区、纸面/导航、弹出层分别使用四档。品牌、选中、状态与素材色独立；作品及黑色绘图数据保留原值。界面不用纯黑，普通容器依靠表面和浅分隔线分层。
+- 输入聚焦取消 outline，采用2px实色焦点环及5px、22%同色外环，120ms过渡；复合输入区只在外壳绘制。强制颜色使用系统色边框，其他按钮/链接仍保留键盘焦点。正文对比度至少4.5:1；新底色下三级文字调整为 #5d6d63。全平台仍为浅色，字重不变。
+- 文字旁图标用独立包装下移0.125em；图标按钮、加载旋转、画布图形及品牌标识保持居中。基础文字及输入启用tabular-nums，StudioCount预留3ch；正文段落、列表和引用使用渐进增强的text-wrap:pretty，代码和编辑区域不套用。
+- 内容折叠复用GridDetails，0fr/1fr切换200ms，关闭时立即inert并返回内部焦点；内容继续挂载。菜单和原生模态不套用内容折叠。款式与展示修订的指定保存按钮按下缩至0.97，释放采用380/18/1微弹，只移动视觉层；等待与成功仍由真实请求驱动。复制成功对勾从成功时起停留2500ms，再次成功重新计时。
+- 流式正文按Unicode字素簇每30ms呈现一字，每字120ms从blur(6px)/opacity 0渐显。只动画新收到的正文；历史、快照恢复和JSON回退直接显示。立即显示操作清空当前积压并令本条后续文字直接显示。减弱动态取消逐字等待、模糊和空间弹簧，保留状态与手势功能。
+
+流式接口、恢复与开关见 `../../doc/architecture/assistant-streaming.md`；实际网关验证脚本与结果入口见 `../../scripts/README.md`。截图、视频、网关指标及检查记录写入 `../../output/ui-refinement/`；模拟浏览器截图、受控模型联调与真实网关测试分别报告。
 
 ### Do:
 

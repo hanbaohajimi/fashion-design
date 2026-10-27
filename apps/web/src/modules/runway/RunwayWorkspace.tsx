@@ -431,7 +431,7 @@ export function RunwayWorkspace(
             {shows.length ? (
               <label className={styles.showSelect}>
                 切换服装秀
-                <Select
+                <Select searchable
                   value={selectedId ?? ""}
                   disabled={busy}
                   onChange={(event) =>
@@ -494,7 +494,7 @@ export function RunwayWorkspace(
             <div className={styles.toolbar}>
               <label className={styles.historySelect}>
                 运行历史
-                <Select
+                <Select searchable
                   value={run.id}
                   disabled={busy}
                   onChange={(event) => {

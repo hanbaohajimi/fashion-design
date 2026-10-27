@@ -1,4 +1,6 @@
 "use client";
+
+import { Select } from "../../../components/ui";
 /* Private images must use the authenticated content endpoint without image optimization. */
 /* eslint-disable @next/next/no-img-element */
 import {
@@ -638,7 +640,7 @@ function ImageWorkspace({
               <>
                 <label>
                   标注工具
-                  <select
+                  <Select
                     value={pen.kind}
                     onChange={(e) =>
                       setPen({
@@ -651,7 +653,7 @@ function ImageWorkspace({
                     <option value="rectangle">矩形</option>
                     <option value="arrow">箭头</option>
                     <option value="text">文字</option>
-                  </select>
+                  </Select>
                 </label>
                 <label>
                   颜色
@@ -870,7 +872,7 @@ function ImageWorkspace({
               <>
                 <label>
                   调整方式
-                  <select
+                  <Select
                     value={resizeKind}
                     onChange={(e) =>
                       setResizeKind(e.target.value as typeof resizeKind)
@@ -879,7 +881,7 @@ function ImageWorkspace({
                     <option value="resize">缩放尺寸</option>
                     <option value="crop">裁剪并调整尺寸</option>
                     <option value="outpaint">AI 扩图</option>
-                  </select>
+                  </Select>
                 </label>
                 {resizeKind === "outpaint" ? (
                   <>
@@ -929,7 +931,7 @@ function ImageWorkspace({
                       <>
                         <label>
                           裁剪比例
-                          <select
+                          <Select
                             defaultValue="free"
                             onChange={(e) => {
                               if (!size || e.target.value === "free") return;
@@ -956,7 +958,7 @@ function ImageWorkspace({
                             <option value={3 / 4}>3:4</option>
                             <option value={4 / 3}>4:3</option>
                             <option value={16 / 9}>16:9</option>
-                          </select>
+                          </Select>
                         </label>
                         {(["left", "top", "width", "height"] as const).map(
                           (key) => (

@@ -2617,7 +2617,11 @@
   max-height: 60%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  transition: box-shadow 120ms var(--ease-enter);
 }
+.composer:focus-within { box-shadow: var(--shadow-input-focus); }
+.composer textarea:focus { outline: none !important; box-shadow: none !important; }
+@media (forced-colors: active) { .composer:focus-within { border-color: Highlight; border-style: dashed; } }
 .composer textarea,
 .assistantBody:has(.assistantConversation[data-empty="true"])
   .composer
@@ -2639,6 +2643,11 @@
   color: var(--color-ink-tertiary);
   font-size: var(--text-sm);
   text-align: right;
+}
+/* Keep the send row before project-wide settings when the composer must scroll. */
+@media (max-width: 767px) {
+  .composerActions > [aria-label="对话操作"] { order: 2; flex: 1 1 100%; }
+  .composerActions > button:last-child { margin-inline-start: auto; }
 }
 .newMessages {
   align-self: center;

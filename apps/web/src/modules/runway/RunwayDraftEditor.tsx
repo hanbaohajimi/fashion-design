@@ -13,6 +13,7 @@ import {
   ImagePreview,
   Input,
   Notice,
+  RadioGroup,
   Select,
   Textarea,
   UploadInput,
@@ -22,6 +23,7 @@ import {
   type StudioPanelProps,
 } from "../studio/use-studio-form";
 import { useStudioAssetName } from "../studio/studio-object-context";
+import { AssetSelect } from "../studio/studio-ui";
 import {
   completeUpload,
   putOriginal,
@@ -91,6 +93,7 @@ export function RunwayDraftEditor({
   const { draft, setDraft } = form;
   const [kind, setKind] = useState<InputKind>("cloth");
   const [source, setSource] = useState("");
+  const [sourceMode, setSourceMode] = useState<"asset" | "style_revision">("asset");
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<
     Record<string, { name: string; url: string | null }>
@@ -292,8 +295,11 @@ export function RunwayDraftEditor({
               ))}
             </Select>
           </Field>
-          <Field label="选择项目素材">
-            <Select
+          <RadioGroup aria-label="素材来源类型" value={sourceMode} options={[{ value: "asset", label: "设计图片" }, { value: "style_revision", label: "款式修订" }]}
+            onValueChange={(value) => { setSourceMode(value as typeof sourceMode); setSource(""); }} />
+          {sourceMode === "asset" ? <AssetSelect label="选择项目素材" value={source} onValueChange={setSource}
+            assets={data.assets.map(asset => ({ ...asset, id: `asset:${asset.id}`, name: assetName(asset.id) }))} /> : <Field label="选择项目素材">
+            <Select searchable
               value={source}
               onChange={(event) => setSource(event.target.value)}
             >
@@ -305,15 +311,8 @@ export function RunwayDraftEditor({
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="设计图片">
-                {data.assets.map((item) => (
-                  <option key={item.id} value={`asset:${item.id}`}>
-                    {assetName(item.id)}
-                  </option>
-                ))}
-              </optgroup>
             </Select>
-          </Field>
+          </Field>}
           <Button
             disabled={!source}
             onClick={() => {

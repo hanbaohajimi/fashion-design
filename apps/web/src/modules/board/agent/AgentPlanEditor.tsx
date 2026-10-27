@@ -1,5 +1,8 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+import { GridDetails } from "../../../components/GridDetails";
+
 import {
   AGENT_PLAN_MAX_STEPS,
   type AgentPlanStepSpec,
@@ -418,7 +421,7 @@ export function AgentPlanEditor({
                   }
                 />
                 <label htmlFor="graph-node-tool">节点工具</label>
-                <select
+                <Select
                   id="graph-node-tool"
                   value={selected.tool}
                   disabled={busy || !editable}
@@ -436,9 +439,9 @@ export function AgentPlanEditor({
                 >
                   <option value="generate_design">生成设计</option>
                   <option value="edit_design">修改设计</option>
-                </select>
+                </Select>
                 <label htmlFor="graph-node-source">输入来源</label>
-                <select
+                <Select searchable
                   id="graph-node-source"
                   value={sourceValue}
                   disabled={
@@ -484,7 +487,7 @@ export function AgentPlanEditor({
                       已保存的设计资产来源
                     </option>
                   ) : null}
-                </select>
+                </Select>
                 <label htmlFor="graph-node-instruction">设计说明</label>
                 <textarea
                   id="graph-node-instruction"
@@ -555,7 +558,7 @@ export function AgentPlanEditor({
                   <section className={styles.history} aria-label="节点尝试历史">
                     <h4>每次尝试与候选</h4>
                     {historical.attempts.map((attempt) => (
-                      <details key={attempt.id}>
+                      <GridDetails key={attempt.id}>
                         <summary>
                           尝试 {attempt.ordinal} ·{" "}
                           {attemptStatusLabel(attempt.status)}
@@ -589,7 +592,7 @@ export function AgentPlanEditor({
                             </button>
                           ))}
                         </div>
-                      </details>
+                      </GridDetails>
                     ))}
                   </section>
                 ) : null}

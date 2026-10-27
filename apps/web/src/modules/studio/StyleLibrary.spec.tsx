@@ -114,7 +114,5 @@ it("does not expose an editable approval status", async () => {
   render(<StyleLibrary {...values} />);
   await screen.findByDisplayValue("褶线夹克");
   expect(screen.queryByRole("option", { name: "已定稿" })).toBeNull();
-  expect((screen.getByLabelText(/^状态/) as HTMLSelectElement).value).toBe(
-    "REVIEW",
-  );
+  expect(screen.getByRole("radio", { name: "待评审" }).getAttribute("aria-checked")).toBe("true");
 });

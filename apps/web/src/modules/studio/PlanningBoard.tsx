@@ -161,7 +161,7 @@ export function PlanningBoard(
       >
         {props.data.collections.length > 1 ? (
           <Field label="当前系列">
-            <Select
+            <Select searchable
               value={collectionId}
               onChange={(event) => {
                 const value = event.target.value;
@@ -377,7 +377,7 @@ function SlotEditor({
         </Field>
         <div className={styles.formGrid}>
           <Field label="所属系列">
-            <Select
+            <Select searchable
               required
               value={draft.collectionId}
               onChange={(event) => update("collectionId", event.target.value)}
@@ -430,7 +430,7 @@ function SlotEditor({
           label="关联款式修订"
           hint="绑定明确修订，后续款式修改不会改变本计划记录。"
         >
-          <Select
+          <Select searchable
             value={draft.styleRevisionId ?? ""}
             onChange={(event) =>
               setDraft((current) => {

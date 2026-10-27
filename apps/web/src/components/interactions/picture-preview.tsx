@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { Button } from "../ui";
 import styles from "./picture-preview.module.css";
 import { motionEase, motionTime, observeMotionCancellation } from "./motion-policy";
+import { animateSpring } from "./spring";
 
 export interface PreviewPicture { readonly id: string; readonly src: string | undefined; readonly name: string; }
 type Point = { x: number; y: number; time: number };
@@ -261,7 +262,10 @@ export function PicturePreview({ pictures, initialIndex = 0, sourceElement, getS
     }
     const slide = value.slide; const dismiss = value.dismiss;
     value.slide = value.dismiss = 0; write();
-    void animate(track.current, [{ transform: `translate(${slide}px,${dismiss}px)` }, { transform: "none" }], dismiss ? motionTime("--motion-picture-dismiss-reset", 400) : motionTime("--motion-gallery-reset", 280));
+    if (track.current) {
+      const animation = animateSpring(track.current, [slide, dismiss], [0, 0], ([x, y]) => `translate(${x}px, ${y}px)`);
+      if (animation) { animations.current.add(animation); void animation.finished.catch(() => undefined).then(() => animations.current.delete(animation)); }
+    }
   };
   if (!current) return null;
   const previousPicture = pictures[targetIndex !== null && targetIndex < index ? targetIndex : index - 1];

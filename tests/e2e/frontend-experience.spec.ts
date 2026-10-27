@@ -1,3 +1,4 @@
+import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { contrastFailures, controlFontFailures } from "./review-accessibility";
@@ -22,13 +23,15 @@ test("P1 项目重命名防重复、失败留稿、键盘恢复和归档焦点",
       await pending;
       return route.fulfill({ status: 503, json: { message: "暂时无法保存，请重试" } });
     }
-    Object.assign(projects[0]!, route.request().postDataJSON());
-    return route.fulfill({ json: projects[0] });
+    const project = projects.find((item) => item.id === "rename-0");
+    if (!project) throw new Error("缺少待重命名的测试项目");
+    Object.assign(project, route.request().postDataJSON());
+    return route.fulfill({ json: project });
   });
   await page.goto("/");
   const card = page.locator('[data-project-id="rename-0"]');
   await card.locator("summary").click();
-  await card.getByRole("button", { name: "重命名", exact: true }).click();
+  await page.getByRole("group", { name: /项目操作选项$/ }).getByRole("button", { name: "重命名", exact: true }).click();
   const input = card.getByRole("textbox", { name: "项目名称", exact: true });
   await input.fill("秋冬风衣的新名称");
   try {
@@ -48,14 +51,14 @@ test("P1 项目重命名防重复、失败留稿、键盘恢复和归档焦点",
   await expect(card.locator("summary")).toBeFocused();
   expect(requests).toBe(2);
   await card.locator("summary").press("Enter");
-  await card.getByRole("button", { name: "重命名", exact: true }).click();
+  await page.getByRole("group", { name: /项目操作选项$/ }).getByRole("button", { name: "重命名", exact: true }).click();
   await input.press("Escape");
   await expect(card.locator("summary")).toBeFocused();
   await card.locator("summary").press("Enter");
-  await card.getByRole("button", { name: "归档", exact: true }).click();
+  await page.getByRole("group", { name: /项目操作选项$/ }).getByRole("button", { name: "归档", exact: true }).click();
   await expect(card).toHaveCount(0);
   await expect(page.locator('[data-project-id="rename-1"] a').first()).toBeFocused();
-  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "项目已归档" })).toHaveCount(1);
+  await expect(page.locator("[data-sonner-toast]").filter({ hasText: "已归档 1 个项目" })).toHaveCount(1);
   await page.screenshot({ path: "output/playwright/optimization/archive-success.png" });
 });
 
@@ -285,11 +288,13 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
     page.getByRole("tab", { name: "系列规划", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel("当前功能", { exact: true }).click();
   await expect(
-    page.getByLabel("当前功能", { exact: true }).locator("option"),
+    page.getByRole("group", { name: "当前功能选项", exact: true }).getByRole("button"),
   ).toHaveCount(12);
-  await expect(page.getByLabel("当前功能", { exact: true }).locator('option[value="runway"]')).toHaveText("服装秀");
-  await page.getByLabel("当前功能", { exact: true }).selectOption("tech");
+  await expect(page.getByRole("group", { name: "当前功能选项", exact: true }).getByRole("button", { name: "服装秀", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await chooseValue(page.getByLabel("当前功能", { exact: true }), "tech");
   await expect(page).toHaveURL(/tab=tech/);
   await expect(page.getByRole("heading", { name: "编辑技术包资料", exact: true })).toBeVisible();
 });

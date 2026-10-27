@@ -824,9 +824,12 @@
 }
 
 .composerSurface:focus-within {
-  border-color: var(--color-scrim-soft);
-  box-shadow: 0 0 0 3px var(--color-divider);
+  box-shadow: var(--shadow-input-focus);
 }
+.composerSurface { transition: box-shadow 120ms var(--ease-enter); }
+@media (forced-colors: active) { .composerSurface:focus-within { border-color: Highlight; border-style: dashed; } }
+.composerSurface textarea:focus,
+.workflowPanel .composerSurface textarea:focus-visible { outline: none !important; box-shadow: none !important; }
 
 .attachmentRow {
   display: flex;
@@ -1317,8 +1320,8 @@
 }
 
 .workflowPanel textarea:focus-visible {
-  outline: 2px solid var(--color-error);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-input-focus);
 }
 
 .workflowPanel textarea[readonly] {

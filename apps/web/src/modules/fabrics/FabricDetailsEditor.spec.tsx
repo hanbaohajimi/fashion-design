@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { FabricCard } from "./FabricCard";
@@ -35,12 +35,12 @@ describe("面料档案编辑", () => {
     function Editor() { const [draft, setDraft] = useState(createFabricDetailsDraft()); return <FabricDetailsEditor value={draft} onChange={setDraft} />; }
     render(<Editor />);
     fireEvent.change(screen.getByLabelText("克重（g/m²）"), { target: { value: "180" } });
-    const weightSource = screen.getByLabelText("克重（g/m²）资料来源");
+    const weightSource = screen.getByRole("radiogroup", { name: "克重（g/m²）资料来源" });
     expect(weightSource.textContent).not.toContain("AI 外观建议");
-    fireEvent.change(weightSource, { target: { value: "supplier" } });
+    fireEvent.click(within(weightSource).getByRole("radio", { name: "供应商资料" }));
     expect(screen.getByLabelText("克重（g/m²）来源备注")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("外观说明"), { target: { value: "表面可见细密纹理" } });
-    expect(screen.getByLabelText("外观说明资料来源").textContent).toContain("AI 外观建议");
+    expect(screen.getByRole("radiogroup", { name: "外观说明资料来源" }).textContent).toContain("AI 外观建议");
   });
 
   it("保存失败保留用户输入，重试成功后立即展示新档案", async () => {

@@ -21,6 +21,7 @@ body {
 body {
   min-height: 100dvh;
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-root {
@@ -59,7 +60,32 @@ input,
 select,
 textarea {
   font: inherit;
+  font-variant-numeric: tabular-nums;
   accent-color: var(--color-action);
+}
+
+/* Text inputs share one focus treatment, including locally styled editors. */
+body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), textarea, select) {
+  transition: box-shadow 120ms var(--ease-enter);
+}
+body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), textarea, select):focus {
+  outline: none;
+  box-shadow: var(--shadow-input-focus);
+}
+body :is(input, textarea, select)[aria-invalid="true"]:focus {
+  --color-focus-ring: var(--color-status-error);
+}
+@media (forced-colors: active) {
+  body :is(input, textarea, select):focus {
+    box-shadow: none;
+    border-color: Highlight;
+    border-style: dashed;
+  }
+}
+
+@supports (text-wrap: pretty) {
+  :where(p, li, blockquote, [role="alert"]) { text-wrap: pretty; }
+  :where(pre, code, textarea, input, select) { text-wrap: wrap; }
 }
 
 /* mobile-native: 消除 iOS/Android 点击高亮闪烁 */
@@ -77,6 +103,34 @@ button,
 
 a {
   color: inherit;
+}
+input::placeholder,
+textarea::placeholder { color: var(--color-ink-tertiary); opacity: 1; }
+/* Local font shorthands reset numeric variants; keep controls on the numeric contract. */
+body :is(input, select, textarea, button, output, time) { font-variant-numeric: tabular-nums !important; }
+/* Custom combobox triggers follow the same minimum type size as native selects. */
+body :is(button[role="combobox"], button[aria-haspopup="listbox"]) { font-size: max(14px, 1em); }
+
+/* Bridge tldraw's UI theme without changing its drawing palette or persisted shapes. */
+body .tl-container,
+body .tl-theme__light {
+  --tl-color-background: var(--surface-0);
+  --tl-color-panel: var(--surface-2);
+  --tl-color-panel-contrast: var(--surface-3);
+  --tl-color-panel-overlay: color-mix(in srgb, var(--surface-3) 82%, transparent);
+  --tl-color-panel-transparent: color-mix(in srgb, var(--surface-2) 50%, transparent);
+  --tl-color-divider: var(--color-divider);
+  --tl-color-text: var(--color-ink);
+  --tl-color-text-0: var(--color-ink);
+  --tl-color-text-1: var(--color-ink-secondary);
+  --tl-color-text-2: var(--color-ink-secondary);
+  --tl-color-text-3: var(--color-ink-tertiary);
+  --tl-color-text-disabled: var(--color-disabled-ink);
+  --tl-color-overlay: rgb(32 51 46 / 20%);
+  --tl-color-hint: rgb(32 51 46 / 6%);
+  --tl-color-primary: var(--color-action);
+  --tl-color-selected: var(--color-selection-bg);
+  --tl-color-selected-contrast: var(--color-selection-ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

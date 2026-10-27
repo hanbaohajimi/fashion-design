@@ -1,3 +1,4 @@
+import { chooseValue } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
 import {
@@ -178,7 +179,7 @@ test("100 个样衣问题按状态筛选并切换当前编辑对象", async ({ p
     }),
   );
   await page.goto(`/${PROJECT}/studio?tab=samples`);
-  await page.getByLabel("筛选问题状态").selectOption("FIXED");
+  await chooseValue(page.getByLabel("筛选问题状态"), "FIXED");
   const index = page.getByRole("navigation", { name: "样衣问题切换" });
   await expect(index.getByRole("button")).toHaveCount(50);
   await index.getByRole("button", { name: /100\./ }).click();

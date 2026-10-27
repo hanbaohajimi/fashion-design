@@ -1,3 +1,4 @@
+import { chooseValue, valueControl } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
@@ -176,7 +177,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await openCandidate(page);
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将口袋改成贴袋，保持廓形");
-  await workspace.getByRole("region", { name: "候选资产工作台", exact: true }).getByRole("combobox").selectOption("palette");
+  await chooseValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 · 可选"), "palette");
   await workspace.getByRole("button", { name: "标记中央区域" }).click();
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
   await expect(workspace.getByRole("img", { name: /^(局部重绘|变体)结果 /u })).toBeVisible();

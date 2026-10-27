@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../../components/GridDetails";
 
 import { useState } from "react";
 import { Button, Dialog, Input } from "../../../components/ui";
@@ -133,10 +134,10 @@ export function AssistantReferencePicker({
             </p>
           ) : null}
           {tools.length ? (
-            <details>
+            <GridDetails>
               <summary>设计工具（{tools.length}）</summary>
               {tools.map(row)}
-            </details>
+            </GridDetails>
           ) : null}
         </div>
       </div>

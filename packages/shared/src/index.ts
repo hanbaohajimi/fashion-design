@@ -404,3 +404,4 @@ export * from "./fabric-details";
 
 export * from "./sketch-document";
 export * from "./runway";
+export * from "./assistant-stream";

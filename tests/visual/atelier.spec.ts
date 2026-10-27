@@ -409,7 +409,7 @@ test.describe("studio touch", () => {
     await expect(page).toHaveScreenshot("studio-assistant-touch.png");
     await page.getByRole("button", { name: "历史对话", exact: true }).click();
     await expect(
-      page.getByRole("combobox", { name: "历史对话", exact: true }),
+      page.locator('button[aria-haspopup="listbox"][aria-label="历史对话"]'),
     ).toBeInViewport({ ratio: 1 });
     await expect(page).toHaveScreenshot("studio-menu-touch.png");
   });

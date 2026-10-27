@@ -187,7 +187,7 @@ it("exits a repositioned portal menu at its current bounds inside the native mod
   const menu = screen.getByRole("group", { name: "操作选项" });
   top = 720;
   fireEvent.scroll(window);
-  const expectedTop = menu.style.top;
+  const expectedTop = (menu.closest("[data-popup-kind]") as HTMLElement).style.top;
   fireEvent.keyDown(menu, { key: "Escape" });
   const ghost = screen.getByRole("dialog").querySelector<HTMLElement>('[aria-label="操作选项"][aria-hidden="true"]');
   expect(ghost).toBeTruthy();

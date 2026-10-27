@@ -1,3 +1,4 @@
+import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { openImageDetails } from "./workflow-navigation";
 import { expect, test } from "@playwright/test";
 
@@ -510,19 +511,15 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   await exportDialog.getByRole("button", { name: "返回工作区" }).click();
   await expect(exportDialog).toBeHidden();
   consistencyAvailable = true;
-  const sourceTypeSelect = collectionDrawer.getByRole("combobox", {
-    name: "服装类型",
-  });
-  await expect(sourceTypeSelect).toHaveValue("jacket");
-  await sourceTypeSelect.selectOption("custom");
+  const sourceTypeSelect = valueControl(collectionDrawer, "服装类型");
+  await expectValue(sourceTypeSelect, "jacket");
+  await chooseValue(sourceTypeSelect, "custom");
   const customSourceType =
     collectionDrawer.getByPlaceholder("输入团队使用的服装类型");
   await customSourceType.fill("斗篷式上装");
   await customSourceType.press("Tab");
   await expect.poll(() => sourceGarmentType?.label).toBe("斗篷式上装");
-  await collectionDrawer
-    .getByRole("combobox", { name: "服装类型" })
-    .selectOption("jacket");
+  await chooseValue(valueControl(collectionDrawer, "服装类型"), "jacket");
   await expect.poll(() => sourceGarmentType?.code).toBe("jacket");
 
   const signatureDetailsEditor = collectionDrawer.getByLabel(
@@ -547,15 +544,13 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   });
   await retrySeriesState.click();
   await expect(retrySeriesState).toBeHidden();
-  const garmentTypeSelect = collectionDrawer.getByRole("combobox", {
-    name: "服装类型",
-  });
+  const garmentTypeSelect = valueControl(collectionDrawer, "服装类型");
   const generateLook = collectionDrawer.getByRole("button", {
     name: "生成",
     exact: true,
   });
   await expect(garmentTypeSelect).toHaveCount(1);
-  await garmentTypeSelect.selectOption("dress");
+  await chooseValue(garmentTypeSelect, "dress");
   await generateLook.click();
   await expect.poll(() => lookRequests).toHaveLength(1);
   expect(lookRequests[0]).toMatchObject({
@@ -570,7 +565,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     collectionDrawer.locator('img[src="https://assets.example/collection-look-2.png"]'),
   ).toBeVisible();
 
-  await garmentTypeSelect.selectOption("coat");
+  await chooseValue(garmentTypeSelect, "coat");
   await generateLook.click();
   await expect.poll(() => lookRequests).toHaveLength(2);
   expect(lookRequests[1]).toMatchObject({
@@ -617,7 +612,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     path: "output/playwright/look-generator-mobile.png",
   });
   await expect(
-    collectionDrawer.getByRole("combobox", { name: "服装类型" }),
+    valueControl(collectionDrawer, "服装类型"),
   ).toHaveCount(1);
   await expect(
     collectionDrawer.getByRole("button", { name: "单 Look 扩展" }),

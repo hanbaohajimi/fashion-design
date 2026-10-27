@@ -8,7 +8,9 @@
 | --- | --- |
 | [项目 README](../README.md) | 本地启动、功能入口、升级和常用命令 |
 | [Agent 架构](architecture/AGENT_ARCHITECTURE.md) | 当前设计协作框架、领域边界与实现依据 |
+| [助手流式消息](architecture/assistant-streaming.md) | SSE协议、Redis恢复、发布开关与真实链路验证 |
 | [前端设计规范](../apps/web/DESIGN.md) | 当前界面的视觉与交互规范，结合运行源码阅读 |
+| [选择控件与命令菜单规范](impeccable/选择控件与命令菜单规范.md) | Select/Dropdown 的语义、数量阈值、手机弹层与登记例外 |
 | [前端产品说明](../apps/web/PRODUCT.md) | 用户、任务、产品约束与资料来源 |
 | [脚本目录](../scripts/README.md) | 日常工具、文档生成与手工验证入口 |
 

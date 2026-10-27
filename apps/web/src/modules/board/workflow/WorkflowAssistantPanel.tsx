@@ -1,7 +1,9 @@
 "use client";
-import { Button, Menu, Notice, Skeleton } from "../../../components/ui";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+
+import { Select } from "../../../components/ui";
+import { Button, Notice, Skeleton } from "../../../components/ui";
+import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
+import type { AssistantStreamEvent } from "@fashion/shared";
 import prose from "../../../components/reading.module.css";
 import { STUDIO_LAYOUT } from "../../../components/ui-config";
 import { userFacingError } from "../../../components/user-facing-error";
@@ -80,6 +82,7 @@ function mergeMessages(
   const merged = current.map((message) => {
     const update = updates.get(message.id);
     if (!update) return message;
+    if (message.status === "completed" && update.status === "pending" || Date.parse(update.updatedAt) < Date.parse(message.updatedAt)) return message;
     // An in-flight poll must not revive a confirmation already handled here.
     if (
       update.proposal?.status === "pending" &&
@@ -126,6 +129,15 @@ export function WorkflowAssistantPanel({
   >([]);
   const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<readonly WorkflowMessageView[]>([]);
+  const streaming = useAssistantStream(conversationId);
+  const receiveStream = (targetId: string, event: AssistantStreamEvent) => {
+    if (activeId.current !== targetId) return;
+    streaming.receive(event);
+    if ("turn" in event) {
+      const turn = event.turn as unknown as { userMessage: WorkflowMessageView; assistantMessage: WorkflowMessageView };
+      setMessages((current) => mergeMessages(current, [turn.userMessage, turn.assistantMessage]));
+    }
+  };
   const [localSubmission, setLocalSubmission] = useState<LocalSubmission | null>(null);
   const acknowledgedRequests = useRef(new Set<string>());
   const freshMessages = useRef(new Set<string>());
@@ -642,7 +654,7 @@ export function WorkflowAssistantPanel({
         referencedNodeIds: refs,
         focusNodeIds: focus,
         ...(adjustment ? { respondingToProposalId: adjustment.id } : {}),
-      });
+      }, (event) => receiveStream(targetId, event), streaming.signalFor(targetId));
       draftStore.current.delete(`${projectId}:${targetId}`);
       requestIds.current.delete(key);
       acknowledgedRequests.current.add(requestId);
@@ -670,6 +682,7 @@ export function WorkflowAssistantPanel({
       setDraftNotice(null);
       reloadContextAfterTurn(targetId);
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
       setLocalSubmission((current) => current ? { ...current, phase: "uncertain" } : current);
       if (!acknowledgedRequests.current.has(attemptedRequestId)) onError(error instanceof Error ? error.message : "发送结果尚未确认，请重试");
     } finally {
@@ -740,7 +753,7 @@ export function WorkflowAssistantPanel({
         ...(user.context?.respondingToProposalId
           ? { respondingToProposalId: user.context.respondingToProposalId }
           : {}),
-      });
+      }, (event) => receiveStream(targetId, event), streaming.signalFor(targetId));
       if (activeId.current === targetId) {
         setMessages((current) =>
           mergeMessages(current, [turn.userMessage, turn.assistantMessage]),
@@ -932,7 +945,7 @@ export function WorkflowAssistantPanel({
       {historyOpen ? (
         <div className={ui.history}>
           <label htmlFor={`${inputId}-history`}>选择历史对话</label>
-          <select
+          <Select searchable
             id={`${inputId}-history`}
             aria-label="历史对话"
             disabled={sending || contextSaving || loading}
@@ -946,7 +959,7 @@ export function WorkflowAssistantPanel({
                 {item.mode === "workflow" ? "" : " · 只读历史"}
               </option>
             ))}
-          </select>
+          </Select>
           {!conversations.length && !loading ? (
             <small>还没有历史对话。发送第一条需求后会建立对话。</small>
           ) : null}
@@ -1119,7 +1132,7 @@ export function WorkflowAssistantPanel({
               <span className={styles.messageKind}>结果分析 · 可继续输入</span>
             ) : null}
             <div
-              data-revealed={message.role === "assistant" && message.status !== "pending" && freshMessages.current.has(message.id)}
+              data-revealed={message.role === "assistant" && message.status !== "pending" && freshMessages.current.has(message.id) && !streaming.drafts[message.id]}
               className={
                 message.role === "user"
                   ? styles.userExample
@@ -1127,15 +1140,13 @@ export function WorkflowAssistantPanel({
               }
             >
               {message.role === "assistant" ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-                  {message.content}
-                </ReactMarkdown>
+                <StreamingReply content={message.content} draft={streaming.drafts[message.id]} />
               ) : (
                 message.content
               )}
             </div>
             {message.status === "pending" ? (
-              <small role="status" className={styles.thinking}>正在分析设计需求<span aria-hidden="true"><i /><i /><i /></span></small>
+              <small role="status" className={styles.thinking}>{assistantPhaseLabel(streaming.drafts[message.id])}<span aria-hidden="true"><i /><i /><i /></span></small>
             ) : null}
             {message.error ? (
               <small role="alert">
@@ -1448,13 +1459,7 @@ export function WorkflowAssistantPanel({
               添加引用
             </Button>
           ) : null}
-          <Menu
-            label="对话操作"
-            trigger="更多"
-            placement="top"
-            align="start"
-            portal
-          >
+          {legacy || agentVersion === 2 ? <div aria-label="对话操作" className={ui.history}>
             {legacy ? (
               <button
                 onClick={() => setLegacyRunsOpen((value) => !value)}
@@ -1469,7 +1474,7 @@ export function WorkflowAssistantPanel({
             <p className={ui.menuHint}>
               设置作用于整个项目；暂停后，已有任务继续运行。
             </p>
-          </Menu>
+          </div> : null}
           {!collaborationReadOnly ? (
             <button
               className={styles.actionPrimary}

@@ -1,3 +1,4 @@
+import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -258,7 +259,7 @@ test("领域评估按真实候选显示约束检查，反馈提案先预览后�
   await expect(details.getByText("? 无法判断 · 不能单凭图像确认防水性能，需要实测").first()).toBeVisible();
   await selectNode(page, "风衣候选 2");
   await openImageDetails(page);
-  await details.getByRole("combobox", { name: "设计师决定" }).selectOption("rejected");
+  await chooseValue(valueControl(details, "设计师决定"), "rejected");
   await details.getByPlaceholder("记录选择或否决理由").fill("面料反光过强，保持宽松比例并减弱亮面涂层");
   await details.getByRole("button", { name: "保存决定" }).click();
   await expect.poll(() => mocked.decisions.length).toBe(1);
@@ -332,7 +333,7 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   await expect(page.getByRole("main").getByText("AGENT 工作区验收项目", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
   await page.getByRole("button", { name: "历史对话", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "历史对话" })).toHaveValue("chat-new");
+  await expectValue(valueControl(page, "历史对话"), "chat-new");
   await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较风衣的面料垂坠感");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.getByText("已整理为三个可执行的廓形与面料方向。")).toBeVisible();
@@ -341,7 +342,7 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   expect(mocked.executionRequests).toHaveLength(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("group", { name: "工作视图" }).getByRole("button", { name: "助手", exact: true }).click();
-  await page.getByRole("combobox", { name: "历史对话" }).selectOption("chat-old");
+  await chooseValue(valueControl(page, "历史对话"), "chat-old");
   await expect(page.getByText("历史中保留的风衣设计需求")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await page.getByRole("button", { name: "节点列表" }).click();

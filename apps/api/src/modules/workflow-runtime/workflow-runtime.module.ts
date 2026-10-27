@@ -1,4 +1,5 @@
 import { ProjectAccessModule } from "../studio/project-access.module";
+import { AssistantStreamsModule } from "../agent-conversations/assistant-streams.module";
 import { ImageTransformQueue } from "./image-transform-queue.service";
 import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
@@ -24,6 +25,7 @@ import {
 
 @Module({
   imports: [ProjectAccessModule,
+    AssistantStreamsModule,
     AiModule,
     FilesModule,
     GenerationModule,

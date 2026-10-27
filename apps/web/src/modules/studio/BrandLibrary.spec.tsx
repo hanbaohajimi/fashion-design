@@ -108,6 +108,7 @@ it("imports an accessible source revision with a stable retry key", async () => 
       }),
     );
   render(<BrandLibrary {...values} />);
+  fireEvent.click(screen.getByText("共享品牌库"));
   fireEvent.click(
     screen.getByRole("button", { name: "从其他项目复用品牌资料" }),
   );

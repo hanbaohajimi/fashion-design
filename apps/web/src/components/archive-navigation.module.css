@@ -51,6 +51,7 @@
 }
 .navigation svg {
   flex: none;
+  translate: 0 0.125em;
 }
 .navigation a:hover {
   color: var(--color-navigation-ink);

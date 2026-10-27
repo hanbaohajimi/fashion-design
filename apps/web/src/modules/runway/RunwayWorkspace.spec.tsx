@@ -1,3 +1,4 @@
+import { chooseValue } from "../../test/choose-value";
 // @vitest-environment jsdom
 import {
   cleanup,
@@ -59,6 +60,8 @@ const workspaceProps = () => ({
   beforeChange: vi.fn(async () => true),
 });
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
   vi.clearAllMocks();
   vi.mocked(fetchRunwayRun).mockReset().mockResolvedValue(runwayRunFixture());
   vi.mocked(watchRunway)
@@ -95,9 +98,7 @@ function deferred<T>() {
 it("submits stable media identifiers and the current interrupt for pairing", async () => {
   const props = panelProps();
   render(<RunwayRunPanel {...props} />);
-  fireEvent.change(screen.getByLabelText("模特 1 的服装"), {
-    target: { value: "cloth-b" },
-  });
+  chooseValue("模特 1 的服装", "cloth-b");
   fireEvent.click(screen.getByRole("button", { name: "确认配对并试衣" }));
   await waitFor(() => expect(props.onRun).toHaveBeenCalledTimes(1));
   expect(actOnRunway).toHaveBeenCalledWith(
@@ -383,16 +384,10 @@ it("replaces the single shared background instead of silently retaining unused r
   fireEvent.change(screen.getByLabelText("秀场需求"), {
     target: { value: "庭院服装秀" },
   });
-  fireEvent.change(screen.getByLabelText("素材用途"), {
-    target: { value: "background" },
-  });
-  fireEvent.change(screen.getByLabelText("选择项目素材"), {
-    target: { value: "asset:asset-front" },
-  });
+  chooseValue("素材用途", "background");
+  chooseValue("选择项目素材", "asset:asset-front");
   fireEvent.click(screen.getByRole("button", { name: "加入素材" }));
-  fireEvent.change(screen.getByLabelText("选择项目素材"), {
-    target: { value: "asset:asset-back" },
-  });
+  chooseValue("选择项目素材", "asset:asset-back");
   fireEvent.click(screen.getByRole("button", { name: "加入素材" }));
   fireEvent.click(screen.getByRole("button", { name: "保存需求" }));
   await waitFor(() => expect(saveRunwayShow).toHaveBeenCalledTimes(1));
@@ -444,14 +439,10 @@ it("loads an older show directly and exposes runs beyond the twenty-row list pre
       initialRunId="run-21"
     />,
   );
-  await waitFor(() =>
-    expect((screen.getByLabelText("运行历史") as HTMLSelectElement).value).toBe(
-      "run-21",
-    ),
-  );
-  expect(
-    (screen.getByLabelText("运行历史") as HTMLSelectElement).options,
-  ).toHaveLength(21);
+  await waitFor(() => expect(screen.getByRole("button", { name: "运行历史" }).textContent).toContain("历史运行 1"));
+  fireEvent.click(screen.getByRole("button", { name: "运行历史" }));
+  expect(screen.getAllByRole("option")).toHaveLength(21);
+  expect(screen.getAllByRole("option").filter(option => option.getAttribute("aria-selected") === "true")).toHaveLength(1);
   expect(fetchRunwayShow).toHaveBeenCalledWith(
     "project-1",
     "show-old",
@@ -575,9 +566,7 @@ it("ignores an old action completion after switching shows and editing another d
   );
   await screen.findByLabelText("模特 1 的服装");
   fireEvent.click(screen.getByRole("button", { name: "确认配对并试衣" }));
-  fireEvent.change(screen.getByLabelText("切换服装秀"), {
-    target: { value: "show-2" },
-  });
+  chooseValue("切换服装秀", "show-2");
   await screen.findByRole("heading", { name: "溪谷服装秀" });
   fireEvent.change(screen.getByLabelText("秀场需求"), {
     target: { value: "保留第二份未保存草稿" },

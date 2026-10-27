@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+
 import { useState } from "react";
 import { EmptyState, ImagePreview } from "../../../components/ui";
 
@@ -80,7 +82,7 @@ export function LookGrid({
       <div className={styles.lookGenerator}>
         <label>
           <span>服装类型</span>
-          <select
+          <Select
             disabled={busy}
             onChange={(event) =>
               setGarmentCode(event.target.value as StandardGarmentType)
@@ -92,7 +94,7 @@ export function LookGrid({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         {garmentCode === "custom" ? (

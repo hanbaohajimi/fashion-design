@@ -35,6 +35,8 @@
 
 ## 手工验证：manual/
 
+- [verify-assistant-stream.mjs](manual/verify-assistant-stream.mjs)：运行 `node --env-file=.env.example --env-file-if-exists=.env scripts/manual/verify-assistant-stream.mjs`，使用现有 Amux 配置发起一次短文本请求，验证真实 SSE 分块、增量文本与最终结果一致；只将脱敏时间、分块计数及结果写入 `output/ui-refinement/assistant-stream/gateway-smoke.json`。
+
 - [verify-ui-motion-upload.mjs](manual/verify-ui-motion-upload.mjs)：运行 `node scripts/manual/verify-ui-motion-upload.mjs`，使用本地 `.env`、已启动的 Web 与 MinIO 验证实际浏览器原图上传进度及校验和。只写入并删除本次唯一验证对象，不调用模型；结果写入 `output/ui-motion/minio-upload.json`。
 
 - [test-amux-response-check.ts](manual/test-amux-response-check.ts)：单参考图与多参考图服务诊断。显式配置供应商环境后，可从根目录运行 `node apps/api/node_modules/tsx/dist/cli.mjs scripts/manual/test-amux-response-check.ts`；该操作会调用配置的图片服务，不属于目录整理验收。

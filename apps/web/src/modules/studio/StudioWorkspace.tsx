@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useState } from "react";
 import type { ExperimentCreateInput, StudioSummary } from "@fashion/shared";
 import {
   Badge,
@@ -11,7 +11,6 @@ import {
   SkeletonGroup,
   Dialog,
   TabPanel,
-  Select,
   Menu,
 } from "../../components/ui";
 import { AppHeader } from "../../components/AppHeader";
@@ -193,7 +192,8 @@ export function StudioWorkspace({
           <header className={styles.header}>
             <h1 className={styles.accessibleTitle}>{name} · 款式与交付</h1>
             <div>
-              <Menu label="项目导航" trigger={name}>
+              <nav aria-label="项目导航" className={styles.toolbar}>
+                <strong>{name}</strong>
                 {[
                   ["项目库", "/"],
                   ["设计工作台", `/${encodeURIComponent(projectId)}`],
@@ -218,13 +218,12 @@ export function StudioWorkspace({
                     {label}
                   </Button>
                 ))}
-              </Menu>
+              </nav>
               <span className={styles.projectCaption}>款式与交付</span>
             </div>
             <div className={styles.toolbar}>
               {data ? (
                 <Button
-                  className={styles.desktopProgress}
                   size="small"
                   variant="ghost"
                   onClick={() => setProgressOpen(true)}
@@ -232,15 +231,7 @@ export function StudioWorkspace({
                   创作进展
                 </Button>
               ) : null}
-              <Menu label="项目选项" trigger="项目选项">
-                {data ? (
-                  <Button
-                    className={styles.mobileProgress}
-                    onClick={() => setProgressOpen(true)}
-                  >
-                    创作进展
-                  </Button>
-                ) : null}
+              <div className={styles.toolbar} aria-label="项目选项">
                 {data ? <Badge>{ROLE_LABELS[data.role]}</Badge> : null}
 
                 <Button
@@ -258,32 +249,27 @@ export function StudioWorkspace({
                 >
                   刷新资料
                 </Button>
-              </Menu>
+              </div>
               {data && !data.capabilities.edit ? (
                 <span className={styles.muted}>只读工作区</span>
               ) : null}
             </div>
             <div className={styles.mobileNavigation}>
-              <label className={styles.mobileFunction}>
+              <div className={styles.mobileFunction}>
                 <span title={name}>{name}</span>
-                <Select
-                  aria-label="当前功能"
-                  value={tab}
-                  onChange={(event) =>
-                    void changeTab(event.target.value as Tab)
-                  }
-                >
+                <Menu label="当前功能" trigger={STUDIO_GROUPS.map((group) => group.items.find((item) => item.value === tab)?.label).find(Boolean) ?? "切换功能"}>
                   {STUDIO_GROUPS.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
+                    <Fragment key={group.label}>
+                      <span className={styles.muted}>{group.label}</span>
                       {group.items.map((item) => (
-                        <option value={item.value} key={item.value}>
+                        <button type="button" aria-current={item.value === tab ? "page" : undefined} onClick={() => void changeTab(item.value)} key={item.value}>
                           {item.label}
-                        </option>
+                        </button>
                       ))}
-                    </optgroup>
+                    </Fragment>
                   ))}
-                </Select>
-              </label>
+                </Menu>
+              </div>
             </div>
           </header>
           {error ? <Notice tone="error">{error}</Notice> : null}

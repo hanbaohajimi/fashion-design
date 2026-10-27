@@ -2,6 +2,7 @@ import { prisma } from "@fashion/db";
 import { Module } from "@nestjs/common";
 
 import { ProjectAccessModule } from "../studio/project-access.module";
+import { AssistantStreamsModule } from "./assistant-streams.module";
 import { AiModule } from "../ai/ai.module";
 import { AgentRunsModule } from "../agent-runs/agent-runs.module";
 import { WorkflowRuntimeModule } from "../workflow-runtime/workflow-runtime.module";
@@ -19,6 +20,7 @@ import {
 
 @Module({
   imports: [
+    AssistantStreamsModule,
     ProjectAccessModule,
     AiModule,
     FilesModule,

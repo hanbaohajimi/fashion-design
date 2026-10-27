@@ -141,9 +141,8 @@ describe("LookGrid", () => {
       }),
     );
 
-    fireEvent.change(screen.getByRole("combobox", { name: "服装类型" }), {
-      target: { value: "dress" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "服装类型" }));
+    fireEvent.click(screen.getByRole("option", { name: "连衣裙" }));
     fireEvent.click(screen.getByRole("button", { name: "生成" }));
 
     await waitFor(() => {

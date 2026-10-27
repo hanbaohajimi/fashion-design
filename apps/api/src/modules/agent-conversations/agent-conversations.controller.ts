@@ -9,6 +9,9 @@ import {
   Post,
   Query,
   UseGuards,
+  Headers,
+  Res,
+  Optional,
 } from "@nestjs/common";
 import { z } from "zod";
 
@@ -25,6 +28,8 @@ import {
   updateAgentConversationSchema,
 } from "./agent-conversations.schemas";
 import { AgentConversationsService } from "./agent-conversations.service";
+import { AssistantStreamsService } from "./assistant-streams.service";
+import type { Response } from "express";
 
 function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -83,6 +88,7 @@ export class AgentConversationsController {
   constructor(
     @Inject(AgentConversationsService)
     private readonly conversations: AgentConversationsService,
+    @Optional() @Inject(AssistantStreamsService) private readonly streams?: AssistantStreamsService,
   ) {}
 
   @Patch(":id")
@@ -126,16 +132,26 @@ export class AgentConversationsController {
     name: "agent-message-create",
     windowSeconds: 60 * 60,
   })
-  send(
+  async send(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") conversationId: string,
     @Body() body: unknown,
+    @Res() response: Response,
+    @Headers("accept") accept?: string,
   ) {
-    return this.conversations.send(
-      user.userId,
-      parseOrThrow(agentIdSchema, conversationId),
-      parseOrThrow(sendAgentMessageSchema, body),
-    );
+    const id = parseOrThrow(agentIdSchema, conversationId);
+    const input = parseOrThrow(sendAgentMessageSchema, body);
+    if (!this.streams?.enabled(accept)) return response.json(await this.conversations.send(user.userId, id, input));
+    await this.conversations.authorizeStream(user.userId, id, true);
+    return this.streams.start(response, id, input.clientRequestId, (observer) => this.conversations.send(user.userId, id, input, observer), () => this.conversations.recoverStream(user.userId, id, input.clientRequestId), JSON.stringify(input));
+  }
+
+  @Get(":id/message-streams/:requestId/events")
+  async events(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Param("requestId") requestId: string, @Query("after") after: string | undefined, @Res() response: Response) {
+    const id = parseOrThrow(agentIdSchema, conversationId); const request = parseOrThrow(agentIdSchema, requestId);
+    await this.conversations.authorizeStream(user.userId, id);
+    if (!this.streams) return response.json(await this.conversations.recoverStream(user.userId, id, request));
+    return this.streams.follow(response, id, request, after, () => this.conversations.recoverStream(user.userId, id, request), () => this.conversations.authorizeStream(user.userId, id));
   }
 
   @Post(":id/generation-tasks/:taskId")

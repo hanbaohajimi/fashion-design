@@ -1,5 +1,8 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+import { GridDetails } from "../../components/GridDetails";
+
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
 import {
@@ -416,7 +419,7 @@ function SampleEditor({
               </Field>
             </div>
             <Field label="对应技术包修订">
-              <Select
+              <Select searchable
                 required
                 disabled={!!existing}
                 value={draft.techPackRevisionId}
@@ -574,23 +577,17 @@ function SampleEditor({
               </div>
               <div className={styles.formGrid}>
                 <Field label="关联样衣照片">
-                  <Select
+                  <AssetSelect
                     value={issue.assetId}
-                    onChange={(event) =>
+                    onValueChange={(assetId) =>
                       updateIssue(index, {
-                        assetId: event.target.value,
+                        assetId: assetId,
                         x: 0.5,
                         y: 0.5,
                         status: "OPEN",
                       })
                     }
-                  >
-                    {draft.photoAssetIds.map((id) => (
-                      <option key={id} value={id}>
-                        {id.slice(0, 12)}
-                      </option>
-                    ))}
-                  </Select>
+                   assets={data.assets.filter((asset) => draft.photoAssetIds.includes(asset.id))} />
                 </Field>
                 <Field label="问题类型">
                   <Select
@@ -653,7 +650,7 @@ function SampleEditor({
                   </Select>
                 </Field>
                 <Field label="负责人">
-                  <Select
+                  <Select searchable
                     value={issue.assigneeId ?? ""}
                     onChange={(event) =>
                       update(
@@ -749,7 +746,7 @@ function SampleEditor({
         ) : null}
       </SaveBar>
       {existing ? (
-        <details className={styles.record}>
+        <GridDetails className={styles.record}>
           <summary>查看本轮修订历史</summary>
           {existing.revisions.map((revision) => {
             const sample = revision.payload as Sample;
@@ -772,7 +769,7 @@ function SampleEditor({
               </article>
             );
           })}
-        </details>
+        </GridDetails>
       ) : null}
     </form>
   );

@@ -159,7 +159,17 @@ export class WorkflowAssistantService {
     });
   }
 
-  async send(userId: string, conversationId: string, raw: MessageInput) {
+  async recoverStream(userId: string, conversationId: string, clientRequestId: string): Promise<AssistantTurnView> {
+    await this.conversation(userId, conversationId);
+    await this.messages(userId, conversationId, { limit: 1 });
+    const userMessage = await this.database.agentMessage.findUniqueOrThrow({ where: { conversationId_clientRequestId: { conversationId, clientRequestId } }, include: { reply: { include: { proposal: true } } } });
+    if (!userMessage.reply) throw new BadRequestException("消息尚未受理");
+    return turnView({ userMessage, assistantMessage: userMessage.reply }) as AssistantTurnView;
+  }
+
+  async authorizeStream(userId: string, conversationId: string) { return this.conversation(userId, conversationId, true); }
+
+  async send(userId: string, conversationId: string, raw: MessageInput, observer?: AssistantStreamObserver) {
     const input = workflowMessageSchema.parse(raw);
     const conversation = await this.conversation(userId, conversationId, true);
     const project = await this.database.project.findUniqueOrThrow({ where: { id: conversation.projectId } });
@@ -207,8 +217,10 @@ export class WorkflowAssistantService {
       return { userMessage, assistantMessage, replay: false, lease, turnId: record.id, epoch };
     });
     if (turn.replay) return turnView(turn);
+    await observer?.accepted(turnView(turn) as AssistantTurnView);
+    await observer?.phase("analyzing");
     try {
-      const assistantMessage = await this.completeTurn(userId, conversationId, conversation.projectId, turn, input);
+      const assistantMessage = await this.completeTurn(userId, conversationId, conversation.projectId, turn, input, undefined, observer);
       return turnView({ userMessage: turn.userMessage, assistantMessage });
     } catch (error) {
       const failed = await this.failTurn(conversationId, turn, error, turn.assistantMessage.id);
@@ -286,13 +298,14 @@ export class WorkflowAssistantService {
 
   private async completeTurn(userId: string, conversationId: string, projectId: string,
     turn: { lease: string; turnId: string; epoch: number; assistantMessage?: { id: string } },
-    input: MessageInput, observation?: { eventId: string; executionId: string }) {
+    input: MessageInput, observation?: { eventId: string; executionId: string }, observer?: AssistantStreamObserver) {
     const previousPlan = await this.database.agentPlanRevision.findFirst({ where: { conversationId }, orderBy: { revision: "desc" } });
     const turnRecord = await this.database.agentTurn.findUniqueOrThrow({ where: { id: turn.turnId } });
     const storedBudget = object(turnRecord.budget);
     const initialBudget = { modelCalls: typeof storedBudget.modelCalls === "number" ? storedBudget.modelCalls : 0,
       readRounds: typeof storedBudget.readRounds === "number" ? storedBudget.readRounds : 0, repairUsed: storedBudget.repairUsed === true };
     const result = await this.coordinatorService().run({ userId, projectId, conversationId, request: input.content, referencedNodeIds: input.referencedNodeIds,
+      ...(observer ? { stream: observer } : {}),
       deadlineAt: turnRecord.leaseExpiresAt?.getTime() ?? Date.now() + TURN_TIMEOUT_MS,
       trigger: observation ? "observation" : "user", previousPlan: previousPlan?.plan, initialBudget,
       reserveBudget: async (budget) => {
@@ -397,11 +410,11 @@ type MessageRow = {
 };
 function messageView(row: MessageRow) {
   const raw = object(row.context);
-  const context = Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]]));
+  const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { fileAssetIds: [], shapeIds: [], ...Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]])) };
   const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
   if (summary.success) context.referenceSummary = summary.data;
   const evidence = object(row.proposal?.evidence);
-  return { id: row.id, role: row.role === "USER" ? "user" : "assistant", status: row.status.toLowerCase(), content: row.content,
+  return { id: row.id, role: row.role === "USER" ? "user" as const : "assistant" as const, status: row.status.toLowerCase() as "pending" | "completed" | "failed", content: row.content,
     kind: row.kind ?? null, context, clientRequestId: row.clientRequestId, replyToId: row.replyToId, generationTaskId: row.generationTaskId,
     origin: row.origin ?? "user", executionId: row.executionId ?? null, sourceEventId: row.sourceEventId ?? null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
@@ -415,3 +428,4 @@ function messageView(row: MessageRow) {
 function turnView(turn: { userMessage: MessageRow; assistantMessage: MessageRow }) {
   return { userMessage: messageView(turn.userMessage), assistantMessage: messageView(turn.assistantMessage) };
 }
+import type { AssistantStreamObserver, AssistantTurnView } from "@fashion/shared";

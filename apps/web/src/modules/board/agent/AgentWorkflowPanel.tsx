@@ -1,5 +1,8 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+import { GridDetails } from "../../../components/GridDetails";
+
 import type {
   AgentDesignIntelligence,
   AgentDomainActionView,
@@ -425,7 +428,7 @@ export function AgentWorkflowPanel({
               <label htmlFor={`workflow-history-${conversationId}`}>
                 设计计划
               </label>
-              <select
+              <Select searchable
                 id={`workflow-history-${conversationId}`}
                 value={activeRunId ?? ""}
                 disabled={busy}
@@ -441,7 +444,7 @@ export function AgentWorkflowPanel({
                     {item.intent} · {RUN_LABELS[item.status]}
                   </option>
                 ))}
-              </select>
+              </Select>
               <button
                 disabled={busy}
                 type="button"
@@ -753,7 +756,7 @@ function WorkflowNode({
         )}
         intelligence={intelligence}
       />
-      <details className={styles.workflowPrompt}>
+      <GridDetails className={styles.workflowPrompt}>
         <summary>
           {editable ? "查看或修改节点提示词" : "查看执行提示词"}
         </summary>
@@ -784,7 +787,7 @@ function WorkflowNode({
             保存节点提示词
           </button>
         ) : null}
-      </details>
+      </GridDetails>
       {step.error ? <p className={styles.error}>{step.error}</p> : null}
       {step.status === "running" ? (
         <p className={styles.workflowTaskNotice}>
@@ -920,7 +923,7 @@ function WorkflowNode({
         />
       ) : null}
       {step.attempts?.length ? (
-        <details className={styles.workflowPrompt}>
+        <GridDetails className={styles.workflowPrompt}>
           <summary>查看每次尝试与反馈</summary>
           {step.attempts.map((attempt) => (
             <section key={attempt.id}>
@@ -940,7 +943,7 @@ function WorkflowNode({
               </p>
             </section>
           ))}
-        </details>
+        </GridDetails>
       ) : null}
     </li>
   );

@@ -1,5 +1,6 @@
 import { Prisma, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
 import { getWorkflowToolCatalog } from "@fashion/shared";
+import type { AssistantStreamObserver } from "@fashion/shared";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { z } from "zod";
@@ -15,6 +16,7 @@ import { applyWorkflowReadPolicy, WorkflowReadGateway, type ReadPolicy } from ".
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export type CoordinatorInput = {
+  stream?: AssistantStreamObserver;
   userId: string; projectId: string; conversationId?: string; request: string;
   referencedNodeIds: string[]; focusNodeIds?: string[]; trigger?: "user" | "observation";
   readPolicy?: ReadPolicy; previousPlan?: unknown;
@@ -99,8 +101,15 @@ export class WorkflowCoordinator {
       calls += 1;
       await reserve();
       let parsed = false;
+      let streamed = "";
+      const stream = input.stream; const streamJson = this.model.streamJson?.bind(this.model);
+      const generate = stream && streamJson ? (request: Parameters<AmuxClaudeJsonClient["generateJson"]>[0]) => streamJson(request, async ({ text, kind }) => {
+        if (!kind || kind === "read") return;
+        if (!text.startsWith(streamed)) { await stream.reset(); streamed = ""; }
+        const delta = text.slice(streamed.length); streamed = text; if (delta) await stream.delta(delta);
+      }) : this.model.generateJson.bind(this.model);
       try {
-        decision = parsePlannerDecision(await this.model.generateJson({ schemaName: "fashion_workflow_collaboration",
+        decision = parsePlannerDecision(await generate({ schemaName: "fashion_workflow_collaboration",
           signal, timeoutMs,
           instructions: `${WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。read只请求项目内补读，不能执行设计工具。当前计划是可修订目标，只有下一项动作可以成为待审提案。\n后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好。`,
           jsonSchema: z.toJSONSchema(plannerDecisionSchema), maxTokens: 6_000, images: attached.images,
@@ -115,6 +124,7 @@ export class WorkflowCoordinator {
         remaining();
         parsed = true;
         if (decision.kind === "read") {
+          await input.stream?.phase("reading");
           if (readRounds >= MAX_READ_ROUNDS || calls >= MAX_PLANNER_CALLS) throw new Error("补读预算已用尽，请根据真实已读信息回答或澄清");
           if (!decision.reads.length || decision.reads.length > 4) throw new Error("每轮补读需要一至四个类型化请求");
           readRounds += 1;
@@ -128,6 +138,7 @@ export class WorkflowCoordinator {
           validationError = null;
           continue;
         }
+        await input.stream?.phase("validating");
         if ((decision.kind === "propose") !== Boolean(decision.action)) throw new Error("只有propose可以包含action，且propose必须提供action");
         if (decision.action) {
           const operations = compileWorkflowAction(built.graph, decision.action, [...new Set([...input.referencedNodeIds, ...built.context.focusNodeIds])], eligibility);
@@ -141,6 +152,7 @@ export class WorkflowCoordinator {
         validationError = null;
         break;
       } catch (error) {
+        if (streamed) await input.stream?.reset();
         const repairable = parsed || error instanceof z.ZodError || error instanceof Error && /json|schema|结构|格式/iu.test(error.message);
         if (!repairable) throw error;
         if (repaired || calls >= MAX_PLANNER_CALLS) {

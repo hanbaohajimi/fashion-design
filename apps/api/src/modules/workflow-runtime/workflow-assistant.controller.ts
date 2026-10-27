@@ -1,4 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Header, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Header, Headers, Res, Optional, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
+import type { AssistantTurnView } from "@fashion/shared";
+import { AssistantStreamsService } from "../agent-conversations/assistant-streams.service";
 import { z } from "zod";
 import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
 import type { AuthenticatedUser } from "../auth/auth.types";
@@ -16,7 +19,7 @@ const id = z.string().trim().min(1).max(128);
 @UseGuards(RateLimitGuard)
 @RateLimit({ keyBy: "user", limit: 120, name: "workflow-assistant", windowSeconds: 60 })
 export class WorkflowAssistantController {
-  constructor(@Inject(WorkflowAssistantService) private readonly assistant: WorkflowAssistantService) {}
+  constructor(@Inject(WorkflowAssistantService) private readonly assistant: WorkflowAssistantService, @Optional() @Inject(AssistantStreamsService) private readonly streams?: AssistantStreamsService) {}
 
   @Get("context")
   @Header("Cache-Control", "private, no-store")
@@ -37,7 +40,10 @@ export class WorkflowAssistantController {
 
   @Post("workflow-messages")
   @RateLimit({ keyBy: "user", limit: 60, name: "workflow-assistant-turn", windowSeconds: 60 * 60 })
-  send(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Body() body: unknown) {
-    return this.assistant.send(user.userId, parse(id, conversationId), parse(workflowMessageSchema, body));
+  async send(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Body() body: unknown, @Res() response: Response, @Headers("accept") accept?: string) {
+    const conversation = parse(id, conversationId); const input = parse(workflowMessageSchema, body);
+    if (!this.streams?.enabled(accept)) return response.json(await this.assistant.send(user.userId, conversation, input));
+    await this.assistant.authorizeStream(user.userId, conversation);
+    return this.streams.start(response, conversation, input.clientRequestId, async (observer) => await this.assistant.send(user.userId, conversation, input, observer) as AssistantTurnView, () => this.assistant.recoverStream(user.userId, conversation, input.clientRequestId), JSON.stringify(input));
   }
 }

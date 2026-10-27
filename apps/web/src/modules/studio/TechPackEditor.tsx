@@ -1,5 +1,8 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+import { GridDetails } from "../../components/GridDetails";
+
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
@@ -476,7 +479,7 @@ function TechPackForm({
           className={styles.formGrid}
         >
           <Field label="对应款式修订">
-            <Select
+            <Select searchable
               required
               value={draft.styleRevisionId}
               onChange={(event) => {
@@ -561,9 +564,9 @@ function TechPackForm({
                   </Select>
                 </Field>
                 <Field label="关联图片">
-                  <Select
+                  <AssetSelect
                     value={view.assetId}
-                    onChange={(event) => {
+                    onValueChange={(assetId) => {
                       const oldAsset = view.assetId;
                       setViewsChanged(true);
                       setDraft((current) => ({
@@ -574,7 +577,7 @@ function TechPackForm({
                           at === index
                             ? {
                                 ...item,
-                                assetId: event.target.value,
+                                assetId: assetId,
                                 reviewed: false,
                               }
                             : item,
@@ -583,20 +586,14 @@ function TechPackForm({
                           item.assetId === oldAsset
                             ? {
                                 ...item,
-                                assetId: event.target.value,
+                                assetId: assetId,
                                 reviewed: false,
                               }
                             : item,
                         ),
                       }));
                     }}
-                  >
-                    {data.assets.map((asset) => (
-                      <option value={asset.id} key={asset.id}>
-                        {asset.id.slice(0, 12)}
-                      </option>
-                    ))}
-                  </Select>
+                   assets={data.assets} />
                 </Field>
                 <Field label="视图说明">
                   <Input
@@ -692,33 +689,23 @@ function TechPackForm({
           {draft.annotations.map((annotation, index) => (
             <article className={styles.record} key={index}>
               <Field label="标注图片">
-                <Select
+                <AssetSelect
                   value={annotation.assetId}
-                  onChange={(event) =>
+                  onValueChange={(assetId) =>
                     update(
                       "annotations",
                       draft.annotations.map((item, at) =>
                         at === index
                           ? {
                               ...item,
-                              assetId: event.target.value,
+                              assetId: assetId,
                               reviewed: false,
                             }
                           : item,
                       ),
                     )
                   }
-                >
-                  {data.assets
-                    .filter((asset) =>
-                      draft.views.some((view) => view.assetId === asset.id),
-                    )
-                    .map((asset) => (
-                      <option value={asset.id} key={asset.id}>
-                        {asset.id.slice(0, 12)}
-                      </option>
-                    ))}
-                </Select>
+                 assets={data.assets.filter((asset) => draft.views.some((view) => view.assetId === asset.id))} />
               </Field>
               <AssetAnchor
                 label={"工艺标注 " + (index + 1) + " 定位"}
@@ -990,7 +977,7 @@ function TechPackForm({
         ) : null}
       </SaveBar>
       {existing ? (
-        <details className={styles.record}>
+        <GridDetails className={styles.record}>
           <summary>查看和导出历史修订</summary>
           {existing.revisions.map((revision) => (
             <article className={styles.record} key={revision.id}>
@@ -1033,7 +1020,7 @@ function TechPackForm({
               ) : null}
             </article>
           ))}
-        </details>
+        </GridDetails>
       ) : null}
     </form>
   );

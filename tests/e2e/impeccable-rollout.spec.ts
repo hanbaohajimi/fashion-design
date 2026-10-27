@@ -2,13 +2,16 @@ import { expect, test } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
 import { contrastFailures } from "./review-accessibility";
+import { expectValue } from "./choice-control";
 
 test("从选定款式继续技术包保持确切修订，未保存内容仍受保护", async ({
   page,
 }) => {
   await seedVisualApp(page);
   const data = workspaceFixture();
-  const second = structuredClone(data.styles[0]!);
+  const first = data.styles[0];
+  if (!first) throw new Error("测试资料缺少初始款式");
+  const second = structuredClone(first);
   second.id = "style-second";
   second.name = "长款通勤风衣";
   second.code = "CT-102";
@@ -26,12 +29,11 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
   await page.getByRole("button", { name: /CT-102 · 长款通勤风衣/ }).click();
   await page.getByRole("button", { name: "继续技术包", exact: true }).click();
   await expect(page).toHaveURL(/styleRevisionId=style-second-r3/);
-  await expect(page.getByLabel("对应款式修订")).toHaveValue("style-second-r3");
+  await expectValue(page.getByLabel("对应款式修订"), "style-second-r3");
   const object = page.getByRole("region", { name: "当前关联作品" });
   await expect(object).toContainText("长款通勤风衣");
   await expect(object).toContainText("款式修订 r3");
   await page.getByLabel("技术包名称", { exact: true }).fill("风衣生产资料草稿");
-  await page.locator('summary[aria-label="项目导航"]').click();
   await page.getByRole("button", { name: "设计工作台", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await expect(guard).toBeVisible();

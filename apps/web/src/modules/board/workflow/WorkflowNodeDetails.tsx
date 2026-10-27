@@ -1,5 +1,8 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+import { GridDetails } from "../../../components/GridDetails";
+
 import { useEffect, useRef, useState } from "react";
 import {
   getWorkflowToolContract,
@@ -188,7 +191,7 @@ export function NodeDetails({
                 : "默认值"}
             。角色仅说明素材用途，不会自动成为硬性设计要求。
           </p>
-          <select
+          <Select
             aria-label="参考图角色"
             disabled={node.status !== "ready"}
             onChange={(event) =>
@@ -216,7 +219,7 @@ export function NodeDetails({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
           {node.status === "ready" &&
           node.payload.roleSource !== "manual" &&
           !(
@@ -319,7 +322,7 @@ export function NodeDetails({
             打开大图、版本与局部重绘
           </button> : null}
           <h4>设计师决定</h4>
-          <select
+          <Select
             aria-label="设计师决定"
             onChange={(event) =>
               setDecisionKind(event.target.value as typeof decisionKind)
@@ -329,7 +332,7 @@ export function NodeDetails({
             <option value="selected">选定方案</option>
             <option value="compare">保留比较</option>
             <option value="rejected">否决方案</option>
-          </select>
+          </Select>
           <textarea
             className={styles.decisionReason}
             onChange={(event) => setDecisionReason(event.target.value)}
@@ -376,7 +379,7 @@ export function NodeDetails({
           </button>
         </section>
       ) : null}
-      <details className={styles.detailSection}>
+      <GridDetails className={styles.detailSection}>
         <summary>来源与路径</summary>
         <div className={styles.detailMeta}>
           <span>输入</span>
@@ -405,7 +408,7 @@ export function NodeDetails({
           </ol>
         ) : null}
         {assetId ? <DesignPathPanel assetId={assetId} /> : null}
-      </details>
+      </GridDetails>
       <section className={styles.detailSection}>
         <button
           className={styles.dangerButton}
@@ -698,7 +701,7 @@ function ToolSettings({
           />
         </label>
         {imageTool ? (
-          <details className={styles.advancedSettings}>
+          <GridDetails className={styles.advancedSettings}>
             <summary>
               <span>高级设置</span>
               <small>
@@ -775,7 +778,7 @@ function ToolSettings({
             </div>
             <label>
               图像质量
-              <select
+              <Select
                 aria-label="图像质量"
                 disabled={!canEdit || saving}
                 onChange={(event) =>
@@ -787,7 +790,7 @@ function ToolSettings({
                 <option value="low">低</option>
                 <option value="medium">标准</option>
                 <option value="high">高</option>
-              </select>
+              </Select>
             </label>
             {referenceNodes.length ? (
               <>
@@ -818,7 +821,7 @@ function ToolSettings({
                       <strong>{displayNodeTitle(reference)}</strong>
                       <label>
                         参考作用
-                        <select
+                        <Select
                           aria-label={`参考作用 ${reference.title}`}
                           disabled={!canEdit || saving}
                           value={current.role}
@@ -833,7 +836,7 @@ function ToolSettings({
                               )?.label ?? role}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </label>
                       <label>
                         参考强度
@@ -855,7 +858,7 @@ function ToolSettings({
                 })}
               </>
             ) : null}
-          </details>
+          </GridDetails>
         ) : null}
       </div>
       {localError ? (
@@ -891,7 +894,7 @@ function ToolSettings({
           <p>连接所需输入后即可执行。</p>
         ) : null}
       </div>
-      <details className={styles.advancedSettings}>
+      <GridDetails className={styles.advancedSettings}>
         <summary>执行记录</summary>
         <button
           onClick={() =>
@@ -984,7 +987,7 @@ function ToolSettings({
             )}
           </ol>
         ) : null}
-      </details>
+      </GridDetails>
     </section>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Dialog, Tabs, TabPanel } from "../../../components/ui";
 import controls from "../../../components/ui.module.css";
@@ -441,7 +443,7 @@ function SourceGarmentTypeEditor({
       </header>
       <div>
         <label>
-          <select
+          <Select
             aria-label="服装类型"
             disabled={disabled}
             onChange={(event) => {
@@ -466,7 +468,7 @@ function SourceGarmentTypeEditor({
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {code === "custom" ? (
           <label>

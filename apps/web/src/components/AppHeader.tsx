@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useAuth } from "../modules/auth/AuthProvider";
-import { Button, Menu } from "./ui";
+import { Button } from "./ui";
 import { ArchiveNavigation, type ArchiveSection } from "./ArchiveNavigation";
 
 export function AppHeader(props: {
@@ -25,9 +25,9 @@ function Account() {
   const [error, setError] = useState<string | null>(null);
   if (!session) return null;
   return (
-    <div>
-      <Menu label={session.user.email} trigger="账户">
+    <div aria-label="账户" title={session.user.email}>
         <Button
+          style={{ minHeight: 44 }}
           loading={pending}
           onClick={() => {
             setPending(true);
@@ -40,7 +40,6 @@ function Account() {
         >
           退出登录
         </Button>
-      </Menu>
       {error ? <small role="alert">{error}</small> : null}
     </div>
   );

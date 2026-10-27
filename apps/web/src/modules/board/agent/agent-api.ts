@@ -1,4 +1,5 @@
 import { privateFetch as fetch } from "../../auth/private-fetch";
+import { sendAssistantTurn, type AssistantEventHandler } from "./assistant-stream-client";
 import type {
   AgentConversationSummary,
   AgentMessageView,
@@ -223,12 +224,13 @@ export function sendWorkflowMessage(
     readonly focusNodeIds?: readonly string[];
     readonly respondingToProposalId?: string;
   },
+  onEvent?: AssistantEventHandler,
+  signal?: AbortSignal,
 ): Promise<{ readonly userMessage: WorkflowMessageView; readonly assistantMessage: WorkflowMessageView }> {
-  return workflowConversationRequest(
+  return sendAssistantTurn(
     `/api/agent-conversations/${encodeURIComponent(conversationId)}/workflow-messages`,
-    { method: "POST", body: JSON.stringify(input) },
-    "设计消息发送失败，请重试",
-  );
+    conversationId, input, onEvent, signal,
+  ) as unknown as Promise<{ readonly userMessage: WorkflowMessageView; readonly assistantMessage: WorkflowMessageView }>;
 }
 
 export function fetchWorkflowConversationContext(
@@ -324,20 +326,13 @@ export async function sendAgentMessage(
     readonly fileAssetIds: readonly string[];
     readonly shapeIds: readonly string[];
   },
+  onEvent?: AssistantEventHandler,
+  signal?: AbortSignal,
 ): Promise<AgentTurnResponse> {
-  const response = await fetch(
+  return sendAssistantTurn<AgentTurnResponse>(
     `/api/agent-conversations/${encodeURIComponent(conversationId)}/messages`,
-    {
-      body: JSON.stringify(input),
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-    },
+    conversationId, input, onEvent, signal,
   );
-  if (!response.ok) {
-    throw await apiError(response, "消息发送失败");
-  }
-  return (await response.json()) as AgentTurnResponse;
 }
 
 export async function attachGenerationTaskToConversation(

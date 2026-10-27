@@ -1,3 +1,4 @@
+import { valueControl, chooseValue } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
@@ -19,9 +20,9 @@ for (const width of [1738, 1440, 1280, 1200, 1199, 1024, 390]) {
     ).toBeVisible();
     await expect(page.getByLabel("展示包名称", { exact: true })).toBeVisible();
     if (width < 1200) {
-      const navigation = page.getByRole("combobox", { name: "当前功能" });
+      const navigation = valueControl(page, "当前功能");
       await expect(navigation).toBeVisible();
-      await navigation.selectOption("styles");
+      await chooseValue(navigation, "styles");
       await expect(page).toHaveURL(/tab=styles/);
       // The responsive variant is intentionally scoped to this page.
       await page.goto(`/${PROJECT}/studio?tab=presentation`);
@@ -86,9 +87,7 @@ test("原生校验能从整理视图定位隐藏的逐图必填说明", async ({
   await expect(page.getByLabel("图片 2 说明", { exact: true })).toBeFocused();
   await page.getByLabel("图片 2 说明", { exact: true }).fill("背面结构展示");
   await page.getByRole("checkbox", { name: /已人工核对图片 2/ }).check();
-  await page
-    .getByRole("combobox", { name: "图片 2 视图", exact: true })
-    .selectOption("back");
+  await chooseValue(valueControl(page, "图片 2 视图"), "back");
   await expect(
     page.getByRole("checkbox", { name: /已人工核对图片 2/ }),
   ).not.toBeChecked();

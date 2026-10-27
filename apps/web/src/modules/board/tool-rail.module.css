@@ -64,14 +64,14 @@
 
 .toolButton:hover:not(:disabled) {
   background: var(--color-paper-beige);
-  border-color: rgba(0, 0, 0, 0.18);
+  border-color: rgb(32 51 46 / 18%);
 }
 
 .toolButton[aria-pressed="true"] {
   border-color: var(--color-ink-black);
   background: var(--color-ink-black);
   color: var(--color-warm-white);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgb(32 51 46 / 20%);
 }
 
 .toolButton[aria-pressed="true"]:hover:not(:disabled) {

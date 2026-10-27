@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../../components/ui";
+
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Dialog, DialogView } from "../../../components/ui";
 import controls from "../../../components/ui.module.css";
@@ -295,10 +297,10 @@ export function ExportModal({
             {job ? <ExportProgress job={job} /> : null}
             <p>关闭窗口不会取消导出，可从此处重新查看。</p>
             {historySync.error ? <p role="status">{historySync.error}<button onClick={historySync.retry} type="button">重试读取导出历史</button></p> : null}
-            {recent.length > 0 ? <label>最近导出<select aria-label="最近导出" value={job?.id ?? ""} onChange={(event) => {
+            {recent.length > 0 ? <label>最近导出<Select aria-label="最近导出" value={job?.id ?? ""} onChange={(event) => {
               const id = event.target.value;
               void fetchExportJob(id).then((next) => { setJob(next); setFormat(next.format); setQuality(next.quality); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "导出读取失败"));
-            }}>{recent.map((item) => <option key={item.id} value={item.id}>{item.format.toUpperCase()} · {new Date(item.createdAt).toLocaleString("zh-CN")}</option>)}</select></label> : null}
+            }}>{recent.map((item) => <option key={item.id} value={item.id}>{item.format.toUpperCase()} · {new Date(item.createdAt).toLocaleString("zh-CN")}</option>)}</Select></label> : null}
             {error && job ? <button onClick={() => { failures.current = 0; setPollAttempt((value) => value + 1); }} type="button">重试状态查询</button> : null}
 
             <div className={styles.exportActions}>

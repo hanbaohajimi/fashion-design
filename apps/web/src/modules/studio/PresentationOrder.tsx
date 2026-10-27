@@ -4,7 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { Button, ImagePreview } from "../../components/ui";
 import type { StudioAsset } from "./studio-ui";
 import styles from "./presentation-sets.module.css";
-import { motionEase, motionTime, observeMotionCancellation } from "../../components/interactions/motion-policy";
+import { motionTime, observeMotionCancellation } from "../../components/interactions/motion-policy";
+import { animateSpring } from "../../components/interactions/spring";
 
 export function movePresentationItem(ids: readonly string[], id: string, to: number): string[] {
   const next = [...ids]; const from = next.indexOf(id);
@@ -48,9 +49,14 @@ export function PresentationOrder({ ids, assets, currentId, assetName, disabled,
     const target = pointer ? [...(list.current?.querySelectorAll<HTMLElement>("[data-order-id]") ?? [])].find((element) => element.dataset.orderId === pointer.id) : null;
     if (commit && floating?.animate && target && motionTime("--motion-drop", 250)) {
       const box = target.getBoundingClientRect(); const left = Number.parseFloat(floating.style.left); const top = Number.parseFloat(floating.style.top);
-      const animation = floating.animate([{ transform: floating.style.transform }, { transform: `translate(${box.left - left}px, ${box.top - top}px) scale(1)` }], { duration: motionTime("--motion-drop", 250), easing: motionEase() });
-      animations.current.add(animation);
-      void animation.finished.catch(() => undefined).then(() => { floating.remove(); animations.current.delete(animation); });
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(floating).transform);
+      const targetTransform = `translate(${box.left - left}px, ${box.top - top}px) scale(1)`;
+      const animation = animateSpring(floating, [matrix.m41, matrix.m42, matrix.a], [box.left - left, box.top - top, 1], ([x, y, scale]) => `translate(${x}px, ${y}px) scale(${scale})`);
+      floating.style.transform = targetTransform;
+      if (animation) {
+        animations.current.add(animation);
+        void animation.finished.catch(() => undefined).then(() => { floating.remove(); animations.current.delete(animation); });
+      } else floating.remove();
     } else floating?.remove();
     if (commit) selectRef.current([...currentOrder.current]);
     setPreview(null); setGrabbed(null);
@@ -75,11 +81,12 @@ export function PresentationOrder({ ids, assets, currentId, assetName, disabled,
   useLayoutEffect(() => {
     if (!before.current.size || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     list.current?.querySelectorAll<HTMLElement>("[data-order-id]").forEach((element) => {
-      const first = before.current.get(element.dataset.orderId ?? ""); const last = element.getBoundingClientRect();
-      if (first && element.animate && element.dataset.orderId !== grabbed) {
-        const animation = element.animate([{ transform: `translate(${first.left - last.left}px, ${first.top - last.top}px)` }, { transform: "none" }], { duration: motionTime("--motion-reorder", 200), easing: motionEase() });
-        animations.current.add(animation);
-        void animation.finished.catch(() => undefined).then(() => animations.current.delete(animation));
+      const first = before.current.get(element.dataset.orderId ?? "");
+      for (const previous of element.getAnimations?.() ?? []) { if (animations.current.has(previous)) { previous.cancel(); animations.current.delete(previous); } }
+      const last = element.getBoundingClientRect();
+      if (first && element.dataset.orderId !== grabbed) {
+        const animation = animateSpring(element, [first.left - last.left, first.top - last.top], [0, 0], ([x, y]) => `translate(${x}px, ${y}px)`);
+        if (animation) { animations.current.add(animation); void animation.finished.catch(() => undefined).then(() => animations.current.delete(animation)); }
       }
     });
     before.current.clear();

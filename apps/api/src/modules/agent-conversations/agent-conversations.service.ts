@@ -10,6 +10,7 @@ import type {
   AgentMessageContext,
   AgentMessageView,
   AgentRunView,
+  AssistantStreamObserver,
 } from "@fashion/shared";
 import {
   BadRequestException,
@@ -419,6 +420,7 @@ export class AgentConversationsService {
     userId: string,
     conversationId: string,
     input: SendAgentMessageInput,
+    observer?: AssistantStreamObserver,
   ) {
     const conversation = await this.assertConversationOwnership(
       userId,
@@ -478,6 +480,8 @@ export class AgentConversationsService {
       }
     }
 
+    await observer?.accepted(toTurnResponse(turn));
+    await observer?.phase("analyzing");
     try {
       const [history, imageContext] = await Promise.all([
         this.loadHistory(conversationId, turn.userMessage.id),
@@ -489,7 +493,13 @@ export class AgentConversationsService {
         ),
       ]);
       await this.access.require(userId, conversation.projectId, "edit");
-      const decision = await this.model.generateJson({
+      let streamed = "";
+      const streamJson = this.model.streamJson?.bind(this.model);
+      const generate = observer && streamJson ? (request: Parameters<AmuxClaudeJsonClient["generateJson"]>[0]) => streamJson(request, async ({ text }) => {
+        if (!text.startsWith(streamed)) { await observer.reset(); streamed = ""; }
+        const delta = text.slice(streamed.length); streamed = text; if (delta) await observer.delta(delta);
+      }) : this.model.generateJson.bind(this.model);
+      const decision = await generate({
         images: imageContext.images,
         instructions: agentInstructions,
         jsonSchema: agentDecisionJsonSchema,
@@ -498,7 +508,9 @@ export class AgentConversationsService {
           agentDecisionSchema.parse(normalizeAgentDecision(value)),
         prompt: buildAgentPrompt(input.content, history, context),
         schemaName: "fashion_agent_decision",
-      });
+      }) as z.infer<typeof agentDecisionSchema>;
+
+      await observer?.phase("validating");
 
       await this.access.require(userId, conversation.projectId, "edit");
       let taskId: string | null = null;
@@ -613,6 +625,22 @@ export class AgentConversationsService {
       });
       return { assistantMessage, userMessage };
     });
+  }
+
+  async authorizeStream(userId: string, conversationId: string, write = false) {
+    return this.assertConversationOwnership(userId, conversationId, write ? "edit" : "read");
+  }
+
+  async recoverStream(userId: string, conversationId: string, clientRequestId: string) {
+    const conversation = await this.assertConversationOwnership(userId, conversationId);
+    if (conversation.mode === "workflow") {
+      if (!this.assistant) throw new ServiceUnavailableException("设计助手暂时不可用");
+      return this.assistant.recoverStream(userId, conversationId, clientRequestId);
+    }
+    await this.messages(userId, conversationId, { limit: 1 });
+    const turn = await this.findTurn(conversationId, clientRequestId);
+    if (!turn) throw new NotFoundException("消息尚未受理");
+    return toTurnResponse(turn);
   }
 
   private async findTurn(conversationId: string, clientRequestId: string) {

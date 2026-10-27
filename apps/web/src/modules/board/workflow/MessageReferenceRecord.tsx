@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../../components/GridDetails";
 import { workflowReferenceSummarySchema } from "@fashion/shared";
 import type { WorkflowMessageView } from "../agent/agent-api";
 import type { WorkflowGraph } from "./workflow-api";
@@ -37,21 +38,21 @@ export function MessageReferenceRecord({ context, graph, onLocate }: {
     })}</ul>}
   </section>;
   if (!hasRecord) return <p className={ui.referenceRecord}>这条回复未保存引用记录</p>;
-  return <details className={ui.referenceRecord}>
+  return <GridDetails className={ui.referenceRecord}>
     <summary>查看引用记录</summary>
     <>
       <p>记录本轮引用的对象与传入图片，不代表全部回答依据。</p>
       {group("本次引用", explicit, "本次没有添加引用")}
       {group("讨论对象", discussion, "整个项目")}
       {group("传入图片", images, "本轮没有传入图片")}
-      {visual || coverage ? <details>
+      {visual || coverage ? <GridDetails>
         <summary>图片统计与读取范围</summary>
         {visual ? <p>本轮记录：{typeof visual.total === "number" ? `共 ${visual.total} 张；` : ""}{typeof visual.ready === "number" ? `已有分析记录 ${visual.ready} 张；` : ""}{typeof visual.pending === "number" ? `处理中 ${visual.pending} 张；` : ""}{typeof visual.failed === "number" ? `读取失败 ${visual.failed} 张。` : ""}</p> : null}
         {images ? <p>传入模型 {images.length} 张图片。传入成功不表示助手已准确理解。</p> : <p>未记录传入模型的图片数量。</p>}
         {typeof coverage?.note === "string" ? <p>{coverage.note}</p> : null}
         {omitted(coverage?.attempts) > 0 ? <p>另有 {omitted(coverage?.attempts)} 条执行历史未载入本轮详情。</p> : null}
         {omitted(coverage?.memory) > 0 ? <p>另有 {omitted(coverage?.memory)} 条项目记忆未载入本轮详情。</p> : null}
-      </details> : null}
+      </GridDetails> : null}
     </>
-  </details>;
+  </GridDetails>;
 }

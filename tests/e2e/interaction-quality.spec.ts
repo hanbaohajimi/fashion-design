@@ -321,7 +321,7 @@ test("保存按钮保留表单、失败草稿、重试与一次提交", async ({
   const name = page.getByLabel("款式名称", { exact: true });
   await name.fill("保留完整轮廓的修订");
   const save = page.getByRole("button", { name: "保存修订", exact: true });
-  await expect(save).toHaveAttribute("data-interaction", "ripple");
+  await expect(save).toHaveAttribute("data-interaction", "spring");
   await save.click();
   await expect(
     page.getByRole("alert").filter({ hasText: "暂时无法保存" }),

@@ -12,6 +12,7 @@ import { PaletteExplorer } from "./PaletteExplorer";
 import { DNACard } from "../board/generation/DNACard";
 import { WorkflowMaterialEntry } from "../board/workflow/WorkflowMaterialDialogs";
 import type { CollectionDna } from "../board/generation/collection-types";
+import { chooseValue } from "../../test/choose-value";
 
 HTMLDialogElement.prototype.showModal = function () {
   this.open = true;
@@ -98,15 +99,11 @@ it("切换策略和数量更新候选，空白名称禁止应用，近似原色�
   );
   open();
   const oldPreview = screen.getByRole("list", { name: "建议颜色" }).textContent;
-  fireEvent.change(screen.getByLabelText("配色策略"), {
-    target: { value: "complementary" },
-  });
+  chooseValue("配色策略", "complementary");
   expect(screen.getByRole("list", { name: "建议颜色" }).textContent).not.toBe(
     oldPreview,
   );
-  fireEvent.change(screen.getByLabelText("追加数量"), {
-    target: { value: "1" },
-  });
+  chooseValue("追加数量", "1");
   expect(
     within(screen.getByRole("list", { name: "建议颜色" })).getAllByRole(
       "listitem",

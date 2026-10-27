@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type SelectHTMLAttributes,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -27,11 +28,38 @@ import { useStudioAssetName } from "./studio-object-context";
 import { userFacingError } from "../../components/user-facing-error";
 import { PresentationPreview as AssetPreview } from "./PresentationGallery";
 import type { SubmitFeedbackSnapshot } from "../../components/interactions/use-submit-feedback";
+import choiceStyles from "../../components/choice-controls.module.css";
 
 export interface StudioAsset {
   readonly id: string;
   readonly url: string;
   readonly thumbnailUrl: string | null;
+  readonly name?: string;
+}
+
+/** The same searchable image picker used by multi-image fields, with native form validation. */
+export function AssetSelect({ assets, value, onValueChange, label = "选择设计图片", ...props }: Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "defaultValue" | "onChange" | "children" | "multiple"> & {
+  readonly assets: readonly StudioAsset[];
+  readonly value: string;
+  readonly onValueChange: (value: string) => void;
+  readonly label?: string;
+}) {
+  const proxy = useRef<HTMLSelectElement>(null);
+  const container = useRef<HTMLDivElement>(null);
+  const [invalid, setInvalid] = useState(false);
+  return <div ref={container} id={props.id} role="group" data-asset-select aria-label={props["aria-label"] ?? label} data-invalid={invalid || props["aria-invalid"]} aria-describedby={props["aria-describedby"]}>
+    <AssetPicker assets={assets} selected={assets.some(asset => asset.id === value) ? [value] : []}
+      label={props["aria-label"] ?? label} max={1} compact selectionPreview={false} disabled={Boolean(props.disabled)}
+      onChange={(ids) => { if (!proxy.current?.matches(":disabled")) { setInvalid(false); onValueChange(ids[0] ?? ""); } }} />
+    <select {...props} id={props.id ? `${props.id}-value` : undefined} aria-label={undefined} aria-labelledby={undefined} ref={proxy} value={assets.some(asset => asset.id === value) ? value : ""} aria-hidden="true" tabIndex={-1} className={choiceStyles.formValue}
+      onChange={(event) => onValueChange(event.currentTarget.value)} onInvalid={(event) => {
+        event.preventDefault(); setInvalid(true); container.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus(); props.onInvalid?.(event);
+      }}>
+      <option value="">请选择图片</option>
+      {assets.map(asset => <option key={asset.id} value={asset.id}>{asset.id}</option>)}
+    </select>
+    {invalid ? <small role="alert" className={choiceStyles.error}>请选择图片后再提交。</small> : null}
+  </div>;
 }
 export function errorMessage(error: unknown): string {
   return userFacingError(error);
@@ -64,6 +92,7 @@ export function AssetPicker({
   const [draft, setDraft] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const assetName = useStudioAssetName();
+  const nameOf = (id: string) => assets.find(asset => asset.id === id)?.name ?? assetName(id);
   const visibleAssets = (
     selected.length && (max === 1 || selected.length > 4)
       ? assets.filter((asset) => selected.includes(asset.id))
@@ -97,7 +126,7 @@ export function AssetPicker({
         <article className={styles.materialCard} key={asset.id}>
           <button
             aria-label={"选择图片 " + (assets.indexOf(asset) + 1)}
-            title={assetName(asset.id)}
+            title={nameOf(asset.id)}
             aria-pressed={ids.includes(asset.id)}
             className={styles.assetButton}
             disabled={disabled}
@@ -108,10 +137,10 @@ export function AssetPicker({
               <ImagePreview
                 retryable={false}
                 src={asset.thumbnailUrl ?? asset.url}
-                alt={assetName(asset.id)}
+                alt={nameOf(asset.id)}
               />
             </span>
-            <span className={styles.assetLabel}>{assetName(asset.id)}</span>
+            <span className={styles.assetLabel}>{nameOf(asset.id)}</span>
             <span className={styles.selectionLabel}>
               {ids.includes(asset.id)
                 ? `已选 · 第 ${ids.indexOf(asset.id) + 1} 张`
@@ -121,7 +150,7 @@ export function AssetPicker({
           <Button
             variant="ghost"
             size="small"
-            aria-label={`查看大图：${assetName(asset.id)}`}
+            aria-label={`查看大图：${nameOf(asset.id)}`}
             onClick={(event) => { setPreviewKeyboard(event.detail === 0); setPreviewSource(event.currentTarget.closest("article")?.querySelector("img") ?? event.currentTarget); setPreview(asset); }}
           >
             查看大图
@@ -160,9 +189,9 @@ export function AssetPicker({
                 key={asset.id}
                 variant="ghost"
                 onClick={(event) => { setPreviewKeyboard(event.detail === 0); setPreviewSource(event.currentTarget); setPreview(asset); }}
-                aria-label={`查看大图：${assetName(asset.id)}`}
+                aria-label={`查看大图：${nameOf(asset.id)}`}
               >
-                {assetName(asset.id)} · 查看大图
+                {nameOf(asset.id)} · 查看大图
               </Button>
             ))}
           </div>
@@ -201,7 +230,7 @@ export function AssetPicker({
           </p>
           {choices(
             assets.filter((asset) =>
-              assetName(asset.id)
+              nameOf(asset.id)
                 .toLocaleLowerCase()
                 .includes(search.trim().toLocaleLowerCase()),
             ),
@@ -209,7 +238,7 @@ export function AssetPicker({
             setDraft,
           )}
           {!assets.some((asset) =>
-            assetName(asset.id)
+            nameOf(asset.id)
               .toLocaleLowerCase()
               .includes(search.trim().toLocaleLowerCase()),
           ) ? (
@@ -236,7 +265,7 @@ export function AssetPicker({
       ) : null}
       {preview ? (
         <AssetPreview
-          name={assetName(preview.id)}
+          name={nameOf(preview.id)}
           src={preview.url}
           sourceElement={previewSource}
           keyboardOpened={previewKeyboard}
@@ -260,6 +289,7 @@ export function SaveBar({
   hint,
   feedback,
   feedbackAction = "save",
+  interaction = "ripple",
 }: {
   readonly busy: boolean;
   readonly dirty: boolean;
@@ -273,6 +303,7 @@ export function SaveBar({
   readonly hint?: ReactNode;
   readonly feedback?: SubmitFeedbackSnapshot | undefined;
   readonly feedbackAction?: string;
+  readonly interaction?: "ripple" | "spring";
 }) {
   return (
     <ActionBar
@@ -298,7 +329,7 @@ export function SaveBar({
       <Button
         type="submit"
         form={formId}
-        interaction="ripple"
+        interaction={interaction}
         variant={primary ? "primary" : "secondary"}
         loading={busy}
         feedback={feedback}

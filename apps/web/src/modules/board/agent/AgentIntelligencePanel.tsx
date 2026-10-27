@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../../components/GridDetails";
 
 import type {
   AgentDesignConstraint,
@@ -55,7 +56,7 @@ export function AgentDesignBriefPanel({
     .slice(0, 2)
     .map((constraint) => constraint.requirement);
   return (
-    <details className={styles.brief}>
+    <GridDetails className={styles.brief}>
       <summary>
         <span>设计简报 · {brief.constraints.length} 项条件</span>
         <small className={styles.briefPreview}>
@@ -95,7 +96,7 @@ export function AgentDesignBriefPanel({
         <p className={styles.caveat}>
           节点绑定表示计划覆盖这些条件，实际结果仍需逐项检查并由你确认。
         </p>
-        <details>
+        <GridDetails>
           <summary>查看来源证据</summary>
           {evidence.length ? (
             <ol className={styles.evidence}>
@@ -116,9 +117,9 @@ export function AgentDesignBriefPanel({
           ) : (
             <p>没有可展示的来源证据。</p>
           )}
-        </details>
+        </GridDetails>
       </div>
-    </details>
+    </GridDetails>
   );
 }
 
@@ -185,7 +186,7 @@ export function AgentNodeRationalePanel({
     intelligence.brief.constraints.find((item) => item.id === id),
   );
   return (
-    <details className={styles.rationale}>
+    <GridDetails className={styles.rationale}>
       <summary>本节点的设计依据</summary>
       <div className={styles.body}>
         <p>{rationale.goal}</p>
@@ -209,7 +210,7 @@ export function AgentNodeRationalePanel({
           这是本步的规划依据，结果是否符合由实际候选与人工选择确认。
         </p>
       </div>
-    </details>
+    </GridDetails>
   );
 }
 
@@ -271,7 +272,7 @@ export function CandidateAgentCheck({
         </p>
       )}
       {evaluation ? (
-        <details open={action?.status === "completed"}>
+        <GridDetails open={action?.status === "completed"}>
           <summary>查看逐项检查</summary>
           <div className={styles.body}>
             <p>{evaluation.summary}</p>
@@ -301,7 +302,7 @@ export function CandidateAgentCheck({
               检查是图像观察建议；尺寸、性能与制作可行性仍需资料或实测。最终由你决定采用。
             </p>
           </div>
-        </details>
+        </GridDetails>
       ) : null}
     </section>
   );
@@ -374,7 +375,7 @@ export function AgentStepRefinement({
         </p>
       ) : null}
       {refinement ? (
-        <details open={action?.status === "completed"}>
+        <GridDetails open={action?.status === "completed"}>
           <summary>查看修订前后与保留项</summary>
           <div className={styles.body}>
             <p>{refinement.summary}</p>
@@ -426,7 +427,7 @@ export function AgentStepRefinement({
               应用只更新本节点提示词，不会自动生成。准备好后再主动执行。
             </p>
           </div>
-        </details>
+        </GridDetails>
       ) : null}
     </section>
   );

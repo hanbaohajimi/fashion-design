@@ -1,5 +1,7 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+
 import { BoundStyleContext } from "./studio-object-context";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为确切修订的图片、意见与审批；成员管理移入次级页签。保留两份草稿，动作服从原权限。 */
@@ -574,25 +576,18 @@ function ReviewForm({
               {draft.anchored ? (
                 <>
                   <Field label="批注图片">
-                    <Select
+                    <AssetSelect
                       value={draft.assetId}
                       required
-                      onChange={(event) =>
+                      onValueChange={(assetId) =>
                         setDraft((current) => ({
                           ...current,
-                          assetId: event.target.value,
+                          assetId: assetId,
                           x: 0.5,
                           y: 0.5,
                         }))
                       }
-                    >
-                      <option value="">选择图片</option>
-                      {data.assets.map((asset) => (
-                        <option value={asset.id} key={asset.id}>
-                          {asset.id.slice(0, 12)}
-                        </option>
-                      ))}
-                    </Select>
+                     assets={data.assets} />
                   </Field>
                   {draft.assetId ? (
                     <AssetAnchor

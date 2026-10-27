@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../components/GridDetails";
 import { StudioCount } from "./StudioCount";
 import type { StudioSummary } from "@fashion/shared";
 import { creativeProgress } from "./creative-progress";
@@ -14,7 +15,7 @@ export function CreativeProgress({
 }) {
   const progress = creativeProgress(data);
   return (
-    <details open={expanded || undefined} className={styles.frame}>
+    <GridDetails open={expanded || undefined} className={styles.frame}>
       <summary>
         创作进展{" "}
         <span>
@@ -87,6 +88,6 @@ export function CreativeProgress({
           ))}
         </nav>
       </section>
-    </details>
+    </GridDetails>
   );
 }

@@ -147,14 +147,15 @@ it("invalidates anchor review when a linked view image changes", async () => {
   });
   render(<TechPackEditor {...values} />);
   await screen.findByDisplayValue("双针线");
-  fireEvent.change(screen.getByLabelText("关联图片"), {
-    target: { value: "asset-back" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "视图来源" }));
+  const linkedImage = screen.getByLabelText("关联图片").querySelector("select");
+  if (!linkedImage) throw new Error("缺少关联图片表单值");
+  fireEvent.change(linkedImage, { target: { value: "asset-back" } });
   await screen.findByText(/相关锚点已标为待复核/);
   expect(
     (screen.getByLabelText("已复核工艺标注") as HTMLInputElement).checked,
   ).toBe(false);
-  expect((screen.getByLabelText("标注图片") as HTMLSelectElement).value).toBe(
+  expect(screen.getByLabelText("标注图片").querySelector("select")?.value).toBe(
     "asset-back",
   );
 });

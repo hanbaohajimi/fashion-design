@@ -2,8 +2,9 @@
 
 /* §2.1/§2.8/§3.6：当前对象和必要输入优先；高级字段以真实摘要收纳。
  * 表面、文字、间距和操作色均来自 design-system.css，不拥有业务草稿或请求。 */
-import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { Button } from "./ui";
+import { Children, cloneElement, isValidElement, useId, useState, type FormEvent, type ReactNode } from "react";
+import { Button, Input } from "./ui";
+import { GridDetails } from "./GridDetails";
 import styles from "./workspace-ui.module.css";
 
 const pendingValidation = new WeakSet<HTMLFormElement>();
@@ -80,10 +81,10 @@ export function FormSection({
     onOpenChange?.(value);
   };
   return (
-    <details
+    <GridDetails
       className={styles.section}
       open={open ?? expanded}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      onOpenChange={setOpen}
       onInvalidCapture={(event) =>
         revealInvalidField(event, () => setOpen(true))
       }
@@ -96,7 +97,7 @@ export function FormSection({
         ) : null}
       </summary>
       <div className={styles.sectionContent}>{children}</div>
-    </details>
+    </GridDetails>
   );
 }
 
@@ -120,6 +121,27 @@ export function ActionBar({
   );
 }
 
+function objectChoiceText(nodes: ReactNode): string {
+  return Children.toArray(nodes).map(node => isValidElement<{ children?: ReactNode }>(node) ? objectChoiceText(node.props.children) : String(node)).join("");
+}
+
+function filterObjectChoices(nodes: ReactNode, query: string): { nodes: ReactNode; matches: number } {
+  let matches = 0;
+  const filtered = Children.map(nodes, node => {
+    if (!isValidElement<{ children?: ReactNode }>(node)) return node;
+    if (node.type === Button || node.type === "button") {
+      if (!objectChoiceText(node.props.children).toLocaleLowerCase().includes(query)) return null;
+      matches++;
+      return node;
+    }
+    if (!node.props.children) return node;
+    const children = filterObjectChoices(node.props.children, query);
+    matches += children.matches;
+    return cloneElement(node, { children: children.nodes });
+  });
+  return { nodes: filtered, matches };
+}
+
 export function ObjectSwitcher({
   label,
   current,
@@ -129,9 +151,15 @@ export function ObjectSwitcher({
   readonly current: ReactNode;
   readonly children: ReactNode;
 }) {
+  const [query, setQuery] = useState("");
+  const filtered = filterObjectChoices(children, query.trim().toLocaleLowerCase());
   return (
-    <FormSection title={label} summary={current}>
-      {children}
+    <FormSection title={label} summary={current} onOpenChange={(open) => { if (open) setQuery(""); }}>
+      <div className={styles.objectChoicePanel}>
+        <Input aria-label={`搜索${label}`} placeholder="搜索已加载对象的名称、编号或修订" value={query} onChange={(event) => setQuery(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+        <div className={styles.objectChoices}>{filtered.nodes}</div>
+        {!filtered.matches ? <p role="status">没有匹配的已加载对象</p> : null}
+      </div>
     </FormSection>
   );
 }

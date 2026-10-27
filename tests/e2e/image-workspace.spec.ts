@@ -1,3 +1,4 @@
+import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
 import { seedVisualApp, PROJECT, NOW } from "../visual/fixtures";
@@ -152,7 +153,7 @@ test.describe("图片手势与复制反馈", () => {
     expect(await view.evaluate((element) => parseFloat(getComputedStyle(element).getPropertyValue("--gallery-x")))).toBeLessThan(-30);
     await page.mouse.up();
     await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-b", { exact: true })).toBeVisible();
-    await workspace.getByLabel("缩放比例").selectOption("200");
+    await chooseValue(workspace.getByLabel("缩放比例"), "200");
     await page.mouse.move(box.x + box.width * .8, box.y + box.height * .5);
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * .3, box.y + box.height * .5, { steps: 14 });
@@ -276,15 +277,15 @@ test("手机上支持尺寸调整、扩图参数和匿名分享页面", async ({
   ).toBeVisible();
   await page.screenshot({ path: "output/image-workspace-mobile.png" });
   await workspace.getByRole("button", { name: "调整大小", exact: true }).click();
-  await workspace.getByLabel("调整方式").selectOption("crop");
-  await workspace.getByLabel("裁剪比例").selectOption("1");
+  await chooseValue(workspace.getByLabel("调整方式"), "crop");
+  await chooseValue(workspace.getByLabel("裁剪比例"), "1");
   await expect(workspace.getByRole("button", { name: "移动裁剪区域" })).toBeVisible();
   await workspace.getByRole("button", { name: "保存为新版本" }).click();
   await expect.poll(() => app.submitted.length).toBe(2);
   expect(app.submitted[1]).toMatchObject({ type: "transform_image", crop: { left: 0, top: 100, width: 600, height: 600 } });
   await expect(workspace.getByAltText("设计 edited-2", { exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "调整大小", exact: true }).click();
-  await workspace.getByLabel("调整方式").selectOption("outpaint");
+  await chooseValue(workspace.getByLabel("调整方式"), "outpaint");
   await workspace.getByLabel("画布宽度").fill("1024");
   await workspace.getByLabel("画布高度").fill("1024");
   await workspace.getByLabel("原图左边距").fill("64");
@@ -311,7 +312,7 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
   await expect(
     workspace.getByAltText("设计 draft", { exact: true }),
   ).toBeVisible();
-  await workspace.getByLabel("缩放比例").selectOption("200");
+  await chooseValue(workspace.getByLabel("缩放比例"), "200");
   await workspace
     .getByRole("button", { name: "添加评论", exact: true })
     .click();

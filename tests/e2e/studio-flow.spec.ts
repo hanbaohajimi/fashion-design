@@ -1,3 +1,4 @@
+import { valueControl, chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import {
   createStudioStyleSchema,
@@ -99,7 +100,8 @@ async function mockStudio(page: Page) {
         });
       }
       savedStyles.push(result.data);
-      const { requestKey: _requestKey, ...payload } = result.data;
+      const { requestKey, ...payload } = result.data;
+      expect(requestKey).toBeTruthy();
       const revision = {
         id: "created-style-r1",
         revision: 1,
@@ -373,17 +375,13 @@ test("商品展示包逐图复核后绑定确切款式修订保存并请求展�
   await page.getByRole("button", { name: "选择图片 1", exact: true }).click();
   await page.getByRole("button", { name: "选择图片 2", exact: true }).click();
   await page.getByRole("button", { name: "逐图核对", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "图片 1 视图", exact: true })
-    .selectOption("front");
+  await chooseValue(valueControl(page, "图片 1 视图"), "front");
   await page.getByLabel("图片 1 说明", { exact: true }).fill("夹克正面");
   await page.getByRole("checkbox", { name: /已人工核对图片 1/ }).check();
   await page
     .getByRole("button", { name: "图片 2 · 待复核", exact: true })
     .click();
-  await page
-    .getByRole("combobox", { name: "图片 2 视图", exact: true })
-    .selectOption("back");
+  await chooseValue(valueControl(page, "图片 2 视图"), "back");
   await page.getByLabel("图片 2 说明", { exact: true }).fill("夹克背面");
   await page
     .getByRole("button", { name: "核对并完成展示包", exact: true })

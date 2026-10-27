@@ -1,3 +1,5 @@
+import { SseDecoder } from "@fashion/shared";
+import { rootStringFields } from "./stream-json";
 export type AmuxClaudeImageDetail = "auto" | "high" | "low";
 
 export interface AmuxClaudeImageInput {
@@ -19,6 +21,7 @@ export interface AmuxClaudeJsonRequest<T> {
 
 export interface AmuxClaudeJsonClient {
   generateJson<T>(request: AmuxClaudeJsonRequest<T>): Promise<T>;
+  streamJson?<T>(request: AmuxClaudeJsonRequest<T>, onDelta: (update: { text: string; kind: string | null }) => Promise<void>): Promise<T>;
 }
 
 export interface AmuxClaudeClientConfig {
@@ -47,6 +50,14 @@ export class AmuxClaudeClient implements AmuxClaudeJsonClient {
   ) {}
 
   async generateJson<T>(request: AmuxClaudeJsonRequest<T>): Promise<T> {
+    return this.request(request);
+  }
+
+  async streamJson<T>(request: AmuxClaudeJsonRequest<T>, onDelta: (update: { text: string; kind: string | null }) => Promise<void>): Promise<T> {
+    return this.request(request, onDelta);
+  }
+
+  private async request<T>(request: AmuxClaudeJsonRequest<T>, onDelta?: (update: { text: string; kind: string | null }) => Promise<void>): Promise<T> {
     const apiKey = this.config.apiKey()?.trim();
     if (!apiKey) {
       throw new Error("缺少 AMUX_API_KEY，无法调用 Claude");
@@ -63,8 +74,8 @@ export class AmuxClaudeClient implements AmuxClaudeJsonClient {
       max_tokens: request.maxTokens,
       messages: [{ content, role: "user" }],
       model: this.config.model,
-      stream: false,
-      system: request.instructions,
+      stream: Boolean(onDelta),
+      system: onDelta ? `${request.instructions}\n请先输出根级 kind（如有），再输出 message 字段，便于增量展示。` : request.instructions,
       temperature: 0,
       tool_choice: {
         disable_parallel_tool_use: true,
@@ -77,12 +88,14 @@ export class AmuxClaudeClient implements AmuxClaudeJsonClient {
           input_schema: request.jsonSchema,
           name: request.schemaName,
           strict: true,
+          ...(onDelta ? { eager_input_streaming: true } : {}),
         },
       ],
     };
-    const response = await this.transport(
+    const transportRequest = { apiKey, body, timeoutMs: Math.min(this.config.timeoutMs, request.timeoutMs ?? this.config.timeoutMs), ...(request.signal ? { signal: request.signal } : {}) };
+    const response = onDelta ? await streamingTransport(`${this.config.baseUrl.replace(/\/$/, "")}/messages`, transportRequest, request.schemaName, onDelta) : await this.transport(
       `${this.config.baseUrl.replace(/\/$/, "")}/messages`,
-      { apiKey, body, timeoutMs: Math.min(this.config.timeoutMs, request.timeoutMs ?? this.config.timeoutMs), ...(request.signal ? { signal: request.signal } : {}) },
+      transportRequest,
     );
     assertUsableStopReason(response);
     const parse = (value: unknown) => request.parse(decodeSchemaContainers(value, request.jsonSchema));
@@ -92,6 +105,53 @@ export class AmuxClaudeClient implements AmuxClaudeJsonClient {
     }
     return parseStructuredJson(responseText(response), parse);
   }
+}
+
+async function streamingTransport(url: string, request: AmuxClaudeTransportRequest, schemaName: string, onDelta: (update: { text: string; kind: string | null }) => Promise<void>): Promise<unknown> {
+  const response = await fetch(url, {
+    body: JSON.stringify(request.body), method: "POST", redirect: "error",
+    headers: { "anthropic-version": "2023-06-01", "Content-Type": "application/json", "x-api-key": request.apiKey, Accept: "text/event-stream" },
+    signal: AbortSignal.any([AbortSignal.timeout(request.timeoutMs), ...(request.signal ? [request.signal] : [])]),
+  });
+  if (!response.ok) throw new Error(`Amux Claude 流式请求失败（HTTP ${response.status}）`);
+  if (!response.headers.get("content-type")?.includes("text/event-stream")) throw new Error("Amux 网关未返回流式响应");
+  if (!response.body) throw new Error("Amux Claude 缺少响应流");
+  const reader = response.body.getReader(); const decoder = new TextDecoder(); const sse = new SseDecoder();
+  const blocks = new Map<number, { name: string; type: string; json: string; text: string; input: unknown }>();
+  let stopReason: unknown; let stopped = false; let previous = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      const frames = sse.push(decoder.decode(chunk.value, { stream: !chunk.done }));
+      for (const frame of frames) {
+        const event: unknown = JSON.parse(frame.data);
+        if (!isRecord(event)) continue;
+        if (event.type === "error") throw new Error("Amux Claude 流式生成失败");
+        if (event.type === "content_block_start" && isRecord(event.content_block) && typeof event.index === "number") {
+          const block = event.content_block;
+          blocks.set(event.index, { name: String(block.name ?? ""), type: String(block.type), json: "", text: typeof block.text === "string" ? block.text : "", input: block.input });
+        }
+        if (event.type === "content_block_delta" && typeof event.index === "number" && isRecord(event.delta)) {
+          const block = blocks.get(event.index);
+          if (!block) continue;
+          if (event.delta.type === "input_json_delta" && typeof event.delta.partial_json === "string") block.json += event.delta.partial_json;
+          if (event.delta.type === "text_delta" && typeof event.delta.text === "string") block.text += event.delta.text;
+          if ((block.type === "tool_use" && block.name === schemaName) || block.type === "text") {
+            const fields = rootStringFields(block.type === "tool_use" ? block.json : block.text);
+            if (fields.message !== undefined) {
+              const key = JSON.stringify([fields.message, fields.kind ?? null]);
+              if (key !== previous) { previous = key; await onDelta({ text: fields.message, kind: fields.kind ?? null }); }
+            }
+          }
+        }
+        if (event.type === "message_delta" && isRecord(event.delta)) stopReason = event.delta.stop_reason;
+        if (event.type === "message_stop") stopped = true;
+      }
+      if (chunk.done || stopped) break;
+    }
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  if (!stopped) throw new Error("Amux Claude 响应流意外中断");
+  return { stop_reason: stopReason, content: [...blocks.values()].map((block) => block.type === "tool_use" ? { type: block.type, name: block.name, input: block.json ? JSON.parse(block.json) as unknown : block.input } : { type: block.type, text: block.text }) };
 }
 
 /** Some gateways serialize nested containers. Decode only where the declared schema requires one. */

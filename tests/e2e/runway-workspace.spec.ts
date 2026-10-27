@@ -1,3 +1,4 @@
+import { chooseValue, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import {
   runwayActionSchema,
@@ -193,7 +194,7 @@ test("服装秀深链优先于 assetId，配对提交媒体 ID 并在刷新后�
       "当前使用模拟生成服务，图片和视频仅用于验证制作流程，不代表真实模型效果。",
     ),
   ).toBeVisible();
-  await page.getByLabel("模特 1 的服装").selectOption("cloth-b");
+  await chooseValue(page.getByLabel("模特 1 的服装"), "cloth-b");
   await page.getByRole("button", { name: "确认配对并试衣" }).click();
   await expect.poll(() => state.actions.length).toBe(1);
   expect(state.actions[0]).toMatchObject({
@@ -208,7 +209,7 @@ test("服装秀深链优先于 assetId，配对提交媒体 ID 并在刷新后�
   await expect(page.getByText("等待执行", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "庭院亚麻秀" })).toBeVisible();
-  await expect(page.getByLabel("运行历史")).toHaveValue("run-1");
+  await expectValue(page.getByLabel("运行历史"), "run-1");
   expect(state.unexpected).toEqual([]);
 });
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为图案大预览；320px 参数区支持调整与生产规格确认。保存为主操作，平铺与坐标计算保持原值。 */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
@@ -9,12 +11,11 @@ import {
   type StudioDocumentView,
 } from "@fashion/shared";
 import { privateFetch } from "../auth/private-fetch";
-import { Button, Input, Select, Textarea } from "../../components/ui";
+import { Button, Input, Textarea } from "../../components/ui";
 import { ActionBar, FormSection } from "../../components/workspace-ui";
 import styles from "./print-workbench.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
-import { useStudioAssetName } from "./studio-object-context";
 type Pattern = (typeof studioPrintPatternSchema)["_output"];
 const CONTROLS = [
   { key: "scale", label: "重复尺度", min: 0.1, max: 5, step: 0.1 },
@@ -41,7 +42,6 @@ export function PrintWorkbench({
   beforeChange?: () => Promise<boolean>;
 }) {
   const feedback = useSubmitFeedback();
-  const assetName = useStudioAssetName();
   const savedPattern = studioPrintPatternSchema.safeParse(
     documents[0]?.currentRevision.payload,
   );
@@ -244,20 +244,13 @@ export function PrintWorkbench({
             </label>
             <label>
               原始图案
-              <Select
+              <AssetSelect
                 disabled={!canEdit || busy}
                 value={value.sourceAssetId}
-                onChange={(event) =>
-                  update("sourceAssetId", event.target.value)
+                onValueChange={(assetId) =>
+                  update("sourceAssetId", assetId)
                 }
-              >
-                <option value="pending">选择项目图片</option>
-                {assets.map((asset) => (
-                  <option key={asset.id} value={asset.id}>
-                    {assetName(asset.id)}
-                  </option>
-                ))}
-              </Select>
+               assets={assets} />
             </label>
           </StudioEditSection>
           {CONTROLS.slice(0, 2).map(slider)}

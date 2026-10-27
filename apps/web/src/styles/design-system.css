@@ -8,10 +8,15 @@
 
 :root {
   color-scheme: light;
-  --color-navigation: #fffefa;
+  --surface-0: oklch(94.5% 0.008 100);
+  --surface-1: oklch(96% 0.008 100);
+  --surface-2: oklch(97.5% 0.008 100);
+  --surface-3: oklch(99% 0.008 100);
+  --shadow-input-focus: 0 0 0 2px var(--color-focus-ring), 0 0 0 5px color-mix(in srgb, var(--color-focus-ring) 22%, transparent);
+  --color-navigation: var(--surface-2);
   --color-navigation-ink: #20332e;
   --color-navigation-muted: #586a60;
-  --color-navigation-hover: #f7f8f2;
+  --color-navigation-hover: var(--surface-1);
   --color-navigation-selected: #e7eee2;
   --color-navigation-border: #e0e4db;
   --control-height: 36px;
@@ -68,10 +73,10 @@
      面板是"纸"，最亮，浮动在墙之上。
   */
 
-  --color-canvas: #f5f4ee;
-  --color-paper: #fffefa;
-  --color-surface: #f7f8f2;
-  --color-overlay: #eef1e9;
+  --color-canvas: var(--surface-0);
+  --color-paper: var(--surface-2);
+  --color-surface: var(--surface-1);
+  --color-overlay: var(--surface-3);
   --color-control-border: #7c8d81;
   --color-disabled-bg: #f5f5f5;
   --color-disabled-ink: #6a6a6a;
@@ -80,8 +85,8 @@
   /* 工作室画布专用表面 —— 只给设计工作台用。
      全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
      因此工作台另开一档中性的图像台底色，让节点真正浮起来。 */
-  --color-studio-canvas: #d7d7d7;
-  --color-studio-canvas-edge: #d7d7d7;
+  --color-studio-canvas: var(--surface-0);
+  --color-studio-canvas-edge: var(--surface-0);
 
   /* ============================================================
      二、文字层级 —— 墨
@@ -91,7 +96,7 @@
 
   --color-ink: #20332e;
   --color-ink-secondary: #586a60;
-  --color-ink-tertiary: #627167;
+  --color-ink-tertiary: #5d6d63;
   --color-ink-disabled: var(--color-disabled-ink);
 
   /* ============================================================

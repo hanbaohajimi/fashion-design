@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { chooseValue } from "../../test/choose-value";
 import { PresentationSets } from "./PresentationSets";
 import { studioFixture, styleFixture } from "./studio-test-fixtures";
 vi.mock("./TechPackExportButton", () => ({
@@ -54,9 +55,7 @@ it("saves a reviewed set against the exact style revision", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "选择图片 1" }));
   fireEvent.click(screen.getByRole("button", { name: "逐图核对" }));
-  fireEvent.change(screen.getByLabelText("图片 1 视图"), {
-    target: { value: "front" },
-  });
+  chooseValue("图片 1 视图", "front");
   fireEvent.change(screen.getByLabelText("图片 1 说明"), {
     target: { value: "夹克正面展示" },
   });

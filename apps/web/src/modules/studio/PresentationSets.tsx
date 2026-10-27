@@ -1,4 +1,5 @@
 "use client";
+import { GridDetails } from "../../components/GridDetails";
 
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
@@ -289,7 +290,7 @@ function PresentationForm({
         </div>
         <div className={styles.headerActions}>
           {data.presentationSets.length ? (
-            <Select
+            <Select searchable
               aria-label="切换展示包"
               value={existing?.id ?? ""}
               disabled={form.busy}
@@ -535,7 +536,7 @@ function PresentationForm({
               </p>
             ) : null}
             <Field label="采用款式修订">
-              <Select
+              <Select searchable
                 id={`${uid}-style`}
                 required
                 disabled={disabled}
@@ -645,6 +646,7 @@ function PresentationForm({
           <Button
             type="submit"
             feedback={feedback?.snapshot}
+            interaction="spring"
             variant={
               !exportPrimary && !completePrimary ? "primary" : "secondary"
             }
@@ -680,7 +682,7 @@ function PresentationForm({
               ),
             )}
           </div>
-          <details>
+          <GridDetails>
             <summary>展示包修订历史</summary>
             {existing.revisions.map((revision) => (
               <article key={revision.id} className={styles.historyRow}>
@@ -697,7 +699,7 @@ function PresentationForm({
                 />
               </article>
             ))}
-          </details>
+          </GridDetails>
         </section>
       ) : null}
       {previewId ? (

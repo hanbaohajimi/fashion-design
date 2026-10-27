@@ -12,9 +12,9 @@ import {
   Field,
   Notice,
   Select,
+  ChoiceSelect,
   Textarea,
   UploadInput,
-  Menu,
   ImagePreview,
 } from "../../components/ui";
 import {
@@ -402,19 +402,9 @@ export function TaskEntry(
           type="开始任务"
           description={currentTask.description}
           actions={
-            <Menu label="选择任务类型" trigger="切换任务类型">
-              {TASKS.map((task) => (
-                <button
-                  type="button"
-                  key={task.kind}
-                  disabled={form.busy || uploading}
-                  aria-pressed={draft.kind === task.kind}
-                  onClick={() => chooseTask(task.kind)}
-                >
-                  {task.name}
-                </button>
-              ))}
-            </Menu>
+            <ChoiceSelect label="任务类型" value={draft.kind} disabled={form.busy || uploading}
+              options={TASKS.map((task) => ({ value: task.kind, label: task.name, description: task.description }))}
+              onValueChange={(value) => chooseTask(value as TaskKind)} />
           }
         />
         {form.error ? <Notice tone="error">{form.error}</Notice> : null}
@@ -467,7 +457,7 @@ export function TaskEntry(
                 }
               >
                 <Field label="采用品牌资料">
-                  <Select
+                  <Select searchable
                     value={draft.brandId}
                     onChange={(event) =>
                       setDraft((current) => ({

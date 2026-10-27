@@ -4,6 +4,14 @@
   justify-content: space-between;
   gap: var(--space-4);
 }
+.objectChoicePanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 264px;
+}
+.objectChoicePanel > input { flex: none; }
+.objectChoices { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .header > div {
   min-width: 0;
 }

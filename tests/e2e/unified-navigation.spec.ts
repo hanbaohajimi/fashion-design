@@ -1,3 +1,4 @@
+import { chooseValue } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
@@ -6,6 +7,7 @@ import { contrastFailures } from "./review-accessibility";
 
 test.beforeEach(async ({ page }) => {
   await seedVisualApp(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: workspaceFixture() }),
   );
@@ -50,14 +52,14 @@ for (const width of [1440, 1366, 1024, 390, 375])
         "src",
         /logo-original-transparent/,
       );
-      const account = rail.locator("summary").filter({ hasText: /^账户$/ });
+      const account = rail.getByRole("button", { name: "退出登录", exact: true });
       await expect(account).toBeInViewport();
       await expect(account).toHaveCSS("min-height", "44px");
       const geometry = await rail.evaluate((element) => {
         const style = getComputedStyle(element),
           bounds = element.getBoundingClientRect();
-        const account = Array.from(element.querySelectorAll("summary"))
-          .find((item) => item.textContent === "账户")
+        const account = Array.from(element.querySelectorAll("button"))
+          .find((item) => item.textContent?.trim() === "退出登录")
           ?.getBoundingClientRect();
         return {
           background: style.backgroundColor,
@@ -69,14 +71,22 @@ for (const width of [1440, 1366, 1024, 390, 375])
           accountY: account?.y,
         };
       });
-      expect(geometry.background).toBe("rgb(255, 254, 250)");
+      const expectedSurface = await page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.background = "var(--color-navigation)";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return color;
+      });
+      expect(geometry.background).toBe(expectedSurface);
       if (baseline) expect(geometry).toEqual(baseline);
       else baseline = geometry;
       if (width < 1200) {
         const menu = rail.locator('summary[aria-label="切换工作区"]');
         await menu.click();
         await expect(
-          rail.locator('a[aria-current="page"]:visible'),
+          page.getByRole("group", { name: "切换工作区选项", exact: true }).locator('a[aria-current="page"]:visible'),
         ).toHaveCount(1);
         await page.keyboard.press("Escape");
         await expect(menu).toBeFocused();
@@ -156,11 +166,11 @@ for (const width of [1440, 390])
           path: "output/unified-navigation/screens/navigation-menu-390.png",
         });
     }
-    await navigation
+    await (width < 1200 ? page.getByRole("group", { name: "切换工作区选项", exact: true }) : navigation)
       .getByRole("link", { name: "款式与交付", exact: true })
       .click();
     if (width < 1200)
-      await page.getByLabel("当前功能", { exact: true }).selectOption("tech");
+      await chooseValue(page.getByLabel("当前功能", { exact: true }), "tech");
     else await page.getByRole("tab", { name: "技术包", exact: true }).click();
     await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue(
       "褶线夹克技术资料",
@@ -168,9 +178,8 @@ for (const width of [1440, 390])
     await expect(page).toHaveURL(new RegExp(`/${PROJECT}/studio\\?tab=tech`));
     const account = page
       .getByRole("complementary", { name: "工作区目录" })
-      .locator("summary")
-      .filter({ hasText: /^账户$/ });
-    await account.click();
+      .getByRole("button", { name: "退出登录", exact: true });
+    await account.focus();
     await expect(
       page.getByRole("button", { name: "退出登录", exact: true }),
     ).toBeInViewport();

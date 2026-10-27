@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "../../components/ui";
+
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useContext, useEffect, useState } from "react";
@@ -152,7 +154,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
             {collectionsQuery.isFetching ? "重试中…" : "重试系列"}
           </button>
         ) : null}
-        <select
+        <Select searchable
           aria-label="选择系列"
           disabled={collections.length === 0}
           onChange={(event) => setCollectionId(event.currentTarget.value)}
@@ -173,7 +175,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
               </option>
             ))
           )}
-        </select>
+        </Select>
         <button
           disabled={!selectedCollectionId}
           onClick={() => setCollectionOpen(true)}

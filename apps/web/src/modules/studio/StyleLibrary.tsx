@@ -1,5 +1,8 @@
 "use client";
 
+import { AssetSelect } from "./studio-ui";
+import { GridDetails } from "../../components/GridDetails";
+
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前修订的设计图与资料；对象切换和历史为次级。保存为主操作，比较在独立弹窗完成。 */
@@ -158,7 +161,7 @@ export function StyleLibrary(
               <h2>比较候选并选款</h2>
               <Button onClick={() => setComparisonOpen(false)}>关闭</Button>
             </div>
-            <details
+            <GridDetails
               ref={comparisonPicker}
               className={styles.compareSelection}
               open
@@ -182,7 +185,7 @@ export function StyleLibrary(
               >
                 开始比较
               </Button>
-            </details>
+            </GridDetails>
             {comparison.length >= 2 ? (
               <div className={styles.compare}>
                 {comparison.map((id, index) => {
@@ -579,29 +582,23 @@ function StyleEditor({
                     />
                   </Field>
                   <Field label="关联图片">
-                    <Select
+                    <AssetSelect
                       value={view.assetId}
-                      onChange={(event) =>
+                      onValueChange={(assetId) =>
                         update(
                           "views",
                           draft.views.map((item, at) =>
                             at === index
                               ? {
                                   ...item,
-                                  assetId: event.target.value,
+                                  assetId: assetId,
                                   reviewed: false,
                                 }
                               : item,
                           ),
                         )
                       }
-                    >
-                      {data.assets.map((asset) => (
-                        <option key={asset.id} value={asset.id}>
-                          {asset.id.slice(0, 12)}
-                        </option>
-                      ))}
-                    </Select>
+                     assets={data.assets} />
                   </Field>
                 </div>
                 <Button
@@ -649,13 +646,14 @@ function StyleEditor({
       </StudioEditSection>
       <SaveBar
         feedback={feedback?.snapshot}
+        interaction="spring"
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}
         canEdit={canEdit}
       />
       {existing ? (
-        <details className={styles.record}>
+        <GridDetails className={styles.record}>
           <summary>修订历史（{existing.revisions.length}）</summary>
           <div className={styles.history}>
             {existing.revisions.map((revision) => (
@@ -700,7 +698,7 @@ function StyleEditor({
               </article>
             ))}
           </div>
-        </details>
+        </GridDetails>
       ) : null}
     </form>
   );

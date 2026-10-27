@@ -1,4 +1,7 @@
 "use client";
+
+import { Select } from "../../../components/ui";
+import { GridDetails } from "../../../components/GridDetails";
 // Keep requirements primary; provenance and controls use existing secondary typography.
 import { useState } from "react";
 import { Dialog } from "../../../components/ui";
@@ -44,7 +47,7 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
     {preference && item.status !== "inactive" ? <button className={styles.actionQuiet} disabled={saving} onClick={() => void onUpdate({ disabledPreferenceIds: [item.id] })} type="button">停用这条偏好</button> : null}
     {item.status !== "inactive" ? <button className={styles.actionSecondary} disabled={saving} onClick={() => { setEditingItem(item.id); setItemText(item.text); setItemScope(item.scope ?? "project"); }} type="button">{preference ? "更正这条偏好" : "更正这条要求"}</button> : null}
     {item.origin === "inferred" && item.status !== "inactive" ? <button className={styles.actionSecondary} disabled={saving} onClick={() => void onUpdate({ updatedItems: [{ id: item.id, confirm: true }] })} type="button">确认这条理解</button> : null}
-    {editingItem === item.id ? <form className={styles.proposalEditor} onSubmit={(event) => { event.preventDefault(); void onUpdate({ updatedItems: [{ id: item.id, text: itemText.trim(), scope: itemScope, confirm: true }] }).then((saved) => { if (saved) setEditingItem(null); }); }}><label>更正内容<textarea aria-label="更正内容" maxLength={600} rows={2} value={itemText} onChange={(event) => setItemText(event.target.value)} /></label><label>作用范围<select aria-label="作用范围" value={itemScope} onChange={(event) => setItemScope(event.target.value as "project" | "branch")}><option value="project">整个项目</option><option disabled={!item.branchNodeIds?.length} value="branch">原分支</option></select></label><button className={styles.actionPrimary} disabled={saving || !itemText.trim()} type="submit">保存更正</button><button className={styles.actionQuiet} onClick={() => setEditingItem(null)} type="button">取消更正</button></form> : null}
+    {editingItem === item.id ? <form className={styles.proposalEditor} onSubmit={(event) => { event.preventDefault(); void onUpdate({ updatedItems: [{ id: item.id, text: itemText.trim(), scope: itemScope, confirm: true }] }).then((saved) => { if (saved) setEditingItem(null); }); }}><label>更正内容<textarea aria-label="更正内容" maxLength={600} rows={2} value={itemText} onChange={(event) => setItemText(event.target.value)} /></label><label>作用范围<Select aria-label="作用范围" value={itemScope} onChange={(event) => setItemScope(event.target.value as "project" | "branch")}><option value="project">整个项目</option><option disabled={!item.branchNodeIds?.length} value="branch">原分支</option></Select></label><button className={styles.actionPrimary} disabled={saving || !itemText.trim()} type="submit">保存更正</button><button className={styles.actionQuiet} onClick={() => setEditingItem(null)} type="button">取消更正</button></form> : null}
   </li>;
 
   return <Dialog open={open} label="设计要求与偏好" onClose={onClose} returnFocusSelector="[data-assistant-requirements-trigger]" className={ui.drawer}>
@@ -58,7 +61,7 @@ export function DesignRequirementsDrawer({ context, error, graph, saving, hasDra
         <section><h3>明确要求</h3><small>项目记录在各会话共享；分支要求仅在适用范围内生效。</small>{active.some(({ item }) => item.origin === "explicit") ? <ul>{active.filter(({ item }) => item.origin === "explicit").map(({ item, preference }) => renderItem(item, preference))}</ul> : <p>暂无明确要求，直接在对话中告诉助手需要保留或避免什么。</p>}</section>
         <section><h3>助手推测</h3><small>这些理解尚未确认，可能参与后续规划。你可以确认或更正。</small>{active.some(({ item }) => item.origin === "inferred") ? <ul>{active.filter(({ item }) => item.origin === "inferred").map(({ item, preference }) => renderItem(item, preference))}</ul> : <p>暂无助手推测</p>}</section>
         {active.some(({ item }) => !item.origin) ? <section><h3>来源未标注的记录</h3><ul>{active.filter(({ item }) => !item.origin).map(({ item, preference }) => renderItem(item, preference))}</ul></section> : null}
-        {inactive.length ? <details><summary>已停用记录（{inactive.length}）</summary><ul>{inactive.map(({ item, preference }) => renderItem(item, preference))}</ul></details> : null}
+        {inactive.length ? <GridDetails><summary>已停用记录（{inactive.length}）</summary><ul>{inactive.map(({ item, preference }) => renderItem(item, preference))}</ul></GridDetails> : null}
       </>}
     </div>
   </Dialog>;

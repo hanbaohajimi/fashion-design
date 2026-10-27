@@ -34,7 +34,8 @@ function setup(onRename = vi.fn(async () => {})) {
       onRestore={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByText("重命名"));
+  fireEvent.click(screen.getByLabelText("原有设计项目 项目操作"));
+  fireEvent.click(screen.getByRole("button", { name: "重命名" }));
   return screen.getByRole("textbox", { name: "项目名称" });
 }
 it("重复提交只发送一次，在途取消无效，完成后恢复菜单焦点", async () => {

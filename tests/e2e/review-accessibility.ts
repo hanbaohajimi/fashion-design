@@ -21,7 +21,17 @@ export async function tabTo(page: Page, target: Locator, limit = 120) {
 export async function contrastFailures(page: Page, includeOffscreen = false, scope?: string) {
   return page.evaluate(
     ({ includeOffscreen, scope }) => {
+      const colors = new Map<string, number[]>();
+      const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
       const rgba = (color: string) => {
+        const cached = colors.get(color); if (cached) return [...cached];
+        // Computed backgrounds may remain OKLCH/color(), rather than serializing to rgb().
+        if (!/^rgba?\(/u.test(color) && context) {
+          context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1);
+          const value = Array.from(context.getImageData(0, 0, 1, 1).data); const converted = [value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, (value[3] ?? 255) / 255];
+          colors.set(color, converted); return converted;
+        }
         const numbers = color.match(/[\d.]+/g)?.map(Number) ?? [];
         return [
           numbers[0] ?? 0,

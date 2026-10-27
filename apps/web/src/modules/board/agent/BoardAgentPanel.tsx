@@ -14,8 +14,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
 import { type TLShape, type TLShapeId, useEditor } from "tldraw";
 
 import { BoardProjectContext } from "../board-context";
@@ -76,6 +75,9 @@ export function BoardAgentPanel({
   >([]);
   const [activeConversationId, setActiveConversationId] = useState("");
   const [messages, setMessages] = useState<readonly AgentMessageView[]>([]);
+  const streaming = useAssistantStream(activeConversationId);
+  const receiveStream = streaming.receive;
+  const streamSignal = streaming.signalFor;
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
   const [draftShapeIds, setDraftShapeIds] = useState<readonly TLShapeId[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -638,7 +640,11 @@ export function BoardAgentPanel({
           content: normalized,
           fileAssetIds: [],
           shapeIds,
-        });
+        }, (event) => {
+          if (projectIdRef.current !== targetProjectId || activeConversationIdRef.current !== targetConversationId) return;
+          receiveStream(event);
+          if ("turn" in event) setMessages((current) => reconcileAgentTurnMessages(current, [optimisticUser.id, optimisticAssistant.id], event.turn));
+        }, streamSignal(targetConversationId));
         if (
           projectIdRef.current === targetProjectId &&
           activeConversationIdRef.current === targetConversationId
@@ -695,7 +701,7 @@ export function BoardAgentPanel({
             ),
           );
         }
-        setError(cause instanceof Error ? cause.message : "消息发送失败");
+        if (!(cause instanceof Error && cause.name === "AbortError")) setError(cause instanceof Error ? cause.message : "消息发送失败");
       } finally {
         if (projectIdRef.current === targetProjectId) setSending(false);
       }
@@ -708,6 +714,8 @@ export function BoardAgentPanel({
       projectId,
       refreshConversations,
       sending,
+      receiveStream,
+      streamSignal,
     ],
   );
 
@@ -1134,9 +1142,7 @@ export function BoardAgentPanel({
                     </div>
                     <div className={styles.messageContent}>
                       {message.role === "assistant" ? (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-                          {message.content}
-                        </ReactMarkdown>
+                        <StreamingReply content={message.content} draft={streaming.drafts[message.id]} />
                       ) : (
                         <p>{message.content}</p>
                       )}
@@ -1149,7 +1155,7 @@ export function BoardAgentPanel({
                     {message.status === "pending" ? (
                       <div className={styles.agentProgress} role="status">
                         <i />
-                        理解需求
+                        {assistantPhaseLabel(streaming.drafts[message.id])}
                       </div>
                     ) : null}
                     {task ? (

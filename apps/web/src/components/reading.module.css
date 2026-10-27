@@ -4,6 +4,10 @@
   overflow-wrap: anywhere;
   max-width: 70ch;
 }
+@supports (text-wrap: pretty) {
+  .prose :is(p, li, blockquote) { text-wrap: pretty; }
+  .prose :is(pre, code, th, td) { text-wrap: wrap; }
+}
 .prose > :first-child {
   margin-top: 0;
 }
