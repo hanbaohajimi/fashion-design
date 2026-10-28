@@ -347,21 +347,37 @@ export function createGenerationProcessor({
       }
       const collectionId = task.collectionId;
       if (finalStatus === "succeeded" && collectionId && similarityJobs) {
-        const generatedAssets = await database.designAsset.findMany({
-          where: { generationTaskId: task.id },
-          select: { id: true },
-        });
+        let failedAssetIds: string[] | undefined;
         try {
-          await Promise.all(
-            generatedAssets.map((asset) =>
+          const generatedAssets = await database.designAsset.findMany({
+            where: { generationTaskId: task.id },
+            select: { id: true },
+          });
+          const enqueued = await Promise.allSettled(
+            generatedAssets.map(async (asset) =>
               similarityJobs.enqueue(collectionId, asset.id),
             ),
           );
+          failedAssetIds = generatedAssets
+            .filter((_, index) => enqueued[index]?.status === "rejected")
+            .map((asset) => asset.id);
         } catch {
+          // A failed lookup leaves the affected assets unknown; only then use
+          // the task as the compensation scope.
+        }
+        if (failedAssetIds === undefined || failedAssetIds.length > 0) {
+          // Generation and billing have already committed. An optional analysis
+          // failure must not turn the completed Bull job into a failed one.
           await database.collectionLook.updateMany({
-            where: { collectionId },
+            where: {
+              collectionId,
+              analysisStatus: SimilarityAnalysisStatus.PENDING,
+              ...(failedAssetIds === undefined
+                ? { designAsset: { generationTaskId: task.id } }
+                : { designAssetId: { in: failedAssetIds } }),
+            },
             data: { analysisStatus: SimilarityAnalysisStatus.FAILED },
-          });
+          }).catch(() => undefined);
         }
       }
       if (finalStatus === "succeeded" && task.projectId && visualSummaryJobs) {

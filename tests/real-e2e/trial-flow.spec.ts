@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { chooseValue, valueControl } from "../e2e/choice-control";
 
 type Node = { id: string; kind: string; type: string; title: string; status: string; payload: Record<string, unknown>; x: number; y: number };
 type Graph = { revision: number; layoutRevision: number; nodes: Node[]; edges: { sourceNodeId: string; targetNodeId: string }[] };
@@ -148,7 +149,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   const collection = await (await admittedCollection).json() as { id: string; name: string };
   const series = page.getByRole("dialog", { name: "系列 DNA", exact: true });
   await expect(series).toBeVisible();
-  await series.getByRole("combobox", { name: "服装类型", exact: true }).selectOption("jacket");
+  await chooseValue(valueControl(series, "服装类型"), "jacket");
   await series.getByLabel("廓形关键词，以逗号或换行分隔").fill("宽松直线廓形");
   await series.getByLabel("面料关键词，以逗号或换行分隔").fill("哑光棉布");
   await series.getByLabel("情绪关键词，以逗号或换行分隔").fill("克制通勤");
@@ -156,7 +157,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   const looksTab = series.getByRole("tab", { name: "Look 扩展", exact: true });
   await looksTab.click();
   await expect(series.getByText("还没有扩展款", { exact: true })).toBeVisible();
-  await series.getByRole("combobox", { name: "服装类型", exact: true }).selectOption("dress");
+  await chooseValue(valueControl(series, "服装类型"), "dress");
   await series.getByRole("button", { name: "生成", exact: true }).click();
   // A running Look continues when the designer edits another series panel.
   await series.getByRole("tab", { name: "DNA 定义", exact: true }).click();

@@ -54,20 +54,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionCheck, setSessionCheck] = useState(0);
   const isPrototypePath = process.env.NODE_ENV !== "production" && pathname === "/prototypes/impeccable";
   const isPublicPath = isPrototypePath || PUBLIC_AUTH_PATHS.has(pathname) || /^\/share\/[\w-]+$/u.test(pathname);
   const draftOwner = useRef<string | null>(null);
+  const clearOwnedDrafts = useCallback(() => {
+    const owner = draftOwner.current;
+    if (!owner) return;
+    draftOwner.current = null;
+    void draftRepository.clearAccount(owner).catch(() => undefined);
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith(`fashion-sketch:${owner}:`)) localStorage.removeItem(key);
+      }
+    } catch { /* Storage may be disabled. */ }
+  }, []);
   useEffect(() => {
-    const id = session?.user.id ?? null;
+    const id = session?.user.id;
+    // Public navigation hides the session without confirming a logout.
+    // Retain the last verified owner until the server confirms an identity change.
+    if (!id) return;
     if (draftOwner.current && draftOwner.current !== id) {
-      void draftRepository.clearAccount(draftOwner.current).catch(() => undefined);
-      try { for (const key of Object.keys(localStorage)) if (key.startsWith(`fashion-sketch:${draftOwner.current}:`)) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
+      clearOwnedDrafts();
     }
     draftOwner.current = id;
-  }, [session?.user.id]);
+  }, [clearOwnedDrafts, session?.user.id]);
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const flight = useRef<Promise<void> | null>(null);
+  const logoutFlight = useRef<Promise<void> | null>(null);
   const epoch = useRef(0);
 
   const loadSession = useCallback((): Promise<void> => {
@@ -76,6 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return Promise.resolve();
     }
 
+    if (logoutFlight.current) return Promise.resolve();
     if (flight.current) return flight.current;
     const currentEpoch = epoch.current;
     const isCurrent = () => epoch.current === currentEpoch;
@@ -91,6 +107,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!isCurrent()) return;
 
         if (refreshed.status === 401 || refreshed.status === 400) {
+          clearOwnedDrafts();
+          sessionRef.current = null;
           setSession(null);
           router.replace("/login");
           return;
@@ -103,18 +121,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (!response.ok) {
         if (response.status === 401) {
+          clearOwnedDrafts();
+          sessionRef.current = null;
           setSession(null);
           router.replace("/login");
           return;
         }
-        if (!sessionRef.current) setError(
-          await readErrorMessage(response, "会话加载失败，请稍后重试。"),
-        );
+        if (!sessionRef.current) {
+          const message = await readErrorMessage(response, "会话加载失败，请稍后重试。");
+          if (isCurrent() && !sessionRef.current) setError(message);
+        }
         return;
       }
 
       const next = (await response.json()) as MeResponse;
-      if (isCurrent()) setSession(next);
+      if (isCurrent()) {
+        sessionRef.current = next;
+        setSession(next);
+      }
     } catch {
       if (isCurrent() && !sessionRef.current) setError("无法连接认证服务，请检查网络后重试。");
     } finally {
@@ -124,25 +148,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const promise = task().finally(() => { if (flight.current === promise) flight.current = null; });
     flight.current = promise;
     return promise;
-  }, [isPublicPath, router]);
+  }, [clearOwnedDrafts, isPublicPath, router]);
 
-  const logout = useCallback(async (): Promise<void> => {
+  const logout = useCallback((): Promise<void> => {
+    if (logoutFlight.current) return logoutFlight.current;
     epoch.current += 1;
     flight.current = null;
-    const response = await logoutSession();
-
-    if (!response.ok) {
-      throw new Error(
-        await readErrorMessage(response, "退出登录失败，请稍后重试。"),
-      );
-    }
-
-    try { for (const key of Object.keys(localStorage)) if (key.startsWith("fashion-sketch:")) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
-    setSession(null);
-    setError(null);
-    announceSessionChange();
-    router.replace("/login");
-  }, [router]);
+    const task = async () => {
+      const response = await logoutSession();
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(response, "退出登录失败，请稍后重试。"),
+        );
+      }
+      epoch.current += 1;
+      clearOwnedDrafts();
+      sessionRef.current = null;
+      setSession(null);
+      setError(null);
+      setLoading(false);
+      announceSessionChange();
+      router.replace("/login");
+    };
+    const promise = task().catch((cause: unknown) => {
+      // A failed logout leaves the server identity uncertain. Recheck after
+      // releasing the lock, including changes announced by another tab.
+      setSessionCheck(value => value + 1);
+      throw cause;
+    }).finally(() => {
+      if (logoutFlight.current === promise) logoutFlight.current = null;
+    });
+    logoutFlight.current = promise;
+    return promise;
+  }, [clearOwnedDrafts, router]);
 
   useEffect(() => {
     if (isPublicPath) {
@@ -157,7 +195,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }, 0);
 
     return () => window.clearTimeout(timerId);
-  }, [isPublicPath, loadSession]);
+  }, [isPublicPath, loadSession, sessionCheck]);
 
   useEffect(() => {
     if (isPublicPath) {

@@ -11,10 +11,22 @@ function states<T extends string>(group: Group, running: T[], attention: T[]) {
 }
 function decodeCursor(value?: string): Cursor | null {
   if (!value) return null;
-  try { const cursor = JSON.parse(Buffer.from(value, "base64url").toString()) as Cursor; if (typeof cursor.id !== "string" || cursor.id.length > 256 || !Number.isFinite(Date.parse(cursor.date))) throw new Error(); return cursor; }
+  try {
+    const cursor = JSON.parse(Buffer.from(value, "base64url").toString()) as Cursor;
+    if (typeof cursor.id !== "string" || cursor.id.length > 256 ||
+      !/^(assistant|workflow|generation|agent|export|runway):.+$/u.test(cursor.id) ||
+      typeof cursor.date !== "string" || !Number.isFinite(Date.parse(cursor.date))) throw new Error();
+    return { id: cursor.id, date: new Date(cursor.date).toISOString() };
+  }
   catch { throw new BadRequestException("任务分页游标无效"); }
 }
 type Row = { id: string; status: string; createdAt: Date; updatedAt: Date };
+const rowSelect = { id: true, status: true, createdAt: true, updatedAt: true } as const;
+
+// Keep the merge order identical to the cursor's comparisons, independent of the server locale.
+function compareDescending(a: string, b: string): number {
+  return a === b ? 0 : a < b ? 1 : -1;
+}
 
 @Injectable()
 export class ProjectTasksService {
@@ -42,31 +54,45 @@ export class ProjectTasksService {
     const assistantWhere = (group: Group) => ({ conversation: { projectId }, role: "ASSISTANT" as const, replyToId: { not: null }, status: states(group, ["PENDING" as const], ["FAILED" as const]) });
     const proposalWhere = (group: Group) => ({ projectId, status: states(group, [], ["pending"]) });
     const [generations, executions, agents, runways, exports, messages, proposals] = await Promise.all([
-      this.db.generationTask.findMany({ where: { ...generationWhere(input.group), ...boundaryFor("generation") }, orderBy, take, include: { generatedAssets: { select: { id: true }, take: 1 } } }),
-      this.db.workflowExecution.findMany({ where: { ...workflowWhere(input.group), ...boundaryFor("workflow") }, orderBy, take }),
-      this.db.agentRun.findMany({ where: { ...agentWhere(input.group), ...boundaryFor("agent") }, orderBy, take }),
-      this.db.runwayRun.findMany({ where: { ...runwayWhere(input.group), ...boundaryFor("runway") }, orderBy, take }),
-      this.db.exportJob.findMany({ where: { ...exportWhere(input.group), ...boundaryFor("export") }, orderBy, take }),
-      this.db.agentMessage.findMany({ where: { ...assistantWhere(input.group), ...boundaryFor("assistant") }, include: { replyTo: true }, orderBy, take }),
-      input.group === "running" || input.group === "ended" ? Promise.resolve([]) : this.db.workflowProposal.findMany({ where: { ...proposalWhere(input.group), ...boundaryFor("workflow") }, orderBy, take }),
+      this.db.generationTask.findMany({ where: { ...generationWhere(input.group), ...boundaryFor("generation") }, orderBy, take, select: { ...rowSelect, parentAssetId: true, generatedAssets: { select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1 } } }),
+      this.db.workflowExecution.findMany({ where: { ...workflowWhere(input.group), ...boundaryFor("workflow") }, orderBy, take, select: { ...rowSelect, toolNodeId: true, conversationId: true } }),
+      this.db.agentRun.findMany({ where: { ...agentWhere(input.group), ...boundaryFor("agent") }, orderBy, take, select: { ...rowSelect, conversationId: true, revision: true } }),
+      this.db.runwayRun.findMany({ where: { ...runwayWhere(input.group), ...boundaryFor("runway") }, orderBy, take, select: { ...rowSelect, stage: true, showId: true, version: true } }),
+      this.db.exportJob.findMany({ where: { ...exportWhere(input.group), ...boundaryFor("export") }, orderBy, take, select: { ...rowSelect, fileName: true, studioRevisionId: true, designAssetId: true, collectionId: true } }),
+      this.db.agentMessage.findMany({ where: { ...assistantWhere(input.group), ...boundaryFor("assistant") }, select: { ...rowSelect, conversationId: true, replyTo: { select: { clientRequestId: true } } }, orderBy, take }),
+      input.group === "running" || input.group === "ended" ? Promise.resolve([]) : this.db.workflowProposal.findMany({ where: { ...proposalWhere(input.group), ...boundaryFor("workflow") }, orderBy, take, select: { ...rowSelect, evidence: true, conversationId: true } }),
     ]);
-    const attempts = await this.db.workflowAttempt.findMany({ where: { projectId, executionId: { in: executions.map(row => row.id) }, generationTask: { status: { in: ["QUEUED", "RUNNING"] } } }, select: { generationTaskId: true, executionId: true } });
     const countsFor = async (group: "running" | "attention") => (await Promise.all([
       this.db.generationTask.count({ where: generationWhere(group) }), this.db.workflowExecution.count({ where: workflowWhere(group) }),
       this.db.agentRun.count({ where: agentWhere(group) }), this.db.runwayRun.count({ where: runwayWhere(group) }), this.db.exportJob.count({ where: exportWhere(group) }),
       this.db.agentMessage.count({ where: assistantWhere(group) }), group === "attention" ? this.db.workflowProposal.count({ where: proposalWhere(group) }) : 0,
     ])).reduce((sum, count) => sum + count, 0);
-    const [running, attention] = await Promise.all([countsFor("running"), countsFor("attention")]);
+    const revisionIds = [...new Set(exports.flatMap(row => row.studioRevisionId ? [row.studioRevisionId] : []))];
+    const [running, attention, attempts, documents] = await Promise.all([
+      countsFor("running"), countsFor("attention"),
+      executions.length ? this.db.workflowAttempt.findMany({ where: { projectId, executionId: { in: executions.map(row => row.id) }, generationTask: { status: { in: ["QUEUED", "RUNNING"] } } }, select: { generationTaskId: true, executionId: true } }) : [],
+      revisionIds.length ? this.db.studioDocument.findMany({ where: { projectId, id: { in: revisionIds } }, select: { id: true, type: true, styleRevisionId: true } }) : [],
+    ]);
+    const documentById = new Map(documents.map(document => [document.id, document]));
+    const exportHref = (row: (typeof exports)[number]): string => {
+      if (row.studioRevisionId) {
+        const document = documentById.get(row.studioRevisionId);
+        if (!document || !["TECH_PACK", "PRESENTATION_SET"].includes(document.type)) return `${base}/studio`;
+        return `${base}/studio?tab=${document.type === "TECH_PACK" ? "tech" : "presentation"}${document.styleRevisionId ? `&styleRevisionId=${encodeURIComponent(document.styleRevisionId)}` : ""}`;
+      }
+      if (row.designAssetId) return `${base}/studio?tab=styles&assetId=${encodeURIComponent(row.designAssetId)}`;
+      return `${base}/studio?tab=presentation`;
+    };
     const rows = [
       ...generations.map(row => toView("generation", row, "图片生成", row.generatedAssets[0] ? `${base}/studio?tab=styles&assetId=${encodeURIComponent(row.generatedAssets[0].id)}` : `${base}?taskId=${encodeURIComponent(row.id)}`, ["QUEUED", "RUNNING"].includes(row.status) ? [{ kind: "cancel_generation", targetId: row.id }] : [], row.parentAssetId)),
       ...executions.map(row => toView("workflow", row, "设计步骤", `${base}?nodeId=${encodeURIComponent(row.toolNodeId)}`, row.status === "failed" ? [{ kind: "retry_workflow", targetId: row.toolNodeId }] : ["queued", "running"].includes(row.status) ? attempts.filter(item => item.executionId === row.id && item.generationTaskId).map(item => ({ kind: "cancel_generation" as const, targetId: item.generationTaskId ?? "" })) : [], row.toolNodeId, row.conversationId)),
       ...agents.map(row => toView("agent", row, "设计运行", `${base}?conversationId=${encodeURIComponent(row.conversationId)}&runId=${encodeURIComponent(row.id)}`, ["planning", "queued", "running", "executing", "paused"].includes(row.status) ? [...(row.status === "paused" ? [{ kind: "resume_agent" as const, targetId: row.id, version: row.revision }] : []), { kind: "cancel_agent", targetId: row.id, version: row.revision }, ...(["running", "executing"].includes(row.status) ? [{ kind: "pause_agent" as const, targetId: row.id, version: row.revision }] : [])] : [], row.id, row.conversationId)),
       ...runways.map(row => toView("runway", row, `服装秀 ${({ prepare: "准备素材", pairing: "搭配", tryon: "试衣", storyboard: "分镜", video: "视频", compose: "合成", music: "配乐", finished: "成片" })[row.stage] ?? row.stage}`, `${base}/studio?tab=runway&showId=${encodeURIComponent(row.showId)}&runId=${encodeURIComponent(row.id)}`, ["QUEUED", "RUNNING", "WAITING_INPUT"].includes(row.status) ? [{ kind: "cancel_runway", targetId: row.id, version: row.version }] : [], row.showId)),
-      ...exports.map(row => toView("export", row, row.fileName ?? "导出文件", `${base}/studio?tab=${row.studioRevisionId ? "tech" : "presentation"}`, [], row.studioRevisionId ?? row.designAssetId)),
+      ...exports.map(row => toView("export", row, row.fileName ?? "导出文件", exportHref(row), [], row.studioRevisionId ?? row.designAssetId ?? row.collectionId)),
       ...messages.map(row => toView("assistant", row, "设计助手回复", `${base}?conversationId=${encodeURIComponent(row.conversationId)}`, row.status === "PENDING" && row.replyTo?.clientRequestId ? [{ kind: "cancel_reply", targetId: row.id, conversationId: row.conversationId, requestId: row.replyTo.clientRequestId }] : [], row.id, row.conversationId)),
       ...proposals.map(row => toView("workflow", { ...row, status: "awaiting_approval" }, "生成方案待确认", `${base}?nodeId=${encodeURIComponent(String((row.evidence as Record<string, unknown>)?.toolNodeId ?? ""))}${row.conversationId ? `&conversationId=${encodeURIComponent(row.conversationId)}` : ""}`, [], String((row.evidence as Record<string, unknown>)?.toolNodeId ?? ""), row.conversationId)),
     ].filter(row => !cursor || row.createdAt < cursor.date || row.createdAt === cursor.date && row.id < cursor.id)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+      .sort((a, b) => compareDescending(a.createdAt, b.createdAt) || compareDescending(a.id, b.id));
     const items = rows.slice(0, input.limit);
     const last = items.at(-1);
     return { items, counts: { running, attention }, nextCursor: rows.length > input.limit && last ? Buffer.from(JSON.stringify({ date: last.createdAt, id: last.id })).toString("base64url") : null };

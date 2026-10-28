@@ -30,6 +30,60 @@ test("助手草稿刷新恢复且组合输入确认不会发送", async ({ page 
   await expect(page.getByRole("complementary", { name: "本机草稿恢复" })).toContainText("已恢复本机草稿");
 });
 
+test("同文档往返公开分享页保留当前账号的助手与草图草稿", async ({ page }) => {
+  const sharePath = `/share/${"a".repeat(43)}`;
+  const prompt = "公开分享返回后继续设计亚麻风衣";
+  const sketchKey = `fashion-sketch:visual-designer:${PROJECT}:new`;
+  const sketch = JSON.stringify({
+    title: "尚未提交的廓形草图",
+    document: { version: 1, width: 640, height: 860, strokes: [] },
+  });
+  // Build real same-document history using the share page's existing Next Link.
+  // A full reload would reset AuthProvider and hide this regression.
+  await page.goto(sharePath);
+  await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+  await page.getByRole("link", { name: "进入工作室", exact: true }).click();
+  await page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "描述设计需求" });
+  await expect(input).toBeEnabled();
+  await input.fill(prompt);
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: sketchKey, value: sketch });
+
+  const hasStoredPrompt = () => page.evaluate(async (expected) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("fashion-workspace-drafts", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      return await new Promise<boolean>((resolve, reject) => {
+        const request = db.transaction("drafts").objectStore("drafts").getAll();
+        request.onsuccess = () => resolve(request.result.some((row: { accountId: string; value: { prompt?: string } }) =>
+          row.accountId === "visual-designer" && row.value.prompt === expected));
+        request.onerror = () => reject(request.error);
+      });
+    } finally {
+      db.close();
+    }
+  }, prompt);
+  await expect.poll(hasStoredPrompt).toBe(true);
+
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true })).toBeVisible();
+  await page.evaluate(() => history.back());
+  await expect(page).toHaveURL(sharePath);
+  await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+
+  await page.getByRole("link", { name: "进入工作室", exact: true }).click();
+  await page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true }).click();
+  await expect(input).toHaveValue(prompt);
+  await expect.poll(hasStoredPrompt).toBe(true);
+  expect(await page.evaluate(key => localStorage.getItem(key), sketchKey)).toBe(sketch);
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+});
+
 test("分栏Escape恢复，键盘调整后可刷新恢复", async ({ page }) => {
   await page.goto(`/${PROJECT}`);
   const separator = page.getByRole("separator", { name: "调整侧栏宽度" });

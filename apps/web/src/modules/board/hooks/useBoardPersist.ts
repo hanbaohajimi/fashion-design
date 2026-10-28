@@ -226,6 +226,9 @@ export function useBoardPersist(
     });
 
     const scheduleFlush = (delay = SAVE_DEBOUNCE_MS): void => {
+      if (disposed || conflictDetected) {
+        return;
+      }
       if (saveTimer) {
         window.clearTimeout(saveTimer);
       }
@@ -256,15 +259,27 @@ export function useBoardPersist(
 
       try {
         const result = await patchBoard(projectId, payload);
+        if (disposed) {
+          return;
+        }
         revision = result.revision;
         retryDelay = RETRY_MIN_MS;
         setError(null);
 
         if (pending.size === 0 && !snapshotDirty) {
-          outboxStorage.removeItem(outboxKey);
+          try {
+            outboxStorage.removeItem(outboxKey);
+          } catch {
+            // A browser storage failure must not retry an already saved batch.
+          }
           setStatus("saved");
+        } else {
+          saveOutbox(makePayload([...pending.values()]));
         }
       } catch (cause) {
+        if (disposed) {
+          return;
+        }
         for (const [shapeId, patch] of sending) {
           if (!pending.has(shapeId)) {
             pending.set(shapeId, patch);
@@ -346,6 +361,9 @@ export function useBoardPersist(
 
       try {
         const board = await fetchBoard(projectId);
+        if (disposed) {
+          return () => undefined;
+        }
         serverRevision = board.revision;
         revision = board.revision;
 
@@ -354,6 +372,9 @@ export function useBoardPersist(
         }
         applyElementRows(store, board.elements);
       } catch (cause) {
+        if (disposed) {
+          return () => undefined;
+        }
         if (!localOutbox) {
           throw cause;
         }
@@ -444,6 +465,9 @@ export function useBoardPersist(
         }
       })
       .catch((cause: unknown) => {
+        if (disposed) {
+          return;
+        }
         setError(cause instanceof Error ? cause.message : "画布加载失败");
         setStatus("error");
       });

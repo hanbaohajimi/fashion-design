@@ -255,19 +255,37 @@ export async function cleanupExport(
     if (scheduledObjectKey) await storage.delete(scheduledObjectKey);
     return;
   }
+  // Cleanup messages belong to a particular render lease. A retry may have
+  // produced a different object since this message was scheduled.
+  if (scheduledObjectKey && scheduledObjectKey !== exportJob.objectKey) {
+    await storage.delete(scheduledObjectKey);
+    return;
+  }
   if (
-    exportJob.status !== ExportStatus.EXPIRED &&
-    exportJob.expiresAt &&
-    exportJob.expiresAt > now
+    exportJob.status !== ExportStatus.SUCCEEDED &&
+    exportJob.status !== ExportStatus.EXPIRED
   ) {
     return;
   }
-  const objectKey = exportJob.objectKey ?? scheduledObjectKey;
+  if (
+    exportJob.status !== ExportStatus.EXPIRED &&
+    (!exportJob.expiresAt || exportJob.expiresAt > now)
+  ) {
+    return;
+  }
+  const objectKey = exportJob.objectKey;
   if (objectKey) {
     await storage.delete(objectKey);
   }
-  await database.exportJob.update({
-    where: { id: exportId },
+  // Keep the reference until deletion succeeds, and do not overwrite a newer
+  // result (or a deleted record) while waiting for object storage.
+  await database.exportJob.updateMany({
+    where: {
+      id: exportId,
+      objectKey,
+      status: exportJob.status,
+      expiresAt: exportJob.expiresAt,
+    },
     data: {
       objectKey: null,
       status: ExportStatus.EXPIRED,

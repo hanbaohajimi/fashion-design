@@ -451,10 +451,188 @@ describe("export processor", () => {
     expect(storage.delete).toHaveBeenCalledWith(
       "temporary/exports/user-a/export-a.png",
     );
-    expect(database.exportJob.update).toHaveBeenCalledWith({
-      where: { id: "export-a" },
+    expect(database.exportJob.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "export-a",
+        objectKey: "temporary/exports/user-a/export-a.png",
+        status: ExportStatus.SUCCEEDED,
+        expiresAt: new Date("2026-07-28T07:00:00.000Z"),
+      },
       data: { objectKey: null, status: ExportStatus.EXPIRED },
     });
+  });
+
+  it.each([ExportStatus.SUCCEEDED, ExportStatus.EXPIRED])(
+    "旧租约的清理消息只删除旧对象，不影响当前 %s 导出",
+    async (status) => {
+      database.exportJob.findUnique.mockResolvedValue({
+        expiresAt: new Date("2026-07-28T09:00:00.000Z"),
+        objectKey: "temporary/exports/user-a/new-lease.png",
+        status,
+      });
+
+      await cleanupExport(
+        database as never,
+        storage,
+        "export-a",
+        "temporary/exports/user-a/old-lease.png",
+        new Date("2026-07-28T08:00:00.000Z"),
+      );
+
+      expect(storage.delete).toHaveBeenCalledExactlyOnceWith(
+        "temporary/exports/user-a/old-lease.png",
+      );
+      expect(database.exportJob.updateMany).not.toHaveBeenCalled();
+      expect(database.exportJob.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([ExportStatus.QUEUED, ExportStatus.RUNNING, ExportStatus.FAILED])(
+    "旧对象清理不会将重试中的 %s 导出标记过期",
+    async (status) => {
+      database.exportJob.findUnique.mockResolvedValue({
+        expiresAt: null,
+        objectKey: null,
+        status,
+      });
+
+      await cleanupExport(
+        database as never,
+        storage,
+        "export-a",
+        "temporary/exports/user-a/old-lease.png",
+      );
+
+      expect(storage.delete).toHaveBeenCalledExactlyOnceWith(
+        "temporary/exports/user-a/old-lease.png",
+      );
+      expect(database.exportJob.updateMany).not.toHaveBeenCalled();
+      expect(database.exportJob.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([ExportStatus.QUEUED, ExportStatus.RUNNING, ExportStatus.FAILED])(
+    "未绑定对象的清理任务不会结束 %s 导出",
+    async (status) => {
+      database.exportJob.findUnique.mockResolvedValue({
+        expiresAt: null,
+        objectKey: null,
+        status,
+      });
+
+      await cleanupExport(database as never, storage, "export-a");
+
+      expect(storage.delete).not.toHaveBeenCalled();
+      expect(database.exportJob.updateMany).not.toHaveBeenCalled();
+      expect(database.exportJob.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("同一对象未到保留期限时继续保留下载文件", async () => {
+    const objectKey = "temporary/exports/user-a/export-a.png";
+    database.exportJob.findUnique.mockResolvedValue({
+      expiresAt: new Date("2026-07-28T09:00:00.000Z"),
+      objectKey,
+      status: ExportStatus.SUCCEEDED,
+    });
+
+    await cleanupExport(
+      database as never,
+      storage,
+      "export-a",
+      objectKey,
+      new Date("2026-07-28T08:00:00.000Z"),
+    );
+
+    expect(storage.delete).not.toHaveBeenCalled();
+    expect(database.exportJob.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("对象删除失败时保留数据库引用，重试可继续清理", async () => {
+    const objectKey = "temporary/exports/user-a/export-a.png";
+    database.exportJob.findUnique.mockResolvedValue({
+      expiresAt: new Date("2026-07-28T07:00:00.000Z"),
+      objectKey,
+      status: ExportStatus.SUCCEEDED,
+    });
+    storage.delete.mockRejectedValueOnce(new Error("存储暂时不可用"));
+
+    await expect(
+      cleanupExport(database as never, storage, "export-a"),
+    ).rejects.toThrow("存储暂时不可用");
+    expect(database.exportJob.updateMany).not.toHaveBeenCalled();
+
+    await cleanupExport(database as never, storage, "export-a");
+    expect(storage.delete).toHaveBeenCalledTimes(2);
+    expect(database.exportJob.updateMany).toHaveBeenCalledOnce();
+  });
+
+  it("等待对象删除时记录被替换，不会清空新导出的引用", async () => {
+    const oldKey = "temporary/exports/user-a/old-lease.png";
+    const newKey = "temporary/exports/user-a/new-lease.png";
+    let current = {
+      expiresAt: new Date("2026-07-28T07:00:00.000Z"),
+      objectKey: oldKey as string | null,
+      status: ExportStatus.SUCCEEDED as ExportStatus,
+    };
+    database.exportJob.findUnique.mockImplementationOnce(async () => ({
+      ...current,
+    }));
+    storage.delete.mockImplementationOnce(async () => {
+      current = {
+        expiresAt: new Date("2026-07-29T08:00:00.000Z"),
+        objectKey: newKey,
+        status: ExportStatus.SUCCEEDED,
+      };
+    });
+    database.exportJob.update.mockImplementation(async ({ data }) => {
+      current = { ...current, ...data };
+      return current;
+    });
+    database.exportJob.updateMany.mockImplementationOnce(
+      async ({ where, data }) => {
+        if (
+          where.objectKey !== current.objectKey ||
+          where.status !== current.status ||
+          where.expiresAt.getTime() !== current.expiresAt.getTime()
+        ) {
+          return { count: 0 };
+        }
+        current = { ...current, ...data };
+        return { count: 1 };
+      },
+    );
+
+    await cleanupExport(
+      database as never,
+      storage,
+      "export-a",
+      oldKey,
+      new Date("2026-07-28T08:00:00.000Z"),
+    );
+
+    expect(storage.delete).toHaveBeenCalledExactlyOnceWith(oldKey);
+    expect(current).toEqual({
+      expiresAt: new Date("2026-07-29T08:00:00.000Z"),
+      objectKey: newKey,
+      status: ExportStatus.SUCCEEDED,
+    });
+  });
+
+  it("导出记录已删除时仍可回收消息中绑定的孤立对象", async () => {
+    database.exportJob.findUnique.mockResolvedValue(null);
+
+    await cleanupExport(
+      database as never,
+      storage,
+      "export-a",
+      "temporary/exports/user-a/deleted-export.png",
+    );
+
+    expect(storage.delete).toHaveBeenCalledExactlyOnceWith(
+      "temporary/exports/user-a/deleted-export.png",
+    );
+    expect(database.exportJob.updateMany).not.toHaveBeenCalled();
   });
 
   it("过期扫描会兜底清理已标记过期但仍残留的对象", async () => {

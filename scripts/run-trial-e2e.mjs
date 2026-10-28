@@ -85,7 +85,12 @@ try {
   await pm(["db:deploy"]);
   await pm(["build:packages"]);
   if (process.argv.includes("--checks")) {
-    await pm(["check"]);
+    // Let Vitest select "test" and Next build select "production". Carrying the
+    // trial app's "development" mode into checks starts background consumers
+    // inside integration fixtures and lets them steal each other's outbox work.
+    const checkEnv = { ...env };
+    delete checkEnv.NODE_ENV;
+    await pm(["check"], { env: checkEnv });
     await pm(["verify:file-pipeline"]);
   }
   if (process.argv.includes("--contracts")) await pm(["test:e2e"]);

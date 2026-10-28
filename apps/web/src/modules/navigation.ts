@@ -55,7 +55,10 @@ export function installNavigationHistory(): () => void {
     state().beforeTraversal?.(event);
     if (!event.cancelBubble) state().lastPosition = Number(event.state?.[HISTORY_POSITION] ?? 0);
   };
-  type NavigationHost = EventTarget & { traverseTo: (key: string) => { finished: Promise<unknown> } };
+  type NavigationHost = EventTarget & {
+    currentEntry: { readonly key: string } | null;
+    traverseTo: (key: string) => { committed: Promise<unknown>; finished: Promise<unknown> };
+  };
   const navigation = (window as unknown as { navigation?: NavigationHost }).navigation;
   let active = true;
   let replay = false;
@@ -70,10 +73,15 @@ export function installNavigationHistory(): () => void {
     if (flight) return;
     flight = true;
     const key = navigationEvent.destination.key;
+    const originKey = navigation?.currentEntry?.key;
     void Promise.all([save(), flushWorkspaceDrafts()]).then(async () => {
-      if (!active) return;
+      // Chromium cannot replay a canceled traversal during its original event.
+      // Even an already-saved document must wait for the next browser task.
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      if (!active || navigation?.currentEntry?.key !== originKey) return;
       replay = true;
-      await navigation?.traverseTo(key).finished;
+      const traversal = navigation?.traverseTo(key);
+      if (traversal) await Promise.all([traversal.committed, traversal.finished]);
     }).catch(() => undefined).finally(() => { flight = false; replay = false; });
   };
   navigation?.addEventListener("navigate", beforeNativeTraversal);
