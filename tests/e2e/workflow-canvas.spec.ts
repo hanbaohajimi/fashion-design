@@ -1,6 +1,7 @@
 import { valueControl, chooseValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails, hideDevelopmentChrome } from "./workflow-navigation";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { mkdir, writeFile } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "./review-accessibility";
 test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
@@ -1482,6 +1483,7 @@ test("Atelier 精修：图像菜单使用可读语义色和一致图标，关闭
 });
 
 async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workflow") {
+  await seedReturningFeatureGuideUser(page, ["e2e-user", "a", "b"]);
   await hideDevelopmentChrome(page);
   // Workflow labels use system fonts, matching the shared visual fixture. Avoid
   // pending unused SDK font requests outliving a view switch or export.
@@ -2253,6 +2255,54 @@ async function selectWire(page: Page, id: string) {
   await page.mouse.click(point.x, point.y);
   await expect(page.getByLabel("连接操作")).toBeVisible();
 }
+
+test("功能指引隔离画布快捷键，退出后保留原有连线选择", async ({ page }) => {
+  const mocked = await mockWorkflow(page);
+  const evaluation = mocked.getGraph().nodes.find((item) => item.id === "evaluate");
+  if (evaluation) evaluation.status = "ready";
+  const writes: string[] = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    }
+    await route.fallback();
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "适合画布", exact: true }).click();
+  await selectWire(page, "e8");
+  const selectedWire = page.locator('[data-workflow-edge="e8"]');
+  await expect(selectedWire).toHaveAttribute("data-selected", "true");
+  const graphBefore = structuredClone(mocked.getGraph());
+  const canvas = page.locator(".tl-canvas").first();
+
+  await page.getByRole("button", { name: "workflow@example.com", exact: true }).click();
+  await page.getByRole("button", { name: "功能指引", exact: true }).click();
+  const guide = page.getByRole("dialog", { name: "界面功能指引", exact: true });
+  await expect(guide).toBeVisible();
+  await expect(guide).toHaveAttribute("data-phase", "open");
+  await guide.getByRole("button", { name: "下一步", exact: true }).focus();
+  const cursorBefore = await canvas.evaluate((element) => getComputedStyle(element).cursor);
+  for (const key of ["Delete", "Backspace", "Shift+L"]) {
+    await page.keyboard.press(key);
+    await expect(guide).toBeVisible();
+  }
+  // A shortcut-triggered write is asynchronous; allow its request to reach the fixture.
+  await page.waitForTimeout(200);
+  expect(writes).toEqual([]);
+  expect(mocked.getGraph()).toEqual(graphBefore);
+  expect(await canvas.evaluate((element) => getComputedStyle(element).cursor)).toBe(cursorBefore);
+  await expect(selectedWire).toHaveAttribute("data-selected", "true");
+
+  await page.keyboard.press("Escape");
+  await expect(guide).toBeHidden();
+  await expect(selectedWire).toHaveAttribute("data-selected", "true");
+  await expect(page.getByLabel("连接操作")).toBeVisible();
+  await expect(page.getByRole("button", { name: "workflow@example.com", exact: true })).toBeFocused();
+  expect(writes).toEqual([]);
+  expect(mocked.getGraph()).toEqual(graphBefore);
+});
 
 test("上传图片直接作为修改原图，已有参考连线可切换用途", async ({ page }) => {
   const mocked = await mockWorkflow(page);

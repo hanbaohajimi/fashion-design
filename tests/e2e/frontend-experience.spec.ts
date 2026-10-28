@@ -1,5 +1,6 @@
 import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { mkdir } from "node:fs/promises";
 import { contrastFailures, controlFontFailures } from "./review-accessibility";
 
@@ -8,6 +9,10 @@ const user = {
   email: "designer@example.com",
   name: "设计师",
 };
+
+test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, [user.id]);
+});
 
 test("P1 项目重命名防重复、失败留稿、键盘恢复和归档焦点", async ({ page }) => {
   await mockWorkspace(page);

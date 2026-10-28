@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { mkdir } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures } from "./review-accessibility";
+
+test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, ["a", "b", "cover-user", "matrix"]);
+});
 
 test("登录样式契约、发送和失败状态", async ({ page }) => {
   await page.route("**/api/auth/login", (route) => route.fulfill({ json: { ok: true } }));

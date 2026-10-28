@@ -411,7 +411,7 @@ export function RunwayDraftEditor({
         </ul>
       </fieldset>
       {form.error ? <Notice tone="error">{form.error}</Notice> : null}
-      <div className={styles.toolbar}>
+      <div className={styles.toolbar} data-guide={canEdit ? "studio-actions" : undefined}>
         {canEdit ? (
           <Button
             type="submit"

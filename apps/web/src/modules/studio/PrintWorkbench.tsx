@@ -348,6 +348,7 @@ export function PrintWorkbench({
           </label>
           {canEdit ? (
             <ActionBar
+              guideAnchor="studio-actions"
               status={
                 signature !== baseline
                   ? "有未保存的修改"

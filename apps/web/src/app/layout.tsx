@@ -7,6 +7,7 @@ import { QueryProvider } from "../modules/projects/QueryProvider";
 import { CreativeContinuity } from "../modules/projects/CreativeContinuity";
 import { MotionEnvironment } from "../components/interactions/MotionEnvironment";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { FeatureGuideProvider } from "../components/feature-guide/FeatureGuideProvider";
 import { Suspense } from "react";
 
 import "./globals.css";
@@ -51,10 +52,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
         </a>
         <div className="app-root" id="main-content" tabIndex={-1}>
           <AuthProvider>
-            <Suspense fallback={null}><WorkspaceShell>
+            <FeatureGuideProvider><Suspense fallback={null}><WorkspaceShell>
               <CreativeContinuity />
               <QueryProvider>{children}</QueryProvider>
-            </WorkspaceShell></Suspense>
+            </WorkspaceShell></Suspense></FeatureGuideProvider>
           </AuthProvider>
         </div>
         {/* 全局通知与本轮浅色工作台使用同一主题。 */}

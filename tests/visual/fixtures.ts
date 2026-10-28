@@ -1,4 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "../e2e/feature-guide-fixture";
 import { studioFixture } from "../../apps/web/src/modules/studio/studio-test-fixtures";
 import {
   runwayRunFixture,
@@ -96,7 +97,9 @@ export const test = base.extend({
 });
 export { expect };
 
-export async function seedVisualApp(page: Page) {
+export async function seedVisualApp(page: Page, { guides = false }: { guides?: boolean } = {}) {
+  // Existing fixtures represent returning users; guide scenarios opt into the first look.
+  if (!guides) await seedReturningFeatureGuideUser(page, ["visual-designer"]);
   // CDP-attached contexts require explicit media emulation before navigation.
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
   // Workflow labels use pinned system fonts. Do not wait on unused SDK text fonts.

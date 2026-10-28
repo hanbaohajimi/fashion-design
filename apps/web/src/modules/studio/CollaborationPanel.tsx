@@ -621,7 +621,7 @@ function ReviewForm({
                   </Button>
                 </div>
               ) : null}
-              <div className={styles.toolbar}>
+              <div className={styles.toolbar} data-guide="studio-actions">
                 <Button
                   type="submit"
                   variant={reviewMode === "comment" ? "primary" : "secondary"}

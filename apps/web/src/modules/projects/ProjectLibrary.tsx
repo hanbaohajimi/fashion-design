@@ -299,6 +299,8 @@ export function ProjectLibrary() {
     <main
       ref={motionRoot}
       className={`${styles.library} ${controls.controlSurface}`}
+      data-guide-page="projects"
+      data-guide-ready={projectsQuery.isSuccess ? "true" : "false"}
     >
       <AppHeader current="projects" />
 
@@ -335,7 +337,7 @@ export function ProjectLibrary() {
             已归档
           </button>
         </div>
-        <label className={styles.search}>
+        <label className={styles.search} data-guide={projects.length ? "projects-search" : undefined}>
           <span className={styles.srOnly}>搜索项目</span>
           <span aria-hidden="true">⌕</span>
           <input
@@ -354,6 +356,7 @@ export function ProjectLibrary() {
           {searchState.pending || projectsQuery.isPlaceholderData ? "正在搜索，暂显示上次结果…" : `${total} 个${projectStatus === "archived" ? "归档项目" : "项目"}`}
         </span>
         <Button
+          data-guide="projects-create"
           interaction="ripple"
           variant={projects.length ? "primary" : "secondary"}
           onClick={() => setCreateOpen(true)}

@@ -1,6 +1,7 @@
 import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
@@ -39,6 +40,7 @@ function sampleGraph(): WorkflowGraph {
 }
 
 async function mockWorkspace(page: Page) {
+  await seedReturningFeatureGuideUser(page, ["user-agent-e2e"]);
   let graph = sampleGraph();
   let proposal: WorkflowProposal | null = null;
   let proposalSequence = 0;

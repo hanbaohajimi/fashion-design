@@ -143,8 +143,14 @@ export function TrendArchive({
   };
 
   return (
-    <section ref={motionRoot} aria-label="趋势资料库" className={styles.archive}>
-      <section aria-label="趋势筛选" className={styles.archiveFilters}>
+    <section
+      ref={motionRoot}
+      aria-label="趋势资料库"
+      className={styles.archive}
+      data-guide-page="trends"
+      data-guide-ready={!trends.isLoading && !trends.error ? "true" : "false"}
+    >
+      <section aria-label="趋势筛选" className={styles.archiveFilters} data-guide="trends-filters">
         <div>
           <p>
             {trends.total} 条来源 当前展示 {items.length} 条

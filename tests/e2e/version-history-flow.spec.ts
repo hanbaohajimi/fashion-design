@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
 test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, ["user-history"]);
   await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
 });
 

@@ -177,6 +177,8 @@ export function StudioWorkspace({
       <main
         data-studio-motion
         data-studio-page={tab}
+        data-guide-page="studio"
+        data-guide-ready={!loading && !refreshing && Boolean(data) && !error ? "true" : "false"}
         className={styles.shell}
         onInvalidCapture={(event) => {
           const input = event.target;
@@ -235,7 +237,7 @@ export function StudioWorkspace({
             <div className={styles.mobileNavigation}>
               <div className={styles.mobileFunction}>
                 <span title={name}>{name}</span>
-                <Menu label="当前功能" trigger={STUDIO_GROUPS.map((group) => group.items.find((item) => item.value === tab)?.label).find(Boolean) ?? "切换功能"}>
+                <Menu label="当前功能" guideAnchor="studio-navigation" trigger={STUDIO_GROUPS.map((group) => group.items.find((item) => item.value === tab)?.label).find(Boolean) ?? "切换功能"}>
                   {STUDIO_GROUPS.map((group) => (
                     <Fragment key={group.label}>
                       <span className={styles.muted}>{group.label}</span>

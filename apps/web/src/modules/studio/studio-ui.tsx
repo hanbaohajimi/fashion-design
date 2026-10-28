@@ -308,6 +308,7 @@ export function SaveBar({
 }) {
   return (
     <ActionBar
+      guideAnchor={canEdit ? "studio-actions" : undefined}
       status={
         <div className={styles.saveStatus}>
           <span role="status">

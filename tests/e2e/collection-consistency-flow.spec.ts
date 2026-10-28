@@ -1,8 +1,10 @@
 import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { openImageDetails } from "./workflow-navigation";
 import { expect, test } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
 test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, ["user-collection"]);
   await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
 });
 

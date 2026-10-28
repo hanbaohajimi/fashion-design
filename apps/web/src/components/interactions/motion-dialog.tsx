@@ -6,16 +6,17 @@ import { motionEase, motionTime } from "./motion-policy";
 import styles from "../ui.module.css";
 
 export function MotionDialog({ open = true, label, children, onClose, onAfterClose,
-  returnFocusSelector, busy = false, className = "", variant = "dialog" }: {
+  returnFocusSelector, describedBy, busy = false, className = "", variant = "dialog" }: {
   readonly open?: boolean;
   readonly label: string;
   readonly children: ReactNode;
   readonly onClose: () => void;
   readonly onAfterClose?: (() => void) | undefined;
   readonly returnFocusSelector?: string | undefined;
+  readonly describedBy?: string | undefined;
   readonly busy?: boolean;
   readonly className?: string | undefined;
-  readonly variant?: "dialog" | "sheet";
+  readonly variant?: "dialog" | "sheet" | "guide";
 }) {
   const title = useId();
   const ref = useRef<HTMLDialogElement>(null);
@@ -25,18 +26,30 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   const restoreChildren = () => { inert.current.forEach((value, child) => { child.inert = value; }); inert.current.clear(); };
   const returnFocus = () => {
     if (document.hidden || pathname.current !== location.pathname) return;
+    if (variant === "guide") {
+      const blocker = [...document.querySelectorAll<HTMLElement>('dialog[open],[role="dialog"][aria-modal="true"],[data-popup-kind]')].filter(element => !element.closest("[data-feature-guide]") && element.checkVisibility({ checkVisibilityCSS: true }) && element.getClientRects().length).at(-1);
+      if (blocker) {
+        if (!blocker.contains(document.activeElement)) {
+          const next = blocker.querySelector<HTMLElement>('[autofocus],[data-autofocus],button:not(:disabled),a[href],input:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])') ?? blocker;
+          if (next === blocker && !next.hasAttribute("tabindex")) next.tabIndex = -1;
+          next.focus({ preventScroll: true });
+        }
+        return;
+      }
+    }
     const target = (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? previous.current;
     const activeDialog = [...document.querySelectorAll("dialog[open]")].at(-1);
     if (activeDialog && (!(target instanceof Node) || !activeDialog.contains(target))) return;
     const fallback = document.querySelector<HTMLElement>("#main-content h1, main h1, #main-content");
-    const focus = target instanceof HTMLElement && target.isConnected && !target.closest("[inert],[hidden]") ? target : fallback;
-    if (focus) { if (!focus.hasAttribute("tabindex") && focus === fallback) focus.tabIndex = -1; focus.focus(); }
+    const safeTarget = target instanceof HTMLElement && target.isConnected && !target.closest("[inert],[hidden]") && !(variant === "guide" && target.matches('input,textarea,select,[contenteditable="true"]'));
+    const focus = safeTarget ? target : fallback;
+    if (focus instanceof HTMLElement) { if (!focus.hasAttribute("tabindex") && focus === fallback) focus.tabIndex = -1; focus.focus({ preventScroll: variant === "guide" }); }
   };
   const presence = useAnimatedPresence<HTMLDialogElement>(open, ref, {
-    enter: { opacity: 0, transform: variant === "sheet" ? "translateY(100%)" : "translateY(8px) scale(.98)" },
-    enterToken: variant === "sheet" ? "--motion-sheet-enter" : "--motion-dialog-enter",
-    exitToken: variant === "sheet" ? "--motion-sheet-exit" : "--motion-dialog-exit",
-    enterMs: variant === "sheet" ? 400 : 350, exitMs: variant === "sheet" ? 300 : 250,
+    enter: { opacity: 0, transform: variant === "guide" ? "none" : variant === "sheet" ? "translateY(100%)" : "translateY(8px) scale(.98)" },
+    enterToken: variant === "guide" ? "--motion-guide-enter" : variant === "sheet" ? "--motion-sheet-enter" : "--motion-dialog-enter",
+    exitToken: variant === "guide" ? "--motion-guide-exit" : variant === "sheet" ? "--motion-sheet-exit" : "--motion-dialog-exit",
+    enterMs: variant === "guide" ? 150 : variant === "sheet" ? 400 : 350, exitMs: variant === "guide" ? 120 : variant === "sheet" ? 300 : 250,
     onOpening() {
       const dialog = ref.current;
       if (!dialog) return;
@@ -51,7 +64,7 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
     onClosing() {
       const dialog = ref.current;
       if (!dialog?.open) return;
-      dialog.focus();
+      if (variant !== "guide" || [...document.querySelectorAll("dialog[open]")].at(-1) === dialog) dialog.focus();
       [...dialog.children].forEach(child => { if (child instanceof HTMLElement) { inert.current.set(child, Boolean(child.inert)); child.inert = true; } });
     },
     onClosed() {
@@ -96,8 +109,8 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   // Refs own each drag; callbacks never change business state.
   }, []);
   useEffect(() => { if (!open || busy) resetDrag(); });
-  return <dialog ref={ref} tabIndex={-1} aria-label={label} aria-busy={busy || undefined}
-    className={`${styles.dialog} ${className}`} data-dialog-id={title} data-phase={presence.phase} data-variant={variant}
+  return <dialog ref={ref} tabIndex={-1} aria-label={label} aria-describedby={describedBy} aria-busy={busy || undefined}
+    className={`${styles.dialog} ${className}`} data-dialog-id={title} data-phase={presence.phase} data-variant={variant} data-feature-guide={variant === "guide" || undefined}
     onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (open) onClose(); }}
     onClick={event => {
       if (event.target !== event.currentTarget || !open) return;
@@ -151,6 +164,7 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
     onPointerCancel={event => { if (gesture.current?.id === event.pointerId) resetDrag(); }}
     onLostPointerCapture={event => { if (gesture.current?.id === event.pointerId) resetDrag(); }}
     onKeyDownCapture={event => {
+      if (variant === "guide") event.stopPropagation();
       if (event.key !== "Tab") return;
       event.stopPropagation();
       const items = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),textarea:not(:disabled),select:not(:disabled),summary,[tabindex]:not([tabindex="-1"])')]

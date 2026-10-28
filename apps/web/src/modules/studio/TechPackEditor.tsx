@@ -106,6 +106,7 @@ export function TechPackEditor(
         title={String(existing?.currentRevision.payload.name ?? "新建技术包")}
         type="技术包"
         description="逐章整理制作资料，人工复核后发布"
+        guideHasRevision={Boolean(existing)}
         status={
           <Badge>
             {existing ? `已保存 r${existing.currentRevision.revision} ` : ""}

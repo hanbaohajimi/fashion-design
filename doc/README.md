@@ -15,6 +15,7 @@
 | [本机工作区草稿](architecture/local-workspace-drafts.md) | 本机恢复、冲突、副本与账号隔离边界 |
 | [项目任务与助手取消](architecture/project-tasks.md) | 聚合接口、权限、取消竞态与部署顺序 |
 | [助手流式消息](architecture/assistant-streaming.md) | SSE协议、Redis恢复、发布开关与真实链路验证 |
+| [功能指引](architecture/feature-guide.md) | 五类页面的视觉导览、自动展示条件、本机偏好与重播边界 |
 | [前端设计规范](../apps/web/DESIGN.md) | 当前界面的视觉与交互规范，结合运行源码阅读 |
 | [选择控件与命令菜单规范](impeccable/选择控件与命令菜单规范.md) | Select/Dropdown 的语义、数量阈值、手机弹层与登记例外 |
 | [前端产品说明](../apps/web/PRODUCT.md) | 用户、任务、产品约束与资料来源 |

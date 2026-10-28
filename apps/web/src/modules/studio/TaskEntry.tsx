@@ -484,7 +484,7 @@ export function TaskEntry(
         <div className={styles.note}>
           需求与参考图将带入设计助手，确认方案后生成。
         </div>
-        <ActionBar status={<span>在工作台继续核对需求。</span>}>
+        <ActionBar guideAnchor={props.canEdit ? "studio-actions" : undefined} status={<span>在工作台继续核对需求。</span>}>
           <Button
             type="submit"
             variant="primary"

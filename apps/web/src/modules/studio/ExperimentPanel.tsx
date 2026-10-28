@@ -469,7 +469,7 @@ export function ExperimentPanel({
                     </p>
                   </fieldset>
                 </div>
-                <div className={styles.configurationActions}>
+                <div className={styles.configurationActions} data-guide="studio-actions">
                   <Button
                     type="submit"
                     variant={

@@ -27,6 +27,7 @@ export function WorkflowEdgeHoverLabel({
   useEffect(() => {
     const view = ownerDocument.defaultView;
     const keydown = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-feature-guide]")) return;
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();

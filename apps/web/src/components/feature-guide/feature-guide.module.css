@@ -1,0 +1,47 @@
+.overlay {
+  --guide-safe-top: env(safe-area-inset-top, 0px);
+  --guide-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --guide-safe-left: env(safe-area-inset-left, 0px);
+  --guide-safe-right: env(safe-area-inset-right, 0px);
+  position: fixed;
+  inset: 0;
+  color: var(--color-ink);
+  touch-action: none;
+}
+
+.scrim { position: absolute; inset: 0; pointer-events: none; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  width: min(352px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  padding: 16px 20px 20px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  border-radius: var(--radius-lg);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-modal);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.topline { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.topline > span { font-size: 12px; color: var(--color-ink-secondary); font-variant-numeric: tabular-nums; }
+.topline > button { margin-right: -8px; }
+.copy { min-height: 0; overflow: auto; overscroll-behavior: contain; animation: guide-copy-in 150ms var(--ease-enter); }
+.copy h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.copy p { margin: 0; color: var(--color-ink-secondary); overflow-wrap: anywhere; }
+.actions { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.card button { min-height: 44px; min-width: 44px; }
+
+@keyframes guide-copy-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 767px) {
+  .card { width: calc(100vw - 32px); padding: 12px 16px 16px; }
+  .actions { margin-top: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .copy { animation: none; } }
+@media (forced-colors: active) { .card { border: 1px solid CanvasText; } }

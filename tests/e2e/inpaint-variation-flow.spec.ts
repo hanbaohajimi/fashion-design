@@ -1,5 +1,6 @@
 import { chooseValue, valueControl, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
@@ -16,6 +17,7 @@ function node(id: string, type: WorkflowNode["type"], title: string, x: number, 
 }
 
 async function mockEditing(page: Page) {
+  await seedReturningFeatureGuideUser(page, ["user-e2e"]);
   let graph: WorkflowGraph = { projectId: PROJECT_ID, revision: 1, layoutRevision: 0, legacyAvailable: false, nodes: [
     node("source", "candidate", "原始短款外套", 40, 100, { assetId: "asset-source", imageUrl: "/api/design-assets/asset-source/thumbnail", text: "结构清晰的短款外套" }),
     node("palette", "swatch", "色卡 01", 40, 450, { color: "#C8AB84", text: "OAT" }),

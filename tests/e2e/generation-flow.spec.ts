@@ -1,8 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { openImageDetails } from "./workflow-navigation";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, ["user-logout", "user-fabric-search", "user-project-create", "user-trends", "user-drop", "user-fabric", "user-e2e"]);
   await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
 });
 

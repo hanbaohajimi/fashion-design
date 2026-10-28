@@ -352,6 +352,8 @@
   --motion-menu-exit: 200ms;
   --motion-dialog-enter: 350ms;
   --motion-dialog-exit: 250ms;
+  --motion-guide-enter: 150ms;
+  --motion-guide-exit: 120ms;
   --motion-sheet-enter: 400ms;
   --motion-sheet-exit: 300ms;
   --motion-indicator: 350ms;

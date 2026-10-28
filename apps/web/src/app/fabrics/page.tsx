@@ -113,7 +113,11 @@ function FabricLibrary() {
   return (
     <>
       <AppHeader current="fabrics" projectId={projectId} />
-      <main className={`${styles.libraryPage} ${controls.controlSurface}`}>
+      <main
+        className={`${styles.libraryPage} ${controls.controlSurface}`}
+        data-guide-page="fabrics"
+        data-guide-ready={!fabrics.isLoading && !fabrics.error ? "true" : "false"}
+      >
         <header className={styles.libraryHeader}>
           <div className={styles.libraryIdentity}>
             <Link

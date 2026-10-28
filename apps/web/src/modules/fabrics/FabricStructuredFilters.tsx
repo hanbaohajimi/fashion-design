@@ -73,7 +73,7 @@ export function FabricStructuredFilters({ onApply }: { readonly onApply: (query:
       {applied.length ? <Button variant="ghost" onClick={clear}>清空筛选</Button> : null}
     </div>
     {mobile ? <>
-      <Button data-fabric-filter-trigger aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+      <Button data-fabric-filter-trigger data-guide="fabrics-filters" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
         规格筛选{applied.length ? ` ${applied.length} 项已启用` : ""}
       </Button>
       <Dialog open={open} variant="sheet" label="面料规格筛选" onClose={() => setOpen(false)}
@@ -84,7 +84,7 @@ export function FabricStructuredFilters({ onApply }: { readonly onApply: (query:
         {form}
       </Dialog>
     </> : <details ref={disclosure} className={styles.specDisclosure}>
-      <summary data-fabric-filter-trigger>规格筛选{applied.length ? ` ${applied.length} 项已启用` : ""}</summary>
+      <summary data-fabric-filter-trigger data-guide="fabrics-filters">规格筛选{applied.length ? ` ${applied.length} 项已启用` : ""}</summary>
       {form}
     </details>}
   </>;

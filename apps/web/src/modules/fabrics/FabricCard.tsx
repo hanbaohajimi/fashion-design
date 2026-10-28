@@ -384,7 +384,7 @@ export function FabricCard({
       draggable
       onDragStart={beginDrag}
     >
-      <div className={styles.cardVisual}>
+      <div className={styles.cardVisual} data-guide="fabrics-preview">
         <ImagePreview
           alt={label}
           src={fabric.mainImageUrl}
@@ -425,6 +425,7 @@ export function FabricCard({
         {onAdd ? (
           <div className={styles.fabricCardActions}>
             <button
+              data-guide={!addDisabled && !adding ? "fabrics-add" : undefined}
               disabled={addDisabled}
               aria-busy={adding}
               onClick={() => onAdd(fabric)}

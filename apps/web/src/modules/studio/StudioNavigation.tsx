@@ -66,6 +66,7 @@ export function StudioNavigation({
                   key={item.value}
                   type="button"
                   role="tab"
+                  data-guide={value === item.value ? "studio-navigation" : undefined}
                   id={`${id}-tab-${item.value}`}
                   aria-controls={`${id}-panel-${item.value}`}
                   aria-selected={value === item.value}

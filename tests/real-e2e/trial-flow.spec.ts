@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { chooseValue, valueControl } from "../e2e/choice-control";
+import { seedReturningFeatureGuideUser } from "../e2e/feature-guide-fixture";
 
 type Node = { id: string; kind: string; type: string; title: string; status: string; payload: Record<string, unknown>; x: number; y: number };
 type Graph = { revision: number; layoutRevision: number; nodes: Node[]; edges: { sourceNodeId: string; targetNodeId: string }[] };
@@ -29,6 +30,10 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   expect(link).toBeTruthy();
   await page.goto(link!);
   await expect(page).not.toHaveURL(/\/auth\/confirm/u);
+  const sessionResponse = await page.request.get("/api/me");
+  expect(sessionResponse.ok()).toBe(true);
+  const session = await sessionResponse.json() as { user: { id: string } };
+  await seedReturningFeatureGuideUser(page, [session.user.id]);
   await page.goto("/");
   await page.getByRole("button", { name: "新建项目", exact: true }).click();
   await page.getByLabel("项目名称").fill("真实链路试用");

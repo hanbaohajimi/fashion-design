@@ -469,7 +469,7 @@ export function ToolRail({
       if (
         target instanceof Element &&
         target.closest(
-          'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+          'input, textarea, select, [contenteditable="true"], [role="textbox"], [data-feature-guide]',
         )
       ) {
         return;
@@ -799,6 +799,7 @@ export function ToolRail({
     if (!activeSketchId) return;
     const handleSketchShortcut = (event: KeyboardEvent): void => {
       const target = event.target;
+      if (target instanceof Element && target.closest("[data-feature-guide]")) return;
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||

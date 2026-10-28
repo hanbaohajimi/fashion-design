@@ -47,6 +47,7 @@ export function Menu({
   align = "end",
   className = "",
   triggerRef,
+  guideAnchor,
 }: {
   readonly label: string;
   readonly children: ReactNode;
@@ -56,6 +57,7 @@ export function Menu({
   readonly align?: "start" | "end";
   readonly className?: string | undefined;
   readonly triggerRef?: Ref<HTMLElement>;
+  readonly guideAnchor?: string | undefined;
   readonly portal?: boolean;
 }) {
   const anchor = useRef<HTMLElement>(null);
@@ -144,6 +146,7 @@ export function Menu({
   return (
     <details className={`${styles.menu} ${className}`} open={open}>
       <summary
+        data-guide={guideAnchor}
         role="button"
         aria-label={label}
         aria-expanded={open}

@@ -1,5 +1,6 @@
 import { chooseValue, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import {
   runwayActionSchema,
   runwayCreateShowSchema,
@@ -64,6 +65,7 @@ async function prepare(
   page: Page,
   { canEdit = true, empty = false, enabled = true } = {},
 ) {
+  await seedReturningFeatureGuideUser(page, ["runway-user"]);
   const data = studioFixture({
     styles: [styleFixture()],
     role: canEdit ? "OWNER" : "VIEWER",

@@ -239,6 +239,7 @@ export function WorkflowInteractionProvider({
   }, [apply, graph.edges, selectedEdgeId]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest("[data-feature-guide]")) return;
       if (event.key === "Escape") {
         setGesture(null);
         setSelectedEdgeId(null);

@@ -9,6 +9,7 @@ export function StudioPageHeader({
   status,
   actions,
   objectSwitcher,
+  guideHasRevision = false,
 }: {
   readonly title: string;
   readonly type?: string;
@@ -16,10 +17,16 @@ export function StudioPageHeader({
   readonly status?: ReactNode;
   readonly actions?: ReactNode;
   readonly objectSwitcher?: ReactNode;
+  readonly guideHasRevision?: boolean;
 }) {
   return (
     <header className={styles.surfaceHeading}>
-      <div>
+      <div
+        data-guide="studio-object"
+        data-guide-title={type ?? title}
+        data-guide-switcher={objectSwitcher ? "true" : "false"}
+        data-guide-revision={guideHasRevision ? "true" : "false"}
+      >
         <div className={styles.surfaceTitle}>
           <h2>{title}</h2>
           {status}

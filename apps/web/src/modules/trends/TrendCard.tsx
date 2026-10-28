@@ -107,7 +107,7 @@ export function TrendCard({
         </div>
       ) : null}
 
-      <div className={styles.cardBody}>
+      <div className={styles.cardBody} data-guide="trends-preview">
         <span className={styles.cardCategory}>
           {trendCategoryLabel(trend.category)}
         </span>
@@ -160,6 +160,7 @@ export function TrendCard({
 
         <button
           className={styles.importButton}
+          data-guide={!disabled && !importing ? "trends-add" : undefined}
           disabled={disabled || importing}
           onClick={() => onImport(trend)}
           type="button"

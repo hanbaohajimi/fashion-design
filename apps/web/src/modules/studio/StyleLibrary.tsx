@@ -136,6 +136,7 @@ export function StyleLibrary(
         title={selected?.name ?? "建立新款式"}
         type="款式档案"
         description="选择主设计图，整理款式资料与视图"
+        guideHasRevision={Boolean(selected)}
         status={
           selected ? <Badge>r{selected.currentRevision.revision}</Badge> : null
         }

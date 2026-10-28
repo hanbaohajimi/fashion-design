@@ -1202,7 +1202,12 @@ export function WorkflowAssistantPanel({
         </button>
       ) : null}
       {legacy && legacyRunsOpen ? renderLegacyRuns(conversationId) : null}
-      <div ref={composerSurface} className={styles.composer}>
+      <div
+        ref={composerSurface}
+        className={styles.composer}
+        data-guide="workspace-assistant"
+        data-guide-variant={legacy ? "history" : agentVersion === 1 ? "paused" : "input"}
+      >
         {legacy ? (
           <div className={styles.legacyReadOnly}>
             <p>
@@ -1424,6 +1429,7 @@ export function WorkflowAssistantPanel({
             <Button
               size="small"
               data-assistant-reference-trigger
+              data-guide="workspace-reference"
               disabled={loading || sending || contextSaving}
               onClick={() => setPickerOpen(true)}
             >

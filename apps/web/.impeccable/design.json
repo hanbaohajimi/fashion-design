@@ -3,6 +3,29 @@
   "generatedAt": "2026-10-25T16:29:24.542Z",
   "title": "Design System: 森织设计工作室 · 织物档案",
   "extensions": {
+    "featureGuide": {
+      "updatedAt": "2026-10-28",
+      "source": "apps/web/src/components/feature-guide/",
+      "scope": "projects、workspace、studio、fabrics、trends 五类页面；studio 十二项功能及不同项目共用 studio 偏好。",
+      "presentation": "MotionDialog guide 变体使用原生模态 dialog；SVG 遮罩挖洞与暖白/深绿双层轮廓突出当前功能，短说明卡提供上一步、下一步/完成、跳过。",
+      "visual": "继承 --color-paper、--color-ink、--color-ink-secondary、--color-action、--color-scrim-soft、--radius-lg、--shadow-modal 与 --font-sans；标题16px、正文14px、步数12px，按钮至少44px。",
+      "placement": "桌面比较目标四周候选位置以减少遮挡；<768px优先底部并比较顶部位置。使用visualViewport与安全区，边缘保留16px；卡片过高时内部滚动，目标可滚动到视口。",
+      "geometry": "useGuideGeometry以事件驱动追踪目标与祖先尺寸、兄弟DOM重排、图片与字体加载，以及滚动、窗口和visualViewport变化；按祖先client box裁剪高亮，排除边框与滚动条，空闲不运行rAF循环。",
+      "motion": {
+        "enter": "var(--motion-guide-enter) = 150ms，opacity / var(--ease-enter)",
+        "exit": "暂挂与普通关闭使用 var(--motion-guide-exit) = 120ms，opacity / var(--ease-exit)；跳过、Escape或完成保留closing状态，待MotionDialog淡出结束并回调后卸载；路由、查询参数或账号切换立即结束。",
+        "stepCopy": "150ms opacity / var(--ease-enter)",
+        "reducedMotion": "原生弹层进入退出时长归零，步骤正文关闭动画。"
+      },
+      "automatic": "已登录且页面标记就绪；目标布局稳定600ms，无业务模态/菜单、输入焦点或按住指针。隐藏页面暂停；加载失败不展示、不记已查看。",
+      "targets": "仅解析当前有布局且未隐藏、未禁用的 data-guide 目标；缺失或移除时跳过，助手收起时只介绍已有入口。",
+      "copy": "助手按data-guide-variant的collapsed、mobile、input、history、paused适配当前入口与可用操作；资料页仅在data-guide-switcher或data-guide-revision为true时介绍切换或修订。面料说明“规格筛选”的分类、成分、供应商与克重，并区分搜索框的名称、标签、编号；趋势说明搜索标题、摘要、关键词及按主题查看。",
+      "preference": "localStorage: fashion:feature-guide:v1:<accountId>:<surface>；首次打开记viewed，跳过或Escape记skipped，末步完成记completed。任一有效状态阻止再次自动展示；存储不可用时保留当前Provider内存选择。",
+      "replay": "账号菜单“功能指引”；流程画布“工作室帮助”中的“查看界面指引”在原弹窗关闭后重播。",
+      "accessibility": "原生模态焦点与Tab循环、Escape退出、关闭后安全返回焦点；步数和说明使用polite播报。",
+      "boundary": "仅介绍和滚动现有功能；不点击目标、不展开业务面板、不改变分栏偏好，不生成、上传、保存修订、发布或导出。",
+      "verification": "本轮导览相关单元测试（含guide-copy.spec.ts）、Web lint与typecheck、43个导览Chromium场景及画布连线快捷键隔离场景已通过；命令与fixture边界见doc/architecture/feature-guide.md，不代表真实后端或全部角色链路已验证。"
+    },
     "pointerInteractions": {
       "updatedAt": "2026-10-26",
       "api": "Button.interaction: none（默认）| ripple | magnetic，互斥；保留原事件、ref、form、type及链接语义。",

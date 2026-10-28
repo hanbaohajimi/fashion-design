@@ -117,7 +117,7 @@ export function ArchiveNavigation({
       <Link href="/" className={styles.brand} aria-label="森织 设计工作室 首页">
         <BrandLockup tone="color" size={44} />
       </Link>
-      <nav aria-label="工作区导航" className={styles.navigation}>
+      <nav aria-label="工作区导航" className={styles.navigation} data-guide="projects-navigation">
         <div className={styles.desktopLinks}>{links}</div>
         <div className={styles.mobileMenu}>
           <Menu

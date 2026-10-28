@@ -61,7 +61,7 @@ export function ProjectTaskCenter({ projectId }: { projectId: string }) {
     finally { setBusy(null); flight.current = false; }
   };
   return <>
-    <span data-project-tasks className={styles.trigger}><Button size="small" onClick={() => setOpen(true)} aria-label={`项目任务${summary.data ? `，${summary.data.counts.running} 项进行中，${summary.data.counts.attention} 项待处理` : ""}`}>
+    <span data-project-tasks className={styles.trigger}><Button size="small" data-guide="project-tasks" onClick={() => setOpen(true)} aria-label={`项目任务${summary.data ? `，${summary.data.counts.running} 项进行中，${summary.data.counts.attention} 项待处理` : ""}`}>
       <span className={styles.desktopLabel}>项目任务</span><span className={styles.mobileLabel}>任务</span>{summary.data && (summary.data.counts.running || summary.data.counts.attention) ? <span className={styles.counts}>{summary.data.counts.running} / {summary.data.counts.attention}</span> : null}
     </Button></span>
     <Dialog open={open} label="项目任务" onClose={() => setOpen(false)} className={styles.dialog}>

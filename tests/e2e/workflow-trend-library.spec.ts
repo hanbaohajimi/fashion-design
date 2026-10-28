@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
+
+test.beforeEach(async ({ page }) => {
+  await seedReturningFeatureGuideUser(page, ["trend-user"]);
+});
 
 test("趋势档案保留真实主题并把原记录与色卡加入工作流，刷新重试不重复写图", async ({
   page,

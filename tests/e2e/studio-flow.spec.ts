@@ -1,5 +1,6 @@
 import { valueControl, chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import {
   createStudioStyleSchema,
   studioDocumentInputSchema,
@@ -25,6 +26,7 @@ test.setTimeout(60_000);
 // Real Next.js pages with isolated API fixtures. Contracts are parsed with the
 // same schemas as the server; these tests do not verify the database or queue.
 async function mockStudio(page: Page) {
+  await seedReturningFeatureGuideUser(page, ["studio-user"]);
   let data = studioFixture({
     styles: [styleFixture()],
     assets: ["front", "back", "detail", "scene", "alternate"].map((name) => ({

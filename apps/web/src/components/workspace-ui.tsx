@@ -105,13 +105,15 @@ export function ActionBar({
   status,
   secondary,
   children,
+  guideAnchor,
 }: {
   readonly status?: ReactNode;
   readonly secondary?: ReactNode;
   readonly children: ReactNode;
+  readonly guideAnchor?: string | undefined;
 }) {
   return (
-    <footer className={styles.actionBar}>
+    <footer className={styles.actionBar} data-guide={guideAnchor}>
       <div className={styles.actionStatus}>{status}</div>
       <div className={styles.actionControls}>
         {secondary}

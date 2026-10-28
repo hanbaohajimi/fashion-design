@@ -588,6 +588,22 @@ textarea.input {
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 .dialog [data-sheet-handle] { touch-action: none; user-select: none; cursor: grab; }
+.dialog[data-variant="guide"] {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+.dialog[data-variant="guide"]::backdrop { background: transparent; animation: none; }
 @keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .feedbackLabel { transition: none; }

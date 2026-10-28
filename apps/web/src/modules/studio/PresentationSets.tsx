@@ -272,7 +272,13 @@ function PresentationForm({
         void save();
       }}
     >
-      <header className={styles.header}>
+      <header
+        className={styles.header}
+        data-guide="studio-object"
+        data-guide-title="商品展示包"
+        data-guide-switcher={data.presentationSets.length ? "true" : "false"}
+        data-guide-revision={existing ? "true" : "false"}
+      >
         <div className={styles.identity}>
           <div className={styles.titleLine}>
             <h2>{draft.name || "新展示包"}</h2>
@@ -621,7 +627,7 @@ function PresentationForm({
           </fieldset>
         </aside>
       </div>
-      <footer className={styles.actionBar}>
+      <footer className={styles.actionBar} data-guide={canEdit ? "studio-actions" : undefined}>
         <div className={styles.actionStatus}>
           <strong role="status">{saveState}</strong>
           <span>

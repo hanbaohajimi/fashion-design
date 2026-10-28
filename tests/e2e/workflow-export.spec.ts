@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
@@ -30,6 +31,7 @@ function exportGraph() {
 }
 
 async function mockExportWorkflow(page: Page) {
+  await seedReturningFeatureGuideUser(page, ["e2e-user"]);
   const graph = exportGraph();
   await page.route("**/api/me", (route) => route.fulfill({ json: {
     user: { id: "e2e-user", authId: "auth-e2e", email: "export@example.com", name: "Export E2E", avatar: null, createdAt: NOW, deletedAt: null },

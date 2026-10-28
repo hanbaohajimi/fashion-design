@@ -301,7 +301,7 @@ export function DesignWorkbench({
             <h3>参考素材</h3>
             <p>图片、面料和配色，留在手边随时引用。</p>
           </div>
-          <button type="button" data-material-trigger onClick={onAdd}>
+          <button type="button" data-material-trigger data-guide="workspace-materials" onClick={onAdd}>
             ＋ 添加素材
           </button>
         </header>

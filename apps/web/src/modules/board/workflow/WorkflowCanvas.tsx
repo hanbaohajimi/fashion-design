@@ -2,6 +2,7 @@
 import { discardWorkspaceDrafts } from "../../../components/drafts/draft-repository";
 import { ProjectTaskCenter } from "../../tasks/ProjectTaskCenter";
 import { WorkspaceSplit } from "../../../components/WorkspaceSplit";
+import { useFeatureGuide } from "../../../components/feature-guide/FeatureGuideProvider";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
 import { DesignWorkbench } from "./DesignWorkbench";
@@ -646,6 +647,7 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 }
 
 function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
+  const { startGuide } = useFeatureGuide();
   const store = useMemo(
     () =>
       createTLStore({
@@ -1453,6 +1455,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       />
       <main
         className={styles.shell}
+        data-guide-page="workspace"
+        data-guide-ready="true"
         data-layout-save-state={layoutSave.state}
         data-layout-pending-count={layoutSave.pendingCount}
         onKeyDownCapture={(event) => {
@@ -1558,6 +1562,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             {!sidebarOpen ? (
               <button
                 aria-label="展开设计助手"
+                data-guide="workspace-assistant"
+                data-guide-variant="collapsed"
                 onClick={() => {
                   setSidebarOpen(true);
 
@@ -1571,7 +1577,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           </div>
         </header>
 
-        <div className={styles.mobileViews}>
+        <div
+          className={styles.mobileViews}
+          data-guide={mobileView !== "assistant" ? "workspace-assistant" : undefined}
+          data-guide-variant="mobile"
+        >
           <SegmentedControl
             label="工作视图"
             value={mobileView}
@@ -1609,7 +1619,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               inert={detailOpen && Boolean(inspected)}
               data-detail-open={detailOpen && Boolean(inspected)}
             >
-              <div className={styles.viewSwitch}>
+              <div className={styles.viewSwitch} data-guide="workspace-views">
                 <SegmentedControl
                   label="画布呈现"
                   value={canvasView}
@@ -1840,6 +1850,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 >
                   <button
                     data-material-trigger
+                    data-guide="workspace-materials"
                     aria-expanded={menuTab === "assets"}
                     onClick={() =>
                       setMenuTab(menuTab === "assets" ? null : "assets")
@@ -2314,9 +2325,14 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   PNG”保存设计路径。候选图与系列在各自工作区导出交付文件，关闭窗口不会取消任务。
                 </li>
               </ol>
-              <Button variant="primary" onClick={() => setHelpOpen(false)}>
-                知道了
-              </Button>
+              <div className={styles.dialogActions}>
+                <Button onClick={() => { setHelpOpen(false); startGuide(); }}>
+                  查看界面指引
+                </Button>
+                <Button variant="primary" onClick={() => setHelpOpen(false)}>
+                  知道了
+                </Button>
+              </div>
             </div>
           </Dialog>
         {sketchOpen ? (

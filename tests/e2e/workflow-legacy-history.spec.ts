@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
@@ -120,6 +121,7 @@ function legacyBoardResponse() {
 }
 
 async function mockLegacyWorkflow(page: Page) {
+  await seedReturningFeatureGuideUser(page, ["legacy-user"]);
   let graph = {
     projectId: PROJECT_ID,
     revision: 0,

@@ -342,7 +342,7 @@ export function TrendBriefPanel({
             <pre>{text}</pre>
           </GridDetails>
           {canEdit ? (
-            <ActionBar status="仅保存简报，不生成图片。">
+            <ActionBar guideAnchor="studio-actions" status="仅保存简报，不生成图片。">
               <Button type="submit" variant="primary" loading={busy}>
                 存入工作流
               </Button>
