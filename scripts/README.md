@@ -16,6 +16,7 @@
 | `check-ports.mjs`、`check-ports.spec.mjs` | 基础设施端口检查、避让及对应测试 |
 | `audit-dependencies.mjs`、`verify-dependency-security.mjs` | 依赖审计与验证 |
 | `run-visual-e2e.mjs`、`run-trial-e2e.mjs` | 固定浏览器视觉验收与隔离应用验收 |
+| `retry-image-pull.mjs`、`retry-image-pull.spec.mjs` | 隔离验收的 Supabase 镜像拉取限流最多尝试三次，间隔 15／30 秒；完整启动日志保存在 `output/trial-runtime/supabase-start.log`；回归测试纳入 `pnpm test:startup`，其他启动或业务错误直接失败 |
 | `capture-ui-audit.mjs`、`create-ui-comparison.mjs`、`export-design-system.mjs` | 界面检查、前后对照与运行时设计变量导出 |
 | `render-painting-loaders.mjs` | 绘画等待媒体处理 |
 | `verify-file-pipeline.ts`、`verify-workflow-pipeline.ts`、`verify-workflow-assistant.ts` | 文件、工作流及助手链路验证，参数和环境见[项目 README](../README.md) |

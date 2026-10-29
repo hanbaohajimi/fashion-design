@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse } from "dotenv";
+import { retryImagePull } from "./retry-image-pull.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const runtime = resolve(root, "output/trial-runtime");
@@ -21,7 +22,15 @@ const compose = ["compose", "--project-name", "fashion-trial", "--env-file", ".e
 const children = [];
 await mkdir(resolve(runtime, "supabase/templates"), { recursive: true });
 const run = (command, args, options = {}) => new Promise((done, fail) => {
-  const child = spawn(command, args, { cwd: root, env, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit", ...options });
+  const { logFile, ...spawnOptions } = options;
+  const child = spawn(command, args, { cwd: root, env, stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit", ...spawnOptions });
+  const log = logFile ? createWriteStream(logFile, { flags: "a" }) : undefined;
+  if (log) {
+    child.stdout.pipe(log, { end: false });
+    child.stderr.pipe(log, { end: false });
+    child.on("close", () => log.end());
+    log.on("error", fail);
+  }
   let output = "", diagnostics = "";
   if (options.capture) {
     child.stdout.on("data", (chunk) => { output += chunk; });
@@ -78,7 +87,9 @@ try {
   await writeFile(resolve(runtime, "supabase/config.toml"), config, "utf8");
   await copyFile(resolve(root, "supabase/templates/magic_link.html"), resolve(runtime, "supabase/templates/magic_link.html"));
   authStarted = true;
-  await pm(["exec", "supabase", "start", "--workdir", runtime], { capture: true });
+  await retryImagePull(() => pm(["exec", "supabase", "start", "--workdir", runtime], {
+    capture: true, logFile: resolve(runtime, "supabase-start.log"),
+  }));
   const status = JSON.parse(await pm(["exec", "supabase", "status", "--workdir", runtime, "--output", "json"], { capture: true }));
   env.SUPABASE_URL = status.API_URL; env.SUPABASE_PUBLISHABLE_KEY = status.PUBLISHABLE_KEY ?? status.ANON_KEY;
   env.TRIAL_MAIL_URL = "http://127.0.0.1:55324";
