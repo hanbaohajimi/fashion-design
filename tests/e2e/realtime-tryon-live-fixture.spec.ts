@@ -10,7 +10,7 @@ async function setup(page: Page, uiCase = "default") {
   const state = {
     creates: 0, signs: 0, uploads: 0, completes: 0, ends: 0,
     captureBodies: [] as Array<{ width: number; height: number; garmentAssetId: string; garmentRevision: number }>,
-    captureKeys: [] as string[], workflowPatches: [] as Array<{ operations: Array<{ node: { payload: { assetId: string } } }> }>,
+    captureKeys: [] as string[], workflowPatches: [] as Array<{ type: string; materials: Array<{ payload: { assetId: string } }> }>,
     uploaded: Buffer.alloc(0), blocked: [] as string[],
   };
   await page.routeWebSocket(/.*/, (socket) => socket.close());
@@ -49,6 +49,10 @@ async function setup(page: Page, uiCase = "default") {
       state.captureBodies.push(request.postDataJSON()); state.captureKeys.push(request.headers()["idempotency-key"] ?? "");
       if (state.captureBodies.length === 1) return route.fulfill({ status: 503, json: { message: "模拟登记失败，可重试保存" } });
       return route.fulfill({ json: { assetId: "saved-capture", url: "/api/design-assets/saved-capture/content", source: "realtime-tryon-capture" } });
+    }
+    if (path === "/api/projects/tryon-fixture-project/canvas/commands") {
+      state.workflowPatches.push(request.postDataJSON());
+      return route.fulfill({ json: { nodeId: "saved-capture-node" } });
     }
     if (path === "/api/projects/tryon-fixture-project/workflow" || path === "/api/projects/tryon-fixture-project/workflow/sync") {
       if (request.method() === "PATCH") state.workflowPatches.push(request.postDataJSON());
@@ -117,7 +121,7 @@ test("模拟视频：显式同意后单连接换装，原尺寸截图经上传�
   await page.getByRole("button", { name: "加入作品区与画布", exact: true }).click();
   await expect(page.getByRole("button", { name: "已加入作品区与画布", exact: true })).toBeDisabled();
   expect(state.workflowPatches).toHaveLength(1);
-  expect(state.workflowPatches[0]?.operations[0]?.node.payload.assetId).toBe("saved-capture");
+  expect(state.workflowPatches[0]?.materials[0]?.payload.assetId).toBe("saved-capture");
   await page.screenshot({ path: "output/realtime-tryon/mock-live-capture-desktop.png", fullPage: true });
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, value: true });

@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { openImageDetails } from "./workflow-navigation";
@@ -839,3 +840,6 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   expect(workflow.graph.nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
   expect(executeCount).toBe(1);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

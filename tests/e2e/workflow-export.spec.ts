@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
@@ -162,3 +163,6 @@ test("工作流 PNG 导出包含紧凑工具名称和素材文字", async ({ pag
     if (text.kind !== "tool") expect(text.summary, `${text.id} summary must be rasterized in the PNG`).toBeGreaterThan(300);
   }
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
@@ -157,3 +158,6 @@ test("引用显式加入且不自动发送，新结果提示不移动画布且�
     page.getByRole("button", { name: "查看新方案 ↗", exact: true }),
   ).toHaveCount(0);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

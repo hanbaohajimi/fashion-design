@@ -1,4 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import { canvasCommandFixture } from "../e2e/node-stage-fixture";
 import { seedReturningFeatureGuideUser } from "../e2e/feature-guide-fixture";
 import { studioFixture } from "../../apps/web/src/modules/studio/studio-test-fixtures";
 import {
@@ -187,6 +188,8 @@ export async function seedVisualApp(page: Page, { guides = false }: { guides?: b
         hasMore: false,
       });
     if (path === `/projects/${PROJECT}`) return json(project);
+    if (path.endsWith("/canvas/commands")) return canvasCommandFixture(page, route);
+    if (path.endsWith("/canvas/initialize")) return json({ projectId: PROJECT, mode: "node", revision: 0, formatVersion: 1, snapshot: {}, bindings: [], initializedFrom: "workflow", canEdit: true });
     if (path.endsWith("/workflow/sync") || path.endsWith("/workflow"))
       return json(graph);
     if (path.endsWith("/workflow/tools"))

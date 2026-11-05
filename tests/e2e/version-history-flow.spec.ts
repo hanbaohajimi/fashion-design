@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
@@ -190,3 +191,6 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   expect(graph.nodes.filter((item) => item.type === "restore_version")).toHaveLength(2);
   expect(graph.nodes.filter((item) => item.payload.assetId === root.id)).toHaveLength(1);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

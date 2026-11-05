@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { readFile } from "node:fs/promises";
@@ -301,3 +302,6 @@ test("历史白板可导出包含旧素材的 PNG，导出过程不修改旧快�
   expect(mocked.boardMethods.every((method) => method === "GET")).toBe(true);
   expect(mocked.graphMutations).toHaveLength(0);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
@@ -353,3 +354,6 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   await expect(page.getByRole("listitem").filter({ hasText: "生成通勤风衣" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

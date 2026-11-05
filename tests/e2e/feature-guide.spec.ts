@@ -22,13 +22,13 @@ async function prepare(page: Page) {
   await page.route(`**/api/projects/${PROJECT}/studio`, route => route.fulfill({ json: workspaceFixture() }));
   const writes: string[] = [];
   page.on("request", request => {
-    if (new URL(request.url()).pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+    if (new URL(request.url()).pathname.startsWith("/api/") && !request.url().endsWith("/canvas/initialize") && !["GET", "HEAD", "OPTIONS"].includes(request.method())) {
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
     }
   });
   await page.route("**/api/**", async route => {
     const request = route.request();
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+    if (!request.url().endsWith("/canvas/initialize") && !["GET", "HEAD", "OPTIONS"].includes(request.method())) {
       await route.fulfill({ status: 409, json: { message: "功能指引不得提交业务操作" } });
       return;
     }

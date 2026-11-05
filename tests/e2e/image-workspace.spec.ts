@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
@@ -379,3 +380,6 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
     workspace.getByAltText("设计 fresh-after-reload", { exact: true }),
   ).toBeVisible();
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

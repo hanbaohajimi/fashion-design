@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
@@ -144,3 +145,6 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
     fullPage: true,
   });
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

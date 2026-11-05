@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { openImageDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -538,3 +539,6 @@ test.describe("触屏动效", () => {
     ).toBe(true);
   });
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

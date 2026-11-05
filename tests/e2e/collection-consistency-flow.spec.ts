@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { valueControl, chooseValue, expectValue } from "./choice-control";
 import { openImageDetails } from "./workflow-navigation";
 import { expect, test } from "@playwright/test";
@@ -624,3 +625,6 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   ).toHaveCount(0);
   await page.setViewportSize(desktopViewport);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

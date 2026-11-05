@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { chooseValue, valueControl, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
@@ -58,14 +59,14 @@ async function mockEditing(page: Page) {
     contentType: "image/svg+xml",
     body: '<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024"><rect width="768" height="1024" fill="#c8b79f"/><path d="M240 180h288l80 680H160z" fill="#39443e"/></svg>',
   }));
-  await page.route("**/api/generations/masks/sign", (route) => {
-    const body = route.request().postDataJSON() as { checksumSha256: string; height: number; width: number };
-    expect(body.checksumSha256).toMatch(/^[A-Za-z0-9+/]{43}=$/u);
-    expect(body).toMatchObject({ height: 1024, width: 768 });
-    return route.fulfill({ json: { expiresAt: NOW, maskId: "mask-e2e", maskUrl: "https://signed.example/mask-e2e.png?read=1", upload: {
-      headers: { "Content-Type": "image/png", "x-amz-checksum-sha256": body.checksumSha256 }, method: "PUT", url: "https://signed.example/mask-e2e.png?write=1",
-    } } });
+  const maskFile = { id: "mask-e2e", name: "局部修改蒙版.png", mimeType: "image/png", size: 1000, width: 768, height: 1024, status: "READY", error: null, thumbnail1024Url: null, thumbnail256Url: null };
+  await page.route("**/api/files/sign-upload", (route) => {
+    const body = route.request().postDataJSON();
+    expect(body.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(body).toMatchObject({ mimeType: "image/png", projectId: PROJECT_ID });
+    return route.fulfill({ json: { deduplicated: false, file: { ...maskFile, status: "PENDING" }, upload: { headers: { "Content-Type": "image/png" }, method: "PUT", url: "https://signed.example/mask-e2e.png?write=1" } } });
   });
+  await page.route("**/api/files/mask-e2e/complete", route => route.fulfill({ json: maskFile }));
   await page.route("https://signed.example/mask-e2e.png?write=1", (route) => {
     const png = route.request().postDataBuffer();
     uploadCount += 1;
@@ -164,8 +165,8 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await expect(workspace.getByRole("alert")).toContainText("模拟修改任务创建失败");
   await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toBeDisabled();
   expect(mocked.executions[0]?.params).not.toHaveProperty("palette");
-  expect(mocked.executions[0]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", prompt: "将领口改成窄驳领，保持原有面料", maskImageUrl: "https://signed.example/mask-e2e.png?read=1", width: 768, height: 1024 } });
-  await workspace.getByRole("button", { name: "重试执行当前修改节点" }).click();
+  expect(mocked.executions[0]).toMatchObject({ parentAssetId: "asset-source", params: { taskType: "inpaint", prompt: "将领口改成窄驳领，保持原有面料", mask: { fileAssetId: "mask-e2e" }, width: 768, height: 1024 } });
+  await workspace.getByRole("button", { name: "重试局部重绘" }).click();
   await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
@@ -221,13 +222,13 @@ test("变体修改方向与保留项需显式确认，图冲突和执行失败�
   await expect(workspace.getByRole("alert")).toContainText("模拟图修订冲突");
   expect(mocked.executions).toHaveLength(0);
   mocked.failExecution();
-  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await workspace.getByRole("button", { name: "重试生成变体" }).click();
   await expect(workspace.getByRole("alert")).toContainText("模拟修改任务创建失败");
   expect(mocked.patchRequests).toHaveLength(2);
-  expect(mocked.patchRequests[1]?.mutationId).not.toBe(mocked.patchRequests[0]?.mutationId);
+  expect(mocked.patchRequests[1]?.mutationId).toBe(mocked.patchRequests[0]?.mutationId);
   expect(mocked.patchRequests[1]?.operations).toEqual(mocked.patchRequests[0]?.operations);
   expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
-  await workspace.getByRole("button", { name: "重试执行当前变体节点" }).click();
+  await workspace.getByRole("button", { name: "重试生成变体" }).click();
   await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
@@ -257,7 +258,7 @@ test("变体分支已提交但响应丢失时，重试认领原节点且只执�
   await expect(workspace.getByRole("alert")).toBeVisible();
   expect(mocked.getGraph().nodes.filter((item) => item.type === "edit_design")).toHaveLength(1);
   expect(mocked.executions).toHaveLength(0);
-  await workspace.getByRole("button", { name: "确认生成变体" }).click();
+  await workspace.getByRole("button", { name: "重试生成变体" }).click();
   await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(workspace).toBeHidden();
@@ -269,3 +270,6 @@ test("变体分支已提交但响应丢失时，重试认领原节点且只执�
   expect(mocked.executions[0]?.parentAssetId).toBe("asset-source");
   expect(mocked.getGraph().nodes.filter((item) => item.type === "candidate")).toHaveLength(2);
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });

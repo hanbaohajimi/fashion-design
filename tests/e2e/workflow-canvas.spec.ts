@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { valueControl, chooseValue } from "./choice-control";
 import { closeNodeDetails, openImageDetails, hideDevelopmentChrome } from "./workflow-navigation";
 import { expect, test, type Locator, type Page } from "@playwright/test";
@@ -1483,6 +1484,7 @@ test("Atelier 精修：图像菜单使用可读语义色和一致图标，关闭
 });
 
 async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workflow") {
+  await seedNodeInteraction(page);
   await seedReturningFeatureGuideUser(page, ["e2e-user", "a", "b"]);
   await hideDevelopmentChrome(page);
   // Workflow labels use system fonts, matching the shared visual fixture. Avoid
@@ -2263,7 +2265,7 @@ test("功能指引隔离画布快捷键，退出后保留原有连线选择", as
   const writes: string[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method())) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method()) && !new URL(request.url()).pathname.endsWith("/canvas/initialize")) {
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
     }
     await route.fallback();

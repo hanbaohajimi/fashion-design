@@ -10,9 +10,7 @@ type Graph = { revision: number; layoutRevision: number; nodes: Node[]; edges: {
 
 test("真实登录、上传、执行、刷新、副本继续设计、系列扩展和后台导出", async ({ page }, testInfo) => {
   test.skip(process.env.TRIAL_E2E !== "1", "只能通过隔离验收启动器运行");
-  // This queue/storage scenario exercises the explicit workflow editor, while
-  // the default workbench is covered by the visual browser matrix.
-  await page.addInitScript(() => sessionStorage.setItem("fashion:canvas-view", "workflow"));
+  // Exercise the new canvas against real auth, DB, queue and private storage.
   const email = `trial-${randomUUID()}@example.com`;
   await page.goto("/login");
   await page.getByLabel("邮箱地址").fill(email);
@@ -41,7 +39,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   await page.getByRole("button", { name: "创建项目", exact: true }).click();
   const project = await (await created).json() as { id: string };
   await page.goto(`/${project.id}`);
-  await expect(page.getByRole("region", { name: "设计工作流画布" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "白板工具" })).toBeVisible();
   const origin = "http://localhost:4300";
   const json = async (path: string, data?: unknown, method = "POST") => {
     const response = await page.request.fetch(`/api${path}`, { method, ...(data ? { data } : {}), headers: { Origin: origin, "Idempotency-Key": randomUUID() } });
@@ -49,43 +47,43 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
     return response.json();
   };
   const graph = async (id: string): Promise<Graph> => json(`/projects/${id}/workflow/sync`, undefined, "GET") as Promise<Graph>;
-  const patch = async (id: string, operations: unknown[]) => {
-    const current = await graph(id);
-    return json(`/projects/${id}/workflow`, { mode: "semantic", baseRevision: current.revision, mutationId: randomUUID(), operations }, "PATCH") as Promise<Graph>;
-  };
+  const command = async (id: string, data: unknown) => json(`/projects/${id}/canvas/commands`, data) as Promise<{ nodeId: string; graph: Graph }>;
   // Real signed upload from the browser; no platform route interception.
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
+  const classified = page.waitForResponse(response => response.url().endsWith("/infer-role"));
   await page.getByRole("button", { name: /上传图片/u }).click();
   await (await chooser).setFiles({ name: "trial-reference.png", mimeType: "image/png", buffer: png });
   await expect.poll(async () => (await graph(project.id)).nodes.filter((node) => node.type === "reference_image").length).toBe(1);
   const reference = (await graph(project.id)).nodes.find((node) => node.type === "reference_image")!;
+  await classified;
   const beforeLayout = await graph(project.id);
-  const layoutRequest = { mode: "layout", baseLayoutRevision: beforeLayout.layoutRevision, mutationId: randomUUID(), positions: [{ nodeId: reference.id, x: 160, y: 220 }] };
-  await json(`/projects/${project.id}/workflow`, layoutRequest, "PATCH");
-  // Replaying a save after a lost response must keep the same layout revision.
-  await json(`/projects/${project.id}/workflow`, layoutRequest, "PATCH");
-  const afterLayout = await graph(project.id);
-  expect(afterLayout.layoutRevision).toBe(beforeLayout.layoutRevision + 1);
-  expect(afterLayout.nodes.find((node) => node.id === reference.id)).toMatchObject({ x: 160, y: 220 });
-  const goal = randomUUID(), analysis = randomUUID();
-  const node = (id: string, kind: string, type: string, title: string, payload: unknown, x: number) => ({ type: "add_node", node: { id, kind, type, title, payload, x, y: 100 } });
-  const edge = (sourceNodeId: string, targetNodeId: string, targetPort: string) => ({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId, targetNodeId, sourcePort: "out", targetPort } });
-  await patch(project.id, [node(goal, "asset", "brief", "设计目标", { text: "藏蓝通勤外套" }, 80),
-    node(analysis, "tool", "analyze_brief", "试用需求分析", { toolKey: "analyze_brief", toolVersion: "1", params: { prompt: "整理设计目标" } }, 430), edge(goal, analysis, "goal")]);
-  await json(`/projects/${project.id}/workflow/nodes/${analysis}/execute`, { mutationId: randomUUID() });
-  const constraint = (await graph(project.id)).nodes.find((item) => item.type === "constraint")!;
-  expect(constraint).toBeTruthy();
-  const generator = randomUUID();
-  await patch(project.id, [node(generator, "tool", "generate_design", "试用生成", { toolKey: "generate_design", toolVersion: "1", params: { prompt: "藏蓝通勤外套", count: 1 } }, 1100), edge(constraint.id, generator, "constraint"), edge(reference.id, generator, "reference")]);
-  await page.reload();
-  await page.getByRole("button", { name: "适合画布" }).click();
-  await page.getByRole("group", { name: "设计节点 试用生成", exact: true }).dblclick();
-  await page.getByRole("button", { name: "确认并执行", exact: true }).click();
+  const material = page.locator(`[data-canvas-node-id="${reference.id}"]`);
+  await expect(material).toBeVisible();
+  const bounds = await material.boundingBox();
+  if (!bounds) throw new Error("上传素材尚未投影到白板");
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 + 45, bounds.y + bounds.height / 2 + 30, { steps: 5 }); await page.mouse.up();
+  type Canvas = { revision: number; snapshot: { document?: { store: Record<string, { typeName: string; x?: number; y?: number }> } }; bindings: { shapeId: string; nodeId: string; removed: boolean }[] };
+  const canvas = async (): Promise<Canvas> => json(`/projects/${project.id}/canvas`, undefined, "GET");
+  await expect.poll(async () => Boolean((await canvas()).snapshot.document)).toBe(true);
+  const saved = await canvas();
+  const layoutRequest = { baseRevision: saved.revision, mutationId: randomUUID(), snapshot: saved.snapshot, bindings: saved.bindings.filter(binding => !binding.removed).map(({ shapeId, nodeId }) => ({ shapeId, nodeId })) };
+  await json(`/projects/${project.id}/canvas`, layoutRequest, "PATCH");
+  await json(`/projects/${project.id}/canvas`, layoutRequest, "PATCH");
+  expect((await canvas()).revision).toBe(saved.revision + 1);
+  expect((await graph(project.id)).revision).toBe(beforeLayout.revision);
+  const forbidden = await page.request.patch(`/api/projects/${project.id}/workflow`, { data: { mode: "layout", baseLayoutRevision: 0, mutationId: randomUUID(), positions: [{ nodeId: reference.id, x: 160, y: 220 }] }, headers: { Origin: origin } });
+  expect(forbidden.status()).toBe(403);
+  const goal = await command(project.id, { type: "create_material", mutationId: randomUUID(), materialType: "brief", title: "设计目标", payload: { text: "藏蓝通勤外套" } });
+  const generation = { type: "run_tool", mutationId: randomUUID(), toolKey: "generate_design", title: "试用生成", parameters: { prompt: "藏蓝通勤外套", count: 1 }, inputs: [{ nodeId: goal.nodeId, port: "goal" }, { nodeId: reference.id, port: "reference" }] };
+  const first = await command(project.id, generation);
+  expect((await command(project.id, generation)).nodeId).toBe(first.nodeId);
   await expect.poll(async () => (await graph(project.id)).nodes.filter((item) => item.type === "candidate").length, { timeout: 90000 }).toBe(1);
   await page.reload();
-  await expect(page.locator('[data-type="candidate"][data-status="completed"]')).toHaveCount(1);
+  const firstCandidate = (await graph(project.id)).nodes.find(node => node.type === "candidate")!;
+  await expect(page.locator(`[data-canvas-node-id="${firstCandidate.id}"]`)).toBeVisible();
   const before = await graph(project.id);
   const copy = await json(`/projects/${project.id}/duplicate`, {}) as { id: string };
   const copied = await graph(copy.id);
@@ -93,9 +91,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   expect(copied.edges).toHaveLength(before.edges.length);
   expect(copied.nodes.every((item) => !before.nodes.some((old) => old.id === item.id))).toBe(true);
   const copiedConstraint = copied.nodes.find((item) => item.type === "constraint")!;
-  const next = randomUUID();
-  await patch(copy.id, [node(next, "tool", "generate_design", "副本继续生成", { toolKey: "generate_design", toolVersion: "1", params: { prompt: "藏蓝通勤外套新分支", count: 1 } }, 2300), edge(copiedConstraint.id, next, "constraint")]);
-  await json(`/projects/${copy.id}/workflow/nodes/${next}/execute`, { mutationId: randomUUID() });
+  const { nodeId: next } = await command(copy.id, { type: "run_tool", mutationId: randomUUID(), toolKey: "generate_design", title: "副本继续生成", parameters: { prompt: "藏蓝通勤外套新分支", count: 1 }, inputs: [{ nodeId: copiedConstraint.id, port: "constraint" }] });
   await expect.poll(async () => (await graph(copy.id)).nodes.filter((item) => item.type === "candidate").length, { timeout: 90000 }).toBe(2);
   const finished = await graph(copy.id);
   const recoveryOutput = finished.edges.find((item) => item.sourceNodeId === next)?.targetNodeId;
@@ -121,11 +117,12 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   expect((await replay.json() as { id: string }).id).toBe(queuedExport.id);
   await expect.poll(async () => (await json(`/exports/${queuedExport.id}`, undefined, "GET") as { status: string }).status).toBe("succeeded");
   await page.goto(`/${copy.id}`);
-  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.getByRole("button", { name: "查看全部", exact: true }).click();
   const primaryCandidate = copied.nodes.find((item) => item.type === "candidate");
   if (!primaryCandidate) throw new Error("副本缺少原候选");
-  const primaryCard = page.locator(`[data-shape-id="shape:workflow-node-${primaryCandidate.id}"] [data-type="candidate"]`);
-  await primaryCard.dblclick();
+  const primaryCard = page.locator(`[data-canvas-node-id="${primaryCandidate.id}"]`);
+  const openCandidate = async () => { await expect(primaryCard).toBeVisible(); const bounds = await primaryCard.boundingBox(); if (!bounds) throw new Error("候选未显示"); await page.mouse.dblclick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2); };
+  await openCandidate();
   await page.getByRole("button", { name: "图像", exact: true }).click();
   await page.getByRole("button", { name: "更多导出选项", exact: true }).click();
   await page.getByRole("button", { name: "开始导出", exact: true }).click();
@@ -135,7 +132,7 @@ test("真实登录、上传、执行、刷新、副本继续设计、系列扩�
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
   await expect(page.getByRole("button", { name: "关闭菜单" })).toBeVisible();
   await page.getByRole("button", { name: "关闭菜单" }).click();
-  await primaryCard.dblclick();
+  await openCandidate();
   await page.getByRole("button", { name: "图像", exact: true }).click();
   await page.getByRole("button", { name: "更多导出选项", exact: true }).click();
   await expect(page.getByRole("link", { name: "下载 PNG" })).toBeVisible();

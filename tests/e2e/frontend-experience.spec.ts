@@ -1,3 +1,4 @@
+import { seedNodeInteraction } from "./node-stage-fixture";
 import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
@@ -112,6 +113,7 @@ async function mockWorkspace(page: Page, status = "running") {
   };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path.includes("/canvas")) return route.fallback();
     if (path === "/api/me")
       return route.fulfill({
         json: { user, credits: { limit: 100, used: 0, remaining: 100 } },
@@ -438,3 +440,6 @@ test("工具节点隐藏状态，详情保留任务反馈并兼容减少动画",
       .getByRole("status"),
   ).toContainText("处理中");
 });
+
+
+test.beforeEach(async ({ page }) => { await seedNodeInteraction(page); });
