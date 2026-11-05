@@ -35,3 +35,5 @@
 远端检查以 [`canvas-workspace` 的 GitHub Actions 记录](https://github.com/hanbaohajimi/fashion-design/actions?query=branch%3Acanvas-workspace) 为准；本地测试结果不替代远端 CI。发布时应核对对应提交的两个任务均结束并成功：完整质量/集成/浏览器/截图任务，以及隔离真实应用任务。
 
 首轮远端完整浏览器回归为 399 项通过、14 项按原条件跳过，隔离真实应用任务通过。视觉回归中 68 项通过，任务失败界面用例因 Docker HTTP 测试环境缺少 Web Crypto、且仍拦截旧接口而失败。该用例已改为使用 Node 原生加密能力和新的白板命令接口；在固定浏览器环境中定向复测通过，保留原截图基线。修复提交继续执行完整远端 CI。
+
+第二轮远端发现白板复制测试在异步剪贴板写入完成前就发送粘贴，以及手机原型测试可能在 React 初始化前填写草稿。测试分别等待真实剪贴板内容和响应式初始化，未改动业务代码或放宽断言。修复后的白板与三种屏宽场景在 Linux Chromium 中各连续执行三次，12 项通过（56.9 秒），日志为 `output/canvas-linux-repro.log`；完整远端结果仍以对应提交的 Actions 记录为准。

@@ -137,7 +137,19 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await expect.poll(async () => (await image.boundingBox())?.x).not.toBe(bounds.x);
   await expect.poll(() => saves.length).toBeGreaterThan(beforeDrag);
   expect(commands).toHaveLength(0);
+  await page.evaluate(() => navigator.clipboard.writeText(""));
   await page.keyboard.press("Control+c");
+  // Copy resolves assets and writes the clipboard asynchronously. Wait for the
+  // actual native clipboard payload before issuing the separate paste gesture.
+  await expect.poll(() => page.evaluate(async () => {
+    for (const item of await navigator.clipboard.read()) {
+      if (item.types.includes("text/html")) {
+        const html = await (await item.getType("text/html")).text();
+        if (html.includes("data-tldraw")) return true;
+      }
+    }
+    return false;
+  })).toBe(true);
   await page.keyboard.press("Control+v");
   await expect(image).toHaveCount(2);
   await expect.poll(() => document.bindings.filter(binding => binding.nodeId === "candidate" && !binding.removed).length).toBe(2);

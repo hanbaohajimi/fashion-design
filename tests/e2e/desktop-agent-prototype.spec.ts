@@ -6,6 +6,15 @@ for (const width of [1440, 900, 390]) {
     await seedVisualApp(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/prototypes/desktop-agent-ui");
+    // The server-rendered textarea is visible before React attaches onChange.
+    // Wait for responsive initialization, or exercise a desktop state control.
+    if (width < 1000) {
+      await expect(page.locator("[data-split-docked]")).toHaveAttribute("data-split-docked", "false");
+    } else {
+      const technicalView = page.getByRole("button", { name: "技术包", exact: true });
+      await technicalView.click();
+      await expect(technicalView).toHaveAttribute("aria-pressed", "true");
+    }
     const input = page.getByRole("textbox", { name: "描述设计需求" });
     await expect(input).toBeVisible();
     await input.fill("原型草稿");
