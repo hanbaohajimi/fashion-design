@@ -57,11 +57,11 @@
 }
 .garment[data-rack-turn] .sideImage {
   transform-origin: var(--side-anchor-x) var(--side-anchor-y);
-  transform: translate(calc(-1 * var(--side-anchor-x)), calc(-1 * var(--side-anchor-y))) rotateY(var(--side-turn-angle));
+  transform: translate(calc(-1 * var(--side-anchor-x)), calc(-1 * var(--side-anchor-y))) rotateY(var(--side-turn-angle, 0deg));
   transition: transform var(--rack-turn-duration) var(--rack-turn-ease), opacity 210ms cubic-bezier(.65, 0, .45, 1);
 }
 .garment[data-rack-turn][data-view="side"] .garmentImage {
-  transform: translate(calc(-1 * var(--anchor-x)), calc(-1 * var(--anchor-y))) rotateY(var(--front-turn-angle));
+  transform: translate(calc(-1 * var(--anchor-x)), calc(-1 * var(--anchor-y))) rotateY(var(--front-turn-angle, 0deg));
   transition-timing-function: var(--rack-turn-ease), cubic-bezier(.65, 0, .45, 1);
   transition-duration: var(--rack-turn-duration), 210ms;
 }
@@ -92,7 +92,7 @@
 .focusStage { position: relative; height: var(--focus-height, 430px); min-height: 280px; margin-top: 20px; container-type: inline-size; }
 .focusStage .garment { top: 16px; height: 430px; }
 .focusPiece { position: absolute; top: 0; left: 50%; width: 100px; height: 430px; transform: translateX(-50%); transform-origin: 0 0; }
-.focusStage .garment { --piece-size: min(var(--piece-width), calc(70vw / var(--content-width)), calc((100cqw - 16px) / var(--focus-span-ratio))); }
+.focusStage .garment { --piece-size: min(var(--piece-width), calc(70vw / var(--content-width)), calc((100cqw - 16px) / var(--focus-span-ratio, 1))); }
 .focusStage .garment[data-display="shelf"] { --support-offset: max(24px, calc(max(0px, (240px - var(--piece-size) / var(--piece-ratio) * var(--content-height, 1)) / 2) + var(--piece-size) / var(--piece-ratio) * var(--front-above-mount, 1) - var(--hardware-size) * var(--hardware-anchor-y))); }
 .previous, .next { position: absolute; top: 45%; z-index: 2; }
 .previous { left: 0; }
