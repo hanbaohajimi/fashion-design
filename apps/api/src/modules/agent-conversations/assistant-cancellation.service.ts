@@ -24,7 +24,7 @@ export class AssistantCancellationService {
       if (message.reply.status !== "PENDING") return { status: message.reply.status.toLowerCase(), messageId: message.reply.id, canceled: message.reply.status === "CANCELED" };
       const turn = await tx.agentTurn.findUnique({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: requestId } } });
       if (turn) {
-        await tx.agentTurn.updateMany({ where: { id: turn.id, status: { in: ["pending", "running", "committing"] } }, data: { status: "canceled", leaseToken: null, leaseExpiresAt: null, error: "用户停止回复" } });
+        await tx.agentTurn.updateMany({ where: { id: turn.id, status: { in: ["pending", "running", "committing", "dispatching"] } }, data: { status: "canceled", leaseToken: null, leaseExpiresAt: null, error: "用户停止回复" } });
         if (turn.leaseToken) await tx.agentConversation.updateMany({ where: { id: conversationId, activeTurnId: turn.leaseToken }, data: { activeTurnId: null, activeTurnStartedAt: null, intentEpoch: { increment: 1 } } });
       }
       await tx.agentMessage.updateMany({ where: { id: message.reply.id, status: "PENDING" }, data: { status: "CANCELED", content: partial ?? message.reply.content, errorCode: "ASSISTANT_CANCELED", errorMessage: "已停止本系统后续处理，已收到的内容尚未完成校验" } });

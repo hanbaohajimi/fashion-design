@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -23,6 +24,7 @@ import {
   workflowRejectSchema,
 } from "./workflow-runtime.schemas";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
+import { CanvasService } from "../canvas/canvas.service";
 
 const idSchema = z.string().trim().min(1).max(128);
 
@@ -48,6 +50,7 @@ export class WorkflowRuntimeController {
   constructor(
     @Inject(WorkflowRuntimeService)
     private readonly runtime: WorkflowRuntimeService,
+    @Inject(CanvasService) private readonly canvas: CanvasService,
   ) {}
 
   @Get("tools")
@@ -72,11 +75,12 @@ export class WorkflowRuntimeController {
   }
 
   @Post("proposals")
-  propose(
+  async propose(
     @CurrentUser() user: AuthenticatedUser,
     @Param("projectId") projectId: string,
     @Body() body: unknown,
   ) {
+    if ((await this.canvas.read(user.userId, projectId)).mode === "canvas") throw new ForbiddenException("请通过设计助手发送明确指令，流程图不可编辑");
     return this.runtime.propose(
       user.userId,
       parse(idSchema, projectId),
@@ -85,12 +89,13 @@ export class WorkflowRuntimeController {
   }
 
   @Post("proposals/:proposalId/accept")
-  accept(
+  async accept(
     @CurrentUser() user: AuthenticatedUser,
     @Param("projectId") projectId: string,
     @Param("proposalId") proposalId: string,
     @Body() body: unknown,
   ) {
+    if ((await this.canvas.read(user.userId, projectId)).mode === "canvas") throw new ForbiddenException("流程图不可手动加入步骤，请通过设计助手继续创作");
     return this.runtime.accept(
       user.userId,
       parse(idSchema, projectId),

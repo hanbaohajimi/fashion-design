@@ -99,6 +99,7 @@ export class WorkflowsService {
   ): Promise<WorkflowGraphResult> {
     const project = await this.assertProject(projectId, userId, undefined, "edit");
     if (project.archived) throw archivedProject();
+    if (project.canvasInteractionMode === "canvas") throw new ForbiddenException({ code: "WORKFLOW_READ_ONLY", message: "流程图为只读视图，请通过白板业务操作继续创作" });
     return this.applyPatch(projectId, userId, input, false);
   }
 
@@ -140,7 +141,13 @@ export class WorkflowsService {
 
     try {
       const commit = async (transaction: WorkflowTransaction) => {
-        if (!system) await this.access.require(ownerId, projectId, "edit", transaction);
+        if (!system) {
+          // Serialize the legacy write boundary with canvas initialization and mode changes.
+          await transaction.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${projectId}), hashtext('canvas-document'))`;
+          const project = await this.assertProject(projectId, ownerId, transaction, "edit");
+          if (project.archived) throw archivedProject();
+          if (project.canvasInteractionMode === "canvas") throw new ForbiddenException({ code: "WORKFLOW_READ_ONLY", message: "流程图为只读视图，请通过白板业务操作继续创作" });
+        }
         // Match the Coordinator's lock order: conversation, context, graph.
         const acceptanceCandidate = proposalId ? await transaction.workflowProposal.findFirst({ where: { id: proposalId, projectId, status: "pending" } }) : null;
         let acceptanceIntentEpoch: number | null = null;
@@ -722,11 +729,12 @@ export class WorkflowsService {
     userId?: string,
     transaction?: WorkflowTransaction,
     action: ProjectAction = "read",
-  ): Promise<{ readonly archived: boolean; readonly ownerId: string; readonly canEdit: boolean }> {
+  ): Promise<{ readonly archived: boolean; readonly ownerId: string; readonly canEdit: boolean; readonly canvasInteractionMode: string }> {
     const project = await (transaction ?? this.database).project.findUnique({
       where: { id: projectId },
       select: {
         archived: true,
+        canvasInteractionMode: true,
         deletedAt: true,
         workspace: { select: { ownerId: true } },
       },
@@ -738,7 +746,7 @@ export class WorkflowsService {
       });
     }
     const permission = userId ? await this.access.require(userId, projectId, action, transaction) : null;
-    return { archived: project.archived, ownerId: project.workspace.ownerId, canEdit: permission?.capabilities.edit ?? true };
+    return { archived: project.archived, ownerId: project.workspace.ownerId, canEdit: permission?.capabilities.edit ?? true, canvasInteractionMode: project.canvasInteractionMode };
   }
 
   private async readGraph(projectId: string, suppliedTransaction?: WorkflowTransaction): Promise<WorkflowGraphResult> {

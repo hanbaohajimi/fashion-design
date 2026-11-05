@@ -1,4 +1,7 @@
 import { ProjectAccessModule } from "../studio/project-access.module";
+import { CanvasModule } from "../canvas/canvas.module";
+import { CanvasCommandService } from "./canvas-command.service";
+import { CanvasCommandsController } from "./canvas-commands.controller";
 import { AssistantStreamsModule } from "../agent-conversations/assistant-streams.module";
 import { ImageTransformQueue } from "./image-transform-queue.service";
 import { prisma } from "@fashion/db";
@@ -24,7 +27,7 @@ import {
 } from "./workflow-runtime.service";
 
 @Module({
-  imports: [ProjectAccessModule,
+  imports: [ProjectAccessModule, CanvasModule,
     AssistantStreamsModule,
     AiModule,
     FilesModule,
@@ -36,9 +39,10 @@ import {
     VisualContextModule,
     ExportsModule,
   ],
-  controllers: [WorkflowRuntimeController, WorkflowAssistantController],
+  controllers: [WorkflowRuntimeController, WorkflowAssistantController, CanvasCommandsController],
   providers: [
     WorkflowRuntimeService,
+    CanvasCommandService,
     ImageTransformQueue,
     WorkflowAssistantService,
     WorkflowCoordinator,

@@ -95,6 +95,7 @@ export const plannerDecisionSchema = z.object({
   kind: z.enum(["reply", "clarify", "read", "propose"]),
   message: z.string().trim().min(1).max(5_000),
   action: workflowActionSchema.nullable().default(null),
+  execution: z.object({ requested: z.boolean(), operation: workflowToolKeySchema.nullable(), sourceQuote: z.string().max(4_000).nullable(), parameters: z.record(z.string(), z.unknown()) }).strict().default({ requested: false, operation: null, sourceQuote: null, parameters: {} }),
   understanding: plannerUnderstandingSchema.default({ currentStepGoal: "", requestType: "discussion", changesTask: false, evidenceRefs: [], openQuestions: [] }),
   plan: collaborationPlanSchema.nullable().default(null),
   reads: z.array(plannerReadSchema).max(4).default([]),
@@ -119,7 +120,7 @@ export function workflowActionFingerprint(action: WorkflowAction): string {
 export function parsePlannerDecision(value: unknown): PlannerDecision {
   if (!value || typeof value !== "object" || Array.isArray(value)) return plannerDecisionSchema.parse(value);
   const normalized = { ...value } as Record<string, unknown>;
-  for (const key of ["plan", "action", "understanding", "reads", "objectiveUpdate", "preferences"]) {
+  for (const key of ["plan", "action", "understanding", "reads", "objectiveUpdate", "preferences", "execution"]) {
     if (typeof normalized[key] !== "string") continue;
     try {
       const parsed: unknown = JSON.parse(normalized[key]);

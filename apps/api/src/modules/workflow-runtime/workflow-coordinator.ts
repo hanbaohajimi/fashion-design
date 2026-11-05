@@ -12,6 +12,7 @@ import { WorkflowsService } from "../workflows/workflows.service";
 import { compileWorkflowAction, workflowActionFingerprint, parsePlannerDecision, plannerDecisionSchema, projectPlannerVisualIndex,
   WORKFLOW_PLANNER_INSTRUCTIONS, type PlannerDecision } from "./workflow-planner";
 import { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
+import { CANVAS_EXECUTION_INSTRUCTIONS } from "./direct-execution";
 import { applyWorkflowReadPolicy, WorkflowReadGateway, type ReadPolicy } from "./workflow-read-gateway";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -51,6 +52,7 @@ export class WorkflowCoordinator {
       return ms;
     };
     remaining();
+    const canvasMode = (await this.database.project.findUnique({ where: { id: input.projectId }, select: { canvasInteractionMode: true } }))?.canvasInteractionMode === "canvas";
     const built = await this.contexts.build(input.userId, input.projectId, {
       ...(input.conversationId ? { conversationId: input.conversationId } : {}), referencedNodeIds: input.referencedNodeIds,
       ...(input.focusNodeIds ? { focusNodeIds: input.focusNodeIds } : {}),
@@ -111,7 +113,7 @@ export class WorkflowCoordinator {
       try {
         decision = parsePlannerDecision(await generate({ schemaName: "fashion_workflow_collaboration",
           signal, timeoutMs,
-          instructions: `${WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。read只请求项目内补读，不能执行设计工具。当前计划是可修订目标，只有下一项动作可以成为待审提案。\n后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好。`,
+          instructions: `${canvasMode ? WORKFLOW_PLANNER_INSTRUCTIONS.replace("不执行工具、不采用/否决候选，不声称生成已经发生。建议需用户确认加入画布，生图需再主动执行。", CANVAS_EXECUTION_INSTRUCTIONS) : WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好，execution.requested=false。`,
           jsonSchema: z.toJSONSchema(plannerDecisionSchema), maxTokens: 6_000, images: attached.images,
           prompt: JSON.stringify({ request: input.request, trigger: input.trigger ?? "user", context: { ...projectedContext.context, imageBindings: attached.imageBindings, visualCoverage: attached.coverage },
             contextSlots: projectedContext.slots, tools, previousPlan: projectedContext.previousPlan ?? null, readResults,

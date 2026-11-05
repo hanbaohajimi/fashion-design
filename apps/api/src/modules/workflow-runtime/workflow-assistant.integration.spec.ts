@@ -5,6 +5,9 @@ import { WorkflowsService } from "../workflows/workflows.service";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 import { WorkflowAssistantService } from "./workflow-assistant.service";
 import { parsePlannerDecision } from "./workflow-planner";
+import { CanvasService } from "../canvas/canvas.service";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { CanvasCommandService } from "./canvas-command.service";
 
 const workflows = new WorkflowsService(prisma);
 const contexts = new DesignContextService(prisma, workflows);
@@ -33,7 +36,7 @@ async function harness() {
     ...([[ids.c1, ids.g1, "constraint"], [ids.g1, ids.a, "source"], [ids.c2, ids.g2, "constraint"], [ids.g2, ids.b, "source"]] as const).map(([sourceNodeId, targetNodeId, targetPort]) => ({ type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId, targetNodeId, sourcePort: "out" as const, targetPort } })),
   ] });
   const model = { generateJson: vi.fn(async (request: { parse: (value: unknown) => unknown }) => request.parse(reply)) };
-  const generation = { createFromAgent: vi.fn() };
+  const generation = { createFromAgent: vi.fn(), get: vi.fn(async () => ({ status: "queued" })) };
   const visual = { enrich: vi.fn(async () => ({ index: [], images: [], imageBindings: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } })) };
   const runtime = new WorkflowRuntimeService(prisma, workflows, generation as never, model as never, {} as never, {} as never);
   const assistant = new WorkflowAssistantService(prisma, workflows, runtime, contexts, visual as never, model as never);
@@ -59,6 +62,75 @@ afterEach(async () => { for (const id of cleanup.splice(0)) {
 } });
 
 describe("persistent workflow collaboration", () => {
+  it("analyzes a brief and generates in one explicit request, with one bounded continuation", async () => {
+    const h = await harness();
+    const access = new ProjectAccessPolicy(prisma);
+    const canvas = new CanvasService(prisma, access, workflows);
+    await canvas.initialize(h.user.id, h.project.id);
+    const commands = new CanvasCommandService(canvas, workflows, h.runtime);
+    const assistant = new WorkflowAssistantService(prisma, workflows, h.runtime, contexts, h.visual as never, h.model as never, undefined, access, commands);
+    const content = "请根据这份需求生成两张风衣方案";
+    const decision = { ...parsePlannerDecision(reply), kind: "propose", message: "先整理需求并生成两张方案", execution: { requested: true, operation: "generate_design", sourceQuote: content, parameters: { prompt: content, count: 2 } }, action: { type: "create_tool", toolKey: "analyze_brief", toolVersion: "1", title: "分析风衣需求", parameters: { prompt: "保留藏蓝色立领" }, inputs: [{ nodeId: h.ids.brief, port: "goal" }], rationale: "生成前完成必要分析" } };
+    h.model.generateJson.mockImplementation(async request => {
+      const schema = (request as { schemaName?: string }).schemaName;
+      return request.parse(schema === "fashion_design_brief" ? { summary: "藏蓝色立领风衣", garmentType: "风衣", constraints: [{ id: "collar", dimension: "structure", requirement: "保持立领", mode: "preserve", priority: "must", origin: "explicit", verification: "visual", evidenceIds: [h.ids.brief], sourceQuote: "立领" }], unknowns: [] } : decision);
+    });
+    h.generation.createFromAgent.mockImplementation(async () => ({ taskId: (await prisma.generationTask.create({ data: { userId: h.user.id, projectId: h.project.id, taskType: "t2i", input: {} } })).id }));
+    const input = { clientRequestId: "canvas-analysis-then-generate", content, referencedNodeIds: [h.ids.brief] };
+    const result = await assistant.send(h.user.id, h.conversation.id, input);
+    expect(result.assistantMessage.kind, result.assistantMessage.content).toBe("reply");
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(2);
+    expect(h.model.generateJson).toHaveBeenCalledTimes(2);
+    await Promise.all([assistant.send(h.user.id, h.conversation.id, input), assistant.recoverStream(h.user.id, h.conversation.id, input.clientRequestId)]);
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(2);
+    expect(await prisma.workflowExecution.count({ where: { projectId: h.project.id } })).toBe(2);
+    expect(await prisma.workflowAttempt.count({ where: { projectId: h.project.id } })).toBe(3);
+  });
+
+  it.each(["不要生成图片", "如果生成三张方案会怎样", "先比较这两份约束"])("never executes an unsupported planner intent for %s", async content => {
+    const h = await harness();
+    const access = new ProjectAccessPolicy(prisma);
+    const canvas = new CanvasService(prisma, access, workflows);
+    await canvas.initialize(h.user.id, h.project.id);
+    const assistant = new WorkflowAssistantService(prisma, workflows, h.runtime, contexts, h.visual as never, h.model as never, undefined, access, new CanvasCommandService(canvas, workflows, h.runtime));
+    h.model.generateJson.mockImplementation(async request => request.parse({ ...parsePlannerDecision(reply), kind: "propose", execution: { requested: true, operation: "generate_design", sourceQuote: content, parameters: { prompt: content } }, action: { type: "create_tool", toolKey: "generate_design", toolVersion: "1", title: "生成", parameters: { prompt: content }, inputs: [{ nodeId: h.ids.c1, port: "constraint" }], rationale: "模拟不正确的自动执行建议" } }));
+    const before = await workflows.get(h.user.id, h.project.id);
+    const result = await assistant.send(h.user.id, h.conversation.id, { clientRequestId: crypto.randomUUID(), content, referencedNodeIds: [h.ids.c1] });
+    expect(result.assistantMessage.proposal).toBeNull();
+    expect(h.generation.createFromAgent).not.toHaveBeenCalled();
+    expect((await workflows.get(h.user.id, h.project.id)).nodes).toEqual(before.nodes);
+  });
+
+  it("executes an explicit canvas request once and freezes its inputs without proposal confirmation", async () => {
+    const h = await harness();
+    const access = new ProjectAccessPolicy(prisma);
+    const canvas = new CanvasService(prisma, access, workflows);
+    await canvas.initialize(h.user.id, h.project.id);
+    const commands = new CanvasCommandService(canvas, workflows, h.runtime);
+    const assistant = new WorkflowAssistantService(prisma, workflows, h.runtime, contexts, h.visual as never, h.model as never, undefined, access, commands);
+    const content = "请生成三张藏蓝色风衣方案";
+    const decision = { ...parsePlannerDecision(reply), kind: "propose", message: "正在筹备三张方案。", execution: { requested: true, operation: "generate_design", sourceQuote: content, parameters: { prompt: content, count: 3 } },
+      action: { type: "create_tool", toolKey: "generate_design", toolVersion: "1", title: "生成风衣", parameters: { prompt: content, count: 3 }, inputs: [{ nodeId: h.ids.c1, port: "constraint" }], rationale: "明确生成请求" } };
+    h.model.generateJson.mockImplementation(async request => request.parse(decision));
+    h.generation.createFromAgent.mockImplementation(async () => {
+      const task = await prisma.generationTask.create({ data: { userId: h.user.id, projectId: h.project.id, taskType: "t2i", input: {} } });
+      return { taskId: task.id };
+    });
+    const input = { clientRequestId: "canvas-direct-generation-1", content, referencedNodeIds: [h.ids.c1] };
+    const result = await assistant.send(h.user.id, h.conversation.id, input);
+    expect(result.assistantMessage.status).toBe("completed");
+    expect(result.assistantMessage.kind, result.assistantMessage.content).toBe("reply");
+    expect(result.assistantMessage.proposal).toBeNull();
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(3);
+    await assistant.send(h.user.id, h.conversation.id, input);
+    await assistant.recoverStream(h.user.id, h.conversation.id, input.clientRequestId);
+    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(3);
+    const attempts = await prisma.workflowAttempt.findMany({ where: { projectId: h.project.id } });
+    expect(attempts).toHaveLength(3);
+    expect(attempts[0]?.requestSnapshot).toMatchObject({ inputSnapshot: [{ id: h.ids.c1, nodeVersionId: expect.any(String) }] });
+    expect(await prisma.workflowExecution.count({ where: { projectId: h.project.id } })).toBe(1);
+  });
+
   it("keeps turn-time reference names after renaming or deleting nodes and after reloading messages", async () => {
     const h = await harness();
     const result = await h.assistant.send(h.user.id, h.conversation.id, { clientRequestId: "reference-history-123", content: "比较这个候选", referencedNodeIds: [h.ids.a], focusNodeIds: [h.ids.a] });
@@ -295,12 +367,12 @@ describe("persistent workflow collaboration", () => {
     h.model.generateJson.mockImplementation(async (request) => request.parse(await new Promise((resolve) => { resolvers.push(resolve); })));
     const request = { clientRequestId: "same-request-retry-123", content: "总结设计过程", referencedNodeIds: [] };
     const older = h.assistant.send(h.user.id, h.conversation.id, request);
-    await vi.waitFor(() => expect(resolvers).toHaveLength(1));
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1), { timeout: 5_000 });
     const expired = new Date(Date.now() - 16 * 60_000);
     await prisma.agentConversation.update({ where: { id: h.conversation.id }, data: { activeTurnStartedAt: expired } });
     await prisma.agentMessage.updateMany({ where: { conversationId: h.conversation.id, status: "PENDING" }, data: { updatedAt: expired } });
     const retried = h.assistant.send(h.user.id, h.conversation.id, request);
-    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2), { timeout: 5_000 });
     resolvers[0]?.(reply);
     await older;
     // Both rows can share the transaction timestamp; UUID ordering does not identify the reply.

@@ -324,7 +324,7 @@ export class WorkflowRuntimeService {
     return this.sync(userId, projectId);
   }
 
-  async execute(userId: string, projectId: string, nodeId: string, input: WorkflowExecuteRequest) {
+  async execute(userId: string, projectId: string, nodeId: string, input: WorkflowExecuteRequest, guard?: { intentEpoch?: number; nodeVersions?: Record<string, string> }) {
     await this.access.require(userId, projectId, "edit");
     let graph: Graph = await this.sync(userId, projectId);
     const node = graph.nodes.find((item) => item.id === nodeId && item.kind === "tool");
@@ -372,8 +372,12 @@ export class WorkflowRuntimeService {
         if (!conversation) throw new BadRequestException("执行会话不属于当前项目或已归档");
         const locked = await tx.agentConversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
         intentEpoch = locked.intentEpoch;
+        if (guard?.intentEpoch !== undefined && guard.intentEpoch !== intentEpoch) throw new ConflictException("执行前设计意图已变化，请重新确认请求");
       }
       const versions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision);
+      for (const [inputNodeId, expectedVersion] of Object.entries(guard?.nodeVersions ?? {})) {
+        if (versions.get(inputNodeId)?.id !== expectedVersion) throw new ConflictException("执行输入的版本已变化，请重新确认素材");
+      }
       const current = await tx.workflowGraph.findUnique({ where: { projectId } });
       if (current?.revision !== graph.revision) throw new ConflictException("执行前画布已变化，请重新确认输入");
       const nodeVersionId = versions.get(nodeId)?.id;
@@ -680,6 +684,7 @@ export class WorkflowRuntimeService {
     const decision = await this.assets.decide(userId, input.assetId, { kind: input.kind, reason: input.reason.slice(0, 1_000), clientRequestId: input.mutationId });
     await this.database.$transaction((tx) => appendWorkflowOutbox(tx, { projectId, eventKey: `asset-decision:${decision.id}`, eventType: "asset.decision",
       payload: { decisionId: decision.id, nodeId, assetId: input.assetId, kind: input.kind, reason: input.reason, userId } }));
+    if (object(object(node.payload).decision).id === decision.id) return graph;
     return this.mutate(graph, [{ type: "update_node", nodeId, payload: { ...object(node.payload), decision: { id: decision.id, kind: input.kind, reason: input.reason } } }]);
   }
 

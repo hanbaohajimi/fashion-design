@@ -1,7 +1,7 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { workflowReferenceSummarySchema } from "@fashion/shared";
 import { buildWorkflowReferenceSummary } from "./workflow-reference-summary";
-import { AgentMessageRole, AgentMessageStatus, Prisma, appendWorkflowOutbox, type PrismaClient } from "@fashion/db";
+import { AgentMessageRole, AgentMessageStatus, Prisma, appendWorkflowOutbox, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
@@ -13,6 +13,9 @@ import type { PatchProjectDesignContextInput } from "../design-context/design-co
 import { WorkflowsService } from "../workflows/workflows.service";
 import { WORKFLOW_RUNTIME_DB, WorkflowRuntimeService } from "./workflow-runtime.service";
 import { WorkflowCoordinator, MAX_PLANNER_CALLS } from "./workflow-coordinator";
+import { CanvasCommandService } from "./canvas-command.service";
+import { allowsDirectExecution, directMutationId } from "./direct-execution";
+import { plannerDecisionSchema } from "./workflow-planner";
 
 const nodeId = z.string().trim().min(1).max(128);
 export const workflowMessageSchema = z.object({
@@ -52,6 +55,7 @@ export class WorkflowAssistantService {
     @Inject(AMUX_CLAUDE_CLIENT) private readonly model: AmuxClaudeJsonClient,
     @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
     @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
+    @Optional() @Inject(CanvasCommandService) private readonly canvasCommands?: CanvasCommandService,
   ) {}
 
   private async conversation(userId: string, id: string, write = false) {
@@ -138,7 +142,7 @@ export class WorkflowAssistantService {
   async messages(userId: string, conversationId: string, input: { cursor?: string | undefined; limit: number }) {
     const conversation = await this.conversation(userId, conversationId);
     const { capabilities } = await this.access.require(userId, conversation.projectId, "read");
-    if (capabilities.edit) await this.database.agentMessage.updateMany({ where: { conversationId, status: "PENDING", updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } },
+    if (capabilities.edit) await this.database.agentMessage.updateMany({ where: { conversationId, status: "PENDING", OR: [{ kind: null }, { kind: { not: "executing" } }], updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } },
       data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试", content: "本轮处理超时，请重试。" } });
     const rows = await this.database.agentMessage.findMany({ where: { conversationId }, include: { proposal: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: input.limit + 1,
@@ -148,6 +152,8 @@ export class WorkflowAssistantService {
   }
 
   async reapExpiredTurns() {
+    const dispatches = await this.database.agentMessage.findMany({ where: { status: "PENDING", kind: "executing" }, take: 20, include: { conversation: true } });
+    for (const message of dispatches) await this.resumeDirectExecution(message.conversation.createdById, message.id).catch(() => this.logger.warn("明确执行请求等待恢复"));
     const rows = await this.database.agentTurn.findMany({ where: { status: { in: ["running", "committing"] }, leaseExpiresAt: { lte: new Date() } },
       orderBy: [{ leaseExpiresAt: "asc" }, { id: "asc" }], take: 100 });
     for (const turn of rows) await this.database.$transaction(async (tx) => {
@@ -164,6 +170,7 @@ export class WorkflowAssistantService {
     await this.messages(userId, conversationId, { limit: 1 });
     const userMessage = await this.database.agentMessage.findUniqueOrThrow({ where: { conversationId_clientRequestId: { conversationId, clientRequestId } }, include: { reply: { include: { proposal: true } } } });
     if (!userMessage.reply) throw new BadRequestException("消息尚未受理");
+    if (userMessage.reply.kind === "executing" && userMessage.reply.status === "PENDING") return turnView({ userMessage, assistantMessage: await this.resumeDirectExecution(userId, userMessage.reply.id) }) as AssistantTurnView;
     return turnView({ userMessage, assistantMessage: userMessage.reply }) as AssistantTurnView;
   }
 
@@ -181,7 +188,7 @@ export class WorkflowAssistantService {
       const previous = await tx.agentMessage.findUnique({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: input.clientRequestId } }, include: { reply: { include: { proposal: true } } } });
       if (previous) {
         if (object(previous.context).requestFingerprint !== fingerprint) throw new ConflictException("请求编号已用于不同内容或引用");
-        if (previous.reply && previous.reply.status !== "FAILED" && !(previous.reply.status === "PENDING" && previous.reply.updatedAt.getTime() < Date.now() - TURN_TIMEOUT_MS))
+        if (previous.reply && previous.reply.status !== "FAILED" && !(previous.reply.status === "PENDING" && previous.reply.kind !== "executing" && previous.reply.updatedAt.getTime() < Date.now() - TURN_TIMEOUT_MS))
           return { userMessage: previous, assistantMessage: previous.reply, replay: true, lease, turnId: "", epoch: 0 };
       }
       this.validateReferences(graph.nodes, [...input.referencedNodeIds, ...(input.focusNodeIds ?? [])]);
@@ -192,13 +199,18 @@ export class WorkflowAssistantService {
         data: { activeTurnId: lease, activeTurnStartedAt: new Date(), intentEpoch: { increment: 1 } } });
       if (claimed.count !== 1) throw new ConflictException("上一条消息正在处理，请等待完成后再发送");
       if (background) await tx.agentTurn.updateMany({ where: { id: background.id, status: "running" }, data: { status: "superseded", error: "用户的新请求优先", leaseToken: null, leaseExpiresAt: null } });
-      await tx.agentMessage.updateMany({ where: { conversationId, status: "PENDING", updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } }, data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试" } });
+      await tx.agentMessage.updateMany({ where: { conversationId, status: "PENDING", OR: [{ kind: null }, { kind: { not: "executing" } }], updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } }, data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试" } });
       const epoch = (await tx.agentConversation.findUniqueOrThrow({ where: { id: conversationId } })).intentEpoch;
       const record = await tx.agentTurn.upsert({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: input.clientRequestId } },
         create: { projectId: conversation.projectId, conversationId, userId, clientRequestId: input.clientRequestId, intentEpoch: epoch, trigger: "user", status: "running", leaseToken: lease, leaseExpiresAt: new Date(Date.now() + TURN_TIMEOUT_MS) },
         update: { intentEpoch: epoch, status: "running", leaseToken: lease, leaseExpiresAt: new Date(Date.now() + TURN_TIMEOUT_MS), error: null } });
+      await tx.workflowGraph.upsert({ where: { projectId: conversation.projectId }, create: { projectId: conversation.projectId }, update: {} });
+      const frozenGraph = await tx.workflowGraph.updateMany({ where: { projectId: conversation.projectId, revision: graph.revision }, data: { updatedAt: new Date() } });
+      if (!frozenGraph.count) throw new ConflictException("素材在发送前发生变化，请核对引用后重新发送");
+      const versions = await ensureWorkflowNodeVersions(tx, conversation.projectId, graph.revision);
+      const referenceSnapshots = input.referencedNodeIds.map((id) => ({ nodeId: id, nodeVersionId: versions.get(id)?.id ?? null, assetId: object(versions.get(id)?.payload).assetId ?? null }));
       const userMessage = previous ?? await tx.agentMessage.create({ data: { conversationId, role: "USER", content: input.content,
-        turnId: record.id, clientRequestId: input.clientRequestId, context: json({ requestFingerprint: fingerprint, referencedNodeIds: input.referencedNodeIds, focusNodeIds: input.focusNodeIds ?? null, respondingToProposalId: input.respondingToProposalId ?? null, fileAssetIds: [], shapeIds: [] }) } });
+        turnId: record.id, clientRequestId: input.clientRequestId, context: json({ requestFingerprint: fingerprint, referenceSnapshots, referencedNodeIds: input.referencedNodeIds, focusNodeIds: input.focusNodeIds ?? null, respondingToProposalId: input.respondingToProposalId ?? null, fileAssetIds: [], shapeIds: [] }) } });
       const assistantMessage = previous?.reply
         ? await tx.agentMessage.update({ where: { id: previous.reply.id }, data: { turnId: record.id, status: "PENDING", content: "正在理解画布与设计过程…", errorCode: null, errorMessage: null, kind: null, proposalId: null } })
         : await tx.agentMessage.create({ data: { conversationId, turnId: record.id, role: "ASSISTANT", status: "PENDING", content: "正在理解画布与设计过程…", replyToId: userMessage.id } });
@@ -216,7 +228,7 @@ export class WorkflowAssistantService {
       }
       return { userMessage, assistantMessage, replay: false, lease, turnId: record.id, epoch };
     });
-    if (turn.replay) return turnView(turn);
+    if (turn.replay) return turnView({ ...turn, assistantMessage: turn.assistantMessage.kind === "executing" && turn.assistantMessage.status === "PENDING" ? await this.resumeDirectExecution(userId, turn.assistantMessage.id) : turn.assistantMessage });
     await observer?.accepted(turnView(turn) as AssistantTurnView);
     await observer?.phase("analyzing");
     try {
@@ -318,6 +330,8 @@ export class WorkflowAssistantService {
         });
       } });
     const { decision, built, visual } = result;
+    const canvasMode = (await this.database.project.findUnique({ where: { id: projectId }, select: { canvasInteractionMode: true } }))?.canvasInteractionMode === "canvas";
+    const direct = !observation && canvasMode && Boolean(this.canvasCommands) && allowsDirectExecution(input.content, decision);
     if (decision.kind === "read") throw new Error("补读尚未形成最终回复");
     const memoryOperations: PatchProjectDesignContextInput["operations"] = [];
     if (!observation && decision.objectiveUpdate) memoryOperations.push({ type: "set_objective", ...decision.objectiveUpdate, origin: "explicit" });
@@ -325,7 +339,7 @@ export class WorkflowAssistantService {
     const saved = await this.database.$transaction(async (tx) => {
       const claim = await tx.agentConversation.updateMany({ where: { id: conversationId, intentEpoch: turn.epoch, activeTurnId: turn.lease,
         activeTurnStartedAt: { gte: new Date(Date.now() - TURN_TIMEOUT_MS) }, archivedAt: null },
-        data: { activeTurnId: null, activeTurnStartedAt: null } });
+        data: direct ? { updatedAt: new Date() } : { activeTurnId: null, activeTurnStartedAt: null } });
       if (claim.count !== 1) throw new ConflictException("本轮已被更新的用户意图替代");
       const lease = await tx.agentTurn.updateMany({ where: { id: turn.turnId, status: "running", leaseToken: turn.lease }, data: { status: "committing" } });
       if (lease.count !== 1) throw new ConflictException("本轮租约已失效");
@@ -352,29 +366,110 @@ export class WorkflowAssistantService {
       if (!observation && decision.understanding.changesTask && decision.understanding.currentStepGoal)
         await tx.agentContextSummary.update({ where: { conversationId }, data: { currentTask: decision.understanding.currentStepGoal } });
       if (!observation) await tx.agentConversation.updateMany({ where: { id: conversationId, title: "新的设计对话" }, data: { title: input.content.slice(0, 24) } });
-      const proposal = decision.action ? await this.runtime.prepareAction(userId, projectId, {
+      const proposal = decision.action && (!canvasMode || direct) ? await this.runtime.prepareAction(userId, projectId, {
         content: input.content, referencedNodeIds: [...new Set([...input.referencedNodeIds, ...built.context.focusNodeIds])],
         mutationId: turn.lease, conversationId, graphRevision: built.graph.revision, contextRevision,
         ...(planRevision === undefined ? {} : { planRevision }), action: decision.action,
       }, tx) : null;
-      const data = { status: "COMPLETED" as const, role: "ASSISTANT" as const, kind: decision.kind, content: decision.message,
+      if (direct) {
+        const sent = await tx.agentMessage.findUniqueOrThrow({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: input.clientRequestId } } });
+        for (const reference of Array.isArray(object(sent.context).referenceSnapshots) ? object(sent.context).referenceSnapshots as unknown[] : []) {
+          const frozen = object(reference);
+          if (typeof frozen.nodeId === "string" && result.eligibility[frozen.nodeId]?.nodeVersionId !== frozen.nodeVersionId) throw new ConflictException("发送后引用素材已经修改，请核对新版本后再执行");
+        }
+      }
+      const inputVersions = Object.fromEntries((decision.action?.inputs ?? []).flatMap((binding) => { const version = result.eligibility[binding.nodeId]; return version ? [[binding.nodeId, version.nodeVersionId]] : []; }));
+      const data = { status: direct ? "PENDING" as const : "COMPLETED" as const, role: "ASSISTANT" as const, kind: direct ? "executing" : canvasMode && decision.kind === "propose" ? "reply" : decision.kind, content: decision.message,
         turnId: turn.turnId, origin: observation ? "background_analysis" : "user", sourceEventId: observation?.eventId ?? null,
         executionId: observation?.executionId ?? null, proposalId: proposal?.id ?? null,
         context: json({ version: "workflow-message-context/2", graphRevision: built.graph.revision, contextRevision, planRevision,
+          ...(direct ? { directExecution: { decision, proposalId: proposal?.id, intentEpoch: turn.epoch, inputVersions, lease: turn.lease } } : {}),
           referencedNodeIds: input.referencedNodeIds, focusNodeIds: built.context.focusNodeIds, coverage: result.coverage,
           referenceSummary: buildWorkflowReferenceSummary(built.graph.nodes, input.referencedNodeIds, built.context.focusNodeIds, visual.coverage.attachedNodeIds),
           visualCoverage: visual.coverage, imageBindings: visual.imageBindings, understanding: decision.understanding, fileAssetIds: [], shapeIds: [] }) };
       const assistantMessage = turn.assistantMessage
         ? await tx.agentMessage.update({ where: { id: turn.assistantMessage.id, status: "PENDING" }, data, include: { proposal: true } })
         : await tx.agentMessage.create({ data: { ...data, conversationId }, include: { proposal: true } });
-      await tx.agentTurn.update({ where: { id: turn.turnId }, data: { status: "completed", graphRevision: built.graph.revision,
+      await tx.agentTurn.update({ where: { id: turn.turnId }, data: { status: direct ? "dispatching" : "completed", graphRevision: built.graph.revision,
         contextRevision, summaryRevision: built.context.summaryRevision, planRevision: planRevision ?? null,
         snapshots: json({ observation: result.observation, decision, reads: result.readResults }),
-        budget: { modelCalls: result.calls, readRounds: result.readRounds, repairUsed: result.repairUsed }, leaseToken: null, leaseExpiresAt: null } });
+        budget: { modelCalls: result.calls, readRounds: result.readRounds, repairUsed: result.repairUsed }, ...(direct ? {} : { leaseToken: null, leaseExpiresAt: null }) } });
       return assistantMessage;
     });
     await this.contexts.refreshSummary(userId, projectId, conversationId).catch(() => this.logger.warn("会话摘要缓存更新失败，原文和执行事实已保存"));
-    return saved;
+    return direct ? this.resumeDirectExecution(userId, saved.id) : saved;
+  }
+
+  private readonly dispatching = new Set<string>();
+  private async resumeDirectExecution(userId: string, messageId: string) {
+    const message = await this.database.agentMessage.findUniqueOrThrow({ where: { id: messageId }, include: { proposal: true, conversation: true } });
+    if (message.status !== "PENDING" || message.kind !== "executing" || !this.canvasCommands || this.dispatching.has(messageId)) return message;
+    this.dispatching.add(messageId);
+    const stored = object(message.context);
+    const execution = object(stored.directExecution);
+    const projectId = message.conversation.projectId;
+    const conversationId = message.conversationId;
+    const epoch = Number(execution.intentEpoch);
+    const guard = { intentEpoch: epoch, nodeVersions: object(execution.inputVersions) as Record<string, string> };
+    let executionNodeId: string | null = null;
+    try {
+      await this.conversation(userId, conversationId, true);
+      const claimed = await this.database.$transaction(async (tx) => {
+        const owned = await tx.agentConversation.updateMany({ where: { id: conversationId, intentEpoch: epoch, activeTurnId: String(execution.lease), archivedAt: null }, data: { updatedAt: new Date() } });
+        if (!owned.count) throw new ConflictException("本次筹备已被更新的设计意图替代，请重新确认");
+        const current = await tx.agentMessage.findUniqueOrThrow({ where: { id: messageId } });
+        const currentContext = object(current.context);
+        const dispatch = object(currentContext.directExecution);
+        if (current.status !== "PENDING" || Number(dispatch.dispatchStartedAt ?? 0) > Date.now() - TURN_TIMEOUT_MS) return false;
+        await tx.agentMessage.update({ where: { id: messageId }, data: { context: json({ ...currentContext, directExecution: { ...dispatch, dispatchStartedAt: Date.now() } }) } });
+        return true;
+      });
+      if (!claimed) return this.database.agentMessage.findUniqueOrThrow({ where: { id: messageId }, include: { proposal: true } });
+      const turn = message.turnId ? await this.database.agentTurn.findUnique({ where: { id: message.turnId } }) : null;
+      if (turn?.status !== "dispatching" || message.conversation.intentEpoch !== epoch) throw new ConflictException("本次筹备已被更新的设计意图替代，请重新确认");
+      if (!message.proposal) throw new ConflictException("执行步骤缺失，请重新发送请求");
+      const decision = plannerDecisionSchema.parse(execution.decision);
+      const commandId = directMutationId(`direct:${message.id}`);
+      await this.runtime.accept(userId, projectId, message.proposal.id, { mutationId: commandId, baseRevision: message.proposal.baseRevision });
+      executionNodeId = String(object(message.proposal.evidence).toolNodeId ?? "");
+      let result = await this.canvasCommands.execute(userId, projectId, { type: "execute_tool", nodeId: executionNodeId, mutationId: commandId, conversationId }, guard);
+      if (decision.action?.toolKey === "analyze_brief" && decision.execution.operation === "generate_design") {
+        const source = result.graph.nodes.find((node) => node.id === executionNodeId);
+        if (source?.status === "running") {
+          await this.database.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { context: json({ ...stored, directExecution: { ...execution, dispatchStartedAt: 0 } }) } });
+          return message;
+        }
+        if (source?.status !== "completed") throw new BadRequestException("需求分析未完成，请查看任务记录并重新确认需求");
+        const outputIds = result.graph.edges.filter((edge) => edge.sourceNodeId === executionNodeId).map((edge) => edge.targetNodeId);
+        const constraints = result.graph.nodes.filter((node) => outputIds.includes(node.id) && node.type === "constraint" && node.status === "completed");
+        const constraint = constraints[0];
+        if (constraints.length !== 1 || !constraint) throw new BadRequestException("需求分析没有形成唯一约束，暂未开始生成");
+        // One fixed continuation is authorized by the original message; no autonomous loop.
+        result = await this.canvasCommands.execute(userId, projectId, { type: "run_tool", mutationId: directMutationId(`direct:${message.id}:generate`), toolKey: "generate_design", title: "生成设计方案", parameters: decision.execution.parameters,
+          inputs: [{ nodeId: constraint.id, port: "constraint" }, ...decision.action.inputs.filter((binding) => binding.port === "reference")], conversationId }, guard);
+        executionNodeId = result.nodeId;
+      }
+      const attempts = await this.database.workflowAttempt.findMany({ where: { projectId, toolNodeId: executionNodeId }, orderBy: { ordinal: "desc" }, select: { id: true, executionId: true, generationTaskId: true, status: true } });
+      return await this.finishDirectMessage(message.id, conversationId, message.turnId, String(execution.lease), {
+        content: "本次操作已提交，可在白板和任务中心查看进度与结果。", kind: "reply", executionId: attempts[0]?.executionId ?? null,
+        context: json({ ...stored, executionReceipt: { status: "submitted", nodeId: executionNodeId, attempts }, directExecution: { ...execution, status: "submitted" } }),
+      });
+    } catch (error) {
+      // Never replan a partially dispatched request. Its immutable attempts remain retryable in task history.
+      return this.finishDirectMessage(message.id, conversationId, message.turnId, String(execution.lease), {
+        content: error instanceof Error ? `本次操作未能继续：${error.message}。已产生的任务与历史仍可在任务中心查看。` : "本次操作未能继续，请查看任务记录。", kind: "clarify",
+        context: json({ ...stored, executionReceipt: { status: "stopped", nodeId: executionNodeId }, directExecution: { ...execution, status: "stopped" } }),
+      });
+    } finally { this.dispatching.delete(messageId); }
+  }
+
+  private async finishDirectMessage(messageId: string, conversationId: string, turnId: string | null, lease: string, data: Prisma.AgentMessageUpdateManyMutationInput) {
+    return this.database.$transaction(async (tx) => {
+      await tx.agentConversation.updateMany({ where: { id: conversationId, activeTurnId: lease }, data: { activeTurnId: null, activeTurnStartedAt: null } });
+      await tx.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { ...data, status: "COMPLETED" } });
+      if (turnId) await tx.agentTurn.updateMany({ where: { id: turnId, status: "dispatching" }, data: { status: "completed", leaseToken: null, leaseExpiresAt: null } });
+      return tx.agentMessage.findUniqueOrThrow({ where: { id: messageId }, include: { proposal: true } });
+    });
   }
 
   private async failTurn(conversationId: string, turn: { lease: string; turnId: string }, error: unknown, messageId?: string) {
@@ -412,6 +507,8 @@ function messageView(row: MessageRow) {
   const raw = object(row.context);
   const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { fileAssetIds: [], shapeIds: [], ...Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]])) };
   const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
+  if (raw.executionReceipt) context.executionReceipt = raw.executionReceipt;
+  if (raw.referenceSnapshots) context.referenceSnapshots = raw.referenceSnapshots;
   if (summary.success) context.referenceSummary = summary.data;
   const evidence = object(row.proposal?.evidence);
   return { id: row.id, role: row.role === "USER" ? "user" as const : "assistant" as const, status: row.status.toLowerCase() as "pending" | "completed" | "failed" | "canceled", content: row.content,
@@ -419,7 +516,7 @@ function messageView(row: MessageRow) {
     origin: row.origin ?? "user", executionId: row.executionId ?? null, sourceEventId: row.sourceEventId ?? null,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
     error: row.errorCode ? { code: row.errorCode, message: row.errorMessage ?? "本轮处理失败" } : null,
-    proposal: row.proposal ? { id: row.proposal.id, baseRevision: row.proposal.baseRevision, status: row.proposal.status, operations: row.proposal.diff,
+    proposal: row.proposal && !raw.directExecution ? { id: row.proposal.id, baseRevision: row.proposal.baseRevision, status: row.proposal.status, operations: row.proposal.diff,
       content: evidence.content, rationale: evidence.rationale, referencedNodeIds: evidence.referencedNodeIds, toolNodeId: evidence.toolNodeId,
       schemaVersion: row.proposal.schemaVersion ?? 1, targetNodeVersionId: row.proposal.targetNodeVersionId ?? null,
       planRevision: row.proposal.planRevision ?? null, rejectionReason: row.proposal.rejectionReason ?? null,

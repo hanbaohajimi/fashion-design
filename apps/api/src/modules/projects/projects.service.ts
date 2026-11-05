@@ -236,6 +236,8 @@ export class ProjectsService {
           where: { shapeType: { not: RETIRED_BOARD_SHAPE_TYPE } },
         },
         boardSnapshot: true,
+        canvasDocument: true,
+        canvasBindings: true,
         collections: {
           include: {
             dna: true,
@@ -280,6 +282,7 @@ export class ProjectsService {
               name: `${source.name} 副本`.slice(0, 80),
               wsId: source.wsId,
               workflowAgentVersion: source.workflowAgentVersion,
+              canvasInteractionMode: source.canvasInteractionMode,
             },
           });
           ids.set(source.id, project.id);
@@ -440,6 +443,11 @@ export class ProjectsService {
             if (edges.length) await transaction.workflowEdge.createMany({ data: edges });
             await ensureWorkflowNodeVersions(transaction, project.id, 0, nodes, edges);
             await transaction.workflowNodeVersion.updateMany({ where: { projectId: project.id, baseline: true }, data: { origin: "project_copy" } });
+          }
+          if (source.canvasDocument) {
+            await transaction.canvasDocument.create({ data: { projectId: project.id, snapshot: remapStructuredValue(source.canvasDocument.snapshot, ids, true) as Prisma.InputJsonValue, formatVersion: source.canvasDocument.formatVersion, initializedFrom: "project_copy" } });
+            const bindings = source.canvasBindings.filter((binding) => ids.has(binding.nodeId)).map((binding) => ({ projectId: project.id, shapeId: binding.shapeId, nodeId: requiredMappedId(ids, binding.nodeId), removedAt: binding.removedAt }));
+            if (bindings.length) await transaction.canvasObjectBinding.createMany({ data: bindings });
           }
           if (source.designContext) {
             const state = source.designContext.state as Record<string, Prisma.JsonValue>;
