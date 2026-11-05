@@ -68,6 +68,60 @@ function canonical(value: unknown): string {
     );
   return JSON.stringify(value) ?? "null";
 }
+function visibleStudioAssets(projectId: string): Prisma.DesignAssetWhereInput {
+  return {
+    projectId,
+    AND: [
+      {
+        OR: [
+          { designStep: { is: null } },
+          {
+            designStep: {
+              is: {
+                tool: {
+                  notIn: [
+                    "wardrobe-material-mask",
+                    "wardrobe-material-detail",
+                    "wardrobe-correction-guide",
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        OR: [
+          { generationTask: { is: null } },
+          {
+            generationTask: {
+              is: { compiledPrompt: { equals: Prisma.AnyNull } },
+            },
+          },
+          {
+            generationTask: {
+              is: {
+                compiledPrompt: { path: ["notes"], equals: Prisma.AnyNull },
+              },
+            },
+          },
+          {
+            generationTask: {
+              is: {
+                NOT: {
+                  compiledPrompt: {
+                    path: ["notes"],
+                    array_contains: ["wardrobe-material-alpha-probe:v1"],
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
 @Injectable()
 export class StudioService {
   constructor(
@@ -79,15 +133,19 @@ export class StudioService {
     await this.access.require(userId, projectId, "read");
     const [styles, assets, packs] = await Promise.all([
       this.database.style.count({ where: { projectId } }),
-      this.database.designAsset.count({ where: { projectId, archivedAt: null } }),
-      this.database.studioDocument.count({ where: { projectId, type: "TECH_PACK" } }),
+      this.database.designAsset.count({
+        where: { ...visibleStudioAssets(projectId), archivedAt: null },
+      }),
+      this.database.studioDocument.count({
+        where: { projectId, type: "TECH_PACK" },
+      }),
     ]);
     return { styles, assets, packs };
   }
 
   private async assets(projectId: string): Promise<StudioAssetView[]> {
     const rows = await this.database.designAsset.findMany({
-      where: { projectId },
+      where: visibleStudioAssets(projectId),
       select: { id: true, url: true, thumbnailUrl: true },
       orderBy: { createdAt: "desc" },
     });

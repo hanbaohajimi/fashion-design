@@ -7,6 +7,55 @@ datasource db {
   provider = "postgresql"
 }
 
+// Audit references deliberately survive project/asset deletion; never store client tokens.
+model RealtimeTryOnSession {
+  outfitSnapshotId String? @map("outfit_snapshot_id")
+  id String @id @default(uuid())
+  userId String @map("user_id")
+  projectId String @map("project_id")
+  garmentAssetId String @map("garment_asset_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  consentVersion String @map("consent_version")
+  modelId String @map("model_id")
+  sdkVersion String @map("sdk_version")
+  usdPerSecond Decimal @db.Decimal(16, 6) @map("usd_per_second")
+  reservedUsd Decimal @db.Decimal(16, 6) @map("reserved_usd")
+  priceVerifiedAt String @map("price_verified_at")
+  maxSessionSeconds Int @map("max_session_seconds")
+  status String @default("reserved")
+  riskUntil DateTime @map("risk_until")
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  issuedAt DateTime? @map("issued_at")
+  endedAt DateTime? @map("ended_at")
+  endReason String? @map("end_reason")
+  observationSequence Int @default(0) @map("observation_sequence")
+  generationSeconds Float @default(0) @map("generation_seconds")
+  observation Json?
+  observationAt DateTime? @map("observation_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  captures RealtimeTryOnCapture[]
+  @@unique([userId, requestKey])
+  @@index([riskUntil])
+  @@index([userId, riskUntil])
+  @@index([createdAt])
+  @@map("realtime_tryon_sessions")
+}
+
+model RealtimeTryOnCapture {
+  id String @id @default(uuid())
+  sessionId String @map("session_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  assetId String @unique @map("asset_id")
+  fileId String @unique @map("file_id")
+  metadata Json
+  createdAt DateTime @default(now()) @map("created_at")
+  session RealtimeTryOnSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  @@unique([sessionId, requestKey])
+  @@map("realtime_tryon_captures")
+}
+
 model User {
   runwayShows RunwayShow[]
   runwayRuns RunwayRun[]
@@ -211,6 +260,8 @@ model AuditLog {
 }
 
 model DesignAsset {
+  wardrobeSources WardrobeRevision[] @relation("WardrobeSource")
+  wardrobeDisplays WardrobeRevision[] @relation("WardrobeDisplay")
   feedback ImageAssetFeedback?
   shares ImageAssetShare[]
   id                  String                     @id @default(cuid(2))
@@ -407,6 +458,11 @@ model Workspace {
 }
 
 model Project {
+  wardrobeItems WardrobeItem[]
+  wardrobePreparations WardrobePreparation[]
+  wardrobeOutfits WardrobeOutfit[]
+  wardrobeTryOns WardrobeTryOn[]
+  wardrobeMutations WardrobeMutation[]
   runwayShows RunwayShow[]
   runwayRuns RunwayRun[]
   runwayMedia RunwayMedia[]
@@ -1271,6 +1327,7 @@ model Style {
 }
 
 model StyleRevision {
+  wardrobeRevisions WardrobeRevision[]
   id String @id @default(cuid(2))
   styleId String @map("style_id")
   revision Int
@@ -1284,6 +1341,112 @@ model StyleRevision {
   documents StudioDocument[]
   @@unique([styleId, revision])
   @@map("style_revisions")
+}
+
+model WardrobeItem {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  name String
+  archived Boolean @default(false)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisions WardrobeRevision[]
+  @@index([projectId, updatedAt])
+  @@map("wardrobe_items")
+}
+
+model WardrobeRevision {
+  id String @id @default(uuid())
+  itemId String @map("item_id")
+  version Int
+  sourceAssetId String @map("source_asset_id")
+  assetId String @map("asset_id")
+  styleRevisionId String? @map("style_revision_id")
+  payload Json
+  createdAt DateTime @default(now()) @map("created_at")
+  item WardrobeItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  sourceAsset DesignAsset @relation("WardrobeSource", fields: [sourceAssetId], references: [id], onDelete: Restrict)
+  asset DesignAsset @relation("WardrobeDisplay", fields: [assetId], references: [id], onDelete: Restrict)
+  styleRevision StyleRevision? @relation(fields: [styleRevisionId], references: [id], onDelete: Restrict)
+  @@unique([itemId, version])
+  @@map("wardrobe_revisions")
+}
+
+model WardrobePreparation {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  input Json
+  taskId String? @map("task_id")
+  ready Boolean @default(false)
+  error String?
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, userId, requestKey])
+  @@index([projectId, createdAt])
+  @@map("wardrobe_preparations")
+}
+
+model WardrobeOutfit {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  name String
+  isTrial Boolean @default(false) @map("is_trial")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshots WardrobeOutfitSnapshot[]
+  @@index([projectId, updatedAt])
+  @@map("wardrobe_outfits")
+}
+
+model WardrobeOutfitSnapshot {
+  id String @id @default(uuid())
+  outfitId String @map("outfit_id")
+  version Int
+  payload Json
+  referenceAssetId String? @map("reference_asset_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  outfit WardrobeOutfit @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+  tryOns WardrobeTryOn[]
+  @@unique([outfitId, version])
+  @@map("wardrobe_outfit_snapshots")
+}
+
+model WardrobeTryOn {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  snapshotId String @map("snapshot_id")
+  modelAssetId String @map("model_asset_id")
+  taskId String? @map("task_id")
+  error String?
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshot WardrobeOutfitSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  @@unique([projectId, userId, requestKey])
+  @@index([projectId, createdAt])
+  @@map("wardrobe_tryons")
+}
+
+model WardrobeMutation {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  userId String @map("user_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  result Json
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, userId, requestKey])
+  @@map("wardrobe_mutations")
 }
 
 model StudioDocument {

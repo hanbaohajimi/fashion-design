@@ -69,7 +69,9 @@ function createPrismaClient(): PrismaClient {
   }
 
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({ connectionString }, {
+      schema: new URL(connectionString).searchParams.get("schema") ?? "public",
+    }),
   });
 }
 
@@ -139,3 +141,5 @@ export { appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNod
 export type { WorkflowVersionNode, WorkflowVersionEdge, WorkflowVersionBinding, WorkflowVersionSnapshot } from "./workflow-events.js";
 
 export type { Style, StyleRevision, StudioDocument, StudioExperiment, WorkspaceMember, StudioMutation } from "../generated/prisma/client.js";
+export type { RealtimeTryOnSession, RealtimeTryOnCapture } from "../generated/prisma/client.js";
+export type { WardrobeItem, WardrobeRevision, WardrobePreparation, WardrobeOutfit, WardrobeOutfitSnapshot, WardrobeTryOn } from "../generated/prisma/client.js";

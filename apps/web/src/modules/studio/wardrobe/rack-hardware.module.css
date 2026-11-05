@@ -1,0 +1,22 @@
+.hardware {
+  display: block;
+  flex: none;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+  shape-rendering: geometricPrecision;
+}
+
+.woodenShoulder {
+  filter: drop-shadow(0 1px 0.7px rgb(41 28 17 / 15%));
+}
+
+.clips,
+.accessoryHook {
+  filter: drop-shadow(0 0.8px 0.6px rgb(34 43 35 / 16%));
+}
+
+.tray {
+  filter: drop-shadow(0 1.2px 1px rgb(41 28 17 / 15%));
+}

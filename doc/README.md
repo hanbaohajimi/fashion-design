@@ -8,6 +8,10 @@
 
 ## 现行入口
 
+实时摄像头试穿 API 接入见[实施与配置](plans/realtime-tryon-api/IMPLEMENTATION.md)及[分层验收记录](plans/realtime-tryon-api/ACCEPTANCE.md)，默认关闭真实收费功能。
+
+衣架搭配与双模式试穿见[实施目录](plans/wardrobe-tryon/README.md)，包含视频对照、版本来源、项目权限及单独列出的真实模型验收范围。
+
 | 资料 | 用途 |
 | --- | --- |
 | [项目 README](../README.md) | 本地启动、功能入口、升级和常用命令 |

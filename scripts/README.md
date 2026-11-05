@@ -8,6 +8,16 @@
 
 ## 日常开发与验收
 
+衣架搭配：`pnpm wardrobe:verify` 使用独立本机 PostgreSQL schema 与私有 MinIO 测试对象验证新增数据和素材链路，不调用收费模型；浏览器运行 `pnpm exec playwright test tests/e2e/wardrobe-tryon.spec.ts`。范围和真实效果未验收项见[衣架搭配交接](../doc/plans/wardrobe-tryon/README.md)。
+
+衣架视频对照：`node scripts/manual/compare-wardrobe-video.mjs <参考视频> <浏览器录屏>` 输出左右并排 MP4 和来源说明到 `output/wardrobe-tryon/browser/`；需要本机 ffmpeg。保留原速，两个操作时间轴不宣称同步，短视频结束后保持最后一帧。
+
+衣架真实模型验证：[使用说明](manual/wardrobe-provider.md) 与 [29 款验收矩阵](../doc/plans/wardrobe-tryon/PROVIDER-REALISM.md)。`node scripts/manual/verify-wardrobe-provider.mjs plan` 只检查配置和案例；收费阶段必须显式选择并传入 `--execute-paid`。真实源图、生产转换任务、候选、侧图和逐图审核保存在 `output/wardrobe-provider/`，未审核结果不能自动确认。`node scripts/manual/inspect-wardrobe-provider.mjs` 生成白／灰／深底和 alpha 检查图，不修改原始素材。
+
+衣架保存后只读核查：`node --env-file=.env.example --env-file-if-exists=.env scripts/manual/audit-wardrobe-provider-state.mjs` 检查 29 件当前数据库修订与 canonical、58 张正侧私有图片 SHA、真实任务血缘和队列状态，并汇总累计外部请求及失败；不打印 `.env`/密钥，不调用模型或写数据库/私有存储。仅在本地 `output/wardrobe-provider/final-state-audit.json` 写核查报告；显式允许待确认单品时不会标为最终通过。
+
+实时摄像头试穿：`pnpm tryon:doctor` 只检查配置与已安装 SDK，不签发令牌或探测供应商；`pnpm tryon:verify` 运行模拟测试，`pnpm tryon:verify --local --browser` 加上隔离本机数据库/MinIO链路与浏览器验证。结果写入 `output/realtime-tryon/`，真实供应商调用需另行明确授权，见[实时试穿交接](../doc/plans/realtime-tryon-api/IMPLEMENTATION.md)。
+
 服装秀工具入口为 `runway.mjs`：`pnpm runway:doctor`、`runway:up`、`runway:down`、`runway:test`、`runway:test:integration` 与显式真实调用 `runway:smoke --provider ...`。运行环境与隔离边界见 [服装秀运行手册](../doc/plans/fashion-show-migration/OPERATIONS.md)。
 
 | 入口或脚本 | 用途 |
@@ -39,6 +49,8 @@
 两个 PDF 光栅化工具均支持 `FLOWBOOK_RENDER_DIR` 指定渲染工作目录。新结果写入 `output/documents/`；历史渲染结果已完整保留在 `output/archive/repository-2026-10-25/`，无需重新生成。
 
 ## 手工验证：manual/
+
+- [diagnose-wardrobe-material-alpha.mjs](manual/diagnose-wardrobe-material-alpha.mjs)：尚未验收的蕾丝透明诊断，命令参数依次为原图、真实绿色中间图、同尺寸蒙版、`output/` 内目录。仅适用于已审计的 1024×1536 袖部案例，保留全部原图 RGB 和蒙版外像素；派生 alpha、三底及细节图均明确标记为诊断，不创建项目资产、不确认单品、不发模型请求。详见[透明材质实测](../doc/plans/wardrobe-tryon/ALPHA-INVESTIGATION.md)。
 
 - [verify-assistant-stream.mjs](manual/verify-assistant-stream.mjs)：运行 `node --env-file=.env.example --env-file-if-exists=.env scripts/manual/verify-assistant-stream.mjs`，使用现有 Amux 配置发起一次短文本请求，验证真实 SSE 分块、增量文本与最终结果一致；只将脱敏时间、分块计数及结果写入 `output/ui-refinement/assistant-stream/gateway-smoke.json`。
 

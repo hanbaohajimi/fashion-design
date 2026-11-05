@@ -75,6 +75,7 @@ export function AssetPicker({
   disabled = false,
   compact = false,
   selectionPreview = true,
+  renderControl,
 }: {
   readonly assets: readonly StudioAsset[];
   readonly selected: readonly string[];
@@ -84,6 +85,7 @@ export function AssetPicker({
   readonly disabled?: boolean;
   readonly compact?: boolean;
   readonly selectionPreview?: boolean;
+  readonly renderControl?: (controls: { openPicker: () => void; openPreview: () => void }) => ReactNode;
 }) {
   const [limit, setLimit] = useState(false);
   const [preview, setPreview] = useState<StudioAsset | null>(null);
@@ -162,6 +164,10 @@ export function AssetPicker({
   );
   return (
     <div className={styles.stack}>
+      {renderControl ? renderControl({
+        openPicker: () => { setDraft([...selected]); setSearch(""); setLimit(false); setBrowsing(true); },
+        openPreview: () => { const asset = assets.find((item) => selected.includes(item.id)); if (asset) { setPreviewSource(document.activeElement as HTMLElement); setPreviewKeyboard(true); setPreview(asset); } },
+      }) : <>
       <div className={styles.recordHeader}>
         <strong>{label}</strong>
         <small className={styles.muted}>
@@ -207,6 +213,7 @@ export function AssetPicker({
       {limit ? (
         <Notice tone="error">最多选择 {max} 张，请先取消一张。</Notice>
       ) : null}
+      </>}
       {browsing ? (
         <Dialog
           label={label}

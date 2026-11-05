@@ -1,0 +1,41 @@
+.preview {
+  min-width: 0;
+  border-block: var(--border-hairline) solid var(--color-border);
+}
+
+.preview summary {
+  padding-block: 12px;
+  min-height: 44px;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preview summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+  height: clamp(220px, 45dvh, 360px);
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: var(--surface-0);
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}

@@ -5,8 +5,8 @@ import { Group, Panel, Separator, useGroupRef, usePanelRef, type Layout } from "
 import { useAuth } from "../modules/auth/AuthProvider";
 import styles from "./workspace-split.module.css";
 
-export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId, ...props }: ComponentProps<"div"> & {
-  children: ReactNode; docked: boolean; open: boolean; onOpenChange: (open: boolean) => void; projectId: string;
+export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId, panelLabel = "设计助手面板", ...props }: ComponentProps<"div"> & {
+  children: ReactNode; docked: boolean; open: boolean; onOpenChange: (open: boolean) => void; projectId: string; panelLabel?: string;
 }) {
   const { session } = useAuth();
   const group = useGroupRef();
@@ -62,7 +62,7 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
       const modal = !docked && !mobile.matches && open;
       dialog.dataset.inline = String(docked || mobile.matches);
       dialog.setAttribute("role", modal ? "dialog" : "presentation");
-      if (modal) dialog.setAttribute("aria-label", "设计助手面板"); else dialog.removeAttribute("aria-label");
+      if (modal) dialog.setAttribute("aria-label", panelLabel); else dialog.removeAttribute("aria-label");
       if (modal && !dialog.open) {
         previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         dialog.showModal();
@@ -74,7 +74,7 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
     };
     update(); mobile.addEventListener("change", update);
     return () => { mobile.removeEventListener("change", update); if (dialog.open) dialog.close(); };
-  }, [docked, open]);
+  }, [docked, open, panelLabel]);
   const panels = Children.toArray(children);
   return <div {...props} ref={host} className={`${props.className ?? ""} ${styles.root}`} data-split-docked={docked}>
     <Group className={styles.group} groupRef={group} disabled={!docked} resizeTargetMinimumSize={{ fine: 8, coarse: 44 }} onLayoutChanged={(layout, meta) => {

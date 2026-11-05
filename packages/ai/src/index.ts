@@ -10,3 +10,4 @@ export * from "./providers/mock.adapter";
 export * from "./reference-image.loader";
 export * from "./vlm-classifier";
 export * from "./visual-summary";
+export * from "./material-alpha";

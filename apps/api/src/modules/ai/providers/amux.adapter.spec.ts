@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AiProviderError } from "../ai.errors";
-import type { AiGenerationRequest } from "../interfaces/provider.interface";
+import {
+  aiGenerationRequestSchema,
+  type AiGenerationRequest,
+} from "../interfaces/provider.interface";
 import {
   AmuxAdapter,
   AmuxHttpError,
@@ -90,9 +93,18 @@ describe("AmuxAdapter", () => {
   });
 
   it("同时返回内联图片和临时地址时优先保存内联数据", async () => {
-    vi.mocked(transport.generate).mockResolvedValue({ data: [{ url: "https://images.example.com/temporary.png", b64_json: "iVBORw0KGgo=" }] });
+    vi.mocked(transport.generate).mockResolvedValue({
+      data: [
+        {
+          url: "https://images.example.com/temporary.png",
+          b64_json: "iVBORw0KGgo=",
+        },
+      ],
+    });
     const job = await adapter.submit(t2iRequest, new AbortController().signal);
-    expect(job.completedResult?.images).toEqual([{ url: "data:image/png;base64,iVBORw0KGgo=" }]);
+    expect(job.completedResult?.images).toEqual([
+      { url: "data:image/png;base64,iVBORw0KGgo=" },
+    ]);
   });
 
   it.each([
@@ -169,6 +181,105 @@ describe("AmuxAdapter", () => {
     expect(form?.get("output_format")).toBe("png");
     expect(job.cost).toMatchObject({ rawCost: 0.12, credits: 12 });
   });
+
+  it("局部重绘按母图、细节参考的顺序上传两张图，蒙版单独绑定第一张", async () => {
+    const sourceUrl = "https://assets.test/masked-source.png";
+    const textureUrl = "https://assets.test/same-source-net-detail.png";
+    const maskUrl = "https://assets.test/source-mask.png";
+    const files = new Map([
+      [
+        sourceUrl,
+        {
+          bytes: new Uint8Array([11, 12]),
+          contentType: "image/png",
+          filename: "source.png",
+        },
+      ],
+      [
+        textureUrl,
+        {
+          bytes: new Uint8Array([21, 22]),
+          contentType: "image/png",
+          filename: "texture.png",
+        },
+      ],
+      [
+        maskUrl,
+        {
+          bytes: new Uint8Array([31, 32]),
+          contentType: "image/png",
+          filename: "mask.png",
+        },
+      ],
+    ]);
+    vi.mocked(loadReferenceImage).mockImplementation(async (url) => {
+      const file = files.get(url);
+      if (!file) throw new Error("Unexpected reference");
+      return file;
+    });
+    vi.mocked(transport.edit).mockResolvedValue({
+      data: [{ b64_json: "iVBORw0KGgo=" }],
+    });
+    const request = aiGenerationRequestSchema.parse({
+      taskType: "inpaint",
+      prompt:
+        "Keep continuous net texture from image 2 within the masked sleeves of image 1.",
+      width: 1024,
+      height: 1536,
+      referenceImageUrl: sourceUrl,
+      referenceImageUrls: [sourceUrl, textureUrl],
+      maskImageUrl: maskUrl,
+      background: "transparent",
+    });
+    await adapter.submit(request, new AbortController().signal);
+    expect(
+      vi.mocked(loadReferenceImage).mock.calls.map(([url]) => url),
+    ).toEqual([sourceUrl, textureUrl, maskUrl]);
+    const form = vi.mocked(transport.edit).mock.calls[0]?.[0];
+    const images = form?.getAll("image") as File[];
+    expect(images.map((file) => file.name)).toEqual([
+      "source.png",
+      "texture.png",
+    ]);
+    expect(
+      await Promise.all(
+        images.map(async (file) =>
+          Array.from(new Uint8Array(await file.arrayBuffer())),
+        ),
+      ),
+    ).toEqual([
+      [11, 12],
+      [21, 22],
+    ]);
+    const mask = form?.get("mask") as File;
+    expect(mask.name).toBe("mask.png");
+    expect(Array.from(new Uint8Array(await mask.arrayBuffer()))).toEqual([
+      31, 32,
+    ]);
+    expect(form?.getAll("mask")).toHaveLength(1);
+    expect(form?.get("background")).toBe("transparent");
+    expect(transport.generate).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 17])(
+    "局部重绘拒绝 %s 张显式参考，不能静默截断或失去母图",
+    (count) => {
+      expect(
+        aiGenerationRequestSchema.safeParse({
+          taskType: "inpaint",
+          prompt: "Preserve the source.",
+          width: 1024,
+          height: 1536,
+          referenceImageUrl: "https://assets.test/source.png",
+          referenceImageUrls: Array.from(
+            { length: count },
+            (_, index) => `https://assets.test/reference-${index}.png`,
+          ),
+          maskImageUrl: "https://assets.test/mask.png",
+        }).success,
+      ).toBe(false);
+    },
+  );
 
   it("带参考图的 t2i 自动走图片编辑接口", async () => {
     vi.mocked(loadReferenceImage).mockResolvedValue({

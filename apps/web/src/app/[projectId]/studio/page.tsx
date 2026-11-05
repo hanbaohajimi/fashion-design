@@ -11,6 +11,7 @@ export default async function StudioPage({
     readonly styleRevisionId?: string | string[];
     readonly showId?: string | string[];
     readonly runId?: string | string[];
+    readonly mode?: string | string[];
   }>;
 }) {
   const { projectId } = await params;
@@ -25,6 +26,7 @@ export default async function StudioPage({
       initialTab={typeof query.tab === "string" ? query.tab : undefined}
       initialShowId={typeof query.showId === "string" ? query.showId : undefined}
       initialRunId={typeof query.runId === "string" ? query.runId : undefined}
+      initialPresentationMode={typeof query.mode === "string" ? query.mode : undefined}
     />
   );
 }

@@ -61,6 +61,7 @@ export function StyleLibrary(
     readonly onTechPack?: (revisionId: string) => void;
     readonly onRunway?: (revisionId: string) => void;
     readonly onPresentation?: (revisionId: string) => void;
+    readonly onWardrobe?: (revisionId: string, assetId: string) => void;
   },
 ) {
   const feedback = useSubmitFeedback();
@@ -264,6 +265,11 @@ export function StyleLibrary(
               onClick={() => props.onRunway?.(selected.currentRevision.id)}
             >
               制作服装秀
+            </Button>
+          ) : null}
+          {props.canEdit && props.onWardrobe ? (
+            <Button onClick={() => props.onWardrobe?.(selected.currentRevision.id, selected.currentRevision.payload.sourceAssetId)}>
+              加入衣架
             </Button>
           ) : null}
         </div>

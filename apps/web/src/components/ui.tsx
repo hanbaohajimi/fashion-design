@@ -410,6 +410,8 @@ export function ImagePreview({
   fit = "contain",
   retryable = true,
   draggable,
+  revealOnLoad = true,
+  onReady,
 }: {
   readonly src: string | undefined;
   readonly alt: string;
@@ -417,6 +419,8 @@ export function ImagePreview({
   readonly fit?: "contain" | "cover";
   readonly retryable?: boolean;
   readonly draggable?: boolean;
+  readonly revealOnLoad?: boolean;
+  readonly onReady?: (() => void) | undefined;
 }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -480,11 +484,13 @@ export function ImagePreview({
           if (image.current !== element || !element.isConnected) return;
           reveal.current?.cancel();
           element.style.removeProperty("opacity");
-          const opacity = getComputedStyle(element).opacity || "1";
-          const duration = motionTime("--motion-image-reveal", 300);
-          if (!fromCache && duration && !document.hidden) reveal.current = element.animate?.(
-            [{ opacity: 0 }, { opacity }], { duration, easing: motionEase() },
-          ) ?? null;
+          if (revealOnLoad && !fromCache && !document.hidden) {
+            const duration = motionTime("--motion-image-reveal", 300);
+            if (duration) reveal.current = element.animate?.(
+              [{ opacity: 0 }, { opacity: getComputedStyle(element).opacity || "1" }], { duration, easing: motionEase() },
+            ) ?? null;
+          }
+          onReady?.();
         };
         if (element.decode) void element.decode().then(show, show);
         else show();

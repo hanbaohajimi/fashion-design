@@ -46,6 +46,11 @@ const GARMENT_ONLY_POSITIVE_CONSTRAINT =
   "Show the garment without any human wearer. Use an isolated garment, flat lay, hanger, " +
   "dress form, ghost mannequin, or technical fashion illustration as appropriate. " +
   "Do not use on-model, try-on, portrait, runway-model, or lifestyle-model presentation.";
+const WARDROBE_CUTOUT_POSITIVE_CONSTRAINT =
+  "Presentation constraint, highest priority: output the requested standalone garment or accessory only, " +
+  "with a genuine transparent alpha background. Follow the specified source-preserving or generated display view. " +
+  "Do not include any human, mannequin, dress form, hanger, clip, hook, rod, shelf or other display hardware. " +
+  "Keep the item's own straps, handles, fasteners and original artwork. Display hardware is rendered separately by the application.";
 const GARMENT_ONLY_NEGATIVE_TERMS = [
   "human",
   "person",
@@ -167,6 +172,38 @@ export class GenerationService {
     );
   }
 
+  /** Explicit wardrobe action: deterministic source snapshot, no assistant/compiler model call. */
+  async createForWardrobe(
+    userId: string,
+    input: { projectId: string; sourceAssetIds: string[]; prompt: string; transparent?: boolean; snapshotId?: string },
+    idempotencyKey: string,
+  ): Promise<{ taskId: string }> {
+    await this.access.require(userId, input.projectId, "edit");
+    const ids = [...new Set(input.sourceAssetIds)];
+    if (!ids.length || input.sourceAssetIds.length > 16) throw new BadRequestException("试穿或提取需要 1–16 张参考图片");
+    if (!input.prompt.trim() || input.prompt.length > 4000) throw new BadRequestException("单品说明与搭配要求需在 4000 字以内，请明确缩短后再提交");
+    const assets = await this.database.designAsset.findMany({ where: { id: { in: ids }, projectId: input.projectId, archivedAt: null } });
+    if (assets.length !== ids.length) throw new BadRequestException("参考图片已移除或不属于当前项目");
+    const ordered = input.sourceAssetIds.map((id) => {
+      const asset = assets.find((asset) => asset.id === id);
+      if (!asset) throw new BadRequestException("参考图片已移除");
+      return asset;
+    });
+    const primary = ordered[0];
+    if (!primary) throw new BadRequestException("缺少原始参考图片");
+    const compiled: CompiledGenInput = {
+      version: 1, mode: "board_guided", positivePrompt: input.prompt, negativePrompt: "unwanted text, watermark, altered garment details",
+      sources: ordered.map((asset, index) => ({ elementId: asset.id, assetId: asset.id, role: index === 0 ? "edit_source" : "garment_ref", title: index === 0 ? "原始参考" : `单品参考 ${index}` })),
+      palette: [], paletteReferences: [], styleReferences: [], silhouetteReferences: [], fabricReferences: [], fabricInputs: [], patternReferences: [], detailReferences: [], avoidLabels: [], notes: [], enhancement: "keywords",
+    };
+    return this.createTask(userId, {
+      projectId: input.projectId, parentAssetId: primary.id, taskType: "i2i", prompt: input.prompt,
+      referenceImageUrl: primary.url, referenceImageUrls: ordered.map((asset) => asset.url),
+      width: 1024, height: 1536, outputFormat: "png", ...(input.transparent ? { background: "transparent" } : {}),
+    }, idempotencyKey, undefined, input.prompt, { modelCalls: "skip" }, compiled,
+    { assetUrls: ordered.map((asset) => asset.url), ...(input.snapshotId ? { snapshotId: input.snapshotId } : {}) });
+  }
+
   async resumeQueuedTask(userId: string, taskId: string): Promise<void> {
     const task = await this.database.generationTask.findUnique({
       where: { id: taskId },
@@ -220,6 +257,7 @@ export class GenerationService {
     rawUserIntent: string = request.prompt,
     compilerOptions: ContextCompilerOptions = {},
     frozenCompiled?: CompiledGenInput,
+    wardrobe?: { assetUrls: string[]; snapshotId?: string },
   ): Promise<{ taskId: string }> {
     const executionActor = userId;
     if (request.projectId) {
@@ -227,6 +265,10 @@ export class GenerationService {
       userId = permission.ownerId;
       if (executionActor !== userId) idempotencyKey = executionActor + ":" + idempotencyKey;
     }
+    const inpaintReferences =
+      request.taskType === "inpaint" && request.referenceImageUrls
+        ? await this.assertInpaintReferences(request)
+        : undefined;
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
@@ -246,7 +288,11 @@ export class GenerationService {
             request.prompt,
             request.shapeIds,
           ));
-    const presentationPolicy = resolvePresentationPolicy(
+    const presentationPolicy: PresentationPolicy = wardrobe ? {
+      mode: wardrobe.snapshotId ? "on_model" : "garment_only",
+      matchedSignals: [wardrobe.snapshotId ? "wardrobe-outfit-tryon" : "wardrobe-item-preparation"],
+      version: PRESENTATION_POLICY_VERSION,
+    } : resolvePresentationPolicy(
       [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
         .filter(Boolean)
         .join("\n"),
@@ -284,11 +330,37 @@ export class GenerationService {
     delete providerRequest.projectId;
     delete providerRequest.shapeIds;
     const parentObjectKey = parentAsset ? objectKeyFrom(parentAsset.url) : null;
+    if (wardrobe && providerRequest.taskType === "i2i") {
+      providerRequest.referenceImageUrls = await Promise.all(wardrobe.assetUrls.map(async (url) => {
+        const key = objectKeyFrom(url);
+        if (!key) throw new BadRequestException("衣架参考图片必须保存在私有存储中");
+        return this.storage.createDownloadUrl(key, 24 * 60 * 60);
+      }));
+      const primaryReference = providerRequest.referenceImageUrls[0];
+      if (!primaryReference) throw new BadRequestException("缺少衣架参考图");
+      providerRequest.referenceImageUrl = primaryReference;
+    }
     if (parentObjectKey && "referenceImageUrl" in providerRequest) {
       providerRequest.referenceImageUrl = await this.storage.createDownloadUrl(
         parentObjectKey,
         24 * 60 * 60,
       );
+    }
+    if (inpaintReferences && providerRequest.taskType === "inpaint") {
+      const signed = await Promise.all(
+        [...inpaintReferences.images, inpaintReferences.mask].map((asset) => {
+          const key = objectKeyFrom(asset.url);
+          if (!key) throw new BadRequestException("局部编辑参考与蒙版必须是当前项目私有资产");
+          return this.storage.createDownloadUrl(key, 24 * 60 * 60);
+        }),
+      );
+      const primaryReference = signed[0];
+      const maskReference = signed.at(-1);
+      if (!primaryReference || !maskReference)
+        throw new BadRequestException("缺少局部编辑参考图或蒙版");
+      providerRequest.referenceImageUrls = signed.slice(0, -1);
+      providerRequest.referenceImageUrl = primaryReference;
+      providerRequest.maskImageUrl = maskReference;
     }
     if (
       providerRequest.taskType === "t2i" &&
@@ -424,6 +496,20 @@ export class GenerationService {
       version: 1,
       sources: [
         ...(compiledPrompt.sources ?? []),
+        ...(inpaintReferences
+          ? [...inpaintReferences.images, inpaintReferences.mask]
+              .filter(
+                (asset) =>
+                  asset.id !== request.parentAssetId &&
+                  !compiledPrompt.sources?.some((source) => source.assetId === asset.id),
+              )
+              .map((asset) => ({
+                elementId: asset.id,
+                assetId: asset.id,
+                role: "detail_ref",
+                title: asset.id === inpaintReferences.mask.id ? "局部编辑蒙版" : "局部编辑细节参考",
+              }))
+          : []),
         ...(request.parentAssetId &&
         !compiledPrompt.sources?.some(
           (source) => source.assetId === request.parentAssetId,
@@ -451,6 +537,7 @@ export class GenerationService {
         ],
       },
       parameters: {
+        ...(wardrobe?.snapshotId ? { outfitSnapshotId: wardrobe.snapshotId } : {}),
         taskType: request.taskType,
         prompt: input.prompt,
         negativePrompt: input.negativePrompt ?? "",
@@ -501,12 +588,12 @@ export class GenerationService {
                   designStep: {
                     create: {
                       projectId: request.projectId,
-                      actor: context
+                      actor: wardrobe ? "wardrobe" : context
                         ? "collection"
                         : compilerOptions.modelCalls === "skip"
                           ? "agent"
                           : "manual",
-                      tool: request.taskType,
+                      tool: wardrobe ? (wardrobe.snapshotId ? "wardrobe-tryon" : "wardrobe-prepare") : request.taskType,
                       intent: rawUserIntent,
                       inputSnapshot:
                         stepSnapshot as unknown as Prisma.InputJsonValue,
@@ -610,6 +697,33 @@ export class GenerationService {
       }
     }
     return { taskId: task.id };
+  }
+
+  private async assertInpaintReferences(
+    request: Extract<GenerationCreateRequest, { taskType: "inpaint" }>,
+  ) {
+    if (!request.projectId || !request.parentAssetId)
+      throw new BadRequestException("多参考局部编辑必须关联项目及原始父资产");
+    const urls = request.referenceImageUrls ?? [];
+    if (!urls.length || urls.length > 16)
+      throw new BadRequestException("局部编辑需要 1–16 张参考图片");
+    const unique = [...new Set([...urls, request.maskImageUrl])];
+    if (unique.some((url) => !objectKeyFrom(url)))
+      throw new BadRequestException("局部编辑参考与蒙版必须是当前项目私有资产");
+    const assets = await this.database.designAsset.findMany({
+      where: { projectId: request.projectId, archivedAt: null, url: { in: unique } },
+    });
+    const ordered = urls.map((url) => assets.find((asset) => asset.url === url));
+    const mask = assets.find((asset) => asset.url === request.maskImageUrl);
+    if (!mask || ordered.some((asset) => !asset))
+      throw new BadRequestException("局部编辑参考或蒙版已移除或不属于当前项目");
+    const images = ordered.filter((asset) => asset !== undefined);
+    if (
+      images[0]?.id !== request.parentAssetId ||
+      images[0]?.url !== request.referenceImageUrl
+    )
+      throw new BadRequestException("蒙版必须对应第一张原始父资产，不能以细节参考替换");
+    return { images, mask };
   }
 
   private async assertParentAsset(
@@ -1028,6 +1142,7 @@ function applyPresentationPolicy(
   policy: PresentationPolicy,
 ): { readonly negativePrompt: string; readonly positivePrompt: string } {
   const garmentOnly = policy.mode === "garment_only";
+  const wardrobeCutout = policy.matchedSignals.includes("wardrobe-item-preparation");
   return {
     negativePrompt: joinUniquePromptSections(
       [
@@ -1039,7 +1154,7 @@ function applyPresentationPolicy(
       3_000,
     ),
     positivePrompt: joinUniquePromptSections(
-      [garmentOnly ? GARMENT_ONLY_POSITIVE_CONSTRAINT : null, positivePrompt],
+      [garmentOnly ? (wardrobeCutout ? WARDROBE_CUTOUT_POSITIVE_CONSTRAINT : GARMENT_ONLY_POSITIVE_CONSTRAINT) : null, positivePrompt],
       "\n\n",
       4_000,
     ),

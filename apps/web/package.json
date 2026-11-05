@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@decartai/sdk": "0.2.14",
     "@fashion/shared": "workspace:*",
     "@mojs/core": "^1.7.1",
     "@number-flow/react": "^0.6.2",

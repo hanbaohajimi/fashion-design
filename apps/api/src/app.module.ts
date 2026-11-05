@@ -1,4 +1,6 @@
 import { StudioModule } from "./modules/studio/studio.module";
+import { WardrobeModule } from "./modules/wardrobe/wardrobe.module";
+import { RealtimeTryOnModule } from "./modules/realtime-tryon/realtime-tryon.module";
 import { ProjectTasksModule } from "./modules/project-tasks/project-tasks.module";
 import { RunwayModule } from "./modules/runway/runway.module";
 import { ExperimentsModule } from "./modules/experiments/experiments.module";
@@ -36,6 +38,8 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
   imports: [
     SentryModule.forRoot(),
     StudioModule,
+    WardrobeModule,
+    RealtimeTryOnModule,
     ProjectTasksModule,
     RunwayModule,
     ExperimentsModule,

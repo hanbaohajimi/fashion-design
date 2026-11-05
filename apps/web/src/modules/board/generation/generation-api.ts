@@ -231,7 +231,7 @@ interface SignedMaskUpload {
 
 const MASK_UPLOAD_TIMEOUT_MS = 20_000;
 
-async function checksumSha256Base64(blob: Blob): Promise<string> {
+async function checksumSha256(blob: Blob): Promise<{ base64: string; hex: string }> {
   if (!globalThis.crypto?.subtle) {
     throw new GenerationApiError(
       "当前浏览器不支持安全掩码上传，请升级浏览器后重试",
@@ -242,7 +242,8 @@ async function checksumSha256Base64(blob: Blob): Promise<string> {
     "SHA-256",
     await blob.arrayBuffer(),
   );
-  return btoa(String.fromCharCode(...new Uint8Array(digest)));
+  const bytes = new Uint8Array(digest);
+  return { base64: btoa(String.fromCharCode(...bytes)), hex: Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("") };
 }
 
 export async function uploadTemporaryMask(
@@ -251,24 +252,38 @@ export async function uploadTemporaryMask(
   width: number,
   height: number,
 ): Promise<string> {
-  const checksumSha256 = await checksumSha256Base64(blob);
+  return (await uploadTemporaryMaskReference(projectId, blob, width, height)).maskUrl;
+}
+
+export async function uploadTemporaryMaskReference(
+  projectId: string,
+  blob: Blob,
+  width: number,
+  height: number,
+  signal?: AbortSignal,
+): Promise<{ maskId: string; maskUrl: string; sha256: string }> {
+  signal?.throwIfAborted();
+  const checksum = await checksumSha256(blob);
+  const operation = AbortSignal.any([AbortSignal.timeout(MASK_UPLOAD_TIMEOUT_MS), ...(signal ? [signal] : [])]);
+  operation.throwIfAborted();
   const response = await fetch("/api/generations/masks/sign", {
     method: "POST",
     body: JSON.stringify({
       height,
       projectId,
-      checksumSha256,
+      checksumSha256: checksum.base64,
       size: blob.size,
       width,
     }),
     credentials: "include",
     headers: { "Content-Type": "application/json" },
+    signal: operation,
   });
   if (!response.ok) {
     throw await apiError(response, "临时掩码签名失败");
   }
   const signed = (await response.json()) as SignedMaskUpload;
-  if (signed.upload.headers["x-amz-checksum-sha256"] !== checksumSha256) {
+  if (signed.upload.headers["x-amz-checksum-sha256"] !== checksum.base64) {
     throw new GenerationApiError(
       "掩码签名摘要不匹配，请重试",
       "MASK_CHECKSUM_MISMATCH",
@@ -280,9 +295,10 @@ export async function uploadTemporaryMask(
       method: signed.upload.method,
       body: blob,
       headers: signed.upload.headers,
-      signal: AbortSignal.timeout(MASK_UPLOAD_TIMEOUT_MS),
+      signal: operation,
     });
   } catch (cause) {
+    signal?.throwIfAborted();
     const timedOut =
       cause instanceof DOMException &&
       (cause.name === "AbortError" || cause.name === "TimeoutError");
@@ -296,5 +312,6 @@ export async function uploadTemporaryMask(
   if (!uploaded.ok) {
     throw new GenerationApiError("掩码上传失败，请重试", "MASK_UPLOAD_FAILED");
   }
-  return signed.maskUrl;
+  operation.throwIfAborted();
+  return { maskId: signed.maskId, maskUrl: signed.maskUrl, sha256: checksum.hex };
 }

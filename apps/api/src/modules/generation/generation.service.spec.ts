@@ -47,6 +47,7 @@ describe("GenerationService", () => {
     workflowOutbox: { upsert: vi.fn() },
     designAsset: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
     generationTask: {
       create: vi.fn(),
@@ -182,6 +183,44 @@ describe("GenerationService", () => {
       expect.any(Function),
     );
     expect(jobs.enqueue).toHaveBeenNthCalledWith(1, "task-1", "owner");
+  });
+
+  it("衣架入口冻结全部参考与搭配快照，使用既有额度队列但不调用提示词模型", async () => {
+    database.designAsset.findMany.mockResolvedValue([
+      { id: "model", projectId: "project-1", url: "s3://model.png" },
+      { id: "garment", projectId: "project-1", url: "s3://garment.png" },
+    ]);
+    database.designAsset.findUnique.mockResolvedValue({ id: "model", projectId: "project-1", url: "s3://model.png" });
+    storage.createDownloadUrl.mockImplementation(async (key: string) => `https://private.example/${key}?signature=temporary`);
+    await service.createForWardrobe("user-1", { projectId: "project-1", sourceAssetIds: ["model", "garment"], prompt: "模特试穿，保留原始模特身份与姿势。某件原始素材说明：不要人物", snapshotId: "snapshot-1" }, "wardrobe-test");
+    expect(compiler.compile).not.toHaveBeenCalled();
+    expect(jobs.enqueue).toHaveBeenCalledWith("task-1", "user-1");
+    expect(database.generationTask.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      input: expect.objectContaining({ referenceImageUrls: ["https://private.example/model.png?signature=temporary", "https://private.example/garment.png?signature=temporary"] }),
+      compiledPrompt: expect.objectContaining({ presentationPolicy: expect.objectContaining({ mode: "on_model", matchedSignals: ["wardrobe-outfit-tryon"] }) }),
+      designStep: { create: expect.objectContaining({ actor: "wardrobe", tool: "wardrobe-tryon", inputSnapshot: expect.objectContaining({ parameters: expect.objectContaining({ outfitSnapshotId: "snapshot-1" }), sources: expect.arrayContaining([expect.objectContaining({ assetId: "model" }), expect.objectContaining({ assetId: "garment" })]) }) }) },
+    }) }));
+  });
+
+  it("衣架入口拒绝任何不属于当前项目的参考，且不会检查额度或调用队列", async () => {
+    database.designAsset.findMany.mockResolvedValue([{ id: "model", projectId: "project-1", url: "s3://model.png" }]);
+    await expect(service.createForWardrobe("user-1", { projectId: "project-1", sourceAssetIds: ["model", "foreign"], prompt: "模特试穿" }, "wardrobe-foreign")).rejects.toThrow("当前项目");
+    expect(billing.canGenerate).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("衣架准备约束不再被通用商品提示的人台或衣架选项覆盖", async () => {
+    database.designAsset.findMany.mockResolvedValue([{ id: "garment", projectId: "project-1", url: "s3://garment.png" }]);
+    database.designAsset.findUnique.mockResolvedValue({ id: "garment", projectId: "project-1", url: "s3://garment.png" });
+    storage.createDownloadUrl.mockResolvedValue("https://private.example/garment.png");
+    await service.createForWardrobe("user-1", { projectId: "project-1", sourceAssetIds: ["garment"], prompt: "把设计稿转为自然悬挂的独立衣服候选，保持面料", transparent: true }, "wardrobe-cutout");
+    const input = database.generationTask.create.mock.calls[0]?.[0]?.data.input as { prompt: string; background: string };
+    expect(input.background).toBe("transparent");
+    expect(input.prompt).toContain("genuine transparent alpha");
+    expect(input.prompt).toContain("Display hardware is rendered separately");
+    expect(input.prompt).not.toContain("ghost mannequin");
+    expect(input.prompt).not.toContain("flat lay");
+    expect(input.prompt).toContain("保持面料");
   });
 
   it("checks editor permission before an idempotency replay, quota check or compilation", async () => {
@@ -555,6 +594,63 @@ describe("GenerationService", () => {
       version: 1,
     });
   });
+
+  it("多参考局部编辑固定父图首位，签名私有蒙版并记录全部来源", async () => {
+    database.designAsset.findMany.mockResolvedValue([
+      { id: "mask", projectId: "project-1", url: "s3://mask.png" },
+      { id: "texture", projectId: "project-1", url: "s3://texture.png" },
+      { id: "source", projectId: "project-1", url: "s3://source.png" },
+    ]);
+    database.designAsset.findUnique.mockResolvedValue({
+      id: "source", projectId: "project-1", url: "s3://source.png",
+    });
+    storage.createDownloadUrl.mockImplementation(async (key: string) => `https://private.example/${key}`);
+    await service.createFromAgent("user-1", {
+      taskType: "inpaint", projectId: "project-1", parentAssetId: "source",
+      referenceImageUrl: "s3://source.png",
+      referenceImageUrls: ["s3://source.png", "s3://texture.png"],
+      maskImageUrl: "s3://mask.png", prompt: "按细网参考仅修正袖部",
+      width: 1024, height: 1536,
+    }, "inpaint-references", "修正袖部");
+    const data = database.generationTask.create.mock.calls[0]?.[0].data;
+    expect(data.input).toMatchObject({
+      referenceImageUrl: "https://private.example/source.png",
+      referenceImageUrls: ["https://private.example/source.png", "https://private.example/texture.png"],
+      maskImageUrl: "https://private.example/mask.png",
+    });
+    expect(data.designStep.create.inputSnapshot.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ assetId: "source", role: "edit_source" }),
+      expect.objectContaining({ assetId: "texture", role: "detail_ref" }),
+      expect.objectContaining({ assetId: "mask", title: "局部编辑蒙版" }),
+    ]));
+  });
+
+  it.each(["foreign-reference", "foreign-mask", "wrong-first", "external-url", "missing-project"])(
+    "多参考局部编辑在任务重放和计费前拒绝不合法输入：%s", async (kind) => {
+      database.designAsset.findMany.mockResolvedValue([
+        { id: "source", projectId: "project-1", url: "s3://source.png" },
+        ...(kind === "foreign-reference" ? [] : [{ id: "texture", projectId: "project-1", url: "s3://texture.png" }]),
+        ...(kind === "foreign-mask" ? [] : [{ id: "mask", projectId: "project-1", url: "s3://mask.png" }]),
+      ]);
+      database.generationTask.findUnique.mockResolvedValue(taskRecord());
+      await expect(service.createFromAgent("user-1", {
+        taskType: "inpaint",
+        ...(kind === "missing-project" ? {} : { projectId: "project-1" }),
+        parentAssetId: "source", referenceImageUrl: "s3://source.png",
+        referenceImageUrls: kind === "wrong-first"
+          ? ["s3://texture.png", "s3://source.png"]
+          : ["s3://source.png", kind === "external-url" ? "https://outside.example/texture.png" : "s3://texture.png"],
+        maskImageUrl: "s3://mask.png", prompt: "修正袖部", width: 1024, height: 1536,
+      }, "inpaint-invalid", "修正袖部")).rejects.toThrow();
+      expect(database.designAsset.findMany).toHaveBeenCalledTimes(kind === "external-url" || kind === "missing-project" ? 0 : 1);
+      if (kind !== "external-url" && kind !== "missing-project") expect(database.designAsset.findMany).toHaveBeenCalledWith({
+        where: { projectId: "project-1", archivedAt: null, url: { in: expect.any(Array) } },
+      });
+      expect(database.generationTask.findUnique).not.toHaveBeenCalled();
+      expect(billing.canGenerate).not.toHaveBeenCalled();
+      expect(jobs.enqueue).not.toHaveBeenCalled();
+    },
+  );
 
   it("用户明确要求模特试穿时不注入默认禁令", async () => {
     compiler.compile.mockResolvedValueOnce({

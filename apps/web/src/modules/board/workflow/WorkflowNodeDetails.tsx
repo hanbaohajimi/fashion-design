@@ -43,6 +43,8 @@ import { userFacingError } from "../../../components/user-facing-error";
 import { WorkflowDialog } from "./WorkflowDialog";
 import styles from "./workflow-canvas.module.css";
 import { useWorkspaceDraft } from "./workspace-drafts";
+import { TryOnReferenceEntry } from "./TryOnReferenceEntry";
+import { WardrobeReferenceEntry } from "./WardrobeReferenceEntry";
 
 const REFERENCE_ROLE_OPTIONS = [
   { value: "style_ref", label: "风格参考" },
@@ -180,6 +182,18 @@ export function NodeDetails({
       ) : null}
       {node.type === "reference_image" || node.type === "sketch" ? (
         <section className={styles.detailSection}>
+          {node.type === "reference_image" && typeof node.payload.fileAssetId === "string" ? <TryOnReferenceEntry
+            key={node.payload.fileAssetId}
+            projectId={projectId}
+            fileAssetId={node.payload.fileAssetId}
+            canEdit={node.canEditPayload === true}
+          /> : null}
+          {node.type === "reference_image" && typeof node.payload.fileAssetId === "string" ? <WardrobeReferenceEntry
+            key={`wardrobe:${node.payload.fileAssetId}`}
+            projectId={projectId}
+            fileAssetId={node.payload.fileAssetId}
+            canEdit={node.canEditPayload === true}
+          /> : null}
           <h4>参考图角色</h4>
           <p>
             当前标签：

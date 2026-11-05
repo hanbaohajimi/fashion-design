@@ -12,6 +12,7 @@ import {
   Dialog,
   TabPanel,
   Menu,
+  SegmentedControl,
 } from "../../components/ui";
 import { ProjectTaskCenter } from "../tasks/ProjectTaskCenter";
 import { AppHeader } from "../../components/AppHeader";
@@ -29,6 +30,8 @@ import { CollaborationPanel } from "./CollaborationPanel";
 import { ExperimentPanel } from "./ExperimentPanel";
 import { PrintWorkbench } from "./PrintWorkbench";
 import { PresentationSets } from "./PresentationSets";
+import { RealtimeTryOnPanel } from "./realtime-tryon/RealtimeTryOnPanel";
+import { WardrobeWorkspace } from "./wardrobe/WardrobeWorkspace";
 import { TrendBriefPanel } from "./TrendBriefPanel";
 import { RunwayWorkspace } from "../runway/RunwayWorkspace";
 import styles from "./studio.module.css";
@@ -57,6 +60,7 @@ export function StudioWorkspace({
   initialStyleRevisionId,
   initialShowId,
   initialRunId,
+  initialPresentationMode,
 }: {
   readonly projectId: string;
   readonly initialAssetId?: string | undefined;
@@ -64,6 +68,7 @@ export function StudioWorkspace({
   readonly initialStyleRevisionId?: string | undefined;
   readonly initialShowId?: string | undefined;
   readonly initialRunId?: string | undefined;
+  readonly initialPresentationMode?: string | undefined;
 }) {
   const { session } = useAuth();
   const [preferredRevision, setPreferredRevision] = useState(
@@ -80,12 +85,18 @@ export function StudioWorkspace({
   const [tab, setTab] = useState<Tab>(
     initialTab === "runway"
       ? "runway"
+      : initialTab === "presentation" && (initialPresentationMode === "realtime" || initialPresentationMode === "wardrobe")
+        ? "presentation"
       : initialAssetId
         ? "styles"
         : isStudioTab(initialTab)
           ? initialTab
           : "tasks",
   );
+  const [presentationMode, setPresentationMode] = useState<"sets" | "wardrobe" | "realtime">(
+    initialPresentationMode === "realtime" || initialPresentationMode === "wardrobe" ? initialPresentationMode : "sets",
+  );
+  const [wardrobeAssetId, setWardrobeAssetId] = useState(initialAssetId);
   const [experimentMode, setExperimentMode] =
     useState<ExperimentCreateInput["mode"]>("color");
   const [dirty, setDirty] = useState(false);
@@ -284,14 +295,33 @@ export function StudioWorkspace({
                       {...props}
                       data={data}
                       initialAssetId={initialAssetId}
+                      onWardrobe={(revisionId, assetId) => {
+                        void (async () => {
+                          if (!(await guard.confirmLeave())) return;
+                          setDirty(false);
+                          setPreferredRevision(revisionId);
+                          setWardrobeAssetId(assetId);
+                          setPresentationMode("wardrobe");
+                          setTab("presentation");
+                          const url = new URL(window.location.href);
+                          url.searchParams.set("tab", "presentation");
+                          url.searchParams.set("mode", "wardrobe");
+                          url.searchParams.set("styleRevisionId", revisionId);
+                          url.searchParams.set("assetId", assetId);
+                          window.history.replaceState(window.history.state, "", url);
+                          if (session) rememberCreativeVisit(session.user.id, projectId, url.pathname + url.search);
+                        })();
+                      }}
                       onPresentation={(revisionId) => {
                         void (async () => {
                           if (!(await guard.confirmLeave())) return;
                           setDirty(false);
                           setPreferredRevision(revisionId);
+                          setPresentationMode("sets");
                           setTab("presentation");
                           const url = new URL(window.location.href);
                           url.searchParams.set("tab", "presentation");
+                          url.searchParams.delete("mode");
                           url.searchParams.set("styleRevisionId", revisionId);
                           url.searchParams.delete("assetId");
                           window.history.replaceState(
@@ -419,7 +449,42 @@ export function StudioWorkspace({
                     value="presentation"
                     activeValue={tab}
                   >
-                    <PresentationSets
+                    <SegmentedControl
+                      label="商品展示模式"
+                      value={presentationMode}
+                      options={[{ value: "sets", label: "展示包" }, { value: "wardrobe", label: "衣架搭配" }, { value: "realtime", label: "实时试穿" }]}
+                      onChange={(next) => {
+                        void (async () => {
+                          if (!(await guard.confirmLeave())) return;
+                          setDirty(false);
+                          setPresentationMode(next);
+                          const url = new URL(window.location.href);
+                          if (next !== "sets") url.searchParams.set("mode", next);
+                          else url.searchParams.delete("mode");
+                          window.history.replaceState(window.history.state, "", url);
+                          if (session) rememberCreativeVisit(session.user.id, projectId, url.pathname + url.search);
+                        })();
+                      }}
+                    />
+                    {presentationMode === "realtime" ? <RealtimeTryOnPanel
+                      key={`${projectId}:${session?.user.id ?? "anonymous"}`}
+                      projectId={projectId}
+                      assets={data.assets}
+                      initialAssetId={initialAssetId}
+                      canEdit={data.capabilities.edit}
+                      onSaved={reload}
+                      onDirty={setDirty}
+                    /> : presentationMode === "wardrobe" ? <WardrobeWorkspace
+                      key={`${projectId}:${session?.user.id ?? "anonymous"}:${wardrobeAssetId ?? "rack"}`}
+                      projectId={projectId}
+                      assets={data.assets}
+                      styles={data.styles}
+                      initialAssetId={wardrobeAssetId}
+                      initialStyleRevisionId={preferredRevision}
+                      canEdit={data.capabilities.edit}
+                      onSaved={reload}
+                      onDirty={setDirty}
+                    /> : <PresentationSets
                       key={preferredRevision ?? "presentation"}
                       {...props}
                       data={data}
@@ -429,7 +494,7 @@ export function StudioWorkspace({
                         setExperimentMode("presentation");
                         void changeTab("experiments");
                       }}
-                    />
+                    />}
                   </TabPanel>
                   <TabPanel tabsId={tabsId} value="runway" activeValue={tab}>
                     <RunwayWorkspace

@@ -31,7 +31,20 @@ const paletteColorSchema = z.object({
 const commonRequestSchema = z
   .object({
     background: z.enum(["auto", "opaque", "transparent"]).optional(),
-    imageEdit: z.object({ intent: z.enum(["edit", "feedback", "erase", "remove_background", "outpaint"]), outpaint: imageOutpaintSchema.optional(), annotations: z.array(imageAnnotationSchema).max(100).optional() }).strict().optional(),
+    imageEdit: z
+      .object({
+        intent: z.enum([
+          "edit",
+          "feedback",
+          "erase",
+          "remove_background",
+          "outpaint",
+        ]),
+        outpaint: imageOutpaintSchema.optional(),
+        annotations: z.array(imageAnnotationSchema).max(100).optional(),
+      })
+      .strict()
+      .optional(),
     prompt: z.string().trim().min(1).max(4_000),
     negativePrompt: z.string().trim().max(3_000).optional(),
     width: z.number().int().min(256).max(2_048).multipleOf(8),
@@ -58,6 +71,8 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
     taskType: z.literal("inpaint"),
     referenceImageUrl: z.url(),
+    // First image is the actual masked source; later images are optional detail references.
+    referenceImageUrls: z.array(z.url()).min(1).max(16).optional(),
     maskImageUrl: z.url(),
     palette: z.array(paletteColorSchema).min(1).max(12).optional(),
   }),

@@ -471,6 +471,8 @@ function ImageWorkspace({
       <header className={styles.topbar}>
         <div className={styles.currentImage}><strong>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}</span></div>
         <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}>保存为款式</a>
+        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=realtime&assetId=${encodeURIComponent(assetId)}`}>实时试穿</a>
+        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=wardrobe&assetId=${encodeURIComponent(assetId)}`}>加入衣架</a>
         <div className={styles.menuAnchor}>
           <Button onClick={() => setMenu(!menu)} aria-expanded={menu}>
             <WorkspaceIcon name="image" />图像<WorkspaceIcon name="chevron" />

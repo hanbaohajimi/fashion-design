@@ -1,0 +1,10 @@
+.stage { display: flex; justify-content: center; min-width: 0; background: var(--surface-2); }
+.media { position: relative; display: inline-grid; max-width: 100%; }
+.media > img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(58dvh, 600px); object-fit: contain; }
+.media canvas { color: var(--color-action); }
+.media[data-busy="true"] { pointer-events: none; }
+.details { border-block: var(--border-hairline) solid var(--color-border); }
+.details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; }
+.details summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
+.region { border: 0; padding: 0; margin: 0; min-width: 0; }
+.region:disabled { pointer-events: none; }
