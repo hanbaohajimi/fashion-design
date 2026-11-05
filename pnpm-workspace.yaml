@@ -6,6 +6,10 @@ overrides:
   dompurify: 3.4.17
   fast-uri: 3.1.9
   find-my-way: 9.7.0
+  # Fix aborted filesystem walks in Sentry's transitive dependency (GHSA-3g3m-2fjr-6pw4).
+  glob@13.0.6: 14.0.2
+  # Fix glob pattern amplification in the TypeScript ESLint parser (GHSA-g3hv-75wg-m249).
+  "@typescript-eslint/typescript-estree>minimatch": 11.0.4
   nanoid@3.3.16: 3.3.18
   postcss: 8.5.23
   sharp: 0.35.5
