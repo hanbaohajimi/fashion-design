@@ -24,21 +24,39 @@ export const canvasInputBindingSchema = z
     port: z.enum(["goal", "reference", "constraint", "candidate", "source"]),
   })
   .strict();
+const materialInput = {
+  clientMaterialId: id.optional(),
+  materialType: canvasMaterialTypeSchema,
+  title: z.string().trim().min(1).max(200),
+  payload,
+  shapeId: id.optional(),
+  position: z
+    .object({ x: z.number().finite(), y: z.number().finite() })
+    .optional(),
+};
 export const canvasCommandSchema = z.discriminatedUnion("type", [
+  z
+    .object({ ...common, type: z.literal("create_material"), ...materialInput })
+    .strict(),
   z
     .object({
       ...common,
-      type: z.literal("create_material"),
-      clientMaterialId: id.optional(),
-      materialType: canvasMaterialTypeSchema,
-      title: z.string().trim().min(1).max(200),
-      payload,
-      shapeId: id.optional(),
-      position: z
-        .object({ x: z.number().finite(), y: z.number().finite() })
-        .optional(),
+      type: z.literal("import_materials"),
+      materials: z.array(z.object(materialInput).strict()).min(1).max(100),
     })
-    .strict(),
+    .strict()
+    .refine((value) => {
+      const ids = value.materials.flatMap((item) =>
+        item.clientMaterialId ? [item.clientMaterialId] : [],
+      );
+      const shapes = value.materials.flatMap((item) =>
+        item.shapeId ? [item.shapeId] : [],
+      );
+      return (
+        new Set(ids).size === ids.length &&
+        new Set(shapes).size === shapes.length
+      );
+    }, "同一批素材不能重复绑定对象或编号"),
   z
     .object({
       ...common,

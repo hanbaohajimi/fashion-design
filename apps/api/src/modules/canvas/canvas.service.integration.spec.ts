@@ -35,6 +35,28 @@ async function fixture() {
   return { user, project };
 }
 describe("independent canvas persistence", () => {
+  it("imports a material batch atomically and replays all bindings once", async () => {
+    const { user, project } = await fixture();
+    try {
+      const before = await canvas.initialize(user.id, project.id);
+      const batch = { type: "import_materials" as const, mutationId: crypto.randomUUID(), materials: [
+        { materialType: "reference_text" as const, title: "来源资料", payload: { text: "海风" }, shapeId: "shape:batch-text" },
+        { materialType: "swatch" as const, title: "配套色卡", payload: { colors: [{ hex: "invalid", name: "海蓝" }] }, shapeId: "shape:batch-palette" },
+      ] };
+      await expect(commands.execute(user.id, project.id, batch)).rejects.toMatchObject({ status: 400 });
+      expect(await prisma.workflowNode.count({ where: { projectId: project.id } })).toBe(0);
+      expect(await prisma.canvasObjectBinding.count({ where: { projectId: project.id } })).toBe(0);
+      expect((await canvas.read(user.id, project.id)).revision).toBe(before.revision);
+      batch.materials[1] = { materialType: "swatch", title: "配套色卡", payload: { colors: [{ hex: "#112233", name: "海蓝" }] }, shapeId: "shape:batch-palette" };
+      const [first, second] = await Promise.all([commands.execute(user.id, project.id, batch), commands.execute(user.id, project.id, batch)]);
+      expect(first.nodeId).toBe(second.nodeId);
+      expect(second.graph.nodes).toHaveLength(2);
+      expect(second.canvas.bindings).toHaveLength(2);
+      expect(second.canvas.revision).toBe(before.revision + 1);
+      expect(await prisma.canvasMutation.count({ where: { projectId: project.id } })).toBe(1);
+    } finally { await prisma.user.delete({ where: { id: user.id } }); }
+  });
+
   it("forks consumed material while preserving other placements and the execution snapshot", async () => {
     const { user, project } = await fixture();
     try {

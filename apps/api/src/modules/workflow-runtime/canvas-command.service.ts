@@ -141,58 +141,74 @@ export class CanvasCommandService {
         let nodeId = "nodeId" in command ? command.nodeId : "";
         let operations: WorkflowSemanticPatchInput["operations"] = [];
         let actualInputIds: string[] = [];
-        if (command.type === "create_material") {
-          const materialPayload =
-            command.materialType === "candidate"
-              ? { ...command.payload, historicalImport: true }
-              : command.payload;
-          if (
-            command.materialType === "candidate" &&
-            (typeof command.payload.assetId !== "string" ||
-              !(await tx.designAsset.findFirst({
-                where: { id: command.payload.assetId, projectId },
-                select: { id: true },
-              })))
-          )
-            throw new BadRequestException(
-              "导入作品必须引用本项目中真实存在的资产",
-            );
-          const bound = command.shapeId
-            ? await tx.canvasObjectBinding.findUnique({
-                where: {
-                  projectId_shapeId: { projectId, shapeId: command.shapeId },
-                },
-              })
-            : null;
-          const existing = bound
-            ? graph.nodes.find((node) => node.id === bound.nodeId)
-            : null;
-          if (existing) {
+        const placements: {
+          shapeId: string;
+          nodeId: string;
+          position?: { x: number; y: number };
+        }[] = [];
+        if (
+          command.type === "create_material" ||
+          command.type === "import_materials"
+        ) {
+          for (const material of command.type === "import_materials"
+            ? command.materials
+            : [command]) {
+            const materialPayload =
+              material.materialType === "candidate"
+                ? { ...material.payload, historicalImport: true }
+                : material.payload;
             if (
-              existing.type !== command.materialType ||
-              canvasHash(existing.payload) !== canvasHash(materialPayload)
+              material.materialType === "candidate" &&
+              (typeof material.payload.assetId !== "string" ||
+                !(await tx.designAsset.findFirst({
+                  where: { id: material.payload.assetId, projectId },
+                  select: { id: true },
+                })))
             )
-              throw new ConflictException(
-                "此白板对象已有保存记录，请恢复绑定后再编辑",
+              throw new BadRequestException(
+                "导入作品必须引用本项目中真实存在的资产",
               );
-            nodeId = existing.id;
-          } else {
-            nodeId = command.clientMaterialId ?? randomUUID();
-            operations = [
-              {
+            const bound = material.shapeId
+              ? await tx.canvasObjectBinding.findUnique({
+                  where: {
+                    projectId_shapeId: { projectId, shapeId: material.shapeId },
+                  },
+                })
+              : null;
+            const existing = bound
+              ? graph.nodes.find((node) => node.id === bound.nodeId)
+              : null;
+            if (existing) {
+              if (
+                existing.type !== material.materialType ||
+                canvasHash(existing.payload) !== canvasHash(materialPayload)
+              )
+                throw new ConflictException(
+                  "此白板对象已有保存记录，请恢复绑定后再编辑",
+                );
+              nodeId = existing.id;
+            } else {
+              nodeId = material.clientMaterialId ?? randomUUID();
+              operations.push({
                 type: "add_node",
                 node: {
                   id: nodeId,
                   kind: "asset",
-                  type: command.materialType,
-                  title: command.title,
+                  type: material.materialType,
+                  title: material.title,
                   payload: materialPayload,
                   x: 0,
                   y: 0,
                 },
-              },
-            ];
+              });
+            }
+            placements.push({
+              shapeId: material.shapeId ?? `shape:canvas-${nodeId}`,
+              nodeId,
+              ...(material.position ? { position: material.position } : {}),
+            });
           }
+          nodeId = placements[0]?.nodeId ?? "";
         } else if (command.type === "update_material") {
           const node = graph.nodes.find(
             (item) => item.id === command.nodeId && item.kind === "asset",
@@ -382,26 +398,34 @@ export class CanvasCommandService {
             undefined,
             tx,
           );
-        if (
-          command.type === "create_material" ||
-          command.type === "update_material"
-        ) {
-          const priorBinding =
-            command.type === "update_material" && !command.shapeId
-              ? await tx.canvasObjectBinding.findFirst({
-                  where: { projectId, nodeId: command.nodeId, removedAt: null },
-                  orderBy: { createdAt: "asc" },
-                })
-              : null;
-          const shapeId =
-            command.shapeId ??
-            priorBinding?.shapeId ??
-            `shape:canvas-${nodeId}`;
-          await tx.canvasObjectBinding.upsert({
-            where: { projectId_shapeId: { projectId, shapeId } },
-            create: { projectId, shapeId, nodeId },
-            update: { nodeId, removedAt: null },
+        if (command.type === "update_material") {
+          const priorBinding = !command.shapeId
+            ? await tx.canvasObjectBinding.findFirst({
+                where: { projectId, nodeId: command.nodeId, removedAt: null },
+                orderBy: { createdAt: "asc" },
+              })
+            : null;
+          placements.push({
+            shapeId:
+              command.shapeId ??
+              priorBinding?.shapeId ??
+              `shape:canvas-${nodeId}`,
+            nodeId,
           });
+        }
+        for (const placement of placements)
+          await tx.canvasObjectBinding.upsert({
+            where: {
+              projectId_shapeId: { projectId, shapeId: placement.shapeId },
+            },
+            create: {
+              projectId,
+              shapeId: placement.shapeId,
+              nodeId: placement.nodeId,
+            },
+            update: { nodeId: placement.nodeId, removedAt: null },
+          });
+        if (placements.length) {
           const document = await tx.canvasDocument.findUnique({
             where: { projectId },
           });
@@ -410,19 +434,21 @@ export class CanvasCommandService {
               where: { projectId },
               data: {
                 revision: { increment: 1 },
-                ...(command.type === "create_material" && command.position
-                  ? {
-                      snapshot: canvasJson({
-                        ...canvasObject(document.snapshot),
-                        placementHints: {
-                          ...canvasObject(
-                            canvasObject(document.snapshot).placementHints,
-                          ),
-                          [shapeId]: command.position,
-                        },
-                      }),
-                    }
-                  : {}),
+                snapshot: canvasJson({
+                  ...canvasObject(document.snapshot),
+                  placementHints: {
+                    ...canvasObject(
+                      canvasObject(document.snapshot).placementHints,
+                    ),
+                    ...Object.fromEntries(
+                      placements.flatMap((placement) =>
+                        placement.position
+                          ? [[placement.shapeId, placement.position]]
+                          : [],
+                      ),
+                    ),
+                  },
+                }),
               },
             });
         }
@@ -487,8 +513,18 @@ export class CanvasCommandService {
         ...command,
         operation: "restore",
       });
-      nodeId = restored.nodes.find(node => node.type === "candidate" && canvasObject(node.payload).assetId === command.assetId)?.id ?? "";
-      await database.canvasMutation.update({ where: { projectId_mutationId: { projectId, mutationId: command.mutationId } }, data: { result: canvasJson({ ...receipt, nodeId }) } });
+      nodeId =
+        restored.nodes.find(
+          (node) =>
+            node.type === "candidate" &&
+            canvasObject(node.payload).assetId === command.assetId,
+        )?.id ?? "";
+      await database.canvasMutation.update({
+        where: {
+          projectId_mutationId: { projectId, mutationId: command.mutationId },
+        },
+        data: { result: canvasJson({ ...receipt, nodeId }) },
+      });
     }
     return {
       nodeId,
