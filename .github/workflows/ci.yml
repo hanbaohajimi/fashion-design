@@ -8,7 +8,8 @@ jobs:
   quality:
     name: quality + integration + browser contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Leave time for pinned screenshot comparisons after the serial browser suite.
+    timeout-minutes: 60
     env:
       API_INTERNAL_URL: http://127.0.0.1:3001
       APP_ORIGIN: http://localhost:3000
