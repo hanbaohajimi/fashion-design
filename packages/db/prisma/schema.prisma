@@ -473,12 +473,16 @@ model Project {
   idempotencyKey     String?             @map("idempotency_key")
   archived           Boolean             @default(false)
   workflowAgentVersion Int                @default(2) @map("workflow_agent_version")
+  canvasInteractionMode String           @default("node") @map("canvas_interaction_mode")
   deletedAt          DateTime?           @map("deleted_at")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   workspace          Workspace           @relation(fields: [wsId], references: [id], onDelete: Cascade)
   boardSnapshot      BoardSnapshot?
   boardElements      BoardElement[]
+  canvasDocument     CanvasDocument?
+  canvasBindings     CanvasObjectBinding[]
+  canvasMutations    CanvasMutation[]
   designAssets       DesignAsset[]
   collections        Collection[]
   generationTasks    GenerationTask[]
@@ -772,6 +776,46 @@ model BoardSnapshot {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("board_snapshots")
+}
+
+model CanvasDocument {
+  projectId String @id @map("project_id")
+  snapshot Json
+  revision Int @default(0)
+  formatVersion Int @default(1) @map("format_version")
+  initializedFrom String @map("initialized_from")
+  sourceGraphRevision Int @default(0) @map("source_graph_revision")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("canvas_documents")
+}
+
+model CanvasObjectBinding {
+  projectId String @map("project_id")
+  shapeId String @map("shape_id")
+  nodeId String @map("node_id")
+  removedAt DateTime? @map("removed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, shapeId])
+  @@index([projectId, nodeId])
+  @@map("canvas_object_bindings")
+}
+
+model CanvasMutation {
+  id String @id @default(uuid())
+  projectId String @map("project_id")
+  mutationId String @map("mutation_id")
+  requestHash String @map("request_hash")
+  kind String
+  result Json
+  createdAt DateTime @default(now()) @map("created_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, mutationId])
+  @@map("canvas_mutations")
 }
 
 model WorkflowGraph {

@@ -408,3 +408,4 @@ export * from "./assistant-stream";
 export * from "./project-tasks";
 export * from "./realtime-tryon";
 export * from "./wardrobe";
+export * from "./canvas-workspace";

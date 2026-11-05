@@ -143,3 +143,4 @@ export type { WorkflowVersionNode, WorkflowVersionEdge, WorkflowVersionBinding, 
 export type { Style, StyleRevision, StudioDocument, StudioExperiment, WorkspaceMember, StudioMutation } from "../generated/prisma/client.js";
 export type { RealtimeTryOnSession, RealtimeTryOnCapture } from "../generated/prisma/client.js";
 export type { WardrobeItem, WardrobeRevision, WardrobePreparation, WardrobeOutfit, WardrobeOutfitSnapshot, WardrobeTryOn } from "../generated/prisma/client.js";
+export type { CanvasDocument, CanvasObjectBinding, CanvasMutation } from "../generated/prisma/client.js";
