@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, webcrypto } from "node:crypto";
 import { test, expect, seedVisualApp, settleImages, PROJECT } from "./fixtures";
 import {
   contrastFailures,
@@ -288,17 +288,48 @@ for (const tab of ["tasks", "experiments"]) {
 }
 
 test("task request failure retains the complete draft", async ({ page }) => {
-  // Docker 的 host.docker.internal HTTP 不提供 secure-context UUID；此用例只验证失败界面。
-  // 请求键由 Node 原生 API 提供，生产逻辑及 localhost 业务回归继续使用浏览器原生实现。
+  // The Docker HTTP origin lacks secure-context crypto. Use native Node crypto
+  // only in this failure-view fixture; localhost/HTTPS regressions use browser APIs.
+  await page.exposeFunction("visualSha256", async (bytes: number[]) =>
+    Array.from(
+      new Uint8Array(
+        await webcrypto.subtle.digest("SHA-256", new Uint8Array(bytes)),
+      ),
+    ),
+  );
   await page.addInitScript((requestKey) => {
     if (typeof crypto.randomUUID !== "function") {
       Object.defineProperty(crypto, "randomUUID", { value: () => requestKey });
+    }
+    if (!crypto.subtle) {
+      const bridge = window as unknown as {
+        visualSha256: (bytes: number[]) => Promise<number[]>;
+      };
+      Object.defineProperty(crypto, "subtle", {
+        value: {
+          digest: async (
+            algorithm: AlgorithmIdentifier,
+            data: BufferSource,
+          ) => {
+            if (
+              (typeof algorithm === "string" ? algorithm : algorithm.name) !==
+              "SHA-256"
+            )
+              throw new Error("Unsupported visual fixture digest");
+            const bytes = ArrayBuffer.isView(data)
+              ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+              : new Uint8Array(data);
+            return new Uint8Array(await bridge.visualSha256(Array.from(bytes)))
+              .buffer;
+          },
+        },
+      });
     }
   }, randomUUID());
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: workspaceFixture() }),
   );
-  await page.route(`**/api/projects/${PROJECT}/workflow`, (route) =>
+  await page.route(`**/api/projects/${PROJECT}/canvas/commands`, (route) =>
     route.fulfill({
       status: 503,
       json: { message: "任务暂时无法提交，请重试" },
@@ -310,7 +341,9 @@ test("task request failure retains the complete draft", async ({ page }) => {
     .fill("保持夹克廓形并调整袖口");
   await page.getByLabel(/^必须保留/u).fill("双口袋和肩线");
   await page.getByRole("button", { name: "选择图片 1", exact: true }).click();
-  await page.getByRole("button", { name: "进入设计工作台", exact: true }).click();
+  await page
+    .getByRole("button", { name: "进入设计工作台", exact: true })
+    .click();
   await expect(
     page.getByText("任务暂时无法提交，请重试", { exact: true }),
   ).toBeVisible();
@@ -403,8 +436,9 @@ test.describe("studio touch", () => {
         .locator("summary"),
     ]) {
       const bounds = await target.boundingBox();
-      expect(bounds!.width).toBeGreaterThanOrEqual(minimum);
-      expect(bounds!.height).toBeGreaterThanOrEqual(minimum);
+      if (!bounds) throw new Error("触屏操作控件不可见");
+      expect(bounds.width).toBeGreaterThanOrEqual(minimum);
+      expect(bounds.height).toBeGreaterThanOrEqual(minimum);
     }
     await expect(page).toHaveScreenshot("studio-assistant-touch.png");
     await page.getByRole("button", { name: "历史对话", exact: true }).click();
