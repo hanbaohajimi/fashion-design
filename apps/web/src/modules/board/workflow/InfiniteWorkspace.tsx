@@ -8,7 +8,6 @@ import {
   useState,
 } from "react";
 import {
-  createShapeId,
   createTLStore,
   defaultBindingUtils,
   defaultShapeUtils,
@@ -23,6 +22,7 @@ import {
   type TLShape,
   type TLShapeId,
   type TLStoreSnapshot,
+  type TLStateNodeConstructor,
 } from "tldraw";
 import {
   readSwatchColors,
@@ -30,8 +30,12 @@ import {
   type CanvasDocumentView,
   type CanvasSave,
 } from "@fashion/shared";
-import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import {
+  useDraftScope,
+  usePersistentDraft,
+} from "../../../components/drafts/use-persistent-draft";
 import { boardShapeUtils } from "../shapes";
+import { MountTool } from "../tools/MountTool";
 import { createSwatchColor } from "../shapes/swatch-colors";
 import {
   completeUpload,
@@ -44,7 +48,7 @@ import {
   CanvasApiError,
   fetchCanvas,
   initializeCanvas,
-  runCanvasCommand,
+  isRejectedCanvasCommand,
   saveCanvas,
 } from "./canvas-api";
 import {
@@ -53,7 +57,20 @@ import {
   type WorkflowNode,
 } from "./workflow-api";
 import { nodeImageUrl } from "./workflow-graph";
+import { CanvasTools, type CanvasToolActions } from "./CanvasTools";
+import {
+  centerCameraForViewport,
+  fitCanvasContents,
+  placementNodeId,
+  readCanvasCamera,
+  selectedMaterialShapes,
+} from "./canvas-placements";
+import { useCanvasCommand } from "./use-canvas-command";
 import styles from "./infinite-workspace.module.css";
+export { selectedMaterialShapes } from "./canvas-placements";
+type CanvasMaterialResult = Awaited<
+  ReturnType<typeof import("./canvas-api").runCanvasCommand>
+>;
 
 export interface InfiniteWorkspaceHandle {
   flush: () => Promise<void>;
@@ -73,6 +90,8 @@ interface Props {
   onReady: (handle: InfiniteWorkspaceHandle | null) => void;
   onSelection: (nodeIds: string[]) => void;
   onOpen: (nodeId: string) => void;
+  onAddMaterial: () => void;
+  toolActions: CanvasToolActions;
   onError: (error: string | null) => void;
   onSaveStatus: (status: string) => void;
 }
@@ -110,9 +129,13 @@ export function InfiniteWorkspace(props: Props) {
         <Tldraw
           store={store}
           shapeUtils={[...boardShapeUtils]}
+          tools={[MountTool] as unknown as TLStateNodeConstructor[]}
           hideUi
           locale="zh-cn"
           options={{ createTextOnCanvasDoubleClick: false }}
+          onMount={(editor) => {
+            editor.updateInstanceState({ isReadonly: true });
+          }}
           {...(licenseKey ? { licenseKey } : {})}
         >
           <WorkspaceDocument {...props} />
@@ -120,24 +143,6 @@ export function InfiniteWorkspace(props: Props) {
       </div>
     </CanvasInteractionContext.Provider>
   );
-}
-
-/** A frame/group is expanded only for explicit selection. It never creates graph edges. */
-export function selectedMaterialShapes(editor: Editor): TLShape[] {
-  const result = new Map<TLShapeId, TLShape>();
-  const visit = (id: TLShapeId) => {
-    const shape = editor.getShape(id);
-    if (!shape) return;
-    if (
-      shape.type === "group" ||
-      shape.type === "frame" ||
-      shape.type === "fashion-frame"
-    ) {
-      for (const child of editor.getSortedChildIdsForParent(id)) visit(child);
-    } else result.set(id, shape);
-  };
-  editor.getSelectedShapeIds().forEach(visit);
-  return [...result.values()];
 }
 
 function projection(node: WorkflowNode) {
@@ -195,18 +200,18 @@ function materialContent(
   title: string;
   payload: Record<string, unknown>;
 } | null {
-  if (shape.type === "text" && editor) {
+  if ((shape.type === "text" || shape.type === "note") && editor) {
     const text = editor.getShapeUtil(shape).getText(shape) ?? "";
     return {
       materialType: "reference_text",
-      title: text.slice(0, 40) || "文字素材",
+      title: text.slice(0, 40).trim() || "文字素材",
       payload: { text },
     };
   }
   if (shape.type === "fashion-note")
     return {
       materialType: "reference_text",
-      title: shape.props.text.slice(0, 40) || "文字素材",
+      title: shape.props.text.slice(0, 40).trim() || "文字素材",
       payload: { text: shape.props.text },
     };
   if (shape.type === "fashion-swatch")
@@ -229,13 +234,35 @@ function strokeContent(shape: TLShape) {
   const { segments, color, fill, dash, size, isPen, isClosed } = shape.props;
   return { version: 1, segments, color, fill, dash, size, isPen, isClosed };
 }
+function commandSignature(
+  command: Extract<
+    CanvasCommand,
+    { type: "create_material" | "update_material" }
+  >,
+) {
+  const payload = command.payload;
+  if (payload.canvasStrokeVersion)
+    return JSON.stringify(payload.canvasStrokeVersion);
+  if (Array.isArray(payload.colors))
+    return JSON.stringify({
+      materialType: "swatch",
+      title: command.title || "色卡",
+      payload: { color: payload.color, colors: payload.colors },
+    });
+  const text = String(payload.text ?? "");
+  return JSON.stringify({
+    materialType: "reference_text",
+    title: text.slice(0, 40).trim() || "文字素材",
+    payload: { text },
+  });
+}
 function WorkspaceDocument(props: Props) {
   const editor = useEditor();
   const live = useRef(props);
   useLayoutEffect(() => {
     live.current = props;
   }, [props]);
-  const { active, onEditor } = props;
+  const { active } = props;
   const document = useRef<CanvasDocumentView | null>(null);
   const bindings = useRef(new Map<string, string>());
   const pendingLocation = useRef<string | null>(null);
@@ -245,6 +272,7 @@ function WorkspaceDocument(props: Props) {
     new Map<string, { signature: string; command: CanvasCommand }>(),
   );
   const captureTargets = useRef(new Set<string>());
+  const layoutSelections = useRef(new Set<TLShapeId>());
   const selectionWork = useRef<Promise<void>>(Promise.resolve());
   const queue = useRef(Promise.resolve());
   const savingPacket = useRef<CanvasSave | null>(null);
@@ -252,6 +280,20 @@ function WorkspaceDocument(props: Props) {
   const persisted = useRef(0);
   const [ready, setReady] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const scope = useDraftScope();
+  const cameraKey = scope
+    ? `fashion:canvas-view:${scope.accountId}:${props.projectId}`
+    : "";
+  const materialCommand = useCanvasCommand(
+    props.projectId,
+    "infinite-canvas-material",
+  );
+  const materialCommandRef = useRef(materialCommand);
+  useLayoutEffect(() => {
+    materialCommandRef.current = materialCommand;
+  }, [materialCommand]);
   const [status, setStatus] = useState("正在载入白板…");
   useEffect(() => live.current.onSaveStatus(status), [status]);
   const [draftValue, setDraftValue] = useState<Record<string, unknown>>({});
@@ -272,7 +314,7 @@ function WorkspaceDocument(props: Props) {
     restore,
     baseline,
     objectKey: "infinite-canvas",
-    enabled: ready,
+    enabled: ready && canEdit,
   });
   const draftRef = useRef(draft);
   useLayoutEffect(() => {
@@ -288,8 +330,10 @@ function WorkspaceDocument(props: Props) {
             document.current.snapshot.document ??
               document.current.snapshot.store,
           );
-      if (!load && remoteChanged && sequence.current !== persisted.current)
+      if (!load && remoteChanged && sequence.current !== persisted.current) {
+        setStatus("存在保存冲突，草稿已保留");
         throw new Error("其他窗口已修改白板，本机草稿已保留，请核对后重新载入");
+      }
       if (!load && remoteChanged)
         loadSnapshot(editor.store, {
           document: data.snapshot.document,
@@ -299,106 +343,165 @@ function WorkspaceDocument(props: Props) {
       if (load && Array.isArray(data.snapshot.legacyRecords)) {
         const records = data.snapshot.legacyRecords.map(object);
         const ids = new Set(records.map((record) => record.id));
-        editor.createShapes(
-          records.map((record) => ({
-            ...record,
-            parentId: ids.has(record.parentId)
-              ? record.parentId
-              : editor.getCurrentPageId(),
-          })) as Parameters<Editor["createShapes"]>[0],
-        );
+        const wasReadOnly = editor.getInstanceState().isReadonly;
+        editor.updateInstanceState({ isReadonly: false });
+        try {
+          editor.store.mergeRemoteChanges(() =>
+            editor.createShapes(
+              records.map((record) => ({
+                ...record,
+                parentId: ids.has(record.parentId)
+                  ? record.parentId
+                  : editor.getCurrentPageId(),
+              })) as Parameters<Editor["createShapes"]>[0],
+            ),
+          );
+        } finally {
+          editor.updateInstanceState({ isReadonly: wasReadOnly });
+        }
       }
       document.current = data;
       setCanEdit(data.canEdit);
       editor.updateInstanceState({ isReadonly: false });
-      editor.store.mergeRemoteChanges(() => {
-        for (const binding of data.bindings) {
-          if (binding.removed) continue;
-          const node = graph.nodes.find((item) => item.id === binding.nodeId);
-          if (!node) continue;
-          const id = binding.shapeId as TLShapeId;
-          const known = bindings.current.has(id);
-          bindings.current.set(id, node.id);
-          const existing = editor.getShape(id);
-          const material = projection(node);
-          if (!existing && (load || !known || remoteChanged)) {
-            const count = editor.getCurrentPageShapes().length;
-            const hint = object(object(data.snapshot.placementHints)[id]);
-            editor.createShape({
-              id,
-              ...material,
-              x: typeof hint.x === "number" ? hint.x : (count % 4) * 380,
-              y:
-                typeof hint.y === "number"
-                  ? hint.y
-                  : Math.floor(count / 4) * 460,
-              meta: { canvasNodeId: node.id },
-            });
-          } else if (existing) {
-            const current = strokeContent(existing) ?? materialContent(existing, editor);
-            const unchanged =
-              !current ||
-              !materialBaselines.current.has(id) ||
-              JSON.stringify(current) === materialBaselines.current.get(id);
-            if (unchanged && existing.type === material.type) {
-              editor.updateShape({
+      let projected = false;
+      try {
+        editor.store.mergeRemoteChanges(() => {
+          for (const binding of data.bindings) {
+            if (binding.removed) continue;
+            const node = graph.nodes.find((item) => item.id === binding.nodeId);
+            if (!node) continue;
+            const id = binding.shapeId as TLShapeId;
+            const known = bindings.current.has(id);
+            bindings.current.set(id, node.id);
+            const existing = editor.getShape(id);
+            const material = projection(node);
+            if (!existing && (load || !known || remoteChanged)) {
+              const count = editor.getCurrentPageShapes().length;
+              const hint = object(object(data.snapshot.placementHints)[id]);
+              editor.createShape({
                 id,
-                type: material.type,
-                props: {
-                  ...material.props,
-                  w: object(existing.props).w,
-                  h: object(existing.props).h,
-                },
-                meta: { ...existing.meta, canvasNodeId: node.id },
-              } as Parameters<Editor["updateShape"]>[0]);
-              const updated = editor.getShape(id);
-              if (updated)
+                ...material,
+                x: typeof hint.x === "number" ? hint.x : (count % 4) * 380,
+                y:
+                  typeof hint.y === "number"
+                    ? hint.y
+                    : Math.floor(count / 4) * 460,
+                meta: { canvasNodeId: node.id },
+              });
+            } else if (existing) {
+              const current =
+                strokeContent(existing) ?? materialContent(existing, editor);
+              const unchanged =
+                !current ||
+                !materialBaselines.current.has(id) ||
+                JSON.stringify(current) === materialBaselines.current.get(id);
+              if (unchanged && existing.type === material.type) {
+                editor.updateShape({
+                  id,
+                  type: material.type,
+                  props: {
+                    ...material.props,
+                    w: object(existing.props).w,
+                    h: object(existing.props).h,
+                  },
+                  meta: { ...existing.meta, canvasNodeId: node.id },
+                } as Parameters<Editor["updateShape"]>[0]);
+                const updated = editor.getShape(id);
+                if (updated)
+                  materialBaselines.current.set(
+                    id,
+                    JSON.stringify(materialContent(updated, editor)),
+                  );
+              } else if (
+                unchanged &&
+                (existing.type === "text" || existing.type === "note") &&
+                material.type === "fashion-note"
+              ) {
+                editor.updateShape({
+                  id,
+                  type: existing.type,
+                  props: { richText: toRichText(material.props.text) },
+                  meta: { ...existing.meta, canvasNodeId: node.id },
+                });
                 materialBaselines.current.set(
                   id,
-                  JSON.stringify(materialContent(updated, editor)),
+                  JSON.stringify(
+                    materialContent(editor.getShape(id) ?? existing, editor),
+                  ),
                 );
-            } else if (
-              unchanged &&
-              existing.type === "text" &&
-              material.type === "fashion-note"
-            ) {
-              editor.updateShape({
-                id,
-                type: "text",
-                props: { richText: toRichText(material.props.text) },
-                meta: { ...existing.meta, canvasNodeId: node.id },
-              });
+              } else if (
+                unchanged &&
+                existing.type === "draw" &&
+                material.type === "fashion-image" &&
+                existing.meta.canvasFileAssetId &&
+                existing.meta.canvasFileAssetId !== node.payload.fileAssetId
+              ) {
+                // A subsequent edit in the sketch panel produces a new image version.
+                // Keep the original editable stroke record alongside its displayed projection.
+                const bounds = editor.getShapeGeometry(existing).bounds;
+                const selected = editor.getSelectedShapeIds().includes(id);
+                editor.deleteShape(id);
+                editor.createShape({
+                  id,
+                  ...material,
+                  x: existing.x,
+                  y: existing.y,
+                  rotation: existing.rotation,
+                  parentId: existing.parentId,
+                  index: existing.index,
+                  props: {
+                    ...material.props,
+                    w: Math.max(1, bounds.w),
+                    h: Math.max(1, bounds.h),
+                  },
+                  meta: {
+                    ...existing.meta,
+                    originalCanvasStroke: JSON.parse(JSON.stringify(existing)),
+                    canvasNodeId: node.id,
+                    canvasFileAssetId: String(node.payload.fileAssetId ?? ""),
+                  },
+                });
+                if (selected) editor.select(id);
+                materialBaselines.current.set(
+                  id,
+                  JSON.stringify(
+                    materialContent(editor.getShape(id) ?? existing, editor),
+                  ),
+                );
+              } else if (
+                existing.meta.canvasNodeId !== node.id ||
+                (existing.type === "draw" && !existing.meta.canvasFileAssetId)
+              )
+                editor.updateShape({
+                  id,
+                  type: existing.type,
+                  meta: {
+                    ...existing.meta,
+                    canvasNodeId: node.id,
+                    ...(existing.type === "draw"
+                      ? {
+                          canvasFileAssetId: String(
+                            node.payload.fileAssetId ?? "",
+                          ),
+                        }
+                      : {}),
+                  },
+                });
+            }
+            const shape = editor.getShape(id);
+            if (shape && !materialBaselines.current.has(id))
               materialBaselines.current.set(
                 id,
-                JSON.stringify(materialContent(editor.getShape(id) ?? existing, editor)),
+                JSON.stringify(
+                  strokeContent(shape) ?? materialContent(shape, editor),
+                ),
               );
-            } else if (unchanged && existing.type === "draw" && material.type === "fashion-image" && existing.meta.canvasFileAssetId && existing.meta.canvasFileAssetId !== node.payload.fileAssetId) {
-              // A subsequent edit in the sketch panel produces a new image version.
-              // Keep the original editable stroke record alongside its displayed projection.
-              const bounds = editor.getShapeGeometry(existing).bounds;
-              const selected = editor.getSelectedShapeIds().includes(id);
-              editor.deleteShape(id);
-              editor.createShape({ id, ...material, x: existing.x, y: existing.y, rotation: existing.rotation, parentId: existing.parentId, index: existing.index, props: { ...material.props, w: Math.max(1, bounds.w), h: Math.max(1, bounds.h) }, meta: { ...existing.meta, originalCanvasStroke: JSON.parse(JSON.stringify(existing)), canvasNodeId: node.id, canvasFileAssetId: String(node.payload.fileAssetId ?? "") } });
-              if (selected) editor.select(id);
-              materialBaselines.current.set(id, JSON.stringify(materialContent(editor.getShape(id) ?? existing, editor)));
-            } else if (existing.meta.canvasNodeId !== node.id || existing.type === "draw" && !existing.meta.canvasFileAssetId)
-              editor.updateShape({
-                id,
-                type: existing.type,
-                meta: { ...existing.meta, canvasNodeId: node.id, ...(existing.type === "draw" ? { canvasFileAssetId: String(node.payload.fileAssetId ?? "") } : {}) },
-              });
           }
-          const shape = editor.getShape(id);
-          if (shape && !materialBaselines.current.has(id))
-            materialBaselines.current.set(
-              id,
-              JSON.stringify(
-                strokeContent(shape) ?? materialContent(shape, editor),
-              ),
-            );
-        }
-      });
-      editor.updateInstanceState({ isReadonly: !data.canEdit });
+        });
+        projected = true;
+      } finally {
+        editor.updateInstanceState({ isReadonly: !projected || !data.canEdit || !live.current.active });
+      }
       if (pendingLocation.current) {
         const placed = editor
           .getCurrentPageShapes()
@@ -421,185 +524,315 @@ function WorkspaceDocument(props: Props) {
     [editor],
   );
 
-  const flush = useCallback(async () => {
-    const work = queue.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (!document.current?.canEdit) return;
-        for (const shape of editor.getCurrentPageShapes()) {
-          const content = materialContent(shape, editor);
-          const stroke = strokeContent(shape);
-          if (!content && !stroke) continue;
-          let nodeId = bindings.current.get(shape.id);
-          if (
-            !nodeId &&
-            typeof shape.meta.canvasNodeId === "string" &&
-            live.current.graph.nodes.some(
-              (node) => node.id === shape.meta.canvasNodeId,
+  const flush = useCallback(
+    async function flushDocument(): Promise<void> {
+      let saveAgain = false;
+      const work = queue.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (!document.current?.canEdit) return;
+          const applyMaterial = (
+            command: Extract<
+              CanvasCommand,
+              { type: "create_material" | "update_material" }
+            >,
+            signature: string,
+            response: CanvasMaterialResult,
+          ) => {
+            const shapeId = command.shapeId as TLShapeId;
+            bindings.current.set(shapeId, response.nodeId);
+            materialBaselines.current.set(shapeId, signature);
+            pendingMaterials.current.delete(shapeId);
+            captureTargets.current.delete(shapeId);
+            const shape = editor.getShape(shapeId);
+            if (shape)
+              editor.store.mergeRemoteChanges(() =>
+                editor.updateShape({
+                  id: shape.id,
+                  type: shape.type,
+                  meta: {
+                    ...shape.meta,
+                    canvasNodeId: response.nodeId,
+                    ...(shape.type === "draw"
+                      ? {
+                          canvasFileAssetId: String(
+                            response.graph.nodes.find(
+                              (node) => node.id === response.nodeId,
+                            )?.payload.fileAssetId ?? "",
+                          ),
+                        }
+                      : {}),
+                  },
+                }),
+              );
+            // A recovered receipt describes its original commit. It must not
+            // rewind a newer document or graph already received from the server.
+            if (
+              !document.current ||
+              response.canvas.revision >= document.current.revision
             )
-          ) {
-            nodeId = shape.meta.canvasNodeId;
-            bindings.current.set(shape.id, nodeId);
-          }
-          const signature = JSON.stringify(stroke ?? content);
-          if (nodeId && !materialBaselines.current.has(shape.id)) {
-            const sibling = [...bindings.current].find(
-              ([id, bound]) =>
-                id !== shape.id &&
-                bound === nodeId &&
-                materialBaselines.current.get(id) === signature,
-            );
-            if (sibling) materialBaselines.current.set(shape.id, signature);
-          }
+              document.current = response.canvas;
+            if (response.graph.revision >= live.current.graph.revision)
+              live.current.onGraph(response.graph);
+          };
+          const pending = await materialCommandRef.current.getPending();
           if (
-            nodeId &&
-            materialBaselines.current.get(shape.id) === signature &&
-            !pendingMaterials.current.has(shape.id)
-          )
-            continue;
-          if (stroke && !nodeId && !captureTargets.current.has(shape.id))
-            continue;
-          const node = live.current.graph.nodes.find(
-            (item) => item.id === nodeId,
-          );
-          let pending = pendingMaterials.current.get(shape.id);
-          if (!pending) {
-            let material: {
-              materialType: "reference_text" | "swatch" | "sketch";
-              title: string;
-              payload: Record<string, unknown>;
-            } | null = content;
-            if (stroke) {
-              const { blob, width, height } = await editor.toImage([shape.id], {
-                format: "png",
-                background: true,
-                scale: 1,
-              });
-              const file = new File([blob], "白板草图.png", {
-                type: "image/png",
-              });
-              const signed = await signImageUpload(
-                live.current.projectId,
-                file,
+            pending &&
+            (pending.type === "create_material" ||
+              pending.type === "update_material") &&
+            pending.shapeId
+          ) {
+            setStatus("正在恢复素材保存…");
+            try {
+              const response = await materialCommandRef.current.execute();
+              applyMaterial(
+                pending,
+                pendingMaterials.current.get(pending.shapeId)?.signature ??
+                  commandSignature(pending),
+                response,
               );
-              const processing = signed.upload
-                ? await putOriginal(signed.upload, file).then(() =>
-                    completeUpload(signed.file.id),
-                  )
-                : signed.file;
-              const uploaded = await waitForThumbnail(
-                signed.file.id,
-                processing,
-              );
-              material = {
-                materialType: "sketch",
-                title: "白板草图",
-                payload: {
-                  fileAssetId: uploaded.id,
-                  imageUrl:
-                    uploaded.thumbnail1024Url ?? uploaded.thumbnail256Url,
-                  canvasStrokeVersion: stroke,
-                  sketchDocument: {
-                    version: 1,
-                    width: Math.min(4096, Math.max(1, Math.round(width))),
-                    height: Math.min(4096, Math.max(1, Math.round(height))),
-                    baseFileAssetId: uploaded.id,
-                    strokes: [],
-                  },
-                },
-              };
+            } catch (error) {
+              if (isRejectedCanvasCommand(error))
+                pendingMaterials.current.delete(pending.shapeId);
+              throw error;
             }
-            if (!material) continue;
-            pending = {
-              signature,
-              command: nodeId
-                ? {
-                    type: "update_material",
-                    mutationId: crypto.randomUUID(),
-                    nodeId,
-                    shapeId: shape.id,
-                    payload: { ...node?.payload, ...material.payload },
-                    title: material.title,
-                  }
-                : {
-                    type: "create_material",
-                    mutationId: crypto.randomUUID(),
-                    shapeId: shape.id,
-                    ...material,
+          }
+          for (const shape of editor.getCurrentPageShapes()) {
+            // Images have no editable material payload, but their copied instances
+            // still need a binding immediately for selection and draft references.
+            const resolvedId = placementNodeId(
+              shape,
+              bindings.current,
+              live.current.graph,
+            );
+            if (resolvedId) bindings.current.set(shape.id, resolvedId);
+            const content = materialContent(shape, editor);
+            const stroke = strokeContent(shape);
+            if (!content && !stroke) continue;
+            let nodeId = bindings.current.get(shape.id);
+            if (
+              !nodeId &&
+              typeof shape.meta.canvasNodeId === "string" &&
+              live.current.graph.nodes.some(
+                (node) => node.id === shape.meta.canvasNodeId,
+              )
+            ) {
+              nodeId = shape.meta.canvasNodeId;
+              bindings.current.set(shape.id, nodeId);
+            }
+            // An untouched blank note is layout only. Clearing existing text is a
+            // real content edit and must not leave stale text in the backend.
+            if (
+              !nodeId &&
+              content?.materialType === "reference_text" &&
+              !String(content.payload.text).trim()
+            )
+              continue;
+            const signature = JSON.stringify(stroke ?? content);
+            if (nodeId && !materialBaselines.current.has(shape.id)) {
+              const sibling = [...bindings.current].find(
+                ([id, bound]) =>
+                  id !== shape.id &&
+                  bound === nodeId &&
+                  materialBaselines.current.get(id) === signature,
+              );
+              if (sibling) materialBaselines.current.set(shape.id, signature);
+            }
+            if (
+              nodeId &&
+              materialBaselines.current.get(shape.id) === signature &&
+              !pendingMaterials.current.has(shape.id)
+            )
+              continue;
+            if (stroke && !nodeId && !captureTargets.current.has(shape.id))
+              continue;
+            const node = live.current.graph.nodes.find(
+              (item) => item.id === nodeId,
+            );
+            let pending = pendingMaterials.current.get(shape.id);
+            if (!pending) {
+              let material: {
+                materialType: "reference_text" | "swatch" | "sketch";
+                title: string;
+                payload: Record<string, unknown>;
+              } | null = content;
+              if (stroke) {
+                const { blob, width, height } = await editor.toImage(
+                  [shape.id],
+                  {
+                    format: "png",
+                    background: true,
+                    scale: 1,
                   },
-            };
-            pendingMaterials.current.set(shape.id, pending);
+                );
+                const file = new File([blob], "白板草图.png", {
+                  type: "image/png",
+                });
+                const signed = await signImageUpload(
+                  live.current.projectId,
+                  file,
+                );
+                const processing = signed.upload
+                  ? await putOriginal(signed.upload, file).then(() =>
+                      completeUpload(signed.file.id),
+                    )
+                  : signed.file;
+                const uploaded = await waitForThumbnail(
+                  signed.file.id,
+                  processing,
+                );
+                material = {
+                  materialType: "sketch",
+                  title: "白板草图",
+                  payload: {
+                    fileAssetId: uploaded.id,
+                    imageUrl:
+                      uploaded.thumbnail1024Url ?? uploaded.thumbnail256Url,
+                    canvasStrokeVersion: stroke,
+                    sketchDocument: {
+                      version: 1,
+                      width: Math.min(4096, Math.max(1, Math.round(width))),
+                      height: Math.min(4096, Math.max(1, Math.round(height))),
+                      baseFileAssetId: uploaded.id,
+                      strokes: [],
+                    },
+                  },
+                };
+              }
+              if (!material) continue;
+              pending = {
+                signature,
+                command: nodeId
+                  ? {
+                      type: "update_material",
+                      mutationId: crypto.randomUUID(),
+                      nodeId,
+                      shapeId: shape.id,
+                      payload: { ...node?.payload, ...material.payload },
+                      title: material.title,
+                    }
+                  : {
+                      type: "create_material",
+                      mutationId: crypto.randomUUID(),
+                      shapeId: shape.id,
+                      ...material,
+                    },
+              };
+              pendingMaterials.current.set(shape.id, pending);
+            }
+            try {
+              const response = await materialCommandRef.current.execute(
+                pending.command,
+              );
+              if (
+                pending.command.type === "create_material" ||
+                pending.command.type === "update_material"
+              )
+                applyMaterial(pending.command, pending.signature, response);
+            } catch (error) {
+              if (isRejectedCanvasCommand(error))
+                pendingMaterials.current.delete(shape.id);
+              throw error;
+            }
           }
-          const response = await runCanvasCommand(
-            live.current.projectId,
-            pending.command,
-          );
-          bindings.current.set(shape.id, response.nodeId);
-          materialBaselines.current.set(shape.id, pending.signature);
-          pendingMaterials.current.delete(shape.id);
-          captureTargets.current.delete(shape.id);
-          editor.store.mergeRemoteChanges(() =>
-            editor.updateShape({
-              id: shape.id,
-              type: shape.type,
-              meta: { ...shape.meta, canvasNodeId: response.nodeId, ...(shape.type === "draw" ? { canvasFileAssetId: String(response.graph.nodes.find(node => node.id === response.nodeId)?.payload.fileAssetId ?? "") } : {}) },
+          // The designer can continue typing while a material request is in flight.
+          // Do not acknowledge a layout containing newer text/colours as saved
+          // until their corresponding business versions have also been committed.
+          const newerMaterial = editor.getCurrentPageShapes().some((shape) => {
+            const content = materialContent(shape, editor);
+            const stroke = strokeContent(shape);
+            const bound = bindings.current.has(shape.id);
+            if (!content && !stroke) return false;
+            if (!bound && stroke && !captureTargets.current.has(shape.id))
+              return false;
+            if (
+              !bound &&
+              content?.materialType === "reference_text" &&
+              !String(content.payload.text).trim()
+            )
+              return false;
+            return (
+              JSON.stringify(stroke ?? content) !==
+              materialBaselines.current.get(shape.id)
+            );
+          });
+          if (newerMaterial) {
+            saveAgain = true;
+            setStatus("正在保存…");
+            return;
+          }
+          const capturedSequence = sequence.current;
+          const snapshot = object(getSnapshot(editor.store));
+          if (
+            sequence.current === persisted.current &&
+            !savingPacket.current &&
+            JSON.stringify(snapshot.document) ===
+              JSON.stringify(document.current.snapshot.document)
+          )
+            return;
+          const acknowledge =
+            await draftRef.current.captureAcknowledgement(snapshot);
+          const packet = savingPacket.current ?? {
+            mutationId: crypto.randomUUID(),
+            baseRevision: document.current.revision,
+            snapshot,
+            bindings: editor.getCurrentPageShapes().flatMap((shape) => {
+              const nodeId =
+                bindings.current.get(shape.id) ??
+                (typeof shape.meta.canvasNodeId === "string"
+                  ? shape.meta.canvasNodeId
+                  : null);
+              return nodeId ? [{ shapeId: shape.id, nodeId }] : [];
             }),
-          );
-          document.current = response.canvas;
-          live.current.onGraph(response.graph);
-        }
-        const capturedSequence = sequence.current;
-        const snapshot = object(getSnapshot(editor.store));
-        if (
-          sequence.current === persisted.current &&
-          !savingPacket.current &&
-          JSON.stringify(snapshot.document) ===
-            JSON.stringify(document.current.snapshot.document)
-        )
-          return;
-        const acknowledge =
-          await draftRef.current.captureAcknowledgement(snapshot);
-        const packet = savingPacket.current ?? {
-          mutationId: crypto.randomUUID(),
-          baseRevision: document.current.revision,
-          snapshot,
-          bindings: editor.getCurrentPageShapes().flatMap((shape) => {
-            const nodeId =
-              bindings.current.get(shape.id) ??
-              (typeof shape.meta.canvasNodeId === "string"
-                ? shape.meta.canvasNodeId
-                : null);
-            return nodeId ? [{ shapeId: shape.id, nodeId }] : [];
-          }),
-        };
-        savingPacket.current = packet;
-        setStatus("正在保存…");
-        try {
-          const saved = await saveCanvas(live.current.projectId, packet);
-          document.current = saved;
-          savingPacket.current = null;
-          // A replay may contain an older snapshot; only acknowledge that exact capture.
-          if (JSON.stringify(packet.snapshot) === JSON.stringify(snapshot)) {
-            persisted.current = capturedSequence;
-            await acknowledge();
+          };
+          savingPacket.current = packet;
+          setStatus("正在保存…");
+          try {
+            const saved = await saveCanvas(live.current.projectId, packet);
+            if (saved.revision >= document.current.revision)
+              document.current = saved;
+            savingPacket.current = null;
+            // A replay may contain an older snapshot; only acknowledge that exact capture.
+            if (JSON.stringify(packet.snapshot) === JSON.stringify(snapshot)) {
+              persisted.current = capturedSequence;
+              await acknowledge();
+            }
+            setBaseline(JSON.stringify(document.current.snapshot));
+            saveAgain =
+              JSON.stringify(packet.snapshot) !== JSON.stringify(snapshot);
+            setStatus(
+              sequence.current === persisted.current ? "已保存" : "尚未保存",
+            );
+          } catch (error) {
+            setStatus(
+              error instanceof CanvasApiError && error.status === 409
+                ? "存在保存冲突，草稿已保留"
+                : "保存未完成，草稿已保留",
+            );
+            throw error;
           }
-          setBaseline(JSON.stringify(saved.snapshot));
-          setStatus("已保存");
-        } catch (error) {
+        })
+        .catch((error: unknown) => {
           setStatus(
             error instanceof CanvasApiError && error.status === 409
               ? "存在保存冲突，草稿已保留"
               : "保存未完成，草稿已保留",
           );
           throw error;
-        }
-      });
-    queue.current = work;
-    await work;
-  }, [editor]);
+        });
+      queue.current = work;
+      await work;
+      // A lost acknowledgement may confirm an older packet. Finish the newer
+      // layout in the same explicit retry, even if no new pointer event follows.
+      if (saveAgain) await flushDocument();
+    },
+    [editor],
+  );
 
   useEffect(() => {
     let active = true;
+    setLoadError(null);
+    setStatus("正在载入白板…");
     void initializeCanvas(props.projectId)
       .then(async (data) => {
         const graph =
@@ -611,29 +844,89 @@ function WorkspaceDocument(props: Props) {
         live.current.onGraph(graph);
         setReady(true);
         setStatus(data.canEdit ? "已保存" : "只读");
-        if (editor.getCurrentPageShapes().length) {
-          editor.zoomToFit();
-          if (editor.getZoomLevel() > 1) {
-            const center = editor.getViewportPageBounds().center;
-            const viewport = editor.getViewportScreenBounds();
-            editor.setCamera({
-              x: viewport.w / 2 - center.x,
-              y: viewport.h / 2 - center.y,
-              z: 1,
-            });
-          }
+        let savedCamera = null;
+        try {
+          if (cameraKey)
+            savedCamera = readCanvasCamera(
+              JSON.parse(localStorage.getItem(cameraKey) ?? "null"),
+              editor.getViewportScreenBounds(),
+            );
+        } catch {
+          /* Optional view preferences. */
+        }
+        if (savedCamera) editor.setCamera(savedCamera);
+        else if (
+          !data.snapshot.session &&
+          editor.getCurrentPageShapes().length
+        ) {
+          fitCanvasContents(editor);
         }
       })
       .catch((error: unknown) => {
-        if (active)
+        if (active) {
+          setLoadError(error instanceof Error ? error.message : "白板载入失败");
+          setStatus("白板尚未载入");
           live.current.onError(
             error instanceof Error ? error.message : "白板载入失败",
           );
+        }
       });
     return () => {
       active = false;
     };
-  }, [editor, project, props.projectId]);
+  }, [editor, project, props.projectId, cameraKey, loadAttempt]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let previous = editor.getViewportScreenBounds();
+    const resize = () => {
+      const next = editor.getViewportScreenBounds();
+      // A hidden workbench reports 1 x 1; keep the last visible viewport.
+      if (!live.current.active || next.w <= 1 || next.h <= 1) return;
+      if (next.w !== previous.w || next.h !== previous.h)
+        editor.setCamera(
+          centerCameraForViewport(editor.getCamera(), previous, next),
+        );
+      previous = next;
+    };
+    editor.on("resize", resize);
+    return () => {
+      editor.off("resize", resize);
+    };
+  }, [editor, ready]);
+
+  useEffect(() => {
+    if (!ready || !cameraKey) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let signature = "";
+    const save = () => {
+      const { x, y, z } = editor.getCamera();
+      const { w, h } = editor.getViewportScreenBounds();
+      if (!live.current.active || w <= 1 || h <= 1) return;
+      const next = JSON.stringify({ x, y, z, w, h });
+      if (next === signature) return;
+      try {
+        localStorage.setItem(cameraKey, next);
+        signature = next;
+      } catch {
+        /* Browsing stays available without storage. */
+      }
+    };
+    const unlisten = editor.store.listen(
+      () => {
+        clearTimeout(timer);
+        timer = setTimeout(save, 180);
+      },
+      { scope: "session", source: "user" },
+    );
+    window.addEventListener("pagehide", save);
+    return () => {
+      clearTimeout(timer);
+      unlisten();
+      save();
+      window.removeEventListener("pagehide", save);
+    };
+  }, [cameraKey, editor, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -706,23 +999,48 @@ function WorkspaceDocument(props: Props) {
     };
   }, [project, props.graph, props.projectId, ready]);
   useEffect(() => {
+    editor.updateInstanceState({ isReadonly: !ready || !active || !canEdit });
+    if (!active) editor.blur();
     if (!ready || !active) return;
-    onEditor(editor);
+    live.current.onEditor(editor);
     editor.updateViewportScreenBounds(editor.getContainer());
-    return () => onEditor(null);
-  }, [editor, active, onEditor, ready]);
+    return () => live.current.onEditor(null);
+  }, [editor, active, canEdit, ready]);
   useEffect(() => {
     if (!ready) return;
     let timer: ReturnType<typeof setTimeout>;
     const unlisten = editor.store.listen(
-      () => {
+      ({ changes }) => {
+        // tldraw automatically selects newly created groups/frames and the
+        // children of an ungroup. These are layout gestures, not sketch imports.
+        const isContainer = (record: { typeName: string; type?: string }) =>
+          record.typeName === "shape" &&
+          ["group", "frame", "fashion-frame"].includes(record.type ?? "");
+        for (const record of Object.values(changes.added))
+          if (isContainer(record))
+            layoutSelections.current.add(record.id as TLShapeId);
+        const removedContainers = new Set(
+          Object.values(changes.removed)
+            .filter(isContainer)
+            .map((record) => record.id),
+        );
+        for (const [before, after] of Object.values(changes.updated))
+          if (
+            before.typeName === "shape" &&
+            after.typeName === "shape" &&
+            before.parentId !== after.parentId &&
+            removedContainers.has(before.parentId)
+          )
+            layoutSelections.current.add(after.id);
         sequence.current++;
         clearTimeout(timer);
         setStatus("尚未保存");
         timer = setTimeout(() => {
           setDraftValue(object(getSnapshot(editor.store)));
           void flush().catch((error: unknown) =>
-            live.current.onError(String(error)),
+            live.current.onError(
+              error instanceof Error ? error.message : "白板保存未完成",
+            ),
           );
         }, 700);
       },
@@ -766,6 +1084,18 @@ function WorkspaceDocument(props: Props) {
       started = true;
       const work = (async () => {
         const shapes = selectedMaterialShapes(editor);
+        const layoutOnlySelection = editor
+          .getSelectedShapeIds()
+          .some((id) => layoutSelections.current.has(id));
+        layoutSelections.current.clear();
+        for (const shape of shapes) {
+          const id = placementNodeId(
+            shape,
+            bindings.current,
+            live.current.graph,
+          );
+          if (id) bindings.current.set(shape.id, id);
+        }
         const distinct = new Set(
           shapes
             .filter((shape) => bindings.current.has(shape.id))
@@ -774,14 +1104,24 @@ function WorkspaceDocument(props: Props) {
         const unbound = shapes.filter(
           (shape) =>
             !bindings.current.has(shape.id) &&
-            ["draw", "text", "fashion-note", "fashion-swatch"].includes(
+            !(layoutOnlySelection && shape.type === "draw") &&
+            ["draw", "text", "note", "fashion-note", "fashion-swatch"].includes(
               shape.type,
-            ),
+            ) &&
+            (shape.type === "draw" ||
+              materialContent(shape, editor)?.materialType !==
+                "reference_text" ||
+              Boolean(
+                String(
+                  materialContent(shape, editor)?.payload.text ?? "",
+                ).trim(),
+              )),
         );
         if (distinct.size + unbound.length > 16)
           throw new Error("每次最多引用 16 项，请减少选择后再发送。");
         for (const shape of shapes)
-          if (shape.type === "draw") captureTargets.current.add(shape.id);
+          if (shape.type === "draw" && !layoutOnlySelection)
+            captureTargets.current.add(shape.id);
         await flush();
         const ids = new Set<string>();
         for (const shape of shapes) {
@@ -831,82 +1171,51 @@ function WorkspaceDocument(props: Props) {
   }, [editor, open]);
   return (
     <>
+      {props.active ? <CanvasTools
+        projectId={props.projectId}
+        actions={props.toolActions}
+        ready={ready}
+        canEdit={canEdit}
+        onOpen={props.onOpen}
+        onAddMaterial={props.onAddMaterial}
+      /> : null}
+      {!ready ? (
+        <section
+          className={styles.loadState}
+          role={loadError ? "alert" : "status"}
+        >
+          <h2>{loadError ? "暂时无法打开白板" : "正在打开白板"}</h2>
+          <p>{loadError ?? "正在恢复素材和上次保存的内容。"}</p>
+          {loadError ? (
+            <button
+              type="button"
+              onClick={() => {
+                live.current.onError(null);
+                setLoadAttempt((value) => value + 1);
+              }}
+            >
+              重试载入白板
+            </button>
+          ) : null}
+        </section>
+      ) : null}
       <div
-        className={styles.toolbar}
-        role="toolbar"
-        aria-label="白板工具"
-        onPointerDown={(event) => event.stopPropagation()}
+        className={styles.status}
+        data-actionable={status.includes("未完成") || status.includes("冲突")}
+        role="status"
       >
-        {(
-          [
-            ["select", "选择"],
-            ["hand", "平移"],
-            ["draw", "手绘"],
-            ["text", "文字"],
-            ["frame", "画框"],
-          ] as const
-        ).map(([tool, label]) => (
-          <button
-            key={tool}
-            type="button"
-            disabled={
-              !ready || (!canEdit && tool !== "hand" && tool !== "select")
-            }
-            onClick={() => editor.setCurrentTool(tool)}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => {
-            const id = createShapeId();
-            const center = editor.getViewportPageBounds().center;
-            editor.createShape({
-              id,
-              type: "fashion-note",
-              x: center.x,
-              y: center.y,
-            });
-            editor.select(id);
-          }}
-        >
-          便签
-        </button>
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => editor.groupShapes(editor.getSelectedShapeIds())}
-        >
-          分组
-        </button>
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={() => editor.ungroupShapes(editor.getSelectedShapeIds())}
-        >
-          解除分组
-        </button>
-        <button type="button" disabled={!canEdit} onClick={() => editor.undo()}>
-          撤销
-        </button>
-        <button type="button" disabled={!canEdit} onClick={() => editor.redo()}>
-          重做
-        </button>
-        <button type="button" onClick={() => editor.zoomToFit()}>
-          查看全部
-        </button>
-      </div>
-      <div className={styles.status} role="status">
         {status}
         {status.includes("未完成") ? (
           <button
             type="button"
             onClick={() =>
-              void flush().catch((error: unknown) =>
-                live.current.onError(String(error)),
-              )
+              void flush()
+                .then(() => live.current.onError(null))
+                .catch((error: unknown) =>
+                  live.current.onError(
+                    error instanceof Error ? error.message : "白板保存未完成",
+                  ),
+                )
             }
           >
             重试保存

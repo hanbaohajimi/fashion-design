@@ -8,23 +8,43 @@
 .workspace[hidden] {
   display: none;
 }
-.toolbar {
+.controls {
   position: absolute;
+  inset: 0;
   z-index: 300;
+  pointer-events: none;
+}
+.selectionBar,
+.drawingSettings,
+.tips {
+  position: absolute;
   left: 16px;
-  top: 64px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
   max-width: calc(100% - 32px);
-  padding: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
   background: var(--color-paper);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 12px;
   pointer-events: auto;
 }
-.toolbar button,
+.railExtras {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-inline-start: 6px;
+  padding-inline-start: 6px;
+  border-inline-start: var(--border-hairline) solid var(--color-border);
+}
+.railExtras > button,
+.railExtras summary,
+.selectionBar button,
+.drawingSettings button,
+.tips button,
 .status button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 4px;
   min-height: 36px;
   padding: 6px 10px;
   background: transparent;
@@ -34,25 +54,164 @@
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  white-space: nowrap;
 }
-.toolbar button:hover,
+.railExtras > button:hover:not(:disabled),
+.selectionBar button:hover:not(:disabled),
+.drawingSettings button:hover:not(:disabled),
 .status button:hover {
   background: var(--color-surface);
 }
-.toolbar button:disabled {
-  opacity: 0.45;
+.drawingSettings button[aria-pressed="true"] {
+  background: var(--color-navigation-selected);
+  color: var(--color-action);
+}
+.controls button:disabled {
+  color: var(--color-ink-disabled);
   cursor: default;
 }
-.toolbar button:focus-visible,
-.status button:focus-visible {
-  outline: 2px solid var(--color-ink);
+.controls button:focus-visible,
+.controls summary:focus-visible,
+.status button:focus-visible,
+.loadState button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
+}
+.railExtras .designToolsButton {
+  font-weight: 600;
+  color: var(--color-action);
+}
+.selectionBar {
+  top: 64px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.selectionCount {
+  flex-shrink: 0;
+  padding: 0 8px;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.drawingSettings {
+  top: 64px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 12px;
+}
+.drawingSettings[data-with-selection="true"] {
+  top: 116px;
+}
+.drawingSettings fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.drawingSettings legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+}
+.colorOptions,
+.sizeOptions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.colorOptions button {
+  position: relative;
+  min-width: 36px;
+  padding: 8px;
+}
+.colorOptions button > span:first-child {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.colorCheck {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-action-on);
+}
+.sizeOptions button {
+  min-width: 36px;
+}
+.tips {
+  top: 64px;
+  width: 340px;
+  padding: 16px;
+  font-size: 14px;
+}
+.tips > button {
+  float: right;
+  margin: -8px -8px 0 8px;
+}
+.tips strong {
+  font-weight: 600;
+}
+.tips p {
+  color: var(--color-ink-secondary);
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+.emptyState,
+.loadState {
+  position: absolute;
+  z-index: 300;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100% - 48px));
+  text-align: center;
+  pointer-events: auto;
+}
+.emptyState h2,
+.loadState h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.emptyState p,
+.loadState p {
+  margin: 12px 0 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--color-ink-secondary);
+  overflow-wrap: anywhere;
+}
+.emptyState button,
+.loadState button {
+  min-height: 44px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 14px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--color-action-on);
+  background: var(--color-action);
+  cursor: pointer;
 }
 .status {
   position: absolute;
   z-index: 300;
   bottom: 16px;
   left: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: calc(100% - 32px);
   padding: 6px 10px;
   border-radius: 8px;
   background: var(--color-paper);
@@ -60,13 +219,53 @@
   font-size: 12px;
   pointer-events: auto;
 }
+.status[data-actionable="true"] {
+  bottom: 84px;
+  border: var(--border-hairline) solid var(--color-border);
+}
 @media (max-width: 640px) {
-  .toolbar {
+  .selectionBar,
+  .drawingSettings,
+  .tips {
     left: 8px;
-    top: 56px;
     max-width: calc(100% - 16px);
   }
-  .toolbar button {
+  .railExtras > button,
+  .railExtras summary,
+  .selectionBar button,
+  .drawingSettings button,
+  .tips button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .selectionBar,
+  .drawingSettings,
+  .tips {
+    top: 56px;
+  }
+  .drawingSettings[data-with-selection="true"] {
+    top: 116px;
+  }
+  .selectionBar {
+    gap: 0;
+  }
+  .selectionCount {
+    padding: 0 4px;
+  }
+  .drawingSettings {
+    gap: 8px 16px;
+    padding: 8px;
+  }
+  .emptyState,
+  .loadState {
+    top: 46%;
+  }
+  .status {
+    bottom: 76px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .status button {
     min-height: 44px;
   }
 }

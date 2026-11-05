@@ -725,6 +725,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const [sketchOpen, setSketchOpen] = useState(false);
   const [editingSketch, setEditingSketch] = useState<WorkflowNode | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
   const [detailSessions, setDetailSessions] = useState<string[]>([]);
@@ -760,11 +761,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   } = useWorkspaceLayout();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canvasInitAttempt, setCanvasInitAttempt] = useState(0);
+  const [canvasInitResult, setCanvasInitResult] = useState<{ projectId: string; attempt: number; error: string | null } | null>(null);
+  const canvasInitializing = canvasInitResult?.projectId !== projectId || canvasInitResult.attempt !== canvasInitAttempt;
+  const canvasInitError = canvasInitializing ? null : canvasInitResult.error;
   useEffect(() => {
     let active = true;
-    void initializeCanvas(projectId).then((document) => { if (active) setCanvasMode(document.mode); }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "白板初始化失败，原数据保持不变"); });
+    void initializeCanvas(projectId)
+      .then((document) => { if (active) { setCanvasMode(document.mode); setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: null }); } })
+      .catch((cause: unknown) => { if (active) setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: cause instanceof Error ? cause.message : "白板初始化失败，原数据保持不变" }); });
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, canvasInitAttempt]);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -780,6 +787,28 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       /* The view still works without storage. */
     }
   };
+  useEffect(() => {
+    if (canvasMode !== "canvas" || !menuTab) return;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-workflow-add-menu] > button")?.focus());
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest("[data-workflow-add-menu], [data-canvas-menu-trigger]")) setMenuTab(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuTab(null);
+        if (trigger?.isConnected) trigger.focus();
+        else editorRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [canvasMode, menuTab]);
   useEffect(() => {
     const update = () => {
       document.documentElement.dataset.pageHidden = String(document.hidden);
@@ -1536,7 +1565,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           </div>
           <div className={`${styles.topActions} ${controls.controlSurface}`}>
             <ProjectTaskCenter projectId={projectId} />
-            {canvasMode === "canvas" && !sync.error ? (
+            {canvasInitializing || canvasInitError ? <span className={styles.saved} role="status" aria-label="画布保存状态">{canvasInitializing ? "正在载入白板…" : "白板尚未载入"}</span> : canvasMode === "canvas" && !sync.error ? (
               <span className={`${styles.saved} ${styles.saveFeedback}`} role="status" aria-label="画布保存状态" data-save-state={canvasStatus.includes("保存…") ? "saving" : canvasStatus.includes("未") || canvasStatus.includes("冲突") ? "error" : "saved"}>
                 <span aria-hidden="true" />{canvasStatus}
               </span>
@@ -1590,6 +1619,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             <WorkflowProjectPanels
               projectId={projectId}
               onCollection={setCollectionId}
+              collectionsOpen={collectionsOpen}
+              onCollectionsOpenChange={setCollectionsOpen}
             />
             <Link href={`/${encodeURIComponent(projectId)}/studio`}>
               款式与交付
@@ -1676,8 +1707,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           >
             <div
               className={styles.canvasBackdrop}
-              inert={detailOpen && Boolean(inspected)}
+              inert={canvasInitializing || Boolean(canvasInitError) || detailOpen && Boolean(inspected)}
               data-detail-open={detailOpen && Boolean(inspected)}
+              data-initializing={canvasInitializing || Boolean(canvasInitError)}
             >
               <div className={styles.viewSwitch} data-guide="workspace-views">
                 <SegmentedControl
@@ -1809,7 +1841,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                     }
                   }}
                 >
-                    {canvasMode === "canvas" ? <InfiniteWorkspace
+                    {canvasInitializing || canvasInitError ? null : canvasMode === "canvas" ? <InfiniteWorkspace
+                      key={projectId}
                       projectId={projectId}
                       graph={graph}
                       active={canvasView === "workbench"}
@@ -1819,6 +1852,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       onError={setError}
                       onSaveStatus={setCanvasStatus}
                       onOpen={openDetails}
+                      onAddMaterial={() => setMenuTab("assets")}
+                      toolActions={{
+                        toolsOpen: menuTab === "tools",
+                        collectionsOpen,
+                        onOpenCollections: () => setCollectionsOpen(true),
+                        onOpenFabrics: () => handleAssetOption("fabric"),
+                        onOpenTrends: () => handleAssetOption("trend"),
+                        onOpenSketch: () => handleAssetOption("sketch"),
+                        onUpload: () => handleAssetOption("reference_image"),
+                        onUseTools: () => setMenuTab(current => current === "tools" ? null : "tools"),
+                      }}
                       onSelection={(nodeIds) => {
                         canvasSelection.current = nodeIds;
                         setSelectedId(nodeIds[0] ?? null);
@@ -1904,10 +1948,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </div>
               ) : null}
 
-              {(canvasMode === "canvas" ? canvasView === "workbench" : canvasView === "workflow" || menuTab) ? (
+              {(canvasMode === "canvas" ? canvasView === "workbench" && menuTab : canvasView === "workflow" || menuTab) ? (
                 <div
-                  className={`${styles.bottomMenu} ${controls.controlSurface}`}
+                  className={canvasMode === "canvas" ? styles.canvasAddMenu : `${styles.bottomMenu} ${controls.controlSurface}`}
                 >
+                  {canvasMode !== "canvas" ? <>
                   <button
                     data-material-trigger
                     data-guide="workspace-materials"
@@ -1919,7 +1964,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   >
                     ＋ 添加素材
                   </button>
-                  {(canvasMode === "canvas" || canvasView === "workflow") ? (
+                  {canvasView === "workflow" ? (
                     <>
                       <span className={styles.menuDivider} />
                       <button
@@ -1929,7 +1974,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         }
                         type="button"
                       >
-                        {canvasMode === "canvas" ? "使用工具" : "＋ 添加工具"}
+                        ＋ 添加工具
                       </button>
                       <Tooltip content="查看素材、连线、保存与导出操作说明">
                         <Button
@@ -1955,9 +2000,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                           <Tooltip content="将全部节点放入当前视口">
                             <button
                               aria-label="适合画布"
-                              onClick={() =>
-                                editorRef.current?.zoomToFit(motionOptions())
-                              }
+                              onClick={() => editorRef.current?.zoomToFit(motionOptions())}
                               type="button"
                             >
                               查看全图
@@ -1985,6 +2028,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       </div>
                     </>
                   ) : null}
+                  </> : null}
                   {menuTab ? (
                     <div className={styles.addPopover} data-workflow-add-menu>
                       <header>
@@ -2041,7 +2085,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               {error || notice || manualCommand.pending ? (
                 <div
                   aria-live="polite"
-                  className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice}`}
+                  className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice} ${canvasMode === "canvas" && canvasView === "workbench" ? styles.workspaceNotice : ""}`}
                   role={error ? "alert" : "status"}
                 >
                   {error ? userFacingError(error) : notice ?? "上一次工具操作尚未确认，可继续处理原操作。"}
@@ -2062,6 +2106,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </div>
               ) : null}
             </div>
+            {canvasInitializing || canvasInitError ? <section className={styles.canvasInitialization} role={canvasInitError ? "alert" : "status"}>
+              <h2>{canvasInitError ? "暂时无法打开白板" : "正在打开白板"}</h2>
+              <p>{canvasInitError ?? "正在恢复素材和上次保存的内容。"}</p>
+              {canvasInitError ? <Button onClick={() => setCanvasInitAttempt(value => value + 1)}>重试载入白板</Button> : null}
+            </section> : null}
             {manualTool ? <WorkflowDetailWorkspace open title={manualTool.node.title} status="ready" origin={null} dirty={false} onClose={() => setManualTool(null)}>
               <ToolSettings key={manualTool.node.id} draftMode readOnly={false} node={manualTool.node} graph={graph} projectId={projectId} referenceNodeIds={manualTool.inputs}
                 inputs={manualTool.inputs.length || (["analyze_brief", "generate_design"].includes(manualTool.node.type) ? 1 : 0)}

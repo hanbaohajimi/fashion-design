@@ -1,3 +1,4 @@
+import { canvasAction } from "./canvas-workspace-controls";
 import { expect, test } from "@playwright/test";
 import { seedVisualApp, PROJECT, NOW } from "../visual/fixtures";
 import type {
@@ -10,6 +11,7 @@ import type { WorkflowGraph } from "../../apps/web/src/modules/board/workflow/wo
 test("自由白板保留外壳、选择引用、整理容器与只读流程", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await seedVisualApp(page);
+  await page.clock.setSystemTime(new Date(NOW));
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = [];
   page.on("pageerror", (error) => {
@@ -117,7 +119,7 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
     return route.fulfill({ json: document });
   });
   await page.goto(`/${PROJECT}`);
-  await expect(page.getByRole("toolbar", { name: "白板工具" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "工具条", exact: true })).toBeVisible();
   const image = page.getByRole("group", { name: "藏蓝通勤外套", exact: true });
   await expect(image).toBeVisible();
   const bounds = await image.boundingBox();
@@ -154,21 +156,28 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await expect(image).toHaveCount(2);
   await expect.poll(() => document.bindings.filter(binding => binding.nodeId === "candidate" && !binding.removed).length).toBe(2);
   expect(commands).toHaveLength(0);
+  await page.getByLabel("正在讨论", { exact: true }).getByRole("button", { name: /移除/ }).click();
+  const copiedBounds = await image.last().boundingBox();
+  if (!copiedBounds) throw new Error("复制的图片不可见");
+  await page.getByRole("button", { name: "取消选择", exact: true }).click();
+  await page.mouse.click(copiedBounds.x + copiedBounds.width / 2, copiedBounds.y + copiedBounds.height / 2);
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("藏蓝通勤外套");
   await page.keyboard.press("Control+a");
   await page.getByRole("button", { name: "分组", exact: true }).click();
   await expect.poll(() => Object.values((document.snapshot.document as { store?: Record<string, { type?: string }> } | undefined)?.store ?? {}).some(record => record.type === "group")).toBe(true);
   await expect(page.getByLabel("正在讨论", { exact: true }).getByRole("button", { name: /移除/ })).toHaveCount(1);
   await page.getByRole("button", { name: "解除分组", exact: true }).click();
-  await page.getByRole("button", { name: "便签", exact: true }).click();
+  await page.getByRole("button", { name: "添加灵感便签", exact: true }).click();
+  await page.getByRole("textbox", { name: "备注内容", exact: true }).fill("探索通勤外套的廓形");
   await expect.poll(() => commands.length).toBe(1);
   await expect.poll(() => saves.length).toBeGreaterThan(0);
   const nodeCount = graph.nodes.length;
-  await page.getByRole("button", { name: "分组", exact: true }).click();
-  await page.getByRole("button", { name: "解除分组", exact: true }).click();
+  await expect(page.getByRole("button", { name: "分组", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "解除分组", exact: true })).toBeDisabled();
   expect(graph.nodes).toHaveLength(nodeCount);
   expect(graph.edges).toHaveLength(0);
   await page.getByRole("button", { name: "流程画布", exact: true }).click();
-  await expect(page.getByRole("toolbar", { name: "白板工具" })).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "工具条", exact: true })).toBeHidden();
   await expect(page.locator("[data-workflow-port]")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "＋ 添加素材", exact: true }),
@@ -188,13 +197,27 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   const beforeCollapse = await workspace.boundingBox();
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
   await expect.poll(async () => (await workspace.boundingBox())?.width ?? 0).toBeGreaterThan(beforeCollapse?.width ?? 0);
+  await canvasAction(page, "查看全图");
+  await expect(page.getByRole("textbox", { name: "备注内容", exact: true })).toBeInViewport();
+  const noteBounds = await page.getByRole("textbox", { name: "备注内容", exact: true }).boundingBox();
+  if (!noteBounds) throw new Error("流程返回后便签丢失");
+  await page.mouse.move(noteBounds.x - 12, noteBounds.y + 16);
+  await page.mouse.down();
+  await page.mouse.move(noteBounds.x + 388, noteBounds.y + 16, { steps: 8 });
+  await page.mouse.up();
+  await canvasAction(page, "查看全图");
+  await page.getByRole("button", { name: "取消选择", exact: true }).click();
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText("已保存");
+  await page.mouse.move(190, 110);
   await page.screenshot({
     path: "output/playwright/canvas-workspace.png",
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("toolbar", { name: "白板工具" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "工具条", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await canvasAction(page, "查看全图");
+  await page.mouse.move(5, 350);
   await page.screenshot({ path: "output/playwright/canvas-workspace-mobile.png", fullPage: true });
   expect(errors).toEqual([]);
   // A large selection is rejected as a whole, with no silent truncation or model call.
@@ -204,12 +227,12 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   document = { ...document, bindings: [...document.bindings, ...extras.map(node => ({ shapeId: `shape:${node.id}`, nodeId: node.id, removed: false }))] };
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.reload();
-  await page.getByRole("button", { name: "查看全部", exact: true }).click();
+  await canvasAction(page, "查看全图");
   const firstImage = image.first();
   await expect(firstImage).toBeVisible();
-  const firstBounds = await firstImage.boundingBox();
-  if (!firstBounds) throw new Error("素材不可见");
-  await page.mouse.click(firstBounds.x + firstBounds.width / 2, firstBounds.y + firstBounds.height / 2);
+  // A note can legitimately overlap an image. Focus the canvas tool instead of
+  // clicking through the note's textarea, where Ctrl+A selects its text.
+  await page.getByRole("button", { name: "选择工具", exact: true }).click();
   await page.keyboard.press("Control+a");
   await expect(page.getByRole("alert").filter({ hasText: "每次最多引用 16 项" })).toBeVisible();
   expect(commands).toHaveLength(beforeLimit);

@@ -77,6 +77,7 @@ export class NoteShapeUtil extends BaseBoxShapeUtil<NoteShape> {
 
 function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
   const editor = useEditor();
+  const readOnly = useValue("note-readonly", () => editor.getInstanceState().isReadonly, [editor]);
   const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
   const appearance = shape.props.appearance ?? generateMaterialAppearance(
@@ -140,6 +141,8 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
     >
       <textarea
         aria-label="备注内容"
+        readOnly={readOnly}
+        placeholder="写下设计想法…"
         className={styles.noteTextEditor}
         maxLength={1000}
         onChange={(event) => handleTextChange(event.target.value)}
@@ -174,7 +177,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
       height={shape.props.h}
       lod={lod}
       userMounts={shape.props.mounts}
-      onRemoveMount={handleRemoveMount}
+      {...(!readOnly ? { onRemoveMount: handleRemoveMount } : {})}
     >
       {content}
     </MaterialShell>

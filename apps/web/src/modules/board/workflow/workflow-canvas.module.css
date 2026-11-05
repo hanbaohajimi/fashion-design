@@ -1291,6 +1291,21 @@
 .canvasNotice button {
   pointer-events: auto;
 }
+.workspaceNotice { top: auto; bottom: 152px; }
+
+.canvasBackdrop[data-initializing="true"] { visibility: hidden; }
+.canvasInitialization {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+.canvasInitialization h2 { margin: 0; font-size: 16px; }
+.canvasInitialization p { max-width: 360px; margin: 12px 0 20px; line-height: 1.7; font-size: 14px; color: var(--color-ink-secondary); overflow-wrap: anywhere; }
 
 .errorNotice button,
 .successNotice button {
@@ -2734,6 +2749,18 @@
   max-height: min(520px, calc(100dvh - 160px));
   overflow: auto;
   border-radius: var(--radius-lg);
+}
+.canvasAddMenu {
+  position: absolute;
+  z-index: 5;
+  bottom: 82px;
+  left: 50%;
+  width: min(295px, calc(100% - 24px));
+  transform: translateX(-50%);
+}
+.canvasAddMenu .addPopover {
+  position: static;
+  width: 100%;
 }
 .mobileViews {
   display: none;

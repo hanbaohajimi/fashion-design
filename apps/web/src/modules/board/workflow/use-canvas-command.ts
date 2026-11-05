@@ -86,5 +86,9 @@ export function useCanvasCommand(projectId: string, objectKey: string) {
     },
     [key, projectId, scope],
   );
-  return { pending, execute };
+  const getPending = useCallback(async () => {
+    await ready.current;
+    return current.current;
+  }, []);
+  return { pending, execute, getPending };
 }

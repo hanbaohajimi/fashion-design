@@ -99,6 +99,7 @@ export class SwatchShapeUtil extends BaseBoxShapeUtil<SwatchShape> {
 
 function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const editor = useEditor();
+  const readOnly = useValue("swatch-readonly", () => editor.getInstanceState().isReadonly, [editor]);
   const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
   const appearance =
@@ -109,7 +110,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
 
   const colors = getSwatchColors(shape.props);
-  const canAdd = colors.length < SWATCH_MAX_COLORS;
+  const canAdd = !readOnly && colors.length < SWATCH_MAX_COLORS;
   const naturalWidth = computeSwatchWidth(colors.length);
   const swatchScale =
     naturalWidth > 0 && shape.props.w > 0 ? shape.props.w / naturalWidth : 1;
@@ -139,6 +140,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
    * resizing the card to the new colour count.
    */
   const commitColors = (next: readonly SwatchColor[]): void => {
+    if (readOnly) return;
     const head = next[0];
     editor.updateShape({
       id: shape.id,
@@ -261,6 +263,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                 <input
                   aria-label={`${entry.label} 颜色`}
                   className={styles.swatchColorInput}
+                  disabled={readOnly}
                   onBlur={() => handleColorBlur(entry.id)}
                   onChange={(event) =>
                     updateColorDraft(entry.id, event.currentTarget.value)
@@ -272,7 +275,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                   type="color"
                   value={draftColors[entry.id] ?? entry.color}
                 />
-                {hoveredId === entry.id && colors.length > 1 && (
+                {!readOnly && hoveredId === entry.id && colors.length > 1 && (
                   <button
                     aria-label={`删除 ${entry.label}`}
                     className={styles.swatchRemove}
@@ -292,6 +295,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
               {editingId === entry.id ? (
                 <input
                   aria-label="颜色名称"
+                  readOnly={readOnly}
                   autoFocus
                   className={styles.swatchLabelInput}
                   maxLength={16}
@@ -309,18 +313,22 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                   value={draftLabel}
                 />
               ) : (
-                <span
+                <button
+                  type="button"
                   className={styles.swatchLabel}
-                  onDoubleClick={(event) => {
+                  aria-label={`重命名颜色 ${entry.label}`}
+                  disabled={readOnly}
+                  onClick={(event) => {
                     event.stopPropagation();
+                    if (readOnly) return;
                     setDraftLabel(entry.label);
                     setEditingId(entry.id);
                   }}
                   onPointerDown={swallow}
-                  title="双击重命名"
+                  title={readOnly ? entry.label : "重命名颜色"}
                 >
                   {entry.label}
-                </span>
+                </button>
               )}
             </div>
           ))}

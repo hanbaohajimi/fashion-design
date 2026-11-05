@@ -19,11 +19,20 @@ import {
 export function WorkflowProjectPanels({
   projectId,
   onCollection,
+  collectionsOpen,
+  onCollectionsOpenChange,
 }: {
   projectId: string;
   onCollection: (id: string) => void;
+  collectionsOpen?: boolean;
+  onCollectionsOpenChange?: (open: boolean) => void;
 }) {
-  const [panel, setPanel] = useState<"collections" | null>(null);
+  const [localPanel, setLocalPanel] = useState<"collections" | null>(null);
+  const panel = collectionsOpen === undefined ? localPanel : collectionsOpen ? "collections" : null;
+  const setPanel = (value: "collections" | null) => {
+    setLocalPanel(value);
+    onCollectionsOpenChange?.(value === "collections");
+  };
   const [collections, setCollections] = useState<readonly CollectionDetail[]>(
     [],
   );

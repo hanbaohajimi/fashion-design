@@ -592,6 +592,10 @@
 }
 
 .swatchLabel {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  font-family: inherit;
   overflow: hidden;
   color: var(--color-ink-secondary);
   font-size: calc(9px * var(--swatch-content-scale));
@@ -604,6 +608,12 @@
   white-space: nowrap;
   cursor: text;
 }
+
+.swatchLabel:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.swatchLabel:disabled { cursor: default; }
 
 .swatchLabelInput {
   width: 100%;

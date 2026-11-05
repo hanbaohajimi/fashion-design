@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowShapeArrowheadEndStyle,
   ArrowShapeArrowheadStartStyle,
@@ -176,14 +176,28 @@ interface ToolRailProps {
   readonly collectionsOpen: boolean;
   readonly onOpenCollections: () => void;
   readonly onOpenFabrics: () => void;
+  readonly embedded?: boolean;
+  readonly ready?: boolean;
+  readonly onOpenSketch?: () => void;
+  readonly onUpload?: () => void;
+  readonly onOpenTrends?: () => void;
+  readonly children?: ReactNode;
 }
 
 export function ToolRail({
   collectionsOpen,
   onOpenCollections,
   onOpenFabrics,
+  embedded = false,
+  ready = true,
+  onOpenSketch,
+  onUpload,
+  onOpenTrends,
+  children,
 }: ToolRailProps) {
   const editor = useEditor();
+  const readOnly = useValue("tool-rail-readonly", () => editor.getInstanceState().isReadonly, [editor]);
+  const editable = ready && !readOnly;
   const projectId = useContext(BoardProjectContext);
   const [activeSketchId, setActiveSketchId] = useState<TLShapeId | null>(null);
   const [sketchColor, setSketchColor] = useState<SketchPencilColor>("black");
@@ -421,23 +435,33 @@ export function ToolRail({
   const createShape = (
     type: typeof NOTE_SHAPE_TYPE | typeof SWATCH_SHAPE_TYPE,
   ): void => {
+    if (!editable) return;
+    editor.markHistoryStoppingPoint("新增白板素材");
+    editor.setCurrentTool("select");
+    const id = createShapeId();
     const center = editor.getViewportPageBounds().center;
     const sizes: Readonly<Record<typeof type, readonly [number, number]>> = {
       [NOTE_SHAPE_TYPE]: [260, 210],
       [SWATCH_SHAPE_TYPE]: [computeSwatchWidth(1), SWATCH_HEIGHT],
     };
     const [width, height] = sizes[type];
-    editor.createShape({
-      type,
+    const placement = {
+      id,
       x: center.x - width / 2,
       y: center.y - height / 2,
-    });
-    const created = editor.getCurrentPageShapes().at(-1);
-    if (created) editor.select(created);
+    };
+    if (embedded && type === NOTE_SHAPE_TYPE) {
+      editor.createShape({ ...placement, type, props: { text: "" } });
+    } else {
+      editor.createShape({ ...placement, type });
+    }
+    editor.select(id);
+    editor.focus();
   };
 
   const setTool = useCallback(
     (toolId: string): void => {
+      if (!ready || (readOnly && !["select", "hand"].includes(toolId))) return;
       if (toolId === "arrow") {
         editor.setStyleForNextShapes(DefaultDashStyle, "solid");
         editor.setStyleForNextShapes(ArrowShapeArrowheadStartStyle, "none");
@@ -446,13 +470,16 @@ export function ToolRail({
       editor.setCurrentTool(
         toolId === "eraser" ? SKETCH_ERASER_TOOL_ID : toolId,
       );
+      editor.focus();
     },
-    [editor],
+    [editor, readOnly, ready],
   );
 
   useEffect(() => {
     const handleArrowShortcut = (event: KeyboardEvent): void => {
       if (
+        !editable ||
+        (embedded && !editor.getInstanceState().isFocused) ||
         activeSketchId ||
         event.altKey ||
         event.ctrlKey ||
@@ -482,7 +509,7 @@ export function ToolRail({
 
     window.addEventListener("keydown", handleArrowShortcut, true);
     return () => window.removeEventListener("keydown", handleArrowShortcut, true);
-  }, [activeSketchId, setTool]);
+  }, [activeSketchId, editable, editor, embedded, setTool]);
 
   const enterSketch = (shapeId: TLShapeId): void => {
     const shape = editor.getShape<TLFrameShape>(shapeId);
@@ -541,6 +568,11 @@ export function ToolRail({
   };
 
   const openSketch = (): void => {
+    if (!editable) return;
+    if (onOpenSketch) {
+      onOpenSketch();
+      return;
+    }
     if (selectedSketchId) {
       enterSketch(selectedSketchId);
     } else {
@@ -869,6 +901,7 @@ export function ToolRail({
       <aside
         aria-label={activeSketchId ? "草绘工具条" : "工具条"}
         className={`${styles.toolRail} ${activeSketchId ? styles.sketchToolRail : ""}`}
+        data-embedded={embedded || undefined}
         data-sketch-mode={activeSketchId ? "true" : "false"}
       >
         {activeSketchId ? (
@@ -1115,6 +1148,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() => setTool("select")}
+                disabled={!ready}
                 title="选择 (V)"
                 type="button"
                 aria-label="选择工具"
@@ -1136,6 +1170,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() => setTool("hand")}
+                disabled={!ready}
                 title="抓手 (H)"
                 type="button"
                 aria-label="抓手工具"
@@ -1165,6 +1200,7 @@ export function ToolRail({
                 className={styles.toolButton}
                 data-tool="sketch"
                 onClick={openSketch}
+                disabled={!editable}
                 title={selectedSketchId ? "编辑选中的廓形草图" : "新建廓形草图"}
                 type="button"
                 aria-label={
@@ -1195,8 +1231,9 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() =>
-                  window.dispatchEvent(new Event(BOARD_FILE_PICKER_EVENT))
+                  onUpload ? onUpload() : window.dispatchEvent(new Event(BOARD_FILE_PICKER_EVENT))
                 }
+                disabled={!editable}
                 title="上传图片"
                 type="button"
                 aria-label="上传图片"
@@ -1234,6 +1271,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() => setTool("text")}
+                disabled={!editable}
                 title="文本 (T)"
                 type="button"
                 aria-label="文本工具"
@@ -1262,6 +1300,7 @@ export function ToolRail({
                 className={styles.toolButton}
                 data-tool="arrow"
                 onClick={() => setTool("arrow")}
+                disabled={!editable}
                 title="箭头 (Shift+L)"
                 type="button"
               >
@@ -1291,6 +1330,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() => createShape(NOTE_SHAPE_TYPE)}
+                disabled={!editable}
                 title="灵感便签"
                 type="button"
                 aria-label="添加灵感便签"
@@ -1324,6 +1364,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={() => createShape(SWATCH_SHAPE_TYPE)}
+                disabled={!editable}
                 title="色卡"
                 type="button"
                 aria-label="添加色卡"
@@ -1371,7 +1412,8 @@ export function ToolRail({
               {/* 固定素材 */}
               <button
                 className={`${styles.toolButton} ${styles.pinButton}`}
-                onClick={() => editor.setCurrentTool("mount")}
+                onClick={() => setTool("mount")}
+                disabled={!editable}
                 title="固定素材"
                 type="button"
                 aria-label="固定素材"
@@ -1407,6 +1449,7 @@ export function ToolRail({
               <button
                 className={styles.toolButton}
                 onClick={onOpenFabrics}
+                disabled={!ready}
                 title="面料素材库"
                 type="button"
                 aria-label="打开面料库"
@@ -1446,6 +1489,7 @@ export function ToolRail({
                 className={styles.toolButton}
                 data-tool="collection"
                 onClick={onOpenCollections}
+                disabled={!ready}
                 title="系列工作台"
                 type="button"
               >
@@ -1477,8 +1521,9 @@ export function ToolRail({
               <button
                 className={styles.navButton}
                 onClick={() =>
-                  window.open(boardTrendsPath(projectId), "_blank", "noopener")
+                  onOpenTrends ? onOpenTrends() : window.open(boardTrendsPath(projectId), "_blank", "noopener")
                 }
+                disabled={!ready}
                 title="趋势分析"
                 type="button"
                 aria-label="打开趋势分析"
@@ -1503,6 +1548,7 @@ export function ToolRail({
             </div>
           </div>
         )}
+        {!activeSketchId ? children : null}
       </aside>
     </>
   );

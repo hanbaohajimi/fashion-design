@@ -85,3 +85,21 @@ it("restores a lost acknowledgement after remount without automatically executin
   expect(final.result.current.pending).toBeNull();
   expect(api.run).toHaveBeenCalledTimes(2);
 });
+
+it("awaits durable material recovery before allowing a new autosave", async () => {
+  const objectKey = crypto.randomUUID();
+  const wrapper = ({ children }: { children: ReactNode }) => <DraftScopeProvider scope={{ accountId: "canvas-material-test", projectId: "project", editor: "canvas" }}>{children}</DraftScopeProvider>;
+  const command: CanvasCommand = { type: "create_material", mutationId: crypto.randomUUID(), materialType: "reference_text", shapeId: "shape:note", title: "原始文字", payload: { text: "原始文字" } };
+  const first = renderHook(() => useCanvasCommand("project", objectKey), { wrapper });
+  api.run.mockRejectedValueOnce(new Error("response lost"));
+  await act(async () => { await expect(first.result.current.execute(command)).rejects.toThrow("response lost"); });
+  first.unmount();
+  const restored = renderHook(() => useCanvasCommand("project", objectKey), { wrapper });
+  // Do not wait for React state: a flush can begin as soon as the canvas mounts.
+  await act(async () => { expect(await restored.result.current.getPending()).toEqual(command); });
+  expect(api.run).toHaveBeenCalledTimes(1);
+  api.run.mockResolvedValueOnce({ nodeId: "original-note" });
+  await act(async () => { await restored.result.current.execute(); });
+  expect(api.run).toHaveBeenLastCalledWith("project", command);
+  expect(await restored.result.current.getPending()).toBeNull();
+});

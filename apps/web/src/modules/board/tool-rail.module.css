@@ -23,12 +23,33 @@
 
 .toolScroller {
   display: flex;
+  min-width: 0;
   max-width: 100%;
   align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+}
+
+/* 嵌入当前工作区，随助手宽度变化在可用画布内居中。 */
+.toolRail[data-embedded="true"] {
+  position: absolute;
+  z-index: 300;
+  bottom: 16px;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  height: auto;
+  min-height: 52px;
+  box-shadow: var(--shadow-ui);
+}
+
+@media (max-width: 760px) {
+  .toolRail[data-embedded="true"]:not(.sketchToolRail) .toolButton,
+  .toolRail[data-embedded="true"] .navButton {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .toolScroller::-webkit-scrollbar {
