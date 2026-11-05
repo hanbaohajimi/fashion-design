@@ -1,6 +1,7 @@
 node_modules/
 .turbo/
 .next/
+.next-*/
 dist/
 coverage/
 output/playwright/

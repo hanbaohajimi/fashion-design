@@ -1,5 +1,7 @@
 # AI 服装设计平台
 
+当前开发线为 `canvas-workspace`：设计师在无限白板创作，后台节点保存语义与执行历史，流程画布只读。现有助手、工具、任务和其他页面继续复用。升级需运行 `pnpm db:deploy` 并重新构建、重启服务；详细边界和验证记录见[无限白板迁移](doc/plans/canvas-workspace/README.md)。
+
 ## 仓库导航
 
 服装秀子功能的迁移、配置、阶段验收和供应商限制见 [服装秀实施入口](doc/plans/fashion-show-migration/README.md)。默认关闭；启用后执行 `pnpm runway:up` 启动独立 Python 执行器。

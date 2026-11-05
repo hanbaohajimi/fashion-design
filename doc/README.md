@@ -1,5 +1,7 @@
 # 文档目录
 
+当前无限白板阶段见[迁移实施与数据边界](plans/canvas-workspace/README.md)及[验收记录](plans/canvas-workspace/ACCEPTANCE.md)（2026-11-05）。
+
 本轮桌面工作台重构见 [计划与实施记录](plans/desktop-agent-ui/README.md)（2026-10-27）。
 
 最新可靠性改进见 [系统可靠性优化](history/系统可靠性优化-2026-10-28.md)（2026-10-28），覆盖草稿、画布保存、任务中心、导出回收及生成后的辅助分析。

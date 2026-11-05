@@ -1,5 +1,7 @@
 # Atelier Web：15 个技能的审查与可执行优化方案
 
+当前无限白板交互迁移见 [方案与验收记录](canvas-workspace/README.md)（2026-11-05）。
+
 本轮桌面工作台重构见 [计划与实施记录](desktop-agent-ui/README.md)（2026-10-27）。
 
 新增功能迁移另见 [服装秀迁移与实施](fashion-show-migration/README.md)（2026-10-26）。下文继续保留本次 Web 审查的时间边界。
