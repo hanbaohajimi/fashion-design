@@ -64,6 +64,8 @@ const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
 
 export function NodeDetails({
   embedded = false,
+  readOnly = false,
+  placementOnly = false,
   graph,
   node,
   onCreateCollection,
@@ -79,6 +81,8 @@ export function NodeDetails({
   onDirtyChange,
 }: {
   readonly embedded?: boolean;
+  readonly readOnly?: boolean;
+  readonly placementOnly?: boolean;
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   readonly graph: WorkflowGraph;
   readonly node: WorkflowNode | null;
@@ -186,13 +190,13 @@ export function NodeDetails({
             key={node.payload.fileAssetId}
             projectId={projectId}
             fileAssetId={node.payload.fileAssetId}
-            canEdit={node.canEditPayload === true}
+            canEdit={!readOnly && node.canEditPayload === true}
           /> : null}
           {node.type === "reference_image" && typeof node.payload.fileAssetId === "string" ? <WardrobeReferenceEntry
             key={`wardrobe:${node.payload.fileAssetId}`}
             projectId={projectId}
             fileAssetId={node.payload.fileAssetId}
-            canEdit={node.canEditPayload === true}
+            canEdit={!readOnly && node.canEditPayload === true}
           /> : null}
           <h4>参考图角色</h4>
           <p>
@@ -209,7 +213,7 @@ export function NodeDetails({
           </p>
           <Select
             aria-label="参考图角色"
-            disabled={node.status !== "ready"}
+            disabled={readOnly || node.status !== "ready"}
             onChange={(event) =>
               void onSavePayload(node.id, {
                 ...node.payload,
@@ -236,7 +240,7 @@ export function NodeDetails({
               </option>
             ))}
           </Select>
-          {node.status === "ready" &&
+          {!readOnly && node.status === "ready" &&
           node.payload.roleSource !== "manual" &&
           !(
             node.payload.roleSource === "inferred" &&
@@ -298,7 +302,7 @@ export function NodeDetails({
           ))}
         </section>
       ) : null}
-      {!embedded && (node.type === "sketch" || node.type === "swatch") ? (
+      {!readOnly && !embedded && (node.type === "sketch" || node.type === "swatch") ? (
         <Button
           onClick={() =>
             window.dispatchEvent(
@@ -316,6 +320,7 @@ export function NodeDetails({
           <h4>输入素材</h4>
           {inputs.length ? inputs.map((edge) => <p key={edge.id}>{PORT_LABELS[edge.targetPort]} {displayNodeTitle(graph.nodes.find((item) => item.id === edge.sourceNodeId) ?? { title: "未知节点", type: "legacy" })}</p>) : <p>尚未连接输入素材。</p>}
         <ToolSettings
+          readOnly={readOnly}
           graph={graph}
           inputs={inputs.length}
           key={node.id}
@@ -340,6 +345,7 @@ export function NodeDetails({
           <h4>设计师决定</h4>
           <Select
             aria-label="设计师决定"
+            disabled={readOnly}
             onChange={(event) =>
               setDecisionKind(event.target.value as typeof decisionKind)
             }
@@ -350,6 +356,7 @@ export function NodeDetails({
             <option value="rejected">否决方案</option>
           </Select>
           <textarea
+            readOnly={readOnly}
             className={styles.decisionReason}
             onChange={(event) => setDecisionReason(event.target.value)}
             placeholder="记录选择或否决理由"
@@ -357,7 +364,7 @@ export function NodeDetails({
             value={decisionReason}
           />
           <button
-            disabled={!decisionReason.trim()}
+            disabled={readOnly || !decisionReason.trim()}
             onClick={() =>
               void decideWorkflowCandidate(
                 projectId,
@@ -386,6 +393,7 @@ export function NodeDetails({
         <section className={styles.detailSection}>
           <h4>系列</h4>
           <button
+            disabled={readOnly}
             onClick={() => void onCreateCollection(node.id, assetId)}
             type="button"
           >
@@ -428,13 +436,13 @@ export function NodeDetails({
       <section className={styles.detailSection}>
         <button
           className={styles.dangerButton}
-          disabled={node.canDelete !== true}
+          disabled={readOnly || (placementOnly ? node.kind !== "asset" : node.canDelete !== true)}
           onClick={() => setConfirmingDelete(true)}
           type="button"
         >
-          从工作流移除节点
+          {placementOnly ? "从白板移除摆放" : "从工作流移除节点"}
         </button>
-        {node.canDelete !== true ? (
+        {!placementOnly && node.canDelete !== true ? (
           <p>
             {node.deleteDisabledReason ??
               "当前节点不可移除，请刷新以读取最新权限。"}
@@ -451,8 +459,7 @@ export function NodeDetails({
           <div className={styles.entryDialog}>
             <h2>移除「{displayNodeTitle(node)}」？</h2>
             <p>
-              同时移除 {inputs.length + outputs.length}{" "}
-              条关联连线。此操作不能撤销，原始设计资产会保留。
+              {placementOnly ? "移除此处的摆放，素材、版本与执行历史继续保留。可以使用白板撤销恢复摆放。" : `同时移除 ${inputs.length + outputs.length} 条关联连线。此操作不能撤销，原始设计资产会保留。`}
             </p>
             <button
               autoFocus
@@ -527,7 +534,8 @@ function toolDraft(node: WorkflowNode): ToolDraft {
   };
 }
 
-function ToolSettings({
+export function ToolSettings({
+  readOnly,
   onDirtyChange,
   graph,
   inputs,
@@ -537,7 +545,14 @@ function ToolSettings({
   onEnsureConversation,
   projectId,
   setError,
+  onExecute,
+  draftMode = false,
+  referenceNodeIds,
 }: {
+  readonly onExecute?: () => Promise<void>;
+  readonly draftMode?: boolean;
+  readonly referenceNodeIds?: readonly string[];
+  readonly readOnly: boolean;
   readonly graph: WorkflowGraph;
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   readonly inputs: number;
@@ -570,7 +585,7 @@ function ToolSettings({
     null,
   );
   const [localError, setLocalError] = useState<string | null>(null);
-  const canEdit = node.status === "ready" && node.type !== "restore_version";
+  const canEdit = !readOnly && node.status === "ready" && node.type !== "restore_version";
   const imageTool =
     node.type === "generate_design" || node.type === "edit_design";
   const dirty =
@@ -591,12 +606,12 @@ function ToolSettings({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const referenceNodes = graph.nodes.filter(
     (source) =>
-      graph.edges.some(
+      (referenceNodeIds?.includes(source.id) ?? graph.edges.some(
         (edge) =>
           edge.targetNodeId === node.id &&
           edge.targetPort === "reference" &&
           edge.sourceNodeId === source.id,
-      ) && Boolean(nodeImageUrl(source)),
+      )) && Boolean(nodeImageUrl(source)),
   );
 
   const save = async () => {
@@ -675,6 +690,7 @@ function ToolSettings({
     executeLock.current = true;
     setExecuting(true);
     try {
+      if (onExecute) { await onExecute(); return; }
       const next = await executeWorkflowNode(
         projectId,
         node.id,
@@ -698,7 +714,7 @@ function ToolSettings({
           ? "确认执行前可调整参数，保存后会记录到设计路径。"
           : "以下参数为该节点记录的设置；已运行节点不可修改。"}
       </p>
-      {node.type === "edit_design" ? (
+      {node.type === "edit_design" && !draftMode ? (
         <p>
           将要修改的候选图或上传图片连接为「原图」；其他图片可连接为「参考素材」。
         </p>
@@ -894,7 +910,7 @@ function ToolSettings({
             {saving ? "正在保存…" : "保存工具参数"}
           </Button>
         ) : null}
-        {node.type !== "restore_version" &&
+        {!readOnly && node.type !== "restore_version" &&
         ["ready", "failed"].includes(node.status) ? (
           <Button
             variant={dirty ? "secondary" : "primary"}
@@ -908,10 +924,10 @@ function ToolSettings({
         {canEdit && dirty ? (
           <p>请先保存参数，再确认执行。</p>
         ) : inputs === 0 ? (
-          <p>连接所需输入后即可执行。</p>
+          <p>{draftMode ? "请先在白板选择所需素材。" : "连接所需输入后即可执行。"}</p>
         ) : null}
       </div>
-      <GridDetails className={styles.advancedSettings}>
+      {!draftMode ? <GridDetails className={styles.advancedSettings}>
         <summary>执行记录</summary>
         <button
           onClick={() =>
@@ -1004,7 +1020,7 @@ function ToolSettings({
             )}
           </ol>
         ) : null}
-      </GridDetails>
+      </GridDetails> : null}
     </section>
   );
 }

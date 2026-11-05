@@ -1,4 +1,5 @@
 "use client";
+import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
 
 import Link from "next/link";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -6,7 +7,6 @@ import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 
 import {
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowOperation,
 } from "../board/workflow/workflow-api";
 import { useCurrentTrendDigest, useTrends } from "./trend-api";
@@ -119,7 +119,7 @@ export function TrendArchive({
             },
           })),
         ];
-        await patchWorkflow(targetId, {
+        await importCanvasMaterials(targetId, {
           mode: "semantic",
           baseRevision: graph.revision,
           mutationId: crypto.randomUUID(),

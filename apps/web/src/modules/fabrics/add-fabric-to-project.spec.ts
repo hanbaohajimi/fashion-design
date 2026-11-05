@@ -1,11 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { addFabricToProject } from "./add-fabric-to-project";
-import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import { fetchWorkflow } from "../board/workflow/workflow-api";
+import { importCanvasMaterials as patchWorkflow } from "../board/workflow/import-canvas-materials";
+vi.mock("../board/workflow/import-canvas-materials", () => ({ importCanvasMaterials: vi.fn() }));
 import type { Fabric } from "./fabric-types";
 
 vi.mock("../board/workflow/workflow-api", () => ({
   fetchWorkflow: vi.fn(),
-  patchWorkflow: vi.fn(),
 }));
 const fabric: Fabric = {
   id: "fabric-1",

@@ -32,9 +32,11 @@ export function WorkflowImageInputs({
   projectId,
   editor,
   onAdd,
+  disabled = false,
 }: {
   children: ReactNode;
   projectId: string;
+  disabled?: boolean;
   editor: () => Editor | null;
   onAdd: (
     type: WorkflowAssetType,
@@ -170,25 +172,25 @@ export function WorkflowImageInputs({
     next.forEach(run);
   };
   useEffect(() => {
-    const open = () => input.current?.click();
+    const open = () => { if (!disabled) input.current?.click(); };
     window.addEventListener("fashion:upload-images", open);
     return () => window.removeEventListener("fashion:upload-images", open);
-  }, []);
+  }, [disabled]);
   return (
     <div
       style={{ position: "relative", height: "100%" }}
       onPasteCapture={(event) => {
+        if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
         if (
           event.target instanceof Element &&
           event.target.closest("input,textarea,[contenteditable=true]")
         )
           return;
-        event.preventDefault();
-        event.stopPropagation();
         const files = Array.from(event.clipboardData.files);
-        if (files.length) add(files);
+        if (files.length) { event.preventDefault(); event.stopPropagation(); add(files); }
       }}
       onDragOverCapture={(event) => {
+        if (disabled) { event.preventDefault(); event.stopPropagation(); return; }
         if (
           Array.from(event.dataTransfer.types).some((type) =>
             ["Files", FABRIC_DRAG_MIME, "application/x-fashion-trend"].includes(
@@ -204,6 +206,7 @@ export function WorkflowImageInputs({
       onDropCapture={(event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (disabled) return;
         const point = locate(event.clientX, event.clientY);
         const trendRaw = event.dataTransfer.getData(
           "application/x-fashion-trend",

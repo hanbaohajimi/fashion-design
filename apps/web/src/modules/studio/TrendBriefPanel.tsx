@@ -1,4 +1,5 @@
 "use client";
+import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
 import { usePersistentDraft } from "../../components/drafts/use-persistent-draft";
 import { GridDetails } from "../../components/GridDetails";
 
@@ -9,7 +10,6 @@ import type { TrendItem, TrendListPage } from "../trends/trend-types";
 import { privateFetch } from "../auth/private-fetch";
 import {
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowOperation,
 } from "../board/workflow/workflow-api";
 import {
@@ -166,7 +166,7 @@ export function TrendBriefPanel({
       }
       const patch = pending.current;
       if (!patch) throw new Error("未建立任务简报");
-      await patchWorkflow(projectId, {
+      await importCanvasMaterials(projectId, {
         mode: "semantic",
         mutationId: patch.mutationId,
         baseRevision: patch.baseRevision,

@@ -1,4 +1,5 @@
 "use client";
+import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
 import { GridDetails } from "../../components/GridDetails";
 
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
@@ -14,7 +15,6 @@ import type {
 import { Button, Field, Input, Notice, Textarea } from "../../components/ui";
 import {
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowOperation,
 } from "../board/workflow/workflow-api";
 import {
@@ -318,7 +318,7 @@ function BrandEditor({
       }
       const packet = pendingApply.current;
       if (!packet) throw new Error("未建立品牌引用内容");
-      await patchWorkflow(projectId, {
+      await importCanvasMaterials(projectId, {
         mode: "semantic",
         mutationId: packet.key,
         baseRevision: packet.baseRevision,

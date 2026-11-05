@@ -1,4 +1,5 @@
-import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
+import { fetchWorkflow } from "../board/workflow/workflow-api";
 import type { Fabric } from "./fabric-types";
 
 /** Keep the node identity across retries; a lost response must not duplicate material. */
@@ -14,7 +15,7 @@ export async function addFabricToProject(
       (node.type === "fabric" && node.payload.fabricId === fabric.id),
   );
   if (existing) return existing.id;
-  await patchWorkflow(projectId, {
+  await importCanvasMaterials(projectId, {
     mode: "semantic",
     mutationId: crypto.randomUUID(),
     baseRevision: graph.revision,

@@ -18,6 +18,7 @@ import {
   type ImageAnnotation,
   type ImageComment,
   type ImageFeedback,
+  type CanvasCommand,
 } from "@fashion/shared";
 import { ImageViewer, type ImageSize } from "./ImageViewer";
 import { ImageZoomControl, type ImageZoomControlHandle } from "./ImageZoomControl";
@@ -30,10 +31,10 @@ import { useWorkspaceDraft } from "./workspace-drafts";
 import {
   executeWorkflowNode,
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowNode,
-  type WorkflowOperation,
 } from "./workflow-api";
+import { useCanvasCommand } from "./use-canvas-command";
+import { isRejectedCanvasCommand } from "./canvas-api";
 import {
   imageRequest,
   imageBlob,
@@ -124,7 +125,7 @@ function ImageWorkspace({
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [hasPending, setHasPending] = useState(false);
+  const [preparingCommand, setHasPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -152,12 +153,10 @@ function ImageWorkspace({
     "自然延伸背景与光线，保持原图服装主体不变。",
   );
   const root = useRef<HTMLElement>(null);
-  const pending = useRef<{
-    toolId: string;
-    mutationId: string;
-    executionMutationId: string;
-    operations: WorkflowOperation[];
-  } | null>(null);
+  const pending = useRef<Extract<CanvasCommand, { type: "run_tool" }> | null>(null);
+  const durableCommand = useCanvasCommand(projectId, `image-command:${assetId}`);
+  const hasPending = preparingCommand || durableCommand.pending !== null;
+  useEffect(() => { if (durableCommand.pending?.type === "run_tool") pending.current = durableCommand.pending; }, [durableCommand.pending]);
   const dirty = JSON.stringify(feedback) !== baseline || Boolean(comment);
   usePersistentDraft({ value: { feedback, comment, mode }, baseline: JSON.stringify({ feedback: JSON.parse(baseline) as ImageFeedback, comment: "", mode: "view" }), enabled: feedbackLoaded, objectKey: `image:${assetId}`, restore: draft => { setFeedback(draft.feedback); setComment(draft.comment); setMode(draft.mode); } });
   useWorkspaceDraft(
@@ -264,13 +263,12 @@ function ImageWorkspace({
   const submit = async (params: Record<string, unknown>, transform = false) => {
     if (!size) throw new Error("原图尚未加载");
     if (pending.current && Object.keys(params).length) throw new Error("上一次提交尚未确认，请使用“重试原操作”继续处理");
-    let graph = await fetchWorkflow(projectId);
+    const graph = await fetchWorkflow(projectId);
     if (!pending.current) {
       const source = graph.nodes.find(
         (node) => node.payload.assetId === assetId,
       );
       if (!source) throw new Error("图片来源节点不存在");
-      const toolId = crypto.randomUUID();
       const key = transform ? "transform_image" : "edit_design";
       const toolTitle = transform
         ? "调整图片尺寸"
@@ -281,32 +279,13 @@ function ImageWorkspace({
             : "移除背景";
       setHasPending(true);
       pending.current = {
-        toolId,
+        type: "run_tool",
         mutationId: crypto.randomUUID(),
-        executionMutationId: crypto.randomUUID(),
-        operations: [
-          {
-            type: "add_node",
-            node: {
-              id: toolId,
-              kind: "tool",
-              type: key,
-              title: toolTitle,
-              payload: { toolKey: key, toolVersion: "1", params },
-              x: source.x + 340,
-              y: source.y + 160,
-            },
-          },
-          {
-            type: "add_edge",
-            edge: {
-              id: crypto.randomUUID(),
-              sourceNodeId: source.id,
-              targetNodeId: toolId,
-              sourcePort: "out",
-              targetPort: "source",
-            },
-          },
+        toolKey: key,
+        title: toolTitle,
+        parameters: params,
+        inputs: [
+          { nodeId: source.id, port: "source" },
           ...graph.edges
             .filter(
               (edge) =>
@@ -316,34 +295,17 @@ function ImageWorkspace({
                 edge.targetPort === "constraint" &&
                 !transform,
             )
-            .map((edge): WorkflowOperation => ({
-              type: "add_edge",
-              edge: {
-                id: crypto.randomUUID(),
-                sourceNodeId: edge.sourceNodeId,
-                targetNodeId: toolId,
-                sourcePort: "out",
-                targetPort: "constraint",
-              },
-            })),
+            .map((edge) => ({ nodeId: edge.sourceNodeId, port: "constraint" as const })),
         ],
       };
+      const conversationId = await onEnsureConversation?.();
+      if (conversationId) pending.current.conversationId = conversationId;
     }
     const request = pending.current;
-    if (!graph.nodes.some((node) => node.id === request.toolId)) {
-      graph = await patchWorkflow(projectId, {
-        mode: "semantic",
-        mutationId: request.mutationId,
-        baseRevision: graph.revision,
-        operations: request.operations,
-      });
-    }
-    await executeWorkflowNode(
-      projectId,
-      request.toolId,
-      await onEnsureConversation?.(),
-      request.executionMutationId,
-    );
+    await durableCommand.execute(request).catch((error: unknown) => {
+      if (isRejectedCanvasCommand(error)) { pending.current = null; setHasPending(false); }
+      throw error;
+    });
     pending.current = null;
     setHasPending(false);
     setMode("view");

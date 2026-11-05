@@ -324,7 +324,7 @@ function WorkflowPort({
   // Keep overview connection targets outside the node, so they remain available
   // without covering its selection/details target.
   const overview = useValue("workflow-port-overview", () => editor.getZoomLevel() < 0.45, [editor]);
-  if (exporting) return null;
+  if (exporting || interaction?.readOnly) return null;
   const hint = interaction?.hint(shape.props.nodeId, side);
   const label =
     hint?.label ?? (side === "input" ? "连接输入素材" : "连接到工具");

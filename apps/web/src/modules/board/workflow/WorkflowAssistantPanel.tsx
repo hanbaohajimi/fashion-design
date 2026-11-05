@@ -71,9 +71,13 @@ interface Props {
   readonly onAddMaterial: () => void;
   readonly focusRequest?: number;
   readonly referenceRequest?: {
-    readonly nodeId: string;
+    readonly nodeId?: string;
+    readonly nodeIds?: string[];
     readonly nonce: number;
   } | null;
+  readonly onBeforeSend?: (ids: readonly string[]) => Promise<string[]>;
+  readonly directExecution?: boolean;
+  readonly onExecution?: () => void;
   readonly renderLegacyRuns: (conversationId: string) => ReactNode;
   readonly onConversationChange?: (conversationId: string | null) => void;
 }
@@ -129,6 +133,9 @@ export function WorkflowAssistantPanel({
   onAddMaterial,
   focusRequest = 0,
   referenceRequest,
+  onBeforeSend,
+  directExecution = false,
+  onExecution,
 }: Props) {
   const inputId = useId();
   const draftStore = useRef(new Map<string, ConversationDraft>());
@@ -260,10 +267,16 @@ export function WorkflowAssistantPanel({
     )
       return;
     consumedReference.current = referenceRequest;
-    if (!graph.nodes.some((node) => node.id === referenceRequest.nodeId))
+    if (referenceRequest.nodeIds?.length) {
+      const ids = [...new Set(referenceRequest.nodeIds)];
+      if (ids.length > MAX_ASSISTANT_REFERENCES) { onError("每次最多引用 16 项，请减少选择。"); return; }
+      setReferencedIds(ids);
+      return;
+    }
+    if (!referenceRequest.nodeId || !graph.nodes.some((node) => node.id === referenceRequest.nodeId))
       return;
     addReference(referenceRequest.nodeId);
-  }, [addReference, graph.nodes, loading, referenceRequest]);
+  }, [addReference, graph.nodes, loading, onError, referenceRequest]);
   const mentionMatch = prompt.match(/(?:^|\s)@([^@\s]*)$/u);
   const mentionChoices = mentionMatch
     ? graph.nodes
@@ -585,11 +598,13 @@ export function WorkflowAssistantPanel({
       onError(`设计需求最多 ${MAX_AGENT_MESSAGE_LENGTH} 个字符`);
       return;
     }
-    const { ids: refs, error: referenceError } = resolveDraftReferences(
+    const references = resolveDraftReferences(
       graph.nodes,
       content,
       referencedIds,
     );
+    let refs = references.ids;
+    const referenceError = references.error;
     if (referenceError) {
       onError(referenceError);
       return;
@@ -607,6 +622,7 @@ export function WorkflowAssistantPanel({
     setLocalSubmission({ conversationId, clientRequestId: proposedRequestId, content, phase: "sending" });
     onError(null);
     try {
+      refs = await onBeforeSend?.(refs) ?? refs;
       const submittedDraft = { prompt, referencedIds, adjustment };
       const acknowledgeDraft = await localDraft.captureAcknowledgement(submittedDraft);
       const targetId = conversationId || (await createConversation(true));
@@ -644,6 +660,7 @@ export function WorkflowAssistantPanel({
         ...(adjustment ? { respondingToProposalId: adjustment.id } : {}),
       }, (event) => { receiveStream(targetId, event); if ("turn" in event) void acceptDraft(); }, streaming.signalFor(targetId));
       await acceptDraft();
+      if (turn.assistantMessage.context?.executionReceipt) onExecution?.();
       requestIds.current.delete(key);
       acknowledgedRequests.current.add(requestId);
       if (activeId.current !== targetId) return;
@@ -1133,13 +1150,13 @@ export function WorkflowAssistantPanel({
               <>
                 <p>
                   {graph.nodes.some((node) => node.type === "candidate")
-                    ? "选择作品旁的“继续修改”，写下要调整和保留的细节。也可以描述一个新想法。"
+                    ? directExecution ? "在白板中选择作品，写下要调整和保留的细节。也可以描述一个新想法。" : "选择作品旁的“继续修改”，写下要调整和保留的细节。也可以描述一个新想法。"
                     : "写下款式、穿着场景和想保留的细节，也可以添加参考素材。"}
                 </p>
                 <ol className={ui.startSteps}>
                   <li>描述需求</li>
-                  <li>核对生成要求</li>
-                  <li>确认生成</li>
+                  <li>{directExecution ? "选择参考素材" : "核对生成要求"}</li>
+                  <li>{directExecution ? "明确指令即可生成" : "确认生成"}</li>
                 </ol>
                 <Button
                   disabled={collaborationReadOnly || Boolean(prompt.trim())}
@@ -1419,7 +1436,7 @@ export function WorkflowAssistantPanel({
             <p className={ui.helper} id={`${inputId}-hint`}>
               {pendingReply
                 ? "助手正在回复，你可以先写下下一条需求。"
-                : "发送后先讨论需求，生成前会请你确认。"}
+                : directExecution ? "讨论不会生图；明确的生成或修改指令会直接执行。" : "发送后先讨论需求，生成前会请你确认。"}
             </p>
           </>
         )}

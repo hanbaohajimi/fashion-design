@@ -8,7 +8,9 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TaskEntry } from "./TaskEntry";
-import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import { fetchWorkflow } from "../board/workflow/workflow-api";
+import { importCanvasMaterials as patchWorkflow } from "../board/workflow/import-canvas-materials";
+vi.mock("../board/workflow/import-canvas-materials", () => ({ importCanvasMaterials: vi.fn() }));
 import "fake-indexeddb/auto";
 import { draftRepository } from "../../components/drafts/draft-repository";
 import { createAgentConversation } from "../board/agent/agent-api";
@@ -19,7 +21,6 @@ vi.mock("../board/agent/agent-api", () => ({ createAgentConversation: vi.fn() })
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../board/workflow/workflow-api", () => ({
   fetchWorkflow: vi.fn(),
-  patchWorkflow: vi.fn(),
 }));
 afterEach(() => {
   cleanup();
@@ -36,7 +37,7 @@ it("将需求与参考图交给统一助手，进入工作台前不执行生成"
     legacyAvailable: false,
   };
   vi.mocked(fetchWorkflow).mockResolvedValue(graph);
-  vi.mocked(patchWorkflow).mockResolvedValue({ ...graph, revision: 4 });
+  vi.mocked(patchWorkflow).mockResolvedValue(undefined);
   vi.mocked(createAgentConversation).mockResolvedValue({ id: "task-chat" } as never);
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);

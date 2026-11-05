@@ -5,7 +5,7 @@ import { addTryOnCaptureToCanvas, loadTryOnGarment, PendingTryOnCapture, uploadT
 const upload = vi.hoisted(() => ({ sign: vi.fn(), put: vi.fn(), complete: vi.fn(), ready: vi.fn(), import: vi.fn(), workflow: vi.fn(), patch: vi.fn() }));
 vi.mock("../../board/file-upload-api", () => ({ signImageUpload: upload.sign, putOriginal: upload.put, completeUpload: upload.complete, waitForThumbnail: upload.ready }));
 vi.mock("../../board/generation/collection-api", () => ({ importDesignAsset: upload.import }));
-vi.mock("../../board/workflow/workflow-api", () => ({ fetchWorkflow: upload.workflow, patchWorkflow: upload.patch }));
+vi.mock("../../board/workflow/workflow-api", () => ({ fetchWorkflow: upload.workflow }));
 
 const ready = { id: "file", status: "READY", thumbnail256Url: "/thumb", width: 1280, height: 720 };
 const output = { assetId: "capture-asset", url: "/api/design-assets/capture-asset/content", source: "realtime-tryon-capture" as const };
@@ -110,3 +110,5 @@ it("adds a saved asset to the existing workflow once and preserves unrelated nod
   await addTryOnCaptureToCanvas("project", output);
   expect(upload.patch).toHaveBeenCalledTimes(1);
 });
+
+vi.mock("../../board/workflow/import-canvas-materials", () => ({ importCanvasMaterials: upload.patch }));

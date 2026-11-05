@@ -1,3 +1,4 @@
+import { importCanvasMaterials } from "../../board/workflow/import-canvas-materials";
 import type {
   RealtimeTryOnCapabilities,
   RealtimeTryOnCaptureResult,
@@ -12,7 +13,7 @@ import {
   completeUpload,
   waitForThumbnail,
 } from "../../board/file-upload-api";
-import { fetchWorkflow, patchWorkflow } from "../../board/workflow/workflow-api";
+import { fetchWorkflow } from "../../board/workflow/workflow-api";
 import type { TryOnCapture, TryOnGarment } from "./realtime-tryon-types";
 
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -119,7 +120,7 @@ export class PendingTryOnCapture {
 export async function addTryOnCaptureToCanvas(projectId: string, asset: RealtimeTryOnCaptureResult): Promise<void> {
   const graph = await fetchWorkflow(projectId);
   if (graph.nodes.some((node) => node.payload.assetId === asset.assetId)) return;
-  await patchWorkflow(projectId, {
+  await importCanvasMaterials(projectId, {
     mode: "semantic", mutationId: `tryon-${asset.assetId}`, baseRevision: graph.revision,
     operations: [{ type: "add_node", node: {
       id: crypto.randomUUID(), kind: "asset", type: "candidate", title: "实时试穿截图",

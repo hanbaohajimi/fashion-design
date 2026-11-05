@@ -10,10 +10,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { StudioDocumentView } from "@fashion/shared";
 import { BrandLibrary } from "./BrandLibrary";
 import { studioFixture } from "./studio-test-fixtures";
-import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import { fetchWorkflow } from "../board/workflow/workflow-api";
+import { importCanvasMaterials as patchWorkflow } from "../board/workflow/import-canvas-materials";
+vi.mock("../board/workflow/import-canvas-materials", () => ({ importCanvasMaterials: vi.fn() }));
 vi.mock("../board/workflow/workflow-api", () => ({
   fetchWorkflow: vi.fn(),
-  patchWorkflow: vi.fn(),
 }));
 const brand: StudioDocumentView = {
   id: "brand-1",
@@ -54,14 +55,7 @@ beforeEach(() => {
     edges: [],
     legacyAvailable: false,
   });
-  vi.mocked(patchWorkflow).mockResolvedValue({
-    projectId: "project-1",
-    revision: 5,
-    layoutRevision: 0,
-    nodes: [],
-    edges: [],
-    legacyAvailable: false,
-  });
+  vi.mocked(patchWorkflow).mockResolvedValue(undefined);
 });
 afterEach(() => {
   cleanup();

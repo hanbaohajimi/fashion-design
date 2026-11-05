@@ -65,7 +65,7 @@ export type WorkflowMessageView = Omit<AgentMessageView, "context"> & {
   readonly origin?: "user" | "execution_result" | "background_analysis";
   readonly executionId?: string | null;
   readonly sourceEventId?: string | null;
-  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary }) | null;
+  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary; readonly executionReceipt?: { readonly status: string; readonly nodeId: string | null }; readonly referenceSnapshots?: readonly { readonly nodeId: string; readonly nodeVersionId: string; readonly assetId: string | null }[] }) | null;
 };
 
 interface CursorPage<T> {

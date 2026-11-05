@@ -2,7 +2,7 @@
 import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 
 import { Select } from "../../../components/ui";
-import { readSwatchColors } from "@fashion/shared";
+import { readSwatchColors, type CanvasCommand } from "@fashion/shared";
 
 import { privateFetch as fetch } from "../../auth/private-fetch";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -12,7 +12,9 @@ import { useWorkspaceDraft } from "./workspace-drafts";
 import controls from "../../../components/ui.module.css";
 
 import { ExportModal } from "../generation/ExportModal";
-import { uploadTemporaryMask } from "../generation/generation-api";
+import { signImageUpload, putOriginal, completeUpload, waitForThumbnail } from "../file-upload-api";
+import { useCanvasCommand } from "./use-canvas-command";
+import { isRejectedCanvasCommand } from "./canvas-api";
 import {
   MaskCanvas,
   type MaskCanvasHandle,
@@ -22,12 +24,9 @@ import { VersionTimeline } from "../generation/VersionTimeline";
 import type { DesignAssetVersion, GenerationPaletteColor } from "../generation/generation-types";
 import generationStyles from "../generation/generation.module.css";
 import {
-  executeWorkflowNode,
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowGraph,
   type WorkflowNode,
-  type WorkflowOperation,
 } from "./workflow-api";
 import styles from "./workflow-asset-workspace.module.css";
 
@@ -44,27 +43,13 @@ export interface WorkflowAssetWorkspaceProps {
 
 interface ImageDimensions { readonly width: number; readonly height: number }
 interface PendingRestore { readonly asset: DesignAssetVersion; readonly mutationId: string }
-interface PendingEditPatch {
-  readonly toolId: string;
-  readonly mutationId: string;
-  readonly baseRevision: number;
-  readonly operations: readonly WorkflowOperation[];
-}
+type PendingEditPatch = Extract<CanvasCommand, { type: "run_tool" }>;
 type Tab = "preview" | "inpaint" | "variation" | "history";
 
 const MAX_MASK_DIMENSION = 2048;
 
 function message(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
-}
-
-function equalJson(left: unknown, right: unknown): boolean {
-  const normalize = (_key: string, value: unknown): unknown => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-    const record = value as Record<string, unknown>;
-    return Object.fromEntries(Object.keys(record).sort().map((key) => [key, record[key]]));
-  };
-  return JSON.stringify(left, normalize) === JSON.stringify(right, normalize);
 }
 
 function generationDimension(value: number): number {
@@ -134,12 +119,14 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   const [submitting, setSubmitting] = useState(false);
   const [submissionStage, setSubmissionStage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingToolId, setPendingToolId] = useState<string | null>(null);
-  const [pendingPatch, setPendingPatch] = useState(false);
+  const [preparingPatch, setPendingPatch] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<PendingRestore | null>(null);
   usePersistentDraft({ value: { prompts, preserve, paletteId, brushRatio }, baseline: JSON.stringify({ prompts: { inpaint: "", variation: "" }, preserve: "", paletteId: "", brushRatio: 0.06 }), objectKey: `image-tools:${assetId}`, restore: draft => { setPrompts(draft.prompts); setPreserve(draft.preserve); setPaletteId(draft.paletteId); setBrushRatio(draft.brushRatio); } });
   const mask = useRef<MaskCanvasHandle>(null);
   const pendingEditPatch = useRef<PendingEditPatch | null>(null);
+  const durableCommand = useCanvasCommand(projectId, `masked-image-command:${assetId}`);
+  const pendingPatch = preparingPatch || durableCommand.pending !== null;
+  useEffect(() => { if (durableCommand.pending?.type === "run_tool") pendingEditPatch.current = durableCommand.pending; }, [durableCommand.pending]);
   const previewUrl = `/api/design-assets/${encodeURIComponent(assetId)}/content`;
   const source = sourceFor(graph, assetId);
   const palettes = useMemo(() => graphPalettes(graph), [graph]);
@@ -147,8 +134,8 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   const changeTab = (next: Tab) => {
     setTab(next);
   };
-  const locked = submitting || Boolean(pendingToolId) || pendingPatch || Boolean(pendingRestore);
-  useWorkspaceDraft("inpaint", { prompt: prompts.inpaint, paletteId, brushRatio, mask: maskState.draft, pendingPatch, pendingToolId }, Boolean(prompts.inpaint || paletteId || maskState.strokeCount || pendingPatch || pendingToolId), locked);
+  const locked = submitting || pendingPatch || Boolean(pendingRestore);
+  useWorkspaceDraft("inpaint", { prompt: prompts.inpaint, paletteId, brushRatio, mask: maskState.draft, pendingPatch }, Boolean(prompts.inpaint || paletteId || maskState.strokeCount || pendingPatch), locked);
   useWorkspaceDraft("variation", { prompt: prompts.variation, preserve }, Boolean(prompts.variation || preserve), locked);
 
   const reloadGraph = useCallback(async () => {
@@ -211,56 +198,24 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
     }
   };
 
-  const executePending = async (toolNodeId: string) => {
-    setSubmitting(true);
-    setActionError(null);
-    setSubmissionStage("正在创建修改任务…");
-    try {
-      const result = await executeWorkflowNode(projectId, toolNodeId, await onEnsureConversation?.());
-      setGraph(result);
-      setPendingToolId(null);
-      setPrompts((previous) => ({ ...previous, [editMode]: "" }));
-      if (editMode === "inpaint") { mask.current?.clear(); setPaletteId(""); }
-      else setPreserve("");
-      onGraphRefresh();
-      onClose();
-    } catch (error) {
-      setActionError(message(error, "工具节点已创建，但执行失败；可重试当前节点"));
-      onGraphRefresh();
-    } finally {
-      setSubmitting(false);
-      setSubmissionStage(null);
-    }
-  };
-
   const saveAndExecuteEdit = async () => {
-    let draft = pendingEditPatch.current;
+    const draft = pendingEditPatch.current;
     if (!draft) throw new Error("修改分支尚未准备好");
     setSubmissionStage("正在建立可追溯的修改分支…");
-    const latest = await reloadGraph();
-    const existing = latest.nodes.find((node) => node.id === draft?.toolId);
-    const expectedNode = draft.operations.find((operation) => operation.type === "add_node");
-    const expectedEdge = draft.operations.find((operation) => operation.type === "add_edge");
-    if (existing && (!expectedNode || expectedNode.type !== "add_node" || existing.kind !== expectedNode.node.kind || existing.type !== expectedNode.node.type || !equalJson(existing.payload, expectedNode.node.payload) ||
-      !expectedEdge || expectedEdge.type !== "add_edge" || !latest.edges.some((edge) => edge.sourceNodeId === expectedEdge.edge.sourceNodeId && edge.targetNodeId === draft?.toolId && edge.sourcePort === "out" && edge.targetPort === "source"))) {
-      throw new Error("修改节点与待提交分支不一致，请检查工作流");
-    }
-    if (!existing && latest.revision !== draft.baseRevision) {
-      draft = { ...draft, mutationId: crypto.randomUUID(), baseRevision: latest.revision };
-      pendingEditPatch.current = draft;
-    }
-    const result = existing ? latest : await patchWorkflow(projectId, { mode: "semantic", mutationId: draft.mutationId, baseRevision: draft.baseRevision, operations: draft.operations });
-    setGraph(result);
-    setPendingToolId(draft.toolId);
+    const conversationId = draft.conversationId ?? await onEnsureConversation?.();
+    const result = await durableCommand.execute({ ...draft, ...(conversationId ? { conversationId } : {}) }).catch((error: unknown) => {
+      if (isRejectedCanvasCommand(error)) { pendingEditPatch.current = null; setPendingPatch(false); }
+      throw error;
+    });
+    setGraph(result.graph);
     pendingEditPatch.current = null;
     setPendingPatch(false);
     onGraphRefresh();
     setSubmitting(false);
-    await executePending(draft.toolId);
+    onClose();
   };
 
   const submitVariation = async () => {
-    if (pendingToolId) { await executePending(pendingToolId); return; }
     if (!pendingEditPatch.current && (!dimensions || imageError)) { setActionError(imageError ?? "原图尚未就绪"); return; }
     if (!pendingEditPatch.current && prompt.trim().length < 3) { setActionError("请描述变体需要如何修改"); return; }
     if (!pendingEditPatch.current && preserve.trim().length < 3) { setActionError("请明确需要保留的设计特征"); return; }
@@ -272,22 +227,14 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
         const latest = await reloadGraph();
         const current = sourceFor(latest, assetId);
         if (!current) throw new Error("找不到当前候选节点，无法建立变体分支");
-        const toolId = crypto.randomUUID();
         pendingEditPatch.current = {
-          toolId,
+          type: "run_tool", toolKey: "edit_design", title: `变体 ${prompt.trim().slice(0, 42)}`,
           mutationId: crypto.randomUUID(),
-          baseRevision: latest.revision,
-          operations: [
-            { type: "add_node", node: {
-              id: toolId, kind: "tool", type: "edit_design", title: `变体 ${prompt.trim().slice(0, 42)}`,
-              payload: { toolKey: "edit_design", toolVersion: "1", params: {
+          parameters: {
                 taskType: "i2i", prompt: `${prompt.trim()}\n保持不变：${preserve.trim()}`,
                 width: generationDimension(dimensions.width), height: generationDimension(dimensions.height),
-              } },
-              x: current.x + 340, y: current.y + 160,
-            } },
-            { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: current.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" } },
-          ],
+          },
+          inputs: [{ nodeId: current.id, port: "source" }],
         };
         setPendingPatch(true);
       }
@@ -300,7 +247,6 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
   };
 
   const submitInpaint = async () => {
-    if (pendingToolId) { await executePending(pendingToolId); return; }
     if (!pendingEditPatch.current && (!dimensions || dimensions.width > MAX_MASK_DIMENSION || dimensions.height > MAX_MASK_DIMENSION)) {
       setActionError(imageError ?? "原图尚未就绪");
       return;
@@ -315,45 +261,26 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
         setSubmissionStage("正在准备掩码…");
         const blob = await mask.current.exportPng();
         setSubmissionStage("正在上传掩码…");
-        const maskImageUrl = await uploadTemporaryMask(projectId, blob, dimensions.width, dimensions.height);
+        const maskFile = new File([blob], "局部修改蒙版.png", { type: "image/png" });
+        const signed = await signImageUpload(projectId, maskFile);
+        const processing = signed.upload ? await putOriginal(signed.upload, maskFile).then(() => completeUpload(signed.file.id)) : signed.file;
+        const maskReference = await waitForThumbnail(signed.file.id, processing);
         const latest = await reloadGraph();
         const current = sourceFor(latest, assetId);
         if (!current) throw new Error("找不到当前候选节点，无法建立修改分支");
-        const toolId = crypto.randomUUID();
         pendingEditPatch.current = {
-          toolId,
+          type: "run_tool", toolKey: "edit_design", title: `局部修改 ${prompt.trim().slice(0, 42)}`,
           mutationId: crypto.randomUUID(),
-          baseRevision: latest.revision,
-          operations: [
-            {
-              type: "add_node",
-              node: {
-                id: toolId,
-                kind: "tool",
-                type: "edit_design",
-                title: `局部修改 ${prompt.trim().slice(0, 42)}`,
-                payload: {
-                  toolKey: "edit_design",
-                  toolVersion: "1",
-                  params: {
+          parameters: {
                     taskType: "inpaint",
                     ...(initialTab === "erase" ? { intent: "erase" } : {}),
-                    maskImageUrl,
+                    mask: { fileAssetId: maskReference.id },
                     prompt: prompt.trim(),
                     width: generationDimension(dimensions.width),
                     height: generationDimension(dimensions.height),
                     ...(selectedPalette ? { palette: selectedPalette.colors } : {}),
-                  },
-                },
-                x: current.x + 340,
-                y: current.y + 160,
-              },
-            },
-            {
-              type: "add_edge",
-              edge: { id: crypto.randomUUID(), sourceNodeId: current.id, targetNodeId: toolId, sourcePort: "out", targetPort: "source" },
-            },
-          ],
+          },
+          inputs: [{ nodeId: current.id, port: "source" }],
         };
         setPendingPatch(true);
       }
@@ -373,7 +300,7 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
             <div><span>候选方案</span><h2>{source?.title ?? "候选设计"}</h2></div>
             <button aria-label="关闭候选工作台" disabled={submitting || Boolean(pendingRestore)} onClick={onClose} type="button">关闭</button>
           </header>
-          <Tabs<Tab> id={tabsId} label="候选资产操作" value={tab} onChange={changeTab} options={[{ value: "preview", label: "大图预览" }, { value: "inpaint", label: "局部重绘" }, { value: "variation", label: "生成变体" }, { value: "history", label: "版本历史" }].map((item) => ({ ...item, value: item.value as Tab, disabled: submitting || Boolean(pendingToolId) || pendingPatch }))} />
+          <Tabs<Tab> id={tabsId} label="候选资产操作" value={tab} onChange={changeTab} options={[{ value: "preview", label: "大图预览" }, { value: "inpaint", label: "局部重绘" }, { value: "variation", label: "生成变体" }, { value: "history", label: "版本历史" }].map((item) => ({ ...item, value: item.value as Tab, disabled: submitting || pendingPatch }))} />
           {graphError ? <p className={styles.notice} role="alert">{graphError} <button onClick={() => void reloadGraph().catch(() => undefined)} type="button">重试</button></p> : null}
           <TabPanel tabsId={tabsId} value="preview" activeValue={tab}>
             <div className={styles.previewLayout}>
@@ -412,14 +339,14 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
               </figure>
               <aside className={generationStyles.inpaintControls}>
                 <div><strong>选择并描述修改</strong></div>
-                <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
-                {palettes.length ? <label><span>参考色卡 可选</span><Select searchable disabled={submitting || Boolean(pendingToolId) || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label> : null}
-                <label><span>画笔尺寸 {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || Boolean(pendingToolId) || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
-                <div className={generationStyles.maskActions}><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !dimensions} onClick={() => mask.current?.addCenterRegion()} type="button">标记中央区域</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.undo()} type="button">撤销一笔</button><button disabled={submitting || Boolean(pendingToolId) || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.clear()} type="button">清空</button></div>
+                <label><span>修改说明</span><textarea aria-label="局部重绘说明" disabled={submitting || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：将领口改为窄驳领，保持面料与光线" value={prompt} /></label>
+                {palettes.length ? <label><span>参考色卡 可选</span><Select searchable disabled={submitting || pendingPatch} onChange={(event) => setPaletteId(event.target.value)} value={paletteId}><option value="">保持原图配色</option>{palettes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</Select></label> : null}
+                <label><span>画笔尺寸 {Math.round(brushRatio * 100)}%</span><input aria-label="掩码画笔尺寸" disabled={submitting || pendingPatch} max={0.16} min={0.02} onChange={(event) => setBrushRatio(Number(event.target.value))} step={0.01} type="range" value={brushRatio} /></label>
+                <div className={generationStyles.maskActions}><button disabled={submitting || pendingPatch || !dimensions} onClick={() => mask.current?.addCenterRegion()} type="button">标记中央区域</button><button disabled={submitting || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.undo()} type="button">撤销一笔</button><button disabled={submitting || pendingPatch || !maskState.strokeCount} onClick={() => mask.current?.clear()} type="button">清空</button></div>
                 {submissionStage ? <p role="status">{submissionStage}</p> : null}
                 {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
                 {actionError ? <p className={styles.error} role="alert">{actionError}</p> : null}
-                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitInpaint()} type="button">{pendingToolId ? "重试执行当前修改节点" : submitting ? "正在处理…" : "提交局部重绘"}</button>
+                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingPatch && (!dimensions || Boolean(imageError)))} onClick={() => void submitInpaint()} type="button">{pendingPatch ? "重试局部重绘" : submitting ? "正在处理…" : "提交局部重绘"}</button>
               </aside>
             </div>
           </TabPanel>
@@ -432,12 +359,12 @@ function AssetWorkspaceContent({ projectId, assetId, open, onClose, onGraphRefre
               <aside className={generationStyles.inpaintControls}>
                 <div><span>变体分支</span><strong>从当前候选生成变体</strong></div>
                 <p>原候选会保留。确认后，新变体将沿当前候选的来源建立独立分支。</p>
-                <label><span>修改方向</span><textarea aria-label="变体修改说明" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：探索两种更简洁的领型" value={prompt} /></label>
-                <label><span>需要保留的特征</span><textarea aria-label="变体保留特征" disabled={submitting || Boolean(pendingToolId) || pendingPatch} maxLength={1000} onChange={(event) => { setPreserve(event.target.value); setActionError(null); }} placeholder="例如：保持宽松廓形、原有面料与配色" value={preserve} /></label>
+                <label><span>修改方向</span><textarea aria-label="变体修改说明" disabled={submitting || pendingPatch} maxLength={1000} onChange={(event) => { setPrompt(event.target.value); setActionError(null); }} placeholder="例如：探索两种更简洁的领型" value={prompt} /></label>
+                <label><span>需要保留的特征</span><textarea aria-label="变体保留特征" disabled={submitting || pendingPatch} maxLength={1000} onChange={(event) => { setPreserve(event.target.value); setActionError(null); }} placeholder="例如：保持宽松廓形、原有面料与配色" value={preserve} /></label>
                 {submissionStage ? <p role="status">{submissionStage}</p> : null}
                 {imageError ? <p className={styles.error} role="alert">{imageError}</p> : null}
                 {actionError ? <p className={styles.error} role="alert">{actionError}</p> : null}
-                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingToolId && (!dimensions || Boolean(imageError)))} onClick={() => void submitVariation()} type="button">{pendingToolId ? "重试执行当前变体节点" : submitting ? "正在处理…" : "确认生成变体"}</button>
+                <button className={generationStyles.inpaintSubmit} disabled={submitting || (!pendingPatch && (!dimensions || Boolean(imageError)))} onClick={() => void submitVariation()} type="button">{pendingPatch ? "重试生成变体" : submitting ? "正在处理…" : "确认生成变体"}</button>
               </aside>
             </div>
           </TabPanel>

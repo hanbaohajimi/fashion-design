@@ -28,6 +28,7 @@ interface Gesture {
   clientY: number;
 }
 interface InteractionContext {
+  readOnly: boolean;
   gesture: Gesture | null;
   hoveredNodeId: string | null;
   setNodeHovered: (nodeId: string, hovered: boolean) => void;
@@ -61,12 +62,14 @@ export function WorkflowInteractionProvider({
   editorRef,
   onEdit,
   onDetails,
+  readOnly = false,
   children,
 }: {
   graph: WorkflowGraph;
   editorRef: RefObject<Editor | null>;
   onEdit: (edit: InputEdit) => Promise<void>;
   onDetails: (nodeId: string) => void;
+  readOnly?: boolean;
   children: ReactNode;
 }) {
   const [gesture, setGesture] = useState<Gesture | null>(null);
@@ -234,9 +237,10 @@ export function WorkflowInteractionProvider({
     };
   }, [endPointer, gesture]);
   const disconnect = useCallback(() => {
+    if (readOnly) return;
     const edge = graph.edges.find((item) => item.id === selectedEdgeId);
     if (edge) void apply({ targetId: edge.targetNodeId, edgeId: edge.id });
-  }, [apply, graph.edges, selectedEdgeId]);
+  }, [apply, graph.edges, readOnly, selectedEdgeId]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.target instanceof Element && event.target.closest("[data-feature-guide]")) return;
@@ -262,6 +266,7 @@ export function WorkflowInteractionProvider({
     return () => window.removeEventListener("keydown", keydown);
   }, [disconnect, selectedEdgeId]);
   const value: InteractionContext = {
+    readOnly,
     gesture,
     hoveredNodeId: gesture ? null : hoveredNodeId,
     setNodeHovered,
@@ -275,6 +280,7 @@ export function WorkflowInteractionProvider({
     },
     portDown: (nodeId, side, event) => {
       event.stopPropagation();
+      if (readOnly) return;
       if (event.button !== 0 || submitting) return;
       ignoreClick.current = false;
       if (!gesture) {
@@ -289,6 +295,7 @@ export function WorkflowInteractionProvider({
       }
     },
     portClick: (nodeId, side, keyboard) => {
+      if (readOnly) return;
       if (ignoreClick.current && !keyboard) {
         ignoreClick.current = false;
         return;

@@ -1,8 +1,9 @@
+import { importCanvasMaterials } from "../../board/workflow/import-canvas-materials";
 import type { StudioAssetView, WardrobeMaterialOperation } from "@fashion/shared";
 import { signImageUpload, putOriginal, completeUpload, waitForThumbnail } from "../../board/file-upload-api";
 import { importDesignAsset } from "../../board/generation/collection-api";
 import { uploadTemporaryMaskReference } from "../../board/generation/generation-api";
-import { fetchWorkflow, patchWorkflow } from "../../board/workflow/workflow-api";
+import { fetchWorkflow } from "../../board/workflow/workflow-api";
 import { wardrobeApi } from "./wardrobe-api";
 
 async function uploadWardrobeImage(projectId: string, file: File, signal: AbortSignal, label: string): Promise<StudioAssetView> {
@@ -35,7 +36,7 @@ export const uploadWardrobeMask = async (projectId: string, sourceAssetId: strin
 export async function addWardrobeResultToCanvas(projectId: string, result: { assetId: string; url: string }, snapshotId: string): Promise<void> {
   const graph = await fetchWorkflow(projectId);
   if (graph.nodes.some(node => node.payload.assetId === result.assetId)) return;
-  await patchWorkflow(projectId, {
+  await importCanvasMaterials(projectId, {
     mode: "semantic", mutationId: `wardrobe-result-${result.assetId}`, baseRevision: graph.revision,
     operations: [{ type: "add_node", node: {
       id: crypto.randomUUID(), kind: "asset", type: "candidate", title: "搭配试衣结果",

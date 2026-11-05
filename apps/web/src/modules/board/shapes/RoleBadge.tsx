@@ -1,6 +1,7 @@
 import { useEditor, type TLShapeId } from "tldraw";
 
 import { requestBoardLabelDesign } from "../board-context";
+import { useCanvasInteraction } from "../workflow/canvas-interaction-context";
 import styles from "./shapes.module.css";
 
 interface RoleBadgeProps {
@@ -30,6 +31,7 @@ export function resolveRoleBadgeLabel(
 
 export function RoleBadge({ label, role, shapeId }: RoleBadgeProps) {
   const editor = useEditor();
+  const canvas = useCanvasInteraction();
   const displayLabel = resolveRoleBadgeLabel(role, label);
 
   return (
@@ -41,7 +43,8 @@ export function RoleBadge({ label, role, shapeId }: RoleBadgeProps) {
       onClick={(event) => {
         event.stopPropagation();
         editor.select(shapeId);
-        requestBoardLabelDesign(shapeId);
+        if (canvas) canvas.open(shapeId);
+        else requestBoardLabelDesign(shapeId);
       }}
       onDoubleClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}

@@ -9,6 +9,7 @@ import {
   useValue,
 } from "tldraw";
 import { useState } from "react";
+import { useCanvasInteraction } from "../workflow/canvas-interaction-context";
 
 import { RoleBadge } from "./RoleBadge";
 import { useUploadPreview } from "../upload-preview-store";
@@ -28,6 +29,7 @@ import styles from "./shapes.module.css";
 
 function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
   const editor = useEditor();
+  const canvas = useCanvasInteraction();
   const exportContext = useSvgExportContext();
   const [inpaintOpen, setInpaintOpen] = useState(false);
   const uploadPreview = useUploadPreview(shape.id);
@@ -93,7 +95,7 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
   };
 
   const content = (
-    <HTMLContainer className={styles.imageShape}>
+    <HTMLContainer className={styles.imageShape} role="group" aria-label={shape.props.title} data-canvas-node-id={typeof shape.meta.canvasNodeId === "string" ? shape.meta.canvasNodeId : undefined}>
       {isGenerationPlaceholder ? (
         <div
           aria-label={generationStatusLabel}
@@ -158,7 +160,8 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
                 className={styles.inpaintTrigger}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setInpaintOpen(true);
+                  if (canvas) canvas.open(shape.id);
+                  else setInpaintOpen(true);
                 }}
                 onDoubleClick={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}

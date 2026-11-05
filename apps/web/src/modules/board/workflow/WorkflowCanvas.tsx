@@ -5,7 +5,11 @@ import { WorkspaceSplit } from "../../../components/WorkspaceSplit";
 import { useFeatureGuide } from "../../../components/feature-guide/FeatureGuideProvider";
 import { useWorkspaceLayout } from "./use-workspace-layout";
 import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
+import { InfiniteWorkspace, type InfiniteWorkspaceHandle } from "./InfiniteWorkspace";
+import { initializeCanvas, runCanvasCommand } from "./canvas-api";
+import { useCanvasCommand } from "./use-canvas-command";
 import { DesignWorkbench } from "./DesignWorkbench";
+import { canvasMaterialTypeSchema, workflowToolKeySchema } from "@fashion/shared";
 import { markResultArrival } from "./result-arrivals";
 import { ImageResultArrivals } from "./image-result-arrivals";
 import { markMotion } from "../../../components/motion/events";
@@ -129,7 +133,7 @@ import {
 import { WorkflowAssistantPanel } from "./WorkflowAssistantPanel";
 import { useWorkflowLayoutSave } from "./use-workflow-layout-save";
 import type { WorkflowLayoutSave } from "./workflow-layout-save";
-import { NodeDetails } from "./WorkflowNodeDetails";
+import { NodeDetails, ToolSettings } from "./WorkflowNodeDetails";
 import {
   WorkflowMaterialEntry,
   WorkflowLibraryDialog,
@@ -302,6 +306,7 @@ function WorkflowProjection({
   onSelected,
   proposal,
   selectedId,
+  readOnly = false,
 }: {
   readonly graph: WorkflowGraph;
   readonly onEditor: (editor: Editor | null) => void;
@@ -311,6 +316,7 @@ function WorkflowProjection({
   readonly onSelected: (id: string | null) => void;
   readonly proposal: WorkflowProposal | null;
   readonly selectedId: string | null;
+  readonly readOnly?: boolean;
 }) {
   const editor = useEditor();
   const initialFit = useRef(false);
@@ -357,8 +363,18 @@ function WorkflowProjection({
     [proposal],
   );
   const projectedGraph = useMemo(
-    () => projectWorkflowProposal(graph, proposal),
-    [graph, proposal],
+    () => {
+      if (!readOnly) return projectWorkflowProposal(graph, proposal);
+      const projected = projectWorkflowProposal(graph, null);
+      const depths = nodeDepths(projected);
+      const rows = new Map<number, number>();
+      return { ...projected, nodes: [...projected.nodes].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((node) => {
+        const depth = depths.get(node.id) ?? 0;
+        const row = rows.get(depth) ?? 0; rows.set(depth, row + 1);
+        return { ...node, x: depth * 440 + 80, y: row * 440 + 80 };
+      }) };
+    },
+    [graph, proposal, readOnly],
   );
   const lineage = useMemo(
     () => (selectedId ? focusPathOf(projectedGraph, selectedId) : null),
@@ -371,7 +387,8 @@ function WorkflowProjection({
   }, [editor, onEditor]);
   useEffect(() => {
     editor.user.updateUserPreferences({ colorScheme: "light" });
-  }, [editor]);
+    editor.updateInstanceState({ isReadonly: readOnly });
+  }, [editor, readOnly]);
   useEffect(() => {
     const container = editor.getContainer();
     // Ancestor animations can move the viewport without triggering ResizeObserver.
@@ -394,6 +411,7 @@ function WorkflowProjection({
   }, [editor, onSelected, selectedShapeId]);
 
   useEffect(() => {
+    editor.updateInstanceState({ isReadonly: false });
     editor.store.mergeRemoteChanges(() => {
       const active = new Set<TLShapeId>();
       // 入场错峰按图的 BFS 深度排：上游先落、下游后落，读图顺序与视觉顺序一致。
@@ -494,6 +512,7 @@ function WorkflowProjection({
         projectedGraph.edges.map((edge) => edgeShapeId(edge.id)),
       );
     });
+    editor.updateInstanceState({ isReadonly: readOnly });
     if (!initialFit.current && graph.nodes.length > 0) {
       initialFit.current = true;
       if (viewKey) {
@@ -520,9 +539,9 @@ function WorkflowProjection({
         }
       }
       const focus =
-        graph.nodes.find((node) => node.id === selectedId) ??
-        graph.nodes.find((node) => node.type === "brief") ??
-        graph.nodes[0];
+        projectedGraph.nodes.find((node) => node.id === selectedId) ??
+        projectedGraph.nodes.find((node) => node.type === "brief") ??
+        projectedGraph.nodes[0];
       if (!focus) return;
       const size = graphNodeSize(editor, focus);
       const zoom = 0.95;
@@ -541,6 +560,7 @@ function WorkflowProjection({
     proposedEdges,
     selectedId,
     viewKey,
+    readOnly,
   ]);
 
   useEffect(
@@ -667,9 +687,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   >(null);
   const [assistantFocusRequest, setAssistantFocusRequest] = useState(0);
   const [referenceRequest, setReferenceRequest] = useState<{
-    nodeId: string;
+    nodeId?: string;
+    nodeIds?: string[];
     nonce: number;
   } | null>(null);
+  const canvasHandle = useRef<InfiniteWorkspaceHandle | null>(null);
+  const [canvasMode, setCanvasMode] = useState<"canvas" | "node">("canvas");
+  const [canvasStatus, setCanvasStatus] = useState("正在载入白板…");
+  const [manualTool, setManualTool] = useState<{ node: WorkflowNode; inputs: string[] } | null>(null);
+  const manualCommand = useCanvasCommand(projectId, "manual-tool-command");
+  const [retryingManual, setRetryingManual] = useState(false);
+  const canvasSelection = useRef<string[]>([]);
   const [canvasView, setCanvasView] = useState<"workbench" | "workflow">(() => {
     try {
       if (
@@ -732,6 +760,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   } = useWorkspaceLayout();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void initializeCanvas(projectId).then((document) => { if (active) setCanvasMode(document.mode); }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "白板初始化失败，原数据保持不变"); });
+    return () => { active = false; };
+  }, [projectId]);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -760,7 +793,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   }, []);
   const [discardAction, setDiscardAction] = useState<(() => void) | null>(null);
   const discardReply = useRef<((accepted: boolean) => void) | null>(null);
-  const beforeLeave = useCallback(() => {
+  const beforeLeave = useCallback(async () => {
+    await canvasHandle.current?.flushLayout();
     if (!draftStore.hasDirty()) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
       discardReply.current = (accepted) => {
@@ -782,10 +816,10 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     setMobileView("canvas");
     if (inspectedId) {
       setSelectedId(inspectedId);
-      editorRef.current?.select(nodeShapeId(inspectedId));
+      if (editorRef.current?.getShape(nodeShapeId(inspectedId))) editorRef.current.select(nodeShapeId(inspectedId));
     }
   };
-  const hasUnsavedDetails = draftStore.hasDirty;
+  const hasUnsavedDetails = useCallback(() => draftStore.hasDirty() || Boolean(canvasHandle.current?.hasUnsaved()), [draftStore]);
   const closeDetails = useCallback(() => {
     setDetailOpen(false);
     requestAnimationFrame(() => {
@@ -842,7 +876,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       setDetailOpen(true);
       setMobileView("canvas");
       setMobileListOpen(false);
-      editorRef.current?.select(nodeShapeId(id));
+      if (editorRef.current?.getShape(nodeShapeId(id))) editorRef.current.select(nodeShapeId(id));
     },
     [setMobileView],
   );
@@ -1087,12 +1121,24 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
         };
         mutationPackets.current.set(key, packet);
         try {
-          const next = await patchWorkflow(projectId, {
-            baseRevision: packet.baseRevision,
-            mode: "semantic",
-            mutationId: packet.mutationId,
-            operations,
-          });
+          if (canvasMode === "node") {
+            const next = await patchWorkflow(projectId, { baseRevision: packet.baseRevision, mode: "semantic", mutationId: packet.mutationId, operations });
+            commitGraph(next); mutationPackets.current.delete(key); setError(null); return next;
+          }
+          if (canvasView === "workflow") throw new Error("流程图为只读视图，请返回设计工作台继续创作");
+          let next = current;
+          for (const operation of operations) {
+            if (operation.type === "remove_node") { canvasHandle.current?.removePlacement(operation.nodeId); continue; }
+            const commandId = operations.length === 1 ? packet.mutationId : crypto.randomUUID();
+            if (operation.type === "update_node") {
+              const node = next.nodes.find((item) => item.id === operation.nodeId);
+              if (!node) throw new Error("素材已不存在");
+              next = (await runCanvasCommand(projectId, node.kind === "tool" ? { type: "configure_tool", mutationId: commandId, nodeId: node.id, parameters: (operation.payload?.params ?? node.payload.params ?? {}) as Record<string, unknown> }
+                : { type: "update_material", mutationId: commandId, nodeId: node.id, ...(operation.title ? { title: operation.title } : {}), payload: { ...node.payload, ...operation.payload } })).graph;
+            } else if (operation.type === "link_collection") next = (await runCanvasCommand(projectId, { ...operation, mutationId: commandId })).graph;
+            else if (operation.type === "add_node" && operation.node.kind === "asset") next = (await runCanvasCommand(projectId, { type: "create_material", mutationId: commandId, materialType: canvasMaterialTypeSchema.parse(operation.node.type), title: operation.node.title, payload: { ...operation.node.payload } })).graph;
+            else throw new Error("请通过素材或图片工具完成此操作");
+          }
           commitGraph(next);
           mutationPackets.current.delete(key);
           setNotice("设计路径已保存");
@@ -1106,7 +1152,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           throw cause;
         }
       }),
-    [commitGraph, enqueue, projectId, reload],
+    [canvasMode, canvasView, commitGraph, enqueue, projectId, reload],
   );
 
   const layoutSave = useWorkflowLayoutSave(
@@ -1253,24 +1299,32 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       pendingCreates.current.set(createKey, { id, operations });
       setBusy(true);
       try {
-        await mutate(operations);
+        const response = canvasMode === "node" ? { graph: await mutate(operations), nodeId: id } : kind === "asset"
+          ? await runCanvasCommand(projectId, { type: "create_material", mutationId: id, materialType: canvasMaterialTypeSchema.parse(type), title, payload: { ...payload }, position: { x, y } })
+          : await runCanvasCommand(projectId, { type: "run_tool", mutationId: id, toolKey: workflowToolKeySchema.parse(type), title, parameters: (payload.params ?? {}) as Record<string, unknown>, inputs: canvasSelection.current.flatMap((nodeId) => {
+            const node = current.nodes.find((item) => item.id === nodeId);
+            if (!node) return [];
+            const port: WorkflowInputPort = node.type === "brief" ? "goal" : node.type === "constraint" ? "constraint" : type === "edit_design" || type === "transform_image" ? "source" : type === "evaluate_design" ? "candidate" : "reference";
+            return [{ nodeId, port }];
+          }) });
+        commitGraph(response.graph);
         pendingCreates.current.delete(createKey);
-        setSelectedId(id);
+        setSelectedId(response.nodeId);
         setMenuTab(null);
         setDraftType(null);
         requestAnimationFrame(() => {
-          editorRef.current?.select(nodeShapeId(id));
+          canvasHandle.current?.locate(response.nodeId);
           editorRef.current?.zoomToSelection(motionOptions());
         });
+        return response.nodeId;
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "节点添加失败");
         throw cause;
       } finally {
         setBusy(false);
       }
-      return id;
     },
-    [mutate, selectedId],
+    [canvasMode, commitGraph, mutate, projectId, selectedId],
   );
 
   const handleAssetOption = (type: WorkflowAssetType) => {
@@ -1387,6 +1441,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const renderDetails = (sessionNode: WorkflowNode) => (
     <NodeDetails
       embedded
+      readOnly={canvasMode === "canvas" && canvasView === "workflow"}
+      placementOnly={canvasMode === "canvas"}
       graph={graph}
       key={sessionNode.id}
       node={sessionNode}
@@ -1480,7 +1536,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           </div>
           <div className={`${styles.topActions} ${controls.controlSurface}`}>
             <ProjectTaskCenter projectId={projectId} />
-            {sync.error || layoutSave.state === "error" ? (
+            {canvasMode === "canvas" && !sync.error ? (
+              <span className={`${styles.saved} ${styles.saveFeedback}`} role="status" aria-label="画布保存状态" data-save-state={canvasStatus.includes("保存…") ? "saving" : canvasStatus.includes("未") || canvasStatus.includes("冲突") ? "error" : "saved"}>
+                <span aria-hidden="true" />{canvasStatus}
+              </span>
+            ) : sync.error || layoutSave.state === "error" ? (
               <details className={styles.syncStatus} open>
                 <summary
                   className={styles.saved}
@@ -1728,6 +1788,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 ) : null}
                 <WorkflowImageInputs
                   projectId={projectId}
+                  disabled={canvasMode === "canvas" && canvasView === "workflow"}
                   editor={() => editorRef.current}
                   onAdd={async (type, title, payload, point) => {
                     const id = await addNode(
@@ -1748,27 +1809,25 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                     }
                   }}
                 >
-                  {canvasView === "workbench" ? (
-                    <DesignWorkbench
+                    {canvasMode === "canvas" ? <InfiniteWorkspace
+                      projectId={projectId}
                       graph={graph}
-                      assistantOpen={sidebarOpen}
-                      pendingProposal={proposal?.status === "pending"}
+                      active={canvasView === "workbench"}
+                      onEditor={(editor) => { editorRef.current = editor; }}
+                      onReady={(handle) => { canvasHandle.current = handle; }}
+                      onGraph={commitGraph}
+                      onError={setError}
+                      onSaveStatus={setCanvasStatus}
                       onOpen={openDetails}
-                      onAdd={() => setMenuTab("assets")}
-                      onStart={() => {
-                        setSidebarOpen(true);
-                        setMobileView("assistant");
-                        setAssistantFocusRequest((value) => value + 1);
+                      onSelection={(nodeIds) => {
+                        canvasSelection.current = nodeIds;
+                        setSelectedId(nodeIds[0] ?? null);
+                        setReferenceRequest({ nodeIds, nonce: Date.now() });
                       }}
-                      onReference={(nodeId) => {
-                        setSelectedId(nodeId);
-                        setReferenceRequest({ nodeId, nonce: Date.now() });
-                        setSidebarOpen(true);
-                        setMobileView("assistant");
-                      }}
-                    />
-                  ) : (
+                    /> : canvasView === "workbench" ? <DesignWorkbench graph={graph} assistantOpen={sidebarOpen} pendingProposal={proposal?.status === "pending"} onOpen={openDetails} onAdd={() => setMenuTab("assets")} onStart={() => { setSidebarOpen(true); setMobileView("assistant"); setAssistantFocusRequest((value) => value + 1); }} onReference={(nodeId) => { setSelectedId(nodeId); setReferenceRequest({ nodeId, nonce: Date.now() }); setSidebarOpen(true); setMobileView("assistant"); }} /> : null}
+                  {canvasView === "workflow" ? (
                     <WorkflowInteractionProvider
+                      readOnly={canvasMode === "canvas"}
                       graph={graph}
                       editorRef={editorRef}
                       onEdit={editInput}
@@ -1789,6 +1848,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                           : {})}
                       >
                         <WorkflowProjection
+                          readOnly={canvasMode === "canvas"}
                           graph={graph}
                           onEditor={(editor) => {
                             editorRef.current = editor;
@@ -1802,10 +1862,10 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                           proposal={proposal}
                           selectedId={selectedId}
                         />
-                        <WorkflowConnectionOverlay graph={graph} />
+                        {canvasMode === "node" ? <WorkflowConnectionOverlay graph={graph} /> : null}
                       </Tldraw>
                     </WorkflowInteractionProvider>
-                  )}
+                  ) : null}
                 </WorkflowImageInputs>
                 {canvasView === "workflow" && graph.nodes.length === 0 ? (
                   <div className={styles.emptyState}>
@@ -1844,7 +1904,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </div>
               ) : null}
 
-              {canvasView === "workflow" || menuTab ? (
+              {(canvasMode === "canvas" ? canvasView === "workbench" : canvasView === "workflow" || menuTab) ? (
                 <div
                   className={`${styles.bottomMenu} ${controls.controlSurface}`}
                 >
@@ -1859,7 +1919,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   >
                     ＋ 添加素材
                   </button>
-                  {canvasView === "workflow" ? (
+                  {(canvasMode === "canvas" || canvasView === "workflow") ? (
                     <>
                       <span className={styles.menuDivider} />
                       <button
@@ -1869,7 +1929,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         }
                         type="button"
                       >
-                        ＋ 添加工具
+                        {canvasMode === "canvas" ? "使用工具" : "＋ 添加工具"}
                       </button>
                       <Tooltip content="查看素材、连线、保存与导出操作说明">
                         <Button
@@ -1931,7 +1991,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         <strong>
                           {menuTab === "assets"
                             ? "添加设计素材"
-                            : "添加设计工具"}
+                            : "使用设计工具"}
                         </strong>
                         <button
                           aria-label="关闭菜单"
@@ -1956,6 +2016,11 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                               const tool = getWorkflowToolContract(
                                 option.type as WorkflowToolKey,
                               );
+                              if (canvasMode === "canvas") {
+                                setManualTool({ node: { id: crypto.randomUUID(), kind: "tool", type: option.type as WorkflowToolType, title: option.title, payload: { toolKey: tool.key, toolVersion: tool.version, params: { ...tool.defaults, prompt: "" } }, x: 0, y: 0, status: "ready", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, inputs: [...canvasSelection.current] });
+                                setMenuTab(null);
+                                return;
+                              }
                               void addNode("tool", option.type, option.title, {
                                 toolKey: tool.key,
                                 toolVersion: tool.version,
@@ -1973,13 +2038,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   ) : null}
                 </div>
               ) : null}
-              {error || notice ? (
+              {error || notice || manualCommand.pending ? (
                 <div
                   aria-live="polite"
                   className={`${error ? styles.errorNotice : styles.successNotice} ${styles.canvasNotice}`}
                   role={error ? "alert" : "status"}
                 >
-                  {error ? userFacingError(error) : notice}
+                  {error ? userFacingError(error) : notice ?? "上一次工具操作尚未确认，可继续处理原操作。"}
+                  {manualCommand.pending ? <Button disabled={retryingManual} onClick={() => {
+                    setRetryingManual(true);
+                    void manualCommand.execute().then(result => { commitGraph(result.graph); setManualTool(null); setError(null); setNotice("原操作已恢复"); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "恢复未完成")).finally(() => setRetryingManual(false));
+                  }}>{retryingManual ? "正在恢复…" : "重试原工具操作"}</Button> : null}
                   <button
                     aria-label="关闭提示"
                     onClick={() => {
@@ -1993,6 +2062,21 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </div>
               ) : null}
             </div>
+            {manualTool ? <WorkflowDetailWorkspace open title={manualTool.node.title} status="ready" origin={null} dirty={false} onClose={() => setManualTool(null)}>
+              <ToolSettings key={manualTool.node.id} draftMode readOnly={false} node={manualTool.node} graph={graph} projectId={projectId} referenceNodeIds={manualTool.inputs}
+                inputs={manualTool.inputs.length || (["analyze_brief", "generate_design"].includes(manualTool.node.type) ? 1 : 0)}
+                onGraphChange={commitGraph} onEnsureConversation={ensureConversation} setError={setError}
+                onSavePayload={async (_id, payload) => { setManualTool((current) => current ? { ...current, node: { ...current.node, payload } } : current); }}
+                onExecute={async () => {
+                  await canvasHandle.current?.flush();
+                  const selected = canvasHandle.current?.resolveReferences(manualTool.inputs) ?? manualTool.inputs;
+                  const toolKey = workflowToolKeySchema.parse(manualTool.node.type);
+                  const parameters = manualTool.node.payload.params as Record<string, unknown>;
+                  const inputs = selected.flatMap((id) => { const node = graphRef.current?.nodes.find((item) => item.id === id); if (!node) return []; const port: WorkflowInputPort = node.type === "brief" || node.type === "reference_text" && toolKey === "analyze_brief" ? "goal" : node.type === "constraint" ? "constraint" : toolKey === "edit_design" || toolKey === "transform_image" ? "source" : toolKey === "evaluate_design" ? "candidate" : "reference"; return [{ nodeId: id, port }]; });
+                  const result = await manualCommand.execute({ type: "run_tool", mutationId: manualTool.node.id, toolKey, title: manualTool.node.title, parameters, inputs, ...(!inputs.some((input) => input.port === "goal" || input.port === "constraint") && ["analyze_brief", "generate_design"].includes(toolKey) ? { newObjective: String(parameters.prompt ?? "") } : {}), conversationId: await ensureConversation() });
+                  commitGraph(result.graph); setManualTool(null);
+                }} />
+            </WorkflowDetailWorkspace> : null}
             <WorkflowDetailWorkspace
               fullScreen={inspected?.type === "candidate"}
               open={detailOpen && Boolean(inspected)}
@@ -2016,9 +2100,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                     [id]: (epochs[id] ?? 0) + 1,
                   }));
                 };
-                const editable =
+                const editable = (canvasMode === "node" || canvasView === "workbench") && (
                   sessionNode.canEditPayload === true ||
-                  sessionNode.canForkPayload !== false;
+                  sessionNode.canForkPayload !== false);
                 const closeSession = () => {
                   if (inspectedRef.current === id) closeDetails();
                 };
@@ -2052,7 +2136,10 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         className={detailStyles.editorFieldset}
                         disabled={conflict}
                       >
-                        {sessionNode.type === "swatch" &&
+                        {canvasMode === "canvas" && canvasView === "workflow" ? <>
+                          <Button onClick={() => { setCanvasView("workbench"); requestAnimationFrame(() => canvasHandle.current?.locate(id)); }}>定位到白板继续创作</Button>
+                          {renderDetails(sessionNode)}
+                        </> : sessionNode.type === "swatch" &&
                         (editable || dirty) ? (
                           <WorkflowMaterialEntry
                             embedded
@@ -2196,6 +2283,15 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               <WorkflowAssistantPanel
                 graph={graph}
                 referenceRequest={referenceRequest}
+                directExecution={canvasMode === "canvas"}
+                onExecution={() => setCanvasView("workbench")}
+                onBeforeSend={async (ids) => {
+                  if (canvasMode === "node") return [...ids];
+                  const canvas = canvasHandle.current;
+                  if (!canvas) throw new Error("白板尚未载入完成，请稍后发送");
+                  await canvas.flush();
+                  return canvas.resolveReferences(ids);
+                }}
                 focusRequest={assistantFocusRequest}
                 onOpenResult={(nodeId) => {
                   const node = graphRef.current?.nodes.find(
@@ -2226,7 +2322,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 selected={selected}
                 onLocate={(nodeId) => {
                   if (canvasView === "workbench") {
-                    openDetails(nodeId);
+                    if (canvasMode === "canvas") canvasHandle.current?.locate(nodeId);
+                    else openDetails(nodeId);
                     return;
                   }
                   setSelectedId(nodeId);

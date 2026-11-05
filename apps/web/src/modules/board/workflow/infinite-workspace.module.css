@@ -1,0 +1,72 @@
+.workspace {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+  z-index: 0;
+  background: var(--color-paper);
+}
+.workspace[hidden] {
+  display: none;
+}
+.toolbar {
+  position: absolute;
+  z-index: 300;
+  left: 16px;
+  top: 64px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: calc(100% - 32px);
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-paper);
+  pointer-events: auto;
+}
+.toolbar button,
+.status button {
+  min-height: 36px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--color-ink);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.toolbar button:hover,
+.status button:hover {
+  background: var(--color-surface);
+}
+.toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.toolbar button:focus-visible,
+.status button:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+.status {
+  position: absolute;
+  z-index: 300;
+  bottom: 16px;
+  left: 16px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  pointer-events: auto;
+}
+@media (max-width: 640px) {
+  .toolbar {
+    left: 8px;
+    top: 56px;
+    max-width: calc(100% - 16px);
+  }
+  .toolbar button {
+    min-height: 44px;
+  }
+}

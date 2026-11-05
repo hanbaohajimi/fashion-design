@@ -1,4 +1,5 @@
 "use client";
+import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
 
 import { StudioPageHeader } from "./StudioPageHeader";
 
@@ -19,7 +20,6 @@ import {
 } from "../../components/ui";
 import {
   fetchWorkflow,
-  patchWorkflow,
   type WorkflowGraph,
   type WorkflowOperation,
 } from "../board/workflow/workflow-api";
@@ -279,7 +279,7 @@ export function TaskEntry(
       }
       const current = packet.current;
       if (current.operations.length && !current.sourceIds.every(id => graph.nodes.some(node => node.id === id)))
-        await patchWorkflow(props.projectId, { mode: "semantic", mutationId: current.mutationId, baseRevision: graph.revision, operations: current.operations });
+        await importCanvasMaterials(props.projectId, { mode: "semantic", mutationId: current.mutationId, baseRevision: graph.revision, operations: current.operations });
       current.conversationId ??= (await createAgentConversation(props.projectId, { mode: "workflow" })).id;
       targetConversationId = current.conversationId;
       const brand = props.data.brandProfiles.find(item => item.id === draft.brandId);

@@ -8,11 +8,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { buildTrendBrief, TrendBriefPanel } from "./TrendBriefPanel";
-import { fetchWorkflow, patchWorkflow } from "../board/workflow/workflow-api";
+import { fetchWorkflow } from "../board/workflow/workflow-api";
+import { importCanvasMaterials as patchWorkflow } from "../board/workflow/import-canvas-materials";
+vi.mock("../board/workflow/import-canvas-materials", () => ({ importCanvasMaterials: vi.fn() }));
 import type { TrendItem } from "../trends/trend-types";
 vi.mock("../board/workflow/workflow-api", () => ({
   fetchWorkflow: vi.fn(),
-  patchWorkflow: vi.fn(),
 }));
 const article: TrendItem = {
   id: "trend-1",
@@ -45,14 +46,7 @@ beforeEach(() => {
     edges: [],
     legacyAvailable: false,
   });
-  vi.mocked(patchWorkflow).mockResolvedValue({
-    projectId: "project-1",
-    revision: 8,
-    layoutRevision: 0,
-    nodes: [],
-    edges: [],
-    legacyAvailable: false,
-  });
+  vi.mocked(patchWorkflow).mockResolvedValue(undefined);
 });
 afterEach(() => {
   cleanup();
