@@ -8,7 +8,13 @@ describe("首页创作摘要", () => {
     const service = new StudioService(database as never, { require } as never);
     expect(await service.creativeSummary("member", "project")).toEqual({ styles: 2, assets: 5, packs: 1 });
     expect(require).toHaveBeenCalledWith("member", "project", "read");
-    expect(database.designAsset.count).toHaveBeenCalledWith({ where: { projectId: "project", archivedAt: null } });
+    expect(database.style.count).toHaveBeenCalledWith({ where: { projectId: "project" } });
+    expect(database.designAsset.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({ projectId: "project", archivedAt: null }),
+    });
+    expect(database.studioDocument.count).toHaveBeenCalledWith({
+      where: { projectId: "project", type: "TECH_PACK" },
+    });
   });
   it("无权访问时不查询项目数据", async () => {
     const count = vi.fn();
