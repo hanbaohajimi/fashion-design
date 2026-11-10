@@ -1,0 +1,24 @@
+{
+  "file": "master/forest-spirit-approved-v2.png",
+  "sha256": "58204e57ce352964d33cbb3078872092a5ccb47ecb962cf575929fc880107c7a",
+  "bytes": 2198972,
+  "size": [
+    982,
+    1602
+  ],
+  "mode": "RGBA",
+  "alpha_extrema": [
+    0,
+    255
+  ],
+  "status": "user_approved_flat_transparent_master",
+  "approved_on": "2026-11-05",
+  "approval_scope": "User approved v2 appearance and instructed preparation for layer separation.",
+  "production_layers_exist": false,
+  "psd_exists": false,
+  "cubism_model_exists": false,
+  "source": "output/forest-spirit-art/candidates/forest-spirit-cross-eyes-v2.png",
+  "generation_record": "generation.txt",
+  "generation_method": "built-in image_gen; transparent_background=true; this image was approved after generation",
+  "limitations": "A generated flat image, not pixel-identical to the earlier board. Approval does not create hidden pixels, editable parts or a Cubism rig."
+}

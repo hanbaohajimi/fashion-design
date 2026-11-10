@@ -1,0 +1,598 @@
+{
+  "source_file": "references/00_approved_board.png",
+  "source_size": [
+    1254,
+    1254
+  ],
+  "source_sha256": "8d10e09ebc7e3bfa1a1e9a35f4a4a18521d30fd5a4ca684de204cba45b56dc17",
+  "source_format": "PNG RGBA; concept board, not a layered document",
+  "precedence": [
+    "Explicit user constraints: no eyelashes; keep approved appearance",
+    "Main character in 00_approved_board.png and its pixel-exact crops",
+    "Auxiliary views and expressions in that same board",
+    "Earlier user pouch and platform logo, for their specified purpose only"
+  ],
+  "warning": "All crops are references, not isolated production textures. The prohibited first doll and unapproved variants are excluded.",
+  "references": [
+    {
+      "id": "01_primary_character",
+      "file": "references/01_primary_character.png",
+      "label": "主角色：材质、配色与造型主基准",
+      "role": "primary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        0,
+        0,
+        605,
+        987
+      ],
+      "size": [
+        605,
+        987
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "a69d8fd3d9420fbe5218596dd8d6a2afa8a5ef9aa9636e047dc5745f6d6c6d9d"
+    },
+    {
+      "id": "02_face_master",
+      "file": "references/02_face_master.png",
+      "label": "主角色面部：棕色椭圆绣眼、无睫毛",
+      "role": "primary-detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        304,
+        248,
+        481,
+        406
+      ],
+      "size": [
+        177,
+        158
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "2a33a9265b39fbb8e21387fdedc4ca1b4606d46228874060ee6bd8092b420fda"
+    },
+    {
+      "id": "03_headwear_and_hair",
+      "file": "references/03_headwear_and_hair.png",
+      "label": "帽子、发色、发型、花叶与铃铛",
+      "role": "primary-detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        35,
+        32,
+        577,
+        550
+      ],
+      "size": [
+        542,
+        518
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "02f1cd999bb216b47db6ce17765e373a473a8b5a8cebe71e3c6abc39578c8f51"
+    },
+    {
+      "id": "04_boots_and_socks",
+      "file": "references/04_boots_and_socks.png",
+      "label": "棕色短靴、奶油色袜筒与木扣",
+      "role": "primary-detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        205,
+        747,
+        464,
+        940
+      ],
+      "size": [
+        259,
+        193
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "79a60875a65c2a61a5581c675b65b0b544b90ef865df518ba47c0923b1abfaef"
+    },
+    {
+      "id": "05_tools_pouch_on_character",
+      "file": "references/05_tools_pouch_on_character.png",
+      "label": "工具袋在主角色上的位置与形状",
+      "role": "primary-detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        421,
+        455,
+        571,
+        682
+      ],
+      "size": [
+        150,
+        227
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "0dd8d85ea4f7ed11b733108799b1d49bb644eab29fff78c23110a184d45fe74c"
+    },
+    {
+      "id": "06_tools_pouch_detail",
+      "file": "references/06_tools_pouch_detail.png",
+      "label": "工具袋细节：金色剪刀与纸样卷",
+      "role": "detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        445,
+        1002,
+        585,
+        1166
+      ],
+      "size": [
+        140,
+        164
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "95224a3938a90ebf9afdef89294f4b7d309c637ff66dd52bcbce3c9b6c28e44f"
+    },
+    {
+      "id": "07_turnaround_row",
+      "file": "references/07_turnaround_row.png",
+      "label": "正面、侧向与背面辅助图（非严格正交）",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        600,
+        327,
+        1254,
+        567
+      ],
+      "size": [
+        654,
+        240
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "9a6513f6f183ab47c9456d786afb6769ec7f744164d361731efbc692100302c1"
+    },
+    {
+      "id": "08_front_reference",
+      "file": "references/08_front_reference.png",
+      "label": "正面辅助图：轮廓与站姿",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        605,
+        333,
+        777,
+        563
+      ],
+      "size": [
+        172,
+        230
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "530d210f8d0348cb7277d12b78661dd903942035c7be4b9d4b7acf4db175b465"
+    },
+    {
+      "id": "09_side_reference_a",
+      "file": "references/09_side_reference_a.png",
+      "label": "侧向辅助图 A",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        779,
+        334,
+        947,
+        563
+      ],
+      "size": [
+        168,
+        229
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "608cfff87ed9fcd0d1fdd10ea97108053c7bfc519955748ef3b438565477bfd8"
+    },
+    {
+      "id": "10_side_reference_b",
+      "file": "references/10_side_reference_b.png",
+      "label": "侧向辅助图 B",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        944,
+        333,
+        1089,
+        563
+      ],
+      "size": [
+        145,
+        230
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "272ab3708d732ccf95417db5b08f16d2713899b0d2b9e1bce380c0b840d44d2f"
+    },
+    {
+      "id": "11_back_reference",
+      "file": "references/11_back_reference.png",
+      "label": "背面辅助图",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        1085,
+        333,
+        1254,
+        563
+      ],
+      "size": [
+        169,
+        230
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "9f7a189ebff76132f17a5a87e304f6a44f755f8cf11eaadc13f6ffc779eb1b06"
+    },
+    {
+      "id": "12_expressions_row",
+      "file": "references/12_expressions_row.png",
+      "label": "表情辅助图：以无睫毛硬约束覆盖局部残留",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        608,
+        591,
+        1232,
+        737
+      ],
+      "size": [
+        624,
+        146
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "67d6c772568c4da3bcbc2c6001b27011c4002a7c2cca687653841c43b96caf95"
+    },
+    {
+      "id": "13_expression_neutral",
+      "file": "references/13_expression_neutral.png",
+      "label": "安静表情辅助参考",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        610,
+        594,
+        751,
+        735
+      ],
+      "size": [
+        141,
+        141
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "1b28c22ce36534f35abccb0391bcb5538f01a386f2a04e5e377913b248439f34"
+    },
+    {
+      "id": "14_expression_happy",
+      "file": "references/14_expression_happy.png",
+      "label": "闭眼微笑辅助参考",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        768,
+        594,
+        908,
+        735
+      ],
+      "size": [
+        140,
+        141
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "d630973da045e68d874e7093ee66f0764477f95d077d42da0379288b3f276507"
+    },
+    {
+      "id": "15_expression_surprised",
+      "file": "references/15_expression_surprised.png",
+      "label": "轻微惊讶辅助参考",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        924,
+        594,
+        1065,
+        735
+      ],
+      "size": [
+        141,
+        141
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "b5b4677d3c6d6f4d662cdc292092b1f85dc40a6e2014052f53c536750088b9d5"
+    },
+    {
+      "id": "16_expression_sleepy",
+      "file": "references/16_expression_sleepy.png",
+      "label": "闭眼辅助参考：不得保留任何睫毛短线",
+      "role": "secondary",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        1080,
+        594,
+        1223,
+        735
+      ],
+      "size": [
+        143,
+        141
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "5d35f761f661ad54cd5b8357834b02673d2f6e81e1cf1b833e8d8a8432b027e1"
+    },
+    {
+      "id": "17_pose_sketchbook",
+      "file": "references/17_pose_sketchbook.png",
+      "label": "拿设计本动作构想，后续可选",
+      "role": "future-prop",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        600,
+        769,
+        810,
+        1046
+      ],
+      "size": [
+        210,
+        277
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "754a898721aaf6f3b3e65c9266b6cda48a18b8f0f895c156b33736f4a7fe7a53"
+    },
+    {
+      "id": "18_pose_fabric",
+      "file": "references/18_pose_fabric.png",
+      "label": "展开布料动作构想，后续可选",
+      "role": "future-prop",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        819,
+        769,
+        1020,
+        1046
+      ],
+      "size": [
+        201,
+        277
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "e5b0edef2391a9ebe3177066e0d400602d1c44157eafe2f61a69f290afabdd1d"
+    },
+    {
+      "id": "19_pose_lantern",
+      "file": "references/19_pose_lantern.png",
+      "label": "提灯动作构想，后续可选",
+      "role": "future-prop",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        1027,
+        769,
+        1227,
+        1046
+      ],
+      "size": [
+        200,
+        277
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "c0f1b2b18bbc053a083d8f6032b412e69a2a11c892928a0846c0235ff0a59027"
+    },
+    {
+      "id": "20_fabric_embroidery",
+      "file": "references/20_fabric_embroidery.png",
+      "label": "布面、缝线与植物刺绣质感",
+      "role": "detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        25,
+        1001,
+        162,
+        1167
+      ],
+      "size": [
+        137,
+        166
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "0bea55a3a074dba05c2bb6e71e9b5379a305d75dc52ead34966919c4211d48cf"
+    },
+    {
+      "id": "21_wood_button",
+      "file": "references/21_wood_button.png",
+      "label": "木纽扣与缝线质感",
+      "role": "detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        167,
+        1001,
+        299,
+        1167
+      ],
+      "size": [
+        132,
+        166
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "0c48d3380f7f8d2d5315f404f50a0033ea976c5a14b5360b8085fad0b1bc4804"
+    },
+    {
+      "id": "22_lace_and_red_fabric",
+      "file": "references/22_lace_and_red_fabric.png",
+      "label": "花边与铁锈红格纹布细节",
+      "role": "detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        304,
+        1001,
+        441,
+        1167
+      ],
+      "size": [
+        137,
+        166
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "cc12f70452299e5fb2caf659f48fc07a7cf236dde48b2aa7fbe7977d5b2db07f"
+    },
+    {
+      "id": "23_palette_in_board",
+      "file": "references/23_palette_in_board.png",
+      "label": "母图色卡：辅助取样，不是精准材质色规范",
+      "role": "palette",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        690,
+        265,
+        1169,
+        324
+      ],
+      "size": [
+        479,
+        59
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "c96397b9122b13e7c225679652e3a501811dc28669241fea109b6c2b9c253349"
+    },
+    {
+      "id": "24_logo_in_board",
+      "file": "references/24_logo_in_board.png",
+      "label": "概念板中的装饰性标志，仅作构图参考",
+      "role": "not-production-logo",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        712,
+        5,
+        996,
+        263
+      ],
+      "size": [
+        284,
+        258
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "1d6dc830fd7e3e2f7b81dda8bad6ec974c52a0d9753ecbccf6e15920fb73bb87"
+    },
+    {
+      "id": "25_costume_master",
+      "file": "references/25_costume_master.png",
+      "label": "披肩、围巾、裙摆与工具袋的整体关系",
+      "role": "primary-detail",
+      "source": "references/00_approved_board.png",
+      "crop_xyxy": [
+        74,
+        397,
+        577,
+        770
+      ],
+      "size": [
+        503,
+        373
+      ],
+      "coordinate_convention": "top-left origin; right and bottom exclusive",
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "f948010a823eb3d4ffcd74967f21a3739e898b1ebb546cd7ff906abe233ddf7a"
+    },
+    {
+      "id": "26_platform_logo_original",
+      "file": "references/26_platform_logo_original.png",
+      "label": "用户之前提供的平台 Logo，只作品牌辅助，不覆盖角色定稿",
+      "role": "supplementary-user-reference",
+      "source": "image(20261105-113510).png",
+      "size": [
+        460,
+        315
+      ],
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "27626f19531c8046d32e37aae96f48467d67e6cd47fbc10662198a9ba4a37fa0"
+    },
+    {
+      "id": "27_tools_pouch_user_reference",
+      "file": "references/27_tools_pouch_user_reference.png",
+      "label": "用户指定加入的工具袋截图，只作配件辅助",
+      "role": "supplementary-user-reference",
+      "source": "image(20261105-120232).png",
+      "size": [
+        121,
+        150
+      ],
+      "resized": false,
+      "background_removed": false,
+      "runtime_layer": false,
+      "sha256": "16acf06cb8e0f38f7cb75e69f4cf79f9918a581fa916e55c618ef33f321b611c"
+    }
+  ]
+}

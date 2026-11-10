@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "reference_integrity": {
+    "result": "PASS",
+    "scope": "REFERENCE PACK INTEGRITY ONLY; NOT PRODUCTION-MODEL READINESS",
+    "source_dimensions": [
+      1254,
+      1254
+    ],
+    "reference_images": 28,
+    "pixel_exact_crops_declared": 25,
+    "errors": [],
+    "production_model_status": "not_created",
+    "outstanding_assets": [
+      "production_master",
+      "separation_psd",
+      "import_psd",
+      "model_project",
+      "animation_project",
+      "runtime_entry",
+      "runtime_model",
+      "runtime_textures",
+      "runtime_motions",
+      "runtime_physics",
+      "sdk_core",
+      "repo_integration"
+    ]
+  },
+  "pixel_comparison": {
+    "checked_crops": 25,
+    "identical_to_source_crops": 25,
+    "method": "Pillow crops compared to delivered PNG pixel arrays using numpy.array_equal"
+  },
+  "python_unit_tests": {
+    "run": true,
+    "passed": 7,
+    "failed": 0,
+    "scope": "Validation helpers only. Synthetic fixtures are not real Live2D models."
+  },
+  "typescript_contract": {
+    "checked": true,
+    "command": "tsc --noEmit --strict --target ES2020 --lib ES2020,DOM specs/runtime.contract.ts",
+    "result": "PASS"
+  },
+  "missing_runtime_check": {
+    "run": true,
+    "result": "FAIL_EXPECTED",
+    "reason": "No completed .model3.json or .moc3 has been created."
+  },
+  "not_tested": [
+    "Real Cubism loading",
+    "Real WebGL rendering",
+    "Actual project integration",
+    "Layered PSD import",
+    "Actual motion playback",
+    "Commercial rights clearance"
+  ]
+}

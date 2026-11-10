@@ -1,0 +1,34 @@
+{
+  "character_id": "forest_atelier_spirit",
+  "version": "visual-lock-1",
+  "approved_reference": "references/00_approved_board.png",
+  "source_sha256": "8d10e09ebc7e3bfa1a1e9a35f4a4a18521d30fd5a4ca684de204cba45b56dc17",
+  "role": "quiet forest-inspired plush fashion-design assistant",
+  "production_model_available": false,
+  "appearance": {
+    "face": "rounded cream woven-cloth face; no redesign",
+    "eyes": "brown vertical oval stitched eyes; no lashes in any expression, no eyeliner, no added eye whites or glossy pupils",
+    "mouth": "retain tiny calm stitched mouth; no forced wide smile",
+    "hair": "flaxen golden hair with short waves and braid details as shown; no red hair",
+    "headwear": "approved cream soft wide-brim botanical hat with warm red lining; do not switch to a crown",
+    "outfit": "cream botanical embroidered cape, olive fabric pieces, rust-red scarf and checked fabric, light lace hem",
+    "feet": "cream ribbed socks and brown felt/suede short boots with cuffs and wooden-button details; no bare cloth feet",
+    "accessory": "brown stitched fashion-tool pouch with golden scissors and rolled pattern/material; keep on approved side",
+    "materials": "cloth, soft felt, yarn, wood, restrained metal; not plastic, flat SVG or glossy anime",
+    "eyebrows": "Retain original tiny eyebrows if visible; removing eyelashes must not remove or redesign eyebrows."
+  },
+  "must_not": [
+    "add eyelashes to any open/closed eye or expression",
+    "import the initial restricted doll image or unapproved prior concepts",
+    "change approved face/hair/boots/hat to increase novelty without user approval",
+    "mirror entire character to fix pouch side",
+    "copy background/ground/logo into model textures",
+    "automatically replace site logo with the decorative board emblem",
+    "call whole-image CSS transforms a finished Live2D model"
+  ],
+  "notes": [
+    "The visual lock does not certify commercial rights clearance.",
+    "The approved board contains illustration inconsistencies: use the main character for material and visual identity; use small views only for structure.",
+    "This project needs a separately approved production standing master with transparent background."
+  ]
+}

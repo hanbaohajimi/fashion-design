@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "characterId": "forest-spirit-front-v8",
+  "status": "user_approved_flat_master_production_art_not_yet_completed",
+  "approved": true,
+  "approval": "User explicitly locked v8 in planning and requested implementation of the complete v8 plan.",
+  "source": "G:\\new-fashion-design\\output\\forest-spirit-production-v2\\front-view-candidates\\v8\\forest-spirit-frontal-candidate-v8.png",
+  "sha256": "da5225e2451d062c5b8c21aea47b236d9d2d1b1b9cc6570942b854f8b775e02e",
+  "canvas": {
+    "width": 971,
+    "height": 1620
+  },
+  "format": "RGBA PNG",
+  "immutableOriginal": true,
+  "appearance": [
+    "Fully frontal face/body/feet",
+    "Moss/sage green, flax/ivory, bark brown",
+    "Scarf hides neck",
+    "Brown checked underskirt and thin moss trim",
+    "Ivory plus crosses inside brown embroidered eyes",
+    "No eyelashes",
+    "Small curved smile, soft unstitched blush",
+    "Short brown boots and functional tool pouch"
+  ],
+  "productionArtExists": false,
+  "realFrontalModelAccepted": false
+}

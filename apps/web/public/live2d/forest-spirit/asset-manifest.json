@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "status": "awaiting-production-assets",
+  "characterId": "forest-spirit-front-v8",
+  "artworkReview": {
+    "flatMasterApproved": true,
+    "designRevision": "front-v8-cross-eye-highlights-no-bell-lower-scarf-loop",
+    "workingCanvas": [971, 1620]
+  },
+  "visualReview": {
+    "approved": false,
+    "reason": "Approved frontal v8 artwork is the reference. Production layers, the real bound model, expressions, all four authored motions and six physics groups remain unaccepted."
+  }
+}

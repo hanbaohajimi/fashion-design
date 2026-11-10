@@ -1,0 +1,122 @@
+{
+  "status": "reference_only_not_flat_recolor_targets",
+  "method": "Median RGB of central 13×13 pixels of each palette circle in approved board",
+  "notes": [
+    "The warm scene lighting affects colors. These values do not replace detailed visual comparison.",
+    "Do not introduce a large purple garment simply because a lavender swatch exists. Preserve the approved costume."
+  ],
+  "colors": [
+    {
+      "id": "cream",
+      "label": "奶油米色",
+      "hex": "#F8E0CA",
+      "rgb": [
+        248,
+        224,
+        202
+      ],
+      "sample_box": [
+        719,
+        288,
+        732,
+        301
+      ]
+    },
+    {
+      "id": "sage",
+      "label": "暖苔绿",
+      "hex": "#A79B4D",
+      "rgb": [
+        167,
+        155,
+        77
+      ],
+      "sample_box": [
+        784,
+        288,
+        797,
+        301
+      ]
+    },
+    {
+      "id": "olive",
+      "label": "深橄榄",
+      "hex": "#77683A",
+      "rgb": [
+        119,
+        104,
+        58
+      ],
+      "sample_box": [
+        848,
+        288,
+        861,
+        301
+      ]
+    },
+    {
+      "id": "lavender",
+      "label": "灰紫点缀",
+      "hex": "#BF9FB7",
+      "rgb": [
+        191,
+        159,
+        183
+      ],
+      "sample_box": [
+        921,
+        288,
+        934,
+        301
+      ]
+    },
+    {
+      "id": "terracotta",
+      "label": "陶红",
+      "hex": "#D86242",
+      "rgb": [
+        216,
+        98,
+        66
+      ],
+      "sample_box": [
+        999,
+        288,
+        1012,
+        301
+      ]
+    },
+    {
+      "id": "ochre",
+      "label": "暖金",
+      "hex": "#F2A84D",
+      "rgb": [
+        242,
+        168,
+        77
+      ],
+      "sample_box": [
+        1062,
+        288,
+        1075,
+        301
+      ]
+    },
+    {
+      "id": "brown",
+      "label": "棕色",
+      "hex": "#955C34",
+      "rgb": [
+        149,
+        92,
+        52
+      ],
+      "sample_box": [
+        1129,
+        288,
+        1142,
+        301
+      ]
+    }
+  ]
+}

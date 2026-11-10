@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "specId": "forest-spirit-front-v8-quality-frozen-2-alpha-union-correction",
+  "status": "frozen_before_candidate_evaluation",
+  "contractCorrection": "Corrected alpha MAE from full-canvas averaging to the foreground alpha>0.05 union required by the user-approved plan, before any production candidate was evaluated. ROI coordinates and all numeric thresholds are unchanged. Previous hash 28805b97cab4479e27b3cae26e270bc0720b2736e529e413a11d2c4813403ee2 identifies the superseded instrument-calibration specification, not production acceptance.",
+  "reference": {
+    "path": "output/forest-spirit-production-v2/front-view-candidates/v8/forest-spirit-frontal-candidate-v8.png",
+    "sha256": "da5225e2451d062c5b8c21aea47b236d9d2d1b1b9cc6570942b854f8b775e02e",
+    "width": 971,
+    "height": 1620,
+    "colorSpace": "sRGB",
+    "orientation": "front-facing face and body, no registration or rescaling"
+  },
+  "roiConvention": "Pixel rectangles [left, top, right-exclusive, bottom-exclusive] on the fixed reference canvas; L/R is anatomical, opposite viewer side. Frozen from visual inspection of the locked mother image, before any candidate measurements. Never shrink after a failed result.",
+  "regions": [
+    { "id": "eye_R", "label": "Anatomical right eye, viewer left", "rect": [390, 432, 462, 533] },
+    { "id": "eye_L", "label": "Anatomical left eye, viewer right", "rect": [590, 432, 663, 533] },
+    { "id": "brow_R", "label": "Original right eyebrow", "rect": [389, 384, 465, 420] },
+    { "id": "brow_L", "label": "Original left eyebrow", "rect": [580, 383, 658, 422] },
+    { "id": "nose", "label": "Original nose", "rect": [502, 497, 547, 533] },
+    { "id": "mouth", "label": "Original mouth", "rect": [493, 530, 556, 568] },
+    { "id": "face", "label": "Whole face and forehead context", "rect": [326, 343, 723, 631] },
+    { "id": "hat", "label": "Complete hat and botanical decorations", "rect": [113, 67, 893, 528] },
+    { "id": "hair", "label": "Complete head hair and braid context", "rect": [127, 306, 904, 974] },
+    { "id": "scarf", "label": "Neck-covering scarf", "rect": [329, 590, 721, 753] },
+    { "id": "bodice_cape", "label": "Upper clothing, cape and sleeves", "rect": [243, 708, 900, 1085] },
+    { "id": "skirt", "label": "All skirt petals, checked underskirt and lace", "rect": [131, 1008, 868, 1268] },
+    { "id": "boot_R", "label": "Anatomical right brown boot", "rect": [276, 1348, 498, 1599] },
+    { "id": "boot_L", "label": "Anatomical left brown boot", "rect": [492, 1348, 720, 1599] },
+    { "id": "pouch_tools", "label": "Pouch and actual scissors/pattern rolls", "rect": [579, 719, 838, 1091] }
+  ],
+  "backgrounds": [
+    { "id": "white", "rgb8": [255, 255, 255] },
+    { "id": "pale_green", "rgb8": [224, 234, 216] },
+    { "id": "deep_green", "rgb8": [26, 53, 37] }
+  ],
+  "metrics": {
+    "ssim": {
+      "implementation": "scikit-image==0.26.0 skimage.metrics.structural_similarity",
+      "input": "Float64 straight sRGB RGB alpha-composited over each fixed background, range 0..1",
+      "dataRange": 1.0,
+      "channelAxis": -1,
+      "gaussianWeights": true,
+      "sigma": 1.5,
+      "useSampleCovariance": false,
+      "windowSize": 11,
+      "foregroundAlphaThreshold": 0.05,
+      "mask": "Union of reference alpha>0.05 and candidate alpha>0.05, intersected with each fixed ROI; no candidate-dependent removal of differing pixels",
+      "aggregation": "Compute a full-canvas SSIM map for RGB, average channels per pixel, then mean over masked pixels. Border pixels use the library reflected Gaussian boundary. Require global and every ROI on every background.",
+      "minimum": 0.95
+    },
+    "alpha": {
+      "iouThreshold": 0.5,
+      "iouMinimum": 0.98,
+      "normalizedMaeMaximum": 0.02,
+      "scope": "IoU uses the full fixed canvas at alpha>=0.5. Alpha MAE uses only the union of reference alpha>0.05 or candidate alpha>0.05. Per-ROI alpha diagnostics do not introduce additional thresholds.",
+      "mae": "Mean absolute difference of alpha/255 over the same foreground union used for masked SSIM; transparent padding never dilutes this mean"
+    },
+    "deltaE00": {
+      "implementation": "skimage.color.rgb2lab and deltaE_ciede2000, D65/2-degree default observer",
+      "input": "Unpremultiplied sRGB RGB, reference-fixed solid material regions. Candidate alpha never removes selected pixels.",
+      "referenceSolidAlphaMinimum": 0.95,
+      "medianMaximum": 3.0,
+      "p95Maximum": 8.0,
+      "scope": "Require each fixed material region and their union; report candidate alpha coverage for diagnostics. Percentile uses numpy linear interpolation.",
+      "regions": [
+        { "id": "hat_olive", "rect": [488, 157, 553, 220] },
+        { "id": "face_linen", "rect": [462, 463, 489, 498] },
+        { "id": "hair_pale_gold", "rect": [714, 506, 757, 545] },
+        { "id": "scarf_taupe", "rect": [434, 640, 502, 662] },
+        { "id": "cape_sage", "rect": [326, 760, 375, 811] },
+        { "id": "bodice_olive", "rect": [465, 829, 500, 872] },
+        { "id": "skirt_cream", "rect": [331, 1082, 365, 1117] },
+        { "id": "skirt_checked_brown", "rect": [463, 1123, 499, 1186] },
+        { "id": "boot_R_brown", "rect": [377, 1480, 435, 1517] },
+        { "id": "boot_L_brown", "rect": [550, 1480, 613, 1517] },
+        { "id": "pouch_leather", "rect": [718, 970, 764, 1016] }
+      ]
+    }
+  },
+  "manualChecksNotReplacedByMetrics": [
+    "Both eye decorations remain the original two-stroke ivory plus inside brown embroidered eyes; no eyelashes in any expression.",
+    "Original eyebrows, nose and mouth retain their shape and placement; closed eyes are clean arcs and hide the plus completely.",
+    "Face and body remain fully front-facing in neutral; the scarf covers the neck across approved motion extremes.",
+    "Hair, cloth, lace, boots and leather preserve coherent material direction and have no repeated or smeared patch defects.",
+    "Layer ownership is correct, with no duplicated eye, hair, tool or garment pixels attached to another moving part.",
+    "Hidden repaint covers actual pose extremes without holes, popping, incorrect draw order or exposed seams.",
+    "Real Cubism model, motion and browser runtime acceptance are separate from this image comparison."
+  ]
+}

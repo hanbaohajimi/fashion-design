@@ -1,0 +1,266 @@
+{
+  "status": "specification_not_live2d_data",
+  "coordinate_convention": "L/R denote character anatomical left/right. Front-view screen right is character left.",
+  "source_for_standard_ids": "https://docs.live2d.com/en/cubism-editor-manual/standard-parameter-list/",
+  "global_notes": [
+    "Custom ParamFS* IDs must be explicitly created in Cubism and verified in exported model.",
+    "IDs or ranges alone do not create deformations. Record actual exported ranges after rigging.",
+    "Eye/Mouth effect ownership must be resolved per motion to avoid double blink or overwrite.",
+    "No ParamEyeBallX/Y target is needed for the approved solid embroidered eyes."
+  ],
+  "parameters": [
+    {
+      "id": "ParamAngleX",
+      "name": "头部左右转向",
+      "min": -30,
+      "default": 0,
+      "max": 30,
+      "id_kind": "official_standard",
+      "owner": "motion",
+      "notes": "Only rig gentle keyforms. In first version limit runtime to roughly [-8,8]; parameter values are not a promise of exact physical degrees.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamAngleY",
+      "name": "抬头低头",
+      "min": -30,
+      "default": 0,
+      "max": 30,
+      "id_kind": "official_standard",
+      "owner": "motion",
+      "notes": "Initial runtime envelope [-5,6].",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamAngleZ",
+      "name": "轻微歪头",
+      "min": -30,
+      "default": 0,
+      "max": 30,
+      "id_kind": "official_standard",
+      "owner": "motion",
+      "notes": "Initial runtime envelope [-5,5].",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamBodyAngleX",
+      "name": "身体左右姿态",
+      "min": -10,
+      "default": 0,
+      "max": 10,
+      "id_kind": "official_standard",
+      "owner": "motion",
+      "notes": "Runtime initially within [-3,3].",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamBodyAngleZ",
+      "name": "身体轻微侧倾",
+      "min": -10,
+      "default": 0,
+      "max": 10,
+      "id_kind": "official_standard",
+      "owner": "motion",
+      "notes": "Runtime initially within [-2,2]. No walking or autonomous translation.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamBreath",
+      "name": "轻微呼吸",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "breath_or_motion",
+      "notes": "Choose one owner. Do not stretch weave noticeably.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamEyeLOpen",
+      "name": "左眼开合",
+      "min": 0,
+      "default": 1,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "blink_or_motion",
+      "notes": "Closed state is a simple curved stitched line with zero lashes. No whites, moving pupils or glints.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamEyeLSmile",
+      "name": "左眼微笑",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "expression",
+      "notes": "Small soft arc only; do not draw extra outer-eye strokes.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamEyeROpen",
+      "name": "右眼开合",
+      "min": 0,
+      "default": 1,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "blink_or_motion",
+      "notes": "Closed state is a simple curved stitched line with zero lashes. No whites, moving pupils or glints.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamEyeRSmile",
+      "name": "右眼微笑",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "expression",
+      "notes": "Small soft arc only; do not draw extra outer-eye strokes.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamMouthForm",
+      "name": "小幅嘴形变化",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "expression",
+      "notes": "Default retains approved tiny angled stitch. No wide grin, lipstick or teeth.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamMouthOpenY",
+      "name": "轻微惊讶开口（可选）",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "official_standard",
+      "owner": "expression",
+      "notes": "Optional; no speech lip-sync in MVP.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSHatTouch",
+      "name": "扶帽复合姿态",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "motion",
+      "notes": "Actual art deformation for an approved hand and hat. Must include hand-before-hat occlusion at the touch moment.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSPickup",
+      "name": "被移动姿态",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "interaction_motion",
+      "notes": "Moves only pose inside renderer. Browser overlay owns screen position.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSSettle",
+      "name": "放下缓冲",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "motion",
+      "notes": "No bouncy squashing or rubber texture.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSHairBackSway",
+      "name": "后发轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Physics output. Do not also key this in all idle motions.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSBraidSway",
+      "name": "发辫轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Low amplitude; moderate damping.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSHatTipSway",
+      "name": "帽尖轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "The brim mostly retains shape.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSBellSway",
+      "name": "铃铛摆动",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Slight pendulum movement; no automatic sound.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSScarfSway",
+      "name": "围巾尾轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Short settling motion, no perpetual wind.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSSkirtSway",
+      "name": "裙摆轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Keep lace edge and folds coherent.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSPouchSway",
+      "name": "工具袋轻摆",
+      "min": -1,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "physics",
+      "notes": "Heavy pouch: smaller amplitude than scarf. Rigid scissors, no bending blades.",
+      "status": "planned_not_rigged"
+    },
+    {
+      "id": "ParamFSBlush",
+      "name": "腮红强弱（可选）",
+      "min": 0,
+      "default": 0,
+      "max": 1,
+      "id_kind": "custom",
+      "owner": "expression",
+      "notes": "Default must match source, not add vivid makeup.",
+      "status": "planned_not_rigged"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "status": "project_proposal",
+  "user_confirmed": {
+    "hover": "play_one_gentle_greeting",
+    "primary_click": "open_existing_chat_and_hide_character",
+    "long_press_drag": "reposition_only_by_user",
+    "autonomous_roaming": false,
+    "small_popover": false,
+    "right_click_required": false,
+    "retain_conversation": true,
+    "eyelashes_allowed": false
+  },
+  "suggested_defaults": {
+    "long_press_ms": 400,
+    "movement_slop_css_px": 6,
+    "hover_cooldown_ms": 1800,
+    "drag_edge_inset_css_px": 16,
+    "default_height_css_px": 220,
+    "height_range_css_px": [
+      160,
+      280
+    ],
+    "render_fps": 30,
+    "max_device_pixel_ratio": 2,
+    "ui_fade_ms": 150
+  },
+  "gesture_rules": {
+    "short_release": "open chat only if still a short click and movement <= slop",
+    "pre_long_press_movement": "cancel click candidate and long-press timer if movement > slop before long-press. Do NOT convert to immediate drag.",
+    "long_press": "arm dragging and suppress click even when pointer does not move",
+    "drag_release": "persist clamped position; play put_down; no click",
+    "cancel": "clear timers and release pointer capture; never open chat",
+    "pointer_capture": "capture accepted primary pointer after hit is confirmed; release on up/cancel/lost capture",
+    "keyboard": "Enter/Space opens chat; reduced motion avoids greeting animation"
+  },
+  "position": {
+    "space": "workspace_viewport_css_pixels_not_fabric_world",
+    "persist": "proposed user+workspace normalized available-travel coordinates",
+    "on_resize": "clamp into viewport without resetting user intent",
+    "on_chat_close": "restore prior anchor and clamp"
+  },
+  "proactive_messages": {
+    "enabled_by_default": false,
+    "status": "needs_product_decision",
+    "no_auto_generation": true,
+    "no_automatic_microphone": true
+  },
+  "lifecycle": {
+    "chat_open": "hide and pause visual rendering, not business tasks",
+    "document_hidden": "pause renderer",
+    "unmount": "dispose instance resources and handlers without corrupting any shared SDK manager",
+    "failure": "use explicit static fallback and existing assistant entry, never pretend a PNG is Live2D"
+  }
+}

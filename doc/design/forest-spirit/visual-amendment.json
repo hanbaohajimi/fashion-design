@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-05",
+  "character_id": "forest_atelier_spirit",
+  "status": "v2_appearance_user_approved_layer_preparation_authorized",
+  "precedence": "Latest explicit user instructions override conflicting visual-lock-1 statements. The archived handoff remains byte-for-byte unchanged.",
+  "approved_production_master": "production/master/forest-spirit-approved-v2.png",
+  "approved_master_type": "flat_transparent_image_not_layered_art_or_model",
+  "latest_user_changes": {
+    "eyes": "One small pale stitched cross (+), with vertical and horizontal strokes only, inside each original brown embroidered oval eye. Not a five-point star or multi-ray sparkle.",
+    "hat": "User approved v2's low rounded soft hat with short scalloped brim, retaining the woodland cloth-doll identity.",
+    "clothing": "User approved v2's shorter capelet, olive bodice and petal-shaped skirt panels, retaining the woodland sewing identity and material/color direction."
+  },
+  "preserve": [
+    "Original rounded cloth face and its proportions",
+    "Brown embroidered oval eyes, with the added internal cross decoration",
+    "Original eyebrows, nose and mouth; no unrelated facial changes",
+    "Flaxen blonde hair and familiar braided hair identity",
+    "Brown ankle boots, cream ribbed socks and wooden buttons",
+    "Brown sewing pouch with gold scissors and rolled patterns, on viewer right",
+    "Cream, olive and rust woodland fabric identity"
+  ],
+  "prohibited": [
+    "Eyelashes or eyeliner in any expression or motion",
+    "Calling a generated single-layer PNG completed separated production artwork, a layered PSD or a Live2D model; a user-approved flat transparent master is explicitly allowed",
+    "Replacing the character with the red-haired SproutProof technical test model",
+    "Binding an unapproved candidate or overwriting the original reference board"
+  ],
+  "eye_layer_requirements": {
+    "status": "planned_not_drawn_or_rigged",
+    "proposed_additional_layers": ["Eye_L_Cross", "Eye_R_Cross"],
+    "draw_order": "Above the corresponding brown open-eye artwork; fully contained by that eye's silhouette, using an appropriate clipping mask if needed.",
+    "deformation": "Follow the corresponding open eye's shape and head deformation. Keep a stitched, non-glowing appearance.",
+    "closing": "Hide each cross together with its open-eye oval as that eye closes. At fully closed, use the independent Eye_L_Closed or Eye_R_Closed clean arc only, with no cross, residual oval, lash or outward tick.",
+    "eyebrows": "Keep Brow_L and Brow_R independent and preserve their original appearance."
+  },
+  "references": {
+    "original_handoff": "handoff-v1/CODEX_START_HERE.md",
+    "original_board": "handoff-v1/references/00_approved_board.png",
+    "earlier_user_eye_reference": "amendments/star-eyes-user-reference.png",
+    "earlier_eye_reference_note": "Retained as user-provided visual evidence. The later explicit cross-shape instruction overrides the earlier star terminology."
+  },
+  "candidate_history": [
+    {
+      "file": "../../../output/forest-spirit-art/candidates/forest-spirit-star-eyes-v1.png",
+      "status": "rejected",
+      "reason": "User requested a different hat and clothing shape, and clarified the eye decoration must be a cross rather than this star."
+    },
+    {
+      "file": "../../../output/forest-spirit-art/candidates/forest-spirit-cross-eyes-v2.png",
+      "status": "appearance_approved_and_layer_preparation_authorized",
+      "description": "Transparent single-layer candidate with low rounded scalloped hat, short capelet and petal skirt panels, plus stitched cross decorations inside brown eyes.",
+      "generation_record": "../../../output/forest-spirit-art/candidates/v2-generation.txt",
+      "limitations": "Generated local textures and fine proportions are not pixel-identical to the approved board. This image has no independently editable body parts or recovered occluded areas."
+    }
+  ],
+  "production_gate": "V2 appearance is already approved; proceed with layer preparation without re-requesting appearance approval. Actual aligned layers, occluded-pixel repaint, real PSD, Cubism rig and official runtime exports are still missing. Follow production/layers-v2.json. Existing no-lashes and interaction requirements remain in force."
+}

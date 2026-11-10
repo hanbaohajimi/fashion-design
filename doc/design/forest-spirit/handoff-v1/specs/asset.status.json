@@ -1,0 +1,81 @@
+{
+  "reference_pack": "complete",
+  "production_art": "not_created",
+  "live2d_model": "not_created",
+  "runtime_integration": "not_performed",
+  "commercial_clearance": "not_confirmed",
+  "assets": [
+    {
+      "id": "production_master",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/art/forest_spirit_master.png"
+    },
+    {
+      "id": "separation_psd",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/art/forest_spirit_separation.psd"
+    },
+    {
+      "id": "import_psd",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/art/forest_spirit_import.psd"
+    },
+    {
+      "id": "model_project",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/forest_spirit.cmo3"
+    },
+    {
+      "id": "animation_project",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/forest_spirit.can3"
+    },
+    {
+      "id": "runtime_entry",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/forest_spirit.model3.json"
+    },
+    {
+      "id": "runtime_model",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/forest_spirit.moc3"
+    },
+    {
+      "id": "runtime_textures",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/textures/"
+    },
+    {
+      "id": "runtime_motions",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/motions/"
+    },
+    {
+      "id": "runtime_physics",
+      "required_phase": "P0",
+      "status": "missing",
+      "target": "deliverables/live2d/forest_spirit.physics3.json"
+    },
+    {
+      "id": "sdk_core",
+      "required_phase": "P0",
+      "status": "external_not_bundled",
+      "target": null
+    },
+    {
+      "id": "repo_integration",
+      "required_phase": "P0",
+      "status": "not_performed",
+      "target": null
+    }
+  ]
+}

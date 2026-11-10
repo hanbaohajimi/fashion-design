@@ -1,0 +1,117 @@
+{
+  "status": "storyboard_and_timing_proposals_not_exported_motion3_json",
+  "motion_count": 9,
+  "timings": "Suggested starting points to tune against model, not user-approved measurements",
+  "motions": [
+    {
+      "id": "idle",
+      "group": "Idle",
+      "phase": "P0",
+      "duration_s": 6.0,
+      "loop": true,
+      "playback": "continuous while visible unless reduced motion",
+      "description": "Very slight breathing; occasional separate blink. Fixed screen position.",
+      "notes": "Breathing has one owner; do not key physics outputs unnecessarily."
+    },
+    {
+      "id": "hover_greet",
+      "group": "Hover",
+      "phase": "P0",
+      "duration_s": 1.8,
+      "loop": false,
+      "playback": "once on pointerenter, subject to cooldown",
+      "description": "Look up gently, touch hat brim with one hand, lower hand and settle.",
+      "keybeats": [
+        {
+          "t": 0.0,
+          "pose": "neutral"
+        },
+        {
+          "t": 0.25,
+          "pose": "small head lift"
+        },
+        {
+          "t": 0.65,
+          "pose": "hand reaches brim"
+        },
+        {
+          "t": 0.95,
+          "pose": "brief held acknowledgment"
+        },
+        {
+          "t": 1.5,
+          "pose": "lower hand"
+        },
+        {
+          "t": 1.8,
+          "pose": "neutral"
+        }
+      ],
+      "notes": "Open chat immediately if clicked. Do not queue repeats or wait for this motion."
+    },
+    {
+      "id": "drag_hold",
+      "group": "DragHold",
+      "phase": "P0",
+      "duration_s": 0.3,
+      "loop": false,
+      "playback": "enter pickup pose then hold parameter while dragging",
+      "description": "Arms gently drawn in; feet slightly lifted within model framing.",
+      "notes": "Screen movement is controlled by DOM overlay, never authored into the model motion."
+    },
+    {
+      "id": "put_down",
+      "group": "PutDown",
+      "phase": "P0",
+      "duration_s": 0.55,
+      "loop": false,
+      "playback": "on valid drag end",
+      "description": "Feet settle; hat and scarf softly follow, with no bounce.",
+      "notes": "Never open chat after drag."
+    },
+    {
+      "id": "task_ready",
+      "group": "TaskReady",
+      "phase": "P1",
+      "duration_s": 1.1,
+      "loop": false,
+      "playback": "actual task completion, throttled and not during pointer interaction",
+      "description": "Small head lift or nod, calm face.",
+      "notes": "Proactive message policy is not yet approved; keep disabled behind feature flag initially."
+    },
+    {
+      "id": "needs_attention",
+      "group": "NeedsAttention",
+      "phase": "P1",
+      "duration_s": 1.1,
+      "loop": false,
+      "playback": "actual failed or actionable task, if notification policy enabled",
+      "description": "Slight head tilt, no panic expression.",
+      "notes": "No decorative fake error state."
+    },
+    {
+      "id": "sketchbook",
+      "group": "Sketchbook",
+      "phase": "P2",
+      "duration_s": null,
+      "loop": false,
+      "description": "Optional reference pose only; separate prop artwork required."
+    },
+    {
+      "id": "fabric",
+      "group": "Fabric",
+      "phase": "P2",
+      "duration_s": null,
+      "loop": false,
+      "description": "Optional reference pose only; separate prop artwork required."
+    },
+    {
+      "id": "lantern",
+      "group": "Lantern",
+      "phase": "P2",
+      "duration_s": null,
+      "loop": false,
+      "description": "Optional reference pose only; separate prop artwork required."
+    }
+  ]
+}
