@@ -11,7 +11,11 @@ import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import type { ImageTransformJob } from "@fashion/shared";
 
 describe("图片尺寸变换真实队列", () => {
-  it("经 Redis、Sharp、MinIO 保存新版本并保持幂等及免费", async () => {
+  it.each([
+    { label: "裁剪与缩放", params: { width: 32, height: 40, crop: { left: 10, top: 20, width: 50, height: 60 } } },
+    { label: "旋转与镜像", params: { width: 120, height: 100, rotate: 90, flipHorizontal: true } },
+    { label: "色彩与明暗", params: { width: 100, height: 120, adjustments: { brightness: 0, contrast: 0, saturation: -100, warmth: 0 } } },
+  ])("$label 经 Redis、Sharp、MinIO 保存新版本并保持幂等及免费", async ({ params }) => {
     const user = await prisma.user.create({
       data: {
         email: `transform-${crypto.randomUUID()}@example.com`,
@@ -117,11 +121,7 @@ describe("图片尺寸变换真实队列", () => {
               payload: {
                 toolKey: "transform_image",
                 toolVersion: "1",
-                params: {
-                  width: 32,
-                  height: 40,
-                  crop: { left: 10, top: 20, width: 50, height: 60 },
-                },
+                params,
               },
               x: 400,
               y: 0,
@@ -158,12 +158,20 @@ describe("图片尺寸变换真实队列", () => {
       expect(asset).toMatchObject({
         operation: "TRANSFORM",
         parentAssetId: id,
-        width: 32,
-        height: 40,
+        rootAssetId: id,
+        width: params.width,
+        height: params.height,
       });
       expect(
         await sharp(await storage.get(asset.url.slice(5))).metadata(),
-      ).toMatchObject({ width: 32, height: 40 });
+      ).toMatchObject({ width: params.width, height: params.height });
+      if ("adjustments" in params) {
+        const pixel = await sharp(await storage.get(asset.url.slice(5))).extract({ left: 10, top: 10, width: 1, height: 1 }).ensureAlpha().raw().toBuffer();
+        expect([...pixel]).toEqual([54, 54, 54, 255]);
+      }
+      const step = await prisma.designStep.findUniqueOrThrow({ where: { outputAssetId: asset.id } });
+      expect(step.inputSnapshot).toMatchObject({ sourceAssetId: id, params });
+      expect(await storage.get(sourceKey)).not.toEqual(await storage.get(asset.url.slice(5)));
       await runtime.execute(user.id, project.id, toolId, { mutationId });
       expect(
         await prisma.designAsset.count({ where: { parentAssetId: id } }),

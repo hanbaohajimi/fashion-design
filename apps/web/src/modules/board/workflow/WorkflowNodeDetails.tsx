@@ -431,7 +431,7 @@ export function NodeDetails({
               ))}
           </ol>
         ) : null}
-        {assetId ? <DesignPathPanel assetId={assetId} /> : null}
+        {assetId ? <DesignPathPanel assetId={assetId} readOnly={readOnly} /> : null}
       </GridDetails>
       <section className={styles.detailSection}>
         <button

@@ -1,31 +1,19 @@
 "use client";
 import { GridDetails } from "../../../components/GridDetails";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button, Dialog, Input } from "../../../components/ui";
 import type { WorkflowGraph, WorkflowNode } from "./workflow-api";
-import { displayNodeTitle, nodeImageUrl } from "./workflow-graph";
+import { displayNodeTitle } from "./workflow-graph";
+import {
+  AssistantReferencePreview,
+  referenceLabel,
+  referenceTypeLabel,
+} from "./AssistantReferencePreview";
 import ui from "./assistant-context.module.css";
+import { MAX_ASSISTANT_REFERENCES } from "./discussion-references";
 
-export const MAX_ASSISTANT_REFERENCES = 16;
-
-function ReferencePreview({ node }: { readonly node: WorkflowNode }) {
-  const [failed, setFailed] = useState(false);
-  const url = nodeImageUrl(node);
-  return url && !failed ? (
-    // The same authenticated images are used by the workbench.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="" onError={() => setFailed(true)} />
-  ) : (
-    <span className={ui.referencePlaceholder} aria-hidden="true">
-      {node.type === "candidate"
-        ? "方案"
-        : node.kind === "tool"
-          ? "工具"
-          : "素材"}
-    </span>
-  );
-}
+export { MAX_ASSISTANT_REFERENCES } from "./discussion-references";
 
 export function AssistantReferencePicker({
   graph,
@@ -51,51 +39,64 @@ export function AssistantReferencePicker({
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
-    if (open) { setQuery(""); setIds(selectedIds.filter((id) => graph.nodes.some((node) => node.id === id))); }
+    if (open) {
+      setQuery("");
+      setIds(
+        selectedIds.filter((id) => graph.nodes.some((node) => node.id === id)),
+      );
+    }
   }
-  const availableIds = ids.filter((id) =>
-    graph.nodes.some((node) => node.id === id),
+  const availableIds = useMemo(
+    () => ids.filter((id) => graph.nodes.some((node) => node.id === id)),
+    [ids, graph.nodes],
   );
-  const matches = graph.nodes.filter((node) =>
-    displayNodeTitle(node)
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
+  const matches = useMemo(
+    () =>
+      graph.nodes.filter((node) =>
+        displayNodeTitle(node)
+          .toLocaleLowerCase()
+          .includes(query.trim().toLocaleLowerCase()),
+      ),
+    [graph.nodes, query],
   );
-  const assets = matches.filter((node) => node.kind === "asset");
-  const tools = matches.filter((node) => node.kind === "tool");
-  const row = (node: WorkflowNode) => (
-    <label className={ui.referenceOption} key={node.id}>
-      <input
-        type="checkbox"
-        checked={availableIds.includes(node.id)}
-        disabled={
-          !availableIds.includes(node.id) &&
-          availableIds.length >= MAX_ASSISTANT_REFERENCES
-        }
-        onChange={(event) =>
-          setIds(
-            event.target.checked
-              ? [...new Set([...availableIds, node.id])]
-              : availableIds.filter((id) => id !== node.id),
-          )
-        }
-      />
-      <ReferencePreview node={node} />
-      <span>
-        <strong>{displayNodeTitle(node)}</strong>{" "}
-        <small>
-          {node.type === "candidate"
-            ? "服装方案"
-            : node.kind === "tool"
-              ? "设计工具"
-              : "参考素材"}
-          {graph.nodes.filter((item) => item.title === node.title).length > 1
-            ? ` ${node.id}`
-            : ""}
-        </small>
-      </span>
-    </label>
+  const assets = useMemo(
+    () => matches.filter((node) => node.kind === "asset"),
+    [matches],
   );
+  const tools = useMemo(
+    () => matches.filter((node) => node.kind === "tool"),
+    [matches],
+  );
+  const row = useCallback(
+    (node: WorkflowNode) => (
+      <label className={ui.referenceOption} key={node.id}>
+        <input
+          type="checkbox"
+          checked={availableIds.includes(node.id)}
+          disabled={
+            !availableIds.includes(node.id) &&
+            availableIds.length >= MAX_ASSISTANT_REFERENCES
+          }
+          onChange={(event) =>
+            setIds(
+              event.target.checked
+                ? [...new Set([...availableIds, node.id])]
+                : availableIds.filter((id) => id !== node.id),
+            )
+          }
+        />
+        <AssistantReferencePreview node={node} />
+        <span>
+          <strong>{referenceLabel(node, graph.nodes)}</strong>{" "}
+          <small>{referenceTypeLabel(node)}</small>
+        </span>
+      </label>
+    ),
+    [availableIds, graph.nodes],
+  );
+  // Composer keystrokes must not rebuild every project thumbnail in the hidden dialog.
+  const assetRows = useMemo(() => assets.map(row), [assets, row]);
+  const toolRows = useMemo(() => tools.map(row), [tools, row]);
 
   return (
     <Dialog
@@ -128,7 +129,7 @@ export function AssistantReferencePicker({
             : "；引用将在发送需求时交给助手。"}
         </p>
         <div className={ui.referenceList}>
-          {assets.map(row)}
+          {assetRows}
           {!assets.length ? (
             <p>
               {query.trim()
@@ -139,7 +140,7 @@ export function AssistantReferencePicker({
           {tools.length ? (
             <GridDetails>
               <summary>设计工具（{tools.length}）</summary>
-              {tools.map(row)}
+              {toolRows}
             </GridDetails>
           ) : null}
         </div>

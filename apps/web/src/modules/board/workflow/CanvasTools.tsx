@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   createShapeId,
   DefaultColorStyle,
@@ -13,7 +13,14 @@ import {
 import { Menu } from "../../../components/ui";
 import { BoardProjectContext } from "../board-context";
 import { ToolRail } from "../ToolRail";
+import { CanvasWelcome } from "./CanvasWelcome";
+import { CanvasObjectsPanel } from "./CanvasObjectsPanel";
+import { CanvasOverview } from "./CanvasOverview";
+import { CanvasObjectHistory, type CanvasHistoryTarget } from "./CanvasObjectHistory";
 import { fitCanvasContents, selectedMaterialShapes } from "./canvas-placements";
+import { canvasImageFitBounds, fitCanvasImageToSource } from "./canvas-image-sizing";
+import { imageToolEntries, type ImageToolEntry } from "./image-tool-entry";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 import styles from "./infinite-workspace.module.css";
 
 const icons: Record<string, ReactNode> = {
@@ -26,6 +33,7 @@ const icons: Record<string, ReactNode> = {
   ),
   close: <path d="m6 6 12 12M18 6 6 18" />,
   check: <path d="m5 12 4 4L19 6" />,
+  layers: <><path d="m12 3 9 5-9 5-9-5ZM3 12l9 5 9-5M3 16l9 5 9-5" /></>,
 };
 function Icon({ name }: { name: string }) {
   return (
@@ -69,6 +77,15 @@ export interface CanvasToolActions {
   onOpenSketch: () => void;
   onUpload: () => void;
   onUseTools: () => void;
+  onReference?: () => void;
+  referencesPreparing?: boolean;
+  onStartConversation?: (focusInput: boolean) => void;
+  assistantOpen?: boolean;
+  onCanvasPanelOpenChange?: (open: boolean) => void;
+  onObjectHistoryOpenChange?: (open: boolean) => void;
+  onOpenAssetHistory?: (nodeId: string, assetId: string) => boolean;
+  imageToolNodeIds?: readonly string[];
+  onOpenImageTool?: (nodeId: string, assetId: string, action: ImageToolEntry) => void;
 }
 
 export function CanvasTools({
@@ -88,13 +105,29 @@ export function CanvasTools({
 }) {
   const editor = useEditor();
   const [showTips, setShowTips] = useState(false);
+  const [showObjects, setShowObjects] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
+  const [history, setHistory] = useState<CanvasHistoryTarget | null>(null);
+  const openHistory = useCallback((target: CanvasHistoryTarget) => setHistory(target), []);
+  const onObjectHistoryOpenChange = actions.onObjectHistoryOpenChange;
+  useEffect(() => { onObjectHistoryOpenChange?.(history !== null); }, [history, onObjectHistoryOpenChange]);
+  useEffect(() => () => onObjectHistoryOpenChange?.(false), [onObjectHistoryOpenChange]);
+  const objectsId = useId();
+  const objectsButton = useRef<HTMLButtonElement>(null);
+  const moreButton = useRef<HTMLElement>(null);
+  const closeObjects = useCallback(() => { setShowObjects(false); objectsButton.current?.focus(); }, []);
+  const closeOverview = useCallback(() => { setShowOverview(false); moreButton.current?.focus(); }, []);
+  const onCanvasPanelOpenChange = actions.onCanvasPanelOpenChange;
+  useEffect(() => { onCanvasPanelOpenChange?.(showObjects || showOverview); }, [onCanvasPanelOpenChange, showObjects, showOverview]);
+  useEffect(() => () => { onCanvasPanelOpenChange?.(false); }, [onCanvasPanelOpenChange]);
   const state = useValue(
     "canvas-tool-state",
     () => {
       const selected = editor.getSelectedShapes();
+      const materials = selectedMaterialShapes(editor);
       const ids = [
         ...new Set(
-          selectedMaterialShapes(editor).flatMap((shape) =>
+          materials.flatMap((shape) =>
             typeof shape.meta.canvasNodeId === "string"
               ? [shape.meta.canvasNodeId]
               : [],
@@ -107,8 +140,15 @@ export function CanvasTools({
       return {
         tool: editor.getCurrentToolId(),
         count: selected.length,
+        referenceCount: ids.length + materials.filter((shape) => typeof shape.meta.canvasNodeId !== "string" && ["draw", "text", "note", "fashion-note", "fashion-swatch"].includes(shape.type)).length,
         ids,
         hasGroup: selected.some((shape) => shape.type === "group"),
+        hasLocked: selected.some((shape) => editor.isShapeOrAncestorLocked(shape)),
+        imageToFit: selected.length === 1 && selected[0]?.type === "fashion-image" ? selected[0].id : null,
+        canFitImage: selected.length === 1 && selected[0]?.type === "fashion-image" && Boolean(canvasImageFitBounds(selected[0])),
+        history: selected.length === 1 && selected[0]?.type === "fashion-image" && typeof selected[0].props.assetId === "string" && selected[0].props.assetId ? {
+          assetId: selected[0].props.assetId, title: String(selected[0].props.title || "图片"), nodeId: typeof selected[0].meta.canvasNodeId === "string" ? selected[0].meta.canvasNodeId : null,
+        } : null,
         canUndo: editor.canUndo(),
         canRedo: editor.canRedo(),
         hasShapes: editor.getCurrentPageShapes().length > 0,
@@ -130,6 +170,7 @@ export function CanvasTools({
     [editor],
   );
   const editable = ready && canEdit;
+  const editableSelection = editable && !state.hasLocked;
   const action = (name: string, work: () => void) => {
     editor.markHistoryStoppingPoint(name);
     work();
@@ -164,6 +205,18 @@ export function CanvasTools({
         <ToolRail {...actions} embedded ready={ready}>
           <div className={styles.railExtras}>
             <button
+              ref={objectsButton}
+              type="button"
+              aria-label="画布对象"
+              title="画布对象"
+              aria-expanded={showObjects}
+              aria-controls={showObjects ? objectsId : undefined}
+              disabled={!ready}
+              onClick={() => { setShowObjects(value => !value); setShowTips(false); setShowOverview(false); }}
+            >
+              <Icon name="layers" />
+            </button>
+            <button
               className={styles.designToolsButton}
               type="button"
               aria-label="使用设计工具"
@@ -176,10 +229,12 @@ export function CanvasTools({
             </button>
             <Menu
               label="更多白板操作"
+              triggerRef={moreButton}
               trigger={<Icon name="more" />}
               align="start"
               guideAnchor="workspace-materials"
             >
+              <button disabled={!ready} aria-expanded={showOverview} onClick={() => { setShowOverview(value => !value); setShowObjects(false); setShowTips(false); }}>画布总览</button>
               <button disabled={!editable} onClick={onAddMaterial}>
                 添加设计素材
               </button>
@@ -202,7 +257,7 @@ export function CanvasTools({
                 画框
               </button>
               <button
-                disabled={!editable || !state.count}
+                disabled={!editableSelection || !state.count}
                 onClick={() =>
                   action("复制摆放实例", () =>
                     editor.duplicateShapes(editor.getSelectedShapeIds()),
@@ -212,13 +267,13 @@ export function CanvasTools({
                 复制所选对象
               </button>
               <button
-                disabled={!editable || !state.count}
+                disabled={!editableSelection || !state.count}
                 onClick={frameSelection}
               >
                 放入画框
               </button>
               <button
-                disabled={!editable || state.count < 2}
+                disabled={!editableSelection || state.count < 2}
                 onClick={() =>
                   action("左对齐", () =>
                     editor.alignShapes(editor.getSelectedShapeIds(), "left"),
@@ -228,7 +283,7 @@ export function CanvasTools({
                 左对齐
               </button>
               <button
-                disabled={!editable || state.count < 2}
+                disabled={!editableSelection || state.count < 2}
                 onClick={() =>
                   action("顶对齐", () =>
                     editor.alignShapes(editor.getSelectedShapeIds(), "top"),
@@ -238,7 +293,7 @@ export function CanvasTools({
                 顶对齐
               </button>
               <button
-                disabled={!editable || state.count < 3}
+                disabled={!editableSelection || state.count < 3}
                 onClick={() =>
                   action("均匀分布", () =>
                     editor.distributeShapes(
@@ -251,7 +306,7 @@ export function CanvasTools({
                 水平等距分布
               </button>
               <button
-                disabled={!editable || !state.count}
+                disabled={!editableSelection || !state.count}
                 onClick={() =>
                   action("移除摆放实例", () =>
                     editor.deleteShapes(editor.getSelectedShapeIds()),
@@ -287,20 +342,33 @@ export function CanvasTools({
               <button disabled={!ready} onClick={() => editor.zoomIn()}>
                 放大画布
               </button>
-              <button onClick={() => setShowTips((value) => !value)}>
+              <button onClick={() => { setShowTips(value => !value); setShowObjects(false); setShowOverview(false); }}>
                 白板操作提示
               </button>
             </Menu>
           </div>
         </ToolRail>
       </BoardProjectContext.Provider>
-      {ready && state.count > 0 && !showTips ? (
+      {ready && showObjects ? <CanvasObjectsPanel id={objectsId} editable={editable} onClose={closeObjects} onHistory={openHistory} /> : null}
+      {history ? <CanvasObjectHistory key={history.assetId} target={history} onClose={() => setHistory(null)} onOpenWorkspace={editable && actions.onOpenAssetHistory ? () => actions.onOpenAssetHistory?.(history.nodeId ?? "", history.assetId) ?? false : undefined} /> : null}
+      {ready && showOverview ? <CanvasOverview onClose={closeOverview} /> : null}
+      {ready && state.count > 0 && !showTips && !showObjects && !showOverview ? (
         <div
           className={styles.selectionBar}
           role="toolbar"
           aria-label="所选对象操作"
         >
           <span className={styles.selectionCount}>已选 {state.count} 项</span>
+          {actions.onReference ? <button type="button" disabled={!state.referenceCount || state.referenceCount > 16 || actions.referencesPreparing} onClick={actions.onReference}>{actions.referencesPreparing ? "正在准备引用…" : "引用到助手"}</button> : null}
+          {state.history?.nodeId && editable && !state.hasLocked && actions.imageToolNodeIds?.includes(state.history.nodeId) && actions.onOpenImageTool ? <div data-canvas-image-tools><Menu key={`${state.history.nodeId}:${state.history.assetId}`} label="图片工具" align="start" trigger={<><WorkspaceIcon name="inpaint" />图片工具<WorkspaceIcon name="chevron" /></>}>
+            {imageToolEntries.map(entry => <button type="button" key={entry.action} onClick={() => {
+              const target = state.history;
+              if (!target?.nodeId) return;
+              const selected = editor.getOnlySelectedShape();
+              if (!selected || editor.getIsReadonly() || editor.isShapeOrAncestorLocked(selected) || editor.isShapeHidden(selected)) return;
+              if (selected.meta.canvasNodeId === target.nodeId && "assetId" in selected.props && selected.props.assetId === target.assetId) actions.onOpenImageTool?.(target.nodeId, target.assetId, entry.action);
+            }}>{entry.label}</button>)}
+          </Menu></div> : null}
           <button
             type="button"
             disabled={state.ids.length !== 1}
@@ -310,9 +378,13 @@ export function CanvasTools({
           >
             查看详情
           </button>
-          <button
+          {state.history ? <button type="button" onClick={() => { if (state.history) openHistory(state.history); }}>查看历史</button> : null}
+          {state.imageToFit ? <button type="button" disabled={!editableSelection || !state.canFitImage} onClick={() => {
+            if (state.imageToFit) fitCanvasImageToSource(editor, state.imageToFit);
+          }}>匹配图片比例</button> : null}
+          {state.count >= 2 ? <button
             type="button"
-            disabled={!editable || state.count < 2}
+            disabled={!editableSelection || state.count < 2}
             onClick={() =>
               action("整理分组", () =>
                 editor.groupShapes(editor.getSelectedShapeIds()),
@@ -320,10 +392,10 @@ export function CanvasTools({
             }
           >
             分组
-          </button>
-          <button
+          </button> : null}
+          {state.hasGroup ? <button
             type="button"
-            disabled={!editable || !state.hasGroup}
+            disabled={!editableSelection || !state.hasGroup}
             onClick={() =>
               action("解除分组", () =>
                 editor.ungroupShapes(editor.getSelectedShapeIds()),
@@ -331,7 +403,7 @@ export function CanvasTools({
             }
           >
             解除分组
-          </button>
+          </button> : null}
           <button
             type="button"
             aria-label="取消选择"
@@ -341,7 +413,7 @@ export function CanvasTools({
           </button>
         </div>
       ) : null}
-      {showStyles && !showTips ? (
+      {showStyles && !showTips && !showObjects && !showOverview && !state.hasLocked ? (
         <div
           className={styles.drawingSettings}
           data-with-selection={state.count > 0}
@@ -403,7 +475,7 @@ export function CanvasTools({
           <strong>自由整理，随时继续创作</strong>
           <p>
             按住空格拖动画布；Shift
-            加选，拖动空白处框选。选择素材会更新对话引用，点击空白处会保留引用。
+            加选，拖动空白处框选。选好素材后，点击“引用到助手”加入对话参考。
           </p>
           <p>
             画框和分组只用于整理。移除摆放不删除作品，撤销白板操作不取消生成任务。
@@ -411,19 +483,7 @@ export function CanvasTools({
         </div>
       ) : null}
       {ready && !state.hasShapes && state.tool === "select" ? (
-        <div className={styles.emptyState}>
-          <h2>{canEdit ? "从一份素材开始" : "白板中还没有素材"}</h2>
-          <p>
-            {canEdit
-              ? "拖入图片、粘贴参考，或用手绘和文字记录想法。选中素材后，可在设计助手中继续创作。"
-              : "项目中的素材和作品将在这里展示。"}
-          </p>
-          {canEdit ? (
-            <button type="button" onClick={onAddMaterial}>
-              添加设计素材
-            </button>
-          ) : null}
-        </div>
+        <CanvasWelcome canEdit={canEdit} assistantOpen={Boolean(actions.assistantOpen)} onStart={actions.onStartConversation} onUpload={actions.onUpload} onSketch={actions.onOpenSketch} />
       ) : null}
     </div>
   );

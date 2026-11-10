@@ -149,6 +149,7 @@ export function Menu({
         data-guide={guideAnchor}
         role="button"
         aria-label={label}
+        title={label}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         ref={anchor}
@@ -162,8 +163,9 @@ export function Menu({
             event.preventDefault();
             show(event.key === "ArrowUp");
           }
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && open) {
             event.preventDefault();
+            event.stopPropagation();
             close(true);
           }
         }}

@@ -17,18 +17,21 @@ import {
   type PrismaClient,
 } from "@fashion/db";
 import type { GenerationJobData, GenerationTaskEvent } from "@fashion/shared";
+import { imageInpaintSourceSchema, privateStorageObjectKey } from "@fashion/shared";
 import { DelayedError, UnrecoverableError, type Job } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import sharp from "sharp";
-import { prepareImageEdit, finishImageEdit } from "./image-edit";
+import { prepareImageEdit, prepareInpaintInputs, finishImageEdit, imageEditTemporaryKeys, ImageEditValidationError } from "./image-edit";
+import { refreshGenerationImageSources } from "./generation-image-sources";
 
 import type {
   ContentModerationDecision,
   ContentModerationService,
 } from "../content-moderation.service";
 import type { ThumbnailStorage } from "../storage";
+import type { ImageEditCleanupJobs } from "../queues/image-edit-cleanup.queue";
 
 const MAX_GENERATED_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_GENERATED_IMAGE_PIXELS = 40_000_000;
@@ -49,7 +52,7 @@ const ALLOWED_GENERATED_IMAGE_TYPES = new Set([
 
 type GenerationDatabase = Pick<
   PrismaClient,
-  "$transaction" | "collectionLook" | "designAsset" | "generationTask"
+  "$transaction" | "collectionLook" | "designAsset" | "fileAsset" | "generationTask"
 >;
 
 type GenerationAi = Pick<
@@ -78,6 +81,7 @@ export interface GenerationProcessorDependencies {
     enqueue(source: import("@fashion/shared").VisualSummarySource): Promise<void>;
   };
   readonly storage?: ThumbnailStorage;
+  readonly imageInputCleanup?: ImageEditCleanupJobs;
   readonly timeoutMs?: number;
 }
 
@@ -111,6 +115,7 @@ export function createGenerationProcessor({
   similarityJobs,
   visualSummaryJobs,
   storage,
+  imageInputCleanup,
   timeoutMs = generationTimeoutMsFromEnv(),
 }: GenerationProcessorDependencies) {
   return async (
@@ -127,12 +132,17 @@ export function createGenerationProcessor({
     if (!task || task.userId !== job.data.userId) {
       throw new UnrecoverableError("生成任务不存在或队列数据无效");
     }
+    const parsedEdit = aiGenerationRequestSchema.safeParse(task.input);
+    const temporaryKeys = parsedEdit.success ? imageEditTemporaryKeys(task.id, parsedEdit.data) : [];
+    const cleanupInputs = (attempt?: number) => cleanupTerminalImageInputs(database, storage, task.id, temporaryKeys, attempt);
     if (task.status === GenerationTaskStatus.CANCELED) {
       await repairTerminalReceipt(database, task.id);
+      await cleanupInputs();
       return { skipped: true, status: "canceled", taskId: task.id };
     }
     if (task.status === GenerationTaskStatus.MODERATION_FAILED) {
       await repairTerminalReceipt(database, task.id);
+      await cleanupInputs();
       return {
         skipped: true,
         status: "moderation_failed",
@@ -141,6 +151,7 @@ export function createGenerationProcessor({
     }
     if (task.status === GenerationTaskStatus.SUCCEEDED) {
       await repairTerminalReceipt(database, task.id);
+      await cleanupInputs();
       if (task.projectId && visualSummaryJobs) {
         await database.designAsset.findMany({ where: { generationTaskId: task.id }, select: { id: true } })
           .then((assets) => Promise.all(assets.map((asset) => visualSummaryJobs.enqueue({ kind: "asset", id: asset.id }))))
@@ -148,7 +159,10 @@ export function createGenerationProcessor({
       }
       return { skipped: true, status: "succeeded", taskId: task.id };
     }
-    if (task.status === GenerationTaskStatus.FAILED) await repairTerminalReceipt(database, task.id);
+    if (task.status === GenerationTaskStatus.FAILED) {
+      await repairTerminalReceipt(database, task.id);
+      await cleanupInputs();
+    }
 
     if (
       task.status !== GenerationTaskStatus.QUEUED &&
@@ -173,6 +187,7 @@ export function createGenerationProcessor({
         if (!ended.count) throw new GenerationLeaseLostError("生成任务执行租约已变更");
         await appendGenerationTerminalOutbox(transaction, { taskId: task.id, status: "FAILED", errorCode: "GENERATION_INTERRUPTED" });
       });
+      await cleanupInputs(task.attemptCount);
       throw new UnrecoverableError(message);
     }
     const claimed = await database.generationTask.updateMany({
@@ -252,14 +267,32 @@ export function createGenerationProcessor({
     let materializationCommitted = false;
 
     try {
-      const editRequest = aiGenerationRequestSchema.parse(task.input);
-      let preparedInput = task.input;
+      const refreshedImages = await refreshGenerationImageSources(
+        aiGenerationRequestSchema.parse(task.input), task.compiledPrompt, storage,
+      );
+      const editRequest = refreshedImages.request;
+      if (storage && temporaryKeys.length) await imageInputCleanup?.enqueue(task.id);
+      const beforeInputWrite = async () => {
+        assertNotAborted(signal);
+        await assertActive(database, task.id, leaseAttempt);
+        assertNotAborted(signal);
+      };
+      let preparedInput = toJson(editRequest) as Prisma.JsonValue;
       let editSource: Buffer | undefined;
+      let editMask: Buffer | undefined;
       if (["outpaint", "feedback"].includes(editRequest.imageEdit?.intent ?? "")) {
         const parent = task.parentAssetId ? await database.designAsset.findUnique({ where: { id: task.parentAssetId } }) : null;
-        if (!parent || !parent.url.startsWith("s3://") || !storage) throw new UnrecoverableError("图片编辑缺少原始资产");
-        editSource = await storage.get(parent.url.slice(5));
-        if (!task.providerJob) preparedInput = toJson(await prepareImageEdit(editRequest, editSource, task.id, storage)) as Prisma.JsonValue;
+        const sourceKey = refreshedImages.sourceObjectKey ?? (parent?.url.startsWith("s3://") ? parent.url.slice(5) : undefined);
+        if (!parent || parent.projectId !== task.projectId || !sourceKey || !storage) throw new UnrecoverableError("图片编辑缺少原始资产");
+        editSource = await storage.get(sourceKey);
+        if (!task.providerJob) preparedInput = toJson(await prepareImageEdit(editRequest, editSource, task.id, storage, beforeInputWrite)) as Prisma.JsonValue;
+      }
+      if (editRequest.taskType === "inpaint" && editRequest.imageEdit?.intent !== "outpaint") {
+        if (!storage?.downloadUrl) throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑存储暂不可用，请稍后重试");
+        const prepared = await prepareInpaintTask(database, storage, task, editRequest, resolveHostname, signal, beforeInputWrite);
+        editSource = prepared.source;
+        editMask = prepared.mask;
+        preparedInput = toJson(prepared.request) as Prisma.JsonValue;
       }
       const result = await executeGeneration({
         ai,
@@ -273,7 +306,7 @@ export function createGenerationProcessor({
       });
       if (
         result.images.some((image) => isInlineImageUrl(image.url)) &&
-        (!storage || !task.projectId)
+        (!storage || !task.projectId && editRequest.taskType !== "inpaint")
       ) {
         throw new UnrecoverableError(
           "GPT Image 2 内联结果必须关联项目并配置对象存储",
@@ -305,7 +338,7 @@ export function createGenerationProcessor({
         );
       }
       let durableResult = result;
-      if (storage && task.projectId) {
+      if (storage && (task.projectId || editRequest.taskType === "inpaint")) {
         const materialized = await materializeResult(
           storage,
           task.userId,
@@ -316,6 +349,7 @@ export function createGenerationProcessor({
           signal,
           editRequest,
           editSource,
+          editMask,
         );
         durableResult = materialized.result;
         materializedObjectKeys = materialized.objectKeys;
@@ -448,7 +482,7 @@ export function createGenerationProcessor({
       }
 
       const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
-      const retryable = !(error instanceof AiProviderError) || error.retryable;
+      const retryable = !(error instanceof ImageEditValidationError) && (!(error instanceof AiProviderError) || error.retryable);
       if (!finalAttempt && retryable) {
         const released = await database.generationTask.updateMany({
           where: {
@@ -511,8 +545,88 @@ export function createGenerationProcessor({
     } finally {
       stopLeaseHeartbeat();
       clearTimeout(timeout);
+      await cleanupInputs(leaseAttempt);
     }
   };
+}
+
+async function prepareInpaintTask(
+  database: GenerationDatabase,
+  storage: ThumbnailStorage,
+  task: { id: string; userId: string; projectId: string | null; parentAssetId: string | null; compiledPrompt: Prisma.JsonValue | null; providerJob: Prisma.JsonValue | null },
+  request: Extract<import("@fashion/ai").AiGenerationRequest, { taskType: "inpaint" }>,
+  resolveHostname: GenerationHostnameResolver,
+  signal: AbortSignal,
+  beforeWrite: () => Promise<void>,
+) {
+  const sourceKey = `image-edit/${task.id}/inpaint-source.png`;
+  const maskKey = `image-edit/${task.id}/inpaint-mask.png`;
+  const downloadUrl = storage.downloadUrl?.bind(storage);
+  if (!downloadUrl) throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑存储暂不可用，请稍后重试");
+  let inputs: { source: Buffer; mask: Buffer } | undefined;
+  try {
+    const [source, mask] = await Promise.all([storage.get(sourceKey), storage.get(maskKey)]);
+    inputs = await prepareInpaintInputs(source, mask);
+  } catch (error) {
+    if (!(error instanceof Error) || !["NoSuchKey", "NotFound"].includes(error.name)) throw error;
+    if (task.providerJob) throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑输入副本已丢失，请保留原图后重新发起编辑");
+  }
+  if (!inputs) {
+    const compiled = task.compiledPrompt && typeof task.compiledPrompt === "object" && !Array.isArray(task.compiledPrompt) ? task.compiledPrompt : {};
+    const snapshot = imageInpaintSourceSchema.safeParse(compiled.inpaintSource);
+    if (compiled.inpaintSource && !snapshot.success) throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑输入记录无效，请重新选择原图和蒙版");
+    const parent = task.parentAssetId ? await database.designAsset.findUnique({ where: { id: task.parentAssetId } }) : null;
+    if (parent && parent.projectId !== task.projectId) throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑原图不属于当前项目");
+    const sourceIdentity = snapshot.success ? snapshot.data.sourceObjectKey : parent?.url.startsWith("s3://") ? parent.url.slice(5) : undefined;
+    const load = async (url: string, verifiedKey?: string) => {
+      if (verifiedKey) return storage.get(verifiedKey);
+      const legacyKey = privateStorageObjectKey(url, { endpoint: process.env.S3_ENDPOINT, bucket: process.env.S3_BUCKET, cdnOrigin: process.env.ASSET_CDN_ORIGIN });
+      if (legacyKey) {
+        const actor = typeof compiled.executionActor === "string" ? compiled.executionActor : task.userId;
+        const prefix = `temporary/masks/${actor}/`;
+        const ownedTemporary = legacyKey.startsWith(prefix) && /^[\da-f-]{36}\.png$/iu.test(legacyKey.slice(prefix.length));
+        const asset = task.projectId ? await database.designAsset.findFirst({ where: { projectId: task.projectId, archivedAt: null, url: `s3://${legacyKey}` } }) : null;
+        const file = !asset && !ownedTemporary ? await database.fileAsset.findUnique({ where: { objectKey: legacyKey } }) : null;
+        if (!asset && !ownedTemporary && !(file?.status === "READY" && [actor, task.userId].includes(file.ownerId)))
+          throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑图片不可用，请重新选择当前项目的素材");
+        return storage.get(legacyKey);
+      }
+      const response = await fetchImageResponse(url, resolveHostname, signal);
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new ImageEditValidationError("IMAGE_EDIT_INVALID_INPUT", "局部编辑原图或蒙版已无法下载，请重新选择图片");
+      }
+      assertDeclaredImageSize(response.headers.get("content-length"));
+      return readBodyWithLimit(response, MAX_GENERATED_IMAGE_BYTES);
+    };
+    const [source, mask] = await Promise.all([
+      load(request.referenceImageUrl, sourceIdentity),
+      load(request.maskImageUrl, snapshot.success ? snapshot.data.maskObjectKey : undefined),
+    ]);
+    inputs = await prepareInpaintInputs(source, mask);
+    await beforeWrite();
+    await storage.put(sourceKey, inputs.source, "image/png");
+    await beforeWrite();
+    await storage.put(maskKey, inputs.mask, "image/png");
+  }
+  const sourceUrl = await downloadUrl(sourceKey);
+  const maskUrl = await downloadUrl(maskKey);
+  return { ...inputs, request: { ...request, referenceImageUrl: sourceUrl, maskImageUrl: maskUrl,
+    ...(request.referenceImageUrls ? { referenceImageUrls: [sourceUrl, ...request.referenceImageUrls.slice(1)] } : {}),
+    ...(request.referenceImages ? { referenceImages: request.referenceImages.map(reference => reference.url === request.referenceImageUrl ? { ...reference, url: sourceUrl } : reference) } : {}),
+  } };
+}
+
+/** Terminal-only cleanup never removes shared assets or another live attempt's inputs. */
+async function cleanupTerminalImageInputs(database: GenerationDatabase, storage: ThumbnailStorage | undefined, taskId: string, keys: string[], attempt?: number) {
+  if (!storage || !keys.length) return;
+  try {
+    const current = await database.generationTask.findUnique({ where: { id: taskId }, select: { status: true, attemptCount: true } });
+    if (!current || attempt !== undefined && current.attemptCount !== attempt || !["SUCCEEDED", "FAILED", "CANCELED", "MODERATION_FAILED"].includes(current.status)) return;
+    await deleteMaterializedObjects(storage, keys);
+  } catch {
+    // The committed receipt wins; the registered cleanup job retries independently.
+  }
 }
 
 function formatTimeoutDuration(timeoutMs: number): string {
@@ -792,6 +906,7 @@ async function materializeResult(
   signal: AbortSignal,
   editRequest?: import("@fashion/ai").AiGenerationRequest,
   editSource?: Buffer,
+  editMask?: Buffer,
 ): Promise<{
   readonly objectKeys: string[];
   readonly result: AiProviderResult;
@@ -808,17 +923,17 @@ async function materializeResult(
       if (!response.ok) {
         throw new Error(`生成结果下载失败（HTTP ${response.status}）`);
       }
-      const contentType = response.headers
+      const declaredContentType = response.headers
         .get("content-type")
         ?.split(";")[0]
         ?.trim()
         .toLowerCase();
-      if (!contentType || !ALLOWED_GENERATED_IMAGE_TYPES.has(contentType)) {
+      if (!declaredContentType || !ALLOWED_GENERATED_IMAGE_TYPES.has(declaredContentType)) {
         throw new Error("生成结果 Content-Type 不受支持");
       }
       assertDeclaredImageSize(response.headers.get("content-length"));
       let body = await readBodyWithLimit(response, MAX_GENERATED_IMAGE_BYTES);
-      if (editRequest?.imageEdit) body = await finishImageEdit(body, editRequest, editSource);
+      if (editRequest && (editRequest.imageEdit || editRequest.taskType === "inpaint")) body = await finishImageEdit(body, editRequest, editSource, editMask);
       if (body.byteLength === 0) {
         throw new Error("生成结果为空");
       }
@@ -829,6 +944,13 @@ async function materializeResult(
       if (!metadata.format || !metadata.height || !metadata.width) {
         throw new Error("生成结果不是有效图片");
       }
+      // Postprocessing (e.g. outpaint protection) can re-encode JPEG as PNG.
+      // Persist the decoded format, never a stale provider response header.
+      const contentType = metadata.format === "png" ? "image/png"
+        : metadata.format === "jpeg" ? "image/jpeg"
+          : metadata.format === "webp" ? "image/webp"
+            : metadata.format === "heif" && metadata.compression === "av1" ? "image/avif" : null;
+      if (!contentType) throw new Error("生成结果图片编码不受支持");
       const assetId = `${taskId}-${index + 1}`;
       const attemptPrefix = `generated/${userId}/${assetId}/attempt-${attemptCount}`;
       const contentKey = `${attemptPrefix}/source`;
@@ -1448,6 +1570,7 @@ async function updateProgressSafely(
 }
 
 function standardErrorCode(error: unknown): string {
+  if (error instanceof ImageEditValidationError) return error.code;
   if (error instanceof ContentModerationUnavailableError) {
     return "CONTENT_MODERATION_UNAVAILABLE";
   }
@@ -1455,6 +1578,7 @@ function standardErrorCode(error: unknown): string {
 }
 
 function safeErrorMessage(error: unknown): string {
+  if (error instanceof ImageEditValidationError) return error.message;
   if (error instanceof ContentModerationUnavailableError) {
     return `${error.message}，请稍后重试`;
   }

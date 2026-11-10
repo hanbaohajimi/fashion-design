@@ -116,3 +116,142 @@ it("does not expose an editable approval status", async () => {
   expect(screen.queryByRole("option", { name: "已定稿" })).toBeNull();
   expect(screen.getByRole("radio", { name: "待评审" }).getAttribute("aria-checked")).toBe("true");
 });
+
+it("保存结果直接成为当前款式，列表刷新失败后继续编辑使用 PATCH", async () => {
+  const values = props();
+  values.onSaved.mockRejectedValue(new Error("资料刷新失败"));
+  const saved = styleFixture();
+  const fetcher = vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(saved), { status: 200 }));
+  render(<StyleLibrary {...values} initialAssetId="asset-front" />);
+  fillNewStyle();
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await screen.findByText(/款式已经保存，资料列表暂未刷新/);
+  expect(screen.getByRole("heading", { name: "褶线夹克" })).toBeTruthy();
+  expect((screen.getByRole("button", { name: "保存修订" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("款式名称"), { target: { value: "褶线夹克新袖口" } });
+  fetcher.mockResolvedValue(new Response(JSON.stringify({ ...saved, name: "褶线夹克新袖口", version: 2, currentRevision: { ...saved.currentRevision, id: "style-r2", revision: 2, payload: { ...saved.currentRevision.payload, name: "褶线夹克新袖口" } } }), { status: 200 }));
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/projects/project-1/studio/styles/style-1");
+  expect(fetcher.mock.calls[1]?.[1]?.method).toBe("PATCH");
+  expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toMatchObject({ expectedVersion: 1, name: "褶线夹克新袖口" });
+});
+
+function twoRevisions() {
+  const first = styleFixture();
+  const latest = { ...first.currentRevision, id: "style-r2", revision: 2, payload: { ...first.currentRevision.payload, name: "新版夹克", description: "较长的衣身" } };
+  return { ...first, name: "新版夹克", version: 2, currentRevision: latest, revisions: [latest, first.currentRevision] };
+}
+
+it("修订链接定位历史资料，后续工作使用该版，继续修改生成新修订", async () => {
+  const values = props();
+  values.data = studioFixture({ styles: [twoRevisions()] });
+  const onTechPack = vi.fn();
+  render(<StyleLibrary {...values} initialStyleRevisionId="style-r1" onTechPack={onTechPack} />);
+  expect(screen.getByRole("heading", { name: "褶线夹克" })).toBeTruthy();
+  expect(screen.getByLabelText("款式名称").matches(":disabled")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "继续创作与交付" }));
+  fireEvent.click(screen.getByRole("button", { name: "继续技术包" }));
+  expect(onTechPack).toHaveBeenCalledWith("style-r1");
+  fireEvent.click(screen.getByRole("button", { name: "以此修订继续" }));
+  await waitFor(() => expect(screen.getByLabelText("款式名称").matches(":disabled")).toBe(false));
+  expect((screen.getByLabelText("款式名称") as HTMLInputElement).value).toBe("褶线夹克");
+  fireEvent.click(screen.getByRole("button", { name: "继续创作与交付" }));
+  await waitFor(() => expect((screen.getByRole("button", { name: "继续技术包" }) as HTMLButtonElement).disabled).toBe(true));
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(twoRevisions()), { status: 200 }));
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toMatchObject({ expectedVersion: 2, name: "褶线夹克", changeNote: "基于 r1 继续修改" });
+});
+
+it("从白板带回改图更新已有款式，并重置替换视图的复核状态", async () => {
+  const values = props();
+  const saved = styleFixture();
+  const firstView = saved.currentRevision.payload.views[0];
+  if (!firstView) throw new Error("缺少款式视图测试数据");
+  firstView.reviewed = true;
+  values.data = studioFixture({ styles: [saved] });
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(saved), { status: 200 }));
+  render(<StyleLibrary {...values} initialAssetId="asset-back" initialStyleRevisionId="style-r1" />);
+  expect((screen.getByLabelText("款式名称") as HTMLInputElement).value).toBe("褶线夹克");
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  expect(vi.mocked(fetch).mock.calls[0]?.[1]?.method).toBe("PATCH");
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body))).toMatchObject({ sourceAssetId: "asset-back", views: [{ assetId: "asset-back", reviewed: false }], expectedVersion: 1 });
+});
+
+it("不存在的修订不静默选择第一款", () => {
+  const values = props();
+  values.data = studioFixture({ styles: [styleFixture()] });
+  render(<StyleLibrary {...values} initialStyleRevisionId="missing" />);
+  expect(screen.getByText(/这份款式修订不存在或已无法访问/)).toBeTruthy();
+  expect(screen.queryByLabelText("款式名称")).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("暂时缺失的修订在重载后恢复准确对象，随后失去修订时不回退最新版", () => {
+  const values = props();
+  const view = render(<StyleLibrary {...values} initialStyleRevisionId="style-r1" />);
+  expect(screen.queryByLabelText("款式名称")).toBeNull();
+  view.rerender(<StyleLibrary {...values} data={studioFixture({ styles: [twoRevisions()] })} initialStyleRevisionId="style-r1" />);
+  expect(screen.getByLabelText("款式名称")).toHaveProperty("value", "褶线夹克");
+  expect(screen.getByLabelText("款式名称").matches(":disabled")).toBe(true);
+  const latest = twoRevisions();
+  latest.revisions = [latest.currentRevision];
+  view.rerender(<StyleLibrary {...values} data={studioFixture({ styles: [latest] })} initialStyleRevisionId="style-r1" />);
+  expect(screen.queryByLabelText("款式名称")).toBeNull();
+  expect(screen.getByText(/这份款式修订不存在或已无法访问/)).toBeTruthy();
+});
+
+it("拒绝切换历史修订保留当前修改，陈旧列表不覆盖刚保存的修订", async () => {
+  const values = props();
+  values.data = studioFixture({ styles: [twoRevisions()] });
+  values.beforeChange.mockResolvedValue(false);
+  const view = render(<StyleLibrary {...values} />);
+  fireEvent.change(screen.getByLabelText("款式名称"), { target: { value: "改动尚未保存" } });
+  fireEvent.click(screen.getByText(/修订历史/));
+  fireEvent.click(screen.getByRole("button", { name: "查看 r1" }));
+  await waitFor(() => expect(values.beforeChange).toHaveBeenCalled());
+  expect(screen.getByLabelText("款式名称")).toHaveProperty("value", "改动尚未保存");
+  const third = twoRevisions();
+  third.version = 3;
+  third.name = "改动尚未保存";
+  third.currentRevision = { ...third.currentRevision, id: "style-r3", revision: 3, payload: { ...third.currentRevision.payload, name: third.name } };
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(third), { status: 200 }));
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await screen.findByText(/r3 已保存/);
+  view.rerender(<StyleLibrary {...values} data={studioFixture({ styles: [styleFixture()] })} />);
+  expect(screen.getByLabelText("款式名称")).toHaveProperty("value", "改动尚未保存");
+  expect(screen.getByRole("button", { name: "保存修订" })).toHaveProperty("disabled", true);
+});
+
+it("已定稿的历史修订可只读查看，继续修改必须重新评审", async () => {
+  const values = props();
+  const style = twoRevisions();
+  const historicalRevision = style.revisions[1];
+  if (!historicalRevision) throw new Error("缺少历史修订测试数据");
+  historicalRevision.payload.status = "APPROVED";
+  values.data = studioFixture({ styles: [style] });
+  render(<StyleLibrary {...values} initialStyleRevisionId="style-r1" />);
+  expect(screen.getByRole("button", { name: "状态" }).textContent).toContain("已定稿");
+  fireEvent.click(screen.getByRole("button", { name: "以此修订继续" }));
+  await waitFor(() => expect(screen.getByRole("radio", { name: "待评审" }).getAttribute("aria-checked")).toBe("true"));
+  expect(screen.queryByRole("radio", { name: "已定稿" })).toBeNull();
+});
+
+it("从白板原样返回当前主图不产生新草稿或保存请求", () => {
+  const values = props();
+  values.data = studioFixture({ styles: [styleFixture()] });
+  render(<StyleLibrary {...values} initialStyleRevisionId="style-r1" initialAssetId="asset-front" />);
+  expect(screen.getByRole("button", { name: "保存修订" })).toHaveProperty("disabled", true);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("历史主图不在最近素材列表时，仍使用修订自带的图片来源", () => {
+  const values = props();
+  const style = twoRevisions();
+  values.data = studioFixture({ styles: [style], assets: [] });
+  render(<StyleLibrary {...values} initialStyleRevisionId="style-r1" />);
+  expect(screen.getByAltText("当前款式主设计图").getAttribute("src")).toBe(style.revisions[1]?.views[0]?.url);
+  expect(screen.getByLabelText("款式名称").matches(":disabled")).toBe(true);
+});

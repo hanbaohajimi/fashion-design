@@ -4,7 +4,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { ProjectTasksService } from "./project-tasks.service";
 
-const querySchema = z.object({ group: z.enum(["active", "running", "attention", "ended"]).default("active"), cursor: z.string().max(1000).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });
+const querySchema = z.object({ group: z.enum(["active", "running", "attention", "ended"]).default("active"), cursor: z.string().max(1000).optional(), limit: z.coerce.number().int().min(1).max(100).default(30), activity: z.literal("1").transform(() => true).optional() });
 @Controller("projects/:projectId/tasks")
 export class ProjectTasksController {
   constructor(@Inject(ProjectTasksService) private readonly tasks: ProjectTasksService) {}

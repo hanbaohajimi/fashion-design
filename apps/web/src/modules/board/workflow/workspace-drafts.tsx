@@ -55,15 +55,18 @@ export class WorkspaceDraftStore {
   }
   update(key: string, entry: WorkspaceDraft) {
     const previous = this.entries.get(key);
-    if (previous && JSON.stringify(previous) === JSON.stringify(entry)) return;
+    // Editors own their values. Workspace subscribers only render leave protection,
+    // conflict/lock indicators and baseline epochs; a slider or keystroke must not
+    // rerender the entire canvas when those signals haven't changed.
     this.entries.set(key, entry);
+    const previousEpoch = this.ownerEpoch(entry.owner);
     if (!this.ownerDirty(entry.owner)) {
       const baseline = this.baselines.get(entry.owner);
       if (baseline !== undefined && baseline !== entry.baseline)
         this.epochs.set(entry.owner, this.ownerEpoch(entry.owner) + 1);
       this.baselines.set(entry.owner, entry.baseline);
     }
-    this.emit();
+    if (!previous || previous.owner !== entry.owner || previous.baseline !== entry.baseline || previous.dirty !== entry.dirty || previous.conflict !== entry.conflict || previous.locked !== entry.locked || previousEpoch !== this.ownerEpoch(entry.owner)) this.emit();
   }
   removeOwner(owner: string) {
     this.baselines.delete(owner);

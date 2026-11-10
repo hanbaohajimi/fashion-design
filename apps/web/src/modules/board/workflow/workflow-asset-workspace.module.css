@@ -95,6 +95,14 @@
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
 }
 
+.assetDialog .editMaskStage { min-height: 0; }
+.assetDialog .editMaskStage > div,
+.assetDialog .editMaskStage > div > img { max-height: calc(100dvh - 180px); }
+@media (max-width: 767px) {
+  .assetDialog .editMaskStage > div,
+  .assetDialog .editMaskStage > div > img { max-height: 40dvh; }
+}
+
 .imageStage {
   display: grid;
   border-right: var(--border-hairline) solid var(--color-ink);

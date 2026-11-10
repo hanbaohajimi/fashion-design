@@ -33,5 +33,5 @@ export async function acceptAndExecuteProposal(
   const mutationId = await proposalExecutionId(
     `${projectId}:${proposal.id}:${node.status === "failed" ? node.updatedAt : "initial"}`,
   );
-  return executeWorkflowNode(projectId, node.id, conversationId, mutationId);
+  return executeWorkflowNode(projectId, node.id, conversationId, mutationId, proposal.id);
 }

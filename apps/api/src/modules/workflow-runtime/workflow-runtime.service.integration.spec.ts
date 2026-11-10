@@ -356,7 +356,7 @@ describe("WorkflowRuntimeService integration", () => {
       expect(createFromAgent).toHaveBeenCalledTimes(2);
       for (const [, request] of createFromAgent.mock.calls) {
         expect(request).toMatchObject({ taskType, parentAssetId: imported.id, referenceImageUrl: `s3://${file.objectKey}` });
-        if (taskType === "inpaint") expect(request).toHaveProperty("maskImageUrl", `https://storage.example.test/${mask.objectKey}`);
+        if (taskType === "inpaint") expect(request).toHaveProperty("maskImageUrl", `s3://${mask.objectKey}`);
         else expect(request).toHaveProperty("referenceImages", [{ order: 0, role: "detail_ref", url: `https://storage.example.test/${mask.objectKey}`, weight: 0.7 }]);
       }
       const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: toolIds[0] } });
@@ -637,6 +637,7 @@ describe("WorkflowRuntimeService integration", () => {
     };
     const storage = {
       readPrefix: vi.fn(async () => Buffer.from("actual-stored-test-image")),
+      head: vi.fn(async () => ({ contentType: "image/png", contentLength: 24 })),
       createDownloadUrl: vi.fn(async (key: string) => `https://storage.example.test/${key}`),
     };
     const assets = new DesignAssetsService(prisma, storage as never);

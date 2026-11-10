@@ -7,7 +7,8 @@ import { z } from "zod";
 import { AMUX_CLAUDE_CLIENT } from "../ai/ai.tokens";
 import { DesignContextService } from "../design-context/design-context.service";
 import { InformationIntegrationService } from "../design-context/information-integration.service";
-import { VisualContextService, type VisualContextResult } from "../design-context/visual-context.service";
+import { VisualContextService } from "../design-context/visual-context.service";
+import { mergeVisualContext, visualImageIdentity } from "../design-context/visual-context-images";
 import { WorkflowsService } from "../workflows/workflows.service";
 import { compileWorkflowAction, workflowActionFingerprint, parsePlannerDecision, plannerDecisionSchema, projectPlannerVisualIndex,
   WORKFLOW_PLANNER_INSTRUCTIONS, type PlannerDecision } from "./workflow-planner";
@@ -92,6 +93,8 @@ export class WorkflowCoordinator {
     const projectedContext = applyWorkflowReadPolicy(context, integrated.slots, input.previousPlan, input.readPolicy);
     const readResults: unknown[] = [];
     let attached = visual;
+    const providedNodeIds = new Set<string>();
+    const providedImageIds = new Set<string>();
     let validationError: string | null = null;
     let repaired = input.initialBudget?.repairUsed ?? false;
     let readRounds = input.initialBudget?.readRounds ?? 0;
@@ -111,6 +114,19 @@ export class WorkflowCoordinator {
         const delta = text.slice(streamed.length); streamed = text; if (delta) await stream.delta(delta);
       }) : this.model.generateJson.bind(this.model);
       try {
+        const currentVisual = projectPlannerVisualIndex(attached.index);
+        projectedContext.context.visualIndex = currentVisual.index;
+        projectedContext.context.visualSummaryCoverage = currentVisual.coverage;
+        if (projectedContext.slots?.designTrajectory) {
+          projectedContext.slots.designTrajectory = { ...object(projectedContext.slots.designTrajectory),
+            visualIndex: currentVisual.index, visualCoverage: attached.coverage };
+        }
+        // Record the actual request boundary, not every intermediate image read:
+        // later reads in the same round can replace images before a model call.
+        for (const binding of attached.imageBindings) if (attached.images[binding.imageIndex]) {
+          providedNodeIds.add(binding.nodeId);
+          providedImageIds.add(visualImageIdentity(binding));
+        }
         decision = parsePlannerDecision(await generate({ schemaName: "fashion_workflow_collaboration",
           signal, timeoutMs,
           instructions: `${canvasMode ? WORKFLOW_PLANNER_INSTRUCTIONS.replace("不执行工具、不采用/否决候选，不声称生成已经发生。建议需用户确认加入画布，生图需再主动执行。", CANVAS_EXECUTION_INSTRUCTIONS) : WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好，execution.requested=false。`,
@@ -135,7 +151,7 @@ export class WorkflowCoordinator {
             remaining();
             const result = await gateway.read(input.userId, input.projectId, input.conversationId, built.graph, read, input.readPolicy);
             readResults.push(result.result);
-            if (result.visual) attached = mergeVisual(result.visual, attached);
+            if (result.visual) attached = mergeVisualContext(result.visual, attached);
           }
           validationError = null;
           continue;
@@ -170,24 +186,13 @@ export class WorkflowCoordinator {
     }
     if (!decision || decision.kind === "read" || validationError) throw new Error("设计助手未在预算内形成有效回复");
     remaining();
+    attached = { ...attached, coverage: { ...attached.coverage, providedNodeIds: [...providedNodeIds], providedImageCount: providedImageIds.size } };
     return { decision, built, profile, visual: attached, eligibility, calls, readRounds, repairUsed: repaired, readResults,
       coverage: "coverage" in integrated ? integrated.coverage : built.context.coverage,
       observation: { ...projectedContext.context, imageBindings: attached.imageBindings, visualCoverage: attached.coverage },
       snapshot: { graphRevision: built.graph.revision, contextRevision: built.context.contextRevision,
         summaryRevision: built.context.summaryRevision, toolVersions: tools.map((tool) => ({ key: tool.key, version: tool.version })) } };
   }
-}
-
-function mergeVisual(priority: VisualContextResult, previous: VisualContextResult): VisualContextResult {
-  const selected = new Map<string, { binding: VisualContextResult["imageBindings"][number]; image: VisualContextResult["images"][number] }>();
-  for (const source of [priority, previous]) for (const binding of source.imageBindings) {
-    const image = source.images[binding.imageIndex];
-    if (image && !selected.has(binding.nodeId) && selected.size < 8) selected.set(binding.nodeId, { binding, image });
-  }
-  const values = [...selected.values()];
-  const index = [...new Map([...previous.index, ...priority.index].map((entry) => [entry.nodeId, entry])).values()];
-  return { images: values.map((value) => value.image), imageBindings: values.map((value, imageIndex) => ({ ...value.binding, imageIndex })), index,
-    coverage: { ...previous.coverage, attachedNodeIds: [...selected.keys()], unreadNodeIds: index.filter((entry) => !selected.has(entry.nodeId)).map((entry) => entry.nodeId) } };
 }
 
 export const coordinatorJson = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;

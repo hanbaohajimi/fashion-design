@@ -3,6 +3,7 @@ import { imageTransformSchema, type ImageTransformJob } from "@fashion/shared";
 import type { Job } from "bullmq";
 import sharp from "sharp";
 import type { ThumbnailStorage } from "../storage";
+import { transformImage } from "./transform-image";
 
 export function createImageTransformProcessor(
   database: PrismaClient,
@@ -33,12 +34,7 @@ export function createImageTransformProcessor(
       });
       if (!asset.url.startsWith("s3://")) throw new Error("原图尚未保存");
       const bytes = await storage.get(asset.url.slice(5));
-      let pipeline = sharp(bytes, { limitInputPixels: 32_000_000 }).rotate();
-      if (params.crop) pipeline = pipeline.extract(params.crop);
-      const result = await pipeline
-        .resize(params.width, params.height, { fit: "fill" })
-        .png()
-        .toBuffer();
+      const result = await transformImage(bytes, params);
       const id = `transform-${attemptId}`;
       const key = `transforms/${attempt.projectId}/${id}.png`;
       const thumb = `transforms/${attempt.projectId}/${id}.webp`;

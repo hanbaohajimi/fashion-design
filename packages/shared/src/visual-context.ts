@@ -1,5 +1,7 @@
 export const VISUAL_SUMMARY_QUEUE_NAME = "visual-summary";
 export const VISUAL_SUMMARY_SCHEMA_VERSION = "visual/2";
+export const MAX_VISUAL_CONTEXT_IMAGES = 8;
+export const MAX_VISUAL_CONTEXT_BINDINGS = 64;
 
 export type VisualSummarySource =
   | { readonly kind: "file"; readonly id: string }
@@ -36,4 +38,9 @@ export interface VisualContextCoverage {
   readonly failed: number;
   readonly attachedNodeIds: readonly string[];
   readonly unreadNodeIds: readonly string[];
+  /** Distinct images in this model request; multiple canvas objects may share one. */
+  readonly attachedImageCount?: number;
+  /** Union across model requests in the completed turn, not merely fetched images. */
+  readonly providedNodeIds?: readonly string[];
+  readonly providedImageCount?: number;
 }

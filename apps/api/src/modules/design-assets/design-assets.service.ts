@@ -11,6 +11,7 @@ import {
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -26,6 +27,7 @@ import {
 } from "@fashion/shared";
 import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { S3FileStorage } from "../files/storage.service";
+import { requireRestoreSourceFile } from "./restore-source-file";
 import { requireProjectFile } from "../files/project-file-access";
 import {
   designDecisionSchema,
@@ -584,6 +586,7 @@ export class DesignAssetsService {
       const replay = await this.database.designAsset.findUnique({ where: { id: restoredId } });
       if (replay) { assertRestore(replay); return this.toView(replay); }
     }
+    await requireRestoreSourceFile(this.storage, target.url);
     const restored = await this.database.designAsset.create({
       data: {
         id: restoredId,
@@ -663,7 +666,8 @@ export class DesignAssetsService {
         message: "设计资产不存在",
       });
     }
-    await this.access.require(userId, asset.projectId, action);
+    const permission = await this.access.require(userId, asset.projectId, action);
+    if (action !== "read" && permission.archived) throw new ForbiddenException({ code: "PROJECT_ARCHIVED", message: "项目已归档，请先恢复项目" });
     return asset;
   }
 

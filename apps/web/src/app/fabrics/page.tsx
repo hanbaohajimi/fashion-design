@@ -118,7 +118,7 @@ function FabricLibrary() {
         data-guide-page="fabrics"
         data-guide-ready={!fabrics.isLoading && !fabrics.error ? "true" : "false"}
       >
-        <header className={styles.libraryHeader}>
+        <header className={styles.libraryHeader} data-workspace-heading>
           <div className={styles.libraryIdentity}>
             <Link
               aria-label={projectId ? "返回设计画布" : "返回项目库"}

@@ -25,9 +25,12 @@ export function MessageReferenceRecord({ context, graph, onLocate }: {
   const summary = parsed.success ? parsed.data : null;
   const explicit = summary?.explicit ?? legacyEntries(context?.referencedNodeIds);
   const discussion = summary?.discussion ?? legacyEntries(context?.focusNodeIds);
-  const images = summary?.images ?? legacyEntries(context?.visualCoverage?.attachedNodeIds);
   const coverage = context?.coverage;
   const visual = context?.visualCoverage;
+  const images = summary?.images ?? legacyEntries(visual?.providedNodeIds ?? visual?.attachedNodeIds);
+  const imageCount = visual?.providedImageCount ?? (visual?.providedNodeIds === undefined ? visual?.attachedImageCount : undefined);
+  const provided = new Set(images?.map(entry => entry.nodeId));
+  const unprovided = explicit?.filter(entry => !provided.has(entry.nodeId) && visual?.unreadNodeIds?.includes(entry.nodeId)) ?? [];
   const hasRecord = explicit !== undefined || discussion !== undefined || images !== undefined || Boolean(coverage || visual);
   const group = (label: string, entries: readonly Entry[] | undefined, empty: string) => <section>
     <h4>{label}</h4>
@@ -45,10 +48,16 @@ export function MessageReferenceRecord({ context, graph, onLocate }: {
       {group("本次引用", explicit, "本次没有添加引用")}
       {group("讨论对象", discussion, "整个项目")}
       {group("传入图片", images, "本轮没有传入图片")}
+      {unprovided.length ? <>
+        {group("尚未传入的引用图片", unprovided, "")}
+        <p>这些图片可能仅提供了已有分析记录。查看细节时，可单独引用它们继续提问。</p>
+      </> : null}
       {visual || coverage ? <GridDetails>
         <summary>图片统计与读取范围</summary>
-        {visual ? <p>本轮记录：{typeof visual.total === "number" ? `共 ${visual.total} 张；` : ""}{typeof visual.ready === "number" ? `已有分析记录 ${visual.ready} 张；` : ""}{typeof visual.pending === "number" ? `处理中 ${visual.pending} 张；` : ""}{typeof visual.failed === "number" ? `读取失败 ${visual.failed} 张。` : ""}</p> : null}
-        {images ? <p>传入模型 {images.length} 张图片。传入成功不表示助手已准确理解。</p> : <p>未记录传入模型的图片数量。</p>}
+        {visual ? <p>画布图片对象：{typeof visual.total === "number" ? `共 ${visual.total} 项；` : ""}{typeof visual.ready === "number" ? `已有分析记录 ${visual.ready} 项；` : ""}{typeof visual.pending === "number" ? `处理中 ${visual.pending} 项；` : ""}{typeof visual.failed === "number" ? `分析不可用 ${visual.failed} 项。` : ""}</p> : null}
+        {images ? <p>{typeof imageCount === "number"
+          ? `本轮累计传入 ${imageCount} 张图片，对应 ${images.length} 个画布对象。同图副本只计一次。`
+          : `本轮记录 ${images.length} 个图片对象，旧记录未区分同图副本。`}传入成功不表示助手已准确理解。</p> : <p>未记录传入模型的图片数量。</p>}
         {typeof coverage?.note === "string" ? <p>{coverage.note}</p> : null}
         {omitted(coverage?.attempts) > 0 ? <p>另有 {omitted(coverage?.attempts)} 条执行历史未载入本轮详情。</p> : null}
         {omitted(coverage?.memory) > 0 ? <p>另有 {omitted(coverage?.memory)} 条项目记忆未载入本轮详情。</p> : null}

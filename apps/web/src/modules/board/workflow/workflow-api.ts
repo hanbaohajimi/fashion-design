@@ -1,5 +1,5 @@
 import { privateFetch as fetch } from "../../auth/private-fetch";
-import type { WorkflowToolKey } from "@fashion/shared";
+import type { WorkflowToolKey, WorkflowProposalExecution } from "@fashion/shared";
 
 export type WorkflowNodeKind = "asset" | "tool";
 
@@ -67,6 +67,7 @@ export interface WorkflowGraph {
 }
 
 export interface WorkflowProposal {
+  readonly execution?: WorkflowProposalExecution;
   readonly id: string;
   readonly baseRevision: number;
   readonly status: string;
@@ -226,10 +227,11 @@ export function decideWorkflowProposal(
   });
 }
 
-export function executeWorkflowNode(projectId: string, nodeId: string, conversationId?: string, mutationId = crypto.randomUUID()): Promise<WorkflowGraph> {
+export function executeWorkflowNode(projectId: string, nodeId: string, conversationId?: string, mutationId = crypto.randomUUID(), proposalId?: string): Promise<WorkflowGraph> {
   return runtimePost(projectId, `/nodes/${encodeURIComponent(nodeId)}/execute`, {
     mutationId,
     ...(conversationId ? { conversationId } : {}),
+    ...(proposalId ? { proposalId } : {}),
   });
 }
 

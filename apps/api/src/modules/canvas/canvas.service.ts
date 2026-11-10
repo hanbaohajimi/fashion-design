@@ -203,6 +203,7 @@ export class CanvasService {
               (node) =>
                 node.kind === "asset" &&
                 materialTypes.has(node.type) &&
+                canvasObject(node.payload).canvasPlacement !== "manual" &&
                 !represented.has(node.id),
             )
             .map((node) => ({
@@ -257,7 +258,7 @@ export class CanvasService {
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         });
         const additions = nodes
-          .filter((node) => !represented.has(node.id))
+          .filter((node) => canvasObject(node.payload).canvasPlacement !== "manual" && !represented.has(node.id))
           .map((node) => ({
             projectId,
             shapeId: `shape:canvas-${node.id}`,

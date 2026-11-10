@@ -1,0 +1,90 @@
+.welcome {
+  position: absolute;
+  inset: 128px 24px 108px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.content {
+  max-height: 100%;
+  width: min(400px, 100%);
+  overflow: auto;
+  overscroll-behavior: contain;
+  text-align: center;
+  pointer-events: auto;
+  padding: 8px 4px;
+}
+.mark {
+  display: block;
+  margin: 0 auto 16px;
+  color: var(--color-action);
+}
+.content h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 24px;
+  line-height: 1.4;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.content p {
+  margin: 12px auto 24px;
+  max-width: 30em;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+.content button {
+  min-height: 44px;
+  border: var(--border-hairline) solid var(--color-control-border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.content button:hover {
+  background: var(--color-surface);
+}
+.content button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+.content .primary {
+  display: inline-flex;
+  gap: 32px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  background: var(--color-action);
+  color: var(--color-action-on);
+  border-color: transparent;
+}
+.content .primary:hover {
+  background: var(--color-ink);
+}
+.actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.content small {
+  display: block;
+  margin-top: 18px;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+@media (max-height: 600px) {
+  .mark {
+    display: none;
+  }
+  .content p {
+    margin-bottom: 14px;
+  }
+}

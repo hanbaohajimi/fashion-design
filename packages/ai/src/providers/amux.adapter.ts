@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { AiProviderError } from "../ai.errors";
+import {
+  generationImageInputLimitError,
+  resolveGenerationImageInputs,
+  type GenerationImageInputs,
+} from "../generation-image-inputs";
 import type {
   AiGenerationCost,
   AiGenerationRequest,
@@ -121,13 +126,17 @@ export class AmuxAdapter implements AiProvider {
     signal: AbortSignal,
   ): Promise<AiProviderJob> {
     this.assertCredentials();
-    const usesEdit =
-      request.taskType !== "t2i" || Boolean(request.referenceImageUrl);
+    const limitError = generationImageInputLimitError(request);
+    if (limitError) {
+      throw new AiProviderError({ code: "INVALID_REQUEST", provider: this.name, message: limitError });
+    }
+    const inputImages = resolveGenerationImageInputs(request);
+    const usesEdit = request.taskType !== "t2i" || inputImages.urls.length > 0;
     try {
       let response: unknown;
       if (usesEdit) {
         response = await this.transport.edit(
-          await this.editForm(request, signal),
+          await this.editForm(request, inputImages, signal),
           signal,
         );
       } else {
@@ -188,9 +197,10 @@ export class AmuxAdapter implements AiProvider {
 
   private async editForm(
     request: AiGenerationRequest,
+    images: GenerationImageInputs,
     signal: AbortSignal,
   ): Promise<FormData> {
-    if (!this.loadReferenceImage || !request.referenceImageUrl) {
+    if (!this.loadReferenceImage || !images.urls.length) {
       throw new AiProviderError({
         code: "INVALID_REQUEST",
         provider: this.name,
@@ -200,7 +210,7 @@ export class AmuxAdapter implements AiProvider {
 
     const form = new FormData();
     form.set("model", this.config.imageModel);
-    form.set("prompt", promptFor(request));
+    form.set("prompt", promptFor(request, true, images));
     form.set("n", "1");
     form.set("size", gptImage2Size(request.width, request.height));
     form.set("quality", request.quality ?? this.config.quality);
@@ -213,12 +223,7 @@ export class AmuxAdapter implements AiProvider {
       form.set("output_compression", String(request.outputCompression));
     }
 
-    // 加载并添加所有参考图片
-    const referenceUrls = orderedReferenceImages(request).map(
-      (reference) => reference.url,
-    );
-
-    for (const url of referenceUrls) {
+    for (const url of images.urls) {
       const source = await this.loadReferenceImage(url, signal);
       form.append("image", blobFrom(source), source.filename);
     }
@@ -402,19 +407,16 @@ function blobFrom(image: LoadedReferenceImage): Blob {
 function promptFor(
   request: AiGenerationRequest,
   includeReferenceGuidance = true,
+  images = resolveGenerationImageInputs(request),
 ): string {
   const sections = [request.prompt];
-  if (includeReferenceGuidance && request.referenceImageUrl) {
+  if (includeReferenceGuidance && images.urls.length) {
     sections.push(referenceGuidance(request.taskType));
   }
-  const referenceInstructions = (
-    "referenceImages" in request ? (request.referenceImages ?? []) : []
-  )
-    .slice()
-    .sort((left, right) => left.order - right.order)
+  const referenceInstructions = images.references
     .map(
       (reference, index) =>
-        `Reference ${index + 1}: ${referenceRoleGuidance(reference.role)}; influence ${Math.round(reference.weight * 100)}%`,
+        `Reference ${index + 1}: ${referenceRoleGuidance(reference.role)}; influence ${Math.round(reference.weight * 100)}%; image ${reference.imageNumber}`,
     )
     .join("\n");
   if (includeReferenceGuidance && referenceInstructions) {
@@ -424,36 +426,6 @@ function promptFor(
     sections.push(`Avoid the following elements: ${request.negativePrompt}`);
   }
   return sections.join("\n\n");
-}
-
-function orderedReferenceImages(request: AiGenerationRequest): Array<{
-  readonly order: number;
-  readonly role:
-    | "detail_ref"
-    | "fabric_texture"
-    | "palette_ref"
-    | "silhouette_ref"
-    | "style_ref";
-  readonly url: string;
-  readonly weight: number;
-}> {
-  if ("referenceImages" in request && request.referenceImages?.length) {
-    return [...request.referenceImages].sort(
-      (left, right) => left.order - right.order,
-    );
-  }
-  const urls =
-    "referenceImageUrls" in request && request.referenceImageUrls?.length
-      ? request.referenceImageUrls
-      : "referenceImageUrl" in request && request.referenceImageUrl
-        ? [request.referenceImageUrl]
-        : [];
-  return urls.map((url, order) => ({
-    order,
-    role: "style_ref" as const,
-    url,
-    weight: 1,
-  }));
 }
 
 function referenceRoleGuidance(
@@ -479,6 +451,9 @@ function referenceRoleGuidance(
 }
 
 function referenceGuidance(taskType: AiGenerationRequest["taskType"]): string {
+  if (taskType === "t2i") {
+    return "Create a new design from the request. Use the uploaded images only for their specified reference roles; do not treat a reference as a source image to reproduce.";
+  }
   if (taskType === "inpaint") {
     return (
       "Edit only the masked area and change only what the request explicitly asks for. " +
@@ -487,7 +462,7 @@ function referenceGuidance(taskType: AiGenerationRequest["taskType"]): string {
     );
   }
   return (
-    "Use the uploaded image as a high-fidelity visual reference. Preserve its " +
+    "Image 1 is the source to edit. Preserve its " +
     "identity and composition except where the request explicitly asks for changes."
   );
 }

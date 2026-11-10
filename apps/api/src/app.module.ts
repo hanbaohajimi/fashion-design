@@ -2,6 +2,7 @@ import { StudioModule } from "./modules/studio/studio.module";
 import { WardrobeModule } from "./modules/wardrobe/wardrobe.module";
 import { RealtimeTryOnModule } from "./modules/realtime-tryon/realtime-tryon.module";
 import { ProjectTasksModule } from "./modules/project-tasks/project-tasks.module";
+import { ProjectGeneratedFilesModule } from "./modules/project-generated-files/project-generated-files.module";
 import { RunwayModule } from "./modules/runway/runway.module";
 import { ExperimentsModule } from "./modules/experiments/experiments.module";
 import { Module } from "@nestjs/common";
@@ -41,6 +42,7 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     WardrobeModule,
     RealtimeTryOnModule,
     ProjectTasksModule,
+    ProjectGeneratedFilesModule,
     RunwayModule,
     ExperimentsModule,
     SecurityModule,

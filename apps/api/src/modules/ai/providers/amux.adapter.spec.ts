@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ReferenceImageLoadError } from "@fashion/ai";
 
 import { AiProviderError } from "../ai.errors";
 import {
@@ -281,6 +282,22 @@ describe("AmuxAdapter", () => {
     },
   );
 
+  it("局部重绘保留结构化参考用途，并把蒙版与首张原图绑定", async () => {
+    const source = "https://assets.test/source.png";
+    const detail = "https://assets.test/detail.png";
+    const mask = "https://assets.test/mask.png";
+    vi.mocked(loadReferenceImage).mockImplementation(async (url) => ({ bytes: new Uint8Array([1]), contentType: "image/png", filename: url.split("/").at(-1) ?? "image.png" }));
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit(aiGenerationRequestSchema.parse({ taskType: "inpaint", prompt: "只修改蒙版区域", width: 1024, height: 1024,
+      referenceImageUrl: source, maskImageUrl: mask, referenceImages: [{ order: 0, url: detail, role: "detail_ref", weight: 0.5 }],
+    }), new AbortController().signal);
+    expect(vi.mocked(loadReferenceImage).mock.calls.map(([url]) => url)).toEqual([source, detail, mask]);
+    const form = vi.mocked(transport.edit).mock.calls[0]?.[0];
+    expect(form?.get("prompt")).toContain("Reference 1: garment construction detail only; influence 50%; image 2");
+    expect((form?.getAll("image") as File[]).map(file => file.name)).toEqual(["source.png", "detail.png"]);
+    expect((form?.get("mask") as File).name).toBe("mask.png");
+  });
+
   it("带参考图的 t2i 自动走图片编辑接口", async () => {
     vi.mocked(loadReferenceImage).mockResolvedValue({
       bytes: new Uint8Array([1]),
@@ -376,6 +393,109 @@ describe("AmuxAdapter", () => {
     expect(form?.get("prompt")).toContain(
       "Reference 2: fabric texture and material behavior; influence 70%",
     );
+  });
+
+  it.each(["referenceImages", "referenceImageUrls"] as const)("仅有 %s 的新设计仍传入实际图片，不走纯文字生成", async field => {
+    vi.mocked(loadReferenceImage).mockResolvedValue({ bytes: new Uint8Array([3]), contentType: "image/png", filename: "reference.png" });
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    vi.mocked(transport.generate).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit({ ...t2iRequest, [field]: field === "referenceImages"
+      ? [{ url: "https://assets.test/fabric.png", order: 0, role: "fabric_texture", weight: 0.6 }]
+      : ["https://assets.test/fabric.png"] }, new AbortController().signal);
+    expect(transport.generate).not.toHaveBeenCalled();
+    expect(transport.edit).toHaveBeenCalledOnce();
+    expect(loadReferenceImage).toHaveBeenCalledWith("https://assets.test/fabric.png", expect.any(AbortSignal));
+  });
+
+  it("修改图片时原图先上传，附加图片按显式顺序与用途编号", async () => {
+    vi.mocked(loadReferenceImage).mockImplementation(async url => ({ bytes: new Uint8Array([url.endsWith("source.png") ? 1 : 2]), contentType: "image/png", filename: new URL(url).pathname.slice(1) }));
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit({ ...t2iRequest, taskType: "i2i", referenceImageUrl: "https://assets.test/source.png", referenceImages: [
+      { order: 1, url: "https://assets.test/fabric.png", role: "fabric_texture", weight: 0.7 },
+      { order: 0, url: "https://assets.test/detail.png", role: "detail_ref", weight: 0.5 },
+    ] }, new AbortController().signal);
+    const form = vi.mocked(transport.edit).mock.calls[0]?.[0];
+    expect((form?.getAll("image") as File[]).map(file => file.name)).toEqual(["source.png", "detail.png", "fabric.png"]);
+    expect(form?.get("prompt")).toContain("Image 1 is the source to edit");
+    expect(form?.get("prompt")).toContain("Reference 1: garment construction detail only; influence 50%; image 2");
+    expect(form?.get("prompt")).toContain("Reference 2: fabric texture and material behavior; influence 70%; image 3");
+  });
+
+  it("只有参考的新设计不添加要求保持第一张图片身份和构图的编辑约束", async () => {
+    vi.mocked(loadReferenceImage).mockResolvedValue({ bytes: new Uint8Array([1]), contentType: "image/png", filename: "fabric.png" });
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit({ ...t2iRequest, referenceImageUrl: "https://assets.test/fabric.png", referenceImages: [
+      { url: "https://assets.test/fabric.png", order: 0, role: "fabric_texture", weight: 0.6 },
+    ] }, new AbortController().signal);
+    const prompt = vi.mocked(transport.edit).mock.calls[0]?.[0].get("prompt");
+    expect(prompt).not.toContain("Preserve its identity and composition");
+    expect(prompt).toContain("fabric texture and material behavior");
+  });
+
+  it("含原图超过16张时在读取或请求前明确拒绝，不静默遗漏原图", async () => {
+    await expect(adapter.submit({ ...t2iRequest, taskType: "i2i", referenceImageUrl: "https://assets.test/source.png",
+      referenceImages: Array.from({ length: 16 }, (_, order) => ({ url: `https://assets.test/ref-${order}.png`, order, role: "style_ref" as const, weight: 0.7 })),
+    }, new AbortController().signal)).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(loadReferenceImage).not.toHaveBeenCalled();
+    expect(transport.edit).not.toHaveBeenCalled();
+  });
+
+  it.each(["structured", "legacy"])("编辑的%s完整列表已有原图时只上传一次，且放在第一张", async (kind) => {
+    const source = "https://assets.test/source.png";
+    const detail = "https://assets.test/detail.png";
+    vi.mocked(loadReferenceImage).mockImplementation(async (url) => ({ bytes: new Uint8Array([1]), contentType: "image/png", filename: url.split("/").at(-1) ?? "image.png" }));
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit({ ...t2iRequest, taskType: "i2i", referenceImageUrl: source,
+      ...(kind === "legacy" ? { referenceImageUrls: [detail, source] } : { referenceImages: [
+        { url: detail, order: 0, role: "detail_ref", weight: 0.5 },
+        { url: source, order: 1, role: "silhouette_ref", weight: 0.8 },
+        { url: source, order: 2, role: "palette_ref", weight: 0.4 },
+      ] }),
+    }, new AbortController().signal);
+    expect(vi.mocked(loadReferenceImage).mock.calls.map(([url]) => url)).toEqual([source, detail]);
+    if (kind === "structured") {
+      const prompt = vi.mocked(transport.edit).mock.calls[0]?.[0].get("prompt");
+      expect(prompt).toContain("Reference 1: garment construction detail only; influence 50%; image 2");
+      expect(prompt).toContain("Reference 2: garment silhouette and proportion only; influence 80%; image 1");
+      expect(prompt).toContain("Reference 3: color palette only; influence 40%; image 1");
+    }
+  });
+
+  it("新设计显式列表优先于旧单图别名，仍保留同图的不同用途", async () => {
+    const url = "https://assets.test/explicit.png";
+    vi.mocked(loadReferenceImage).mockResolvedValue({ bytes: new Uint8Array([1]), contentType: "image/png", filename: "explicit.png" });
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit({ ...t2iRequest, referenceImageUrl: "https://assets.test/old-alias.png", referenceImages: [
+      { url, order: 0, role: "palette_ref", weight: 0.4 },
+      { url, order: 1, role: "fabric_texture", weight: 0.7 },
+    ] }, new AbortController().signal);
+    expect(vi.mocked(loadReferenceImage).mock.calls.map(([value]) => value)).toEqual([url, url]);
+    const prompt = vi.mocked(transport.edit).mock.calls[0]?.[0].get("prompt");
+    expect(prompt).toContain("color palette only; influence 40%; image 1");
+    expect(prompt).toContain("fabric texture and material behavior; influence 70%; image 2");
+  });
+
+  it.each(["legacy", "structured"])("原图加15张%s参考恰好可用，第16张额外参考在校验时拒绝", async (kind) => {
+    const urls = Array.from({ length: 16 }, (_, index) => `https://assets.test/ref-${index}.png`);
+    const fields = (count: number) => kind === "legacy" ? { referenceImageUrls: urls.slice(0, count) } : {
+      referenceImages: urls.slice(0, count).map((url, order) => ({ url, order, role: "style_ref" as const, weight: 0.7 })),
+    };
+    const edit = { ...t2iRequest, taskType: "i2i" as const, referenceImageUrl: "https://assets.test/source.png" };
+    const valid = aiGenerationRequestSchema.parse({ ...edit, ...fields(15) });
+    expect(aiGenerationRequestSchema.safeParse({ ...edit, ...fields(16) }).success).toBe(false);
+    vi.mocked(loadReferenceImage).mockResolvedValue({ bytes: new Uint8Array([1]), contentType: "image/png", filename: "ref.png" });
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    await adapter.submit(valid, new AbortController().signal);
+    expect(vi.mocked(transport.edit).mock.calls[0]?.[0].getAll("image")).toHaveLength(16);
+  });
+
+  it("任一参考下载失败时不提交不完整图片，也不降级为纯文字", async () => {
+    vi.mocked(loadReferenceImage).mockResolvedValueOnce({ bytes: new Uint8Array([1]), contentType: "image/png", filename: "first.png" })
+      .mockRejectedValueOnce(new ReferenceImageLoadError("INVALID_RESPONSE", "参考图片下载失败"));
+    await expect(adapter.submit({ ...t2iRequest, referenceImageUrls: ["https://assets.test/first.png", "https://assets.test/missing.png"] }, new AbortController().signal))
+      .rejects.toMatchObject({ code: "INVALID_RESPONSE", message: "参考图片下载失败" });
+    expect(transport.edit).not.toHaveBeenCalled();
+    expect(transport.generate).not.toHaveBeenCalled();
   });
 
   it("inpaint 图片编辑返回 5xx 时不降级为会修改整张图的纯生成", async () => {

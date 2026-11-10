@@ -104,7 +104,37 @@ describe("reply reference records", () => {
     expect(screen.getByText("整个项目")).toBeTruthy();
     expect(screen.getByText("本轮没有传入图片")).toBeTruthy();
     expect(details.querySelector("details")?.open).toBe(false);
-    expect(details.textContent).toContain("读取失败 1 张");
+    expect(details.textContent).toContain("分析不可用 1 项");
     expect(details.textContent).not.toContain("已理解");
+  });
+
+  it("同图副本保留各自定位但不会虚报图片张数", () => {
+    const { details } = record({ referencedNodeIds: ["a", "copy"], visualCoverage: {
+      total: 2, ready: 2, pending: 0, failed: 0, attachedNodeIds: ["a", "copy"], unreadNodeIds: [],
+      attachedImageCount: 1, providedNodeIds: ["a", "copy"], providedImageCount: 1,
+    } });
+    expect(details.textContent).toContain("本轮累计传入 1 张图片，对应 2 个画布对象");
+    expect(details.textContent).not.toContain("未区分同图副本");
+  });
+
+  it("补读记录包含此前传入的图片，仅提示真正未传入的显式图片", () => {
+    const { details } = record({ referencedNodeIds: ["a", "next", "unread"], visualCoverage: {
+      total: 3, ready: 2, pending: 0, failed: 1, attachedNodeIds: ["next"], unreadNodeIds: ["a", "unread"],
+      attachedImageCount: 1, providedNodeIds: ["a", "next"], providedImageCount: 2,
+    } });
+    const sent = screen.getByRole("heading", { name: "传入图片" }).parentElement;
+    if (!sent) throw new Error("已传入图片容器缺失");
+    expect(within(sent).getAllByRole("button")).toHaveLength(2);
+    const missing = screen.getByRole("heading", { name: "尚未传入的引用图片" }).parentElement;
+    if (!missing) throw new Error("未传入图片容器缺失");
+    expect(within(missing).getAllByRole("button")).toHaveLength(1);
+    expect(within(missing).queryByText("改名后的风衣（当前名称）")).toBeNull();
+    expect(details.textContent).toContain("本轮累计传入 2 张图片，对应 2 个画布对象");
+  });
+
+  it("旧记录没有独立图片数量时不从对象数量推断张数", () => {
+    const { details } = record({ visualCoverage: { total: 2, ready: 2, pending: 0, failed: 0, attachedNodeIds: ["a", "copy"] } });
+    expect(details.textContent).toContain("本轮记录 2 个图片对象，旧记录未区分同图副本");
+    expect(details.textContent).not.toContain("传入 2 张图片");
   });
 });

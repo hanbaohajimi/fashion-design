@@ -8,6 +8,8 @@ import {
 import { FabricScope, type PrismaClient } from "@fashion/db";
 import {
   VISUAL_SUMMARY_SCHEMA_VERSION,
+  MAX_VISUAL_CONTEXT_IMAGES,
+  MAX_VISUAL_CONTEXT_BINDINGS,
   type VisualContextCoverage,
   type VisualContextIndexEntry,
   type VisualSummarySource,
@@ -18,6 +20,7 @@ import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { requireProjectFile } from "../files/project-file-access";
 import { S3FileStorage, type FileStorage } from "../files/storage.service";
 import { BullVisualSummaryJobs } from "./visual-summary-queue.service";
+import { visualContextCoverage, visualImageIdentity } from "./visual-context-images";
 
 export const VISUAL_CONTEXT_DB = Symbol("VISUAL_CONTEXT_DB");
 type VisualDatabase = Pick<PrismaClient,
@@ -37,7 +40,6 @@ export interface VisualContextResult {
   readonly coverage: VisualContextCoverage;
 }
 const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
-const MAX_IMAGES = 8;
 const FAILED_SUMMARY_RETRY_COOLDOWN_MS = 5 * 60_000;
 const IMAGE_NODE_TYPES = new Set(["reference", "reference_image", "sketch", "candidate", "fabric", "trend"]);
 
@@ -144,31 +146,33 @@ export class VisualContextService {
       index.push(...entries);
     }
 
-    const priorities = new Map(priorityNodeIds.map((id, i) => [id, i]));
+    const priorities = new Map([...new Set(priorityNodeIds)].map((id, i) => [id, i]));
     // Filter actual accessible images first: text nodes never consume the image budget.
     const candidates = index.filter((entry) => sources.has(entry.nodeId))
       .sort((a, b) => (priorities.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER) -
         (priorities.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER));
     const images: AmuxClaudeImageInput[] = [];
     const imageBindings: VisualContextResult["imageBindings"][number][] = [];
+    const imagePositions = new Map<string, number>();
     for (const entry of candidates) {
-      if (images.length >= MAX_IMAGES) break;
+      if (imageBindings.length >= MAX_VISUAL_CONTEXT_BINDINGS) break;
       const source = sources.get(entry.nodeId);
       if (!source) continue;
       try {
-        const bytes = await load(source.sourceKey);
-        imageBindings.push({ imageIndex: images.length, nodeId: entry.nodeId,
-          assetId: source.assetId, fileAssetId: source.fileAssetId });
-        images.push({ detail: "high", url: `data:image/webp;base64,${Buffer.from(bytes).toString("base64")}` });
+        const binding = { imageIndex: 0, nodeId: entry.nodeId, assetId: source.assetId, fileAssetId: source.fileAssetId };
+        const identity = visualImageIdentity(binding);
+        let imageIndex = imagePositions.get(identity);
+        if (imageIndex === undefined) {
+          if (images.length >= MAX_VISUAL_CONTEXT_IMAGES) continue;
+          const bytes = await load(source.sourceKey);
+          imageIndex = images.length;
+          imagePositions.set(identity, imageIndex);
+          images.push({ detail: "high", url: `data:image/webp;base64,${Buffer.from(bytes).toString("base64")}` });
+        }
+        imageBindings.push({ ...binding, imageIndex });
       } catch { /* Coverage below explicitly reports images not attached. */ }
     }
-    const attachedNodeIds = imageBindings.map((binding) => binding.nodeId);
-    return { index, images, imageBindings, coverage: {
-      total: index.length, ready: index.filter((entry) => entry.status === "ready").length,
-      pending: index.filter((entry) => entry.status === "pending" || entry.status === "not_ready").length,
-      failed: index.filter((entry) => entry.status === "failed" || entry.status === "unavailable").length,
-      attachedNodeIds, unreadNodeIds: index.filter((entry) => !attachedNodeIds.includes(entry.nodeId)).map((entry) => entry.nodeId),
-    } };
+    return { index, images, imageBindings, coverage: visualContextCoverage(index, imageBindings, images.length) };
   }
 
   private async readImage(key: string): Promise<Uint8Array> {

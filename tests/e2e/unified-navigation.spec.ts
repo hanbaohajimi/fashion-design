@@ -1,9 +1,21 @@
-import { chooseValue } from "./choice-control";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
 import { contrastFailures } from "./review-accessibility";
+
+async function openNavigation(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) < 1200) {
+    await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "工作区目录", exact: true })).toBeVisible();
+    return;
+  }
+  // Wait for account hydration before observing the responsive/default preference.
+  await expect(page.locator('[data-archive-navigation] summary[aria-label="designer@example.com"]')).toBeAttached();
+  const rail = page.getByRole("complementary", { name: "工作区目录" });
+  if (!(await rail.isVisible())) await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+  await expect(rail).toBeVisible();
+}
 
 test.beforeEach(async ({ page }) => {
   await seedVisualApp(page);
@@ -47,6 +59,7 @@ for (const width of [1440, 1366, 1024, 390, 375])
           }),
         ).toBeVisible();
       const rail = page.getByRole("complementary", { name: "工作区目录" });
+      await openNavigation(page);
       await expect(rail).toBeVisible();
       await expect(rail.locator("img")).toHaveAttribute(
         "src",
@@ -85,18 +98,7 @@ for (const width of [1440, 1366, 1024, 390, 375])
       expect(geometry.background).toBe(expectedSurface);
       if (baseline) expect(geometry).toEqual(baseline);
       else baseline = geometry;
-      if (width < 1200) {
-        const menu = rail.locator('summary[aria-label="切换工作区"]');
-        await menu.click();
-        await expect(
-          page.getByRole("group", { name: "切换工作区选项", exact: true }).locator('a[aria-current="page"]:visible'),
-        ).toHaveCount(1);
-        await page.keyboard.press("Escape");
-        await expect(menu).toBeFocused();
-      } else
-        await expect(
-          rail.locator('a[aria-current="page"]:visible'),
-        ).toHaveCount(1);
+      await expect(rail.locator('a[aria-current="page"]:visible')).toHaveCount(1);
       expect(
         await contrastFailures(page, true, "[data-archive-navigation]"),
       ).toEqual([]);
@@ -162,19 +164,18 @@ for (const width of [1440, 390])
       name: "工作区导航",
       exact: true,
     });
-    if (width < 1200) {
-      await navigation.locator("summary").click();
+    if (!(await navigation.isVisible())) {
+      await openNavigation(page);
       if (process.env.CAPTURE_NAVIGATION)
         await page.screenshot({
           path: "output/unified-navigation/screens/navigation-menu-390.png",
         });
     }
-    await (width < 1200 ? page.getByRole("group", { name: "切换工作区选项", exact: true }) : navigation)
+    await navigation
       .getByRole("link", { name: "款式与交付", exact: true })
       .click();
-    if (width < 1200)
-      await chooseValue(page.getByLabel("当前功能", { exact: true }), "tech");
-    else await page.getByRole("tab", { name: "技术包", exact: true }).click();
+    await openNavigation(page);
+    await page.getByRole("tab", { name: "技术包", exact: true }).click();
     await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue(
       "褶线夹克技术资料",
     );
@@ -182,6 +183,7 @@ for (const width of [1440, 390])
     const account = page
       .getByRole("complementary", { name: "工作区目录" })
       .getByRole("button", { name: "designer@example.com", exact: true });
+    await openNavigation(page);
     await account.click();
     await expect(
       page.getByRole("button", { name: "退出登录", exact: true }),

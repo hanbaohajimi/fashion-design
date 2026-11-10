@@ -248,6 +248,7 @@ export function InpaintPanel({
             <MaskCanvas
               brushRatio={brushRatio}
               descriptionId={maskHelpId}
+              disabled={submitting}
               height={height}
               onChange={onMaskChange}
               ref={mask}

@@ -4,6 +4,7 @@ import {
   type RecordProps,
   T,
   useEditor,
+  useSvgExportContext,
   useValue,
 } from "tldraw";
 import {
@@ -99,6 +100,7 @@ export class SwatchShapeUtil extends BaseBoxShapeUtil<SwatchShape> {
 
 function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const editor = useEditor();
+  const exporting = Boolean(useSvgExportContext());
   const readOnly = useValue("swatch-readonly", () => editor.getInstanceState().isReadonly, [editor]);
   const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
@@ -110,7 +112,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
 
   const colors = getSwatchColors(shape.props);
-  const canAdd = !readOnly && colors.length < SWATCH_MAX_COLORS;
+  const canAdd = !exporting && !readOnly && colors.length < SWATCH_MAX_COLORS;
   const naturalWidth = computeSwatchWidth(colors.length);
   const swatchScale =
     naturalWidth > 0 && shape.props.w > 0 ? shape.props.w / naturalWidth : 1;
@@ -119,6 +121,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   // Repair legacy or freely-stretched cards using width as the authoritative
   // dimension. Future pointer resizing is aspect-locked by the shape util.
   useEffect(() => {
+    if (exporting) return;
     if (Math.abs(shape.props.h - normalizedHeight) < 0.5) {
       return;
     }
@@ -127,7 +130,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
       type: SWATCH_SHAPE_TYPE,
       props: { h: normalizedHeight },
     });
-  }, [editor, normalizedHeight, shape.id, shape.props.h]);
+  }, [editor, exporting, normalizedHeight, shape.id, shape.props.h]);
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -260,7 +263,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                 style={{ backgroundColor: entry.color }}
                 title={`${entry.label} ${entry.color.toUpperCase()}`}
               >
-                <input
+                {!exporting ? <input
                   aria-label={`${entry.label} 颜色`}
                   className={styles.swatchColorInput}
                   disabled={readOnly}
@@ -274,8 +277,8 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                   onPointerDown={swallow}
                   type="color"
                   value={draftColors[entry.id] ?? entry.color}
-                />
-                {!readOnly && hoveredId === entry.id && colors.length > 1 && (
+                /> : null}
+                {!exporting && !readOnly && hoveredId === entry.id && colors.length > 1 && (
                   <button
                     aria-label={`删除 ${entry.label}`}
                     className={styles.swatchRemove}
@@ -292,7 +295,7 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
                 )}
               </div>
 
-              {editingId === entry.id ? (
+              {exporting ? <span className={styles.swatchLabel}>{entry.label}</span> : editingId === entry.id ? (
                 <input
                   aria-label="颜色名称"
                   readOnly={readOnly}

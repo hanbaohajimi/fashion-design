@@ -80,6 +80,9 @@ async function finishGuide(page: Page) {
 }
 
 async function replayFromAccount(page: Page) {
+  if (!(await page.getByRole("button", { name: "designer@example.com", exact: true }).isVisible())) {
+    await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+  }
   await page.getByRole("button", { name: "designer@example.com", exact: true }).click();
   await page.getByRole("button", { name: "功能指引", exact: true }).click();
   await expect(guide(page)).toBeVisible();

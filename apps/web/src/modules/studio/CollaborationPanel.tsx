@@ -143,7 +143,7 @@ function MemberManager({
             member={member}
             projectId={projectId}
             canManage={data.capabilities.manageMembers}
-            onSaved={onSaved}
+            onSaved={async () => { await onSaved(); }}
           />
         ))}
       </div>

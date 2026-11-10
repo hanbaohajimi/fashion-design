@@ -13,7 +13,7 @@ export const workflowProposalDecisionSchema = z.object({
   mutationId: z.uuid(),
 });
 
-export const workflowExecuteSchema = z.object({ mutationId: z.uuid(), conversationId: id.optional() });
+export const workflowExecuteSchema = z.object({ mutationId: z.uuid(), conversationId: id.optional(), proposalId: id.optional() });
 export const workflowRejectSchema = z.object({ mutationId: z.uuid(), reason: z.string().trim().min(1).max(2_000).optional() });
 export const workflowRoleInferenceSchema = z.object({ mutationId: z.uuid() });
 

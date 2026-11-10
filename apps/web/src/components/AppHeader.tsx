@@ -5,6 +5,7 @@ import { useAuth } from "../modules/auth/AuthProvider";
 import { Button, Menu } from "./ui";
 import { ArchiveNavigation, type ArchiveSection } from "./ArchiveNavigation";
 import { useFeatureGuide } from "./feature-guide/FeatureGuideProvider";
+import { useWorkspaceChromeActions } from "./WorkspaceChrome";
 
 export function AppHeader(props: {
   readonly current: ArchiveSection;
@@ -26,6 +27,7 @@ const serverHydrated = () => false;
 
 function Account() {
   const guide = useFeatureGuide();
+  const { compact, setOpen } = useWorkspaceChromeActions();
   const hydrated = useSyncExternalStore(subscribeHydration, clientHydrated, serverHydrated);
   const { session, logout } = useAuth();
   const [pending, setPending] = useState(false);
@@ -33,7 +35,10 @@ function Account() {
   if (!session || !hydrated) return null;
   return (
     <Menu label={session.user.email} trigger={session.user.name || session.user.email} guideAnchor="guide-help">
-      {guide.available ? <Button onClick={guide.startGuide}>功能指引</Button> : null}
+      {guide.available ? <Button onClick={() => {
+        if (compact) setOpen(false);
+        guide.startGuide();
+      }}>功能指引</Button> : null}
         <Button
           style={{ minHeight: 44 }}
           loading={pending}

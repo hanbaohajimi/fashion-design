@@ -1,6 +1,3 @@
-:global(.app-root):has(.rail) {
-  padding-left: var(--workspace-nav-width);
-}
 .rail {
   --control-height: var(--control-height-touch);
   position: fixed;
@@ -11,200 +8,71 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-5) var(--space-3);
+  padding: var(--space-3);
   background: var(--color-navigation);
   color: var(--color-navigation-ink);
   border-right: var(--border-hairline) solid var(--color-navigation-border);
+  transform: translateX(0);
+  transition: transform 180ms var(--ease-out, ease-out), visibility 0s;
 }
-.rail a {
-  text-decoration: none;
+.rail[data-expanded="false"] {
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition-duration: 120ms, 0s;
+  transition-delay: 0s, 120ms;
 }
-.rail :focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 3px;
-}
-.brand {
-  flex: none;
-  display: flex;
+.rail a { text-decoration: none; }
+.rail :focus-visible, .toggle:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
+.brandRow { display: flex; align-items: center; gap: 4px; flex: none; }
+.brand { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 56px; color: inherit; }
+.brand > span { min-width: 0; }
+.toggle {
+  display: inline-flex;
+  justify-content: center;
   align-items: center;
-  min-height: 56px;
-  padding: 0 var(--space-2);
-  color: inherit;
-}
-.navigation {
   flex: none;
-  min-width: 0;
-}
-.desktopLinks {
-  display: grid;
-  gap: var(--space-1);
-}
-.navigation a {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-3);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-md);
-  color: var(--color-navigation-muted);
-  font-size: var(--text-base);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  cursor: pointer;
+  font: inherit;
+  touch-action: manipulation;
 }
-.navigation svg {
-  flex: none;
-  translate: 0 0.125em;
-}
-.navigation a:hover {
-  color: var(--color-navigation-ink);
-  background: var(--color-navigation-hover);
-}
-.navigation a[aria-current="page"] {
-  color: var(--color-selection-ink);
-  background: var(--color-navigation-selected);
-  font-weight: var(--font-semibold);
-}
-.navigation a[data-current-parent] {
-  background: transparent;
-  font-weight: 500;
-}
-.project {
-  flex: none;
-  display: grid;
-  gap: var(--space-1);
-  border-top: var(--border-hairline) solid var(--color-navigation-border);
-  padding: var(--space-3) var(--space-3) 0;
-  min-width: 0;
-}
-.project > span {
-  font-size: var(--text-xs);
-  color: var(--color-navigation-muted);
-}
-.project strong {
-  font-size: var(--text-base);
-  white-space: nowrap;
+.brandRow .toggle { width: 32px; height: 44px; border: 0; color: inherit; background: transparent; font-size: 24px; }
+.reopen { position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; z-index: 31; box-shadow: var(--shadow-material-1); }
+.reopen[hidden] { display: none; }
+.navigation { flex: none; min-width: 0; }
+.desktopLinks { display: grid; gap: var(--space-1); }
+.navigation a { display: flex; align-items: center; gap: var(--space-2); min-height: 40px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); color: var(--color-navigation-muted); font-size: var(--text-base); }
+.navigation svg { flex: none; }
+.navigation a:hover { color: var(--color-navigation-ink); background: var(--color-navigation-hover); }
+.navigation a[aria-current="page"] { color: var(--color-selection-ink); background: var(--color-navigation-selected); font-weight: var(--font-semibold); }
+.navigation a[data-current-parent] { background: transparent; font-weight: 500; }
+.project { display: grid; flex: none; gap: var(--space-1); min-width: 0; padding: var(--space-3) var(--space-3) 0; border-top: var(--border-hairline) solid var(--color-navigation-border); }
+.project > span { font-size: var(--text-xs); color: var(--color-navigation-muted); }
+.project strong { font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.projectNavigation { min-height: 0; min-width: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--color-control-border) var(--color-navigation); }
+.account { flex: none; margin-top: auto; min-width: 0; font-size: var(--text-base); border-top: var(--border-hairline) solid var(--color-navigation-border); padding-top: var(--space-3); }
+.account > div { min-width: 0; }
+.rail .account summary { color: var(--color-navigation-ink); background: var(--color-navigation); border-color: var(--color-navigation-border); min-height: 44px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account details > div { top: auto; bottom: calc(100% + 8px); right: 0; min-width: 160px; }
+.drawer.drawer {
+  width: min(280px, calc(100vw - 32px));
+  height: 100dvh;
+  max-height: 100dvh;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto 0 0;
+  padding: 0;
+  border-radius: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
-.projectNavigation {
-  min-height: 0;
-  min-width: 0;
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-control-border) var(--color-navigation);
-}
-.account {
-  flex: none;
-  margin-top: auto;
-  min-width: 0;
-  font-size: var(--text-base);
-  border-top: var(--border-hairline) solid var(--color-navigation-border);
-  padding-top: var(--space-3);
-}
-.account > div {
-  min-width: 0;
-}
-.rail .account summary {
-  color: var(--color-navigation-ink);
-  background: var(--color-navigation);
-  border-color: var(--color-navigation-border);
-  min-height: 44px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.account details > div {
-  top: auto;
-  bottom: calc(100% + 8px);
-  right: 0;
-  min-width: 160px;
-}
-.mobileMenu {
-  display: none;
-}
-.menuProject {
-  display: block;
-  padding: var(--space-2) var(--space-3);
-  color: var(--color-ink-secondary);
-  overflow-wrap: anywhere;
-}
-@media (max-width: 1199px) {
-  :global(.app-root):has(.rail) {
-    padding-left: 0;
-  }
-  .rail {
-    position: relative;
-    inset: auto;
-    flex-direction: row;
-    align-items: center;
-    width: 100%;
-    height: var(--workspace-mobile-nav-height);
-    padding: var(--space-2) var(--space-4);
-    gap: var(--space-3);
-    border-right: 0;
-    border-bottom: var(--border-hairline) solid var(--color-navigation-border);
-  }
-  .brand {
-    min-height: 44px;
-    padding: 0;
-  }
-  .brand img {
-    width: 32px;
-    height: 32px;
-  }
-  .brand > span > span {
-    display: none;
-  }
-  .desktopLinks,
-  .project,
-  .projectNavigation {
-    display: none;
-  }
-  .navigation {
-    flex: 1;
-  }
-  .mobileMenu {
-    display: block;
-  }
-  .rail .mobileMenu summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    min-height: 44px;
-    color: var(--color-navigation-ink);
-    background: var(--color-navigation);
-    border-color: var(--color-navigation-border);
-  }
-  .mobileMenu details > div {
-    left: 0;
-    right: auto;
-    width: min(280px, calc(100vw - 32px));
-    max-height: calc(100dvh - 88px);
-    overflow-y: auto;
-  }
-  .navigation a {
-    min-height: 44px;
-  }
-  .account {
-    margin: 0 0 0 auto;
-    padding: 0;
-    border: 0;
-  }
-  .rail .account summary {
-    min-height: 44px;
-  }
-  .account details > div {
-    top: calc(100% + 4px);
-    bottom: auto;
-  }
-}
-@media print {
-  .rail {
-    display: none;
-  }
-  :global(.app-root):has(.rail) {
-    padding-left: 0;
-  }
-}
+.drawer .rail { position: relative; width: 100%; height: 100%; border: 0; transition: none; padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.drawer .rail[data-expanded="false"] { transform: none; visibility: visible; }
+.drawer .navigation a { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .rail, .rail[data-expanded="false"] { transition: none; } }
+@media print { .rail, .reopen { display: none; } }

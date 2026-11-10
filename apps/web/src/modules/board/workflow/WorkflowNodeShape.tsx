@@ -17,6 +17,7 @@ import { consumeResultArrival } from "./result-arrivals";
 import { useCoutureMotion } from "../../../components/motion/use-couture-motion";
 import { useTaskMotion } from "../../../components/motion/use-task-motion";
 import { useWorkflowInteractions } from "./WorkflowInteractions";
+import { preparedCanvasImage } from "./canvas-export-images";
 
 export const WORKFLOW_NODE_SHAPE_TYPE = "fashion-workflow-node";
 
@@ -182,7 +183,7 @@ function WorkflowNodeImage({ shape, title }: { shape: WorkflowNodeShape; title: 
   return (
     // Canvas assets use their authenticated image URL directly, including during export.
     // eslint-disable-next-line @next/next/no-img-element
-    <img alt={title} draggable={false} src={shape.props.imageUrl} onError={() => { if (!exporting) consumeResultArrival(shape.props.nodeId); }} onLoad={(event) => {
+    <img alt={title} draggable={false} src={exporting ? preparedCanvasImage(editor, shape.props.imageUrl) : shape.props.imageUrl} onError={() => { if (!exporting) consumeResultArrival(shape.props.nodeId); }} onLoad={(event) => {
       if (exporting || !isImageNodeType(shape.props.nodeType)) return;
       const fresh = consumeResultArrival(shape.props.nodeId);
       const image = event.currentTarget;

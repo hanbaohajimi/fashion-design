@@ -1,0 +1,29 @@
+.chrome {
+  display: contents;
+}
+:global(.app-root):has(.chrome[data-nav-reserved="true"] [data-archive-navigation]) {
+  padding-left: var(--workspace-nav-width);
+}
+.chrome :global([data-workspace-heading]) {
+  padding-inline-start: 52px;
+}
+.chrome[data-nav-reserved="true"] :global([data-workspace-heading]) {
+  padding-inline-start: 0;
+}
+.connection {
+  position: fixed;
+  top: calc(68px + env(safe-area-inset-top, 0px));
+  left: 16px;
+  z-index: 100;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+.chrome[data-nav-reserved="true"] > .connection {
+  left: calc(var(--workspace-nav-width) + 16px);
+  max-width: calc(100vw - var(--workspace-nav-width) - 32px);
+}
+.connection:empty { display: none; }
+@media print {
+  :global(.app-root):has(.chrome) { padding-left: 0; }
+  .connection { display: none; }
+}

@@ -1,15 +1,31 @@
 "use client";
 
 import { Select } from "../../../components/ui";
-import { AssistantComposer } from "../../../components/AssistantComposer";
+import { AssistantMentionInput } from "./AssistantMentionInput";
+import { AssistantStarters } from "./AssistantStarters";
+import { AssistantReferencePreview, referenceLabel, referenceTypeLabel } from "./AssistantReferencePreview";
 import { Button, Notice, Skeleton, Menu } from "../../../components/ui";
 import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
 import type { AssistantStreamEvent } from "@fashion/shared";
 import prose from "../../../components/reading.module.css";
 import { useConversationViewport } from "../../../components/use-conversation-viewport";
-import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import { useDraftScope, usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import { draftRepository } from "../../../components/drafts/draft-repository";
+import { useAssistantImageUploads } from "./use-assistant-image-uploads";
+import { AssistantImageUploadTray } from "./AssistantImageUploadTray";
+import { AssistantReferenceViewer, type ReferencePlacementActions } from "./AssistantReferenceViewer";
+import { AssistantResultGallery } from "./AssistantResultGallery";
+import { AssistantResultViewer } from "./AssistantResultViewer";
+import { AssistantExecutionStatus } from "./AssistantExecutionStatus";
+import { WorkspaceIcon } from "./WorkspaceIcon";
+import { resultImageNode } from "./assistant-result-data";
+import { workflowExecutionResultSchema, workflowExecutionProgressSchema, type WorkflowResultImage } from "@fashion/shared";
+import type { AssistantImageImportResult } from "./assistant-image-uploads";
+import uploadStyles from "./assistant-image-uploads.module.css";
 import { userFacingError } from "../../../components/user-facing-error";
 import { useSerialPolling } from "../../use-serial-polling";
+import { useAuth } from "../../auth/AuthProvider";
+import type { ChatActivity } from "../../assistant-character/project-activity";
 
 import {
   useCallback,
@@ -26,9 +42,14 @@ import {
 } from "./AssistantReferencePicker";
 import { DesignRequirementsDrawer } from "./DesignRequirementsDrawer";
 import { MessageReferenceRecord } from "./MessageReferenceRecord";
+import { mergeMessages, executionObservationKey } from "./conversation-messages";
 import {
+  appendDraftReferences,
+  retainReferenceInstances,
   resolveDraftReferences,
   removeReferenceMentions,
+  type CanvasReferenceSelection,
+  type ReferenceInstances,
 } from "./discussion-references";
 import ui from "./assistant-context.module.css";
 import { ProposalReview } from "./ProposalReview";
@@ -38,6 +59,7 @@ import {
   cancelAssistantReply,
   fetchWorkflowConversationContext,
   listAgentConversations,
+  getAgentConversation,
   listWorkflowMessages,
   sendWorkflowMessage,
   updateWorkflowConversationContext,
@@ -74,45 +96,29 @@ interface Props {
     readonly nodeId?: string;
     readonly nodeIds?: string[];
     readonly nonce: number;
+    readonly instances?: ReferenceInstances;
+    readonly conversationId?: string | null;
+    readonly onConsumed?: () => void;
   } | null;
-  readonly onBeforeSend?: (ids: readonly string[]) => Promise<string[]>;
+  readonly referencesPreparing?: boolean;
+  readonly onBeforeSend?: (ids: readonly string[], instances: ReferenceInstances) => Promise<CanvasReferenceSelection>;
   readonly directExecution?: boolean;
   readonly onExecution?: () => void;
+  readonly canUploadReferences?: boolean;
+  readonly onPrepareImageImport?: (signal: AbortSignal) => Promise<void>;
+  readonly onImageImported?: (result: AssistantImageImportResult, signal: AbortSignal) => Promise<void>;
+  readonly referencePlacement?: ReferencePlacementActions;
+  readonly onOpenGeneratedFiles?: () => void;
   readonly renderLegacyRuns: (conversationId: string) => ReactNode;
   readonly onConversationChange?: (conversationId: string | null) => void;
-}
-
-function mergeMessages(
-  current: readonly WorkflowMessageView[],
-  incoming: readonly WorkflowMessageView[],
-) {
-  const updates = new Map(incoming.map((message) => [message.id, message]));
-  let changed = false;
-  const merged = current.map((message) => {
-    const update = updates.get(message.id);
-    if (!update) return message;
-    if (message.status !== "pending" && update.status === "pending" || Date.parse(update.updatedAt) < Date.parse(message.updatedAt)) return message;
-    if (JSON.stringify(message) === JSON.stringify(update)) return message;
-    changed = true;
-    // An in-flight poll must not revive a confirmation already handled here.
-    if (
-      update.proposal?.status === "pending" &&
-      message.proposal &&
-      message.proposal.status !== "pending"
-    ) {
-      return { ...update, proposal: message.proposal };
-    }
-    return update;
-  });
-  const seen = new Set(current.map((message) => message.id));
-  const added = incoming.filter((message) => !seen.has(message.id));
-  return !changed && !added.length ? current : [...merged, ...added];
+  readonly onActivityChange?: (activity: ChatActivity) => void;
 }
 
 type ConversationDraft = {
   prompt: string;
   referencedIds: readonly string[];
   adjustment: WorkflowProposal | null;
+  referenceInstances?: ReferenceInstances;
 };
 type LocalSubmission = { conversationId: string; clientRequestId: string; content: string; phase: "sending" | "uncertain" };
 const messageDisplayKey = (conversationId: string, message: Pick<WorkflowMessageView, "role" | "clientRequestId" | "id">) =>
@@ -129,15 +135,28 @@ export function WorkflowAssistantPanel({
   onLocate,
   renderLegacyRuns,
   onConversationChange,
+  onActivityChange,
   onOpenResult,
   onAddMaterial,
   focusRequest = 0,
   referenceRequest,
+  referencesPreparing = false,
   onBeforeSend,
   directExecution = false,
   onExecution,
+  canUploadReferences = false,
+  onPrepareImageImport,
+  onImageImported,
+  referencePlacement,
+  onOpenGeneratedFiles,
 }: Props) {
   const inputId = useId();
+  const { session } = useAuth();
+  const draftScope = useDraftScope();
+  const imageInput = useRef<HTMLInputElement>(null);
+  const [imagesDragging, setImagesDragging] = useState(false);
+  const [previewReferenceId, setPreviewReferenceId] = useState<string | null>(null);
+  const [resultPreview, setResultPreview] = useState<{ images: readonly WorkflowResultImage[]; compare: boolean } | null>(null);
   const draftStore = useRef(new Map<string, ConversationDraft>());
   const [conversations, setConversations] = useState<
     readonly WorkflowConversationSummary[]
@@ -157,8 +176,17 @@ export function WorkflowAssistantPanel({
   const [localSubmission, setLocalSubmission] = useState<LocalSubmission | null>(null);
   const acknowledgedRequests = useRef(new Set<string>());
   const freshMessages = useRef(new Set<string>());
-  const { conversationView, composerSurface, followMessages, followedConversation, newMessages, setNewMessages, stopScroll, scrollToLatest, viewportProps } = useConversationViewport(conversationId);
+  const { conversationView, composerSurface, followMessages, followedConversation, newMessages, awayFromLatest, setNewMessages, stopScroll, scrollToLatest, preserveReading, viewportProps } = useConversationViewport(`${session?.user.id ?? "guest"}:${projectId}:${conversationId}`);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [olderError, setOlderError] = useState<string | null>(null);
+  const olderRequest = useRef<AbortController | null>(null);
+  const messagePages = useRef(new Map<string, { messages: readonly WorkflowMessageView[]; cursor: string | null }>());
+  const [conversationCursor, setConversationCursor] = useState<string | null>(null);
+  const [conversationPageLoading, setConversationPageLoading] = useState(false);
+  const [conversationPageError, setConversationPageError] = useState<string | null>(null);
+  const conversationPageRequest = useRef<AbortController | null>(null);
+  const conversationResolution = useRef<AbortController | null>(null);
   const [context, setContext] = useState<WorkflowConversationContext | null>(
     null,
   );
@@ -171,13 +199,17 @@ export function WorkflowAssistantPanel({
   );
   const executionFlight = useRef(false);
   const composerInput = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (focusRequest) composerInput.current?.focus({ preventScroll: true });
-  }, [focusRequest]);
+  const focusedRequest = useRef(0);
   const [agentVersion, setAgentVersion] = useState<1 | 2>(2);
   const [contextError, setContextError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [referencedIds, setReferencedIds] = useState<readonly string[]>([]);
+  const [referenceInstances, setReferenceInstances] = useState<ReferenceInstances>({});
+  const draftInstances = useMemo(() => retainReferenceInstances(referenceInstances, referencedIds), [referenceInstances, referencedIds]);
+  const instanceDraft = Object.keys(draftInstances).length ? { referenceInstances: draftInstances } : {};
+  useEffect(() => {
+    setReferenceInstances(current => Object.keys(current).every(id => referencedIds.includes(id)) ? current : retainReferenceInstances(current, referencedIds));
+  }, [referencedIds]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const sendFlight = useRef(false);
@@ -200,6 +232,7 @@ export function WorkflowAssistantPanel({
   const [legacyRunsOpen, setLegacyRunsOpen] = useState(false);
   const activeId = useRef(conversationId);
   const initializedMessages = useRef("");
+  const messageEpoch = useRef(0);
   const contextEpoch = useRef(0);
   const requestIds = useRef(new Map<string, string>());
   useEffect(() => {
@@ -223,71 +256,119 @@ export function WorkflowAssistantPanel({
       message.origin !== "execution_result",
   );
   const collaborationReadOnly = legacy || agentVersion === 1;
+  const waitingForConfirmation = !collaborationReadOnly && messages.some(message => message.proposal?.status === "pending");
+  const activityPhase: ChatActivity["phase"] = legacy ? "idle"
+    : sending || submittingProposal ? "sending"
+    : localSubmission?.conversationId === conversationId && localSubmission.phase === "uncertain" ? "uncertain"
+    : waitingForConfirmation ? "awaiting_confirmation"
+    : pendingReply ? "replying" : "idle";
+  useEffect(() => {
+    onActivityChange?.({ conversationId: legacy || !conversationId ? null : conversationId, phase: activityPhase });
+  }, [activityPhase, conversationId, legacy, onActivityChange]);
   useEffect(() => {
     draftStore.current.set(`${projectId}:${conversationId}`, {
       prompt,
       referencedIds,
       adjustment,
+      ...(Object.keys(draftInstances).length ? { referenceInstances: draftInstances } : {}),
     });
-  }, [projectId, conversationId, prompt, referencedIds, adjustment]);
+  }, [projectId, conversationId, prompt, referencedIds, adjustment, draftInstances]);
   const localDraft = usePersistentDraft<ConversationDraft>({
-    value: { prompt, referencedIds, adjustment },
+    value: { prompt, referencedIds, adjustment, ...instanceDraft },
     baseline: JSON.stringify({ prompt: "", referencedIds: [], adjustment: null }),
     objectKey: `assistant:${conversationId || "new"}`,
     enabled: !loading,
-    restore: (draft) => { setPrompt(draft.prompt); setReferencedIds(draft.referencedIds); setAdjustment(draft.adjustment); },
+    restore: (draft) => { setPrompt(draft.prompt); setReferencedIds(draft.referencedIds); setAdjustment(draft.adjustment); setReferenceInstances(draft.referenceInstances ?? {}); },
   });
-  const addReference = useCallback(
-    (id: string) => {
+  const uploadEnabled = canUploadReferences && Boolean(onPrepareImageImport && onImageImported) && !collaborationReadOnly && !loading && localDraft.ready && !sending && !contextSaving;
+  const uploads = useAssistantImageUploads({ accountId: session?.user.id ?? "", projectId, editor: draftScope?.editor ?? "workspace", conversationId }, {
+    enabled: uploadEnabled,
+    slots: MAX_ASSISTANT_REFERENCES - resolveDraftReferences(graph.nodes, prompt, referencedIds).ids.length,
+    checkpointDraft: () => localDraft.checkpoint({ prompt, referencedIds, adjustment, ...instanceDraft }, JSON.stringify({ prompt: "", referencedIds: [], adjustment: null })),
+    beforeImport: async signal => {
+      if (!onPrepareImageImport) throw new Error("当前白板尚未准备好，请稍后继续。");
+      return onPrepareImageImport(signal);
+    },
+    apply: async (result, signal) => {
+      if (!onImageImported) throw new Error("当前白板尚未准备好，请稍后继续。");
+      await onImageImported(result, signal);
+    },
+    reference: async (result, signal) => {
+      signal.throwIfAborted();
+      if (!uploadEnabled) throw new Error("当前对话暂时不可添加引用，图片已加入项目。请稍后继续添加。");
+      const next = appendDraftReferences(result.graph.nodes, prompt, referencedIds, [result.nodeId]);
+      if (next.error) throw new Error(next.error);
+      const shapes = result.canvas.bindings.filter(binding => binding.nodeId === result.nodeId && !binding.removed).map(binding => binding.shapeId);
+      const instances = { ...draftInstances, ...(shapes.length ? { [result.nodeId]: shapes } : {}) };
+      setReferencedIds(next.ids); setReferenceInstances(instances);
+      await localDraft.checkpoint({ prompt, referencedIds: next.ids, adjustment, ...(Object.keys(instances).length ? { referenceInstances: instances } : {}) }, JSON.stringify({ prompt: "", referencedIds: [], adjustment: null }));
+      signal.throwIfAborted();
+      if (draftScope) {
+        const saved = await draftRepository.read<ConversationDraft>(JSON.stringify([draftScope.accountId, projectId, draftScope.editor, `assistant:${conversationId || "new"}`]));
+        signal.throwIfAborted();
+        if (!saved?.value.referencedIds.includes(result.nodeId)) throw new Error("图片已加入项目，引用暂未保存。请核对本机草稿后继续添加。");
+      }
+      onError(null);
+    },
+  });
+  const imagesPending = Boolean(session?.user.id) && !uploads.ready || uploads.items.length > 0 || Boolean(uploads.error);
+  useEffect(() => {
+    const reset = () => setImagesDragging(false);
+    window.addEventListener("dragend", reset); window.addEventListener("blur", reset);
+    return () => { window.removeEventListener("dragend", reset); window.removeEventListener("blur", reset); };
+  }, []);
+  useEffect(() => {
+    if (!loading && localDraft.ready && focusRequest && focusedRequest.current !== focusRequest) {
+      composerInput.current?.focus({ preventScroll: true });
+      focusedRequest.current = focusRequest;
+    }
+  }, [focusRequest, loading, localDraft.ready]);
+  const addReferences = useCallback(
+    (incoming: readonly string[], focusInput: boolean, instances: ReferenceInstances = {}) => {
       if (collaborationReadOnly) {
         onError("请先打开可编辑的设计对话再引用素材。");
         return false;
       }
-      const ids = resolveDraftReferences(
-        graph.nodes,
-        prompt,
-        referencedIds,
-      ).ids;
-      if (!ids.includes(id) && ids.length >= MAX_ASSISTANT_REFERENCES) {
-        onError("每次最多引用 16 项，请先移除一项再添加。");
+      if (sending || contextSaving) {
+        onError("正在提交当前内容，请完成后再添加引用。");
         return false;
       }
-      setReferencedIds((current) => [...new Set([...current, id])]);
-      composerInput.current?.focus({ preventScroll: true });
+      const result = appendDraftReferences(graph.nodes, prompt, referencedIds, incoming);
+      if (result.error) { onError(result.error); return false; }
+      if (result.ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("还在准备的图片也占用引用名额，请先完成或移除部分附件。"); return false; }
+      setReferencedIds(result.ids);
+      setReferenceInstances(current => {
+        const merged = { ...retainReferenceInstances(current, referencedIds) };
+        for (const [id, shapes] of Object.entries(instances)) merged[id] = [...new Set([...(merged[id] ?? []), ...shapes])];
+        return merged;
+      });
+      onError(null);
+      if (focusInput) composerInput.current?.focus({ preventScroll: true });
       return true;
     },
-    [collaborationReadOnly, graph.nodes, onError, prompt, referencedIds],
+    [collaborationReadOnly, contextSaving, graph.nodes, onError, prompt, referencedIds, sending, uploads.items.length],
   );
+  const addReference = useCallback((id: string) => addReferences([id], true), [addReferences]);
   const consumedReference = useRef<unknown>(null);
   useEffect(() => {
+    if (referenceRequest && consumedReference.current !== referenceRequest && referenceRequest.conversationId !== undefined && referenceRequest.conversationId !== (conversationId || null)) {
+      consumedReference.current = referenceRequest;
+      referenceRequest.onConsumed?.();
+      onError("对话已切换，请在当前对话重新引用素材。");
+      return;
+    }
     if (
       !referenceRequest ||
       loading ||
+      !localDraft.ready ||
       consumedReference.current === referenceRequest
     )
       return;
     consumedReference.current = referenceRequest;
-    if (referenceRequest.nodeIds?.length) {
-      const ids = [...new Set(referenceRequest.nodeIds)];
-      if (ids.length > MAX_ASSISTANT_REFERENCES) { onError("每次最多引用 16 项，请减少选择。"); return; }
-      setReferencedIds(ids);
-      return;
-    }
-    if (!referenceRequest.nodeId || !graph.nodes.some((node) => node.id === referenceRequest.nodeId))
-      return;
-    addReference(referenceRequest.nodeId);
-  }, [addReference, graph.nodes, loading, onError, referenceRequest]);
-  const mentionMatch = prompt.match(/(?:^|\s)@([^@\s]*)$/u);
-  const mentionChoices = mentionMatch
-    ? graph.nodes
-        .filter(
-          (node) =>
-            node.title.includes(mentionMatch[1] ?? "") &&
-            !referencedIds.includes(node.id),
-        )
-        .slice(0, 6)
-    : [];
-
+    const ids = referenceRequest.nodeIds ?? (referenceRequest.nodeId ? [referenceRequest.nodeId] : []);
+    if (ids.length) addReferences(ids, false, referenceRequest.instances);
+    referenceRequest.onConsumed?.();
+  }, [addReferences, conversationId, loading, localDraft.ready, onError, referenceRequest]);
   useEffect(() => {
     activeId.current = conversationId;
   }, [conversationId]);
@@ -308,19 +389,37 @@ export function WorkflowAssistantPanel({
 
   const activateConversation = useCallback(
     (id: string) => {
+      if (id && activeId.current === id && initializedMessages.current === id) {
+        setLoading(false);
+        setConversationError(null);
+        return;
+      }
       const draft = draftStore.current.get(`${projectId}:${id}`);
+      const cached = messagePages.current.get(id);
+      conversationResolution.current?.abort();
+      olderRequest.current?.abort();
+      olderRequest.current = null;
+      messageEpoch.current++;
       setNewMessages(false);
-      initializedMessages.current = "";
+      initializedMessages.current = cached ? id : "";
       contextEpoch.current += 1;
       activeId.current = id;
+      const url = new URL(window.location.href);
+      if (id && url.searchParams.has("conversationId") && url.searchParams.get("conversationId") !== id) {
+        url.searchParams.set("conversationId", id);
+        window.history.replaceState(window.history.state, "", url);
+      }
       freshMessages.current.clear();
       setConversationId(id);
-      setMessages([]);
-      setCursor(null);
+      setMessages(cached?.messages ?? []);
+      setCursor(cached?.cursor ?? null);
+      setOlderLoading(false);
+      setOlderError(null);
       setContext(null);
       setAdjustment(draft?.adjustment ?? null);
       setContextError(null);
       setReferencedIds(draft?.referencedIds ?? []);
+      setReferenceInstances(draft?.referenceInstances ?? {});
       setPrompt(draft?.prompt ?? "");
       setDraftNotice(
         draft &&
@@ -330,9 +429,12 @@ export function WorkflowAssistantPanel({
       );
       setPickerOpen(false);
       setLegacyMessageError(null);
+      setConversationError(null);
       setRequirementsOpen(false);
+      setPreviewReferenceId(null);
+      setResultPreview(null);
       setCorrectionError(null);
-      setLoading(Boolean(id));
+      setLoading(Boolean(id) && !cached);
       onProposal(null);
     },
     [onProposal, projectId, setNewMessages],
@@ -342,30 +444,46 @@ export function WorkflowAssistantPanel({
     const activate = (event: Event) => {
       const id = (event as CustomEvent<{ id: string }>).detail?.id;
       if (!id) return;
-      activateConversation(id);
-      void listAgentConversations(projectId)
-        .then((page) => setConversations(page.items))
-        .catch(() => undefined);
+      conversationResolution.current?.abort();
+      const controller = new AbortController();
+      conversationResolution.current = controller;
+      void getAgentConversation(projectId, id, controller.signal).then(item => {
+        if (controller.signal.aborted) return;
+        setConversations(current => current.some(entry => entry.id === item.id) ? current.map(entry => entry.id === item.id ? item : entry) : [item, ...current]);
+        activateConversation(item.id);
+      }).catch((error: unknown) => {
+        if (!controller.signal.aborted) onError(userFacingError(error, "这段对话读取失败，请从历史对话重新选择。"));
+      });
     };
     window.addEventListener("fashion-workflow:conversation", activate);
     return () =>
       window.removeEventListener("fashion-workflow:conversation", activate);
-  }, [activateConversation, projectId]);
+  }, [activateConversation, onError, projectId]);
 
   useEffect(() => {
-    let disposed = false;
+    const controller = new AbortController();
+    conversationResolution.current?.abort();
+    conversationResolution.current = controller;
+    conversationPageRequest.current?.abort();
+    conversationPageRequest.current = null;
+    setConversationPageLoading(false);
+    setConversationPageError(null);
     setConversationError(null);
     setLoading(true);
-    void listAgentConversations(projectId)
-      .then((page) => {
-        if (disposed) return;
+    void listAgentConversations(projectId, undefined, controller.signal)
+      .then(async (page) => {
+        if (controller.signal.aborted) return;
         setConversations(page.items);
-        activateConversation(
-          page.items.find(item => item.id === new URLSearchParams(window.location.search).get("conversationId"))?.id ?? page.items.find((item) => item.mode === "workflow")?.id ?? "",
-        );
+        setConversationCursor(page.nextCursor);
+        const linkedId = new URLSearchParams(window.location.search).get("conversationId");
+        const target = linkedId ? page.items.find(item => item.id === linkedId) ?? await getAgentConversation(projectId, linkedId, controller.signal)
+          : page.items.find(item => item.mode === "workflow");
+        if (controller.signal.aborted) return;
+        if (target && !page.items.some(item => item.id === target.id)) setConversations(current => [target, ...current]);
+        activateConversation(target?.id ?? "");
       })
       .catch((error: unknown) => {
-        if (!disposed) {
+        if (!controller.signal.aborted) {
           setConversationError(
             userFacingError(error, "历史对话读取失败，请重试。"),
           );
@@ -373,20 +491,91 @@ export function WorkflowAssistantPanel({
         }
       });
     return () => {
-      disposed = true;
+      controller.abort();
+      conversationPageRequest.current?.abort();
     };
   }, [activateConversation, projectId, conversationReload]);
+
+  const loadConversations = async () => {
+    if (!conversationCursor || conversationPageRequest.current) return;
+    const requestedCursor = conversationCursor;
+    const controller = new AbortController();
+    conversationPageRequest.current = controller;
+    setConversationPageLoading(true);
+    setConversationPageError(null);
+    try {
+      const page = await listAgentConversations(projectId, requestedCursor, controller.signal);
+      if (controller.signal.aborted) return;
+      setConversations(current => {
+        const seen = new Set(current.map(item => item.id));
+        const added = page.items.filter(item => {
+          if (seen.has(item.id)) return false;
+          seen.add(item.id);
+          return true;
+        });
+        return [...current, ...added];
+      });
+      setConversationCursor(page.nextCursor === requestedCursor ? null : page.nextCursor);
+    } catch (error) {
+      if (!controller.signal.aborted) setConversationPageError(userFacingError(error, "较早对话读取失败，请重试。"));
+    } finally {
+      if (conversationPageRequest.current === controller) {
+        conversationPageRequest.current = null;
+        setConversationPageLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => () => {
+    conversationResolution.current?.abort();
+    olderRequest.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!conversationId || loading || initializedMessages.current !== conversationId) return;
+    messagePages.current.delete(conversationId);
+    messagePages.current.set(conversationId, { messages, cursor });
+    const oldest = messagePages.current.keys().next().value;
+    if (messagePages.current.size > 8 && oldest) messagePages.current.delete(oldest);
+  }, [conversationId, cursor, loading, messages]);
+
+  const loadOlderMessages = async () => {
+    if (!cursor || olderRequest.current) return;
+    const targetId = conversationId;
+    const epoch = messageEpoch.current;
+    const requestedCursor = cursor;
+    const controller = new AbortController();
+    olderRequest.current = controller;
+    preserveReading();
+    setOlderLoading(true);
+    setOlderError(null);
+    const current = () => !controller.signal.aborted && activeId.current === targetId && messageEpoch.current === epoch;
+    try {
+      const page = await listWorkflowMessages(targetId, requestedCursor, controller.signal);
+      if (!current()) return;
+      setMessages(messages => mergeMessages(messages, page.items, true));
+      setCursor(page.nextCursor === requestedCursor ? null : page.nextCursor);
+    } catch (error) {
+      if (current()) setOlderError(userFacingError(error, "较早消息读取失败，请重试。"));
+    } finally {
+      if (olderRequest.current === controller) {
+        olderRequest.current = null;
+        if (current()) setOlderLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     let disposed = false;
     if (!conversationId || !legacy) return;
-    setLoading(true);
+    setLoading(initializedMessages.current !== conversationId);
     setLegacyMessageError(null);
     void listWorkflowMessages(conversationId)
       .then((page) => {
         if (!disposed) {
-          setMessages((current) => mergeMessages(page.items, current));
-          setCursor(page.nextCursor);
+          setMessages((current) => mergeMessages(current, page.items));
+          if (initializedMessages.current !== conversationId) setCursor(page.nextCursor);
+          initializedMessages.current = conversationId;
           setLoading(false);
         }
       })
@@ -500,19 +689,17 @@ export function WorkflowAssistantPanel({
 
   const latestMessage = messages.at(-1);
   const latestMessageKey = latestMessage
-    ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.content.length}`
+    ? JSON.stringify([latestMessage.id, latestMessage.status, latestMessage.content])
     : "";
-  const proposalResultKey = messages
-    .filter((message) => message.proposal)
-    .map(({ proposal }) => {
-      const tool = graph.nodes.find((node) => node.id === proposal?.toolNodeId);
-      const outputs = graph.edges
-        .filter((edge) => edge.sourceNodeId === tool?.id)
-        .map((edge) => edge.targetNodeId);
-      return `${proposal?.id}:${proposal?.status}:${tool?.status}:${outputs.join(",")}`;
-    })
-    .join("|");
+  const proposalResults = useMemo(() => new Map(messages.map(message => [message.id, executionObservationKey(message)])), [messages]);
+  const latestSeen = useRef({ conversationId: "", key: "", results: new Map<string, string>() });
   useEffect(() => {
+    const key = `${latestMessageKey}:${localSubmission?.clientRequestId ?? ""}`;
+    const previous = latestSeen.current;
+    // Newly loaded historical proposals establish a baseline, just like old text.
+    const resultChanged = [...proposalResults].some(([id, value]) => previous.results.has(id) && previous.results.get(id) !== value);
+    const changed = previous.conversationId === conversationId && Boolean(previous.key) && (previous.key !== key || resultChanged);
+    latestSeen.current = { conversationId, key: latestMessageKey ? key : "", results: proposalResults };
     if (followMessages.current && conversationView.current) {
       if (followedConversation.current !== conversationId) {
         stopScroll();
@@ -520,8 +707,8 @@ export function WorkflowAssistantPanel({
         if (messages.length) followedConversation.current = conversationId;
       } else scrollToLatest(conversationView.current);
     }
-    else setNewMessages(true);
-  }, [latestMessageKey, messages.length, pendingReply, proposalResultKey, localSubmission, scrollToLatest, conversationId, stopScroll, conversationView, followMessages, followedConversation, setNewMessages]);
+    else if (changed) setNewMessages(true);
+  }, [latestMessageKey, messages.length, pendingReply, proposalResults, localSubmission, scrollToLatest, conversationId, stopScroll, conversationView, followMessages, followedConversation, setNewMessages]);
 
   const createConversation = async (keepDraft = false) => {
     const created = await createAgentConversation(projectId, {
@@ -533,6 +720,7 @@ export function WorkflowAssistantPanel({
     if (keepDraft) {
       setPrompt(prompt);
       setReferencedIds(referencedIds);
+      setReferenceInstances(draftInstances);
       setAdjustment(adjustment);
       draftStore.current.delete(`${projectId}:`);
     }
@@ -584,6 +772,10 @@ export function WorkflowAssistantPanel({
       !content ||
       sendFlight.current ||
       sending ||
+      referencesPreparing ||
+      imagesPending ||
+      uploads.queue.snapshot().items.length > 0 || Boolean(uploads.queue.snapshot().error) ||
+      !localDraft.ready ||
       loading ||
       contextSaving ||
       collaborationReadOnly ||
@@ -617,13 +809,28 @@ export function WorkflowAssistantPanel({
     setNewMessages(false);
     sendFlight.current = true;
     setSending(true);
-    const proposedRequestId = localSubmission?.conversationId === conversationId && localSubmission.content === content ? localSubmission.clientRequestId : crypto.randomUUID();
+    // Reuse only an identical request payload below. The same words can refer
+    // to a different garment, focus, or proposal on the next send.
+    const proposedRequestId = crypto.randomUUID();
     let attemptedRequestId = proposedRequestId;
     setLocalSubmission({ conversationId, clientRequestId: proposedRequestId, content, phase: "sending" });
     onError(null);
     try {
-      refs = await onBeforeSend?.(refs) ?? refs;
-      const submittedDraft = { prompt, referencedIds, adjustment };
+      const prepared = await onBeforeSend?.(refs, draftInstances);
+      if (prepared && JSON.stringify(prepared.nodeIds) !== JSON.stringify(refs)) {
+        // A consumed canvas material can fork when edited. Surface its new
+        // identity before sending, instead of silently changing the preview.
+        setReferencedIds(prepared.nodeIds);
+        setReferenceInstances(prepared.instances);
+        setPrompt(current => removeReferenceMentions(current, graph.nodes, refs.filter(id => !prepared.nodeIds.includes(id))));
+        setLocalSubmission(null);
+        onError("引用素材已更新，预览已同步。请核对后再次发送。");
+        return;
+      }
+      refs = prepared?.nodeIds ?? refs;
+      if (refs.length > MAX_ASSISTANT_REFERENCES)
+        throw new Error("素材副本变更后超过 16 项，请重新核对引用再发送。");
+      const submittedDraft = { prompt, referencedIds, adjustment, ...instanceDraft };
       const acknowledgeDraft = await localDraft.captureAcknowledgement(submittedDraft);
       const targetId = conversationId || (await createConversation(true));
       const focus = refs.length ? refs : (context?.focusNodeIds ?? []);
@@ -846,6 +1053,7 @@ export function WorkflowAssistantPanel({
       executionFlight.current = false;
       setSending(false);
       setSubmittingProposal(null);
+      messageSync.retry();
     }
   };
 
@@ -870,6 +1078,7 @@ export function WorkflowAssistantPanel({
   const discussionIds = draftReferences.ids.length
     ? draftReferences.ids
     : (context?.focusNodeIds ?? []);
+  const previewReference = graph.nodes.find(node => node.id === previewReferenceId && node.type === "reference_image");
   const clearDiscussion = async () => {
     const target = activeId.current;
     const ids = [
@@ -919,8 +1128,32 @@ export function WorkflowAssistantPanel({
   };
 
   // Draft keystrokes must not rebuild the loaded conversation tree.
+  const previewOrLocate = useCallback((id: string) => {
+    if (graph.nodes.some(node => node.id === id && node.type === "reference_image")) setPreviewReferenceId(id);
+    else onLocate(id);
+  }, [graph.nodes, onLocate]);
   const transcriptActions = useRef({ retryMessage, decide, addReference });
   useEffect(() => { transcriptActions.current = { retryMessage, decide, addReference }; });
+  const openResultImage = useCallback((image: WorkflowResultImage) => {
+    const node = resultImageNode(graph, image);
+    if (node) onOpenResult(node.id);
+    else setResultPreview({ images: [image], compare: false });
+  }, [graph, onOpenResult]);
+  const continueResultImage = useCallback((image: WorkflowResultImage) => {
+    const node = resultImageNode(graph, image);
+    if (node) transcriptActions.current.addReference(node.id);
+    else onError("这张结果已移出当前画布，请从项目生成文件放回后继续修改。");
+  }, [graph, onError]);
+  const retryMessageSync = messageSync.retry;
+  const refreshExecution = useCallback(() => { retryMessageSync(); window.dispatchEvent(new Event("fashion-workflow:refresh")); }, [retryMessageSync]);
+  const revealExecutionResult = useCallback((executionId: string) => {
+    const element = conversationView.current?.querySelector<HTMLElement>(`[data-execution-results="${CSS.escape(executionId)}"]`);
+    if (element) { followMessages.current = false; element.scrollIntoView({ block: "start", behavior: "auto" }); element.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true }); }
+  }, [conversationView, followMessages]);
+  const resultReceipts = useMemo(() => new Set(messages.flatMap(message => {
+    const result = message.origin === "execution_result" ? workflowExecutionResultSchema.safeParse(message.context?.executionResult) : null;
+    return result?.success && result.data.executionId === message.executionId && result.data.images.length ? [result.data.executionId] : [];
+  })), [messages]);
   const transcript = useMemo(() => ([...messages.map((message) => ({ kind: "server" as const, message })),
           ...(localSubmission && localSubmission.conversationId === conversationId && !messages.some((message) => message.role === "user" && message.clientRequestId === localSubmission.clientRequestId)
             ? [{ kind: "local" as const, submission: localSubmission }] : []),
@@ -930,6 +1163,8 @@ export function WorkflowAssistantPanel({
             <small role="status">{row.submission.phase === "sending" ? "正在发送…" : "发送结果尚未确认，可用下方发送按钮重试。"}</small>
           </article>;
           const message = row.message;
+          const parsedResult = message.origin === "execution_result" ? workflowExecutionResultSchema.safeParse(message.context?.executionResult) : null;
+          const parsedProgress = message.origin !== "execution_result" && !message.proposal ? workflowExecutionProgressSchema.safeParse(message.context?.executionProgress) : null;
           return (
           <article
             className={styles.workflowMessage}
@@ -988,16 +1223,24 @@ export function WorkflowAssistantPanel({
                 重试这条回复
               </button>
             ) : null}
-            {message.role === "assistant" && message.status !== "pending" ? (
+            {message.role === "assistant" && message.status !== "pending" && message.origin !== "execution_result" && (!message.context?.executionReceipt && !message.proposal?.execution || Boolean(message.context?.referenceSummary)) ? (
               <MessageReferenceRecord
                 context={message.context}
                 graph={graph}
-                onLocate={onLocate}
+                onLocate={previewOrLocate}
               />
             ) : null}
+            {parsedResult?.success && parsedResult.data.executionId === message.executionId ? <AssistantResultGallery result={parsedResult.data} graph={graph} disabled={sending || contextSaving || pendingReply || collaborationReadOnly} onOpen={openResultImage} onContinue={continueResultImage} onCompare={images => setResultPreview({ images, compare: true })} /> : null}
+            {parsedProgress?.success && parsedProgress.data.executionId === message.executionId ? <AssistantExecutionStatus key={parsedProgress.data.executionId} progress={parsedProgress.data} projectId={projectId} onRefresh={refreshExecution} disabled={collaborationReadOnly} /> : null}
             {message.proposal ? (
               <ProposalReview
                 proposal={message.proposal}
+                projectId={projectId}
+                onRefresh={refreshExecution}
+                onOpenImage={openResultImage}
+                onContinueImage={continueResultImage}
+                onCompare={images => setResultPreview({ images, compare: true })}
+                onRevealResult={message.proposal.execution?.progress && resultReceipts.has(message.proposal.execution.progress.executionId) ? () => revealExecutionResult(message.proposal?.execution?.progress?.executionId ?? "") : undefined}
                 graph={graph}
                 submitting={submittingProposal === message.proposal.id}
                 disabled={sending || pendingReply || collaborationReadOnly}
@@ -1012,6 +1255,7 @@ export function WorkflowAssistantPanel({
                   if (!message.proposal) return;
                   setAdjustment(message.proposal);
                   setReferencedIds(message.proposal.referencedNodeIds);
+                  setReferenceInstances({});
                   composerInput.current?.focus({ preventScroll: true });
                 }}
                 onOpenResult={onOpenResult}
@@ -1019,40 +1263,49 @@ export function WorkflowAssistantPanel({
               />
             ) : null}
           </article>
-        ); }), [messages, localSubmission, conversationId, streaming.drafts, graph, legacy, sending, contextSaving, pendingReply, collaborationReadOnly, submittingProposal, executionErrors, onLocate, onOpenResult]);
+        ); }), [messages, localSubmission, conversationId, streaming.drafts, graph, legacy, sending, contextSaving, pendingReply, collaborationReadOnly, submittingProposal, executionErrors, previewOrLocate, onOpenResult, openResultImage, continueResultImage, projectId, refreshExecution, resultReceipts, revealExecutionResult]);
 
   return (
     <div className={styles.assistantBody}>
       <div className={ui.toolbar}>
-        <strong className={ui.conversationTitle}>
+        <strong className={ui.conversationTitle} title={active?.title || "新设计对话"}>
           {active?.title || "新设计对话"}
         </strong>
         <div className={ui.toolbarActions}>
           <Button
             size="small"
+            variant="ghost"
+            aria-label="历史对话"
+            title="历史对话"
             aria-expanded={historyOpen}
             onClick={() => setHistoryOpen((value) => !value)}
           >
-            历史对话
+            <WorkspaceIcon name="history" />
           </Button>
           <Button
             size="small"
+            variant="ghost"
+            aria-label="新建对话"
+            title="新建对话"
             disabled={
-              loading || sending || contextSaving || Boolean(conversationError)
+              loading || sending || contextSaving
             }
             onClick={newConversation}
           >
-            新建对话
+            <WorkspaceIcon name="new_chat" />
           </Button>
           <Button
             size="small"
+            variant="ghost"
+            aria-label="设计要求"
+            title="设计要求"
             data-assistant-requirements-trigger
             disabled={legacy}
             onClick={() => setRequirementsOpen(true)}
           >
-            设计要求
+            <WorkspaceIcon name="requirements" />
           </Button>
-          {<Menu label="助手设置">
+          {<Menu label="助手设置" trigger={<WorkspaceIcon name="settings" />}>
             {legacy ? (
               <button
                 onClick={() => setLegacyRunsOpen((value) => !value)}
@@ -1088,16 +1341,25 @@ export function WorkflowAssistantPanel({
               </option>
             ))}
           </Select>
+          <div className={ui.historyPages}>
+            <small>{conversations.length ? `已载入 ${conversations.length} 条对话` : ""}</small>
+            {conversationCursor ? <Button size="small" variant="ghost" disabled={conversationPageLoading} onClick={() => void loadConversations()}>
+              {conversationPageLoading ? "正在读取…" : conversationPageError ? "重试读取对话" : "读取更早对话"}
+            </Button> : null}
+          </div>
+          {conversationPageError ? <p role="alert">{conversationPageError}</p> : null}
           {!conversations.length && !loading ? (
             <small>还没有历史对话。发送第一条需求后会建立对话。</small>
           ) : null}
         </div>
       ) : null}
+      <div className={styles.conversationViewport}>
       <div
         ref={conversationView}
         {...viewportProps}
         aria-label="设计对话"
         aria-live="polite"
+        tabIndex={0}
         className={styles.assistantConversation}
         data-empty={!loading && messages.length === 0}
       >
@@ -1153,77 +1415,76 @@ export function WorkflowAssistantPanel({
                     ? directExecution ? "在白板中选择作品，写下要调整和保留的细节。也可以描述一个新想法。" : "选择作品旁的“继续修改”，写下要调整和保留的细节。也可以描述一个新想法。"
                     : "写下款式、穿着场景和想保留的细节，也可以添加参考素材。"}
                 </p>
-                <ol className={ui.startSteps}>
-                  <li>描述需求</li>
-                  <li>{directExecution ? "选择参考素材" : "核对生成要求"}</li>
-                  <li>{directExecution ? "明确指令即可生成" : "确认生成"}</li>
-                </ol>
-                <Button
-                  disabled={collaborationReadOnly || Boolean(prompt.trim())}
-                  onClick={() => {
-                    setPrompt(
-                      "设计一件秋冬通勤风衣，藏蓝色、宽松廓形，保留立领，生成 2 张方案。",
-                    );
+                <AssistantStarters
+                  disabled={collaborationReadOnly || loading || sending || contextSaving}
+                  hasDraft={Boolean(prompt)}
+                  hasReferences={draftReferences.ids.length > 0}
+                  onChoose={value => {
+                    setPrompt(value);
                     composerInput.current?.focus({ preventScroll: true });
                   }}
-                >
-                  填入示例
-                </Button>
+                />
               </>
             ) : null}
           </div>
         ) : null}
+        {olderError ? <p role="alert">{olderError}</p> : null}
         {cursor ? (
           <button
             className={styles.historyAction}
-            disabled={loading}
-            onClick={() => {
-              setLoading(true);
-              void listWorkflowMessages(conversationId, cursor)
-                .then((page) => {
-                  setMessages((current) => [
-                    ...page.items,
-                    ...current.filter(
-                      (item) =>
-                        !page.items.some((older) => older.id === item.id),
-                    ),
-                  ]);
-                  setCursor(page.nextCursor);
-                })
-                .catch((error: unknown) =>
-                  onError(
-                    error instanceof Error ? error.message : "历史读取失败",
-                  ),
-                )
-                .finally(() => setLoading(false));
-            }}
+            disabled={loading || olderLoading}
+            onClick={() => void loadOlderMessages()}
             type="button"
           >
-            读取更早消息
+            {olderLoading ? "正在读取更早消息…" : olderError ? "重试读取消息" : "读取更早消息"}
           </button>
         ) : null}
         {transcript}
       </div>
-      {newMessages ? (
+      {newMessages || awayFromLatest ? (
         <button
           className={styles.newMessages}
           onClick={() => {
             followMessages.current = true;
             setNewMessages(false);
-            if (conversationView.current)
+            if (conversationView.current) {
               scrollToLatest(conversationView.current);
+              conversationView.current.focus({ preventScroll: true });
+            }
           }}
           type="button"
         >
-          有新消息 ↓
+          {newMessages ? "有新消息 ↓" : "回到最新 ↓"}
         </button>
       ) : null}
+      </div>
       {legacy && legacyRunsOpen ? renderLegacyRuns(conversationId) : null}
       <div
         ref={composerSurface}
         className={styles.composer}
         data-guide="workspace-assistant"
         data-guide-variant={legacy ? "history" : agentVersion === 1 ? "paused" : "input"}
+        data-assistant-image-drop
+        onDragEnterCapture={event => { if (Array.from(event.dataTransfer.types).includes("Files") && uploadEnabled) setImagesDragging(true); }}
+        onDragOverCapture={event => { if (Array.from(event.dataTransfer.types).includes("Files")) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = uploadEnabled ? "copy" : "none"; } }}
+        onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setImagesDragging(false); }}
+        onDropCapture={event => {
+          if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+          event.preventDefault(); event.stopPropagation(); setImagesDragging(false);
+          void uploads.queue.add(Array.from(event.dataTransfer.files));
+        }}
+        onPasteCapture={event => {
+          const files = Array.from(event.clipboardData.files); if (!files.length) return;
+          event.preventDefault(); event.stopPropagation();
+          const text = event.clipboardData.getData("text/plain"), input = composerInput.current;
+          if (text && input && !input.disabled && event.target === input) {
+            const start = input.selectionStart, end = input.selectionEnd;
+            const next = prompt.slice(0, start) + text + prompt.slice(end);
+            if (next.length <= MAX_AGENT_MESSAGE_LENGTH) { setPrompt(next); requestAnimationFrame(() => input.setSelectionRange(start + text.length, start + text.length)); }
+            else onError("粘贴文字超出输入上限，原正文仍保留。");
+          }
+          void uploads.queue.add(files);
+        }}
       >
         {legacy ? (
           <div className={styles.legacyReadOnly}>
@@ -1237,6 +1498,9 @@ export function WorkflowAssistantPanel({
           </div>
         ) : (
           <>
+            <div className={styles.composerReferences} data-composer-references>
+            {imagesDragging && uploadEnabled ? <p className={uploadStyles.dropHint}>松开添加参考图片</p> : null}
+            <AssistantImageUploadTray ready={uploads.ready} items={uploads.items} error={uploads.error} queue={uploads.queue} disabled={!uploadEnabled} />
             {draftNotice ? (
               <div className={ui.draftNotice} role="status">
                 <span>{draftNotice}</span>
@@ -1249,9 +1513,10 @@ export function WorkflowAssistantPanel({
                 </Button>
               </div>
             ) : null}
-            <div className={ui.discussion} aria-label="正在讨论">
+            <div className={ui.discussion} aria-label="正在讨论" data-has-references={discussionIds.length > 0}>
               <span>
                 {draftReferences.ids.length ? "本次发送的引用" : "当前讨论对象"}
+                {draftReferences.ids.length ? <span className={ui.referenceCount}> {draftReferences.ids.length} / {MAX_ASSISTANT_REFERENCES}</span> : null}
               </span>
               {discussionIds.length > 0 ? (
                 <button
@@ -1268,35 +1533,37 @@ export function WorkflowAssistantPanel({
                   改为讨论整个项目
                 </button>
               ) : null}
-              <div className={ui.discussionReferences}>
+              <div className={ui.discussionReferences} data-discussion-references>
                 {discussionIds.length ? (
-                  discussionIds.map((id) => (
+                  discussionIds.map((id) => {
+                    const node = graph.nodes.find(item => item.id === id);
+                    const label = node ? referenceLabel(node, graph.nodes) : "已移除节点";
+                    return (
                     <span
-                      className={
-                        draftReferences.ids.length
-                          ? ui.referenceChip
-                          : undefined
-                      }
+                      className={ui.referenceChip}
+                      data-assistant-reference-id={id}
                       key={id}
                     >
                       <button
-                        className={styles.nodeLink}
-                        title={
-                          graph.nodes.find((node) => node.id === id)?.title ??
-                          "已移除节点"
-                        }
-                        disabled={!graph.nodes.some((node) => node.id === id)}
-                        onClick={() => onLocate(id)}
+                        className={ui.referenceLocate}
+                        data-reference-preview={id}
+                        title={node?.type === "reference_image" ? `预览：${label}` : `在画布中定位：${label}`}
+                        aria-label={label}
+                        disabled={!node}
+                        onClick={() => node?.type === "reference_image" ? setPreviewReferenceId(id) : onLocate(id)}
                         type="button"
                       >
-                        {graph.nodes.find((node) => node.id === id)?.title ??
-                          "已移除节点"}
+                        {node ? <AssistantReferencePreview node={node} /> : null}
+                        <span className={ui.referenceCaption}>
+                          <span>{label}</span>
+                          {node ? <small>{referenceTypeLabel(node)}</small> : null}
+                        </span>
                       </button>
                       {draftReferences.ids.length ? (
                         <button
                           className={ui.removeReference}
                           disabled={sending || contextSaving}
-                          aria-label={`移除引用 ${graph.nodes.find((node) => node.id === id)?.title ?? id}`}
+                          aria-label={`移除引用 ${node ? label : id}`}
                           onClick={() => {
                             setReferencedIds((current) =>
                               current.filter((item) => item !== id),
@@ -1311,7 +1578,8 @@ export function WorkflowAssistantPanel({
                         </button>
                       ) : null}
                     </span>
-                  ))
+                    );
+                  })
                 ) : (
                   <span>
                     {conversationId && !context
@@ -1372,36 +1640,6 @@ export function WorkflowAssistantPanel({
               </button>
             ) : null}
 
-            {mentionChoices.length > 0 ? (
-              <div aria-label="引用画布节点" className={styles.mentionChoices}>
-                {mentionChoices.map((node) => (
-                  <button
-                    disabled={sending || contextSaving}
-                    key={node.id}
-                    onClick={() => {
-                      if (!addReference(node.id)) return;
-                      setPrompt((value) =>
-                        value.replace(
-                          /(?:^|\s)@([^@\s]*)$/u,
-                          (match) =>
-                            `${match.startsWith(" ") ? " " : ""}@${node.title} `,
-                        ),
-                      );
-                    }}
-                    type="button"
-                  >
-                    @{node.title}
-                    <small>
-                      {node.kind === "asset" ? "素材" : "工具"}
-                      {graph.nodes.filter((item) => item.title === node.title)
-                        .length > 1
-                        ? ` ${node.id}`
-                        : ""}
-                    </small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
             {adjustment ? (
               <div className={styles.adjustmentContext}>
                 <span>
@@ -1414,16 +1652,21 @@ export function WorkflowAssistantPanel({
                 </button>
               </div>
             ) : null}
+            </div>
             <label className={ui.fieldLabel} htmlFor={inputId}>
               描述设计需求
             </label>
-            <AssistantComposer
+            <AssistantMentionInput
               id={inputId}
               ref={composerInput}
+              contextKey={`${projectId}:${conversationId}`}
+              nodes={graph.nodes}
+              referencedIds={referencedIds}
+              onAddReference={addReference}
               aria-describedby={`${inputId}-hint`}
-              disabled={loading || sending || contextSaving}
+              disabled={loading || !localDraft.ready || sending || contextSaving}
               maxLength={MAX_AGENT_MESSAGE_LENGTH}
-              onChange={(event) => setPrompt(event.target.value)}
+              onValueChange={setPrompt}
               onSend={() => void send()}
               placeholder={
                 adjustment
@@ -1436,18 +1679,24 @@ export function WorkflowAssistantPanel({
             <p className={ui.helper} id={`${inputId}-hint`}>
               {pendingReply
                 ? "助手正在回复，你可以先写下下一条需求。"
-                : directExecution ? "讨论不会生图；明确的生成或修改指令会直接执行。" : "发送后先讨论需求，生成前会请你确认。"}
+                : directExecution ? "讨论不生图，明确要求生成或修改时执行。" : "发送后先讨论需求，生成前会请你确认。"}
             </p>
           </>
         )}
         <div className={styles.composerActions}>
+          {canUploadReferences && !collaborationReadOnly ? <>
+            <input ref={imageInput} hidden multiple type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" aria-label="选择助手参考图片" onChange={event => {
+              const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void uploads.queue.add(files);
+            }} />
+            <Button size="small" disabled={!uploadEnabled || !uploads.ready} onClick={() => imageInput.current?.click()}>上传图片</Button>
+          </> : null}
           {pendingReply ? <Button loading={stopping} onClick={() => void stopReply()}>停止回复</Button> : null}
           {!collaborationReadOnly ? (
             <Button
               size="small"
               data-assistant-reference-trigger
               data-guide="workspace-reference"
-              disabled={loading || sending || contextSaving}
+              disabled={loading || !localDraft.ready || sending || contextSaving}
               onClick={() => setPickerOpen(true)}
             >
               添加引用
@@ -1459,6 +1708,9 @@ export function WorkflowAssistantPanel({
               disabled={
                 loading ||
                 sending ||
+                referencesPreparing ||
+                imagesPending ||
+                !localDraft.ready ||
                 contextSaving ||
                 pendingReply ||
                 !prompt.trim() ||
@@ -1488,11 +1740,20 @@ export function WorkflowAssistantPanel({
           </small>
         ) : null}
       </div>
+        {resultPreview ? <AssistantResultViewer images={resultPreview.images} compare={resultPreview.compare} graph={graph} disabled={sending || contextSaving || pendingReply || collaborationReadOnly} onClose={() => setResultPreview(null)} onOpen={openResultImage} onContinue={continueResultImage} onOpenFiles={onOpenGeneratedFiles} /> : null}
+        {previewReference ? <AssistantReferenceViewer
+          key={previewReference.id}
+          node={previewReference}
+          projectId={projectId}
+          actions={referencePlacement}
+          onClose={() => setPreviewReferenceId(null)}
+        /> : null}
         <AssistantReferencePicker
           open={pickerOpen}
           graph={graph}
           selectedIds={draftReferences.ids}
           onApply={(ids) => {
+            if (resolveDraftReferences(graph.nodes, prompt, ids).ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("待添加图片和所选引用合并后超过 16 项，请先减少部分内容。"); return; }
             setReferencedIds(ids);
             setPrompt((value) =>
               removeReferenceMentions(

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { imageTransformSchema, imageOutpaintSchema } from "./image-workspace";
+import { imageTextEditsSchema } from "./image-text";
 import type { WorkflowConnectionPort } from "./workflow-connections";
 
 export const WORKFLOW_TOOL_KEYS = ["analyze_brief", "generate_design", "evaluate_design", "edit_design", "transform_image"] as const;
@@ -29,6 +30,7 @@ const commonGenerationShape = {
 export const workflowToolParametersSchema = z.object({
   intent: z.enum(["edit", "feedback", "erase", "remove_background", "outpaint"]).default("edit"),
   outpaint: imageOutpaintSchema.optional(),
+  textEdits: imageTextEditsSchema.optional().describe("图片内文字替换；需使用inpaint并提供覆盖对应文字区域的实际蒙版，original/replacement按字面呈现"),
   feedbackRevision: z.number().int().nonnegative().optional(),
   commentIds: z.array(z.string().max(128)).max(100).optional(),
   ...commonGenerationShape,
@@ -39,6 +41,7 @@ export const workflowToolParametersSchema = z.object({
 const textParametersSchema = z.object({ prompt: promptSchema }).strict();
 const generateParametersSchema = z.object({ ...commonGenerationShape, count: commonGenerationShape.count.default(2), taskType: z.literal("t2i").default("t2i") }).strict();
 const editParametersSchema = workflowToolParametersSchema.extend({ taskType: z.enum(["i2i", "inpaint"]).default("i2i") }).superRefine((value, context) => {
+  if (value.textEdits && (value.taskType !== "inpaint" || value.intent !== "edit")) context.addIssue({ code: "custom", path: ["textEdits"], message: "文字修改必须使用局部重绘和对应蒙版" });
   if (value.intent === "outpaint" && !value.outpaint) context.addIssue({ code: "custom", path: ["outpaint"], message: "扩图需要目标画布" });
   if (value.intent === "erase" && value.taskType !== "inpaint") context.addIssue({ code: "custom", path: ["taskType"], message: "擦除需要蒙版" });
   if (value.taskType === "inpaint" && !value.mask) context.addIssue({ code: "custom", path: ["mask"], message: "局部重绘必须引用实际蒙版" });
@@ -64,7 +67,7 @@ const referenceSlot: WorkflowToolInputSlot = { port: "reference", min: 0, max: 1
 const constraintSlot: WorkflowToolInputSlot = { port: "constraint", min: 1, max: 1, assetTypes: ["constraint"], description: "本分支唯一的设计约束" };
 const generationDefaults = { negativePrompt: "", count: 1, width: 768, height: 1024, quality: "high", referenceInputs: [] };
 export const WORKFLOW_TOOL_CATALOG: readonly WorkflowToolContract[] = [
-  { key: "transform_image", name: "调整图片尺寸", version: WORKFLOW_TOOL_VERSION, description: "裁剪或缩放图片，保存新版本，不消耗生图额度", tags: ["image", "resize", "crop"], inputSlots: [{ port: "source", min: 1, max: 1, assetTypes: ["candidate"], description: "待调整的图片" }], parameterSchema: imageTransformSchema, defaults: { width: 1024, height: 1024 }, output: { type: "candidate", description: "调整后的图片" }, limits: ["输出最多 3200 万像素"] },
+  { key: "transform_image", name: "调整图片", version: WORKFLOW_TOOL_VERSION, description: "裁剪、旋转、镜像、缩放或调整图片色彩与明暗，保存新版本，不消耗生图额度。先按正向原图坐标裁剪，再顺时针旋转（负值为逆时针），沿旋转结果的水平/垂直轴镜像，缩放为 width × height，最后应用 adjustments；width/height 是最终输出尺寸。adjustments 的 brightness、contrast、saturation、warmth 均为 -100 至 100，0 保持原值；用于整张图片，不用于替换指定衣服或局部颜色", tags: ["image", "resize", "crop", "rotate", "flip", "color"], inputSlots: [{ port: "source", min: 1, max: 1, assetTypes: ["candidate"], description: "待调整的图片" }], parameterSchema: imageTransformSchema, defaults: { width: 1024, height: 1024 }, output: { type: "candidate", description: "调整后的图片" }, limits: ["输出最多 3200 万像素", "旋转角度 -180° 至 180°，旋转空白处透明", "色彩调整应用于整张图片，透明度保留"] },
   { key: "analyze_brief", name: "需求分析", version: WORKFLOW_TOOL_VERSION, description: "整理有证据的需求、保留项、改变项和未知项", tags: ["understand", "brief"], inputSlots: [{ port: "goal", min: 1, max: 1, assetTypes: ["brief", "reference_text"], description: "唯一设计目标，或通过 newObjective 创建新需求" }, referenceSlot], parameterSchema: textParametersSchema, defaults: {}, output: { type: "constraint", description: "有来源的结构化设计简报" }, limits: ["不生成图片，不预定整条工具链"] },
   { key: "generate_design", name: "方案生成", version: WORKFLOW_TOOL_VERSION, description: "按约束及明确参考创建服装候选", tags: ["create", "image", "t2i"], inputSlots: [constraintSlot, referenceSlot], parameterSchema: generateParametersSchema, defaults: { ...generationDefaults, count: 2, taskType: "t2i" }, output: { type: "candidate", description: "一至四个真实图片候选" }, limits: ["接受建议不生成；用户主动执行才创建任务", "参考角色和强度通过提示词引导，不保证模型精确控制"] },
   { key: "evaluate_design", name: "服装评估", version: WORKFLOW_TOOL_VERSION, description: "观察真实候选是否符合明确约束并解释问题", tags: ["inspect", "evaluate", "image"], inputSlots: [constraintSlot, { port: "candidate", min: 1, max: 4, assetTypes: ["candidate"], description: "明确比较的候选集合" }], parameterSchema: textParametersSchema, defaults: {}, output: { type: "evaluation", description: "逐项评价和未知项" }, limits: ["图片不能确认纤维成分、精确尺寸或生产性能", "跨约束分支比较必须明确指定本次约束"] },

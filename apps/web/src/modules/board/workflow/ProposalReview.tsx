@@ -4,11 +4,20 @@
  * Parameter editing belongs to node details; prose changes use the existing composer. */
 import type { WorkflowGraph, WorkflowProposal } from "./workflow-api";
 import { useLayoutEffect, useRef } from "react";
-import { getWorkflowToolContract } from "@fashion/shared";
-import { nodeImageUrl } from "./workflow-graph";
+import {
+  getWorkflowToolContract,
+  workflowProposalExecutionSchema,
+  type WorkflowResultImage,
+} from "@fashion/shared";
+import { resultImageNode } from "./assistant-result-data";
+import { AssistantExecutionStatus } from "./AssistantExecutionStatus";
+import { AssistantResultGallery } from "./AssistantResultGallery";
 import { Button } from "../../../components/ui";
-import { TaskFeedback } from "../../../components/TaskFeedback";
-import { motionEase, motionTime, observeMotionCancellation } from "../../../components/interactions/motion-policy";
+import {
+  motionEase,
+  motionTime,
+  observeMotionCancellation,
+} from "../../../components/interactions/motion-policy";
 import styles from "./workflow-canvas.module.css";
 
 export function ProposalReview({
@@ -22,6 +31,12 @@ export function ProposalReview({
   onAdjust,
   onOpenResult,
   onContinue,
+  projectId,
+  onRefresh = () => {},
+  onOpenImage,
+  onContinueImage,
+  onCompare,
+  onRevealResult,
 }: {
   readonly proposal: WorkflowProposal;
   readonly graph: WorkflowGraph;
@@ -33,6 +48,12 @@ export function ProposalReview({
   readonly onAdjust: () => void;
   readonly onOpenResult: (nodeId: string) => void;
   readonly onContinue: (nodeId: string) => void;
+  readonly projectId?: string;
+  readonly onRefresh?: () => void;
+  readonly onOpenImage?: (image: WorkflowResultImage) => void;
+  readonly onContinueImage?: (image: WorkflowResultImage) => void;
+  readonly onCompare?: (images: readonly WorkflowResultImage[]) => void;
+  readonly onRevealResult?: (() => void) | undefined;
 }) {
   const previousProposal = useRef({ id: proposal.id, status: proposal.status });
   const acceptanceReceipt = useRef<HTMLSpanElement>(null);
@@ -44,17 +65,28 @@ export function ProposalReview({
     receipt.hidden = true;
     // Only acknowledge a real transition observed here. Historical accepted
     // proposals and subsequent node polling must not replay submission success.
-    if (previous.id !== proposal.id || previous.status !== "pending" || proposal.status !== "accepted") return;
+    if (
+      previous.id !== proposal.id ||
+      previous.status !== "pending" ||
+      proposal.status !== "accepted"
+    )
+      return;
     receipt.hidden = false;
     const duration = motionTime("--motion-feedback-check", 350);
     const path = receipt.querySelector("path");
-    const animation = duration > 0 && !window.matchMedia?.("(forced-colors: active)").matches
-      ? path?.animate?.([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration, easing: motionEase() })
-      : undefined;
+    const animation =
+      duration > 0 && !window.matchMedia?.("(forced-colors: active)").matches
+        ? path?.animate?.([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], {
+            duration,
+            easing: motionEase(),
+          })
+        : undefined;
     const cancelMotion = () => animation?.cancel();
     const unsubscribe = observeMotionCancellation(cancelMotion);
     // This is only a receipt for acceptance, never a delay to starting work.
-    const timer = window.setTimeout(() => { receipt.hidden = true; }, 1000);
+    const timer = window.setTimeout(() => {
+      receipt.hidden = true;
+    }, 1000);
     return () => {
       window.clearTimeout(timer);
       unsubscribe();
@@ -81,12 +113,10 @@ export function ProposalReview({
   const imageTool = tool === "generate_design" || tool === "edit_design";
   const pending = proposal.status === "pending";
   const accepted = proposal.status === "accepted";
-  const raw = accepted
-    ? node?.payload.params
-    : (proposal.action?.parameters ??
-      updatedParams ??
-      proposedNode?.payload.params ??
-      node?.payload.params);
+  const raw =
+    proposal.action?.parameters ??
+    updatedParams ??
+    proposedNode?.payload.params;
   const defaults =
     tool === "generate_design" || tool === "edit_design"
       ? getWorkflowToolContract(tool).defaults
@@ -97,21 +127,14 @@ export function ProposalReview({
   };
   const prompt =
     typeof params.prompt === "string" ? params.prompt : proposal.content;
-  const running =
-    accepted && node && ["running", "pending"].includes(node.status);
-  const complete = accepted && node?.status === "completed";
-  const failed = accepted && node?.status === "failed";
-  const resumable =
-    accepted && node && ["ready", "failed"].includes(node.status);
-  const outputs = graph.nodes.filter(
-    (item) =>
-      item.kind === "asset" &&
-      graph.edges.some(
-        (edge) =>
-          edge.sourceNodeId === proposal.toolNodeId &&
-          edge.targetNodeId === item.id,
-      ),
+  const parsedExecution = workflowProposalExecutionSchema.safeParse(
+    proposal.execution,
   );
+  const execution =
+    accepted && parsedExecution.success ? parsedExecution.data : null;
+  const status = execution?.progress?.status;
+  const failed = status === "failed" || status === "moderation_failed";
+  const resumable = accepted && execution?.canExecute === true;
   const preserve = proposal.preserve ?? proposal.action?.preserve ?? [];
   const count = typeof params.count === "number" ? params.count : 1;
 
@@ -128,36 +151,66 @@ export function ProposalReview({
               ? "生成前确认"
               : "分析前确认"
             : imageTool
-              ? "生成结果"
-              : "分析结果"}
+              ? "生成记录"
+              : "分析记录"}
         </strong>
         <span>
-          <span ref={acceptanceReceipt} hidden aria-hidden="true" data-proposal-accepted>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: "-2px", marginRight: "4px" }}>
-              <path d="m5 12 4 4L19 6" pathLength="1" strokeDasharray="1" strokeDashoffset="0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <span
+            ref={acceptanceReceipt}
+            hidden
+            aria-hidden="true"
+            data-proposal-accepted
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              style={{ verticalAlign: "-2px", marginRight: "4px" }}
+            >
+              <path
+                d="m5 12 4 4L19 6"
+                pathLength="1"
+                strokeDasharray="1"
+                strokeDashoffset="0"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
-            已受理 {" "}
+            已受理{" "}
           </span>
-          <span role="status" className={styles.proposalState} key={`${submitting}:${proposal.status}:${node?.status}:${Boolean(error)}`}>
-          {submitting
-            ? "提交中"
-            : running
-              ? imageTool
-                ? "生成中"
-                : "分析中"
-              : complete
-                ? "已完成"
-                : failed
-                  ? "执行失败"
-                  : error
-                    ? "提交失败"
-                    : pending
-                      ? "待确认"
-                      : accepted
-                        ? "已保存，待执行"
-                        : proposal.status === "rejected"
-                          ? "未采用"
-                          : "已失效"}
+          <span
+            role="status"
+            className={styles.proposalState}
+            key={`${submitting}:${proposal.status}:${status}:${Boolean(error)}`}
+          >
+            {submitting
+              ? "提交中"
+              : error
+                ? "提交失败"
+                : pending
+                  ? "待确认"
+                  : accepted
+                    ? status
+                      ? {
+                          preparing: "准备执行",
+                          queued: "排队中",
+                          running: "处理中",
+                          processing: "正在确认结果",
+                          completed: "已完成",
+                          partial_failed: "部分未完成",
+                          failed: "执行失败",
+                          canceled: "已取消",
+                          moderation_failed: "内容检查未通过",
+                        }[status]
+                      : execution?.binding === "not_started"
+                        ? "已确认，待执行"
+                        : "历史执行未核实"
+                    : proposal.status === "rejected"
+                      ? "未采用"
+                      : "已失效"}
           </span>
         </span>
       </header>
@@ -179,13 +232,7 @@ export function ProposalReview({
           {proposal.referencedNodeIds.length ? (
             <p className={styles.proposalMeta}>
               参考：
-              {proposal.referencedNodeIds
-                .map(
-                  (id) =>
-                    graph.nodes.find((item) => item.id === id)?.title ??
-                    "已移除的素材",
-                )
-                .join("、")}
+              {proposal.referencedNodeIds.length} 项素材
             </p>
           ) : null}
           {imageTool ? (
@@ -200,11 +247,33 @@ export function ProposalReview({
             </p>
           ) : null}
         </>
+      ) : accepted ? (
+        <details className={styles.proposalMeta}>
+          <summary>查看已确认内容</summary>
+          <p>{prompt}</p>
+          <p>
+            {count} 项操作
+            {preserve.length ? `，保留：${preserve.join("、")}` : ""}
+          </p>
+        </details>
       ) : null}
-      {running ? (
-        <div><TaskFeedback taskId={proposal.toolNodeId} motionKey={`node:${proposal.toolNodeId}`} status={node?.status ?? "pending"} operation={imageTool ? "generate" : "analysis"} compact title={imageTool ? "生成方案" : "分析要求"} />
-          <p>{imageTool ? "完成后加入作品区。" : "可以继续补充想法。"}</p>
-        </div>
+      {execution?.binding === "changed" ? (
+        <p className={styles.proposalMeta}>
+          这条确认后的内容已有后续修改，历史结果保留。请发送新需求继续。
+        </p>
+      ) : accepted && (!execution || execution.binding === "unrecorded") ? (
+        <p className={styles.proposalMeta}>
+          这条旧确认缺少可核实的执行关联，可查看任务记录，或发送新需求继续。
+        </p>
+      ) : null}
+      {execution?.progress && projectId ? (
+        <AssistantExecutionStatus
+          key={execution.progress.executionId}
+          progress={execution.progress}
+          projectId={projectId}
+          onRefresh={onRefresh}
+          disabled={disabled}
+        />
       ) : null}
       {error ? (
         <p role="alert" className={styles.proposalError}>
@@ -215,42 +284,58 @@ export function ProposalReview({
         <p className={styles.proposalMeta}>{proposal.rejectionReason}</p>
       ) : null}
       {failed && !error ? <p role="alert">本次执行未完成，可以重试。</p> : null}
-      {accepted && outputs.length ? (
-        <div className={styles.proposalResults} aria-label="本次结果">
-          <p>已完成 {outputs.length} 项结果</p>
-          {outputs.map((result) => (
-            <div className={styles.proposalResult} key={result.id}>
-              <button
-                type="button"
-                aria-label={`查看大图：${result.title}`}
-                onClick={() => onOpenResult(result.id)}
-              >
-                <span>{result.title}</span>
-                <small>查看大图</small>
-              </button>
-              {nodeImageUrl(result) ? (
-                <button
-                  className={styles.actionSecondary}
-                  disabled={disabled}
-                  type="button"
-                  aria-label={`继续修改：${result.title}`}
-                  onClick={() => onContinue(result.id)}
-                >
-                  继续修改
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
+      {accepted && execution?.result?.images.length ? (
+        onRevealResult ? (
+          <button
+            type="button"
+            className={styles.actionSecondary}
+            onClick={onRevealResult}
+          >
+            查看本次结果
+          </button>
+        ) : (
+          <AssistantResultGallery
+            result={execution.result}
+            graph={graph}
+            disabled={disabled}
+            onOpen={(image) => {
+              if (onOpenImage) onOpenImage(image);
+              else {
+                const node = resultImageNode(graph, image);
+                if (node) onOpenResult(node.id);
+              }
+            }}
+            onContinue={(image) => {
+              if (onContinueImage) onContinueImage(image);
+              else {
+                const node = resultImageNode(graph, image);
+                if (node) onContinue(node.id);
+              }
+            }}
+            onCompare={(images) => onCompare?.(images)}
+          />
+        )
       ) : null}
       {pending || resumable ? (
         <div className={styles.suggestionActions}>
           {pending ? (
             <>
-              <button className={styles.actionSecondary} disabled={disabled} onClick={onAdjust} type="button">
+              <button
+                className={styles.actionSecondary}
+                disabled={disabled}
+                onClick={onAdjust}
+                type="button"
+              >
                 {imageTool ? "修改生成要求" : "修改分析要求"}
               </button>
-              <button className={styles.actionQuiet} disabled={disabled} onClick={onReject} type="button">不采用此方案</button>
+              <button
+                className={styles.actionQuiet}
+                disabled={disabled}
+                onClick={onReject}
+                type="button"
+              >
+                不采用此方案
+              </button>
             </>
           ) : null}
           <Button
@@ -258,7 +343,11 @@ export function ProposalReview({
             variant="primary"
             interaction="ripple"
             loading={submitting}
-            feedback={{ phase: submitting ? "pending" : error ? "error" : "idle", actionKey: proposal.id, revision: 0 }}
+            feedback={{
+              phase: submitting ? "pending" : error ? "error" : "idle",
+              actionKey: proposal.id,
+              revision: 0,
+            }}
             feedbackAction={proposal.id}
             disabled={disabled}
             onClick={onAccept}

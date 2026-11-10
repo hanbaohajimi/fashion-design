@@ -20,9 +20,8 @@ for (const width of [1738, 1440, 1280, 1200, 1199, 1024, 390]) {
     ).toBeVisible();
     await expect(page.getByLabel("展示包名称", { exact: true })).toBeVisible();
     if (width < 1200) {
-      const navigation = valueControl(page, "当前功能");
-      await expect(navigation).toBeVisible();
-      await chooseValue(navigation, "styles");
+      await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+      await page.getByRole("tab", { name: "款式档案", exact: true }).click();
       await expect(page).toHaveURL(/tab=styles/);
       // The responsive variant is intentionally scoped to this page.
       await page.goto(`/${PROJECT}/studio?tab=presentation`);
@@ -79,12 +78,15 @@ test("查看原图不改变选择，Escape 后恢复焦点", async ({ page }) =>
   await expect(page.getByText("已保存", { exact: true })).toBeVisible();
 });
 
-test("原生校验能从整理视图定位隐藏的逐图必填说明", async ({ page }) => {
+test("完成展示前定位未核对图片，修改视图会清除已有复核", async ({ page }) => {
   await page.goto(`/${PROJECT}/studio?tab=presentation`);
+  await page.getByRole("button", { name: "逐图核对", exact: true }).click();
+  await page.getByRole("checkbox", { name: /已人工核对图片 1/ }).check();
+  await page.getByRole("button", { name: "整理素材", exact: true }).click();
   await page.getByRole("button", { name: "选择图片 2", exact: true }).click();
-  await page.getByRole("button", { name: "保存修订", exact: true }).click();
+  await page.getByRole("button", { name: "核对并完成展示包", exact: true }).click();
   await expect(page.getByLabel("图片 2 说明", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("图片 2 说明", { exact: true })).toBeFocused();
+  await expect(page.getByText("交付前请逐张人工核对商品外观")).toBeVisible();
   await page.getByLabel("图片 2 说明", { exact: true }).fill("背面结构展示");
   await page.getByRole("checkbox", { name: /已人工核对图片 2/ }).check();
   await chooseValue(valueControl(page, "图片 2 视图"), "back");

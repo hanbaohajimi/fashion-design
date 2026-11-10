@@ -1,0 +1,128 @@
+.tray {
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.list {
+  max-height: min(168px, 26dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 2px;
+  border-bottom: var(--border-hairline) solid var(--color-border);
+}
+.preview {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 48px;
+  background: var(--color-surface);
+  font-size: 12px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.info {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+.info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+.info span {
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.info [role="alert"],
+.error {
+  color: var(--color-error);
+}
+.info progress {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--color-action);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 2px;
+  max-width: 116px;
+}
+.tray button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-ink);
+  background: transparent;
+  padding: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tray button:hover:enabled {
+  background: var(--color-surface);
+}
+.tray button:disabled {
+  color: var(--color-ink-disabled);
+  cursor: default;
+}
+.tray button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.error span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dropHint {
+  padding: 8px 12px;
+  border: var(--border-hairline) solid var(--color-action);
+  border-radius: 6px;
+  color: var(--color-action);
+  background: var(--color-paper);
+  margin-bottom: 8px;
+  font-size: 14px;
+  pointer-events: none;
+}
+@media (max-width: 767px) {
+  .tray button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .actions {
+    max-width: 88px;
+  }
+  .list {
+    max-height: min(150px, 24dvh);
+  }
+}

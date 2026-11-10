@@ -1,5 +1,7 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
-import { workflowReferenceSummarySchema } from "@fashion/shared";
+import { workflowReferenceSummarySchema, workflowExecutionResultSchema } from "@fashion/shared";
+import { readWorkflowMessageExecutions } from "./workflow-message-executions";
+import { buildWorkflowExecutionResults, workflowExecutionResultText } from "./workflow-execution-result";
 import { buildWorkflowReferenceSummary } from "./workflow-reference-summary";
 import { AgentMessageRole, AgentMessageStatus, Prisma, appendWorkflowOutbox, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
@@ -141,14 +143,23 @@ export class WorkflowAssistantService {
 
   async messages(userId: string, conversationId: string, input: { cursor?: string | undefined; limit: number }) {
     const conversation = await this.conversation(userId, conversationId);
-    const { capabilities } = await this.access.require(userId, conversation.projectId, "read");
+    const { capabilities, archived } = await this.access.require(userId, conversation.projectId, "read");
     if (capabilities.edit) await this.database.agentMessage.updateMany({ where: { conversationId, status: "PENDING", OR: [{ kind: null }, { kind: { not: "executing" } }], updatedAt: { lt: new Date(Date.now() - TURN_TIMEOUT_MS) } },
       data: { status: "FAILED", errorCode: "WORKFLOW_TURN_TIMEOUT", errorMessage: "本轮处理超时，可以重试", content: "本轮处理超时，请重试。" } });
     const rows = await this.database.agentMessage.findMany({ where: { conversationId }, include: { proposal: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: input.limit + 1,
       ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}) });
     const page = rows.slice(0, input.limit);
-    return { items: page.reverse().map(messageView), nextCursor: rows.length > input.limit ? page[0]?.id ?? null : null };
+    const missing = page.filter(row => row.origin === "execution_result" && row.executionId && !workflowExecutionResultSchema.safeParse(object(row.context).executionResult).success);
+    const executionIds = page.flatMap(row => row.executionId && (row.origin !== "execution_result" || missing.includes(row)) ? [row.executionId] : []);
+    const observation = await readWorkflowMessageExecutions(this.database, { projectId: conversation.projectId, conversationId, userId, canEdit: capabilities.edit && !archived }, executionIds, page.flatMap(row => row.proposal ? [row.proposal] : []));
+    return { items: page.reverse().map(row => {
+      const result = row.executionId ? observation.results.get(row.executionId) : undefined;
+      const progress = row.executionId ? observation.progress.get(row.executionId) : undefined;
+      const view = messageView(result && row.origin === "execution_result" ? { ...row, context: { ...object(row.context), executionResult: result } } : row);
+      const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { ...view.context, ...(progress && row.origin !== "execution_result" ? { executionProgress: progress } : {}) };
+      return { ...view, context, ...(view.proposal && row.proposal ? { proposal: { ...view.proposal, execution: observation.proposalExecutions.get(row.proposal.id) } } : {}) };
+    }), nextCursor: rows.length > input.limit ? page[0]?.id ?? null : null };
   }
 
   async reapExpiredTurns() {
@@ -257,11 +268,13 @@ export class WorkflowAssistantService {
     if (!event.executionId) return "completed";
     const execution = await this.database.workflowExecution.findUnique({ where: { id: event.executionId } });
     if (!execution?.conversationId) return "completed";
+    if (!workflowExecutionResultSchema.shape.status.safeParse(execution.status).success) return "deferred";
     const conversationId = execution.conversationId;
     const conversation = await this.database.agentConversation.findFirst({ where: { id: conversationId, projectId: execution.projectId, createdById: execution.userId,
       project: { deletedAt: null } } });
     if (!conversation) return "completed";
     try { await this.access.require(execution.userId, execution.projectId, "edit"); } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) return "superseded"; throw error; }
+    const result = (await buildWorkflowExecutionResults(this.database, execution.projectId, [execution])).get(execution.id);
     const lease = randomUUID();
     const reserved = await this.database.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM agent_conversations WHERE id = ${conversationId} FOR UPDATE`;
@@ -269,8 +282,8 @@ export class WorkflowAssistantService {
       const existing = await tx.agentTurn.findUnique({ where: { sourceEventId: eventId } });
       const factKey = "execution-receipt:" + execution.id;
       await tx.agentMessage.upsert({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: factKey } }, update: {}, create: { conversationId, role: "ASSISTANT", kind: "reply", origin: "execution_result", sourceEventId: eventId, executionId: execution.id,
-        clientRequestId: factKey, content: execution.status === "completed" ? "工具已完成，实际结果已保存到画布。正在结合结果整理后续建议。" : "本次工具执行已结束：" + execution.status + "。实际结果和失败原因已记录，未自动重试生成。",
-        context: json({ executionId: execution.id, fileAssetIds: [], shapeIds: [], sourceEventId: eventId }) } });
+        clientRequestId: factKey, content: workflowExecutionResultText(execution.status, result?.images.length ?? 0),
+        context: json({ executionId: execution.id, fileAssetIds: [], shapeIds: [], sourceEventId: eventId, ...(result ? { executionResult: result } : {}) }) } });
       if (existing && ["completed", "superseded"].includes(existing.status)) return null;
       if (execution.intentEpoch !== null && execution.intentEpoch !== live.intentEpoch) {
         await tx.agentTurn.upsert({ where: { sourceEventId: eventId }, create: { projectId: execution.projectId, conversationId, userId: execution.userId,
@@ -385,7 +398,7 @@ export class WorkflowAssistantService {
         context: json({ version: "workflow-message-context/2", graphRevision: built.graph.revision, contextRevision, planRevision,
           ...(direct ? { directExecution: { decision, proposalId: proposal?.id, intentEpoch: turn.epoch, inputVersions, lease: turn.lease } } : {}),
           referencedNodeIds: input.referencedNodeIds, focusNodeIds: built.context.focusNodeIds, coverage: result.coverage,
-          referenceSummary: buildWorkflowReferenceSummary(built.graph.nodes, input.referencedNodeIds, built.context.focusNodeIds, visual.coverage.attachedNodeIds),
+          referenceSummary: buildWorkflowReferenceSummary(built.graph.nodes, input.referencedNodeIds, built.context.focusNodeIds, visual.coverage.providedNodeIds ?? visual.coverage.attachedNodeIds),
           visualCoverage: visual.coverage, imageBindings: visual.imageBindings, understanding: decision.understanding, fileAssetIds: [], shapeIds: [] }) };
       const assistantMessage = turn.assistantMessage
         ? await tx.agentMessage.update({ where: { id: turn.assistantMessage.id, status: "PENDING" }, data, include: { proposal: true } })
@@ -508,6 +521,8 @@ function messageView(row: MessageRow) {
   const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { fileAssetIds: [], shapeIds: [], ...Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]])) };
   const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
   if (raw.executionReceipt) context.executionReceipt = raw.executionReceipt;
+  const result = workflowExecutionResultSchema.safeParse(raw.executionResult);
+  if (row.origin === "execution_result" && result.success && result.data.executionId === row.executionId) context.executionResult = result.data;
   if (raw.referenceSnapshots) context.referenceSnapshots = raw.referenceSnapshots;
   if (summary.success) context.referenceSummary = summary.data;
   const evidence = object(row.proposal?.evidence);

@@ -279,6 +279,18 @@ export class AgentConversationsService {
     };
   }
 
+  async get(userId: string, projectId: string, conversationId: string) {
+    await this.assertProjectOwnership(userId, projectId);
+    const conversation = await this.database.agentConversation.findFirst({
+      where: { id: conversationId, projectId, createdById: userId, archivedAt: null },
+    });
+    if (!conversation) throw new NotFoundException({
+      code: "AGENT_CONVERSATION_NOT_FOUND",
+      message: "这段对话已不可用，请从历史对话重新选择。",
+    });
+    return toConversation(conversation);
+  }
+
   async create(
     userId: string,
     projectId: string,

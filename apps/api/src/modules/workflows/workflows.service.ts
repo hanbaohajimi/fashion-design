@@ -110,10 +110,11 @@ export class WorkflowsService {
     expectedContextRevision?: number,
     proposalId?: string,
     transaction?: WorkflowTransaction,
+    actingUserId?: string,
   ): Promise<WorkflowGraphResult> {
-    const project = await this.assertProject(projectId, undefined, transaction);
+    const project = await this.assertProject(projectId, actingUserId, transaction, actingUserId ? "edit" : "read");
     if (project.archived) throw archivedProject();
-    return this.applyPatch(projectId, project.ownerId, input, true, expectedContextRevision, proposalId, transaction);
+    return this.applyPatch(projectId, actingUserId ?? project.ownerId, input, true, expectedContextRevision, proposalId, transaction);
   }
 
   private async applyPatch(
@@ -243,6 +244,13 @@ export class WorkflowsService {
           );
         } else {
           await this.applyLayout(transaction, projectId, input);
+        }
+        if (proposalId && acceptanceCandidate) {
+          const evidence = jsonObject(acceptanceCandidate.evidence);
+          if (typeof evidence.toolNodeId === "string") {
+            const acceptedVersion = await transaction.workflowNodeVersion.findFirst({ where: { projectId, nodeId: evidence.toolNodeId, kind: "tool" }, orderBy: { version: "desc" }, select: { id: true } });
+            if (acceptedVersion) await transaction.workflowProposal.update({ where: { id: proposalId }, data: { evidence: { ...evidence, acceptedNodeVersionId: acceptedVersion.id } as Prisma.InputJsonObject } });
+          }
         }
 
         await transaction.workflowMutation.create({

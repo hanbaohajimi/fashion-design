@@ -1,9 +1,10 @@
 import type { Editor, TLShape, TLShapeId } from "tldraw";
 import type { WorkflowGraph } from "./workflow-api";
+import { visibleCanvasBounds } from "./canvas-visibility";
 
 /** Fit the working set with room for controls, without enlarging small assets. */
 export function fitCanvasContents(editor: Editor, options?: Parameters<Editor["zoomToBounds"]>[1]) {
-  const bounds = editor.getCurrentPageBounds();
+  const bounds = visibleCanvasBounds(editor);
   if (bounds) editor.zoomToBounds(bounds, { ...options, targetZoom: 1, inset: Math.min(240, editor.getViewportScreenBounds().w * 0.3) });
 }
 
@@ -15,7 +16,7 @@ export function selectedMaterialShapes(editor: Editor): TLShape[] {
     if (visited.has(id)) return;
     visited.add(id);
     const shape = editor.getShape(id);
-    if (!shape) return;
+    if (!shape || editor.isShapeHidden(shape)) return;
     if (["group", "frame", "fashion-frame"].includes(shape.type)) {
       editor.getSortedChildIdsForParent(id).forEach(visit);
     } else result.set(id, shape);

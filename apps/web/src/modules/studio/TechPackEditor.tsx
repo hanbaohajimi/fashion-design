@@ -2,13 +2,14 @@
 
 import { AssetSelect } from "./studio-ui";
 import { GridDetails } from "../../components/GridDetails";
+import { useLinkedDocumentRevision } from "./use-linked-document-revision";
 
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为同一份技术草稿与宽表格；章节目录和修订历史为次级。保存为主操作，不复制章节草稿。 */
 
 import { BoundStyleContext } from "./studio-object-context";
-import { useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import {
   createTechPackDraft,
   serializeTechPackDraft,
@@ -45,21 +46,30 @@ import { TechPackExportButton } from "./TechPackExportButton";
 import styles from "./studio.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
+import { mergeSavedRecords } from "./studio-records";
 
 export function TechPackEditor(
   props: StudioPanelProps & {
     readonly data: StudioSummary;
     readonly initialStyleRevisionId?: string | undefined;
+    readonly initialDocumentId?: string | undefined;
+    readonly initialDocumentRevisionId?: string | undefined;
+    readonly onOpenStyle?: (revisionId: string) => void;
   },
 ) {
   const feedback = useSubmitFeedback();
+  const [saving, setSaving] = useState(false);
+  const [savedDocuments, setSavedDocuments] = useState<StudioDocumentView[]>([]);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const documents = mergeSavedRecords(props.data.techPacks, savedDocuments);
   const beforeChange = async () => {
+    if (saving) return false;
     const allowed = await props.beforeChange();
     if (allowed) feedback.reset();
     return allowed;
   };
   const [id, setId] = useState<string | null>(
-    (props.initialStyleRevisionId
+    props.initialDocumentId ?? (props.initialStyleRevisionId
       ? props.data.techPacks.find(
           (item) =>
             (item.currentRevision.payload as StudioTechPack).styleRevisionId ===
@@ -68,18 +78,25 @@ export function TechPackEditor(
       : props.data.techPacks[0]?.id) ?? null,
   );
   const [draftVersion, setDraftVersion] = useState(0);
-  const existing = props.data.techPacks.find((item) => item.id === id);
+  const existing = documents.find((item) => item.id === id);
+  const refresh = () => { void props.onSaved().then(result => setRefreshFailed(result === false), () => setRefreshFailed(true)); };
+  const acceptSaved = (document: StudioDocumentView) => {
+    setSavedDocuments(current => mergeSavedRecords(current, [document]));
+    props.onDocumentSaved?.(document);
+    setId(document.id);
+    refresh();
+  };
   return (
     <div className={styles.section}>
       <StudioPageHeader
         objectSwitcher={
-          props.data.techPacks.length > 0 ? (
+          documents.length > 0 ? (
             <ObjectSwitcher
               label="切换技术包"
               current={existing?.currentRevision.payload.name ?? "新建资料"}
             >
               <aside className={styles.rail}>
-                {props.data.techPacks.map((item) => (
+                {documents.map((item) => (
                   <Button
                     key={item.id}
                     aria-pressed={id === item.id}
@@ -118,7 +135,7 @@ export function TechPackEditor(
         }
         actions={
           <Button
-            disabled={!props.canEdit}
+            disabled={!props.canEdit || saving}
             onClick={() =>
               void (async () => {
                 if (await beforeChange()) {
@@ -132,8 +149,9 @@ export function TechPackEditor(
           </Button>
         }
       />
+      {refreshFailed ? <Notice tone="warning">技术包已经保存，资料列表暂未刷新。当前修订仍可使用。<Button onClick={refresh}>刷新资料</Button></Notice> : null}
       <div className={styles.split}>
-        <TechPackForm
+        {id && !existing ? <Notice tone="warning">这份技术包不存在或已无法访问。<Button onClick={refresh}>重新载入资料</Button></Notice> : <TechPackForm
           key={
             (existing?.id ?? "new") +
             ":" +
@@ -142,11 +160,14 @@ export function TechPackEditor(
             draftVersion
           }
           {...props}
+          initialDocumentRevisionId={existing?.id === props.initialDocumentId ? props.initialDocumentRevisionId : undefined}
+          data={{ ...props.data, techPacks: documents }}
           feedback={feedback}
           beforeChange={beforeChange}
           existing={existing}
-          onCreated={setId}
-        />
+          onCommitted={acceptSaved}
+          onSaving={setSaving}
+        />}
       </div>
     </div>
   );
@@ -159,21 +180,27 @@ function TechPackForm({
   canEdit,
   onDirty,
   onSaved,
+  onDocumentSaved,
   beforeChange,
   feedback,
-  onCreated,
+  onCommitted,
+  onSaving,
   initialStyleRevisionId,
+  initialDocumentRevisionId,
+  onOpenStyle,
 }: StudioPanelProps & {
   readonly data: StudioSummary;
   readonly existing: StudioDocumentView | undefined;
   readonly initialStyleRevisionId?: string | undefined;
-  readonly onCreated: (id: string) => void;
+  readonly initialDocumentRevisionId?: string | undefined;
+  readonly onOpenStyle?: (revisionId: string) => void;
+  readonly onCommitted: (document: StudioDocumentView) => void;
+  readonly onSaving: (saving: boolean) => void;
 }) {
-  const firstRevision =
-    data.styles
-      .flatMap((style) => [style.currentRevision, ...style.revisions])
-      .find((revision) => revision.id === initialStyleRevisionId) ??
-    data.styles[0]?.currentRevision;
+  const linkedRevision = useLinkedDocumentRevision(initialDocumentRevisionId, existing?.revisions.map(revision => revision.id) ?? []);
+  const firstRevision = initialStyleRevisionId
+    ? data.styles.flatMap((style) => [style.currentRevision, ...style.revisions]).find((revision) => revision.id === initialStyleRevisionId)
+    : data.styles[0]?.currentRevision;
   const chapterId = useId();
   const [chapter, setChapter] = useState("basics");
   const initial: StudioTechPack = existing
@@ -192,6 +219,7 @@ function TechPackForm({
       };
   const [initialDraft] = useState(() => createTechPackDraft(initial));
   const form = useStudioForm(initialDraft, onDirty, { feedback, draftKey: existing?.id ?? "new" });
+  useLayoutEffect(() => { onSaving(form.busy); return () => onSaving(false); }, [form.busy, onSaving]);
   const formElement = useRef<HTMLFormElement>(null);
   const { draft, setDraft } = form;
   const [viewsChanged, setViewsChanged] = useState(false);
@@ -314,18 +342,22 @@ function TechPackForm({
       showValidationError(error);
       return;
     }
-    let id = "";
+    let savedDocument: StudioDocumentView | undefined;
     if (
-      await form.submit(async (key) => {
-        const result = await saveStudioDocument(
+      await form.submit(async (key, recovery) => {
+        savedDocument = await saveStudioDocument(
           projectId,
           { type: "TECH_PACK", payload },
           key + (publish ? "-publish" : "-draft"),
           existing,
+          recovery,
         );
-        id = result.id;
       }, publish ? "publish" : "save")
     ) {
+      if (!form.isMounted()) {
+        if (savedDocument) onDocumentSaved?.(savedDocument);
+        return;
+      }
       const normalized = createTechPackDraft(payload);
       form.reset({
         ...normalized,
@@ -338,8 +370,7 @@ function TechPackForm({
           uiId: draft.pom[index]?.uiId ?? row.uiId,
         })),
       });
-      await onSaved();
-      onCreated(id);
+      if (savedDocument) onCommitted(savedDocument);
     }
   };
   const showValidationError = (error: unknown) => {
@@ -400,10 +431,13 @@ function TechPackForm({
           </Notice>
         </div>
       ) : null}
+      {linkedRevision.missing ? <Notice tone="warning">所选导出文件的来源修订已不可用，当前显示的是这份技术包的最新修订。</Notice> : null}
       {viewsChanged ? (
         <Notice>关联视图已更换。相关锚点已标为待复核，请逐一重新定位。</Notice>
       ) : null}
-      <BoundStyleContext data={data} revisionId={draft.styleRevisionId} />
+      <BoundStyleContext data={data} revisionId={draft.styleRevisionId}>
+        {onOpenStyle && draft.styleRevisionId ? <Button disabled={form.busy} onClick={() => onOpenStyle(draft.styleRevisionId)}>查看对应款式修订</Button> : null}
+      </BoundStyleContext>
       <StudioEditSection
         persistent
         title="编辑技术包资料"
@@ -978,10 +1012,11 @@ function TechPackForm({
         ) : null}
       </SaveBar>
       {existing ? (
-        <GridDetails className={styles.record}>
+        <GridDetails className={styles.record} open={linkedRevision.available}>
           <summary>查看和导出历史修订</summary>
           {existing.revisions.map((revision) => (
-            <article className={styles.record} key={revision.id}>
+            <article className={styles.record} key={revision.id} ref={revision.id === initialDocumentRevisionId ? linkedRevision.target : undefined} tabIndex={-1} data-linked-document-revision={revision.id === initialDocumentRevisionId ? revision.id : undefined}>
+              {revision.id === initialDocumentRevisionId ? <p>所选导出文件的来源修订</p> : null}
               <div className={styles.recordHeader}>
                 <strong>
                   r{revision.revision} {revision.payload.name}
@@ -1003,6 +1038,7 @@ function TechPackForm({
               >
                 打开此修订的打印版
               </a>
+              {revision.id === initialDocumentRevisionId ? <TechPackExportButton projectId={projectId} revisionId={revision.id} /> : null}
               {canEdit ? (
                 <Button
                   size="small"

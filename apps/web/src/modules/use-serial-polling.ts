@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** One request per lane; hidden pages pause, failures back off, and old responses are aborted. */
 export function useSerialPolling(key: string, enabled: boolean, intervalMs: number, task: (signal: AbortSignal) => Promise<void>) {
@@ -45,5 +45,6 @@ export function useSerialPolling(key: string, enabled: boolean, intervalMs: numb
     schedule(0);
     return () => { disposed = true; if (timer) clearTimeout(timer); controller?.abort(); document.removeEventListener("visibilitychange", visibility); };
   }, [key, enabled, intervalMs, retry]);
-  return { ...state, retry: () => setRetry((value) => value + 1) };
+  const retryNow = useCallback(() => setRetry(value => value + 1), []);
+  return { ...state, retry: retryNow };
 }

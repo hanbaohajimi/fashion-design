@@ -16,7 +16,7 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   readonly describedBy?: string | undefined;
   readonly busy?: boolean;
   readonly className?: string | undefined;
-  readonly variant?: "dialog" | "sheet" | "guide";
+  readonly variant?: "dialog" | "sheet" | "guide" | "navigation";
 }) {
   const title = useId();
   const ref = useRef<HTMLDialogElement>(null);
@@ -46,10 +46,10 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
     if (focus instanceof HTMLElement) { if (!focus.hasAttribute("tabindex") && focus === fallback) focus.tabIndex = -1; focus.focus({ preventScroll: variant === "guide" }); }
   };
   const presence = useAnimatedPresence<HTMLDialogElement>(open, ref, {
-    enter: { opacity: 0, transform: variant === "guide" ? "none" : variant === "sheet" ? "translateY(100%)" : "translateY(8px) scale(.98)" },
-    enterToken: variant === "guide" ? "--motion-guide-enter" : variant === "sheet" ? "--motion-sheet-enter" : "--motion-dialog-enter",
-    exitToken: variant === "guide" ? "--motion-guide-exit" : variant === "sheet" ? "--motion-sheet-exit" : "--motion-dialog-exit",
-    enterMs: variant === "guide" ? 150 : variant === "sheet" ? 400 : 350, exitMs: variant === "guide" ? 120 : variant === "sheet" ? 300 : 250,
+    enter: { opacity: 0, transform: variant === "guide" ? "none" : variant === "navigation" ? "translateX(-100%)" : variant === "sheet" ? "translateY(100%)" : "translateY(8px) scale(.98)" },
+    enterToken: variant === "guide" ? "--motion-guide-enter" : variant === "navigation" ? "--motion-navigation-enter" : variant === "sheet" ? "--motion-sheet-enter" : "--motion-dialog-enter",
+    exitToken: variant === "guide" ? "--motion-guide-exit" : variant === "navigation" ? "--motion-navigation-exit" : variant === "sheet" ? "--motion-sheet-exit" : "--motion-dialog-exit",
+    enterMs: variant === "guide" ? 150 : variant === "navigation" ? 180 : variant === "sheet" ? 400 : 350, exitMs: variant === "guide" || variant === "navigation" ? 120 : variant === "sheet" ? 300 : 250,
     onOpening() {
       const dialog = ref.current;
       if (!dialog) return;
@@ -163,6 +163,10 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
     }}
     onPointerCancel={event => { if (gesture.current?.id === event.pointerId) resetDrag(); }}
     onLostPointerCapture={event => { if (gesture.current?.id === event.pointerId) resetDrag(); }}
+    onKeyDown={event => {
+      // Portals retain React ancestry. A nested dialog owns Escape while it exits.
+      if (event.key === "Escape") event.stopPropagation();
+    }}
     onKeyDownCapture={event => {
       if (variant === "guide") event.stopPropagation();
       if (event.key !== "Tab") return;

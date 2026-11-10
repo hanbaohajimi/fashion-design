@@ -1,0 +1,37 @@
+.panel {
+  position: absolute;
+  left: 16px;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  width: 280px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 152px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 12px;
+}
+.header { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 0 12px; }
+.header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.panel button { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; padding: 6px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.header button { font-size: 20px; }
+.panel button:hover { background: var(--color-surface); }
+.panel button:focus-visible, .map:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+.map { display: block; flex: 1 1 auto; min-height: 72px; height: min(160px, 24dvh); width: calc(100% - 16px); margin: 4px 8px; border-radius: 4px; cursor: grab; touch-action: none; user-select: none; }
+.map:active { cursor: grabbing; }
+.footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0 8px; padding: 0 6px 4px 12px; }
+.footer > span { font-size: 12px; color: var(--color-ink-secondary); }
+.footer > div { display: flex; align-items: center; margin-inline-start: auto; }
+.footer output { min-width: 42px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fallback { margin: 12px; font-size: 14px; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 767px) {
+  .panel { left: 8px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 16px); width: 300px; }
+  .panel button { min-width: 44px; min-height: 44px; }
+}
+@media (max-height: 480px) {
+  .panel { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); max-height: calc(100% - 136px); }
+  .map { height: 88px; }
+}

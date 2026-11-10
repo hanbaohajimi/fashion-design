@@ -4,6 +4,7 @@ import {
   type RecordProps,
   T,
   useEditor,
+  useSvgExportContext,
   useValue,
 } from "tldraw";
 
@@ -21,6 +22,7 @@ import {
 import { deriveShapeSeed } from "./fabric-silhouette";
 import { generateEdgePath } from "./edge-path";
 import styles from "./shapes.module.css";
+import { preparedCanvasImage } from "../workflow/canvas-export-images";
 
 export class FabricShapeUtil extends BaseBoxShapeUtil<FabricShape> {
   static override type = FABRIC_SHAPE_TYPE;
@@ -78,6 +80,7 @@ export class FabricShapeUtil extends BaseBoxShapeUtil<FabricShape> {
 
 function FabricShapeContent({ shape }: { readonly shape: FabricShape }) {
   const editor = useEditor();
+  const exporting = useSvgExportContext();
   const role = normalizeBoardRole(shape.props.role);
 
   // FNV-1a seed: stable across renders, reloads and collaborators.
@@ -118,7 +121,7 @@ function FabricShapeContent({ shape }: { readonly shape: FabricShape }) {
         <img
           alt={shape.props.fabricTags.join("、")}
           draggable={false}
-          src={shape.props.thumbnailUrl}
+          src={exporting ? preparedCanvasImage(editor, shape.props.thumbnailUrl) : shape.props.thumbnailUrl}
           className={styles.fabricSwatchImage}
         />
       ) : (

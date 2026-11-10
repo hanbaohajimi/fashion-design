@@ -29,4 +29,13 @@ describe("工作区布局模式", () => {
     expect(overlay.sidebarOpen).toBe(true);
     expect(changeWorkspaceMode(overlay, "mobile").mobileView).toBe("assistant");
   });
+  it("手机收起聊天后切回桌面不会恢复旧的展开状态", () => {
+    const current: WorkspaceLayout = { mode: "mobile", mobileView: "canvas", sidebarOpen: true };
+    expect(changeWorkspaceMode(current, "docked").sidebarOpen).toBe(false);
+    expect(changeWorkspaceMode(current, "overlay").sidebarOpen).toBe(false);
+  });
+  it("桌面收起聊天后转为手机保留画布视图", () => {
+    const current: WorkspaceLayout = { mode: "docked", mobileView: "assistant", sidebarOpen: false };
+    expect(changeWorkspaceMode(current, "mobile").mobileView).toBe("canvas");
+  });
 });

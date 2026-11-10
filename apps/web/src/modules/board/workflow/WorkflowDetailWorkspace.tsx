@@ -138,6 +138,7 @@ export function WorkflowDetailWorkspace({
       onKeyDown={(event) => {
         if (
           event.key !== "Escape" ||
+          event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 ||
           event.defaultPrevented ||
           document.querySelector("dialog[open]")
         )

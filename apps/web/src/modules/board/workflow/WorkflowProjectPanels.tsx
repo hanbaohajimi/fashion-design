@@ -21,11 +21,13 @@ export function WorkflowProjectPanels({
   onCollection,
   collectionsOpen,
   onCollectionsOpenChange,
+  hideTrigger = false,
 }: {
   projectId: string;
   onCollection: (id: string) => void;
   collectionsOpen?: boolean;
   onCollectionsOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const [localPanel, setLocalPanel] = useState<"collections" | null>(null);
   const panel = collectionsOpen === undefined ? localPanel : collectionsOpen ? "collections" : null;
@@ -73,7 +75,7 @@ export function WorkflowProjectPanels({
   };
   return (
     <>
-      <Button onClick={() => setPanel("collections")}>系列</Button>
+      {!hideTrigger ? <Button onClick={() => setPanel("collections")}>系列</Button> : null}
       {panel ? (
         <Dialog
           label="系列工作台"

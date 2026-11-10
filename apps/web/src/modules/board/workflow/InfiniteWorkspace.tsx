@@ -1,4 +1,5 @@
 "use client";
+import { CanvasSaveStatus } from "./CanvasSaveStatus";
 import {
   useCallback,
   useEffect,
@@ -58,6 +59,7 @@ import {
 } from "./workflow-api";
 import { nodeImageUrl } from "./workflow-graph";
 import { CanvasTools, type CanvasToolActions } from "./CanvasTools";
+import { resolveReferenceInstances, type CanvasReferenceSelection, type ReferenceInstances } from "./discussion-references";
 import {
   centerCameraForViewport,
   fitCanvasContents,
@@ -66,6 +68,8 @@ import {
   selectedMaterialShapes,
 } from "./canvas-placements";
 import { useCanvasCommand } from "./use-canvas-command";
+import { canvasShapeVisibility, locateCanvasMaterial, protectHiddenCanvasSelection } from "./canvas-visibility";
+import { initialCanvasImageSize } from "./canvas-image-sizing";
 import styles from "./infinite-workspace.module.css";
 export { selectedMaterialShapes } from "./canvas-placements";
 type CanvasMaterialResult = Awaited<
@@ -73,13 +77,17 @@ type CanvasMaterialResult = Awaited<
 >;
 
 export interface InfiniteWorkspaceHandle {
+  editor: Editor;
   flush: () => Promise<void>;
   flushLayout: () => Promise<void>;
   hasUnsaved: () => boolean;
   locate: (nodeId: string) => void;
   removePlacement: (nodeId: string) => void;
   refresh: () => Promise<void>;
-  resolveReferences: (ids: readonly string[]) => string[];
+  applyResult: (data: CanvasDocumentView, graph: WorkflowGraph) => void;
+  resolveReferences: (ids: readonly string[], instances: ReferenceInstances) => CanvasReferenceSelection;
+  captureReferences: () => Promise<CanvasReferenceSelection>;
+  selectionInstances: () => ReferenceInstances;
 }
 interface Props {
   projectId: string;
@@ -93,7 +101,6 @@ interface Props {
   onAddMaterial: () => void;
   toolActions: CanvasToolActions;
   onError: (error: string | null) => void;
-  onSaveStatus: (status: string) => void;
 }
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -131,6 +138,7 @@ export function InfiniteWorkspace(props: Props) {
           shapeUtils={[...boardShapeUtils]}
           tools={[MountTool] as unknown as TLStateNodeConstructor[]}
           hideUi
+          getShapeVisibility={canvasShapeVisibility}
           locale="zh-cn"
           options={{ createTextOnCanvasDoubleClick: false }}
           onMount={(editor) => {
@@ -152,8 +160,8 @@ function projection(node: WorkflowNode) {
     return {
       type: "fashion-image" as const,
       props: {
-        w: 320,
-        h: 380,
+        ...initialCanvasImageSize(payload),
+        imageSource: url,
         role: node.type === "candidate" ? "garment_ref" : "style_ref",
         title: node.title,
         url,
@@ -264,16 +272,15 @@ function WorkspaceDocument(props: Props) {
   }, [props]);
   const { active } = props;
   const document = useRef<CanvasDocumentView | null>(null);
+  const lastProjection = useRef<string | null>(null);
   const bindings = useRef(new Map<string, string>());
   const pendingLocation = useRef<string | null>(null);
-  const referenceInstances = useRef(new Map<string, string[]>());
   const materialBaselines = useRef(new Map<string, string>());
   const pendingMaterials = useRef(
     new Map<string, { signature: string; command: CanvasCommand }>(),
   );
   const captureTargets = useRef(new Set<string>());
   const layoutSelections = useRef(new Set<TLShapeId>());
-  const selectionWork = useRef<Promise<void>>(Promise.resolve());
   const queue = useRef(Promise.resolve());
   const savingPacket = useRef<CanvasSave | null>(null);
   const sequence = useRef(0);
@@ -295,11 +302,11 @@ function WorkspaceDocument(props: Props) {
     materialCommandRef.current = materialCommand;
   }, [materialCommand]);
   const [status, setStatus] = useState("正在载入白板…");
-  useEffect(() => live.current.onSaveStatus(status), [status]);
   const [draftValue, setDraftValue] = useState<Record<string, unknown>>({});
   const [baseline, setBaseline] = useState("{}");
   const restore = useCallback(
     (snapshot: Record<string, unknown>) => {
+      lastProjection.current = null;
       loadSnapshot(editor.store, snapshot as unknown as TLStoreSnapshot);
       for (const shape of editor.getCurrentPageShapes())
         if (typeof shape.meta.canvasNodeId === "string")
@@ -323,6 +330,15 @@ function WorkspaceDocument(props: Props) {
 
   const project = useCallback(
     (data: CanvasDocumentView, graph: WorkflowGraph, load = false) => {
+      const signature = JSON.stringify({ canvas: data, materials: graph.nodes.filter(node => node.kind === "asset") });
+      // Task polling still reads document permissions, but unchanged materials do not
+      // need to run another update across every shape in the editor store.
+      if (!load && !pendingLocation.current && lastProjection.current === signature) {
+        document.current = data;
+        setCanEdit(data.canEdit);
+        editor.updateInstanceState({ isReadonly: !data.canEdit || !live.current.active });
+        return;
+      }
       const remoteChanged =
         document.current &&
         JSON.stringify(data.snapshot.document ?? data.snapshot.store) !==
@@ -365,7 +381,8 @@ function WorkspaceDocument(props: Props) {
       editor.updateInstanceState({ isReadonly: false });
       let projected = false;
       try {
-        editor.store.mergeRemoteChanges(() => {
+        // Layout locks protect user gestures, not authoritative material/version updates.
+        editor.store.mergeRemoteChanges(() => editor.run(() => {
           for (const binding of data.bindings) {
             if (binding.removed) continue;
             const node = graph.nodes.find((item) => item.id === binding.nodeId);
@@ -401,6 +418,9 @@ function WorkspaceDocument(props: Props) {
                   type: material.type,
                   props: {
                     ...material.props,
+                    ...(existing.type === "fashion-image" && material.type === "fashion-image" &&
+                      existing.props.imageSource === material.props.url && existing.props.imageWidth && existing.props.imageHeight
+                      ? { imageWidth: existing.props.imageWidth, imageHeight: existing.props.imageHeight } : {}),
                     w: object(existing.props).w,
                     h: object(existing.props).h,
                   },
@@ -447,6 +467,7 @@ function WorkspaceDocument(props: Props) {
                   x: existing.x,
                   y: existing.y,
                   rotation: existing.rotation,
+                  isLocked: existing.isLocked,
                   parentId: existing.parentId,
                   index: existing.index,
                   props: {
@@ -497,7 +518,7 @@ function WorkspaceDocument(props: Props) {
                 ),
               );
           }
-        });
+        }, { ignoreShapeLock: true, history: "ignore" }));
         projected = true;
       } finally {
         editor.updateInstanceState({ isReadonly: !projected || !data.canEdit || !live.current.active });
@@ -505,14 +526,14 @@ function WorkspaceDocument(props: Props) {
       if (pendingLocation.current) {
         const placed = editor
           .getCurrentPageShapes()
-          .find(
+          .filter(
             (shape) =>
               bindings.current.get(shape.id) === pendingLocation.current,
           );
-        if (placed) {
+        if (placed.length) {
+          const nodeId = pendingLocation.current;
           pendingLocation.current = null;
-          editor.select(placed.id);
-          editor.zoomToSelection();
+          if (!locateCanvasMaterial(editor, placed)) live.current.onOpen(nodeId);
         }
       }
       if (load) {
@@ -520,6 +541,7 @@ function WorkspaceDocument(props: Props) {
         setBaseline(JSON.stringify(snapshot));
         setDraftValue(snapshot);
       }
+      lastProjection.current = signature;
     },
     [editor],
   );
@@ -546,7 +568,7 @@ function WorkspaceDocument(props: Props) {
             captureTargets.current.delete(shapeId);
             const shape = editor.getShape(shapeId);
             if (shape)
-              editor.store.mergeRemoteChanges(() =>
+              editor.store.mergeRemoteChanges(() => editor.run(() =>
                 editor.updateShape({
                   id: shape.id,
                   type: shape.type,
@@ -563,7 +585,7 @@ function WorkspaceDocument(props: Props) {
                         }
                       : {}),
                   },
-                }),
+                }), { ignoreShapeLock: true, history: "ignore" }),
               );
             // A recovered receipt describes its original commit. It must not
             // rewind a newer document or graph already received from the server.
@@ -797,7 +819,15 @@ function WorkspaceDocument(props: Props) {
               persisted.current = capturedSequence;
               await acknowledge();
             }
-            setBaseline(JSON.stringify(document.current.snapshot));
+            // A selection-triggered flush can finish before the 700 ms draft capture.
+            // Pair the acknowledged baseline with the actual current editor snapshot,
+            // otherwise the old React draft becomes a "new" dirty draft and restores
+            // obsolete positions/order on reload. Keep edits made during the request.
+            const acceptedBaseline = JSON.stringify(document.current.snapshot);
+            const currentSnapshot = object(getSnapshot(editor.store));
+            setDraftValue(currentSnapshot);
+            setBaseline(acceptedBaseline);
+            await draftRef.current.checkpoint(currentSnapshot, acceptedBaseline);
             saveAgain =
               JSON.stringify(packet.snapshot) !== JSON.stringify(snapshot);
             setStatus(
@@ -895,6 +925,8 @@ function WorkspaceDocument(props: Props) {
     };
   }, [editor, ready]);
 
+  useEffect(() => protectHiddenCanvasSelection(editor), [editor]);
+
   useEffect(() => {
     if (!ready || !cameraKey) return;
     let timer: ReturnType<typeof setTimeout>;
@@ -928,6 +960,28 @@ function WorkspaceDocument(props: Props) {
     };
   }, [cameraKey, editor, ready]);
 
+  const prepareSelectedMaterials = useCallback(async (shapes: readonly TLShape[], captureDrawings: boolean) => {
+    for (const shape of shapes) {
+      const id = placementNodeId(shape, bindings.current, live.current.graph);
+      if (id) bindings.current.set(shape.id, id);
+    }
+    const distinct = new Set(shapes.flatMap((shape) => {
+      const id = bindings.current.get(shape.id);
+      if (id) return [id];
+      if (shape.type === "draw") return captureDrawings ? [shape.id] : [];
+      const content = materialContent(shape, editor);
+      return content && (content.materialType !== "reference_text" || String(content.payload.text ?? "").trim()) ? [shape.id] : [];
+    }));
+    if (distinct.size > 16) throw new Error("每次最多引用 16 项，请减少选择后再发送。");
+    if (captureDrawings) for (const shape of shapes)
+      if (shape.type === "draw") captureTargets.current.add(shape.id);
+    await flush();
+    return [...new Set(shapes.flatMap((shape) => {
+      const id = bindings.current.get(shape.id);
+      return id && editor.getShape(shape.id) ? [id] : [];
+    }))];
+  }, [editor, flush]);
+
   useEffect(() => {
     if (!ready) return;
     const refresh = async () => {
@@ -935,40 +989,45 @@ function WorkspaceDocument(props: Props) {
       project(data, live.current.graph);
     };
     const locate = (nodeId: string) => {
-      const shape = editor
+      const shapes = editor
         .getCurrentPageShapes()
-        .find((item) => bindings.current.get(item.id) === nodeId);
-      if (shape) {
-        editor.select(shape.id);
-        editor.zoomToSelection();
+        .filter((item) => bindings.current.get(item.id) === nodeId);
+      if (shapes.length) {
+        if (!locateCanvasMaterial(editor, shapes)) live.current.onOpen(nodeId);
       } else if (
         document.current?.bindings.some(
           (binding) => binding.nodeId === nodeId && binding.removed,
         )
-      )
+      || live.current.graph.nodes.some(node => node.id === nodeId && node.payload.canvasPlacement === "manual"))
         live.current.onOpen(nodeId);
       else pendingLocation.current = nodeId;
     };
     live.current.onReady({
+      editor,
       flushLayout: flush,
       hasUnsaved: () =>
         sequence.current !== persisted.current || savingPacket.current !== null,
-      flush: async () => {
-        await selectionWork.current;
-        await flush();
-      },
+      flush,
       refresh,
+      applyResult: (data, graph) => { project(data, graph); },
       locate,
-      resolveReferences: (ids) => [
-        ...new Set(
-          ids.flatMap((id) => {
-            const instances = referenceInstances.current.get(id);
-            return instances?.length
-              ? instances.map((shapeId) => bindings.current.get(shapeId) ?? id)
-              : [id];
-          }),
-        ),
-      ],
+      resolveReferences: (ids, instances) => resolveReferenceInstances(ids, instances, bindings.current),
+      selectionInstances: () => {
+        const instances: Record<string, string[]> = {};
+        for (const shape of selectedMaterialShapes(editor)) {
+          const id = placementNodeId(shape, bindings.current, live.current.graph);
+          if (id) (instances[id] ??= []).push(shape.id);
+        }
+        return instances;
+      },
+      captureReferences: async () => {
+        // Capture the clicked selection before saving or opening the mobile
+        // assistant can change the editor's selection and visibility.
+        const shapes = selectedMaterialShapes(editor);
+        const nodeIds = await prepareSelectedMaterials(shapes, true);
+        if (!nodeIds.length) throw new Error("请先选择可引用的图片、文字、色卡或草图。");
+        return { nodeIds, instances: Object.fromEntries(nodeIds.map((id) => [id, shapes.filter((shape) => bindings.current.get(shape.id) === id).map((shape) => shape.id)])) };
+      },
       removePlacement: (nodeId) => {
         const selected = editor
           .getSelectedShapes()
@@ -985,7 +1044,7 @@ function WorkspaceDocument(props: Props) {
       },
     });
     return () => live.current.onReady(null);
-  }, [editor, flush, project, ready]);
+  }, [editor, flush, prepareSelectedMaterials, project, ready]);
   useEffect(() => {
     if (!ready) return;
     let active = true;
@@ -1069,79 +1128,22 @@ function WorkspaceDocument(props: Props) {
   );
   const selectionEpoch = useRef(0);
   useEffect(() => {
-    if (!selectionKey || !ready || !props.active || !selectionIdle) return;
     const epoch = ++selectionEpoch.current;
+    if (!selectionKey) { live.current.onSelection([]); return; }
+    if (!ready || !props.active || !selectionIdle) return;
     let canceled = false;
-    let release: () => void = () => undefined;
-    let fail: (error: unknown) => void = () => undefined;
-    selectionWork.current = new Promise<void>((resolve, reject) => {
-      release = resolve;
-      fail = reject;
-    });
-    void selectionWork.current.catch(() => undefined);
-    let started = false;
     const timer = setTimeout(() => {
-      started = true;
       const work = (async () => {
         const shapes = selectedMaterialShapes(editor);
         const layoutOnlySelection = editor
           .getSelectedShapeIds()
           .some((id) => layoutSelections.current.has(id));
         layoutSelections.current.clear();
-        for (const shape of shapes) {
-          const id = placementNodeId(
-            shape,
-            bindings.current,
-            live.current.graph,
-          );
-          if (id) bindings.current.set(shape.id, id);
-        }
-        const distinct = new Set(
-          shapes
-            .filter((shape) => bindings.current.has(shape.id))
-            .map((shape) => bindings.current.get(shape.id)),
-        );
-        const unbound = shapes.filter(
-          (shape) =>
-            !bindings.current.has(shape.id) &&
-            !(layoutOnlySelection && shape.type === "draw") &&
-            ["draw", "text", "note", "fashion-note", "fashion-swatch"].includes(
-              shape.type,
-            ) &&
-            (shape.type === "draw" ||
-              materialContent(shape, editor)?.materialType !==
-                "reference_text" ||
-              Boolean(
-                String(
-                  materialContent(shape, editor)?.payload.text ?? "",
-                ).trim(),
-              )),
-        );
-        if (distinct.size + unbound.length > 16)
-          throw new Error("每次最多引用 16 项，请减少选择后再发送。");
-        for (const shape of shapes)
-          if (shape.type === "draw" && !layoutOnlySelection)
-            captureTargets.current.add(shape.id);
-        await flush();
-        const ids = new Set<string>();
-        for (const shape of shapes) {
-          const nodeId = bindings.current.get(shape.id);
-          if (nodeId) ids.add(nodeId);
-        }
-        if (!canceled && epoch === selectionEpoch.current && ids.size) {
-          referenceInstances.current = new Map(
-            [...ids].map((id) => [
-              id,
-              shapes
-                .filter((shape) => bindings.current.get(shape.id) === id)
-                .map((shape) => shape.id),
-            ]),
-          );
-          live.current.onSelection([...ids]);
-        }
+        const ids = await prepareSelectedMaterials(shapes, !layoutOnlySelection);
+        if (!canceled && epoch === selectionEpoch.current) live.current.onSelection(ids);
       })();
-      void work.then(release, (error: unknown) => {
-        fail(error);
+      void work.catch((error: unknown) => {
+        if (canceled) return;
         live.current.onError(
           error instanceof Error ? error.message : "所选素材尚未保存",
         );
@@ -1150,9 +1152,8 @@ function WorkspaceDocument(props: Props) {
     return () => {
       clearTimeout(timer);
       canceled = true;
-      if (!started) release();
     };
-  }, [editor, flush, props.active, ready, selectionIdle, selectionKey]);
+  }, [editor, prepareSelectedMaterials, props.active, ready, selectionIdle, selectionKey]);
 
   const open = useCallback((shapeId: TLShapeId) => {
     const nodeId = bindings.current.get(shapeId);
@@ -1161,7 +1162,7 @@ function WorkspaceDocument(props: Props) {
   // Shape utilities render in the editor's React tree; expose the current detail handler.
   useEffect(() => {
     const onDouble = (event: MouseEvent) => {
-      if ((event.target as Element).closest("button,textarea,input")) return;
+      if ((event.target as Element).closest("button,textarea,input,[data-canvas-overview]")) return;
       const id = editor.getOnlySelectedShapeId();
       if (id && bindings.current.has(id)) open(id);
     };
@@ -1199,12 +1200,10 @@ function WorkspaceDocument(props: Props) {
           ) : null}
         </section>
       ) : null}
-      <div
+      <CanvasSaveStatus
         className={styles.status}
-        data-actionable={status.includes("未完成") || status.includes("冲突")}
-        role="status"
+        label={status}
       >
-        {status}
         {status.includes("未完成") ? (
           <button
             type="button"
@@ -1255,7 +1254,7 @@ function WorkspaceDocument(props: Props) {
             导出草稿并载入最新
           </button>
         ) : null}
-      </div>
+      </CanvasSaveStatus>
     </>
   );
 }

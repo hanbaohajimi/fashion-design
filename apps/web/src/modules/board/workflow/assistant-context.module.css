@@ -42,8 +42,13 @@
   margin-bottom: var(--space-2);
 }
 .discussion > button {
-  order: 3;
+  order: 1;
   margin-left: auto;
+}
+.discussion[data-has-references="false"] { padding: 0; background: transparent; margin-bottom: 0; font-size: 12px; }
+.referenceCount {
+  color: var(--color-ink-secondary);
+  font-variant-numeric: tabular-nums;
 }
 .discussion button {
   max-width: 100%;
@@ -58,32 +63,69 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
-  max-height: 72px;
+  max-height: 116px;
   overflow: auto;
   overscroll-behavior: contain;
   padding: var(--space-1);
+}
+.discussion[data-has-references="true"] .discussionReferences {
+  flex-basis: 100%;
 }
 .discussionReferences > span {
   min-width: 0;
   max-width: 100%;
 }
 .referenceChip {
-  display: inline-flex;
+  display: flex;
+  flex: 1 1 100%;
   align-items: center;
   min-width: 0;
   max-width: 100%;
   border-radius: var(--radius-sm);
-  background: var(--color-selection-bg);
+  background: var(--color-paper);
+  border: var(--border-hairline) solid var(--color-border);
 }
 .referenceChip button {
-  color: var(--color-selection-ink);
+  color: var(--color-ink);
 }
-.referenceChip > button:first-child {
+.referenceLocate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
   min-width: 0;
+  min-height: 48px;
   flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+.referenceLocate:hover:enabled {
+  background: var(--color-action-subtle);
+}
+.referenceCaption {
+  min-width: 0;
+}
+.referenceCaption > span {
+  display: block;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-size: var(--text-sm);
+}
+.referenceCaption small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+}
+.referenceLocate .referencePreview {
+  width: 32px;
+  height: 40px;
+  flex: none;
+  font-size: var(--text-sm);
 }
 .referenceChip .removeReference {
   flex: none;
@@ -96,7 +138,8 @@
   text-align: center;
   cursor: pointer;
 }
-.referenceChip .removeReference:focus-visible {
+.referenceChip .removeReference:focus-visible,
+.referenceLocate:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
@@ -143,34 +186,54 @@
 }
 .toolbar {
   flex: none;
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--assistant-tools-surface);
-  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  border-bottom: var(--border-hairline) solid var(--color-border);
 }
 .conversationTitle {
+  flex: 1;
+  min-width: 0;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   overflow: hidden;
 }
 .toolbarActions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  flex: none;
+  gap: 4px;
 }
 .toolbarActions button {
-  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 6px;
+  flex: none;
 }
 .history {
   flex: none;
   display: grid;
   gap: var(--space-2);
   font-size: var(--text-base);
+}
+
+.historyPages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.historyPages small {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 .history select {
   width: 100%;
@@ -182,16 +245,6 @@
   background: var(--color-paper);
   color: var(--color-ink);
   font: inherit;
-}
-.startSteps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  list-style-position: inside;
-  padding-left: 0;
-  margin: var(--space-4) 0;
-  font-size: var(--text-base);
-  color: var(--color-ink-secondary);
 }
 .fieldLabel {
   display: grid;
@@ -287,13 +340,13 @@
   height: 18px;
   accent-color: var(--color-action);
 }
-.referenceOption img,
-.referencePlaceholder {
+.referencePreview {
   width: 40px;
   height: 52px;
   object-fit: contain;
   background: var(--image-stage-background);
   border-radius: var(--radius-sm);
+  flex: none;
 }
 .referencePlaceholder {
   display: grid;
@@ -346,20 +399,20 @@
   .keyboardHint {
     display: none;
   }
+  .toolbarActions.toolbarActions button { width: 44px; }
 }
 @media (max-width: 767px) and (max-height: 600px) {
   .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    padding-bottom: var(--space-1);
+    padding-bottom: 4px;
   }
   .conversationTitle {
-    flex: 1 1 100px;
+    display: block;
   }
   .toolbarActions {
-    flex: 1 1 240px;
+    flex: none;
   }
+  .toolbarActions > * { flex-shrink: 0; }
+  .toolbarActions button { white-space: nowrap; }
 }
 .referenceRecord summary:focus-visible,
 .drawerContents summary:focus-visible {

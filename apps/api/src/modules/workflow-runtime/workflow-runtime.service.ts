@@ -1,10 +1,11 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { acceptedProposalVersions, initialProposalExecutionId } from "./proposal-execution-binding";
 import { ImageTransformQueue } from "./image-transform-queue.service";
 import { requireProjectFile } from "../files/project-file-access";
 import { FileStatus, Prisma, appendWorkflowOutbox, appendGenerationTerminalOutbox, ensureWorkflowNodeVersions, type PrismaClient, type WorkflowProposal } from "@fashion/db";
 import { AmuxClaudeVlmClassifier, type AmuxClaudeImageInput, type AmuxClaudeJsonClient } from "@fashion/ai";
 import type { AgentDesignBrief, AgentDesignEvidence, VlmRoleLabel } from "@fashion/shared";
-import { imageFeedbackSchema, readSwatchColors, workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowToolParameters, workflowToolKeySchema } from "@fashion/shared";
+import { imageFeedbackSchema, imageTextEditPrompt, readSwatchColors, workflowInputConnectionError, getWorkflowToolCatalog, parseWorkflowToolParameters, workflowToolKeySchema } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -25,6 +26,7 @@ import {
   type GenerationCreateRequest,
 } from "../generation/generation.schemas";
 import { DesignAssetsService } from "../design-assets/design-assets.service";
+import { requireRestoreSourceFile } from "../design-assets/restore-source-file";
 import { WorkflowsService } from "../workflows/workflows.service";
 import {
   workflowSemanticPatchSchema,
@@ -40,6 +42,7 @@ import type {
 } from "./workflow-runtime.schemas";
 import { compileWorkflowProposal, compileWorkflowAction, workflowActionFingerprint, type WorkflowAction, type WorkflowToolPlan } from "./workflow-planner";
 import { WorkflowCoordinator } from "./workflow-coordinator";
+import { buildImageFeedbackRequest } from "./image-feedback";
 
 import { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
 export { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
@@ -331,7 +334,11 @@ export class WorkflowRuntimeService {
     if (!node) throw new NotFoundException("工具节点不存在");
     if (node.type === "restore_version") throw new BadRequestException("请从候选的版本历史恢复版本");
     const attempts = await this.database.workflowAttempt.findMany({ where: { projectId, toolNodeId: nodeId }, orderBy: { ordinal: "desc" } });
-    if (attempts.some((attempt) => object(attempt.requestSnapshot).mutationId === input.mutationId)) return graph;
+    const replay = attempts.find(attempt => object(attempt.requestSnapshot).mutationId === input.mutationId);
+    if (replay) {
+      if (input.proposalId && object(replay.requestSnapshot).proposalId !== input.proposalId && !(object(replay.requestSnapshot).proposalId === undefined && input.mutationId === initialProposalExecutionId(projectId, input.proposalId))) throw new ConflictException("该执行编号不属于这条确认内容，请重新读取记录。");
+      return graph;
+    }
     if (node.status === "running") throw new ConflictException("该节点正在执行，请等待完成");
     if (node.status === "completed") return graph;
     const sources = incoming(graph, node);
@@ -382,7 +389,14 @@ export class WorkflowRuntimeService {
       if (current?.revision !== graph.revision) throw new ConflictException("执行前画布已变化，请重新确认输入");
       const nodeVersionId = versions.get(nodeId)?.id;
       if (!nodeVersionId) throw new ConflictException("节点版本缺失，请刷新后重试");
+      if (input.proposalId) {
+        const proposal = await tx.workflowProposal.findFirst({ where: { id: input.proposalId, projectId, userId, status: "accepted", conversationId: input.conversationId ?? null } });
+        if (!proposal || object(proposal.evidence).toolNodeId !== nodeId || !input.conversationId) throw new BadRequestException("确认内容不属于本次会话或执行步骤。");
+        const accepted = (await acceptedProposalVersions(tx, projectId, [proposal])).get(proposal.id);
+        if (!accepted || accepted !== nodeVersionId) throw new ConflictException("确认后的内容已有变化，请发送新的设计需求。");
+      }
       const snapshot = json({ ...(transformAssetId ? { transformAssetId } : {}), executionActor: userId, mutationId: input.mutationId, params, toolVersion: "1", graphRevision: graph.revision,
+        ...(input.proposalId ? { proposalId: input.proposalId } : {}),
         inputNodeIds: sources.map((source) => source.id), inputBindings: versions.get(nodeId)?.inputBindings,
         inputSnapshot: sources.map((source) => ({ id: source.id, nodeVersionId: versions.get(source.id)?.id, type: source.type, title: source.title, payload: source.payload })),
         ...(request ? { request } : { model: process.env.AMUX_CLAUDE_MODEL }) });
@@ -803,7 +817,8 @@ export class WorkflowRuntimeService {
   }
 
   async importAsset(userId: string, projectId: string, input: { sourceNodeId: string; assetId: string; operation: "restore"; mutationId: string }) {
-    await this.access.require(userId, projectId, "edit");
+    const permission = await this.access.require(userId, projectId, "edit");
+    if (permission.archived) throw new ForbiddenException("项目已归档，请先恢复项目");
     const graph = await this.workflows.get(userId, projectId);
     const source = graph.nodes.find((node) => node.id === input.sourceNodeId && node.type === "candidate");
     if (!source) throw new BadRequestException("版本恢复必须引用当前候选节点");
@@ -820,11 +835,16 @@ export class WorkflowRuntimeService {
     };
     const known = await this.database.workflowAttempt.findUnique({ where: { executionKey } });
     if (known) { assertReplay(known); return graph; }
-    const restoredFrom = asset.restoredFromAssetId ? await this.ownedAsset(userId, projectId, asset.restoredFromAssetId) : null;
+    // A historical source can be archived; only the new output must be active.
+    const restoredFrom = asset.restoredFromAssetId ? await this.database.designAsset.findFirst({ where: { id: asset.restoredFromAssetId, projectId } }) : null;
+    if (asset.restoredFromAssetId && !restoredFrom) throw new BadRequestException("恢复来源已不存在或不属于当前项目");
     if (restoredFrom && restoredFrom.rootAssetId !== asset.rootAssetId) throw new BadRequestException("恢复来源不属于同一设计资产链");
+    await requireRestoreSourceFile(this.storage, asset.url);
     try {
       await this.database.$transaction(async (tx) => {
         // Serialize projection, immutable bindings and the explicit restore receipt.
+        const currentPermission = await this.access.require(userId, projectId, "edit", tx);
+        if (currentPermission.archived) throw new ForbiddenException("项目已归档，请先恢复项目");
         const beforeVersions = await ensureWorkflowNodeVersions(tx, projectId, graph.revision);
         const replay = await tx.workflowAttempt.findUnique({ where: { executionKey } });
         if (replay) { assertReplay(replay); return; }
@@ -918,7 +938,12 @@ export class WorkflowRuntimeService {
       if (url) references.push({ order: references.length, role, url, weight: typeof setting?.weight === "number" ? setting.weight : 0.7 });
     }
     let prompt = [text(params.prompt), ...sources.filter((item) => ["constraint", "brief", "reference_text", "swatch", "trend", "fabric"].includes(item.type)).map(nodeText)].filter(Boolean).join("\n");
+    if (params.textEdits) {
+      try { prompt += `\n${imageTextEditPrompt(params.textEdits)}`; }
+      catch { throw new BadRequestException("文字修改内容或区域不合法，请检查文案长度和选区"); }
+    }
     let annotations: unknown[] | undefined;
+    let markers: ReturnType<typeof buildImageFeedbackRequest>["markers"] | undefined;
     if (params.intent === "outpaint") {
       const frame = object(params.outpaint);
       if (!sourceAsset?.width || !sourceAsset.height || Number(frame.left) + sourceAsset.width > Number(frame.width) || Number(frame.top) + sourceAsset.height > Number(frame.height) || (sourceAsset.width === frame.width && sourceAsset.height === frame.height)) {
@@ -930,17 +955,16 @@ export class WorkflowRuntimeService {
       const saved = await this.database.imageAssetFeedback.findUnique({ where: { assetId: sourceAsset.id } });
       if (!saved || saved.revision !== params.feedbackRevision) throw new ConflictException("标注已更新，请重新保存并提交");
       const feedback = imageFeedbackSchema.parse({ ...object(saved.data), revision: saved.revision });
-      const selected = feedback.comments.filter((comment) => Array.isArray(params.commentIds) && params.commentIds.includes(comment.id));
-      if (!selected.length) throw new BadRequestException("请选择修改意见");
-      const linked = new Set(selected.flatMap((comment) => comment.annotationIds));
-      annotations = feedback.annotations.filter((annotation) => !linked.size || linked.has(annotation.id));
-      prompt += "\n修改意见（位置为原图宽高的比例）：\n" + selected.map((comment) => `${comment.point ? `(${comment.point.x.toFixed(3)},${comment.point.y.toFixed(3)}) ` : ""}${comment.text}`).join("\n");
-      prompt += "\n附图中的彩色标注仅用于指示修改位置，不要将标注绘制在最终图片里。";
+      const selection = buildImageFeedbackRequest(feedback, params.commentIds);
+      annotations = selection.annotations;
+      markers = selection.markers;
+      prompt += selection.instructions;
     }
     if (prompt.length > 4_000) throw new BadRequestException("工具提示词与已连接文字超过 4000 字符，请缩短本轮描述或参考文字；系统不会静默截掉设计要求");
-    if (references.length > (sourceAsset ? 15 : 16)) throw new BadRequestException("本次图片输入超过上限（含母图最多 16 张），请明确减少参考图后再执行；系统不会静默忽略参考");
+    const reservedImages = sourceAsset ? params.intent === "feedback" ? 2 : 1 : 0;
+    if (references.length + reservedImages > 16) throw new BadRequestException(`本次图片输入超过上限（含母图${params.intent === "feedback" ? "和标记图" : ""}最多 16 张），请明确减少参考图后再执行；系统不会静默忽略参考`);
     const base = { projectId, shapeIds: [], prompt, negativePrompt: text(params.negativePrompt), width: params.width, height: params.height, quality: params.quality, outputFormat: "png",
-      ...(params.intent && params.intent !== "edit" ? { imageEdit: { intent: params.intent, ...(params.outpaint ? { outpaint: params.outpaint } : {}), ...(annotations ? { annotations } : {}) } } : {}),
+      ...(params.intent && params.intent !== "edit" ? { imageEdit: { intent: params.intent, ...(params.outpaint ? { outpaint: params.outpaint } : {}), ...(annotations ? { annotations } : {}), ...(markers ? { markers } : {}) } } : {}),
       ...(params.intent === "remove_background" ? { background: "transparent" } : {}) };
     if (params.taskType === "inpaint") {
       if (!sourceAsset || !params.mask) throw new BadRequestException("局部重绘需要实际母图与蒙版");
@@ -951,7 +975,8 @@ export class WorkflowRuntimeService {
       else {
         const file = await requireProjectFile(this.database, this.access, userId, text(mask.fileAssetId), projectId);
         if (!file || !file.mimeType.startsWith("image/")) throw new BadRequestException("蒙版图片不可用或不属于当前用户");
-        maskUrl = await this.storage.createDownloadUrl(file.objectKey, 60 * 60);
+        // Freeze identity, not an expiring URL, in the execution snapshot.
+        maskUrl = `s3://${file.objectKey}`;
       }
       return generationCreateRequestSchema.parse({ ...base, taskType: "inpaint", parentAssetId: sourceAsset.id, referenceImageUrl: sourceAsset.url, maskImageUrl: maskUrl, ...(params.palette ? { palette: params.palette } : {}) });
     }

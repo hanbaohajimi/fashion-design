@@ -88,8 +88,10 @@ const graph = {
 
 export const test = base.extend({
   browser: async ({ playwright }, use) => {
+    const endpoint = process.env.ATELIER_VISUAL_CDP;
+    if (!endpoint) throw new Error("视觉浏览器检查需要 ATELIER_VISUAL_CDP");
     const browser = await playwright.chromium.connectOverCDP(
-      process.env.ATELIER_VISUAL_CDP!,
+      endpoint,
     );
     expect(browser.version()).toBe(process.env.ATELIER_CHROMIUM_VERSION);
     await use(browser);
@@ -98,16 +100,23 @@ export const test = base.extend({
 });
 export { expect };
 
-export async function seedVisualApp(page: Page, { guides = false }: { guides?: boolean } = {}) {
+export async function seedVisualApp(page: Page, { guides = false, firstAssistantVisit = false, realClock = false }: { guides?: boolean; firstAssistantVisit?: boolean; realClock?: boolean } = {}) {
   // Existing fixtures represent returning users; guide scenarios opt into the first look.
   if (!guides) await seedReturningFeatureGuideUser(page, ["visual-designer"]);
+  if (!firstAssistantVisit) await page.addInitScript(() => {
+    const key = "fashion:workspace-split:visual-designer:atelier-visual";
+    if (localStorage.getItem(key) === null) {
+      const available = innerWidth - (innerWidth >= 1200 ? 184 : 0);
+      localStorage.setItem(key, JSON.stringify({ width: 384, open: available >= 966 }));
+    }
+  });
   // CDP-attached contexts require explicit media emulation before navigation.
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "light" });
   // Workflow labels use pinned system fonts. Do not wait on unused SDK text fonts.
   await page.route("https://cdn.tldraw.com/*/fonts/**", (route) =>
     route.abort(),
   );
-  await page.clock.setFixedTime(new Date(NOW));
+  if (!realClock) await page.clock.setFixedTime(new Date(NOW));
   await page.addInitScript(() => {
     document.addEventListener(
       "DOMContentLoaded",

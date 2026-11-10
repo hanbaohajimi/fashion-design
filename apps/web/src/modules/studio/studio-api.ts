@@ -12,6 +12,7 @@ import {
 import { privateFetch } from "../auth/private-fetch";
 import { readErrorMessage } from "../auth/auth-api";
 import type { StudioCreativeSummary } from "@fashion/shared";
+import { saveStudioOperation, type StudioSaveContext, type StudioSaveOperation } from "./studio-save-recovery";
 export function fetchCreativeSummary(projectId: string, signal?: AbortSignal) {
   return request<StudioCreativeSummary>(base(projectId) + "/creative-summary", signal ? { signal } : undefined);
 }
@@ -54,6 +55,7 @@ export function saveStyle(
   payload: StudioStyleInput,
   requestKey: string,
   existing?: StudioStyleView,
+  recovery?: StudioSaveContext,
 ) {
   const body = existing
     ? updateStudioStyleSchema.parse({
@@ -62,18 +64,15 @@ export function saveStyle(
         expectedVersion: existing.version,
       })
     : createStudioStyleSchema.parse({ ...payload, requestKey });
-  return request<StudioStyleView>(
-    base(projectId) +
-      "/styles" +
-      (existing ? "/" + encodeURIComponent(existing.id) : ""),
-    { method: existing ? "PATCH" : "POST", body: JSON.stringify(body) },
-  );
+  return saveStudioOperation(projectId, { kind: "style", input: body, ...(existing ? { styleId: existing.id } : {}) }, recovery,
+    operation => sendStudioSave(projectId, operation) as Promise<StudioStyleView>);
 }
 export function saveStudioDocument(
   projectId: string,
   input: Omit<StudioDocumentInput, "requestKey">,
   requestKey: string,
   existing?: StudioDocumentView,
+  recovery?: StudioSaveContext,
 ) {
   const body = studioDocumentInputSchema.parse({
     ...input,
@@ -82,10 +81,18 @@ export function saveStudioDocument(
       ? { documentId: existing.id, expectedVersion: existing.version }
       : {}),
   });
-  return request<StudioDocumentView>(base(projectId) + "/documents", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return saveStudioOperation(projectId, { kind: "document", input: body }, recovery,
+    operation => sendStudioSave(projectId, operation) as Promise<StudioDocumentView>);
+}
+
+export function sendStudioSave(projectId: string, operation: StudioSaveOperation): Promise<StudioStyleView | StudioDocumentView> {
+  if (operation.kind === "style") {
+    const body = (operation.styleId ? updateStudioStyleSchema : createStudioStyleSchema).parse(operation.input);
+    return request<StudioStyleView>(base(projectId) + "/styles" + (operation.styleId ? "/" + encodeURIComponent(operation.styleId) : ""), {
+      method: operation.styleId ? "PATCH" : "POST", body: JSON.stringify(body),
+    });
+  }
+  return request<StudioDocumentView>(base(projectId) + "/documents", { method: "POST", body: JSON.stringify(studioDocumentInputSchema.parse(operation.input)) });
 }
 export function saveMember(
   projectId: string,

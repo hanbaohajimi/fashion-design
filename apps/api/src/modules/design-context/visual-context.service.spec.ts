@@ -165,6 +165,47 @@ describe("VisualContextService", () => {
     expect(jobs.enqueue).toHaveBeenCalledTimes(1);
     expect(storage.readPrefix).toHaveBeenCalledTimes(1);
     expect(result.imageBindings.map((binding) => binding.nodeId)).toEqual(["branch-a", "branch-b"]);
+    expect(result.images).toHaveLength(1);
+    expect(result.imageBindings.map((binding) => binding.imageIndex)).toEqual([0, 0]);
+  });
+
+  it("同图副本不挤占其他参考图片名额，满额后仍保留已附图片的副本绑定", async () => {
+    const { service, addFile } = setup();
+    addFile("shared");
+    const copies = Array.from({ length: 9 }, (_, i) => ({ id: `copy-${i}`, type: "reference_image", payload: { fileAssetId: "shared" } }));
+    const others = Array.from({ length: 8 }, (_, i) => {
+      addFile(`other-${i}`);
+      return { id: `other-${i}`, type: "reference_image", payload: { fileAssetId: `other-${i}` } };
+    });
+    const result = await service.enrich("user", "project", [...copies.slice(0, 8), ...others, ...copies.slice(8)]);
+    expect(result.images).toHaveLength(8);
+    expect(result.coverage.attachedNodeIds).toEqual([
+      ...copies.slice(0, 8).map(node => node.id), ...others.slice(0, 7).map(node => node.id), "copy-8",
+    ]);
+    expect(result.coverage.unreadNodeIds).toEqual(["other-7"]);
+    expect(result.imageBindings.filter(binding => binding.fileAssetId === "shared").every(binding => binding.imageIndex === 0)).toBe(true);
+  });
+
+  it("重复出现在讨论焦点的素材不能改变显式引用的先后顺序", async () => {
+    const { service, addFile } = setup();
+    const nodes = Array.from({ length: 10 }, (_, i) => {
+      addFile(`file-${i}`);
+      return { id: `image-${i}`, type: "reference_image", payload: { fileAssetId: `file-${i}` } };
+    });
+    const result = await service.enrich("user", "project", nodes, ["image-9", "image-8", "image-8", "image-9"]);
+    expect(result.imageBindings.slice(0, 2).map(binding => binding.nodeId)).toEqual(["image-9", "image-8"]);
+  });
+
+  it("大量同图副本的绑定有界，显式引用优先且未附对象仍有记录", async () => {
+    const { service, addFile } = setup();
+    addFile("shared");
+    const nodes = Array.from({ length: 70 }, (_, i) => ({ id: `copy-${i}`, type: "reference_image", payload: { fileAssetId: "shared" } }));
+    const result = await service.enrich("user", "project", nodes, ["copy-69"]);
+    expect(result.images).toHaveLength(1);
+    expect(result.imageBindings).toHaveLength(64);
+    expect(result.imageBindings[0]?.nodeId).toBe("copy-69");
+    expect(result.coverage).toMatchObject({ total: 70, attachedImageCount: 1 });
+    expect(result.coverage.unreadNodeIds).toHaveLength(6);
   });
 
   it("损坏的已完成缓存重新入队，不能当作已读取视觉事实", async () => {

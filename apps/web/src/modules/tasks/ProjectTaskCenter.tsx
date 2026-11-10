@@ -1,33 +1,32 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectTaskAction, ProjectTaskPage } from "@fashion/shared";
 import { useAuth } from "../auth/AuthProvider";
-import { privateFetch } from "../auth/private-fetch";
+import { fetchTaskPage, taskRequest as request, ProjectTaskProvider, useProjectTaskSource } from "./project-task-source";
 import { flushWorkspaceDrafts } from "../../components/drafts/draft-repository";
 import { Button, Dialog, Notice } from "../../components/ui";
 import { TaskFeedback } from "../../components/TaskFeedback";
 import { useLocalActivities } from "./local-activities";
 import styles from "./project-tasks.module.css";
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await privateFetch(url, { credentials: "include", cache: "no-store", ...init });
-  if (!response.ok) throw new Error("任务状态暂不可用，请重试");
-  return response.json() as Promise<T>;
-}
-
-async function fetchTaskPage(url: string, signal: AbortSignal): Promise<ProjectTaskPage> {
-  const value = await request<ProjectTaskPage>(url, { signal });
-  if (!value || !Array.isArray(value.items) || !value.counts || !Number.isInteger(value.counts.running) || !Number.isInteger(value.counts.attention)) throw new Error("任务状态响应无效，请重新读取");
-  return value;
-}
-
 export function ProjectTaskCenter({ projectId }: { projectId: string }) {
+  const source = useProjectTaskSource();
+  return source?.projectId === projectId ? <ProjectTaskCenterContent projectId={projectId} /> : <ProjectTaskProvider projectId={projectId}><ProjectTaskCenterContent projectId={projectId} /></ProjectTaskProvider>;
+}
+
+function ProjectTaskCenterContent({ projectId }: { projectId: string }) {
+  const source = useProjectTaskSource();
   const { session } = useAuth();
   const cache = useQueryClient();
   const local = useLocalActivities().filter(item => item.accountId === session?.user.id && item.projectId === projectId);
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = (event: Event) => { if ((event as CustomEvent<{ projectId?: string }>).detail?.projectId === projectId) setOpen(true); };
+    window.addEventListener("fashion-project:tasks", show);
+    return () => window.removeEventListener("fashion-project:tasks", show);
+  }, [projectId]);
   const [group, setGroup] = useState("active");
   const [cursor, setCursor] = useState<string | null>(null);
   const [previous, setPrevious] = useState<ProjectTaskPage["items"]>([]);
@@ -36,7 +35,8 @@ export function ProjectTaskCenter({ projectId }: { projectId: string }) {
   const flight = useRef(false);
   const keys = useRef(new Map<string, string>());
   const rootKey = ["project-tasks", session?.user.id, projectId];
-  const summary = useQuery({ queryKey: [...rootKey, "active"], enabled: Boolean(session), queryFn: ({ signal }) => fetchTaskPage(`/api/projects/${encodeURIComponent(projectId)}/tasks`, signal), refetchInterval: query => query.state.data?.counts.running ? 3000 : 15000, refetchOnWindowFocus: true, refetchIntervalInBackground: false, staleTime: 3000 });
+  if (!source) throw new Error("项目任务数据源未就绪");
+  const summary = source.summary;
   const list = useQuery({ queryKey: [...rootKey, group, cursor], enabled: Boolean(session) && open && (group !== "active" || Boolean(cursor)), queryFn: ({ signal }) => fetchTaskPage(`/api/projects/${encodeURIComponent(projectId)}/tasks?group=${group}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, signal), refetchInterval: open ? 3000 : false, refetchOnWindowFocus: true, refetchIntervalInBackground: false });
   const page = group === "active" && !cursor ? summary : list;
   const items = [...previous, ...(page.data?.items ?? [])].filter((item, index, all) => all.findIndex(other => other.id === item.id) === index);

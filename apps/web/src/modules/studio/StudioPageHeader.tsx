@@ -1,5 +1,13 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { createContext, useContext, type ReactNode } from "react";
 import styles from "./studio.module.css";
+
+export const StudioHeaderContext = createContext<{ actions: ReactNode; readOnly: boolean } | null>(null);
+export function StudioProjectActions() {
+  const context = useContext(StudioHeaderContext);
+  return context ? <div className={styles.projectActions}>{context.actions}</div> : null;
+}
 
 /** Object identity is shared; the workspace beneath it follows each task. */
 export function StudioPageHeader({
@@ -19,8 +27,9 @@ export function StudioPageHeader({
   readonly objectSwitcher?: ReactNode;
   readonly guideHasRevision?: boolean;
 }) {
+  const workspace = useContext(StudioHeaderContext);
   return (
-    <header className={styles.surfaceHeading}>
+    <header className={styles.surfaceHeading} data-workspace-heading>
       <div
         data-guide="studio-object"
         data-guide-title={type ?? title}
@@ -30,13 +39,14 @@ export function StudioPageHeader({
         <div className={styles.surfaceTitle}>
           <h2>{title}</h2>
           {status}
+          {workspace?.readOnly ? <span className={styles.muted}>只读工作区</span> : null}
         </div>
         {type || description ? (
           <p>{[type, description].filter(Boolean).join(" ")}</p>
         ) : null}
         {objectSwitcher}
       </div>
-      {actions ? <div className={styles.surfaceTools}>{actions}</div> : null}
+      {actions || workspace ? <div className={styles.surfaceTools}><StudioProjectActions />{actions}</div> : null}
     </header>
   );
 }

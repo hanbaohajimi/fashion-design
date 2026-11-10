@@ -6,8 +6,9 @@ import {
   appendGenerationTerminalOutbox,
   type PrismaClient,
 } from "@fashion/db";
-import type { AiGenerationRequest } from "@fashion/ai";
+import { generationImageInputLimitError, type AiGenerationRequest } from "@fashion/ai";
 import type { DesignStepSnapshot } from "@fashion/shared";
+import { privateStorageObjectKey } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -23,6 +24,8 @@ import { GenerationLimitExceededException } from "../billing/billing.errors";
 import type { CompiledGenInput } from "./compiler/compiler.types";
 import { BillingService } from "../billing/billing.service";
 import { S3FileStorage } from "../files/storage.service";
+import { requireProjectFile } from "../files/project-file-access";
+import { captureGenerationImageSources } from "./generation-image-sources";
 import {
   ContextCompilerService,
   type ContextCompilerOptions,
@@ -79,7 +82,7 @@ interface PresentationPolicy {
   readonly version: typeof PRESENTATION_POLICY_VERSION;
 }
 
-type GenerationDatabase = Pick<PrismaClient, "$transaction" | "designAsset" | "generationTask" | "project" | "workspaceMember">;
+type GenerationDatabase = Pick<PrismaClient, "$transaction" | "designAsset" | "fileAsset" | "generationTask" | "project" | "workspaceMember">;
 
 export interface GenerationJobs {
   enqueue(taskId: string, userId: string): Promise<void>;
@@ -265,6 +268,7 @@ export class GenerationService {
       userId = permission.ownerId;
       if (executionActor !== userId) idempotencyKey = executionActor + ":" + idempotencyKey;
     }
+    assertImageInputLimit(request);
     const inpaintReferences =
       request.taskType === "inpaint" && request.referenceImageUrls
         ? await this.assertInpaintReferences(request)
@@ -330,6 +334,16 @@ export class GenerationService {
     delete providerRequest.projectId;
     delete providerRequest.shapeIds;
     const parentObjectKey = parentAsset ? objectKeyFrom(parentAsset.url) : null;
+    const inpaintSource = request.taskType === "inpaint" ? {
+      version: 1 as const,
+      sourceObjectKey: parentObjectKey ?? await this.inpaintObjectKey(executionActor, request.projectId, request.referenceImageUrl, false),
+      maskObjectKey: inpaintReferences ? objectKeyFrom(inpaintReferences.mask.url)
+        : await this.inpaintObjectKey(executionActor, request.projectId, request.maskImageUrl, true),
+    } : undefined;
+    if (inpaintSource && providerRequest.taskType === "inpaint") {
+      if (inpaintSource.sourceObjectKey) replaceProviderSource(providerRequest, await this.storage.createDownloadUrl(inpaintSource.sourceObjectKey, 24 * 60 * 60));
+      if (inpaintSource.maskObjectKey) providerRequest.maskImageUrl = await this.storage.createDownloadUrl(inpaintSource.maskObjectKey, 24 * 60 * 60);
+    }
     if (wardrobe && providerRequest.taskType === "i2i") {
       providerRequest.referenceImageUrls = await Promise.all(wardrobe.assetUrls.map(async (url) => {
         const key = objectKeyFrom(url);
@@ -341,10 +355,11 @@ export class GenerationService {
       providerRequest.referenceImageUrl = primaryReference;
     }
     if (parentObjectKey && "referenceImageUrl" in providerRequest) {
-      providerRequest.referenceImageUrl = await this.storage.createDownloadUrl(
+      const source = await this.storage.createDownloadUrl(
         parentObjectKey,
         24 * 60 * 60,
       );
+      replaceProviderSource(providerRequest, source);
     }
     if (inpaintReferences && providerRequest.taskType === "inpaint") {
       const signed = await Promise.all(
@@ -359,12 +374,14 @@ export class GenerationService {
       if (!primaryReference || !maskReference)
         throw new BadRequestException("缺少局部编辑参考图或蒙版");
       providerRequest.referenceImageUrls = signed.slice(0, -1);
-      providerRequest.referenceImageUrl = primaryReference;
+      replaceProviderSource(providerRequest, primaryReference);
       providerRequest.maskImageUrl = maskReference;
     }
     if (
       providerRequest.taskType === "t2i" &&
-      !providerRequest.referenceImageUrl
+      !providerRequest.referenceImageUrl &&
+      providerRequest.referenceImages === undefined &&
+      providerRequest.referenceImageUrls === undefined
     ) {
       // 收集所有参考图片及其权重
       interface WeightedReference {
@@ -437,12 +454,10 @@ export class GenerationService {
           return b.priority - a.priority;
         });
 
-        // 使用 referenceImageUrls 传递所有图片（最多16张）
-        const selected = sorted.slice(0, 16);
-        providerRequest.referenceImageUrls = selected.map(
+        providerRequest.referenceImageUrls = sorted.map(
           (reference) => reference.url,
         );
-        providerRequest.referenceImages = selected.map((reference, order) => ({
+        providerRequest.referenceImages = sorted.map((reference, order) => ({
           order,
           role: reference.role,
           url: reference.url,
@@ -455,6 +470,10 @@ export class GenerationService {
         }
       }
     }
+    assertImageInputLimit(providerRequest);
+    const imageSources = await captureGenerationImageSources(
+      this.database, this.access, executionActor, request.projectId, providerRequest,
+    );
     const requestedPalette =
       request.taskType === "inpaint" ? request.palette : undefined;
     const providerPrompts =
@@ -490,6 +509,12 @@ export class GenerationService {
       request,
       requestFingerprint,
       executionActor,
+      ...(imageSources ? { imageSources } : {}),
+      ...(inpaintSource ? { inpaintSource: {
+        version: 1,
+        ...(inpaintSource.sourceObjectKey ? { sourceObjectKey: inpaintSource.sourceObjectKey } : {}),
+        ...(inpaintSource.maskObjectKey ? { maskObjectKey: inpaintSource.maskObjectKey } : {}),
+      } } : {}),
     };
     const generationInputs = compiledPrompt.fabricInputs ?? [];
     const stepSnapshot: DesignStepSnapshot = {
@@ -724,6 +749,23 @@ export class GenerationService {
     )
       throw new BadRequestException("蒙版必须对应第一张原始父资产，不能以细节参考替换");
     return { images, mask };
+  }
+
+  private async inpaintObjectKey(userId: string, projectId: string | undefined, url: string, mask: boolean): Promise<string | null> {
+    const key = privateStorageObjectKey(url, { endpoint: process.env.S3_ENDPOINT, bucket: process.env.S3_BUCKET, cdnOrigin: process.env.ASSET_CDN_ORIGIN });
+    if (!key) return null; // Legacy public URLs are validated and frozen by the worker.
+    const maskPrefix = `temporary/masks/${userId}/`;
+    if (mask && key.startsWith(maskPrefix) && /^[\da-f-]{36}\.png$/iu.test(key.slice(maskPrefix.length))) return key;
+    if (projectId) {
+      const asset = await this.database.designAsset.findFirst({ where: { projectId, archivedAt: null, url: `s3://${key}` } });
+      if (asset) return key;
+    }
+    const file = await this.database.fileAsset.findUnique({ where: { objectKey: key } });
+    if (file && file.status === "READY" && file.mimeType.startsWith("image/")) {
+      await requireProjectFile(this.database, this.access, userId, file.id, projectId);
+      return key;
+    }
+    throw new BadRequestException("局部编辑原图或蒙版不可用，请重新选择当前项目中的图片");
   }
 
   private async assertParentAsset(
@@ -964,6 +1006,20 @@ export class GenerationService {
       updatedAt: task.updatedAt,
     };
   }
+}
+
+function replaceProviderSource(request: AiGenerationRequest, source: string): void {
+  const previousSource = request.referenceImageUrl;
+  request.referenceImageUrl = source;
+  if (request.referenceImageUrls) request.referenceImageUrls = request.referenceImageUrls.map(url => url === previousSource ? source : url);
+  if (request.referenceImages) request.referenceImages = request.referenceImages.map(reference => reference.url === previousSource ? { ...reference, url: source } : reference);
+}
+
+function assertImageInputLimit(request: AiGenerationRequest): void {
+  // Feedback preparation adds a numbered copy beside the unchanged source.
+  const reservedImages = request.taskType === "i2i" && request.imageEdit?.intent === "feedback" ? 1 : 0;
+  const message = generationImageInputLimitError(request, reservedImages);
+  if (message) throw new BadRequestException({ code: "INVALID_REQUEST", message });
 }
 
 function recoverGenerationRequest(task: {

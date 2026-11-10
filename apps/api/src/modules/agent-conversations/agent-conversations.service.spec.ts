@@ -72,6 +72,7 @@ function createHarness(access?: ProjectAccessPolicy) {
     ),
     agentConversation: {
       create: vi.fn().mockResolvedValue(conversationFixture()),
+      findFirst: vi.fn().mockResolvedValue(conversationFixture()),
       findMany: vi.fn().mockResolvedValue([]),
       findUnique: vi.fn().mockResolvedValue(conversationFixture()),
       update: vi.fn().mockResolvedValue(conversationFixture()),
@@ -146,6 +147,33 @@ function createHarness(access?: ProjectAccessPolicy) {
 }
 
 describe("AgentConversationsService", () => {
+  it("reads a linked conversation directly within its project and account, without creating work", async () => {
+    const access = { require: vi.fn().mockResolvedValue({ capabilities: { edit: false } }) };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    h.database.agentConversation.findFirst.mockResolvedValue({ ...conversationFixture(), mode: "workflow" } as never);
+    await expect(h.service.get("user-a", "project-a", "conversation-a")).resolves.toMatchObject({ id: "conversation-a", projectId: "project-a", mode: "workflow" });
+    expect(access.require).toHaveBeenCalledWith("user-a", "project-a", "read");
+    expect(h.database.agentConversation.findFirst).toHaveBeenCalledWith({ where: { id: "conversation-a", projectId: "project-a", createdById: "user-a", archivedAt: null } });
+    expect(h.database.agentConversation.findMany).not.toHaveBeenCalled();
+    expect(h.database.agentConversation.create).not.toHaveBeenCalled();
+    expect(h.database.agentMessage.updateMany).not.toHaveBeenCalled();
+    expect(h.model.generateJson).not.toHaveBeenCalled();
+  });
+
+  it("returns unavailable when no active conversation matches the project, account and ID", async () => {
+    const h = createHarness();
+    h.database.agentConversation.findFirst.mockResolvedValue(null as never);
+    await expect(h.service.get("user-a", "project-a", "invalid-link")).rejects.toMatchObject({ status: 404, response: { code: "AGENT_CONVERSATION_NOT_FOUND" } });
+    expect(h.database.agentConversation.findMany).not.toHaveBeenCalled();
+  });
+
+  it("checks project access before reading linked conversation metadata", async () => {
+    const access = { require: vi.fn().mockRejectedValue(new ForbiddenException()) };
+    const h = createHarness(access as unknown as ProjectAccessPolicy);
+    await expect(h.service.get("user-a", "project-a", "conversation-a")).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.database.agentConversation.findFirst).not.toHaveBeenCalled();
+  });
+
   it.each(["REVIEWER", "VIEWER"])("%s 读取历史消息不触发超时写入或生成恢复", async (role) => {
     const access = { require: vi.fn().mockResolvedValue({ role, capabilities: { edit: false } }) };
     const h = createHarness(access as unknown as ProjectAccessPolicy);

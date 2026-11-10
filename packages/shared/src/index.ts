@@ -397,6 +397,8 @@ export type AgentAction =
 
 export * from "./studio";
 export * from "./image-workspace";
+export * from "./image-adjustments";
+export * from "./image-text";
 
 export * from "./experiments";
 
@@ -406,6 +408,11 @@ export * from "./sketch-document";
 export * from "./runway";
 export * from "./assistant-stream";
 export * from "./project-tasks";
+export * from "./project-generated-files";
 export * from "./realtime-tryon";
 export * from "./wardrobe";
 export * from "./canvas-workspace";
+export { privateStorageObjectKey } from "./private-storage-url";
+export * from "./generation-image-sources";
+export * from "./workflow-execution-result";
+export * from "./workflow-execution-progress";

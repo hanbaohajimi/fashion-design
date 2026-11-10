@@ -2,6 +2,7 @@ import { GenerationTaskStatus, ExportStatus, type PrismaClient } from "@fashion/
 import { type ProjectTaskAction, type ProjectTaskDomain, type ProjectTaskPage, type ProjectTaskView, projectTaskGroup } from "@fashion/shared";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
+import { readProjectTaskActivity } from "./project-task-activity";
 
 export const PROJECT_TASKS_DB = Symbol("PROJECT_TASKS_DB");
 type Group = "active" | "running" | "attention" | "ended";
@@ -32,7 +33,7 @@ function compareDescending(a: string, b: string): number {
 export class ProjectTasksService {
   constructor(@Inject(PROJECT_TASKS_DB) private readonly db: PrismaClient, @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy) {}
 
-  async list(userId: string, projectId: string, input: { group: Group; limit: number; cursor?: string | undefined }): Promise<ProjectTaskPage> {
+  async list(userId: string, projectId: string, input: { group: Group; limit: number; cursor?: string | undefined; activity?: boolean | undefined }): Promise<ProjectTaskPage> {
     const { capabilities } = await this.access.require(userId, projectId, "read");
     const editable = capabilities.edit;
     const cursor = decodeCursor(input.cursor);
@@ -47,8 +48,8 @@ export class ProjectTasksService {
     const take = input.limit + 1;
     const orderBy = [{ createdAt: "desc" as const }, { id: "desc" as const }];
     const generationWhere = (group: Group) => ({ projectId, workflowAttempts: { none: {} }, agentRunAttempt: { is: null }, status: states(group, [GenerationTaskStatus.QUEUED, GenerationTaskStatus.RUNNING], [GenerationTaskStatus.FAILED, GenerationTaskStatus.MODERATION_FAILED]) });
-    const workflowWhere = (group: Group) => ({ projectId, status: states(group, ["queued", "pending", "running", "dispatching"], ["failed", "not_admitted"]) });
-    const agentWhere = (group: Group) => ({ projectId, status: states(group, ["queued", "planning", "running", "executing"], ["ready", "awaiting_approval", "awaiting_review", "paused", "failed"]) });
+    const workflowWhere = (group: Group) => ({ projectId, status: states(group, ["queued", "pending", "running", "dispatching"], ["failed", "partial_failed", "moderation_failed", "not_admitted"]) });
+    const agentWhere = (group: Group) => ({ projectId, status: states(group, ["queued", "planning", "running", "executing"], ["ready", "awaiting_approval", "awaiting_review", "waiting_review", "paused", "failed"]) });
     const runwayWhere = (group: Group) => ({ projectId, status: states(group, ["QUEUED", "RUNNING"], ["WAITING_INPUT", "NEEDS_ATTENTION", "FAILED"]) });
     const exportWhere = (group: Group) => ({ projectId, status: states(group, [ExportStatus.QUEUED, ExportStatus.RUNNING], [ExportStatus.FAILED]) });
     const assistantWhere = (group: Group) => ({ conversation: { projectId }, role: "ASSISTANT" as const, replyToId: { not: null }, status: states(group, ["PENDING" as const], ["FAILED" as const]) });
@@ -68,8 +69,8 @@ export class ProjectTasksService {
       this.db.agentMessage.count({ where: assistantWhere(group) }), group === "attention" ? this.db.workflowProposal.count({ where: proposalWhere(group) }) : 0,
     ])).reduce((sum, count) => sum + count, 0);
     const revisionIds = [...new Set(exports.flatMap(row => row.studioRevisionId ? [row.studioRevisionId] : []))];
-    const [running, attention, attempts, documents] = await Promise.all([
-      countsFor("running"), countsFor("attention"),
+    const [observation, attempts, documents] = await Promise.all([
+      input.activity ? readProjectTaskActivity(this.db, projectId) : Promise.all([countsFor("running"), countsFor("attention")]).then(([running, attention]) => ({ counts: { running, attention }, activity: undefined })),
       executions.length ? this.db.workflowAttempt.findMany({ where: { projectId, executionId: { in: executions.map(row => row.id) }, generationTask: { status: { in: ["QUEUED", "RUNNING"] } } }, select: { generationTaskId: true, executionId: true } }) : [],
       revisionIds.length ? this.db.studioDocument.findMany({ where: { projectId, id: { in: revisionIds } }, select: { id: true, type: true, styleRevisionId: true } }) : [],
     ]);
@@ -95,6 +96,6 @@ export class ProjectTasksService {
       .sort((a, b) => compareDescending(a.createdAt, b.createdAt) || compareDescending(a.id, b.id));
     const items = rows.slice(0, input.limit);
     const last = items.at(-1);
-    return { items, counts: { running, attention }, nextCursor: rows.length > input.limit && last ? Buffer.from(JSON.stringify({ date: last.createdAt, id: last.id })).toString("base64url") : null };
+    return { items, counts: observation.counts, ...(observation.activity ? { activity: observation.activity } : {}), nextCursor: rows.length > input.limit && last ? Buffer.from(JSON.stringify({ date: last.createdAt, id: last.id })).toString("base64url") : null };
   }
 }

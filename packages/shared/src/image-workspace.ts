@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { imageAdjustmentsSchema } from "./image-adjustments";
+
+/** Admission-verified private identities, kept internally with the task snapshot. */
+export const imageInpaintSourceSchema = z.object({
+  version: z.literal(1),
+  sourceObjectKey: z.string().min(1).optional(),
+  maskObjectKey: z.string().min(1).optional(),
+}).strict();
 
 const point = z
   .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
@@ -31,11 +39,26 @@ export const imageFeedbackSchema = z
 export type ImageAnnotation = z.infer<typeof imageAnnotationSchema>;
 export type ImageComment = z.infer<typeof imageCommentSchema>;
 export type ImageFeedback = z.infer<typeof imageFeedbackSchema>;
+/** Numbering follows the saved comment list, including whole-image comments. */
+export const imageCommentMarkerSchema = z.object({
+  number: z.number().int().min(1).max(100),
+  point,
+}).strict();
+export type ImageCommentMarker = z.infer<typeof imageCommentMarkerSchema>;
+export const imageOrientationSchema = z.object({
+  rotate: z.number().min(-180).max(180),
+  flipHorizontal: z.boolean(),
+  flipVertical: z.boolean(),
+});
+export type ImageOrientation = z.infer<typeof imageOrientationSchema>;
 export const imageTransformSchema = z
   .object({
     prompt: z.string().max(4000).default("调整图片尺寸"),
     width: z.number().int().min(16).max(8192),
     height: z.number().int().min(16).max(8192),
+    // Crop uses the upright source coordinates. Mirror axes refer to the rotated result.
+    ...imageOrientationSchema.partial().shape,
+    adjustments: imageAdjustmentsSchema.optional(),
     crop: z
       .object({
         left: z.number().int().nonnegative(),
@@ -66,6 +89,18 @@ export const imageOutpaintSchema = z
     "扩图尺寸需至少 655360 像素，长宽比不超过 3:1",
   );
 export type ImageTransform = z.infer<typeof imageTransformSchema>;
+
+/** Full rotated bounds, matching Sharp/libvips' nearest-pixel rounding. */
+export function rotatedImageSize(width: number, height: number, degrees: number) {
+  const radians = degrees * Math.PI / 180;
+  const cosine = Math.abs(Math.cos(radians));
+  const sine = Math.abs(Math.sin(radians));
+  return {
+    width: Math.max(1, Math.round(width * cosine + height * sine)),
+    height: Math.max(1, Math.round(height * cosine + width * sine)),
+  };
+}
+
 export const IMAGE_TRANSFORM_QUEUE = "image-transform";
 export interface ImageTransformJob {
   attemptId: string;
@@ -76,6 +111,7 @@ export function imageAnnotationsSvg(
   items: readonly ImageAnnotation[],
   width: number,
   height: number,
+  markers: readonly ImageCommentMarker[] = [],
 ): string {
   const escape = (s: string) =>
     s.replace(
@@ -107,5 +143,15 @@ export function imageAnnotationsSvg(
     }
     return `<polyline points="${p.map((v) => `${v.x},${v.y}`).join(" ")}" ${attributes}/>`;
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${shapes.join("")}</svg>`;
+  const radius = Math.min(Math.max(12, Math.min(width, height) * .025), 32, Math.min(width, height) / 4);
+  const pins = markers.map(input => {
+    const marker = imageCommentMarkerSchema.parse(input);
+    const px = marker.point.x * width, py = marker.point.y * height;
+    const inset = radius + 1;
+    const x = Math.max(inset, Math.min(width - inset, px));
+    const y = Math.max(inset, Math.min(height - inset, py));
+    // Keep edge labels readable while the line retains the exact selected point.
+    return `<g><path d="M${px},${py} L${x},${y}" stroke="#ffffff" stroke-width="3"/><circle cx="${x}" cy="${y}" r="${radius}" fill="#214e40" stroke="#ffffff" stroke-width="2"/><text x="${x}" y="${y + radius * .36}" text-anchor="middle" font-family="sans-serif" font-size="${radius * 1.05}" font-weight="700" fill="#ffffff">${marker.number}</text></g>`;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${shapes.join("")}${pins.join("")}</svg>`;
 }

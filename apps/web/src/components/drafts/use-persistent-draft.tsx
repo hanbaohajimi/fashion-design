@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, isValidElement, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { DraftConflict, draftRepository, draftWriter, registerDraftDiscard, registerDraftFlush, normalizeDraftBaseline, serializeDraft, type DraftRecord } from "./draft-repository";
+import { DraftConflict, draftRepository, draftWriter, registerDraftDiscard, registerDraftFlush, normalizeDraftBaseline, sameDraftBaseline, serializeDraft, type DraftRecord } from "./draft-repository";
 import { Button } from "../ui";
 
 export interface DraftScope { accountId: string; projectId: string; editor: string; }
@@ -25,13 +25,16 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
   const scope = useContext(Scope);
   const report = useContext(Reports);
   const key = scope && enabled ? JSON.stringify([scope.accountId, scope.projectId, scope.editor, objectKey]) : "";
+  const hydrationOwner = useMemo(() => ({ key }), [key]);
+  const [loadedOwner, setLoadedOwner] = useState<typeof hydrationOwner | null>(null);
+  const ready = !key || loadedOwner === hydrationOwner;
   const live = useRef({ value, restore, baseline, key });
   useLayoutEffect(() => { live.current = { value, restore, baseline, key }; }, [value, restore, baseline, key]);
   const [notice, setNotice] = useState<string | null>(null);
   const [conflict, setConflict] = useState<DraftRecord<T> | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   const accountId = scope?.accountId;
-  const controller = useRef<{ key: string; flush: () => Promise<void>; discard: () => Promise<void>; capture: (value: T, baseline: string) => void; getRevision: () => number; acknowledge: (value: T, expectedRevision?: number) => Promise<void> } | null>(null);
+  const controller = useRef<{ key: string; flush: () => Promise<void>; checkpoint: (value: T, baseline: string) => Promise<void>; discard: () => Promise<void>; capture: (value: T, baseline: string) => void; getRevision: () => number; acknowledge: (value: T, expectedRevision?: number) => Promise<void> } | null>(null);
   useEffect(() => {
     if (!key || !accountId) return;
     draftRepository.enableAccount(accountId);
@@ -43,6 +46,7 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
     let revision = 0;
     let saved = "";
     let acknowledged = "";
+    let restoring: string | null = null;
     let base = live.current.baseline;
     let owned = { ...live.current };
     let queue = Promise.resolve();
@@ -51,10 +55,17 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("fashion-workspace-drafts");
     const restoreRecord = (record: DraftRecord<T>) => {
       revision = record.revision; saved = serializeDraft(record.value);
-      if (record.baseline !== live.current.baseline || serializeDraft(live.current.value) !== initial) {
+      if (sameDraftBaseline(saved, record.baseline)) {
+        // A clean record may survive an interrupted acknowledgement. It must not
+        // restore an obsolete document or conflict with a newly arrived result.
+        // The normal flush removes this exact revision (or saves newer input).
+        base = live.current.baseline; saved = ""; setNotice(null);
+        return;
+      }
+      if (!sameDraftBaseline(record.baseline, live.current.baseline) || serializeDraft(live.current.value) !== initial) {
         blocked = true; setConflict(record); setNotice("本机草稿与当前资料存在差异，请核对后继续。");
       } else {
-        base = record.baseline; live.current.restore(record.value); setNotice("已恢复本机草稿，尚未保存到项目。");
+        base = record.baseline; restoring = saved; live.current.restore(record.value); setNotice("已恢复本机草稿，尚未保存到项目。");
       }
     };
     const initialization = Promise.all([draftRepository.read<T>(key), draftRepository.conflicts<T>(key)]).then(([record, copies]) => {
@@ -65,24 +76,31 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
       else saved = initial;
       if (copies[0]) { conflictCopy = copies[0]; blocked = true; setConflict(copies[0]); setNotice("另一个版本的本机草稿已保留，请核对差异。"); }
       loaded = true;
+      setLoadedOwner(hydrationOwner);
     }).catch(() => {
       if (!active) return;
       const cached = draftRepository.memory<T>(key);
       if (cached) restoreRecord(cached);
       loaded = true; setNotice("本机草稿暂未保存，当前内容仅保留在本页。");
+      setLoadedOwner(hydrationOwner);
     });
-    const flush = () => {
+    const flush = (snapshot?: { value: T; baseline: string }) => {
       clearTimeout(timer);
       queue = queue.then(async () => {
         await initialization;
         if (!loaded || blocked) return;
-        if (live.current.key === key) owned = { ...live.current };
+        if (snapshot) owned = { ...owned, ...snapshot };
+        else if (live.current.key === key) owned = { ...live.current };
         const signature = serializeDraft(owned.value);
         const currentBase = owned.baseline;
+        // Initialization schedules a React restore. An eager clean-form flush can
+        // run before that render commits; it must not delete the recovered record.
+        if (restoring && signature === initial && signature !== restoring) return;
+        restoring = null;
         if (acknowledged && signature === acknowledged) return;
         if (signature === saved && currentBase === base) return;
         // Clean drafts are removed only when the stored version is still ours.
-        if (signature === currentBase) {
+        if (sameDraftBaseline(signature, currentBase)) {
           if (revision) await draftRepository.remove(key, revision);
           revision = 0; base = currentBase; saved = signature; return;
         }
@@ -129,7 +147,7 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
         catch { if (active) setNotice("本机草稿暂未保存，当前内容仅保留在本页。"); }
       }
     };
-    controller.current = { key, acknowledge, getRevision: () => revision, capture: (value, baseline) => { if (acknowledged && serializeDraft(value) !== acknowledged) acknowledged = ""; owned = { ...owned, value, baseline }; if (abandoned && serializeDraft(value) === baseline) { abandoned = false; blocked = false; saved = baseline; base = baseline; } }, flush: async () => { change(); await flush(); }, discard };
+    controller.current = { key, acknowledge, getRevision: () => revision, checkpoint: (value, baseline) => flush({ value, baseline }), capture: (value, baseline) => { if (restoring === serializeDraft(value)) restoring = null; if (acknowledged && serializeDraft(value) !== acknowledged) acknowledged = ""; owned = { ...owned, value, baseline }; if (abandoned && sameDraftBaseline(serializeDraft(value), baseline)) { abandoned = false; blocked = false; saved = serializeDraft(value); base = baseline; } }, flush: async () => { change(); await flush(); }, discard };
     const unregister = registerDraftFlush(flush);
     const unregisterDiscard = registerDraftDiscard(key, async () => {
       await queue;
@@ -145,7 +163,7 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
       document.removeEventListener("visibilitychange", hidden);
       if (controller.current?.key === key) controller.current = null;
     };
-  }, [key, accountId]);
+  }, [key, accountId, hydrationOwner]);
   useLayoutEffect(() => { if (controller.current?.key === key) controller.current.capture(value, baseline); }, [key, value, baseline]);
   const signature = serializeDraft(value);
   useEffect(() => {
@@ -154,8 +172,15 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
     return () => clearTimeout(timer);
   }, [signature, baseline, key]);
   const result = useMemo(() => ({
-    notice, conflict, showDiff, setShowDiff,
+    ready, notice, conflict, showDiff, setShowDiff,
     dismiss: () => setNotice(null),
+    checkpoint: async (next: T, nextBaseline: string) => {
+      const owner = controller.current;
+      if (!owner || owner.key !== key) return;
+      // A server save can be followed immediately by reload. Persist the new
+      // baseline and the retained editor state before starting another request.
+      await owner.checkpoint(next, normalizeDraftBaseline(nextBaseline));
+    },
     acknowledge: (submitted: T) => controller.current?.key === key ? controller.current.acknowledge(submitted) : undefined,
     captureAcknowledgement: async (submitted: T) => {
       const owner = controller.current;
@@ -168,7 +193,7 @@ export function usePersistentDraft<T>({ value, restore, baseline: serverBaseline
     useServer: async () => { await controller.current?.discard(); live.current.restore(JSON.parse(live.current.baseline) as T); },
     useLocal: async () => { const record = conflict; await controller.current?.discard(); if (record) live.current.restore(record.value); },
     continueEditing: async () => { await controller.current?.discard(); await controller.current?.flush(); },
-  }), [notice, conflict, showDiff, key]);
+  }), [ready, notice, conflict, showDiff, key]);
   const node = useMemo(() => notice ? <DraftRecoveryNotice draft={result} current={JSON.parse(signature) as T} /> : null, [notice, result, signature]);
   useEffect(() => { if (key) report?.(key, node); return () => { if (key) report?.(key, null); }; }, [key, node, report]);
   return result;

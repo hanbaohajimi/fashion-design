@@ -1,4 +1,3 @@
-import { valueControl } from "./choice-control";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import {
@@ -140,7 +139,7 @@ for (const [tab, field] of [["samples", "轮次名称"]] as const)
     await expect(page.getByLabel(field, { exact: true })).toBeDisabled();
   });
 
-for (const width of [1738, 1440, 1280, 1199, 1024, 390, 720])
+for (const width of [1738, 1440, 1280, 1199, 1024, 390, 320, 720])
   test(`工作室导航与页面在 ${width} 宽无横向溢出`, async ({ page }) => {
     await page.setViewportSize({
       width,
@@ -173,7 +172,7 @@ for (const width of [1738, 1440, 1280, 1199, 1024, 390, 720])
       });
       if (width < 1200)
         await expect(
-          valueControl(page, "当前功能"),
+          page.getByRole("button", { name: "展开工作区目录", exact: true }),
         ).toBeVisible();
       else
         await expect(

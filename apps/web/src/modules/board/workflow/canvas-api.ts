@@ -22,6 +22,7 @@ async function request<T>(
   path: string,
   method: string,
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await privateFetch(
     `/api/projects/${encodeURIComponent(projectId)}/canvas${path}`,
@@ -29,6 +30,7 @@ async function request<T>(
       method,
       credentials: "include",
       cache: "no-store",
+      ...(signal ? { signal } : {}),
       ...(body === undefined
         ? {}
         : {
@@ -54,10 +56,11 @@ export const fetchCanvas = (projectId: string) =>
   request<CanvasDocumentView>(projectId, "", "GET");
 export const saveCanvas = (projectId: string, input: CanvasSave) =>
   request<CanvasDocumentView>(projectId, "", "PATCH", input);
-export const runCanvasCommand = (projectId: string, input: CanvasCommand) =>
+export const runCanvasCommand = (projectId: string, input: CanvasCommand, signal?: AbortSignal) =>
   request<{ nodeId: string; graph: WorkflowGraph; canvas: CanvasDocumentView }>(
     projectId,
     "/commands",
     "POST",
     input,
+    signal,
   );

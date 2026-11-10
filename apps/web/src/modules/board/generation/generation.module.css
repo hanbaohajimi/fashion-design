@@ -367,6 +367,22 @@
   color: var(--color-ink);
 }
 
+.designPath.embeddedPath {
+  container: design-path / inline-size;
+  max-height: none;
+  overflow: visible;
+  padding: 16px 0 0;
+  background: transparent;
+}
+
+@container design-path (max-width: 560px) {
+  .embeddedPath .pathGraph { overflow: visible; }
+  .embeddedPath .pathRow { min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .embeddedPath .pathRow button { min-height: 44px; width: 100%; }
+  .embeddedPath .pathOperation::before, .embeddedPath .pathOperation::after { display: none; }
+  .embeddedPath .pathDetails dl > div { grid-template-columns: 64px minmax(0, 1fr); }
+}
+
 @media (max-width: 760px) {
   .lightbox > header {
     display: block;
@@ -1094,6 +1110,16 @@
   display: grid;
   min-width: 0;
   gap: 6px;
+}
+
+.versionActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.versionActions button { min-height: var(--control-height-touch); border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-md); padding: 8px 12px; color: var(--color-ink); background: var(--color-paper); cursor: pointer; }
+.versionActions button:disabled { color: var(--color-disabled-ink); background: var(--color-disabled-bg); cursor: not-allowed; }
+.versionActions button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.versionComparison { display: flex; flex-direction: column; height: var(--image-comparison-height, min(680px, 70dvh)); min-height: 360px; }
+@media (max-width: 767px) {
+  .versionTimeline li .versionActions { grid-column: 2 / -1; padding-bottom: 12px; }
+  .versionComparison { height: var(--image-comparison-height, max(360px, calc(100dvh - 230px))); }
 }
 
 .versionMeta strong {

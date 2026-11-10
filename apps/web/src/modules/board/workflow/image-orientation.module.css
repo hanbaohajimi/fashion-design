@@ -1,0 +1,124 @@
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: -6px;
+  padding: 6px;
+  scroll-padding-block: 6px;
+}
+.controls {
+  flex: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.group {
+  display: grid;
+  gap: 10px;
+}
+.label {
+  font-weight: 600;
+}
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pair button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.pair button:hover:enabled {
+  background: var(--color-overlay);
+}
+.pair button[aria-pressed="true"] {
+  background: var(--color-selection-bg);
+  color: var(--color-action);
+  border-color: var(--color-action);
+}
+.angleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.angleRow label {
+  font-weight: 600;
+}
+.angleInput {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 112px;
+}
+.angleInput input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.controls input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--color-action);
+  min-height: 32px;
+  cursor: pointer;
+}
+.output {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding-block: 16px;
+  border-top: var(--border-hairline) solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+.output span {
+  color: var(--color-ink-secondary);
+}
+.output strong {
+  font-weight: 500;
+}
+.output small,
+.output p {
+  grid-column: 1 / -1;
+}
+.output p[role="alert"] {
+  color: var(--color-status-error);
+}
+.save {
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding-block-start: 12px;
+}
+.save small {
+  text-align: center;
+}
+@media (max-width: 767px) {
+  .controls {
+    gap: 16px;
+  }
+  .controls input[type="range"] {
+    min-height: 44px;
+  }
+  .intro {
+    display: none;
+  }
+  .content {
+    gap: 12px;
+  }
+  .save {
+    padding-block-start: 8px;
+  }
+}

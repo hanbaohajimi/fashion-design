@@ -28,8 +28,8 @@ function anchor(name: string, metadata: Record<string, string> = {}): HTMLElemen
 
 describe("设计助手导览与当前入口一致", () => {
   it.each([
-    ["collapsed", "点击“设计助手”展开对话区"],
-    ["mobile", "切换到“助手”视图"],
+    ["collapsed", "点击画布中的织芽或助手入口展开对话"],
+    ["mobile", "从画布中的织芽进入对话"],
     ["input", "生成前再请你确认"],
     ["history", "顶部“新建对话”"],
     ["paused", "“助手设置”中选择“恢复设计助手”"],
@@ -59,6 +59,10 @@ describe("设计助手导览与当前入口一致", () => {
 });
 
 describe("款式资料导览只介绍实际提供的能力", () => {
+  it("目录收起时说明展开入口", () => {
+    anchor("studio-navigation", { guideVariant: "collapsed" });
+    expect(resolveGuideSteps("studio")[0]?.description).toContain("点击这里展开目录");
+  });
   it("没有切换器和修订标记的功能只介绍名称与说明", () => {
     const target = anchor("studio-object", { guideTitle: "色料与改款实验" });
     target.textContent = "切换资料、修订是其他功能的说明";

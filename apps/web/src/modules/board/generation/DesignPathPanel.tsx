@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { useDraftScope } from "../../../components/drafts/use-persistent-draft";
 import type {
   DesignDecisionKind,
   DesignPathStep,
@@ -40,11 +41,12 @@ const DECISION_LABELS: Record<DesignDecisionKind, string> = {
   compare: "保留比较",
 };
 
-export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
+export function DesignPathPanel({ assetId, readOnly = false, embedded = false }: { readonly assetId: string; readonly readOnly?: boolean; readonly embedded?: boolean }) {
   const queryClient = useQueryClient();
+  const scope = useDraftScope();
   const path = useQuery({
-    queryKey: ["design-asset-path", assetId],
-    queryFn: () => fetchDesignPath(assetId),
+    queryKey: ["design-asset-path", scope?.accountId, assetId],
+    queryFn: ({ signal }) => fetchDesignPath(assetId, signal),
   });
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -87,13 +89,13 @@ export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
     );
 
   return (
-    <section className={styles.designPath} aria-label="设计路径">
+    <section className={`${styles.designPath} ${embedded ? styles.embeddedPath : ""}`} aria-label="设计路径">
       <header>
         <div>
-          <span>DESIGN PROCESS</span>
-          <h3>从来源到设计结果</h3>
+          {!embedded ? <span>DESIGN PROCESS</span> : null}
+          <h3>{embedded ? "设计路径" : "从来源到设计结果"}</h3>
         </div>
-        <p>点击操作节点查看当时的输入与约束。放上白板与选定方案分别记录。</p>
+        {!embedded ? <p>点击操作节点查看当时的输入与约束。放上白板与选定方案分别记录。</p> : null}
       </header>
       {path.isPending ? (
         <p role="status">正在读取设计路径…</p>
@@ -201,7 +203,7 @@ export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
                 {latest ? DECISION_LABELS[latest.kind] : "尚未作出明确选择"}
               </span>
             </div>
-            <label htmlFor={`decision-reason-${assetId}`}>
+            {!readOnly ? <><label htmlFor={`decision-reason-${assetId}`}>
               选择理由（可选）
             </label>
             <textarea
@@ -234,6 +236,7 @@ export function DesignPathPanel({ assetId }: { readonly assetId: string }) {
                   : "保存失败，请重试"}
               </p>
             ) : null}
+            </> : null}
             {latest?.reason ? <p>最近的理由：{latest.reason}</p> : null}
             <details>
               <summary>查看历史选择</summary>

@@ -37,6 +37,7 @@
 .railExtras > button,
 .railExtras summary,
 .selectionBar button,
+.selectionBar summary,
 .drawingSettings button,
 .tips button,
 .status button {
@@ -58,11 +59,13 @@
 }
 .railExtras > button:hover:not(:disabled),
 .selectionBar button:hover:not(:disabled),
+.selectionBar summary:hover,
 .drawingSettings button:hover:not(:disabled),
 .status button:hover {
   background: var(--color-surface);
 }
-.drawingSettings button[aria-pressed="true"] {
+.drawingSettings button[aria-pressed="true"],
+.railExtras > button[aria-expanded="true"] {
   background: var(--color-navigation-selected);
   color: var(--color-action);
 }
@@ -82,7 +85,7 @@
   color: var(--color-action);
 }
 .selectionBar {
-  top: 64px;
+  top: calc(116px + env(safe-area-inset-top, 0px));
   display: flex;
   align-items: center;
   gap: 2px;
@@ -98,7 +101,7 @@
   white-space: nowrap;
 }
 .drawingSettings {
-  top: 64px;
+  top: calc(116px + env(safe-area-inset-top, 0px));
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -106,7 +109,7 @@
   padding: 10px 12px;
 }
 .drawingSettings[data-with-selection="true"] {
-  top: 116px;
+  top: calc(172px + env(safe-area-inset-top, 0px));
 }
 .drawingSettings fieldset {
   border: 0;
@@ -147,7 +150,7 @@
   min-width: 36px;
 }
 .tips {
-  top: 64px;
+  top: calc(116px + env(safe-area-inset-top, 0px));
   width: 340px;
   padding: 16px;
   font-size: 14px;
@@ -164,7 +167,6 @@
   line-height: 1.6;
   margin: 8px 0 0;
 }
-.emptyState,
 .loadState {
   position: absolute;
   z-index: 300;
@@ -175,14 +177,12 @@
   text-align: center;
   pointer-events: auto;
 }
-.emptyState h2,
 .loadState h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--color-ink);
 }
-.emptyState p,
 .loadState p {
   margin: 12px 0 20px;
   font-size: 14px;
@@ -190,7 +190,6 @@
   color: var(--color-ink-secondary);
   overflow-wrap: anywhere;
 }
-.emptyState button,
 .loadState button {
   min-height: 44px;
   padding: 10px 16px;
@@ -233,6 +232,7 @@
   .railExtras > button,
   .railExtras summary,
   .selectionBar button,
+  .selectionBar summary,
   .drawingSettings button,
   .tips button {
     min-height: 44px;
@@ -241,10 +241,10 @@
   .selectionBar,
   .drawingSettings,
   .tips {
-    top: 56px;
+    top: calc(116px + env(safe-area-inset-top, 0px));
   }
   .drawingSettings[data-with-selection="true"] {
-    top: 116px;
+    top: calc(176px + env(safe-area-inset-top, 0px));
   }
   .selectionBar {
     gap: 0;
@@ -256,7 +256,6 @@
     gap: 8px 16px;
     padding: 8px;
   }
-  .emptyState,
   .loadState {
     top: 46%;
   }

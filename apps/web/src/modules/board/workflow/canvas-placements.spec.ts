@@ -25,12 +25,23 @@ describe("explicit canvas placements", () => {
     const editor = {
       getSelectedShapeIds: () => ["frame", "image", "missing"],
       getShape: (id: string) => records.find((record) => record.id === id),
+      isShapeHidden: () => false,
       getSortedChildIdsForParent: (id: string) => children[id] ?? [],
     } as unknown as Editor;
     expect(selectedMaterialShapes(editor).map((shape) => shape.id)).toEqual([
       "image",
       "text",
     ]);
+  });
+
+  it("explicit container references skip hidden children and whole hidden subtrees", () => {
+    const shapes = ["frame", "image", "hidden-image", "hidden-group", "nested"].map(id => ({ id, type: id === "frame" ? "frame" : id === "hidden-group" ? "group" : "fashion-image" }));
+    const children: Record<string, string[]> = { frame: ["image", "hidden-image", "hidden-group"], "hidden-group": ["nested"] };
+    const editor = { getSelectedShapeIds: () => ["frame", "hidden-image"],
+      getShape: (id: string) => shapes.find(shape => shape.id === id),
+      isShapeHidden: (shape: { id: string }) => shape.id.startsWith("hidden-"),
+      getSortedChildIdsForParent: (id: string) => children[id] ?? [] } as unknown as Editor;
+    expect(selectedMaterialShapes(editor).map(shape => shape.id)).toEqual(["image"]);
   });
 
   it("binds a copied placement only to a real material in this project", () => {

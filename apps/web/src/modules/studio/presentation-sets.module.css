@@ -576,12 +576,14 @@
     gap: 8px;
   }
   .actionButtons > button {
-    flex: 1;
+    flex: 1 0 auto;
     min-height: 44px;
     padding-inline: 8px;
+    white-space: nowrap;
   }
   .actionButtons > div {
     max-width: none;
+    flex: 1 0 100%;
   }
   .previewDialog {
     padding: 16px;

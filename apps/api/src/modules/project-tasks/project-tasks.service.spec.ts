@@ -13,7 +13,7 @@ const row = (id: string, fields: Record<string, unknown> = {}) => ({
 const cursor = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 
 function setup(editable = true) {
-  const store = () => ({ findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) });
+  const store = () => ({ findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0), groupBy: vi.fn().mockResolvedValue([]) });
   const database = {
     generationTask: store(),
     workflowExecution: store(),
@@ -30,6 +30,29 @@ function setup(editable = true) {
 }
 
 describe("项目任务聚合", () => {
+  it("活动摘要沿用项目权限；权限失败时不查询任何领域", async () => {
+    const { database, access, service } = setup();
+    access.require.mockRejectedValueOnce(new Error("无权读取项目"));
+    await expect(service.list("outsider", "private", { group: "active", limit: 1, activity: true })).rejects.toThrow("无权读取项目");
+    expect(database.generationTask.findMany).not.toHaveBeenCalled();
+    expect(database.generationTask.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("摘要不受分页、分组和游标限制，旧请求不增加字段或摘要查询", async () => {
+    const { database, service } = setup(false);
+    database.generationTask.findMany.mockImplementation(query => query.orderBy[0].updatedAt
+      ? [row("newly-finished", { status: "SUCCEEDED", updatedAt: new Date("2026-11-08T10:00:00Z") })] : []);
+    database.generationTask.groupBy.mockResolvedValue([{ status: "SUCCEEDED", _count: { _all: 1 } }]);
+    const result = await service.list("viewer", "project-a", { group: "ended", limit: 1, cursor: cursor({ date: date.toISOString(), id: "generation:a" }), activity: true });
+    expect(result.items).toEqual([]);
+    expect(result.activity?.recent).toMatchObject([{ id: "generation:newly-finished", outcome: "completed" }]);
+    expect(database.generationTask.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 20, where: expect.not.objectContaining({ OR: expect.anything() }) }));
+    database.generationTask.groupBy.mockClear();
+    const legacy = await service.list("viewer", "project-a", { group: "active", limit: 30 });
+    expect(legacy).not.toHaveProperty("activity");
+    expect(database.generationTask.groupBy).not.toHaveBeenCalled();
+  });
+
   it("按导出来源定位展示稿、技术包和图片，并保留款式修订", async () => {
     const { database, service } = setup();
     database.exportJob.findMany.mockResolvedValue([

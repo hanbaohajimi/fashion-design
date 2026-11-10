@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   WorkspaceDraftProvider,
   WorkspaceDraftStore,
@@ -16,6 +16,30 @@ function Editor({ value, dirty }: { value: string; dirty: boolean }) {
 }
 
 describe("画布工作区草稿", () => {
+  it("连续调整仍保留最新值，只在草稿保护状态改变时通知工作区", () => {
+    const store = new WorkspaceDraftStore();
+    const initial = { owner: "image", baseline: "v1", value: { angle: 0 }, dirty: false, conflict: false, locked: false };
+    store.update("image:orientation", initial);
+    const listener = vi.fn();
+    const unsubscribe = store.subscribe(listener);
+    store.update("image:orientation", { ...initial, value: { angle: 1 }, dirty: true });
+    expect(listener).toHaveBeenCalledTimes(1);
+    for (let angle = 2; angle <= 180; angle++) store.update("image:orientation", { ...initial, value: { angle }, dirty: true });
+    expect(store.get("image:orientation")?.value).toEqual({ angle: 180 });
+    expect(store.ownerDirty("image")).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    store.update("image:orientation", { ...initial, dirty: true, locked: true });
+    expect(listener).toHaveBeenCalledTimes(2);
+    store.update("image:orientation", { ...initial, dirty: true, locked: true, conflict: true });
+    expect(listener).toHaveBeenCalledTimes(3);
+    store.update("image:orientation", { ...initial, baseline: "v2" });
+    expect(listener).toHaveBeenCalledTimes(4);
+    expect(store.ownerDirty("image")).toBe(false);
+    expect(store.ownerLocked("image")).toBe(false);
+    expect(store.ownerConflict("image")).toBe(false);
+    expect(store.ownerEpoch("image")).toBe(1);
+    unsubscribe();
+  });
   it("登记修改、保留基准版本，在后台更新后阻止静默覆盖", () => {
     const store = new WorkspaceDraftStore();
     const view = (baseline: string, value: string, dirty: boolean) => (

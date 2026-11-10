@@ -50,6 +50,9 @@
 
 ## 手工验证：manual/
 
+- 织芽：正式入口与同一聊天的回归使用 `pnpm exec playwright test tests/e2e/zhiya-assistant.spec.ts tests/e2e/zhiya-lifecycle.spec.ts --workers=1`。原生计时性能、开关回退和检查边界见 [接入验证记录](../doc/design/assistant-seed/validation.md)。
+- 森林布偶 Live2D：历史 [资产审计与交付边界](../doc/design/forest-spirit/asset-audit.md) 与 `manual/forest-spirit/` 工具保留。旧合成模型检查只代表历史交互方案，当前白板已由织芽替换。
+
 - [diagnose-wardrobe-material-alpha.mjs](manual/diagnose-wardrobe-material-alpha.mjs)：尚未验收的蕾丝透明诊断，命令参数依次为原图、真实绿色中间图、同尺寸蒙版、`output/` 内目录。仅适用于已审计的 1024×1536 袖部案例，保留全部原图 RGB 和蒙版外像素；派生 alpha、三底及细节图均明确标记为诊断，不创建项目资产、不确认单品、不发模型请求。详见[透明材质实测](../doc/plans/wardrobe-tryon/ALPHA-INVESTIGATION.md)。
 
 - [verify-assistant-stream.mjs](manual/verify-assistant-stream.mjs)：运行 `node --env-file=.env.example --env-file-if-exists=.env scripts/manual/verify-assistant-stream.mjs`，使用现有 Amux 配置发起一次短文本请求，验证真实 SSE 分块、增量文本与最终结果一致；只将脱敏时间、分块计数及结果写入 `output/ui-refinement/assistant-stream/gateway-smoke.json`。

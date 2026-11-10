@@ -44,7 +44,7 @@ export default async function TrendsPage({ searchParams }: TrendsPageProps) {
       <div className={styles.editorialFrame}>
 
 
-        <section className={styles.hero}>
+        <section className={styles.hero} data-workspace-heading>
           <h1>趋势档案</h1>
         </section>
 

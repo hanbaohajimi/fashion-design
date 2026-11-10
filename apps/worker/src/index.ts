@@ -33,6 +33,12 @@ import {
   markCollectionSimilarityFailed,
 } from "./processors/collection-similarity.processor";
 import { createGenerationProcessor } from "./processors/generation.processor";
+import { createImageEditCleanupProcessor } from "./processors/image-edit-cleanup.processor";
+import {
+  IMAGE_EDIT_CLEANUP_QUEUE,
+  createImageEditCleanupJobs,
+  type ImageEditCleanupJobData,
+} from "./queues/image-edit-cleanup.queue";
 import { createImageTransformProcessor } from "./processors/image-transform.processor";
 import { IMAGE_TRANSFORM_QUEUE, type ImageTransformJob } from "@fashion/shared";
 import {
@@ -76,6 +82,13 @@ function redisConnection() {
 }
 
 const storage = new S3ThumbnailStorage();
+const imageEditCleanupQueue = new Queue<ImageEditCleanupJobData>(IMAGE_EDIT_CLEANUP_QUEUE, { connection: redisConnection() });
+const imageEditCleanupWorker = new Worker<ImageEditCleanupJobData>(IMAGE_EDIT_CLEANUP_QUEUE,
+  createImageEditCleanupProcessor({ database: prisma, storage }),
+  { connection: redisConnection(), concurrency: 1, lockDuration: 30_000, maxStalledCount: 2 });
+imageEditCleanupWorker.on("error", (error) => captureWorkerException(error, { phase: "failed", queue: IMAGE_EDIT_CLEANUP_QUEUE }));
+imageEditCleanupWorker.on("failed", (_job, error) => captureWorkerException(error, { phase: "failed", queue: IMAGE_EDIT_CLEANUP_QUEUE }));
+imageEditCleanupQueue.on("error", (error) => captureWorkerException(error, { phase: "failed", queue: IMAGE_EDIT_CLEANUP_QUEUE }));
 const imageTransformWorker = new Worker<ImageTransformJob>(IMAGE_TRANSFORM_QUEUE, createImageTransformProcessor(prisma, storage), { connection: redisConnection(), concurrency: 2 });
 imageTransformWorker.on("error", (error) => captureWorkerException(error, { phase: "failed", queue: IMAGE_TRANSFORM_QUEUE }));
 const amuxClaude = createAmuxClaudeClientFromEnv();
@@ -147,6 +160,7 @@ const processGeneration = createGenerationProcessor({
   database: prisma,
   moderator: new AmuxClaudeContentModerationService(amuxClaude),
   storage,
+  imageInputCleanup: createImageEditCleanupJobs(imageEditCleanupQueue),
   visualSummaryJobs,
   similarityJobs: {
     async enqueue(collectionId, designAssetId) {
@@ -289,6 +303,7 @@ async function start(): Promise<void> {
   await Promise.all([
     thumbnailWorker.waitUntilReady(),
     imageTransformWorker.waitUntilReady(),
+    imageEditCleanupWorker.waitUntilReady(),
     visualSummaryWorker.waitUntilReady(),
     inferenceWorker.waitUntilReady(),
     generationWorker.waitUntilReady(),
@@ -310,6 +325,8 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   console.log(`收到 ${signal}，正在关闭 Worker。`);
   await Promise.all([
     imageTransformWorker.close(),
+    imageEditCleanupWorker.close(),
+    imageEditCleanupQueue.close(),
     generationWorker.close(),
     collectionSimilarityWorker.close(),
     exportWorker.close(),
@@ -408,6 +425,8 @@ void start().catch(async (error: unknown) => {
   captureWorkerException(error, { phase: "bootstrap", queue: "worker" });
   await Promise.all([
     imageTransformWorker.close(),
+    imageEditCleanupWorker.close(),
+    imageEditCleanupQueue.close(),
     generationWorker.close(),
     collectionSimilarityWorker.close(),
     exportWorker.close(),

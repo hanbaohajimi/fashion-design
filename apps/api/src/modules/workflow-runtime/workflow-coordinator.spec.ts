@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { WorkflowCoordinator } from "./workflow-coordinator";
 import { parsePlannerDecision, workflowActionFingerprint, type PlannerDecision } from "./workflow-planner";
+import type { VisualContextResult } from "../design-context/visual-context.service";
 
 const reply = () => parsePlannerDecision({ kind: "reply", message: "根据已读取内容解释设计过程", plan: null, objectiveUpdate: null, preferences: [] });
 const read = () => ({ ...reply(), kind: "read", reads: [{ type: "nodes", ids: ["brief"] }] });
-function harness(responses: unknown[], declined: unknown[] = []) {
+function harness(responses: unknown[], declined: unknown[] = [], integrated = false) {
   const graph = { projectId: "project", revision: 4, layoutRevision: 0, legacyAvailable: false,
     nodes: [{ id: "brief", kind: "asset", type: "brief", title: "设计需求", payload: { text: "保留立领" }, status: "ready", x: 0, y: 0 }], edges: [] };
   const context = { nodes: graph.nodes, focusNodeIds: [], graphRevision: 4, contextRevision: 1, summaryRevision: 2,
@@ -12,14 +13,26 @@ function harness(responses: unknown[], declined: unknown[] = []) {
   const database = { $queryRaw: vi.fn(async () => []), $transaction: vi.fn(async () => undefined), workflowNodeVersion: { findMany: vi.fn(async () => []) },
     workflowAttempt: { groupBy: vi.fn(async () => []) }, workflowProposal: { findMany: vi.fn(async () => declined) }, project: { findUnique: vi.fn(async () => ({ id: "project", wsId: "workspace", deletedAt: null, workspace: { ownerId: "user" } })), findFirst: vi.fn(async () => ({ id: "project" })) } };
   const contexts = { build: vi.fn(async () => ({ graph, context })), get: vi.fn(async () => ({ revision: 1, state: { preferences: [] } })) };
-  const visual = { enrich: vi.fn(async () => ({ images: [], imageBindings: [], index: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } })) };
+  const visual = { enrich: vi.fn(async (): Promise<VisualContextResult> => ({ images: [], imageBindings: [], index: [], coverage: { total: 0, ready: 0, pending: 0, failed: 0, attachedNodeIds: [], unreadNodeIds: [] } })) };
   const generateJson = vi.fn(async (request: { parse: (value: unknown) => PlannerDecision; prompt: string }) => {
     const value = responses.shift() ?? reply();
     if (value instanceof Error) throw value;
     return request.parse(value);
   });
-  const coordinator = new WorkflowCoordinator(database as never, {} as never, contexts as never, visual as never, { generateJson } as never);
-  return { coordinator, generateJson, database };
+  const integration = { integrate: vi.fn(async (_user: string, _project: string, options: { visual: VisualContextResult }) => ({ context,
+    slots: { designTrajectory: { visualIndex: options.visual.index, visualCoverage: options.visual.coverage } } })) };
+  const coordinator = new WorkflowCoordinator(database as never, {} as never, contexts as never, visual as never, { generateJson } as never, integrated ? integration as never : undefined);
+  return { coordinator, generateJson, database, visual, graph };
+}
+
+function visualBatch(ids: string[], pending: string[] = []): VisualContextResult {
+  return {
+    images: ids.map(id => ({ url: `data:image/webp;base64,${Buffer.from(id).toString("base64")}`, detail: "high" })),
+    imageBindings: ids.map((id, imageIndex) => ({ imageIndex, nodeId: id, assetId: null, fileAssetId: `file-${id}` })),
+    index: [...ids, ...pending].map(id => ({ nodeId: id, assetId: null, fileAssetId: `file-${id}`,
+      status: pending.includes(id) ? "not_ready" : "ready", summary: null, error: null })),
+    coverage: { total: ids.length + pending.length, ready: ids.length, pending: pending.length, failed: 0, attachedNodeIds: ids, unreadNodeIds: pending },
+  };
 }
 
 describe("Fig8 bounded coordinator", () => {
@@ -109,5 +122,38 @@ describe("Fig8 bounded coordinator", () => {
     expect(first.context).toMatchObject({ dialog: [], trajectory: null, preferences: [] });
     expect(first.previousPlan).toBeNull();
     expect(result.readResults).toEqual([expect.objectContaining({ type: "dialog", unavailable: true })]);
+  });
+
+  it("补读重新计算摘要覆盖，记录本轮实际传入过的图片而不只记录最后八张", async () => {
+    const firstIds = Array.from({ length: 8 }, (_, i) => `image-${i}`);
+    const nextIds = Array.from({ length: 8 }, (_, i) => `image-${i + 8}`);
+    const h = harness([{ ...read(), reads: [{ type: "images", ids: nextIds }] }, reply()], [], true);
+    const template = h.graph.nodes[0];
+    if (!template) throw new Error("测试节点缺失");
+    h.graph.nodes = [...firstIds, ...nextIds].map(id => ({ ...template, id }));
+    h.visual.enrich.mockResolvedValueOnce(visualBatch(firstIds, nextIds)).mockResolvedValueOnce(visualBatch(nextIds));
+    const result = await h.coordinator.run(input);
+    const second = JSON.parse(h.generateJson.mock.calls[1]?.[0].prompt ?? "{}");
+    expect(second.visualCoverage).toMatchObject({ total: 16, ready: 16, pending: 0, attachedNodeIds: nextIds });
+    expect(second.context.visualIndex.map((entry: { status: string }) => entry.status)).toEqual(Array(16).fill("ready"));
+    expect(second.contextSlots.designTrajectory.visualIndex).toEqual(second.context.visualIndex);
+    expect(second.contextSlots.designTrajectory.visualCoverage).toEqual(second.visualCoverage);
+    expect(second.imageBindings.map((binding: { nodeId: string }) => binding.nodeId)).toEqual(nextIds);
+    expect(result.visual.coverage).toMatchObject({ providedNodeIds: [...firstIds, ...nextIds], providedImageCount: 16 });
+  });
+
+  it("一轮里补读后又被替换的图片没有进入模型时不能算作已经传入", async () => {
+    const firstIds = Array.from({ length: 8 }, (_, i) => `first-${i}`);
+    const skippedIds = Array.from({ length: 8 }, (_, i) => `skipped-${i}`);
+    const lastIds = Array.from({ length: 8 }, (_, i) => `last-${i}`);
+    const h = harness([{ ...read(), reads: [{ type: "images", ids: skippedIds }, { type: "images", ids: lastIds }] }, reply()]);
+    const template = h.graph.nodes[0];
+    if (!template) throw new Error("测试节点缺失");
+    h.graph.nodes = [...firstIds, ...skippedIds, ...lastIds].map(id => ({ ...template, id }));
+    h.visual.enrich.mockResolvedValueOnce(visualBatch(firstIds, [...skippedIds, ...lastIds]))
+      .mockResolvedValueOnce(visualBatch(skippedIds)).mockResolvedValueOnce(visualBatch(lastIds));
+    const result = await h.coordinator.run(input);
+    expect(result.visual.coverage).toMatchObject({ providedNodeIds: [...firstIds, ...lastIds], providedImageCount: 16 });
+    expect(h.generateJson).toHaveBeenCalledTimes(2);
   });
 });

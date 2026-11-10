@@ -74,14 +74,19 @@ export function guideStepCopy(
     readonly hasRevision: boolean;
   },
 ): Pick<GuideStep, "title" | "description"> {
+  if (step.id === "navigation" && metadata.variant === "collapsed") {
+    return { title: step.title, description: surface === "studio"
+      ? "点击这里展开目录，可切换款式、色料实验、技术包和展示等功能。收起目录后，可以专心处理当前资料。"
+      : "点击这里展开工作区目录，访问项目库、面料库和趋势档案。进入项目后，也能找到设计工作台与款式资料。" };
+  }
   if (surface === "workspace" && step.id === "assistant") {
     let description = step.description;
     switch (metadata.variant) {
       case "collapsed":
-        description = "点击“设计助手”展开对话区，再描述你的设计想法。";
+        description = "点击画布中的织芽或助手入口展开对话，再描述你的设计想法。";
         break;
       case "mobile":
-        description = "切换到“助手”视图，即可查看对话和输入设计需求。";
+        description = "从画布中的织芽进入对话；完成后可返回画布继续创作。";
         break;
       case "history":
         description = "当前为只读历史，可查看已有消息。使用顶部“新建对话”继续设计。";

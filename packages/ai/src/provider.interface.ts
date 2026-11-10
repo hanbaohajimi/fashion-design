@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { imageOutpaintSchema, imageAnnotationSchema } from "@fashion/shared";
+import { imageOutpaintSchema, imageAnnotationSchema, imageCommentMarkerSchema } from "@fashion/shared";
+import { generationImageInputLimitError } from "./generation-image-inputs";
 
 export const AI_TASK_TYPES = ["t2i", "i2i", "inpaint"] as const;
 export type AiTaskType = (typeof AI_TASK_TYPES)[number];
@@ -42,6 +43,7 @@ const commonRequestSchema = z
         ]),
         outpaint: imageOutpaintSchema.optional(),
         annotations: z.array(imageAnnotationSchema).max(100).optional(),
+        markers: z.array(imageCommentMarkerSchema).max(100).optional(),
       })
       .strict()
       .optional(),
@@ -55,7 +57,7 @@ const commonRequestSchema = z
   })
   .strict();
 
-export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
+const generationRequestShape = z.discriminatedUnion("taskType", [
   commonRequestSchema.extend({
     taskType: z.literal("t2i"),
     referenceImageUrl: z.url().optional(),
@@ -73,12 +75,28 @@ export const aiGenerationRequestSchema = z.discriminatedUnion("taskType", [
     referenceImageUrl: z.url(),
     // First image is the actual masked source; later images are optional detail references.
     referenceImageUrls: z.array(z.url()).min(1).max(16).optional(),
+    referenceImages: z.array(referenceImageSchema).max(16).optional(),
     maskImageUrl: z.url(),
     palette: z.array(paletteColorSchema).min(1).max(12).optional(),
   }),
 ]);
 
-export type AiGenerationRequest = z.infer<typeof aiGenerationRequestSchema>;
+export type AiGenerationRequest = z.infer<typeof generationRequestShape>;
+
+export const aiGenerationRequestSchema = generationRequestShape.superRefine(
+  (request, ctx) => {
+    const message = generationImageInputLimitError(request);
+    if (message) {
+      ctx.addIssue({
+        code: "custom",
+        message,
+        path: ["referenceImages" in request && request.referenceImages?.length
+          ? "referenceImages"
+          : "referenceImageUrls"],
+      });
+    }
+  },
+);
 
 export type AiProviderStatus = "queued" | "running" | "completed";
 

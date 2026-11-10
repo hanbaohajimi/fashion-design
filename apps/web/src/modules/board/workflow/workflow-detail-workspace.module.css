@@ -9,7 +9,7 @@
 .session[hidden] {
   display: none;
 }
-.fullScreen { position: fixed; inset: 0; z-index: 120; }
+.workspace.fullScreen { position: fixed; inset: 0; z-index: 120; }
 .fullScreen .header { display: none; }
 .fullScreen .body { container-type: normal; }
 .fullScreen .content { border-radius: 0; }

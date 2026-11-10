@@ -8,9 +8,10 @@ import { useSubmitFeedback } from "../../components/interactions/use-submit-feed
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为当前修订的设计图与资料；对象切换和历史为次级。保存为主操作，比较在独立弹窗完成。 */
 
 import { useStudioAssetName } from "./studio-object-context";
-import { useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type {
   StudioStyleInput,
+  StudioStyleRevisionView,
   StudioStyleView,
   StudioSummary,
 } from "@fashion/shared";
@@ -22,6 +23,7 @@ import {
   Field,
   ImagePreview,
   Input,
+  Menu,
   Notice,
   Select,
   Textarea,
@@ -33,6 +35,7 @@ import { ObjectSwitcher, FormSection } from "../../components/workspace-ui";
 import styles from "./studio.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
+import { continueStyleRevision, findStyleRevision, mergeSavedStyles } from "./style-revisions";
 
 const STATUS_LABELS: Record<StudioStyleInput["status"], string> = {
   DESIGNING: "设计中",
@@ -57,6 +60,9 @@ export function StyleLibrary(
   props: StudioPanelProps & {
     readonly data: StudioSummary;
     readonly initialAssetId?: string | undefined;
+    readonly initialStyleRevisionId?: string | undefined;
+    readonly onSelectionChange?: (revisionId: string | undefined, assetId?: string) => void;
+    readonly onStyleSaved?: (style: StudioStyleView) => void;
     readonly onExplore?: (assetId: string) => void;
     readonly onTechPack?: (revisionId: string) => void;
     readonly onRunway?: (revisionId: string) => void;
@@ -65,7 +71,9 @@ export function StyleLibrary(
   },
 ) {
   const feedback = useSubmitFeedback();
+  const [saving, setSaving] = useState(false);
   const beforeChange = async () => {
+    if (saving) return false;
     const allowed = await props.beforeChange();
     if (allowed) feedback.reset();
     return allowed;
@@ -73,36 +81,79 @@ export function StyleLibrary(
   const assetName = useStudioAssetName();
   const comparisonPicker = useRef<HTMLDetailsElement>(null);
   const [draftVersion, setDraftVersion] = useState(0);
+  const [savedStyles, setSavedStyles] = useState<StudioStyleView[]>([]);
+  const availableStyles = mergeSavedStyles(props.data.styles, savedStyles);
+  const initialSelection = findStyleRevision(availableStyles, props.initialStyleRevisionId);
   const [selectedId, setSelectedId] = useState<string | null>(
-    props.initialAssetId ? null : (props.data.styles[0]?.id ?? null),
+    initialSelection?.style.id ?? (props.initialAssetId || props.initialStyleRevisionId ? null : (availableStyles[0]?.id ?? null)),
   );
+  const [viewedRevisionId, setViewedRevisionId] = useState(props.initialStyleRevisionId);
+  const [seed, setSeed] = useState<StudioStyleInput | undefined>();
+  const [editingDirty, setEditingDirty] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [refreshError, setRefreshError] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [comparison, setComparison] = useState<string[]>([]);
   const [adoptedId, setAdoptedId] = useState(props.initialAssetId ?? "");
-  const selected = props.data.styles.find((style) => style.id === selectedId);
+  const revisionSelection = findStyleRevision(availableStyles, viewedRevisionId);
+  const selected = viewedRevisionId ? revisionSelection?.style : availableStyles.find((style) => style.id === selectedId);
+  const viewed = viewedRevisionId ? revisionSelection?.revision : selected?.currentRevision;
+  const initialDraft = seed ?? (adoptedId && viewed && adoptedId !== viewed.payload.sourceAssetId ? continueStyleRevision(viewed, adoptedId) : undefined);
+  const historical = Boolean(selected && viewed && viewed.id !== selected.currentRevision.id && !initialDraft);
+  const missingRevision = Boolean(viewedRevisionId && !revisionSelection);
+  const currentData = { ...props.data, styles: availableStyles };
+  const notifyDirty = props.onDirty;
+  const onDirty = useCallback((dirty: boolean) => { setEditingDirty(dirty); notifyDirty(dirty); }, [notifyDirty]);
   const selectStyle = async (id: string | null) => {
     if (await beforeChange()) {
       setSelectedId(id);
       setDraftVersion((current) => current + 1);
       setAdoptedId("");
+      setSeed(undefined);
+      setViewedRevisionId(undefined);
+      setSaveNotice("");
+      props.onSelectionChange?.(availableStyles.find(style => style.id === id)?.currentRevision.id);
     }
+  };
+  const selectRevision = async (revision: StudioStyleRevisionView, continueEditing = false) => {
+    if (!(await beforeChange())) return;
+    setViewedRevisionId(revision.id);
+    setSeed(continueEditing ? continueStyleRevision(revision) : undefined);
+    setAdoptedId("");
+    setDraftVersion(current => current + 1);
+    setSaveNotice("");
+    props.onSelectionChange?.(revision.id);
+  };
+  const acceptSaved = (style: StudioStyleView) => {
+    setSavedStyles(previous => mergeSavedStyles(previous, [style]));
+    setSelectedId(style.id);
+    setViewedRevisionId(style.currentRevision.id);
+    setSeed(undefined);
+    setAdoptedId("");
+    setEditingDirty(false);
+    setSaveNotice(`「${style.name}」r${style.currentRevision.revision} 已保存，可以继续技术包或商品展示。`);
+    props.onStyleSaved?.(style);
+    props.onSelectionChange?.(style.currentRevision.id);
+    setRefreshError(false);
+    void props.onSaved().then(result => setRefreshError(result === false), () => setRefreshError(true));
   };
   return (
     <div className={styles.section}>
       <StudioPageHeader
         objectSwitcher={
-          props.data.styles.length > 0 ? (
+          availableStyles.length > 0 ? (
             <ObjectSwitcher
-              label="切换对象"
-              current={<>切换款式 {selected?.name ?? "建立新款式"}</>}
+              label="切换款式"
+              current={selected?.code ?? "建立新款式"}
             >
               <aside
                 className={`${styles.rail} ${styles.styleRail}`}
                 aria-label="已有款式"
               >
-                {props.data.styles.map((style) => (
+                {availableStyles.map((style) => (
                   <Button
-                    aria-pressed={selectedId === style.id}
+                    aria-pressed={selected?.id === style.id}
                     key={style.id}
                     onClick={() => void selectStyle(style.id)}
                   >
@@ -125,7 +176,7 @@ export function StyleLibrary(
                     </small>
                   </Button>
                 ))}
-                {!props.data.styles.length ? (
+                {!availableStyles.length ? (
                   <p className={styles.muted}>
                     还没有款式。选择一张已有候选保存第一款。
                   </p>
@@ -134,24 +185,29 @@ export function StyleLibrary(
             </ObjectSwitcher>
           ) : null
         }
-        title={selected?.name ?? "建立新款式"}
+        title={historical ? viewed?.payload.name ?? "款式修订" : selected?.name ?? "建立新款式"}
         type="款式档案"
-        description="选择主设计图，整理款式资料与视图"
+        description={selected ? "" : "选择主设计图，整理款式资料与视图"}
         guideHasRevision={Boolean(selected)}
         status={
-          selected ? <Badge>r{selected.currentRevision.revision}</Badge> : null
+          selected && viewed ? <Badge>{historical ? "历史修订 " : ""}r{historical ? viewed.revision : selected.currentRevision.revision}</Badge> : null
         }
         actions={
           <>
-            <Button onClick={() => setComparisonOpen(true)}>
-              比较候选并选款（选择 2–4 张）
+            <Button aria-label="比较候选并选款（选择 2–4 张）" disabled={saving} onClick={() => setComparisonOpen(true)}>
+              比较候选
             </Button>
             {props.canEdit ? (
-              <Button onClick={() => void selectStyle(null)}>新建款式</Button>
+              <Button disabled={saving} onClick={() => void selectStyle(null)}>新建款式</Button>
             ) : null}
           </>
         }
       />
+      {saveNotice && !editingDirty ? <Notice tone="success">{saveNotice}</Notice> : null}
+      {refreshError ? <Notice tone="warning">款式已经保存，资料列表暂未刷新。当前保存结果仍可继续使用。<Button onClick={() => { void props.onSaved().then(result => setRefreshError(result === false), () => setRefreshError(true)); }}>刷新资料</Button></Notice> : null}
+      {missingRevision ? <Notice tone="warning">这份款式修订不存在或已无法访问。请从已有款式中选择，或重新载入资料。{loadError ? <p>重新载入未完成，请稍后重试。</p> : null}<Button onClick={() => { void props.onSaved().then(result => setLoadError(result === false), () => setLoadError(true)); }}>重新载入</Button></Notice> : null}
+      {historical && selected && viewed ? <Notice>正在查看 r{viewed.revision}，最新为 r{selected.currentRevision.revision}。后续操作使用当前查看的修订。<Button onClick={() => void selectRevision(selected.currentRevision)}>查看最新修订</Button>{props.canEdit ? <Button onClick={() => void selectRevision(viewed, true)}>以此修订继续</Button> : null}</Notice> : null}
+      {initialDraft && viewed ? <Notice>基于 r{viewed.revision} 继续编辑。保存后形成新修订，已保存的历史与交付引用保留。</Notice> : null}
       {comparisonOpen ? (
         <Dialog
           className={styles.dialog}
@@ -212,6 +268,10 @@ export function StyleLibrary(
                               setSelectedId(null);
                               setDraftVersion((current) => current + 1);
                               setAdoptedId(id);
+                              setViewedRevisionId(undefined);
+                              setSeed(undefined);
+                              setSaveNotice("");
+                              props.onSelectionChange?.(undefined, id);
                               setComparisonOpen(false);
                             }
                           })()
@@ -231,21 +291,24 @@ export function StyleLibrary(
           </div>
         </Dialog>
       ) : null}
-      {selected && props.onExplore ? (
-        <div className={styles.toolbar}>
-          <span>
-            沿用「{selected.name}」r{selected.currentRevision.revision} 的母图
-          </span>
-          <Button
+      {selected && viewed ? (
+        <div className={styles.styleContinuation}>
+          <span>{editingDirty ? "请先保存修改，再继续后续工作。" : `后续工作使用 r${viewed.revision}`}</span>
+          <div>
+          {!editingDirty && !saving ? <a className={styles.canvasReturn} href={`/${encodeURIComponent(props.projectId)}?assetId=${encodeURIComponent(viewed.payload.sourceAssetId)}&styleRevisionId=${encodeURIComponent(viewed.id)}`}>在白板中继续编辑</a> : null}
+          {props.onExplore || props.onTechPack || props.onPresentation || props.canEdit && (props.onRunway || props.onWardrobe) ? <Menu label="继续创作与交付" trigger="继续工作" align="end">
+          {props.onExplore ? <Button
+            disabled={editingDirty || saving}
             onClick={() =>
-              props.onExplore?.(selected.currentRevision.payload.sourceAssetId)
+              props.onExplore?.(viewed.payload.sourceAssetId)
             }
           >
             以此款式探索色料
-          </Button>
+          </Button> : null}
           {props.onTechPack ? (
             <Button
-              onClick={() => props.onTechPack?.(selected.currentRevision.id)}
+              disabled={editingDirty || saving}
+              onClick={() => props.onTechPack?.(viewed.id)}
             >
               继续技术包
             </Button>
@@ -253,8 +316,9 @@ export function StyleLibrary(
 
           {props.onPresentation ? (
             <Button
+              disabled={editingDirty || saving}
               onClick={() =>
-                props.onPresentation?.(selected.currentRevision.id)
+                props.onPresentation?.(viewed.id)
               }
             >
               继续商品展示
@@ -262,20 +326,23 @@ export function StyleLibrary(
           ) : null}
           {props.canEdit && props.onRunway ? (
             <Button
-              onClick={() => props.onRunway?.(selected.currentRevision.id)}
+              disabled={editingDirty || saving}
+              onClick={() => props.onRunway?.(viewed.id)}
             >
               制作服装秀
             </Button>
           ) : null}
           {props.canEdit && props.onWardrobe ? (
-            <Button onClick={() => props.onWardrobe?.(selected.currentRevision.id, selected.currentRevision.payload.sourceAssetId)}>
+            <Button disabled={editingDirty || saving} onClick={() => props.onWardrobe?.(viewed.id, viewed.payload.sourceAssetId)}>
               加入衣架
             </Button>
           ) : null}
+          </Menu> : null}
+          </div>
         </div>
       ) : null}
       <div className={styles.split}>
-        {props.canEdit || selected ? (
+        {!missingRevision && (props.canEdit || selected) ? (
           <StyleEditor
             key={
               (selected?.id ?? "new") +
@@ -284,16 +351,27 @@ export function StyleLibrary(
               ":" +
               draftVersion +
               ":" +
-              adoptedId
+              adoptedId +
+              ":" +
+              (viewed?.id ?? "new")
             }
             {...props}
+            data={currentData}
+            onDirty={onDirty}
+            canEdit={props.canEdit && !historical}
             feedback={feedback}
             beforeChange={beforeChange}
             existing={selected}
             adoptedId={adoptedId}
-            onCreated={setSelectedId}
+            viewedRevision={historical ? viewed : undefined}
+            initialDraft={initialDraft}
+            onCommitted={acceptSaved}
+            onBackgroundCommit={props.onStyleSaved}
+            onSaving={setSaving}
+            onSelectRevision={selectRevision}
+            allowContinue={props.canEdit}
           />
-        ) : (
+        ) : missingRevision ? null : (
           <EmptyState title="款式档案还是空白">
             编辑成员建立款式后，可在这里查看。
           </EmptyState>
@@ -313,14 +391,26 @@ function StyleEditor({
   feedback,
   existing,
   adoptedId,
-  onCreated,
+  viewedRevision,
+  initialDraft,
+  onCommitted,
+  onBackgroundCommit,
+  onSaving,
+  onSelectRevision,
+  allowContinue,
 }: StudioPanelProps & {
   readonly data: StudioSummary;
   readonly existing: StudioStyleView | undefined;
   readonly adoptedId: string;
-  readonly onCreated: (id: string) => void;
+  readonly viewedRevision?: StudioStyleRevisionView | undefined;
+  readonly initialDraft?: StudioStyleInput | undefined;
+  readonly onCommitted: (style: StudioStyleView) => void;
+  readonly onBackgroundCommit?: ((style: StudioStyleView) => void) | undefined;
+  readonly onSaving: (saving: boolean) => void;
+  readonly onSelectRevision: (revision: StudioStyleRevisionView, continueEditing?: boolean) => Promise<void>;
+  readonly allowContinue: boolean;
 }) {
-  const initial = existing
+  const initial = viewedRevision ? viewedRevision.payload : existing
     ? {
         ...existing.currentRevision.payload,
         status:
@@ -329,9 +419,12 @@ function StyleEditor({
             : existing.currentRevision.payload.status,
       }
     : { ...blankStyle(), sourceAssetId: adoptedId };
-  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? `new:${adoptedId}` });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? `new:${adoptedId}`, initialDraft, persist: !viewedRevision });
+  useLayoutEffect(() => { onSaving(form.busy); return () => onSaving(false); }, [form.busy, onSaving]);
   const { draft, setDraft } = form;
   const [viewAssetId, setViewAssetId] = useState("");
+  const revisionImages = viewedRevision?.views ?? existing?.currentRevision.views;
+  const imageUrl = (id: string) => data.assets.find(asset => asset.id === id)?.url ?? revisionImages?.find(view => view.assetId === id)?.url;
   const update = <K extends keyof StudioStyleInput>(
     key: K,
     value: StudioStyleInput[K],
@@ -352,15 +445,17 @@ function StyleEditor({
             ]
           : [],
     };
-    let savedId = "";
+    if (!canEdit) return;
+    let savedStyle: StudioStyleView | undefined;
     if (
-      await form.submit(async (key) => {
-        const saved = await saveStyle(projectId, payload, key, existing);
-        savedId = saved.id;
+      await form.submit(async (key, recovery) => {
+        savedStyle = await saveStyle(projectId, payload, key, existing, recovery);
       })
     ) {
-      await onSaved();
-      onCreated(savedId);
+      if (savedStyle) {
+        if (form.isMounted()) onCommitted(savedStyle);
+        else onBackgroundCommit?.(savedStyle);
+      }
     }
   };
   return (
@@ -393,11 +488,7 @@ function StyleEditor({
         {draft.sourceAssetId ? (
           <span className={styles.assetImage}>
             <ImagePreview
-              src={
-                data.assets.find(
-                  (asset) => asset.id === (viewAssetId || draft.sourceAssetId),
-                )?.url
-              }
+              src={imageUrl(viewAssetId || draft.sourceAssetId)}
               alt="当前款式主设计图"
             />
           </span>
@@ -414,7 +505,8 @@ function StyleEditor({
           selected={draft.sourceAssetId ? [draft.sourceAssetId] : []}
           disabled={!canEdit || form.busy}
           onChange={(ids) => {
-            update("sourceAssetId", ids[0] ?? "");
+            const assetId = ids[0] ?? "";
+            setDraft(current => ({ ...current, sourceAssetId: assetId, views: assetId ? current.views.map(view => view.assetId === current.sourceAssetId ? { ...view, assetId, reviewed: false } : view) : current.views }));
             setViewAssetId("");
           }}
           label="主设计图（必选）"
@@ -438,7 +530,7 @@ function StyleEditor({
                 >
                   <ImagePreview
                     retryable={false}
-                    src={data.assets.find((asset) => asset.id === id)?.url}
+                    src={imageUrl(id)}
                     alt={`款式视图 ${index + 1}`}
                   />
                 </Button>
@@ -449,7 +541,7 @@ function StyleEditor({
               draft.code,
               draft.category,
               draft.season,
-              STATUS_LABELS[existing?.status ?? draft.status],
+              STATUS_LABELS[viewedRevision?.payload.status ?? existing?.status ?? draft.status],
             ]
               .filter(Boolean)
               .join(" ")}
@@ -461,7 +553,7 @@ function StyleEditor({
       </div>
       <StudioEditSection
         persistent
-        title="编辑款式资料"
+        title={canEdit ? "编辑款式资料" : "款式资料"}
         summary={
           form.dirty
             ? "有未保存的修改"
@@ -526,7 +618,7 @@ function StyleEditor({
                 }
               >
                 {Object.entries(STATUS_LABELS)
-                  .filter(([value]) => value !== "APPROVED")
+                  .filter(([value]) => value !== "APPROVED" || viewedRevision?.payload.status === "APPROVED")
                   .map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
@@ -651,14 +743,14 @@ function StyleEditor({
           </Field>
         </fieldset>
       </StudioEditSection>
-      <SaveBar
+      {canEdit ? <SaveBar
         feedback={feedback?.snapshot}
         interaction="spring"
         busy={form.busy}
         dirty={form.dirty}
         isNew={!existing}
         canEdit={canEdit}
-      />
+      /> : null}
       {existing ? (
         <GridDetails className={styles.record}>
           <summary>修订历史（{existing.revisions.length}）</summary>
@@ -687,16 +779,11 @@ function StyleEditor({
                       {view.label || view.kind}
                     </a>
                   ))}
-                  {canEdit ? (
+                  <Button size="small" aria-pressed={viewedRevision?.id === revision.id || !viewedRevision && existing.currentRevision.id === revision.id} onClick={() => void onSelectRevision(revision)}>查看 r{revision.revision}</Button>
+                  {allowContinue ? (
                     <Button
                       size="small"
-                      onClick={() =>
-                        setDraft({
-                          ...revision.payload,
-                          changeNote:
-                            "基于 r" + revision.revision + " 继续修改",
-                        })
-                      }
+                      onClick={() => void onSelectRevision(revision, true)}
                     >
                       以此修订继续
                     </Button>

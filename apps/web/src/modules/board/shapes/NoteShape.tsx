@@ -5,6 +5,7 @@ import {
   type RecordProps,
   T,
   useEditor,
+  useSvgExportContext,
   useValue,
 } from "tldraw";
 
@@ -77,6 +78,7 @@ export class NoteShapeUtil extends BaseBoxShapeUtil<NoteShape> {
 
 function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
   const editor = useEditor();
+  const exporting = Boolean(useSvgExportContext());
   const readOnly = useValue("note-readonly", () => editor.getInstanceState().isReadonly, [editor]);
   const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
@@ -93,6 +95,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
   const textEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   useLayoutEffect(() => {
+    if (exporting) return;
     const editorElement = textEditorRef.current;
     if (!editorElement) return;
 
@@ -108,7 +111,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
         h: shape.props.h + overflowHeight + 1,
       },
     });
-  }, [editor, noteScale, shape.id, shape.props.h, shape.props.text, sourceUrl]);
+  }, [editor, exporting, noteScale, shape.id, shape.props.h, shape.props.text, sourceUrl]);
 
   const handleRemoveMount = (mountId: string): void => {
     const nextMounts = (shape.props.mounts ?? []).filter((m) => m.id !== mountId);
@@ -139,7 +142,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
         } as CSSProperties
       }
     >
-      <textarea
+      {exporting ? <div className={`${styles.noteTextEditor} ${styles.noteTextExport}`}>{shape.props.text}</div> : <textarea
         aria-label="备注内容"
         readOnly={readOnly}
         placeholder="写下设计想法…"
@@ -152,7 +155,7 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
         ref={textEditorRef}
         spellCheck={false}
         value={shape.props.text}
-      />
+      />}
       {sourceUrl ? (
         <a
           className={styles.noteSourceLink}

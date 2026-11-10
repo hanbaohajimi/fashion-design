@@ -304,7 +304,7 @@ export function ProjectLibrary() {
     >
       <AppHeader current="projects" />
 
-      <section className={styles.dashboard} aria-label="项目库">
+      <section className={styles.dashboard} aria-label="项目库" data-workspace-heading>
         <h1 className={styles.dashboardTitle}>项目库</h1>
       </section>
 

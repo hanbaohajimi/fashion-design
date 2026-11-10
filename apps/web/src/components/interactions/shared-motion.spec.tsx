@@ -196,6 +196,20 @@ it("exits a repositioned portal menu at its current bounds inside the native mod
   expect(frames.at(-1)?.transform).toContain("translateY(6px)");
 });
 
+it("lets a closed menu's Escape reach its containing surface", () => {
+  const parent = vi.fn();
+  render(<div onKeyDown={parent}><Menu label="账号操作"><button>退出登录</button></Menu></div>);
+  const trigger = screen.getByRole("button", { name: "账号操作" });
+  fireEvent.keyDown(trigger, { key: "Escape" });
+  expect(parent).toHaveBeenCalledOnce();
+  parent.mockClear();
+  fireEvent.click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  fireEvent.keyDown(trigger, { key: "Escape" });
+  expect(parent).not.toHaveBeenCalled();
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+});
+
 it("places a top-layer portal in its animated dialog coordinate system", () => {
   const dialog = document.createElement("dialog");
   dialog.open = true; dialog.style.transform = "scale(.5)";

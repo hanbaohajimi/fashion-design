@@ -1,5 +1,7 @@
 "use client";
-import { usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import { useSearchParams } from "next/navigation";
+import { useDraftScope, usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
+import { draftRepository } from "../../../components/drafts/draft-repository";
 
 import { Select } from "../../../components/ui";
 /* Private images must use the authenticated content endpoint without image optimization. */
@@ -15,12 +17,31 @@ import {
   imageAnnotationsSvg,
   imageOutpaintSchema,
   imageTransformSchema,
+  hasImageAdjustments,
+  imageAdjustmentsSchema,
+  originalImageAdjustments,
+  type ImageAdjustments,
   type ImageAnnotation,
   type ImageComment,
   type ImageFeedback,
   type CanvasCommand,
+  canvasCommandSchema,
 } from "@fashion/shared";
 import { ImageViewer, type ImageSize } from "./ImageViewer";
+import { ImageCommentsPanel, type ImageCommentDraft } from "./ImageCommentsPanel";
+import { ImageOrientationControls } from "./ImageOrientationControls";
+import { ImageAdjustmentControls } from "./ImageAdjustmentControls";
+import { ImageOutpaintControls } from "./ImageOutpaintControls";
+import { ImageTextControls } from "./ImageTextControls";
+import { ImageTextRegionOverlay } from "./ImageTextRegionOverlay";
+import { useImageTextEditor } from "./use-image-text-editor";
+import { changedImageText, imageTextEditProblem, imageTextMask } from "./image-text-editor";
+import { signImageUpload, putOriginal, completeUpload, waitForThumbnail } from "../file-upload-api";
+import { emptyOutpaintDraft, initialOutpaintFrame, outpaintBaseline, outpaintProblem, readOutpaintDraft, type OutpaintDraft } from "./image-outpaint";
+import { ImageComparison } from "./ImageComparison";
+import { imageToolEntryMode, type ImageToolEntryRequest } from "./image-tool-entry";
+import type { AssetRestoreResult } from "./use-asset-restore";
+import { hasOrientationChange, imageOrientationSchema, originalOrientation, type ImageOrientation } from "./image-orientation";
 import { ImageZoomControl, type ImageZoomControlHandle } from "./ImageZoomControl";
 import { CopyImageLinkButton } from "./CopyImageLinkButton";
 import { Button, IconButton } from "../../../components/ui";
@@ -50,6 +71,10 @@ type Mode =
   | "remove_background"
   | "erase"
   | "resize"
+  | "orient"
+  | "adjust"
+  | "compare"
+  | "text_edit"
   | "inpaint"
   | "variation"
   | "history"
@@ -67,7 +92,11 @@ export interface WorkflowAssetWorkspaceProps {
   tasks?: readonly WorkflowNode[];
   candidates?: readonly WorkflowNode[];
   onSelectAsset?: (id: string) => void;
+  onRestoredAsset?: (result: AssetRestoreResult) => void;
   details?: ReactNode;
+  entryRequest?: ImageToolEntryRequest | undefined;
+  active?: boolean;
+  canEdit?: boolean;
 }
 const tools = [
   { mode: "annotate", label: "标注" },
@@ -75,10 +104,22 @@ const tools = [
   { mode: "remove_background", label: "移除背景" },
   { mode: "erase", label: "擦除" },
   { mode: "resize", label: "调整大小" },
+  { mode: "orient", label: "旋转与翻转" },
+  { mode: "adjust", label: "色彩与明暗" },
+  { mode: "text_edit", label: "修改文字" },
   { mode: "inpaint", label: "局部重绘" },
   { mode: "variation", label: "生成变体" },
 ] as const;
 const empty: ImageFeedback = { revision: 0, annotations: [], comments: [] };
+interface ImageFeedbackDraft {
+  feedback: ImageFeedback;
+  comment: string;
+  mode: Mode;
+  point?: ImageCommentDraft["point"];
+  editingComment?: string;
+  selected?: string[];
+  commentAnnotationIds?: string[];
+}
 interface Share {
   id: string;
   expiresAt: string;
@@ -97,9 +138,18 @@ function ImageWorkspace({
   candidates = [],
   tasks = [],
   onSelectAsset,
+  onRestoredAsset,
   details,
+  entryRequest,
+  active = true,
+  canEdit = true,
 }: WorkflowAssetWorkspaceProps) {
-  const [mode, setMode] = useState<Mode>("view");
+  const query = useSearchParams();
+  const draftScope = useDraftScope();
+  const returnRevisionId = query.get("styleRevisionId");
+  const styleHref = `/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}${returnRevisionId ? `&styleRevisionId=${encodeURIComponent(returnRevisionId)}` : ""}`;
+  const [storedMode, setMode] = useState<Mode>("view");
+  const mode = canEdit || ["view", "compare", "history", "details"].includes(storedMode) ? storedMode : "view";
   const [legacyTab, setLegacyTab] = useState<
     "inpaint" | "variation" | "erase" | "history" | null
   >(null);
@@ -107,6 +157,7 @@ function ImageWorkspace({
   const zoomControl = useRef<ImageZoomControlHandle>(null);
   const previewZoom = useCallback((percent: number | null) => zoomControl.current?.previewZoom(percent), []);
   const [size, setSize] = useState<ImageSize | null>(null);
+  const textEditor = useImageTextEditor(assetId, size);
   const [feedback, setFeedback] = useState<ImageFeedback>(empty);
   const [baseline, setBaseline] = useState(JSON.stringify(empty));
   const [feedbackLoaded, setFeedbackLoaded] = useState(false);
@@ -124,7 +175,12 @@ function ImageWorkspace({
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [commentAnnotationIds, setCommentAnnotationIds] = useState<string[]>([]);
+  const commentInput = useRef<HTMLTextAreaElement>(null);
+  const [actionBusy, setBusy] = useState(false);
+  const [legacyBusy, setLegacyBusy] = useState(false);
+  const busy = actionBusy || legacyBusy || textEditor.scanning;
+  const actionLock = useRef(false);
   const [preparingCommand, setHasPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,9 +188,28 @@ function ImageWorkspace({
   const [shares, setShares] = useState<Share[]>([]);
   const [now] = useState(() => Date.now());
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [resizeKind, setResizeKind] = useState<"resize" | "crop" | "outpaint">(
-    "resize",
-  );
+  const [outpaintDraft, setOutpaintDraft] = useState<OutpaintDraft>(emptyOutpaintDraft);
+  const resizeKind = outpaintDraft.kind;
+  const setResizeKind = (kind: OutpaintDraft["kind"]) => setOutpaintDraft(value => ({ ...value, kind }));
+  const [orientation, setOrientation] = useState<ImageOrientation>(originalOrientation);
+  const [comparingOriginal, setComparingOriginal] = useState(false);
+  const [adjustments, setAdjustments] = useState<ImageAdjustments>({ ...originalImageAdjustments });
+  const adjustmentsDirty = hasImageAdjustments(adjustments);
+  const adjustmentPersistence = usePersistentDraft({
+    value: adjustments, baseline: JSON.stringify(originalImageAdjustments),
+    objectKey: `image-adjustments:${assetId}`,
+    restore: value => { const parsed = imageAdjustmentsSchema.safeParse(value); if (parsed.success) setAdjustments(parsed.data); },
+  });
+  const orientationDirty = hasOrientationChange(orientation);
+  const orientationPersistence = usePersistentDraft({
+    value: orientation,
+    baseline: JSON.stringify(originalOrientation),
+    objectKey: `image-orientation:${assetId}`,
+    restore: value => {
+      const parsed = imageOrientationSchema.safeParse(value);
+      if (parsed.success) setOrientation(parsed.data);
+    },
+  });
   const [target, setTarget] = useState({ width: 1024, height: 1024 });
   const [lockRatio, setLockRatio] = useState(true);
   const [crop, setCrop] = useState({
@@ -143,28 +218,92 @@ function ImageWorkspace({
     width: 1024,
     height: 1024,
   });
-  const [frame, setFrame] = useState({
-    left: 0,
-    top: 0,
-    width: 1024,
-    height: 1024,
+  const cropInitialized = useRef(false);
+  const frame = outpaintDraft.frame ?? initialOutpaintFrame(size ?? { width: 768, height: 1024 });
+  const setFrame = (value: typeof frame) => setOutpaintDraft(draft => ({ ...draft, frame: value }));
+  const expandPrompt = outpaintDraft.prompt;
+  const outpaintPersistence = usePersistentDraft({
+    value: outpaintDraft, baseline: outpaintBaseline, objectKey: `image-outpaint:${assetId}`,
+    restore: value => { const draft = readOutpaintDraft(value); if (draft) setOutpaintDraft(draft); },
   });
-  const [expandPrompt, setExpandPrompt] = useState(
-    "自然延伸背景与光线，保持原图服装主体不变。",
-  );
+  const outpaintDirty = outpaintDraft.frame !== null || outpaintDraft.prompt !== emptyOutpaintDraft.prompt;
   const root = useRef<HTMLElement>(null);
+  const menuAnchor = useRef<HTMLDivElement>(null);
   const pending = useRef<Extract<CanvasCommand, { type: "run_tool" }> | null>(null);
   const durableCommand = useCanvasCommand(projectId, `image-command:${assetId}`);
   const hasPending = preparingCommand || durableCommand.pending !== null;
   useEffect(() => { if (durableCommand.pending?.type === "run_tool") pending.current = durableCommand.pending; }, [durableCommand.pending]);
-  const dirty = JSON.stringify(feedback) !== baseline || Boolean(comment);
-  usePersistentDraft({ value: { feedback, comment, mode }, baseline: JSON.stringify({ feedback: JSON.parse(baseline) as ImageFeedback, comment: "", mode: "view" }), enabled: feedbackLoaded, objectKey: `image:${assetId}`, restore: draft => { setFeedback(draft.feedback); setComment(draft.comment); setMode(draft.mode); } });
+  const dirty = JSON.stringify(feedback) !== baseline || Boolean(comment || point || editingComment || commentAnnotationIds.length);
+  const feedbackDraft = (value = feedback): ImageFeedbackDraft => ({ feedback: value, comment, mode, ...(point ? { point } : {}), ...(editingComment ? { editingComment } : {}), ...(selected.length ? { selected } : {}), ...(commentAnnotationIds.length ? { commentAnnotationIds } : {}) });
+  const feedbackDraftBaseline = (value: ImageFeedback) => JSON.stringify({ feedback: value, comment: "", mode: "view" });
+  // Omit empty optional fields so pre-marker drafts retain the same baseline.
+  const feedbackPersistence = usePersistentDraft<ImageFeedbackDraft>({ value: feedbackDraft(), baseline: feedbackDraftBaseline(JSON.parse(baseline) as ImageFeedback), enabled: feedbackLoaded, objectKey: `image:${assetId}`, restore: draft => {
+    setFeedback(draft.feedback); setComment(draft.comment); setMode(draft.mode);
+    setPoint(draft.point ?? null);
+    setEditingComment(draft.feedback.comments.some(c => c.id === draft.editingComment) ? draft.editingComment ?? null : null);
+    setSelected((draft.selected ?? []).filter(id => draft.feedback.comments.some(c => c.id === id)));
+    setCommentAnnotationIds((draft.commentAnnotationIds ?? []).filter(id => draft.feedback.annotations.some(a => a.id === id)));
+    if (["inpaint", "variation", "erase", "history"].includes(draft.mode)) setLegacyTab(draft.mode as "inpaint" | "variation" | "erase" | "history");
+  } });
+  const consumedEntryRequest = useRef<number | undefined>(undefined);
+  const entryReady = feedbackLoaded && feedbackPersistence.ready && orientationPersistence.ready && adjustmentPersistence.ready && outpaintPersistence.ready && textEditor.ready;
+  const getPendingEntryCommand = durableCommand.getPending;
+  const entryScopeKey = draftScope ? JSON.stringify([draftScope.accountId, draftScope.projectId, draftScope.editor]) : null;
+  useEffect(() => {
+    if (!entryRequest || entryRequest.assetId !== assetId || entryRequest.nonce === consumedEntryRequest.current) return;
+    if (!active) { consumedEntryRequest.current = entryRequest.nonce; return; }
+    if (!entryReady || busy || (entryRequest.action === "crop" && !size)) return;
+    let canceled = false;
+    void (async () => {
+      const scope = entryScopeKey ? JSON.parse(entryScopeKey) as string[] : null;
+      const [normal, masked, restore] = await Promise.all([
+        getPendingEntryCommand(),
+        scope ? draftRepository.read<CanvasCommand>(JSON.stringify([...scope, `masked-image-command:${assetId}`])) : undefined,
+        scope ? draftRepository.read(JSON.stringify([...scope, `asset-restore:${assetId}`])) : undefined,
+      ]);
+      if (canceled) return;
+      consumedEntryRequest.current = entryRequest.nonce;
+      const parsed = masked ? canvasCommandSchema.safeParse(masked.value) : null;
+      if (masked && !parsed?.success) { setError("上次图片操作记录暂时无法读取，请保留草稿后重新打开。"); return; }
+      if (entryRequest.action !== "history" && (!canEdit || hasPending || normal || masked || restore)) {
+        setError(null);
+        setNotice(!canEdit ? "当前图片仅可查看。" : "上次操作尚未确认，请先继续原操作；编辑草稿仍保留。");
+        if (canEdit && restore) { setMode("history"); setLegacyTab("history"); }
+        else if (canEdit && parsed?.success && parsed.data.type === "run_tool") {
+          const pendingMode = parsed.data.parameters.intent === "erase" ? "erase" : parsed.data.parameters.taskType === "inpaint" ? "inpaint" : "variation";
+          setMode(pendingMode); setLegacyTab(pendingMode);
+        }
+        return;
+      }
+      const next = imageToolEntryMode(entryRequest.action);
+      setMode(next); setMenu(false); setComparingOriginal(false); setError(null);
+      if (["inpaint", "variation", "erase", "history"].includes(next)) setLegacyTab(next as "inpaint" | "variation" | "erase" | "history");
+      if (entryRequest.action === "crop" || entryRequest.action === "outpaint") {
+        setOutpaintDraft(value => ({ ...value, kind: entryRequest.action as "crop" | "outpaint" }));
+        if (entryRequest.action === "crop" && size && !cropInitialized.current) {
+          cropInitialized.current = true;
+          setTarget(size); setCrop({ left: 0, top: 0, ...size });
+        }
+      }
+      if (["orient", "adjust", "text_edit", "resize"].includes(next)) setZoom(null);
+    })().catch(() => { if (!canceled) { consumedEntryRequest.current = entryRequest.nonce; setError("暂时无法核对上次操作，请保留草稿后重新打开工具。"); } });
+    return () => { canceled = true; };
+  }, [entryRequest, assetId, active, entryReady, busy, canEdit, hasPending, size, mode, getPendingEntryCommand, entryScopeKey]);
   useWorkspaceDraft(
     "image-workspace",
-    { feedback, comment, mode },
-    dirty,
-    busy,
+    { feedback, comment, mode, orientation, adjustments, point, editingComment, selected, commentAnnotationIds, outpaintDraft, text: textEditor.draft },
+    dirty || orientationDirty || adjustmentsDirty || outpaintDirty || changedImageText(textEditor.draft.regions).length > 0,
+    busy || hasPending,
   );
+  const closeWorkspace = () => {
+    void Promise.all([
+      feedbackPersistence.checkpoint(feedbackDraft(), feedbackDraftBaseline(JSON.parse(baseline) as ImageFeedback)),
+      orientationPersistence.checkpoint(orientation, JSON.stringify(originalOrientation)),
+      adjustmentPersistence.checkpoint(adjustments, JSON.stringify(originalImageAdjustments)),
+      outpaintPersistence.checkpoint(outpaintDraft, outpaintBaseline),
+      textEditor.checkpoint(),
+    ]).then(onClose);
+  };
   const current = candidates.find((node) => node.payload.assetId === assetId);
   const groupId = current?.payload.executionId;
   const siblings = groupId
@@ -172,9 +311,16 @@ function ImageWorkspace({
     : current
       ? [current]
       : [];
+  const derived = [...new Map(candidates.filter(node => node.payload.parentAssetId === assetId && typeof node.payload.assetId === "string" && node.payload.assetId !== assetId).map(node => [String(node.payload.assetId), node])).values()]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const parent = candidates.find(node => node.payload.assetId === current?.payload.parentAssetId);
+  const latestDerived = derived[0];
+  const comparisonChoices = [...new Map([...derived, ...siblings, ...(parent ? [parent] : [])]
+    .filter(node => typeof node.payload.assetId === "string" && node.payload.assetId !== assetId)
+    .map(node => [String(node.payload.assetId), { id: String(node.payload.assetId), title: node.title }])).values()];
   const title = current?.title ?? "生成图片";
   const siblingIndex = siblings.findIndex((node) => node.payload.assetId === assetId);
-  const canSwipe = mode === "view" && !dirty && !busy && !menu && siblings.length >= 3;
+  const canSwipe = mode === "view" && !dirty && !orientationDirty && !adjustmentsDirty && !outpaintDirty && !changedImageText(textEditor.draft.regions).length && !busy && !menu && siblings.length >= 3;
   const siblingUrl = (index: number) => { const id = siblings[index]?.payload.assetId; return typeof id === "string" ? `/api/design-assets/${encodeURIComponent(id)}/content` : undefined; };
   const base = `/api/design-assets/${encodeURIComponent(assetId)}`;
   const setImageSize = useCallback((next: ImageSize) => {
@@ -206,8 +352,17 @@ function ImageWorkspace({
       ?.querySelector<HTMLButtonElement>("button")
       ?.focus({ preventScroll: true });
   }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuAnchor.current?.contains(event.target)) setMenu(false);
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    return () => document.removeEventListener("pointerdown", dismiss, true);
+  }, [menu]);
   const act = async (action: () => Promise<void>) => {
-    if (busy) return;
+    if (actionLock.current) return;
+    actionLock.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -218,10 +373,12 @@ function ImageWorkspace({
       if (cause instanceof ImageRequestError && cause.status === 409)
         setConflict(true);
     } finally {
+      actionLock.current = false;
       setBusy(false);
     }
   };
   const save = async () => {
+    if (!canEdit) throw new Error("当前图片仅可查看，无法保存修改。");
     if (!feedbackLoaded) throw new Error("标注尚未加载，请先重试读取");
     const value = await imageRequest<ImageFeedback>(
       `${base}/feedback`,
@@ -231,6 +388,7 @@ function ImageWorkspace({
     setFeedback(value);
     setBaseline(JSON.stringify(value));
     setConflict(false);
+    await feedbackPersistence.checkpoint(feedbackDraft(value), feedbackDraftBaseline(value));
     return value;
   };
   const annotations = (next: ImageAnnotation[]) => {
@@ -239,10 +397,12 @@ function ImageWorkspace({
     setFeedback((value) => ({ ...value, annotations: next }));
   };
   const changeMode = (next: Mode) => {
-    if (busy) return;
+    if (busy || !canEdit && !["view", "compare", "history", "details"].includes(next)) return;
     setMode(next);
     setMenu(false);
     setError(null);
+    setComparingOriginal(false);
+    if (next === "orient" || next === "adjust" || next === "text_edit") setZoom(null);
     if (
       next === "inpaint" ||
       next === "variation" ||
@@ -251,9 +411,9 @@ function ImageWorkspace({
     )
       setLegacyTab(next);
     if (next === "resize" && size && mode !== "resize") {
+      cropInitialized.current = true;
       setTarget(size);
       setCrop({ left: 0, top: 0, ...size });
-      setFrame({ left: 0, top: 0, ...size });
     }
     if (next === "share")
       void act(async () =>
@@ -261,6 +421,7 @@ function ImageWorkspace({
       );
   };
   const submit = async (params: Record<string, unknown>, transform = false) => {
+    if (!canEdit) throw new Error("当前图片仅可查看，无法提交修改。");
     if (!size) throw new Error("原图尚未加载");
     if (pending.current && Object.keys(params).length) throw new Error("上一次提交尚未确认，请使用“重试原操作”继续处理");
     const graph = await fetchWorkflow(projectId);
@@ -271,8 +432,8 @@ function ImageWorkspace({
       if (!source) throw new Error("图片来源节点不存在");
       const key = transform ? "transform_image" : "edit_design";
       const toolTitle = transform
-        ? "调整图片尺寸"
-        : params.intent === "outpaint"
+        ? params.adjustments ? "调整图片色彩与明暗" : (params.rotate !== undefined || params.flipHorizontal !== undefined || params.flipVertical !== undefined ? "旋转与翻转图片" : "调整图片尺寸")
+        : params.textEdits ? "修改图片文字" : params.intent === "outpaint"
           ? "AI 扩图"
           : params.intent === "feedback"
             ? "按意见修改"
@@ -308,6 +469,16 @@ function ImageWorkspace({
     });
     pending.current = null;
     setHasPending(false);
+    if (request.toolKey === "transform_image" && (request.parameters.rotate !== undefined || request.parameters.flipHorizontal !== undefined || request.parameters.flipVertical !== undefined)) {
+      setOrientation(originalOrientation);
+      setComparingOriginal(false);
+      await orientationPersistence.checkpoint(originalOrientation, JSON.stringify(originalOrientation));
+    }
+    if (request.toolKey === "transform_image" && request.parameters.adjustments) {
+      setAdjustments({ ...originalImageAdjustments });
+      setComparingOriginal(false);
+      await adjustmentPersistence.checkpoint({ ...originalImageAdjustments }, JSON.stringify(originalImageAdjustments));
+    }
     setMode("view");
     setNotice("任务已提交，完成后会展示新版本");
     onGraphRefresh();
@@ -342,7 +513,7 @@ function ImageWorkspace({
     context.drawImage(bitmap, 0, 0);
     bitmap.close();
     const svg = new Image();
-    svg.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(imageAnnotationsSvg(feedback.annotations, canvas.width, canvas.height))}`;
+    svg.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(imageAnnotationsSvg(feedback.annotations, canvas.width, canvas.height, feedback.comments.flatMap((c, i) => c.point ? [{ number: i + 1, point: c.point }] : [])))}`;
     await svg.decode();
     context.drawImage(svg, 0, 0);
     const result = await new Promise<Blob>((resolve, reject) =>
@@ -354,13 +525,34 @@ function ImageWorkspace({
     );
     saveBlob(result, `${title}-标注.png`);
   };
+  const commentsLocked = !canEdit || busy || hasPending || !feedbackLoaded;
+  const clearComment = () => {
+    setComment(""); setPoint(null); setEditingComment(null); setCommentAnnotationIds([]);
+  };
+  const editComment = (id: string) => {
+    if (commentsLocked || editingComment === id) return;
+    const original = feedback.comments.find(c => c.id === editingComment);
+    const changed = original
+      ? comment !== original.text || JSON.stringify(point) !== JSON.stringify(original.point) || JSON.stringify(commentAnnotationIds) !== JSON.stringify(original.annotationIds)
+      : Boolean(comment || point || commentAnnotationIds.length);
+    if (changed) {
+      setNotice("先添加、更新或取消当前评论，再编辑其他意见。");
+      commentInput.current?.focus();
+      return;
+    }
+    const value = feedback.comments.find(c => c.id === id);
+    if (!value) return;
+    setComment(value.text); setPoint(value.point); setEditingComment(id); setCommentAnnotationIds(value.annotationIds);
+    setMode("comment");
+    requestAnimationFrame(() => commentInput.current?.focus());
+  };
   const addComment = () => {
-    if (!comment.trim()) return;
+    if (commentsLocked || !comment.trim() || (!editingComment && feedback.comments.length >= 100)) return;
     const value: ImageComment = {
       id: editingComment ?? crypto.randomUUID(),
       text: comment.trim(),
       point,
-      annotationIds: feedback.annotations.map((a) => a.id),
+      annotationIds: commentAnnotationIds.filter(id => feedback.annotations.some(a => a.id === id)),
     };
     setFeedback((old) => ({
       ...old,
@@ -369,15 +561,21 @@ function ImageWorkspace({
         : [...old.comments, value],
     }));
     setSelected((old) => [...new Set([...old, value.id])]);
-    setComment("");
-    setPoint(null);
-    setEditingComment(null);
+    clearComment();
   };
   const legacy =
     mode === "erase" ||
     mode === "inpaint" ||
     mode === "variation" ||
     mode === "history";
+  const resizeMethodControl = <label>调整方式
+    <Select value={resizeKind} disabled={busy || hasPending || !outpaintPersistence.ready}
+      onChange={event => setResizeKind(event.target.value as typeof resizeKind)}>
+      <option value="resize">缩放尺寸</option>
+      <option value="crop">裁剪</option>
+      <option value="outpaint">AI 扩图</option>
+    </Select>
+  </label>;
   return (
     <section
       ref={root}
@@ -385,12 +583,21 @@ function ImageWorkspace({
       aria-modal="true"
       aria-label="图片工作区"
       data-image-editing={mode !== "view" || busy}
+      data-image-legacy={legacy && mode !== "history"}
+      data-comparing={mode === "compare"}
       className={styles.workspace}
       onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
         if (event.key === "Escape" && !event.defaultPrevented) {
           event.stopPropagation();
+          if (menu) {
+            event.preventDefault();
+            setMenu(false);
+            menuAnchor.current?.querySelector<HTMLButtonElement>("button")?.focus();
+            return;
+          }
           if (!busy) {
-            if (mode === "view") onClose();
+            if (mode === "view") closeWorkspace();
             else setMode("view");
           }
         }
@@ -432,10 +639,8 @@ function ImageWorkspace({
     >
       <header className={styles.topbar}>
         <div className={styles.currentImage}><strong>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}</span></div>
-        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`}>保存为款式</a>
-        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=realtime&assetId=${encodeURIComponent(assetId)}`}>实时试穿</a>
-        <a className={styles.saveStyle} href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=wardrobe&assetId=${encodeURIComponent(assetId)}`}>加入衣架</a>
-        <div className={styles.menuAnchor}>
+        {canEdit ? <a className={styles.saveStyle} href={styleHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{returnRevisionId ? "更新款式修订" : "保存为款式"}</a> : <span className={styles.readOnly}>仅查看</span>}
+        <div className={styles.menuAnchor} ref={menuAnchor}>
           <Button onClick={() => setMenu(!menu)} aria-expanded={menu}>
             <WorkspaceIcon name="image" />图像<WorkspaceIcon name="chevron" />
           </Button>
@@ -445,8 +650,14 @@ function ImageWorkspace({
               <span>
                 {size ? `${size.width} × ${size.height}` : "正在加载原图"}
               </span>
+              {canEdit ? <a className={styles.mobileAction} href={styleHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{returnRevisionId ? "更新款式修订" : "保存为款式"}</a> : null}
+              <button className={styles.mobileAction} disabled={busy} onClick={() => { setMenu(false); void act(() => download()); }}>下载原图</button>
+              {canEdit ? <><button className={styles.mobileAction} onClick={() => changeMode("share")}>分享</button>
+              <a href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=realtime&assetId=${encodeURIComponent(assetId)}`}>实时试穿</a>
+              <a href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=wardrobe&assetId=${encodeURIComponent(assetId)}`}>加入衣架</a></> : null}
               <button onClick={() => changeMode("history")}>版本历史</button>
-              <button onClick={() => changeMode("export")}>更多导出选项</button>
+              {comparisonChoices.length > 0 && onSelectAsset ? <button disabled={busy} onClick={() => changeMode("compare")}>比较方案</button> : null}
+              {canEdit ? <button onClick={() => changeMode("export")}>更多导出选项</button> : null}
               {details ? (
                 <button onClick={() => changeMode("details")}>
                   来源与设计决策
@@ -463,6 +674,7 @@ function ImageWorkspace({
           ) : null}
         </div>
         <div className={styles.topActions}>
+          <div className={styles.desktopActions}>
           <ImageZoomControl ref={zoomControl} zoom={zoom} onChange={setZoom} />
           <button
             disabled={busy}
@@ -471,8 +683,9 @@ function ImageWorkspace({
           >
             <WorkspaceIcon name="download" /> <span>下载</span>
           </button>
-          <Button onClick={() => changeMode("share")}><WorkspaceIcon name="share" />分享</Button>
-          <IconButton disabled={busy} label="关闭图片工作区" onClick={onClose}>
+          {canEdit ? <Button onClick={() => changeMode("share")}><WorkspaceIcon name="share" />分享</Button> : null}
+          </div>
+          <IconButton className={styles.closeWorkspace} disabled={busy} label="关闭图片工作区" onClick={closeWorkspace}>
             <WorkspaceIcon name="close" />
           </IconButton>
         </div>
@@ -504,7 +717,15 @@ function ImageWorkspace({
       {hasPending && !busy ? (
         <div className={styles.notice} role="status">
           <span>上一次提交尚未确认，重试将继续原操作。</span>
-          <button onClick={() => void act(() => submit({}))}>重试原操作</button>
+          {canEdit ? <button onClick={() => void act(() => submit({}))}>重试原操作</button> : <span>当前只读，恢复编辑权限后可继续。</span>}
+        </div>
+      ) : null}
+      {mode === "view" && onSelectAsset && (derived.length > 0 || parent) ? (
+        <div className={styles.notice} role="group" aria-label="图片编辑版本">
+          <span>{derived.length > 0 ? `这张图已有 ${derived.length} 个编辑版本` : "当前为编辑后的新版本"}</span>
+          {latestDerived ? <button disabled={busy} onClick={() => onSelectAsset(String(latestDerived.payload.assetId))} type="button">查看编辑结果</button> : null}
+          {parent ? <button disabled={busy} onClick={() => onSelectAsset(String(parent.payload.assetId))} type="button">返回来源图片</button> : null}
+          <button data-compare-trigger disabled={busy} onClick={() => changeMode("compare")} type="button">{derived.length > 0 ? "对比编辑结果" : "对比来源图片"}</button>
         </div>
       ) : null}
       {conflict ? (
@@ -541,7 +762,7 @@ function ImageWorkspace({
                   ? "排队中"
                   : "正在处理"}
             </span>
-            {task.status === "failed" ? (
+            {canEdit && task.status === "failed" ? (
               <button
                 disabled={busy}
                 onClick={() =>
@@ -560,7 +781,7 @@ function ImageWorkspace({
             ) : null}
           </div>
         ))}
-      <div className={styles.body}>
+      <div className={styles.body} data-comparing={mode === "compare"}>
         <ImageViewer
           url={`${base}/content`}
           title={title}
@@ -571,16 +792,30 @@ function ImageWorkspace({
           nextUrl={canSwipe ? siblingUrl(siblingIndex + 1) : undefined}
           onNavigate={canSwipe ? (direction) => { const id = siblings[siblingIndex + direction]?.payload.assetId; if (typeof id === "string") onSelectAsset?.(id); } : undefined}
           onSize={setImageSize}
+          onLoadError={() => setSize(null)}
+          orientation={mode === "orient" ? comparingOriginal ? originalOrientation : orientation : undefined}
+          adjustments={mode === "adjust" ? comparingOriginal ? { ...originalImageAdjustments } : adjustments : undefined}
+          previewLabel={mode === "orient" || mode === "adjust" ? comparingOriginal ? "原图" : "调整预览" : undefined}
           annotations={feedback.annotations}
           comments={feedback.comments}
-          mode={feedbackLoaded ? mode : "view"}
+          selectedCommentIds={selected}
+          editingCommentId={editingComment}
+          commentDraft={mode === "comment" && point ? { point, number: editingComment ? feedback.comments.findIndex(c => c.id === editingComment) + 1 : feedback.comments.length + 1 } : undefined}
+          commentsLocked={commentsLocked}
+          onSelectComment={editComment}
+          mode={feedbackLoaded || mode === "orient" || mode === "adjust" || mode === "text_edit" ? mode : "view"}
           pen={pen}
           onAnnotation={(a) => annotations([...feedback.annotations, a])}
-          onPoint={setPoint}
+          onPoint={value => { if (!commentsLocked && (editingComment || feedback.comments.length < 100)) setPoint(value); }}
           frame={
             mode === "resize" && resizeKind === "outpaint" ? frame : undefined
           }
           onFrame={setFrame}
+          imageOverlay={mode === "text_edit" ? (imageSize, scale) => <ImageTextRegionOverlay
+            regions={textEditor.draft.regions} selected={textEditor.draft.selected} size={imageSize} scale={scale}
+            locked={busy || hasPending || !textEditor.ready} onSelect={textEditor.select}
+            onRect={(id, rect) => textEditor.update(id, { rect })} /> : undefined}
+          geometryLocked={busy || hasPending || !size || (resizeKind === "outpaint" && (!outpaintPersistence.ready || size.width > 2048 || size.height > 2048))}
           crop={mode === "resize" && resizeKind === "crop" ? crop : undefined}
           onCrop={(value) => {
             setCrop(value);
@@ -588,12 +823,13 @@ function ImageWorkspace({
           }}
         />
         {mode !== "view" &&
+        mode !== "compare" &&
         !legacy &&
         mode !== "export" &&
         mode !== "details" ? (
-          <aside className={styles.panel} aria-label="图片工具参数">
+          <aside className={`${styles.panel} ${mode === "orient" || mode === "adjust" || mode === "text_edit" || (mode === "resize" && resizeKind === "outpaint") ? styles.orientationPanel : ""} ${mode === "text_edit" || (mode === "resize" && resizeKind === "outpaint") ? styles.outpaintPanel : ""}`} aria-label="图片工具参数">
             <div className={styles.panelHeading}>
-              <h2>{tools.find((t) => t.mode === mode)?.label ?? "分享图片"}</h2>
+              <h2>{mode === "resize" && resizeKind === "outpaint" ? "AI 扩图" : tools.find((t) => t.mode === mode)?.label ?? "分享图片"}</h2>
               <button
                 disabled={busy}
                 onClick={() => setMode("view")}
@@ -602,6 +838,35 @@ function ImageWorkspace({
                 ×
               </button>
             </div>
+            {mode === "orient" ? <ImageOrientationControls
+              value={orientation}
+              onChange={value => { setOrientation(value); setZoom(null); }}
+              size={size}
+              busy={busy}
+              pending={hasPending}
+              comparing={comparingOriginal}
+              onCompare={value => { setComparingOriginal(value); setZoom(null); }}
+              onSave={params => void act(() => submit(params, true))}
+            /> : null}
+            {mode === "adjust" ? <ImageAdjustmentControls
+              value={adjustments} onChange={setAdjustments} size={size} locked={busy || hasPending}
+              comparing={comparingOriginal} onCompare={setComparingOriginal}
+              onSave={params => void act(() => submit(params, true))}
+            /> : null}
+            {mode === "text_edit" ? <ImageTextControls editor={textEditor} size={size} locked={busy || hasPending} busy={actionBusy}
+              onSubmit={() => void act(async () => {
+                const problem = imageTextEditProblem(textEditor.draft, size);
+                if (problem || !size) throw new Error(problem ?? "原图尚未加载");
+                const edits = changedImageText(textEditor.draft.regions);
+                await textEditor.checkpoint();
+                const blob = await imageTextMask(edits, size);
+                const file = new File([blob], "文字修改选区.png", { type: "image/png" });
+                const signed = await signImageUpload(projectId, file);
+                const uploaded = signed.upload ? await putOriginal(signed.upload, file).then(() => completeUpload(signed.file.id)) : signed.file;
+                const mask = await waitForThumbnail(signed.file.id, uploaded);
+                await submit({ ...generationParams(), taskType: "inpaint", textEdits: edits, mask: { fileAssetId: mask.id },
+                  prompt: "按确认的文字与区域修改图片，保留选区外原图。" });
+              })} /> : null}
             {mode === "annotate" ? (
               <>
                 <label>
@@ -715,100 +980,26 @@ function ImageWorkspace({
               </>
             ) : null}
             {mode === "comment" ? (
-              <>
-                <p>点击图片定位，或直接填写整图意见。</p>
-                {point ? (
-                  <div className={styles.row}>
-                    <span>已选择图片位置</span>
-                    <button onClick={() => setPoint(null)}>改为整图</button>
-                  </div>
-                ) : null}
-                <textarea
-                  aria-label="图片评论"
-                  maxLength={2000}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="例如：保留面料，将袖口收窄"
-                />
-                <button
-                  disabled={!comment.trim() || !feedbackLoaded}
-                  onClick={addComment}
-                >
-                  {editingComment ? "更新评论" : "添加评论"}
-                </button>
-                {feedback.comments.map((c, i) => (
-                  <div className={styles.comment} key={c.id}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(c.id)}
-                        onChange={(e) =>
-                          setSelected(
-                            e.target.checked
-                              ? [...selected, c.id]
-                              : selected.filter((id) => id !== c.id),
-                          )
-                        }
-                      />
-                      {i + 1}. {c.text}
-                    </label>
-                    <div className={styles.row}>
-                      <button
-                        onClick={() => {
-                          setComment(c.text);
-                          setPoint(c.point);
-                          setEditingComment(c.id);
-                        }}
-                      >
-                        编辑
-                      </button>
-                      <button
-                        onClick={() => {
-                          setFeedback({
-                            ...feedback,
-                            comments: feedback.comments.filter(
-                              (v) => v.id !== c.id,
-                            ),
-                          });
-                          setSelected(selected.filter((id) => id !== c.id));
-                        }}
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  disabled={busy || !feedbackLoaded || Boolean(comment)}
-                  onClick={() =>
-                    void act(async () => {
-                      await save();
-                      setNotice("评论已保存");
-                    })
-                  }
-                >
-                  保存评论
-                </button>
-                <button
-                  className={styles.primary}
-                  disabled={busy || !selected.length || Boolean(comment)}
-                  onClick={() =>
-                    void act(async () => {
-                      const saved = await save();
-                      await submit({
-                        ...generationParams(),
-                        intent: "feedback",
-                        prompt:
-                          "按照选定的修改意见调整服装，保留未要求修改的内容。",
-                        feedbackRevision: saved.revision,
-                        commentIds: selected,
-                      });
-                    })
-                  }
-                >
-                  按选中意见修改
-                </button>
-              </>
+              <ImageCommentsPanel feedback={feedback}
+                draft={{ text: comment, point, editingId: editingComment, annotationIds: commentAnnotationIds }}
+                selected={selected} locked={commentsLocked} inputRef={commentInput}
+                onDraft={value => {
+                  if (value.text !== undefined) setComment(value.text);
+                  if (value.point !== undefined) setPoint(value.point);
+                  if (value.annotationIds !== undefined) setCommentAnnotationIds(value.annotationIds);
+                }}
+                onSelect={setSelected} onEdit={editComment} onAdd={addComment} onClear={clearComment}
+                onDelete={id => {
+                  setFeedback(old => ({ ...old, comments: old.comments.filter(c => c.id !== id) }));
+                  setSelected(old => old.filter(value => value !== id));
+                  if (editingComment === id) clearComment();
+                }}
+                onSave={() => void act(async () => { await save(); setNotice("评论已保存"); })}
+                onSubmit={() => void act(async () => {
+                  const saved = await save();
+                  await submit({ ...generationParams(), intent: "feedback", prompt: "按照选定的修改意见调整服装，保留未要求修改的内容。", feedbackRevision: saved.revision, commentIds: selected });
+                })}
+              />
             ) : null}
             {mode === "remove_background" ? (
               <>
@@ -836,61 +1027,20 @@ function ImageWorkspace({
             ) : null}
             {mode === "resize" ? (
               <>
-                <label>
-                  调整方式
-                  <Select
-                    value={resizeKind}
-                    onChange={(e) =>
-                      setResizeKind(e.target.value as typeof resizeKind)
-                    }
-                  >
-                    <option value="resize">缩放尺寸</option>
-                    <option value="crop">裁剪并调整尺寸</option>
-                    <option value="outpaint">AI 扩图</option>
-                  </Select>
-                </label>
+                {resizeKind !== "outpaint" ? resizeMethodControl : null}
                 {resizeKind === "outpaint" ? (
-                  <>
-                    <p>
-                      拖动图片调整位置，拖动右下角扩展边界。原图区域会保留。
-                    </p>
-                    {(["width", "height", "left", "top"] as const).map(
-                      (key) => (
-                        <label key={key}>
-                          {
-                            {
-                              width: "画布宽度",
-                              height: "画布高度",
-                              left: "原图左边距",
-                              top: "原图上边距",
-                            }[key]
-                          }
-                          <input
-                            type="number"
-                            min={0}
-                            max={2048}
-                            value={frame[key]}
-                            onChange={(e) =>
-                              setFrame({
-                                ...frame,
-                                [key]: Number(e.target.value),
-                              })
-                            }
-                          />
-                        </label>
-                      ),
-                    )}
-                    <p>
-                      实际输出 {frame.width} × {frame.height}，边长为 16
-                      的倍数；最长边 2048，至少 655360 像素。
-                    </p>
-                    <textarea
-                      aria-label="扩图要求"
-                      value={expandPrompt}
-                      maxLength={1000}
-                      onChange={(e) => setExpandPrompt(e.target.value)}
-                    />
-                  </>
+                  <ImageOutpaintControls frame={frame} size={size} prompt={expandPrompt}
+                    methodControl={resizeMethodControl}
+                    locked={busy || hasPending || !outpaintPersistence.ready} busy={busy}
+                    onFrame={setFrame} onPrompt={prompt => setOutpaintDraft(value => ({ ...value, prompt }))}
+                    onSubmit={() => void act(async () => {
+                      const problem = outpaintProblem(frame, size);
+                      if (problem) throw new Error(problem);
+                      const parsed = imageOutpaintSchema.parse(frame);
+                      await outpaintPersistence.checkpoint(outpaintDraft, outpaintBaseline);
+                      await submit({ ...generationParams(), width: parsed.width, height: parsed.height,
+                        intent: "outpaint", outpaint: parsed, prompt: expandPrompt.trim() || "自然扩展背景，保留原图主体" });
+                    })} />
                 ) : (
                   <>
                     {resizeKind === "crop" ? (
@@ -996,33 +1146,12 @@ function ImageWorkspace({
                     ))}
                   </>
                 )}
-                <button
-                  className={styles.primary}
-                  disabled={busy || !size}
-                  onClick={() =>
-                    void act(async () => {
-                      if (resizeKind === "outpaint") {
-                        const parsed = imageOutpaintSchema.safeParse(frame);
-                        if (!parsed.success)
-                          throw new Error(
-                            parsed.error.issues[0]?.message ?? "扩图尺寸不合法",
-                          );
-                        if (
-                          !size ||
-                          frame.left + size.width > frame.width ||
-                          frame.top + size.height > frame.height
-                        )
-                          throw new Error("画布必须完整包含原图");
-                        await submit({
-                          ...generationParams(),
-                          width: frame.width,
-                          height: frame.height,
-                          intent: "outpaint",
-                          outpaint: frame,
-                          prompt:
-                            expandPrompt.trim() || "自然扩展背景，保留原图主体",
-                        });
-                      } else {
+                {resizeKind !== "outpaint" ? (
+                  <button
+                    className={styles.primary}
+                    disabled={busy || hasPending || !size}
+                    onClick={() =>
+                      void act(async () => {
                         const parsed = imageTransformSchema.safeParse({
                           ...target,
                           ...(resizeKind === "crop" ? { crop } : {}),
@@ -1039,16 +1168,12 @@ function ImageWorkspace({
                         )
                           throw new Error("裁剪区域超出原图");
                         await submit(parsed.data, true);
-                      }
-                    })
-                  }
-                >
-                  {busy
-                    ? "正在提交…"
-                    : resizeKind === "outpaint"
-                      ? "生成扩图版本"
-                      : "保存为新版本"}
-                </button>
+                      })
+                    }
+                  >
+                    {busy ? "正在提交…" : "保存为新版本"}
+                  </button>
+                ) : null}
               </>
             ) : null}
             {mode === "share" ? (
@@ -1119,10 +1244,12 @@ function ImageWorkspace({
         ) : null}
         {legacyTab ? (
           <div className={styles.legacy} hidden={!legacy}>
-            <button className={styles.back} onClick={() => setMode("view")}>
+            <button className={styles.back} disabled={busy} onClick={() => setMode("view")}>
               ← 返回图片
             </button>
             <LegacyAssetTools
+              readOnly={!canEdit}
+              styleHref={styleHref}
               initialTab={legacyTab}
               embedded
               open
@@ -1130,10 +1257,20 @@ function ImageWorkspace({
               projectId={projectId}
               onClose={() => setMode("view")}
               onGraphRefresh={onGraphRefresh}
+              {...(onRestoredAsset ? { onRestoredAsset } : {})}
+              onBusyChange={setLegacyBusy}
               {...(onEnsureConversation ? { onEnsureConversation } : {})}
             />
           </div>
         ) : null}
+        {mode === "compare" ? <div className={styles.comparisonLayer}>
+          <ImageComparison
+            current={{ id: assetId, title }}
+            choices={comparisonChoices}
+            onClose={() => { setMode("view"); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>("[data-compare-trigger]")?.focus()); }}
+            {...(onSelectAsset ? { onOpen: onSelectAsset } : {})}
+          />
+        </div> : null}
         {mode === "export" ? (
           <div className={styles.legacy}>
             <ExportModal
@@ -1151,7 +1288,8 @@ function ImageWorkspace({
           </div>
         ) : null}
       </div>
-      {siblings.length > 1 ? (
+      {siblings.length > 1 && mode !== "compare" && (!legacy || mode === "history") ? (
+        <div className={styles.galleryFooter}>
         <nav className={styles.filmstrip} aria-label="本次生成结果">
           {siblings.map((node) => (
             <button
@@ -1170,8 +1308,10 @@ function ImageWorkspace({
             </button>
           ))}
         </nav>
+        {onSelectAsset ? <button data-compare-trigger className={styles.compareTrigger} disabled={busy} onClick={() => changeMode("compare")} type="button">比较方案</button> : null}
+        </div>
       ) : null}
-      <nav className={styles.toolbar} data-surface="inverse" aria-label="图片工具">
+      <nav className={styles.toolbar} data-surface="inverse" aria-label="图片工具" hidden={!canEdit || mode === "compare" || (legacy && mode !== "history")}>
         {tools.map((tool) => (
           <button
             key={tool.mode}

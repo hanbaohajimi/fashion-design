@@ -39,16 +39,18 @@ function taskRecord(overrides: Record<string, unknown> = {}) {
 
 describe("GenerationService", () => {
   const database = {
-    project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-1" } }) },
+    project: { findUnique: vi.fn().mockResolvedValue({ deletedAt: null, workspace: { ownerId: "user-1" } }), findFirst: vi.fn().mockResolvedValue(null) },
     workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
     workflowAttempt: { findMany: vi.fn() },
     workflowOutbox: { upsert: vi.fn() },
     designAsset: {
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    fileAsset: { findUnique: vi.fn() },
     generationTask: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -618,11 +620,37 @@ describe("GenerationService", () => {
       referenceImageUrls: ["https://private.example/source.png", "https://private.example/texture.png"],
       maskImageUrl: "https://private.example/mask.png",
     });
+    expect(data.compiledPrompt.inpaintSource).toEqual({ version: 1, sourceObjectKey: "source.png", maskObjectKey: "mask.png" });
     expect(data.designStep.create.inputSnapshot.sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ assetId: "source", role: "edit_source" }),
       expect.objectContaining({ assetId: "texture", role: "detail_ref" }),
       expect.objectContaining({ assetId: "mask", title: "局部编辑蒙版" }),
     ]));
+  });
+
+  it("上传文件蒙版保存稳定私有键，过期签名不成为执行依赖", async () => {
+    vi.stubEnv("S3_ENDPOINT", "https://private.example");
+    vi.stubEnv("S3_BUCKET", "assets");
+    database.designAsset.findUnique.mockResolvedValue({ projectId: "project-1", url: "s3://source.png" });
+    database.designAsset.findFirst.mockResolvedValue(null);
+    database.fileAsset.findUnique.mockResolvedValue({ id: "mask-file", ownerId: "user-1", status: "READY", mimeType: "image/png", objectKey: "files/蒙版.png" });
+    storage.createDownloadUrl.mockImplementation(async (key: string) => `https://private.example/${key}`);
+    try {
+      await service.createFromAgent("user-1", { taskType: "inpaint", projectId: "project-1", parentAssetId: "source", referenceImageUrl: "s3://source.png", maskImageUrl: "https://private.example/assets/files/%E8%92%99%E7%89%88.png?X-Amz-Expires=1", width: 1024, height: 1024, prompt: "只改袖口" }, "file-mask", "只改袖口");
+      const data = database.generationTask.create.mock.calls[0]?.[0].data;
+      expect(data.compiledPrompt.inpaintSource).toEqual({ version: 1, sourceObjectKey: "source.png", maskObjectKey: "files/蒙版.png" });
+      expect(data.input.maskImageUrl).toBe("https://private.example/files/蒙版.png");
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it.each(["missing", "processing", "foreign"])("拒绝不可用的私有蒙版：%s", async kind => {
+    database.designAsset.findUnique.mockResolvedValue({ projectId: "project-1", url: "s3://source.png" });
+    database.designAsset.findFirst.mockResolvedValue(null);
+    database.fileAsset.findUnique.mockResolvedValue(kind === "missing" ? null : { id: "mask-file", ownerId: kind === "foreign" ? "another-user" : "user-1", status: kind === "processing" ? "PROCESSING" : "READY", mimeType: "image/png" });
+    database.project.findFirst.mockResolvedValue(null);
+    await expect(service.createFromAgent("user-1", { taskType: "inpaint", projectId: "project-1", parentAssetId: "source", referenceImageUrl: "s3://source.png", maskImageUrl: "s3://private-mask.png", width: 1024, height: 1024, prompt: "只改袖口" }, `invalid-${kind}`, "只改袖口")).rejects.toThrow();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+    expect(database.generationTask.create).not.toHaveBeenCalled();
   });
 
   it.each(["foreign-reference", "foreign-mask", "wrong-first", "external-url", "missing-project"])(
@@ -1101,6 +1129,70 @@ describe("GenerationService", () => {
         weight: 0.55,
       },
     ]);
+  });
+
+  it("显式参考不被画布编译出的参考列表覆盖", async () => {
+    compiler.compile.mockResolvedValueOnce({ enhancement: "keywords", mode: "board_guided", positivePrompt: "new design", negativePrompt: "",
+      version: 1, styleReferences: [{ imageUrl: "https://signed.test/implicit.png", labels: [] }] });
+    const explicit = [{ order: 0, url: "https://signed.test/explicit.png", role: "detail_ref" as const, weight: 0.4 }];
+    await service.create("user-1", { ...request, referenceImages: explicit });
+    expect(database.generationTask.create.mock.calls[0]?.[0].data.input.referenceImages).toEqual(explicit);
+  });
+
+  it("编译参考超过16张时明确拒绝，不截掉后面的参考继续入队", async () => {
+    compiler.compile.mockResolvedValueOnce({ enhancement: "keywords", mode: "board_guided", positivePrompt: "new design", negativePrompt: "", version: 1,
+      styleReferences: Array.from({ length: 17 }, (_, i) => ({ imageUrl: `https://signed.test/ref-${i}.png`, labels: [] })) });
+    await expect(service.create("user-1", request)).rejects.toThrow("最多16张");
+    expect(database.generationTask.create).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it.each([{ urls: [] }, { urls: ["https://signed.test/explicit.png"] }])("显式旧列表$urls保留用户选择，不注入画布参考", async ({ urls }) => {
+    compiler.compile.mockResolvedValueOnce({ enhancement: "keywords", mode: "board_guided", positivePrompt: "new design", negativePrompt: "", version: 1,
+      styleReferences: [{ imageUrl: "https://signed.test/implicit.png", labels: [] }] });
+    await service.create("user-1", { ...request, referenceImageUrls: urls });
+    const input = database.generationTask.create.mock.calls[0]?.[0].data.input;
+    expect(input.referenceImageUrls).toEqual(urls);
+    expect(input.referenceImages).toBeUndefined();
+  });
+
+  it("刷新母图签名时同步更新完整参考列表中的别名，不重复占用名额", async () => {
+    const source = "https://private.example/source.png?signature=expired";
+    database.designAsset.findUnique.mockResolvedValue({ id: "asset-parent", projectId: "project-1", url: "s3://source.png" });
+    storage.createDownloadUrl.mockResolvedValue("https://private.example/source.png?signature=fresh");
+    await service.create("user-1", { ...request, taskType: "i2i", projectId: "project-1", parentAssetId: "asset-parent", referenceImageUrl: source,
+      referenceImageUrls: [source, "https://private.example/detail.png"],
+      referenceImages: [{ order: 0, url: source, role: "silhouette_ref", weight: 0.9 }, { order: 1, url: "https://private.example/detail.png", role: "detail_ref", weight: 0.5 }],
+    });
+    const input = database.generationTask.create.mock.calls[0]?.[0].data.input;
+    expect(input.referenceImageUrl).toBe("https://private.example/source.png?signature=fresh");
+    expect(input.referenceImageUrls[0]).toBe(input.referenceImageUrl);
+    expect(input.referenceImages[0]).toEqual({ order: 0, url: input.referenceImageUrl, role: "silhouette_ref", weight: 0.9 });
+  });
+
+  it.each(["edit", "feedback"])("%s超过含原图与标记图的总量时在编译和入队前拒绝", async (intent) => {
+    await expect(service.create("user-1", { ...request, taskType: "i2i", referenceImageUrl: "https://signed.test/source.png",
+      ...(intent === "feedback" ? { imageEdit: { intent: "feedback" as const } } : {}),
+      referenceImageUrls: Array.from({ length: intent === "feedback" ? 15 : 16 }, (_, index) => `https://signed.test/ref-${index}.png`),
+    })).rejects.toThrow("最多16张");
+    expect(compiler.compile).not.toHaveBeenCalled();
+    expect(database.generationTask.create).not.toHaveBeenCalled();
+    expect(billing.withLockedGenerationQuota).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("局部重绘多次刷新原图签名时同步结构化用途，不额外上传旧原图", async () => {
+    const source = "https://private.example/source.png?signature=old";
+    database.designAsset.findUnique.mockResolvedValue({ id: "asset-parent", projectId: "project-1", url: "s3://source.png" });
+    let version = 0;
+    storage.createDownloadUrl.mockImplementation(async (key: string) => `https://private.example/${key}?signature=${++version}`);
+    await service.create("user-1", { ...request, taskType: "inpaint", projectId: "project-1", parentAssetId: "asset-parent", referenceImageUrl: source,
+      maskImageUrl: "https://cdn.test/mask.png", referenceImages: [{ order: 0, url: source, role: "silhouette_ref", weight: 0.9 }, { order: 1, url: "https://private.example/detail.png", role: "detail_ref", weight: 0.5 }],
+    });
+    const input = database.generationTask.create.mock.calls[0]?.[0].data.input;
+    expect(input.referenceImages[0].url).toBe(input.referenceImageUrl);
+    expect(input.referenceImageUrl).not.toBe(source);
+    expect(input.referenceImages[1]).toEqual({ order: 1, url: "https://private.example/detail.png", role: "detail_ref", weight: 0.5 });
   });
 
   it("变体任务校验父资产归属并保存 parentAssetId", async () => {

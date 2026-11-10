@@ -65,6 +65,60 @@ async function configuredAction(f: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe("Fig. 8 action and execution integration", () => {
+  it("按意见修改冻结原编号、位置和选定标注，重复提交复用快照", async () => {
+    const f = await fixture();
+    try {
+      const assetId = randomUUID(), source = randomUUID(), editTool = randomUUID();
+      await prisma.designAsset.create({ data: { id: assetId, projectId: f.project.id, rootAssetId: assetId, operation: "IMPORTED", url: `s3://verification/${assetId}.png`, width: 600, height: 800 } });
+      const feedback = { annotations: [
+        { id: "selected", kind: "arrow", points: [{ x: .2, y: .5 }, { x: .3, y: .6 }], color: "#ff3355", width: 5, text: "" },
+        { id: "unrelated", kind: "text", points: [{ x: .5, y: .1 }], color: "#ff3355", width: 5, text: "不参与本轮" },
+      ], comments: [
+        { id: "old", text: "暂不调整领口", point: { x: .5, y: .2 }, annotationIds: ["unrelated"] },
+        { id: "cuff", text: "收窄袖口", point: { x: .25, y: .65 }, annotationIds: ["selected"] },
+        { id: "overall", text: "保持色彩", point: null, annotationIds: [] },
+      ] };
+      await prisma.imageAssetFeedback.create({ data: { assetId, revision: 7, data: feedback } });
+      const graph = await f.workflows.get(f.user.id, f.project.id);
+      await f.workflows.patch(f.user.id, f.project.id, { mode: "semantic", baseRevision: graph.revision, mutationId: randomUUID(), operations: [
+        { type: "add_node", node: { id: source, kind: "asset", type: "candidate", title: "原图", payload: { assetId }, x: 0, y: 1000 } },
+        { type: "add_node", node: { id: editTool, kind: "tool", type: "edit_design", title: "按意见修改", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "按选中意见修改", intent: "feedback", feedbackRevision: 7, commentIds: ["overall", "cuff"] } }, x: 400, y: 1000 } },
+        { type: "add_edge", edge: { id: randomUUID(), sourceNodeId: source, targetNodeId: editTool, sourcePort: "out", targetPort: "source" } },
+      ] });
+      const mutationId = randomUUID();
+      await f.runtime.execute(f.user.id, f.project.id, editTool, { mutationId });
+      const request = f.generation.createFromAgent.mock.calls[0]?.[1];
+      expect(request).toMatchObject({ parentAssetId: assetId, imageEdit: { intent: "feedback", markers: [{ number: 2, point: { x: .25, y: .65 } }], annotations: [feedback.annotations[0]] } });
+      expect(request?.prompt).toContain("意见 2，标记 2 (0.250,0.650)：收窄袖口");
+      expect(request?.prompt).toContain("意见 3，整张图片：保持色彩");
+      expect(request?.prompt).not.toContain("暂不调整领口");
+      const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: editTool } });
+      expect(attempt.requestSnapshot).toMatchObject({ request: { imageEdit: request?.imageEdit } });
+      await prisma.imageAssetFeedback.update({ where: { assetId }, data: { revision: 8, data: { annotations: [], comments: [] } } });
+      await f.runtime.execute(f.user.id, f.project.id, editTool, { mutationId });
+      expect(f.generation.createFromAgent).toHaveBeenCalledOnce();
+      expect((await prisma.workflowAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).requestSnapshot).toEqual(attempt.requestSnapshot);
+    } finally { await f.cleanup(); }
+  });
+
+  it("过期的意见修订和无项目权限的执行都不能提交生成", async () => {
+    const f = await fixture();
+    try {
+      const assetId = randomUUID(), source = randomUUID(), editTool = randomUUID();
+      await prisma.designAsset.create({ data: { id: assetId, projectId: f.project.id, rootAssetId: assetId, operation: "IMPORTED", url: `s3://verification/${assetId}.png` } });
+      await prisma.imageAssetFeedback.create({ data: { assetId, revision: 2, data: { annotations: [], comments: [{ id: "opinion", text: "收窄袖口", point: null, annotationIds: [] }] } } });
+      const graph = await f.workflows.get(f.user.id, f.project.id);
+      await f.workflows.patch(f.user.id, f.project.id, { mode: "semantic", baseRevision: graph.revision, mutationId: randomUUID(), operations: [
+        { type: "add_node", node: { id: source, kind: "asset", type: "candidate", title: "原图", payload: { assetId }, x: 0, y: 1000 } },
+        { type: "add_node", node: { id: editTool, kind: "tool", type: "edit_design", title: "按意见修改", payload: { toolKey: "edit_design", toolVersion: "1", params: { prompt: "调整袖口", intent: "feedback", feedbackRevision: 1, commentIds: ["opinion"] } }, x: 400, y: 1000 } },
+        { type: "add_edge", edge: { id: randomUUID(), sourceNodeId: source, targetNodeId: editTool, sourcePort: "out", targetPort: "source" } },
+      ] });
+      await expect(f.runtime.execute(f.user.id, f.project.id, editTool, { mutationId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      await expect(f.runtime.execute(randomUUID(), f.project.id, editTool, { mutationId: randomUUID() })).rejects.toThrow();
+      expect(f.generation.createFromAgent).not.toHaveBeenCalled();
+      expect(await prisma.workflowAttempt.count({ where: { toolNodeId: editTool } })).toBe(0);
+    } finally { await f.cleanup(); }
+  });
   it("does not silently drop the last explicitly connected image when an edit exceeds its total image budget", async () => {
     const f = await fixture();
     try {
@@ -158,7 +212,7 @@ describe("Fig. 8 action and execution integration", () => {
       expect(attempts).toHaveLength(2);
       for (const attempt of attempts) expect(attempt.requestSnapshot).toMatchObject({ params: { mask: { fileAssetId: f.maskFile.id }, count: 2 }, request: {
         taskType: "inpaint", parentAssetId: asset.id, referenceImageUrl: asset.url,
-        maskImageUrl: `https://storage.test/${encodeURIComponent(f.maskFile.objectKey)}`, palette: [{ hex: "#C0C0C0", name: "银色" }], width: 1024, height: 1536,
+        maskImageUrl: `s3://${f.maskFile.objectKey}`, palette: [{ hex: "#C0C0C0", name: "银色" }], width: 1024, height: 1536,
       } });
     } finally { await f.cleanup(); }
   });

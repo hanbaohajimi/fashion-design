@@ -14,14 +14,24 @@ async function openDesignRequirements(page: Page) {
   return page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
 }
 
+async function seedOpenAssistant(page: Page) {
+  // These conversation regressions model a returning user with an open assistant.
+  // First-visit collapsed behavior is covered by zhiya and creative-start tests.
+  await page.addInitScript((projectId) => {
+    const key = `fashion:workspace-split:e2e-user:${projectId}`;
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify({ width: 384, open: true }));
+  }, PROJECT_ID);
+}
+
 test("助手入口：引用选择、对话草稿恢复与显式发送", async ({ page }) => {
   const mocked = await mockWorkflow(page, "workbench");
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await expect(page.getByRole("button", { name: "历史对话", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "填入示例" }).click();
+  await page.getByRole("button", { name: /通勤外套方案/ }).click();
   await expect(input).toHaveValue(/秋冬通勤风衣/);
   expect(mocked.workflowRequests).toHaveLength(0);
   await input.fill("保留立领，只调整袖型");
@@ -49,6 +59,7 @@ test("助手入口：引用选择、对话草稿恢复与显式发送", async ({
 
 test("助手入口：发送、调整、确认、查看结果再继续修改", async ({ page }) => {
   const mocked = await mockWorkflow(page, "workbench");
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
@@ -132,6 +143,7 @@ test("助手入口：手机从引用选择跳转添加素材，返回仍保留�
 
 test("助手入口：等待回复可准备下一条草稿，失效引用阻止发送", async ({ page }) => {
   const mocked = await mockWorkflow(page, "workbench");
+  await seedOpenAssistant(page);
   mocked.setMessages([{ id: "pending", role: "assistant", status: "pending", content: "" }]);
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
@@ -198,6 +210,7 @@ for (const width of [1440, 1280, 390, 320]) {
 
 test("讨论对象与发送一致：引用优先、失败保留、清空保留正文及切换会话隔离", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   mocked.getContext().focusNodeIds = ["candidate-a"];
   await page.route("**/api/agent-conversations/chat-new/context", (route) => route.fulfill({ json: { ...mocked.getContext(), focusNodeIds: [], summaryRevision: 0 } }));
   await page.goto(`/${PROJECT_ID}`);
@@ -273,7 +286,8 @@ test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读�
 
 for (const width of [1440, 390]) {
   test(`引用记录 ${width}：历史名称、旧消息和图片失败信息保持准确`, async ({ page }) => {
-    const mocked = await mockWorkflow(page);
+    const mocked = await mockWorkflow(page, "workbench");
+    await seedOpenAssistant(page);
     const candidate = mocked.getGraph().nodes.find((entry) => entry.id === "candidate-a");
     if (!candidate) throw new Error("缺少候选 A");
     candidate.title = "后来改名的风衣";
@@ -287,7 +301,7 @@ for (const width of [1440, 390]) {
     ]);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
-    await showAssistant(page, width);
+    await expect(page.getByRole("textbox", { name: "描述设计需求", exact: true })).toBeVisible();
     const saved = page.locator('[data-message-id="saved"]');
     await expect(saved.locator("details").first()).not.toHaveAttribute("open");
     await saved.getByText("查看引用记录", { exact: true }).click();
@@ -295,7 +309,7 @@ for (const width of [1440, 390]) {
     await expect(saved.getByRole("button", { name: "已删除候选的历史名称", exact: true })).toBeDisabled();
     await expect(saved).not.toContainText("后来改名的风衣");
     await saved.getByText("图片统计与读取范围", { exact: true }).click();
-    await expect(saved).toContainText("读取失败 1 张");
+    await expect(saved).toContainText("分析不可用 1 项");
     await expect(saved).not.toContainText("已理解");
     const legacy = page.locator('[data-message-id="legacy"]');
     await legacy.getByText("查看引用记录", { exact: true }).click();
@@ -533,6 +547,7 @@ test("聚焦工作区：Escape 层级、助手独立与快速反向切换", asyn
 
 test("聚焦工作区：跨节点草稿、保存失败重试与助手独立", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate");
   if (!tool) throw new Error("缺少生成工具");
   tool.status = "ready";
@@ -740,6 +755,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/${PROJECT_ID}`);
   const openCollection = async () => {
+    await page.getByRole("button", { name: "项目菜单", exact: true }).click();
     await page.getByRole("button", { name: "系列", exact: true }).click();
     await page.getByRole("button", { name: "秋冬配色系列", exact: true }).click();
   };
@@ -817,6 +833,7 @@ for (const width of [1280, 375]) {
 for (const width of [1280, 375]) {
   test(`助手直接生成 ${width}：保存后失败可恢复，同一请求不重复生成，结果原位打开`, async ({ page }) => {
     const mocked = await mockWorkflow(page);
+    await seedOpenAssistant(page);
     const requests: Array<{ mutationId: string; conversationId: string }> = [];
     let accepts = 0;
     page.on("request", (request) => { if (request.url().endsWith("/accept")) accepts++; });
@@ -831,8 +848,8 @@ for (const width of [1280, 375]) {
     });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
-    await showAssistant(page, width);
     const composer = page.getByRole("textbox", { name: "描述设计需求" });
+    await expect(composer).toBeVisible();
     await composer.fill("请以 @候选 A 为基础设计一件藏蓝风衣，保留肩线。");
     await page.getByRole("button", { name: "发送需求" }).click();
     const card = page.getByRole("region", { name: "方案确认" });
@@ -846,9 +863,9 @@ for (const width of [1280, 375]) {
     expect(requests).toHaveLength(1);
     expect(mocked.getGraph().nodes.filter((item) => item.id === "edit-proposed-0")).toHaveLength(1);
     await page.reload();
-    await showAssistant(page, width);
+    await expect(composer).toBeVisible();
     await card.getByRole("button", { name: "继续生成" }).click();
-    await expect(card.getByRole("status").filter({ hasText: "生成中" })).toBeVisible();
+    await expect(card.getByRole("status").filter({ hasText: "处理中" }).first()).toBeVisible();
     expect(accepts).toBe(1);
     expect(requests).toHaveLength(2);
     expect(requests[1]).toEqual(requests[0]);
@@ -1373,7 +1390,7 @@ test("作品工作台：方案详情返回恢复焦点，导出可转入完整�
   await expect(details).toBeVisible();
   await details.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
   await expect(work.getByRole("group", { name: "服装方案 候选 A", exact: true })).toBeFocused();
-  await page.getByText("资料与更多", { exact: true }).click();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   expect((await download).suggestedFilename()).toContain(".png");
@@ -1518,6 +1535,26 @@ async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workfl
     { id: "chat-old", mode: "legacy", projectId: PROJECT_ID, title: "历史会话", createdAt: NOW, updatedAt: NOW, archivedAt: null },
   ];
   const workflowMessages = new Map<string, Array<Record<string, unknown>>>();
+  const confirmedExecutions = new Map<string, { mutationId: string; nodeId: string }>();
+  page.on("request", request => {
+    if (request.method() !== "POST" || !request.url().includes("/workflow/nodes/") || !request.url().endsWith("/execute")) return;
+    const body = request.postDataJSON() as { proposalId?: string; mutationId?: string };
+    const nodeId = new URL(request.url()).pathname.split("/").at(-2);
+    if (body.proposalId && body.mutationId && nodeId) confirmedExecutions.set(body.proposalId, { mutationId: body.mutationId, nodeId });
+  });
+  const observedMessage = (message: Record<string, unknown>) => {
+    const proposal = message.proposal as { id?: string; status?: string; toolNodeId?: string } | null;
+    if (!proposal?.id || proposal.status !== "accepted") return message;
+    const node = graph.nodes.find(node => node.id === proposal.toolNodeId), attempt = confirmedExecutions.get(proposal.id);
+    const started = Boolean(attempt && node && node.status !== "ready");
+    const status = node?.status === "completed" ? "completed" : node?.status === "failed" ? "failed" : "running";
+    const outputs = started ? graph.nodes.filter(node => node.kind === "asset" && graph.edges.some(edge => edge.sourceNodeId === proposal.toolNodeId && edge.targetNodeId === node.id) && typeof node.payload.assetId === "string") : [];
+    const executionId = `fixture:${attempt?.mutationId ?? proposal.id}`;
+    return { ...message, proposal: { ...proposal, execution: { version: 1, binding: started ? "linked" : node?.status === "ready" ? "not_started" : "unrecorded", nodeVersionId: `fixture-version:${proposal.id}`, canExecute: node?.status === "ready" || node?.status === "failed",
+      progress: started ? { version: 1, executionId, toolNodeId: proposal.toolNodeId, title: node?.title ?? "设计任务", operation: "image", status, updatedAt: new Date().toISOString(), counts: { total: 1, preparing: 0, queued: 0, running: status === "running" ? 1 : 0, completed: status === "completed" ? 1 : 0, failed: status === "failed" ? 1 : 0, canceled: 0 }, cancelTaskIds: [] } : null,
+      result: status === "completed" && started ? { version: 1, executionId, toolNodeId: proposal.toolNodeId, status: "completed", completedAt: new Date().toISOString(), attempts: { completed: 1, failed: 0, canceled: 0 }, images: outputs.map(output => ({ assetId: output.payload.assetId, nodeId: output.id, title: output.title, width: null, height: null })) } : null,
+    } } };
+  };
   const contextPatches: Array<Record<string, unknown>> = [];
   const storedPreferences = [{ id: "prefer-matte", text: "偏好哑光面料", status: "active", origin: "inferred", scope: "project", sourceQuote: "上次否决了强反光方案", branchNodeIds: [] as string[], sourceNodeIds: [] as string[] }];
   const context = {
@@ -1554,6 +1591,10 @@ async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workfl
   await page.route(`**/api/projects/${PROJECT_ID}`, (route) => route.fulfill({ json: {
     id: PROJECT_ID, name: "秋冬通勤风衣", archived: false, createdAt: NOW, updatedAt: NOW,
     assetCount: 2, coverAssetId: null, coverUrl: null,
+  } }));
+  await page.route(`**/api/projects/${PROJECT_ID}/tasks?*`, route => route.fulfill({ json: {
+    items: [], nextCursor: null, counts: { running: 0, attention: 0 },
+    activity: { preparing: 0, queued: 0, executing: 0, awaitingUser: 0, waiting: { input: 0, confirmation: 0, resume: 0 }, recent: [] },
   } }));
   await page.route("**/api/design-assets/asset-*/thumbnail", (route) => route.fulfill({
     body: "<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400'><rect width='300' height='400' fill='#e9e5df'/><path d='M100 60 150 35 200 60 235 130 190 145 185 345 115 345 110 145 65 130Z' fill='#263950'/></svg>",
@@ -1704,7 +1745,7 @@ async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workfl
       }, status: 201 });
     }
     const id = path.split("/").at(-2) ?? "";
-    return route.fulfill({ json: { items: path.includes("chat-old") ? [{ id: "old-message", content: "历史消息", role: "user", status: "completed" }] : workflowMessages.get(id) ?? [], nextCursor: null } });
+    return route.fulfill({ json: { items: path.includes("chat-old") ? [{ id: "old-message", content: "历史消息", role: "user", status: "completed" }] : (workflowMessages.get(id) ?? []).map(observedMessage), nextCursor: null } });
   });
   await page.route("**/api/agent-conversations/*/context", (route) => {
     if (route.request().method() === "PATCH") {
@@ -1764,6 +1805,7 @@ test("方案确认显示数量与保留项，一次确认更新原节点并执�
   // Keep artifact capture independent of optional external canvas fonts.
   await page.route(/\.(?:woff2?|ttf|otf)(?:\?.*)?$/u, (route) => route.abort());
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   const draft = node("fig8-draft", "tool", "generate_design", "待执行生成", 1080, 1050, { params: { prompt: "原方案", count: 2 } });
   draft.status = "ready";
   mocked.getGraph().nodes.push(draft);
@@ -1839,6 +1881,7 @@ test("后台结果持续恢复，移除重复工作计划后不再轮询计划",
 
 test("Fig8 调整提案失败后重试保留原提案关联和精确输入", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2194,6 +2237,7 @@ for (const imageType of ["reference_image", "sketch", "candidate"] as const) {
 }
 
 test("@节点提案先以虚线预览，确认后保留分支并直接执行", async ({ page }) => {
+  await seedOpenAssistant(page);
   const mocked = await mockWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -2201,7 +2245,7 @@ test("@节点提案先以虚线预览，确认后保留分支并直接执行", a
   await expect(page.getByText("保持藏蓝与宽松廓形，给我两种通勤风衣方案。")).toHaveCount(0);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选");
-  await page.getByRole("button", { name: /@候选 A/ }).click();
+  await page.getByRole("option", { name: /@候选 A/ }).click();
   await expect(composer).toHaveValue("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.locator('[data-role="user"]').getByText("请修改 @候选 A", { exact: false })).toBeVisible();
@@ -2412,6 +2456,7 @@ test("已运行工具改输入建立独立分支，系统结果来源保持只�
 test("单击保留对话，详情返回恢复草稿，引用需显式加入", async ({ page }) => {
   test.setTimeout(60_000);
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -2466,7 +2511,9 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.getByRole("button", { name: /引用选中对象「候选 A」/ }).click();
   await composer.fill("修改领口");
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
+  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
   await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
   await expect(composer).toHaveValue("修改领口");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(2);
@@ -2811,6 +2858,7 @@ test("未执行工具可保存真实参数；历史显示来源和模型，完�
 });
 
 test("同名节点仅引用 @列表里明确选中的那条分支", async ({ page }) => {
+  await seedOpenAssistant(page);
   const mocked = await mockWorkflow(page);
   mocked.getContext().focusNodeIds = ["candidate-a"];
   mocked.getGraph().nodes.push(node("candidate-a-branch", "asset", "candidate", "候选 A", 1770, 390, { assetId: "asset-b" }));
@@ -2823,7 +2871,7 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("status").filter({ hasText: "请从 @列表选择准确节点" })).toBeVisible();
   expect(mocked.proposalRequests).toHaveLength(0);
   await composer.fill("请修改 @候选");
-  await page.getByRole("button", { name: /@候选 A/ }).last().click();
+  await page.getByRole("option", { name: /@候选 A/ }).last().click();
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a-branch"]);
@@ -3060,6 +3108,7 @@ test("项目中其他会话的待确认提案不会自动出现在当前对话�
 
 test("终态失败的回复以新请求保留原上下文重试，不自动执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   mocked.failMessageOnce();
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();

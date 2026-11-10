@@ -11,6 +11,11 @@ import type {
   WorkflowNode,
 } from "../../apps/web/src/modules/board/workflow/workflow-api";
 
+function present<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error("验证所需的对象、保存回执或可见元素尚未出现");
+  return value;
+}
+
 const material = (
   id: string,
   type: string,
@@ -42,6 +47,7 @@ async function canvasFixture(
     failInitialize?: "project" | "document";
     canEdit?: boolean;
     legacyRecords?: Record<string, unknown>[];
+    forkOnUpdate?: boolean;
   } = {},
 ) {
   await seedVisualApp(page);
@@ -121,7 +127,7 @@ async function canvasFixture(
       const nodeId =
         command.type === "create_material"
           ? `material-${commandReplies.size + 1}`
-          : command.nodeId;
+          : options.forkOnUpdate ? `${command.nodeId}-revision-${commandReplies.size + 1}` : command.nodeId;
       const node =
         command.type === "create_material"
           ? material(
@@ -131,7 +137,8 @@ async function canvasFixture(
               command.title,
             )
           : {
-              ...graph.nodes.find((node) => node.id === nodeId)!,
+              ...present(graph.nodes.find((node) => node.id === command.nodeId)),
+              id: nodeId,
               payload: command.payload,
               ...(command.title ? { title: command.title } : {}),
             };
@@ -255,6 +262,8 @@ async function canvasFixture(
                     type: string;
                     x: number;
                     y: number;
+                    isLocked?: boolean;
+                    meta?: Record<string, unknown>;
                     props: Record<string, unknown>;
                   }
                 >;
@@ -332,8 +341,8 @@ test("原白板工具栏承接节点设计工具与素材入口", async ({ page 
   await rail.getByRole("button", { name: "使用设计工具", exact: true }).click();
   await expect(menu).toBeInViewport();
   const selectBounds = await rail.getByRole("button", { name: "选择工具", exact: true }).boundingBox();
-  expect(selectBounds!.width).toBeGreaterThanOrEqual(44);
-  expect(selectBounds!.height).toBeGreaterThanOrEqual(44);
+  expect(present(selectBounds).width).toBeGreaterThanOrEqual(44);
+  expect(present(selectBounds).height).toBeGreaterThanOrEqual(44);
   await menu.getByRole("button", { name: /^局部修改/ }).click();
   await expect(page.getByRole("heading", { name: "局部修改", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "← 返回画布", exact: true }).click();
@@ -379,7 +388,7 @@ test("空白便签只保存布局，素材回执重试使用原编号，清空�
   const fixture = await canvasFixture(page, { nodes: [] });
   await page.goto(`/${PROJECT}`);
   await expect(
-    page.getByRole("heading", { name: "从一份素材开始" }),
+    page.getByRole("heading", { name: /从一个想法开始|把参考素材放在这里/ }),
   ).toBeVisible();
   await page.getByRole("button", { name: "添加灵感便签", exact: true }).click();
   const note = page.getByRole("textbox", { name: "备注内容", exact: true });
@@ -396,13 +405,13 @@ test("空白便签只保存布局，素材回执重试使用原编号，清空�
     page.getByRole("button", { name: "重试保存", exact: true }),
   ).toBeVisible();
   expect(fixture.commands).toHaveLength(1);
-  const mutation = fixture.commands[0]!.mutationId;
+  const mutation = present(fixture.commands[0]).mutationId;
   await page.getByRole("button", { name: "重试保存", exact: true }).click();
   await expect.poll(() => fixture.commands.length).toBe(2);
   await expect(
     page.getByRole("button", { name: "重试保存", exact: true }),
   ).toHaveCount(0);
-  expect(fixture.commands[1]!.mutationId).toBe(mutation);
+  expect(present(fixture.commands[1]).mutationId).toBe(mutation);
   expect(fixture.graph().nodes).toHaveLength(1);
   await note.fill("");
   await expect.poll(() => fixture.graph().nodes[0]?.payload.text).toBe("");
@@ -445,7 +454,7 @@ test("旧布局回执恢复后继续保存较新的移动，不显示虚假的�
   await expect(
     page.getByRole("button", { name: "重试保存", exact: true }),
   ).toBeVisible();
-  const failed = fixture.saves.at(-1)!;
+  const failed = present(fixture.saves.at(-1));
   await drag(45);
   await expect
     .poll(
@@ -460,7 +469,7 @@ test("旧布局回执恢复后继续保存较新的移动，不显示虚假的�
   const savedX = fixture
     .records()
     .find((record) => record.type === "fashion-image")?.x;
-  const latest = fixture.saves.at(-1)!;
+  const latest = present(fixture.saves.at(-1));
   expect(latest.mutationId).not.toBe(failed.mutationId);
   const oldStore = (
     failed.snapshot.document as {
@@ -468,12 +477,13 @@ test("旧布局回执恢复后继续保存较新的移动，不显示虚假的�
     }
   ).store;
   expect(savedX).toBeGreaterThan(
-    Object.values(oldStore).find((record) => record.type === "fashion-image")!
+    present(Object.values(oldStore).find((record) => record.type === "fashion-image"))
       .x,
   );
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText(
-    "已保存",
-  );
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toBeHidden();
+  const savedView = await image.boundingBox();
+  await page.reload();
+  await expect.poll(() => image.boundingBox()).toEqual(savedView);
   expect(fixture.commands).toHaveLength(0);
 });
 
@@ -501,9 +511,52 @@ test("保存过程中继续编辑，必须先提交最新素材再确认布局�
     .toBe("第二版方领");
   expect(fixture.inconsistentLayouts).toEqual([]);
   expect(fixture.graph().nodes).toHaveLength(1);
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText(
-    "已保存",
-  );
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toBeHidden();
+});
+
+test("累计引用记住具体素材副本，刷新后编辑新版本先同步预览再发送", async ({ page }) => {
+  const fixture = await canvasFixture(page, {
+    nodes: [material("brief", "reference_text", { text: "第一版领口" }, "第一版领口"), candidate],
+    forkOnUpdate: true,
+  });
+  const requests: { referencedNodeIds: string[] }[] = [];
+  await page.route("**/api/agent-conversations/visual-chat/workflow-messages", route => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ status: 503, json: { message: "测试已记录提交" } });
+  });
+  await page.goto(`/${PROJECT}`);
+  const noteShape = page.locator('.tl-shape[data-shape-id="shape:canvas-brief"]');
+  await noteShape.click({ position: { x: 14, y: 12 } });
+  await page.keyboard.press("Control+d");
+  await expect(page.getByRole("textbox", { name: "备注内容", exact: true })).toHaveCount(2);
+  await expect.poll(() => fixture.records().filter(record => record.type === "fashion-note").length).toBe(2);
+  const copyId = present(fixture.records().find(record => record.type === "fashion-note" && record.id !== "shape:canvas-brief")).id;
+  await page.getByRole("button", { name: "引用到助手", exact: true }).click();
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("第一版领口");
+  await page.locator('.tl-shape[data-shape-id="shape:canvas-candidate"]').click();
+  await page.getByRole("button", { name: "引用到助手", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "描述设计需求", exact: true });
+  await input.fill("比较便签要求与外套");
+  await page.waitForTimeout(500);
+  await page.reload();
+  await expect(input).toHaveValue("比较便签要求与外套");
+  await page.locator(`.tl-shape[data-shape-id="${copyId}"]`).getByRole("textbox", { name: "备注内容", exact: true }).fill("第二版方领");
+  await expect.poll(() => fixture.graph().nodes.some(node => node.title === "第二版方领")).toBe(true);
+  // A new unrelated selection must not replace the saved placement identity.
+  await page.locator('.tl-shape[data-shape-id="shape:canvas-candidate"]').click();
+  const send = page.getByRole("button", { name: "发送需求", exact: true });
+  await send.click();
+  await expect(page.getByRole("alert").filter({ hasText: "引用素材已更新，预览已同步。" })).toBeVisible();
+  expect(requests).toEqual([]);
+  const discussion = page.getByLabel("正在讨论", { exact: true });
+  await expect(discussion).toContainText("第二版方领");
+  await expect(discussion).toContainText("藏蓝通勤外套");
+  await expect(discussion).not.toContainText("第一版领口");
+  await send.click();
+  await expect.poll(() => requests.length).toBe(1);
+  const revised = present(fixture.graph().nodes.find(node => node.title === "第二版方领"));
+  expect(requests[0]?.referencedNodeIds).toEqual([revised.id, "candidate"]);
+  expect(fixture.graph().nodes.find(node => node.id === "brief")?.payload.text).toBe("第一版领口");
 });
 
 test("平移视野会恢复，收起助手及切换窄屏保持画布中心且不修改业务记录", async ({
@@ -524,7 +577,7 @@ test("平移视野会恢复，收起助手及切换窄屏保持画布中心且�
   await page.mouse.move(x + 45, y + 30, { steps: 5 });
   await page.mouse.up();
   await expect
-    .poll(async () => Math.round((await image.boundingBox())!.x - box.x))
+    .poll(async () => Math.round(present(await image.boundingBox()).x - box.x))
     .toBe(45);
   await expect
     .poll(() =>
@@ -536,8 +589,8 @@ test("平移视野会恢复，收起助手及切换窄屏保持画布中心且�
     )
     .toBe(true);
   const centerOffset = async () => {
-    const shape = (await image.boundingBox())!,
-      bounds = (await workspace.boundingBox())!;
+    const shape = present(await image.boundingBox()),
+      bounds = present(await workspace.boundingBox());
     return {
       x: shape.x + shape.width / 2 - bounds.x - bounds.width / 2,
       y: shape.y + shape.height / 2 - bounds.y - bounds.height / 2,
@@ -568,8 +621,8 @@ test("平移视野会恢复，收起助手及切换窄屏保持画布中心且�
   const more = await page
     .getByRole("button", { name: "更多白板操作", exact: true })
     .boundingBox();
-  expect(more!.width).toBeGreaterThanOrEqual(44);
-  expect(more!.height).toBeGreaterThanOrEqual(44);
+  expect(present(more).width).toBeGreaterThanOrEqual(44);
+  expect(present(more).height).toBeGreaterThanOrEqual(44);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -651,9 +704,64 @@ test("绘制设置、撤销重做及只整理画框不提前创建草图节点",
     color: "blue",
     size: "l",
   });
+  // Selection prepares the sketch, but only this explicit action adds it to chat.
+  await expect(page.getByLabel("正在讨论", { exact: true }).getByRole("button", { name: /移除引用/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(page.getByLabel("正在讨论", { exact: true })).toContainText(
     "白板草图",
   );
+});
+
+test("手绘在素材回执到达前锁定和隐藏，元数据与新版图片投影仍保留状态", async ({ page }) => {
+  const fixture = await canvasFixture(page, { nodes: [] });
+  let uploads = 0;
+  await page.route("**/api/files/sign-upload", route => {
+    uploads++;
+    return route.fulfill({ json: { deduplicated: true, upload: null, file: {
+      id: "locked-canvas-sketch", status: "READY", thumbnail1024Url: "/visual-garment.svg", thumbnail256Url: "/visual-garment.svg",
+    } } });
+  });
+  await page.goto(`/${PROJECT}`);
+  await canvasAction(page, "自由手绘");
+  await page.mouse.move(480, 450); await page.mouse.down();
+  await page.mouse.move(580, 550, { steps: 12 }); await page.mouse.up();
+  await expect.poll(() => fixture.records().some(record => record.type === "draw")).toBe(true);
+  const id = present(fixture.records().find(record => record.type === "draw")).id;
+  const release = fixture.delayMaterialReceipt();
+  await page.getByRole("button", { name: "选择工具", exact: true }).click();
+  await page.mouse.click(530, 500);
+  await expect.poll(() => fixture.commands.length).toBe(1);
+  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  const objects = page.getByRole("region", { name: "画布对象", exact: true });
+  const target = objects.locator(`[data-canvas-object-id="${id}"]`);
+  await target.getByRole("button", { name: /^锁定/ }).click();
+  await expect(target).toHaveAttribute("data-locked", "true");
+  await target.getByRole("button", { name: /^隐藏/ }).click();
+  await expect(target).toHaveAttribute("data-hidden", "true");
+  release();
+  await expect.poll(() => fixture.records().find(record => record.id === id)?.meta?.canvasFileAssetId).toBe("locked-canvas-sketch");
+  expect(fixture.records().find(record => record.id === id)?.isLocked).toBe(true);
+  const original = present(fixture.records().find(record => record.id === id));
+  const updatedNode = present(fixture.graph().nodes[0]);
+  updatedNode.title = "已经调整的廓形";
+  updatedNode.payload = { ...updatedNode.payload, fileAssetId: "new-sketch-version", imageUrl: "/visual-garment.svg", imageWidth: 600, imageHeight: 800 };
+  fixture.graph().revision++;
+  await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
+  await expect(target).toContainText("已经调整的廓形");
+  await expect(target).toHaveAttribute("data-locked", "true");
+  await expect.poll(() => fixture.records().find(record => record.id === id)?.type).toBe("fashion-image");
+  const projected = present(fixture.records().find(record => record.id === id));
+  expect(projected).toMatchObject({ x: original.x, y: original.y, isLocked: true, meta: {
+    canvasNodeId: updatedNode.id, canvasFileAssetId: "new-sketch-version", originalCanvasStroke: { type: "draw" }, canvasHidden: true,
+  } });
+  await page.reload();
+  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await expect(target).toContainText("已经调整的廓形");
+  await expect(target).toHaveAttribute("data-locked", "true");
+  await expect(target).toHaveAttribute("data-hidden", "true");
+  await target.getByRole("button", { name: /^显示/ }).click();
+  await expect(page.locator(`.tl-shape[data-shape-id="${id}"]`)).toBeVisible();
+  expect(uploads).toBe(1); expect(fixture.commands).toHaveLength(1);
 });
 
 test("布局回执丢失期间新增素材，旧回执不能倒退版本或产生自身冲突", async ({
@@ -666,7 +774,7 @@ test("布局回执丢失期间新增素材，旧回执不能倒退版本或产�
   await expect(
     page.getByRole("button", { name: "重试保存", exact: true }),
   ).toBeVisible();
-  const original = fixture.saves[0]!;
+  const original = present(fixture.saves[0]);
   await page.screenshot({
     path: "output/playwright/canvas-save-recovery.png",
     fullPage: true,
@@ -689,12 +797,12 @@ test("布局回执丢失期间新增素材，旧回执不能倒退版本或产�
           ?.props.text,
     )
     .toBe("新素材仍要正确保存");
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText(
-    "已保存",
-  );
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toBeHidden();
   await expect(
     page.getByRole("button", { name: "导出草稿并载入最新", exact: true }),
   ).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "备注内容", exact: true })).toHaveValue("新素材仍要正确保存");
 });
 
 test("素材回执丢失后刷新仍恢复同一操作，不重复创建素材", async ({ page }) => {
@@ -709,7 +817,7 @@ test("素材回执丢失后刷新仍恢复同一操作，不重复创建素材",
   await expect(
     page.getByRole("button", { name: "重试保存", exact: true }),
   ).toBeVisible();
-  const original = fixture.commands[0]!;
+  const original = present(fixture.commands[0]);
   page.once("dialog", (dialog) => dialog.accept());
   await page.reload();
   await expect(
@@ -722,9 +830,7 @@ test("素材回执丢失后刷新仍恢复同一操作，不重复创建素材",
     ),
   ).toBe(true);
   expect(fixture.graph().nodes).toHaveLength(1);
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText(
-    "已保存",
-  );
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toBeHidden();
 });
 
 test("多色色卡可以添加和键盘重命名，手机工具菜单可用", async ({ page }) => {

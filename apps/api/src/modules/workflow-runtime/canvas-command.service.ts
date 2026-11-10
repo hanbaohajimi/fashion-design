@@ -26,6 +26,11 @@ import {
 } from "./workflow-planner";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 import { directMutationId } from "./direct-execution";
+import { S3FileStorage } from "../files/storage.service";
+import { visibleStudioAssets } from "../studio/studio-asset-visibility";
+import { requireRestoreSourceFile } from "../design-assets/restore-source-file";
+import { requireProjectFile } from "../files/project-file-access";
+import { ProjectAccessPolicy } from "../studio/project-access.policy";
 
 @Injectable()
 export class CanvasCommandService {
@@ -34,6 +39,7 @@ export class CanvasCommandService {
     @Inject(WorkflowsService) private readonly workflows: WorkflowsService,
     @Inject(WorkflowRuntimeService)
     private readonly runtime: WorkflowRuntimeService,
+    @Inject(S3FileStorage) private readonly storage: S3FileStorage = new S3FileStorage(),
   ) {}
 
   async execute(
@@ -146,7 +152,62 @@ export class CanvasCommandService {
           nodeId: string;
           position?: { x: number; y: number };
         }[] = [];
-        if (
+        if (command.type === "import_reference_image") {
+          const file = await requireProjectFile(tx, new ProjectAccessPolicy(tx), userId, command.fileId, projectId, tx);
+          if (file.status !== "READY" || !file.thumbnail1024Key || !file.width || !file.height || !file.mimeType.startsWith("image/")) throw new BadRequestException("参考图片尚未处理完成，请稍后重试。");
+          await requireRestoreSourceFile(this.storage, `s3://${file.objectKey}`, { code: "REFERENCE_IMAGE_UNAVAILABLE", message: "参考原图暂时无法读取，尚未加入项目。请稍后继续添加。" });
+          await this.canvas.writable(userId, projectId, tx);
+          const existing = graph.nodes.find(node => node.type === "reference_image" && canvasObject(node.payload).fileAssetId === file.id);
+          nodeId = existing?.id ?? directMutationId(`reference-upload:${projectId}:${command.mutationId}`);
+          if (!existing) operations.push({ type: "add_node", node: { id: nodeId, kind: "asset", type: "reference_image",
+            title: file.originalName.trim().slice(0, 200) || "上传参考图", x: command.position?.x ?? 0, y: command.position?.y ?? 0,
+            payload: { fileAssetId: file.id, sourceName: file.originalName, imageUrl: `/api/files/${encodeURIComponent(file.id)}/thumbnail/1024`, width: file.width, height: file.height,
+              role: "style_ref", roleSource: "default", roleInferenceState: "none",
+              ...(command.placement === "reference" ? { canvasPlacement: "manual" } : {}),
+            },
+          } });
+          if (!existing && command.placement !== "reference") placements.push({ shapeId: `shape:canvas-${nodeId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (command.type === "place_reference_image") {
+          const source = graph.nodes.find(node => node.id === command.nodeId && node.kind === "asset" && node.type === "reference_image");
+          const fileId = source && canvasObject(source.payload).fileAssetId;
+          if (!source || typeof fileId !== "string") throw new BadRequestException("参考图片不存在或无法访问，请重新打开图片。");
+          const file = await requireProjectFile(tx, new ProjectAccessPolicy(tx), userId, fileId, projectId, tx);
+          if (file.status !== "READY" || !file.thumbnail1024Key || !file.width || !file.height || !file.mimeType.startsWith("image/")) throw new BadRequestException("参考图片尚未处理完成，请稍后重试。");
+          await requireRestoreSourceFile(this.storage, `s3://${file.objectKey}`, { code: "REFERENCE_IMAGE_UNAVAILABLE", message: "参考原图暂时无法读取，尚未放入白板。请稍后继续。" });
+          await this.canvas.writable(userId, projectId, tx);
+          nodeId = source.id;
+          const existingPlacement = await tx.canvasObjectBinding.findFirst({ where: { projectId, nodeId, removedAt: null } });
+          if (!existingPlacement) placements.push({ shapeId: `shape:reference-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (command.type === "place_generated_asset") {
+          const source = await tx.designAsset.findFirst({
+            where: { AND: [visibleStudioAssets(projectId), { id: command.assetId, operation: { not: "IMPORTED" } }] },
+            include: { designStep: { select: { intent: true } } },
+          });
+          if (!source) throw new BadRequestException("生成图片不存在或无法访问，请刷新文件列表。");
+          if (Boolean(source.archivedAt) !== command.archived) throw new BadRequestException("图片归档状态已变化，请刷新文件列表后重新选择。");
+          await requireRestoreSourceFile(this.storage, source.url);
+          await this.canvas.writable(userId, projectId, tx);
+          const title = source.designStep?.intent.trim().slice(0, 160) || "生成图片";
+          const asset = source.archivedAt ? await tx.designAsset.create({ data: {
+            id: `restore_${directMutationId(`generated-file:${projectId}:${command.mutationId}`)}`,
+            projectId, rootAssetId: source.rootAssetId, parentAssetId: source.id, restoredFromAssetId: source.id,
+            operation: "RESTORE", url: source.url, thumbnailUrl: source.thumbnailUrl, width: source.width, height: source.height, seed: source.seed,
+            designStep: { create: { projectId, actor: "manual", tool: "restore", intent: "从归档生成图片继续创作", inputSnapshot: { version: 1,
+              sources: [{ elementId: source.id, assetId: source.id, role: "restore_source", title }],
+              constraints: { palette: [], notes: [], avoidLabels: [], fabricTerms: [] }, parameters: {},
+            } } },
+          } }) : source;
+          const existing = graph.nodes.find(node => node.type === "candidate" && canvasObject(node.payload).assetId === asset.id);
+          nodeId = existing?.id ?? directMutationId(`generated-file-node:${projectId}:${command.mutationId}`);
+          if (!existing) operations.push({ type: "add_node", node: {
+            id: nodeId, kind: "asset", type: "candidate", title, status: "completed",
+            payload: { assetId: asset.id, historicalImport: true, imageUrl: `/api/design-assets/${encodeURIComponent(asset.id)}/content`,
+              ...(asset.width ? { imageWidth: asset.width } : {}), ...(asset.height ? { imageHeight: asset.height } : {}),
+              ...(source.archivedAt ? { restoredFromAssetId: source.id, parentAssetId: source.id } : {}),
+            }, x: command.position?.x ?? 0, y: command.position?.y ?? 0,
+          } });
+          placements.push({ shapeId: `shape:generated-file-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (
           command.type === "create_material" ||
           command.type === "import_materials"
         ) {
@@ -397,6 +458,7 @@ export class CanvasCommandService {
             undefined,
             undefined,
             tx,
+            command.type === "import_reference_image" ? userId : undefined,
           );
         if (command.type === "update_material") {
           const priorBinding = !command.shapeId

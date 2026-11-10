@@ -7,6 +7,12 @@
   pointer-events: auto;
 }
 
+/* Export mounts a fresh copy. Capture its settled appearance, never its entry fade. */
+.materialShell[data-exporting="true"],
+.materialShell[data-exporting="true"] .mountGroupAnimated {
+  animation: none;
+}
+
 .shadowLayer {
   position: absolute;
   top: 0;

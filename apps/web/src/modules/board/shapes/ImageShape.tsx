@@ -8,8 +8,10 @@ import {
   useSvgExportContext,
   useValue,
 } from "tldraw";
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCanvasInteraction } from "../workflow/canvas-interaction-context";
+import { readCanvasImageDimensions } from "../workflow/canvas-image-sizing";
+import { preparedCanvasImage } from "../workflow/canvas-export-images";
 
 import { RoleBadge } from "./RoleBadge";
 import { useUploadPreview } from "../upload-preview-store";
@@ -33,6 +35,26 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
   const exportContext = useSvgExportContext();
   const [inpaintOpen, setInpaintOpen] = useState(false);
   const uploadPreview = useUploadPreview(shape.id);
+  const source = shape.props.url || uploadPreview;
+  const [retry, setRetry] = useState(0);
+  const imageKey = `${retry}:${source ?? ""}`;
+  const currentImageKey = useRef(imageKey);
+  useLayoutEffect(() => { currentImageKey.current = imageKey; }, [imageKey]);
+  const [imageState, setImageState] = useState<
+    { key: string; status: "ready"; width: number; height: number } | { key: string; status: "failed" } | null
+  >(null);
+  const imageReady = imageState?.key === imageKey && imageState.status === "ready";
+  const imageFailed = imageState?.key === imageKey && imageState.status === "failed";
+  const readOnly = useValue(`image-readonly-${shape.id}`, () => editor.getIsReadonly(), [editor, shape.id]);
+  useEffect(() => {
+    if (exportContext || readOnly || imageState?.status !== "ready" || imageState.key !== imageKey || !source) return;
+    const current = editor.getShape<ImageShape>(shape.id);
+    if (!current || current.props.url !== source ||
+      (current.props.imageSource === source && current.props.imageWidth === imageState.width && current.props.imageHeight === imageState.height)) return;
+    editor.store.mergeRemoteChanges(() => editor.run(() => editor.updateShape({
+      id: shape.id, type: "fashion-image", props: { imageWidth: imageState.width, imageHeight: imageState.height, imageSource: source },
+    }), { ignoreShapeLock: true, history: "ignore" }));
+  }, [editor, exportContext, imageKey, imageState, readOnly, shape.id, source]);
   const isNearViewport = useValue(
     `image-visible-${shape.id}`,
     () => {
@@ -118,19 +140,30 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
             </div>
           )}
         </div>
-      ) : (
+      ) : (!source || (!exportContext && !imageReady)) ? (
         <div className={styles.imagePlaceholder}>
-          <span>IMAGE / CDN</span>
+          <span>{imageFailed ? "图片暂不可用" : source ? "正在载入图片" : "图片尚未就绪"}</span>
+          {imageFailed ? <button type="button" onPointerDown={event => event.stopPropagation()} onClick={event => {
+            event.stopPropagation(); setRetry(value => value + 1);
+          }}>重新加载图片</button> : null}
         </div>
-      )}
+      ) : null}
       {(exportContext || isNearViewport) &&
-      (shape.props.url || uploadPreview) ? (
+      source ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={imageKey}
           alt=""
           draggable={false}
+          hidden={!exportContext && imageFailed}
           loading={exportContext ? "eager" : "lazy"}
-          src={shape.props.url || uploadPreview}
+          src={exportContext ? preparedCanvasImage(editor, source) : source}
+          onError={() => { if (!exportContext && currentImageKey.current === imageKey) setImageState({ key: imageKey, status: "failed" }); }}
+          onLoad={event => {
+            if (exportContext || currentImageKey.current !== imageKey) return;
+            const size = readCanvasImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight);
+            if (size) setImageState({ key: imageKey, status: "ready", ...size });
+          }}
         />
       ) : null}
       {(shape.props.uploadStatus ?? "ready") !== "ready" ? (
@@ -154,7 +187,7 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
               role={role}
               shapeId={shape.id}
             />
-            {isSelected && inpaintCandidate ? (
+            {isSelected && !readOnly && !exportContext && inpaintCandidate ? (
               <button
                 aria-label="局部更改成衣"
                 className={styles.inpaintTrigger}
@@ -172,12 +205,12 @@ function ImageShapeContent({ shape }: { readonly shape: ImageShape }) {
             ) : null}
           </div>
         }
-        annotationScale={computeAnnotationScale(
+        annotationScale={Math.max(1.2, computeAnnotationScale(
           shape.props.w,
           shape.props.h,
           340,
           260,
-        )}
+        ))}
         appearance={appearance}
         width={shape.props.w}
         height={shape.props.h}
@@ -210,6 +243,9 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
     generationStatus: T.string.optional(),
     generationTaskId: T.string.optional(),
     h: T.number,
+    imageWidth: T.number.optional(),
+    imageHeight: T.number.optional(),
+    imageSource: T.string.optional(),
     mounts: T.any.optional(),
     role: T.string,
     roleConfidence: T.number.optional(),

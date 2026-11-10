@@ -1,9 +1,11 @@
 "use client";
+import { useLinkedDocumentRevision } from "./use-linked-document-revision";
+import { StudioProjectActions } from "./StudioPageHeader";
 import { GridDetails } from "../../components/GridDetails";
 
 import { useSubmitFeedback } from "../../components/interactions/use-submit-feedback";
 
-import { useId, useRef, useState, type CSSProperties } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { PresentationOrder } from "./PresentationOrder";
 import { usePresentationUndo } from "./use-presentation-undo";
 import { StudioCount } from "./StudioCount";
@@ -33,6 +35,7 @@ import {
   PresentationPreview,
 } from "./PresentationGallery";
 import styles from "./presentation-sets.module.css";
+import { mergeSavedRecords } from "./studio-records";
 
 type Presentation = (typeof studioPresentationSchema)["_output"];
 const KIND_LABELS = {
@@ -50,18 +53,26 @@ type Props = StudioPanelProps & {
   readonly data: StudioSummary;
   readonly onGenerate: () => void;
   readonly onOpenStyles?: () => void;
+  readonly onOpenStyle?: (revisionId: string) => void;
   readonly initialStyleRevisionId?: string | undefined;
+  readonly initialDocumentId?: string | undefined;
+  readonly initialDocumentRevisionId?: string | undefined;
 };
 
 export function PresentationSets(props: Props) {
   const feedback = useSubmitFeedback();
+  const [saving, setSaving] = useState(false);
+  const [savedDocuments, setSavedDocuments] = useState<StudioDocumentView[]>([]);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const documents = mergeSavedRecords(props.data.presentationSets, savedDocuments);
   const beforeChange = async () => {
+    if (saving) return false;
     const allowed = await props.beforeChange();
     if (allowed) feedback.reset();
     return allowed;
   };
   const [id, setId] = useState<string | null>(
-    (props.initialStyleRevisionId
+    props.initialDocumentId ?? (props.initialStyleRevisionId
       ? props.data.presentationSets.find(
           (item) =>
             studioPresentationSchema.parse(item.currentRevision.payload)
@@ -70,22 +81,35 @@ export function PresentationSets(props: Props) {
       : props.data.presentationSets[0]?.id) ?? null,
   );
   const [draftVersion, setDraftVersion] = useState(0);
-  const existing = props.data.presentationSets.find((item) => item.id === id);
+  const existing = documents.find((item) => item.id === id);
+  const refresh = () => { void props.onSaved().then(result => setRefreshFailed(result === false), () => setRefreshFailed(true)); };
+  const acceptSaved = (document: StudioDocumentView) => {
+    setSavedDocuments(current => mergeSavedRecords(current, [document]));
+    props.onDocumentSaved?.(document);
+    setId(document.id);
+    refresh();
+  };
   const changeObject = async (next: string | null) => {
     if (!(await beforeChange())) return;
     setId(next);
     if (!next) setDraftVersion((current) => current + 1);
   };
   return (
-    <PresentationForm
+    <>
+    {refreshFailed ? <Notice tone="warning">展示包已经保存，资料列表暂未刷新。当前修订仍可使用。<Button onClick={refresh}>刷新资料</Button></Notice> : null}
+    {id && !existing ? <Notice tone="warning">这份展示包不存在或已无法访问。<Button onClick={refresh}>重新载入资料</Button></Notice> : <PresentationForm
       key={`${existing?.id ?? "new"}:${existing?.version ?? 0}:${draftVersion}`}
       {...props}
+      initialDocumentRevisionId={existing?.id === props.initialDocumentId ? props.initialDocumentRevisionId : undefined}
+      data={{ ...props.data, presentationSets: documents }}
       feedback={feedback}
       beforeChange={beforeChange}
       existing={existing}
-      onCreated={setId}
+      onCommitted={acceptSaved}
+      onSaving={setSaving}
       onChangeObject={(next) => void changeObject(next)}
-    />
+    />}
+    </>
   );
 }
 
@@ -95,19 +119,25 @@ function PresentationForm({
   canEdit,
   onDirty,
   onSaved,
+  onDocumentSaved,
   beforeChange,
   feedback,
   onGenerate,
   onOpenStyles,
+  onOpenStyle,
   existing,
-  onCreated,
+  onCommitted,
+  onSaving,
   onChangeObject,
   initialStyleRevisionId,
+  initialDocumentRevisionId,
 }: Props & {
   readonly existing: StudioDocumentView | undefined;
-  readonly onCreated: (id: string) => void;
+  readonly onCommitted: (document: StudioDocumentView) => void;
+  readonly onSaving: (saving: boolean) => void;
   readonly onChangeObject: (id: string | null) => void;
 }) {
+  const linkedRevision = useLinkedDocumentRevision(initialDocumentRevisionId, existing?.revisions.map(revision => revision.id) ?? []);
   const initial: Presentation = existing
     ? studioPresentationSchema.parse(existing.currentRevision.payload)
     : {
@@ -120,6 +150,7 @@ function PresentationForm({
         notes: "",
       };
   const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? "new" });
+  useLayoutEffect(() => { onSaving(form.busy); return () => onSaving(false); }, [form.busy, onSaving]);
   const { draft, setDraft } = form;
   const errorRef = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLFormElement>(null);
@@ -233,21 +264,23 @@ function PresentationForm({
       focusError();
       return;
     }
-    let savedId = "";
+    let savedDocument: StudioDocumentView | undefined;
     undo.clear();
     if (
-      await form.submit(async (key) => {
-        const saved = await saveStudioDocument(
+      await form.submit(async (key, recovery) => {
+        savedDocument = await saveStudioDocument(
           projectId,
           { type: "PRESENTATION_SET", payload: parsed.data },
           key + (ready ? "-ready" : "-draft"),
           existing,
+          recovery,
         );
-        savedId = saved.id;
       }, ready ? "complete" : "save")
     ) {
-      await onSaved();
-      onCreated(savedId);
+      if (savedDocument) {
+        if (form.isMounted()) onCommitted(savedDocument);
+        else onDocumentSaved?.(savedDocument);
+      }
     } else focusError();
   };
 
@@ -274,6 +307,7 @@ function PresentationForm({
     >
       <header
         className={styles.header}
+        data-workspace-heading
         data-guide="studio-object"
         data-guide-title="商品展示包"
         data-guide-switcher={data.presentationSets.length ? "true" : "false"}
@@ -295,6 +329,7 @@ function PresentationForm({
           </p>
         </div>
         <div className={styles.headerActions}>
+          <StudioProjectActions />
           {data.presentationSets.length ? (
             <Select searchable
               aria-label="切换展示包"
@@ -319,6 +354,7 @@ function PresentationForm({
           </Button>
         </div>
       </header>
+      {linkedRevision.missing ? <Notice tone="warning">所选导出文件的来源修订已不可用，当前显示的是这份展示包的最新修订。</Notice> : null}
       {form.error ? (
         <div ref={errorRef} tabIndex={-1} className={styles.error}>
           <Notice tone="error">
@@ -483,7 +519,6 @@ function PresentationForm({
                       </Field>
                       <Field label={`图片 ${index + 1} 说明`}>
                         <Input
-                          required
                           maxLength={120}
                           value={item.label}
                           onChange={(event) =>
@@ -541,6 +576,7 @@ function PresentationForm({
                 </span>
               </p>
             ) : null}
+            {boundRevision && onOpenStyle ? <Button disabled={form.busy} onClick={() => onOpenStyle(boundRevision.id)}>查看对应款式修订</Button> : null}
             <Field label="采用款式修订">
               <Select searchable
                 id={`${uid}-style`}
@@ -688,11 +724,12 @@ function PresentationForm({
               ),
             )}
           </div>
-          <GridDetails>
+          <GridDetails open={linkedRevision.available}>
             <summary>展示包修订历史</summary>
             {existing.revisions.map((revision) => (
-              <article key={revision.id} className={styles.historyRow}>
+              <article key={revision.id} className={styles.historyRow} ref={revision.id === initialDocumentRevisionId ? linkedRevision.target : undefined} tabIndex={-1} data-linked-document-revision={revision.id === initialDocumentRevisionId ? revision.id : undefined}>
                 <div>
+                  {revision.id === initialDocumentRevisionId ? <p>所选导出文件的来源修订</p> : null}
                   <strong>
                     修订 {revision.revision} {revision.payload.name}
                   </strong>

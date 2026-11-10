@@ -1,0 +1,70 @@
+.root {
+  --pp-size: 96px;
+  --pp-shadow: light-dark(#34391e38, #080d0980);
+  --pp-contact: light-dark(#34391e30, #080d0990);
+  --pp-focus: var(--color-focus-ring);
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  color: var(--color-ink-secondary);
+  font-family: var(--font-sans);
+  isolation: isolate;
+}
+.root[hidden], .root [hidden] { display: none !important; }
+.root :global(.pp-stage) { position: absolute; inset: 0; pointer-events: none; }
+  .root :global(.pp-position) { position: absolute; left: 0; top: 0; width: var(--pp-size); aspect-ratio: 4 / 5; }
+  .root :global(.pp-shadow) { position: absolute; left: 8%; top: 93.5%; width: 84%; height: 9%; border-radius: 50%; background: radial-gradient(ellipse, var(--pp-shadow) 0%, transparent 71%); transform-origin: center; pointer-events: none; }
+  .root :global(.pp-contact) { position: absolute; left: 22%; top: 96%; width: 56%; height: 2.7%; border-radius: 50%; background: radial-gradient(ellipse, var(--pp-contact) 0%, transparent 70%); transform-origin: center; pointer-events: none; }
+  .root :global(.pp-character) { display: block; width: 100%; height: 100%; border: 0; border-radius: 40%; background: transparent; padding: 0; color: inherit; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  .root :global(.pp-character)[data-held="true"] { cursor: grabbing; }
+  .root :global(.pp-character):focus-visible { outline: 2px solid var(--pp-focus); outline-offset: 5px; }
+  .root :global(.pp-rise), .root :global(.pp-lean), .root :global(.pp-form), .root :global(.pp-breathe) { display: block; width: 100%; height: 100%; transform-origin: 50.56% 96.07%; pointer-events: none; }
+  .root :global(.pp-breathe) { animation: pp-breath 6.2s cubic-bezier(.45, 0, .55, 1) infinite; }
+  .root[data-scene="sleeping"] :global(.pp-breathe) { animation-duration: 7.8s; }
+  .root[data-active="false"] :global(.pp-breathe), .root[data-held="true"] :global(.pp-breathe) { animation-play-state: paused; }
+  .root :global(.pp-rig), .root :global(.pp-layer) { position: absolute; display: block; inset: 0; }
+  .root :global(.pp-rig) img { position: absolute; display: block; max-width: none; pointer-events: none; user-select: none; }
+  .root :global(.pp-eye), .root :global(.pp-mouth) { position: absolute; display: block; }
+  .root :global(.pp-rig) img[data-fill] { inset: 0; width: 100%; height: 100%; }
+  .root :global(.pp-upper) { transform-origin: 50.558036% 80.892857%; }
+  .root :global(.pp-body-fallback) { transform-origin: 50.558036% 77.221527%; }
+  .root :global(.pp-body-mesh) { position: absolute; display: block; left: -7%; top: -5%; width: 114%; height: 110%; opacity: 0; pointer-events: none; }
+  .root[data-body-surface="mesh"] :global(.pp-body-fallback) { opacity: 0; }
+  .root[data-body-surface="mesh"] :global(.pp-body-mesh) { opacity: 1; }
+  .root :global(.pp-leaf-big) { transform-origin: 50% 29.55%; }
+  .root :global(.pp-leaf-small) { transform-origin: 53.46% 23.13%; }
+  .root :global(.pp-eye-open) { transform-origin: 50% 53%; }
+  .root :global(.pp-eye-rest), .root :global(.pp-eye-happy), .root :global(.pp-mouth-oh) { opacity: 0; }
+  .root :global(.pp-eye-happy) { transform-origin: 50% 53%; }
+  .root :global(.pp-mouth) { transform-origin: 50% 50%; }
+  .root :global(.pp-brow) { transform-origin: 50% 60%; }
+  .root :global(.pp-work-kit) { opacity: 0; transform-origin: 50.56% 90%; }
+  .root :global(.pp-pencil-motion) { transform-origin: 71.317% 82.679%; }
+  .root :global(.pp-dot-one), .root :global(.pp-dot-two), .root :global(.pp-question) { opacity: 0; transform-origin: 50% 65%; }
+  .root :global(.pp-thought-mark) { position: absolute; display: block; width: max(8px, 8%); aspect-ratio: 122 / 165; opacity: 0; transform-origin: 50% 65%; }
+  .root :global(.pp-thought-one) { left: 69%; top: 4%; }
+  .root :global(.pp-thought-two) { left: 81%; top: 0; width: max(9px, 10%); }
+  .root :global(.pp-thought-three) { left: 93%; top: 6%; }
+  .root :global(.pp-spark) { position: absolute; display: block; opacity: 0; transform-origin: 50% 60%; }
+  .root :global(.pp-spark-secondary) { left: 93%; top: 48%; width: 6.6%; height: 6.36%; }
+
+.root :global(.pp-character) { pointer-events: none; }
+.root :global(.pp-hit) { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; touch-action: none; outline: none; cursor: grab; }
+.root :global(.pp-hit) path { pointer-events: auto; touch-action: none; }
+.root :global(.pp-hit)[data-held="true"] { cursor: grabbing; }
+.root :global(.pp-hit):focus-visible path { stroke: var(--pp-focus); stroke-width: 16; stroke-linejoin: round; }
+.root :global(.pp-label-anchor) { position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(224px, calc(100vw - 32px)); pointer-events: none; }
+.root :global(.pp-label-anchor)[data-side="below"] { bottom: auto; top: calc(100% + 12px); }
+.root :global(.pp-label) { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-paper); color: var(--color-ink); box-shadow: var(--shadow-material-1); text-align: center; font-family: inherit; font-size: 14px; line-height: 1.5; pointer-events: auto; cursor: pointer; touch-action: manipulation; }
+.root :global(.pp-label)[data-speaking="true"] { padding: 10px 12px; border-color: var(--color-control-border); }
+.root :global(.pp-label):focus-visible { outline: 2px solid var(--pp-focus); outline-offset: 3px; }
+.root :global(.pp-speech) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-weight: 500; }
+.root :global(.pp-status) { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.root :global(.pp-label)[data-speaking="true"] :global(.pp-status) { font-size: 12px; color: var(--color-ink-secondary); }
+.root :global(.pp-expression) { font-size: 12px; white-space: pre; }
+.root :global(.pp-caption):empty { display: none; }
+.root :global(.pp-announcement) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (pointer: coarse) { .root :global(.pp-label) { min-height: 44px; } }
+@keyframes pp-breath { 0%, 100% { transform: scale(1, 1); } 48% { transform: scale(.998, 1.0035); } }
+@media (prefers-reduced-motion: reduce) { .root :global(.pp-breathe) { animation: none; } }

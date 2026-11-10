@@ -82,6 +82,19 @@ export class ProjectAgentConversationsController {
       parseOrThrow(createAgentConversationSchema, body),
     );
   }
+
+  @Get(":conversationId")
+  get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("conversationId") conversationId: string,
+  ) {
+    return this.conversations.get(
+      user.userId,
+      parseOrThrow(agentIdSchema, projectId),
+      parseOrThrow(agentIdSchema, conversationId),
+    );
+  }
 }
 
 @Controller("agent-conversations")

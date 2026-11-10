@@ -37,6 +37,14 @@ function openDatabase() {
 }
 
 export const draftRepository = {
+  async list<T>(prefix: string): Promise<DraftRecord<T>[]> {
+    const db = await openDatabase();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction("drafts").objectStore("drafts").getAll(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
+      request.onsuccess = () => resolve((request.result as DraftRecord<T>[]).filter(record => !record.conflictOf));
+      request.onerror = () => reject(request.error);
+    });
+  },
   async read<T>(key: string): Promise<DraftRecord<T> | undefined> {
     const db = await openDatabase();
     return new Promise((resolve, reject) => {
@@ -53,10 +61,11 @@ export const draftRepository = {
       request.onerror = () => reject(request.error);
     });
   },
-  async write<T>(input: Omit<DraftRecord<T>, "revision" | "updatedAt" | "writer">, expected: number): Promise<DraftRecord<T>> {
+  async write<T>(input: Omit<DraftRecord<T>, "revision" | "updatedAt" | "writer">, expected: number, options: { preserveConflict?: boolean } = {}): Promise<DraftRecord<T>> {
     input = { ...input, value: JSON.parse(serializeDraft(input.value)) as T, baseline: normalizeDraftBaseline(input.baseline) };
     if (blockedAccounts.has(input.accountId)) throw new Error("账号已退出");
     const db = await openDatabase();
+    if (blockedAccounts.has(input.accountId)) throw new Error("账号已退出");
     return new Promise((resolve, reject) => {
       const tx = db.transaction("drafts", "readwrite");
       const store = tx.objectStore("drafts");
@@ -67,7 +76,7 @@ export const draftRepository = {
         const current = request.result as DraftRecord | undefined;
         if ((current?.revision ?? 0) !== expected) {
           conflict = current ?? { ...input, revision: 0, updatedAt: Date.now(), writer: draftWriter };
-          store.put({ ...input, key: `${input.key}:conflict:${draftWriter}`, conflictOf: input.key, revision: 1, updatedAt: Date.now(), writer: draftWriter });
+          if (options.preserveConflict !== false) store.put({ ...input, key: `${input.key}:conflict:${draftWriter}`, conflictOf: input.key, revision: 1, updatedAt: Date.now(), writer: draftWriter });
         } else {
           result = { ...input, revision: expected + 1, updatedAt: Date.now(), writer: draftWriter };
           store.put(result);
@@ -81,7 +90,7 @@ export const draftRepository = {
       tx.onabort = tx.onerror = () => reject(tx.error);
     });
   },
-  async remove(key: string, revision: number) {
+  async remove(key: string, revision: number, expectedValue?: unknown) {
     const db = await openDatabase();
     return new Promise<boolean>((resolve, reject) => {
       const tx = db.transaction("drafts", "readwrite");
@@ -89,7 +98,10 @@ export const draftRepository = {
       const request = store.get(key);
       let removed = false;
       request.onsuccess = () => {
-        if ((request.result as DraftRecord | undefined)?.revision === revision) { store.delete(key); memory.delete(key); removed = true; }
+        const current = request.result as DraftRecord | undefined;
+        // A deleted key can be recreated at revision 1. Durable commands also
+        // match their payload so a late acknowledgement cannot erase the next command.
+        if (current?.revision === revision && (expectedValue === undefined || serializeDraft(current.value) === serializeDraft(expectedValue))) { store.delete(key); memory.delete(key); removed = true; }
       };
       tx.oncomplete = () => resolve(removed);
       tx.onabort = tx.onerror = () => reject(tx.error);
@@ -120,6 +132,30 @@ export async function flushWorkspaceDrafts() { await Promise.all([...pending].ma
 
 export function normalizeDraftBaseline(value: string): string {
   try { return serializeDraft(JSON.parse(value)); } catch { return value; }
+}
+
+/** Compare saved content while keeping view state and row identities in storage. */
+export function sameDraftBaseline(left: string, right: string) {
+  const comparable = (value: string) => {
+    try {
+      const parsed = JSON.parse(normalizeDraftBaseline(value)) as unknown;
+      if (parsed && typeof parsed === "object" && "document" in parsed) {
+        const document = parsed.document;
+        if (document && typeof document === "object" && "store" in document && "schema" in document) {
+          // Canvas selection/camera changes do not create unsaved artwork. Store
+          // record order can also change when tldraw reloads the same document.
+          return JSON.stringify(document, (_key, item: unknown) =>
+            item && typeof item === "object" && !Array.isArray(item)
+              ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+              : item);
+        }
+      }
+      return parsed && typeof parsed === "object" && "bom" in parsed && "pom" in parsed
+        ? JSON.stringify(parsed, (key, item: unknown) => key === "uiId" ? undefined : item)
+        : JSON.stringify(parsed);
+    } catch { return value; }
+  };
+  return comparable(left) === comparable(right);
 }
 
 /** Exclude ephemeral references; real resource IDs remain serializable. */

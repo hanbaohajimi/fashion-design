@@ -1,16 +1,26 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProposalReview } from "./ProposalReview";
 import type { WorkflowGraph, WorkflowProposal } from "./workflow-api";
 
-const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+const originalAnimate = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  "animate",
+);
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  if (originalAnimate) Object.defineProperty(Element.prototype, "animate", originalAnimate);
+  if (originalAnimate)
+    Object.defineProperty(Element.prototype, "animate", originalAnimate);
   else Reflect.deleteProperty(Element.prototype, "animate");
 });
 const graph = { nodes: [], edges: [] } as unknown as WorkflowGraph;
@@ -85,7 +95,7 @@ it("结果分别支持查看大图和继续修改，不重新执行生成", () =
         kind: "asset",
         type: "candidate",
         title: "藏蓝风衣",
-        payload: { imageUrl: "/result.png" },
+        payload: { imageUrl: "/result.png", assetId: "result-asset" },
       },
     ],
     edges: [{ sourceNodeId: "tool", targetNodeId: "result" }],
@@ -100,6 +110,30 @@ it("结果分别支持查看大图和继续修改，不重新执行生成", () =
           toolNodeId: "tool",
           operations: [],
           referencedNodeIds: [],
+          execution: {
+            version: 1,
+            binding: "linked",
+            nodeVersionId: "version",
+            canExecute: false,
+            progress: null,
+            result: {
+              version: 1,
+              executionId: "execution",
+              toolNodeId: "tool",
+              status: "completed",
+              completedAt: null,
+              attempts: { completed: 1, failed: 0, canceled: 0 },
+              images: [
+                {
+                  assetId: "result-asset",
+                  nodeId: "result",
+                  title: "藏蓝风衣",
+                  width: 600,
+                  height: 800,
+                },
+              ],
+            },
+          },
         } as unknown as WorkflowProposal
       }
       disabled={false}
@@ -115,6 +149,55 @@ it("结果分别支持查看大图和继续修改，不重新执行生成", () =
   expect(onOpenResult).toHaveBeenCalledWith("result");
   expect(onContinue).toHaveBeenCalledWith("result");
   expect(onAccept).not.toHaveBeenCalled();
+});
+
+it("旧确认没有可核实执行时不借用当前节点成功状态或后来输出", () => {
+  const card = review(
+    {
+      id: "historical",
+      status: "accepted",
+      toolNodeId: "tool",
+      operations: [
+        {
+          type: "add_node",
+          node: {
+            id: "tool",
+            kind: "tool",
+            type: "generate_design",
+            title: "原要求",
+            payload: { params: { prompt: "原来藏蓝立领", count: 1 } },
+            x: 0,
+            y: 0,
+          },
+        },
+      ],
+      referencedNodeIds: [],
+      content: "原来藏蓝立领",
+    } as unknown as WorkflowProposal,
+    {
+      nodes: [
+        {
+          id: "tool",
+          kind: "tool",
+          type: "generate_design",
+          status: "completed",
+          payload: { params: { prompt: "后来红色夹克", count: 4 } },
+        },
+        {
+          id: "new",
+          kind: "asset",
+          type: "candidate",
+          title: "后来的结果",
+          payload: { assetId: "new-asset" },
+        },
+      ],
+      edges: [{ sourceNodeId: "tool", targetNodeId: "new" }],
+    } as unknown as WorkflowGraph,
+  );
+  expect(card.textContent).toContain("历史执行未核实");
+  expect(card.textContent).toContain("原来藏蓝立领");
+  expect(card.textContent).not.toContain("后来红色夹克");
+  expect(screen.queryByRole("button", { name: /查看大图/ })).toBeNull();
 });
 
 it("旧版修改提案展示即将应用的数量和要求，不显示原节点旧参数", () => {
@@ -158,9 +241,25 @@ function motionReview() {
     operations: [],
     referencedNodeIds: [],
     content: "设计藏蓝风衣",
+    execution: {
+      version: 1,
+      binding: "not_started",
+      nodeVersionId: "version",
+      canExecute: true,
+      progress: null,
+      result: null,
+    },
   } as unknown as WorkflowProposal;
   const currentGraph = {
-    nodes: [{ id: "tool", kind: "tool", type: "generate_design", status: "ready", payload: { params: {} } }],
+    nodes: [
+      {
+        id: "tool",
+        kind: "tool",
+        type: "generate_design",
+        status: "ready",
+        payload: { params: {} },
+      },
+    ],
     edges: [],
   } as unknown as WorkflowGraph;
   return {
@@ -176,15 +275,21 @@ function motionReview() {
 }
 
 function mockReceiptMotion(reduced = false) {
-  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
-    matches: reduced && query === "(prefers-reduced-motion: reduce)",
-    media: query,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: reduced && query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
   const cancel = vi.fn();
   const animate = vi.fn(() => ({ cancel }));
-  Object.defineProperty(Element.prototype, "animate", { configurable: true, value: animate });
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    value: animate,
+  });
   return { animate, cancel };
 }
 
@@ -195,13 +300,19 @@ it("确认立即调用业务，提交超过 300ms 后显示匹配该提案的等
   fireEvent.click(screen.getByRole("button", { name: "确认并生成 2 张" }));
   expect(props.onAccept).toHaveBeenCalledTimes(1);
   view.rerender(<ProposalReview {...props} submitting />);
-  const button = screen.getByRole("button", { name: "提交中…" }) as HTMLButtonElement;
+  const button = screen.getByRole("button", {
+    name: "提交中…",
+  }) as HTMLButtonElement;
   expect(button.disabled).toBe(true);
   expect(button.dataset.feedback).toBe("pending");
   expect(button.querySelector('[data-phase="pending"]')).toBeNull();
-  act(() => { vi.advanceTimersByTime(299); });
+  act(() => {
+    vi.advanceTimersByTime(299);
+  });
   expect(button.querySelector('[data-phase="pending"]')).toBeNull();
-  act(() => { vi.advanceTimersByTime(1); });
+  act(() => {
+    vi.advanceTimersByTime(1);
+  });
   expect(button.querySelector('[data-phase="pending"]')).not.toBeNull();
   fireEvent.click(button);
   expect(props.onAccept).toHaveBeenCalledTimes(1);
@@ -212,22 +323,71 @@ it("本次待确认到受理只描一次 350ms 小勾，立即运行与后续轮
   const { animate, cancel } = mockReceiptMotion();
   const props = motionReview();
   const view = render(<ProposalReview {...props} />);
-  const receipt = view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]");
+  const receipt = view.container.querySelector<HTMLSpanElement>(
+    "[data-proposal-accepted]",
+  );
   if (!receipt) throw new Error("Missing acceptance receipt");
   expect(receipt.hidden).toBe(true);
-  const accepted = { ...props.proposal, status: "accepted" } as WorkflowProposal;
-  const running = { ...props.graph, nodes: props.graph.nodes.map((node) => ({ ...node, status: "running" })) } as WorkflowGraph;
-  view.rerender(<ProposalReview {...props} proposal={accepted} graph={running} />);
+  const accepted = {
+    ...props.proposal,
+    status: "accepted",
+    execution: {
+      version: 1,
+      binding: "linked",
+      nodeVersionId: "version",
+      canExecute: false,
+      result: null,
+      progress: {
+        version: 1,
+        executionId: "execution",
+        toolNodeId: "tool",
+        title: "设计",
+        operation: "image",
+        status: "running",
+        updatedAt: "2026-11-10T10:00:00Z",
+        counts: {
+          total: 2,
+          running: 2,
+          queued: 0,
+          preparing: 0,
+          completed: 0,
+          failed: 0,
+          canceled: 0,
+        },
+        cancelTaskIds: [],
+      },
+    },
+  } as WorkflowProposal;
+  const running = {
+    ...props.graph,
+    nodes: props.graph.nodes.map((node) => ({ ...node, status: "running" })),
+  } as WorkflowGraph;
+  view.rerender(
+    <ProposalReview {...props} proposal={accepted} graph={running} />,
+  );
   expect(receipt.hidden).toBe(false);
   expect(receipt.textContent).toContain("已受理");
-  expect(view.container.querySelector('header [role="status"]')?.textContent).toBe("生成中");
+  expect(
+    view.container.querySelector('header [role="status"]')?.textContent,
+  ).toBe("处理中");
   expect(screen.queryByText("已完成")).toBeNull();
   expect(animate).toHaveBeenCalledTimes(1);
-  expect(animate).toHaveBeenCalledWith([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], expect.objectContaining({ duration: 350 }));
-  view.rerender(<ProposalReview {...props} proposal={{ ...accepted }} graph={{ ...running }} />);
+  expect(animate).toHaveBeenCalledWith(
+    [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+    expect.objectContaining({ duration: 350 }),
+  );
+  view.rerender(
+    <ProposalReview
+      {...props}
+      proposal={{ ...accepted }}
+      graph={{ ...running }}
+    />,
+  );
   expect(animate).toHaveBeenCalledTimes(1);
   expect(props.onAccept).not.toHaveBeenCalled();
-  act(() => { vi.advanceTimersByTime(1000); });
+  act(() => {
+    vi.advanceTimersByTime(1000);
+  });
   expect(receipt.hidden).toBe(true);
   view.unmount();
   expect(cancel).toHaveBeenCalledTimes(1);
@@ -236,13 +396,24 @@ it("本次待确认到受理只描一次 350ms 小勾，立即运行与后续轮
 it("历史已受理初载和替换为另一已受理提案均不播放成功确认", () => {
   const { animate } = mockReceiptMotion();
   const props = motionReview();
-  const accepted = { ...props.proposal, status: "accepted" } as WorkflowProposal;
+  const accepted = {
+    ...props.proposal,
+    status: "accepted",
+  } as WorkflowProposal;
   const view = render(<ProposalReview {...props} proposal={accepted} />);
-  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(true);
-  expect(screen.getByRole("status").textContent).toBe("已保存，待执行");
+  expect(
+    view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")
+      ?.hidden,
+  ).toBe(true);
+  expect(screen.getByRole("status").textContent).toBe("已确认，待执行");
   view.rerender(<ProposalReview {...props} />);
-  view.rerender(<ProposalReview {...props} proposal={{ ...accepted, id: "another" }} />);
-  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(true);
+  view.rerender(
+    <ProposalReview {...props} proposal={{ ...accepted, id: "another" }} />,
+  );
+  expect(
+    view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")
+      ?.hidden,
+  ).toBe(true);
   expect(animate).not.toHaveBeenCalled();
 });
 
@@ -250,8 +421,16 @@ it("减弱动态时受理结果立即可见，不描勾或等待动画", () => {
   const { animate } = mockReceiptMotion(true);
   const props = motionReview();
   const view = render(<ProposalReview {...props} />);
-  view.rerender(<ProposalReview {...props} proposal={{ ...props.proposal, status: "accepted" }} />);
-  expect(view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")?.hidden).toBe(false);
-  expect(screen.getByRole("status").textContent).toBe("已保存，待执行");
+  view.rerender(
+    <ProposalReview
+      {...props}
+      proposal={{ ...props.proposal, status: "accepted" }}
+    />,
+  );
+  expect(
+    view.container.querySelector<HTMLSpanElement>("[data-proposal-accepted]")
+      ?.hidden,
+  ).toBe(false);
+  expect(screen.getByRole("status").textContent).toBe("已确认，待执行");
   expect(animate).not.toHaveBeenCalled();
 });

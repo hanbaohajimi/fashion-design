@@ -1,4 +1,5 @@
 "use client";
+import { StudioProjectActions } from "../StudioPageHeader";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { StudioSummary, WardrobeItemView, WardrobeRevisionView, WardrobeSummary } from "@fashion/shared";
@@ -102,7 +103,7 @@ function WardrobeContent({ projectId, assets, styles: projectStyles, canEdit: pe
     } finally { locked.current = false; setBusy(false); }
   };
   return <div ref={host} className={styles.workspace}>
-    <header className={styles.toolbar}><div><h2>衣架与搭配</h2><p>当前项目的单品陈列，点击服装聚焦查看。</p></div><div className={styles.actions}><Button disabled={!canEdit} onClick={() => { setEditingItem(null); setPrepare(true); }}>准备单品</Button>{!mobile ? <Button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "收起搭配面板" : "打开搭配面板"}</Button> : null}</div></header>
+    <header className={styles.toolbar} data-workspace-heading><div><h2>衣架与搭配</h2><p>当前项目的单品陈列，点击服装聚焦查看。</p></div><div className={styles.actions}><StudioProjectActions /><Button disabled={!canEdit} onClick={() => { setEditingItem(null); setPrepare(true); }}>准备单品</Button>{!mobile ? <Button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "收起搭配面板" : "打开搭配面板"}</Button> : null}</div></header>
     {!data.capabilities.enabled ? <Notice>衣架功能当前未启用，已有资料仍可查看。</Notice> : null}
     {error ? <Notice tone="error" onClose={() => setError(null)}>{error}<Button onClick={() => void refresh()}>重新读取</Button>{draft.outfitId ? <Button onClick={() => change({ ...draft, outfitId: null, version: null, name: `${draft.name} 副本`.slice(0, 120) })}>将草稿另存为新搭配</Button> : null}</Notice> : null}
     {message ? <Notice onClose={() => setMessage(null)}>{message}</Notice> : null}

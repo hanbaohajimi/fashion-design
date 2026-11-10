@@ -87,13 +87,13 @@ const path: DesignPathView = {
   ],
 };
 
-function renderPanel() {
+function renderPanel(readOnly = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <DesignPathPanel assetId="current" />
+      <DesignPathPanel assetId="current" readOnly={readOnly} />
     </QueryClientProvider>,
   );
 }
@@ -104,6 +104,14 @@ beforeEach(() => {
 });
 
 describe("DesignPathPanel", () => {
+  it("生成文件的只读路径可浏览来源，不提供修改决策的入口", async () => {
+    renderPanel(true); await screen.findByText("保留宽松袖型");
+    expect(screen.queryByRole("button", { name: "选定此方案" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "选择理由（可选）" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "编辑来源：原方案" }));
+    expect(within(screen.getByRole("region", { name: "步骤详情" })).getByText("原始设计条件")).toBeTruthy();
+    expect(mocks.recordDesignDecision).not.toHaveBeenCalled();
+  });
   it("显示来源节点及冻结的条件，浏览或放置不自动记录设计选择", async () => {
     renderPanel();
     await screen.findByText("保留宽松袖型");

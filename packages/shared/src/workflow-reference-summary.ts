@@ -10,7 +10,8 @@ export const workflowReferenceSummarySchema = z.object({
   version: z.literal(1),
   explicit: z.array(referenceNodeSchema).max(64),
   discussion: z.array(referenceNodeSchema).max(64),
-  images: z.array(referenceNodeSchema).max(64),
+  // At most five planner requests, each with up to 64 object-to-image bindings.
+  images: z.array(referenceNodeSchema).max(320),
 }).strict();
 
 export type WorkflowReferenceSummary = z.infer<typeof workflowReferenceSummarySchema>;

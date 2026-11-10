@@ -3,8 +3,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BrandLockup } from "./BrandLockup";
-import { Menu } from "./ui";
-import { ConnectionNotice } from "./interactions/ConnectionNotice";
+import { Dialog } from "./ui";
+import { useWorkspaceChrome } from "./WorkspaceChrome";
 import styles from "./archive-navigation.module.css";
 
 export type ArchiveSection =
@@ -71,6 +71,7 @@ export function ArchiveNavigation({
   readonly hideProjectReturn?: boolean;
   readonly currentIsParent?: boolean;
 }) {
+  const { open, setOpen, compact, focused, kind } = useWorkspaceChrome();
   const context = projectId
     ? `?from=board&boardId=${encodeURIComponent(projectId)}`
     : "";
@@ -108,46 +109,36 @@ export function ArchiveNavigation({
       <span>{entry.title}</span>
     </Link>
   ));
-  return (
+  const directory = (
     <aside
       className={styles.rail}
       data-archive-navigation
+      data-expanded={open}
+      data-navigation-kind={kind}
+      id="workspace-navigation"
+      inert={!open}
+      aria-hidden={!open || undefined}
       aria-label="工作区目录"
+      onKeyDown={event => {
+        if (event.key === "Escape" && !event.defaultPrevented && !event.currentTarget.querySelector("details[open]")) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+          requestAnimationFrame(() => document.getElementById("workspace-navigation-toggle")?.focus());
+        }
+      }}
     >
-      <Link href="/" className={styles.brand} aria-label="森织 设计工作室 首页">
-        <BrandLockup tone="color" size={44} />
-      </Link>
+      <div className={styles.brandRow}>
+        <Link href="/" className={styles.brand} aria-label="森织 设计工作室 首页">
+          <BrandLockup tone="color" size={44} />
+        </Link>
+        <button className={styles.toggle} type="button" aria-label="收起工作区目录" onClick={() => {
+          setOpen(false);
+          requestAnimationFrame(() => document.getElementById("workspace-navigation-toggle")?.focus());
+        }}><span aria-hidden="true">‹</span></button>
+      </div>
       <nav aria-label="工作区导航" className={styles.navigation} data-guide="projects-navigation">
         <div className={styles.desktopLinks}>{links}</div>
-        <div className={styles.mobileMenu}>
-          <Menu
-            label="切换工作区"
-            trigger={
-              <>
-                <span>
-                  {entries.find((entry) => entry.id === current)?.title ??
-                    "导航"}
-                </span>
-                <svg
-                  aria-hidden="true"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </>
-            }
-          >
-            {projectName ? (
-              <span className={styles.menuProject}>{projectName}</span>
-            ) : null}
-            {links}
-          </Menu>
-        </div>
       </nav>
       {projectName ? (
         <div className={styles.project}>
@@ -158,7 +149,27 @@ export function ArchiveNavigation({
       {navigation ? (
         <div className={styles.projectNavigation} data-workspace-navigation-scroll>{navigation}</div>
       ) : null}
-      <div className={styles.account}><ConnectionNotice />{account}</div>
+      <div className={styles.account}>{account}</div>
     </aside>
   );
+  return <>
+    <button
+      id="workspace-navigation-toggle"
+      className={`${styles.toggle} ${styles.reopen}`}
+      type="button"
+      hidden={focused || open && !compact}
+      aria-label="展开工作区目录"
+      aria-controls="workspace-navigation"
+      aria-expanded={open}
+      data-guide={!open ? current === "studio" ? "studio-navigation" : "projects-navigation" : undefined}
+      data-guide-variant="collapsed"
+      onClick={() => {
+        setOpen(!open);
+        if (!compact && !open) requestAnimationFrame(() => document.querySelector<HTMLElement>("#workspace-navigation button")?.focus());
+      }}
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M9 4v16m4-11 3 3-3 3" /></svg>
+    </button>
+    {compact ? <Dialog open={open} label="工作区目录" variant="navigation" className={styles.drawer} returnFocusSelector="#workspace-navigation-toggle" onClose={() => setOpen(false)}>{directory}</Dialog> : directory}
+  </>;
 }

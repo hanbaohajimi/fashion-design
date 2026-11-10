@@ -60,6 +60,7 @@ export function captureWorkerException(
     readonly phase: "bootstrap" | "failed" | "fallback";
     readonly queue:
       | "image-transform"
+      | "image-edit-cleanup"
       | "collection-similarity"
       | "export"
       | "generation"

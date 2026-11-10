@@ -30,6 +30,23 @@ const props = () => ({
   beforeChange: vi.fn(async () => true),
 });
 
+it("技术包保存后刷新失败仍可继续编辑同一份资料", async () => {
+  const values = props();
+  values.onSaved.mockRejectedValue(new Error("刷新失败"));
+  const saved = techPackFixture();
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(saved), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<TechPackEditor {...values} />);
+  fireEvent.change(screen.getByLabelText("技术包名称"), { target: { value: "夹克技术资料" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await screen.findByText(/技术包已经保存，资料列表暂未刷新/);
+  expect(screen.getByRole("button", { name: "保存修订" })).toHaveProperty("disabled", true);
+  fireEvent.change(screen.getByLabelText("技术包名称"), { target: { value: "夹克制作资料更新" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toMatchObject({ documentId: saved.id, expectedVersion: saved.version, payload: { name: "夹克制作资料更新", styleRevisionId: "style-r1" } });
+});
+
 it("小数中间态与非法草稿跨章节保留，失败输入不会保存旧数值", async () => {
   const values = props();
   vi.stubGlobal("fetch", vi.fn());

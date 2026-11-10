@@ -1,0 +1,196 @@
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: -6px;
+  padding: 6px;
+}
+.content > p {
+  flex: none;
+}
+.controls {
+  flex: none;
+  border: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 18px;
+}
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.pair button {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: 8px;
+}
+.regionList {
+  display: grid;
+  gap: 4px;
+}
+.regionList button {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  text-align: left;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+}
+.regionList button span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.regionList button[aria-pressed="true"] {
+  background: var(--color-selection-bg);
+  color: var(--color-action);
+}
+.regionList small {
+  flex: none;
+}
+.selected {
+  display: grid;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.help summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--color-action);
+}
+.help button {
+  margin-top: 12px;
+}
+.content p[role="alert"] {
+  color: var(--color-status-error);
+}
+.actions {
+  flex: none;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: var(--border-hairline) solid var(--color-border);
+}
+.actions button {
+  min-height: 44px;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.region {
+  position: absolute;
+}
+.overlay .regionMove {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  min-height: 0;
+  background: transparent;
+  border-style: solid;
+  border-color: var(--color-action);
+  border-radius: 0;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: move;
+}
+.region[data-selected="true"] {
+  z-index: 2;
+}
+.region[data-selected="true"] button.regionMove {
+  background: color-mix(in srgb, var(--color-action) 12%, transparent);
+}
+.overlay .regionBadge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
+}
+.regionBadge > span {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding-inline: 4px;
+  font-size: 12px;
+  background: var(--color-action);
+  color: var(--color-action-on);
+}
+.regionNumber {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 3px;
+  font-size: 10px;
+  line-height: 1;
+  background: var(--color-paper);
+  color: var(--color-action);
+}
+.overlay .regionHandle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  transform-origin: bottom right;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: nwse-resize;
+}
+.regionHandle::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-paper);
+  background: var(--color-action);
+  border-radius: 3px;
+}
+.overlay .region button:disabled {
+  background: transparent;
+}
+@media (max-width: 767px) {
+  .content,
+  .controls {
+    gap: 12px;
+  }
+  .actions {
+    padding-top: 8px;
+    gap: 8px;
+  }
+}

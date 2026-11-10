@@ -30,6 +30,37 @@ export interface MaskCanvasDraft {
   readonly height: number;
 }
 
+/** Local drafts can outlive a version of the editor; reject malformed geometry. */
+export function isMaskCanvasDraft(value: unknown): value is MaskCanvasDraft {
+  if (!value || typeof value !== "object") return false;
+  const draft = value as MaskCanvasDraft;
+  return (
+    Number.isInteger(draft.width) &&
+    draft.width > 0 &&
+    Number.isInteger(draft.height) &&
+    draft.height > 0 &&
+    Number.isFinite(draft.brushRatio) &&
+    draft.brushRatio > 0 &&
+    Array.isArray(draft.strokes) &&
+    draft.strokes.every(
+      (stroke) =>
+        stroke &&
+        Number.isFinite(stroke.lineWidth) &&
+        stroke.lineWidth > 0 &&
+        (stroke.softness === undefined ||
+          (Number.isFinite(stroke.softness) &&
+            stroke.softness >= 0 &&
+            stroke.softness <= 1)) &&
+        Array.isArray(stroke.points) &&
+        stroke.points.length > 0 &&
+        stroke.points.every(
+          (point: Point) =>
+            point && Number.isFinite(point.x) && Number.isFinite(point.y),
+        ),
+    )
+  );
+}
+
 export interface MaskCanvasState {
   readonly draft?: MaskCanvasDraft;
   readonly coverage: number;
@@ -91,14 +122,16 @@ function paintStroke(context: CanvasRenderingContext2D, stroke: Stroke): void {
     // Nested round paths stay within the original radius. Source-over increments
     // reproduce a smooth weight ramp without blurring into protected pixels.
     context.globalAlpha = (opacity - previousOpacity) / (1 - previousOpacity);
-    context.lineWidth = stroke.lineWidth * (1 - softness * (index - 1) / layers);
+    context.lineWidth =
+      stroke.lineWidth * (1 - (softness * (index - 1)) / layers);
     context.beginPath();
     if (stroke.points.length === 1) {
       context.arc(first.x, first.y, context.lineWidth / 2, 0, Math.PI * 2);
       context.fill();
     } else {
       context.moveTo(first.x, first.y);
-      for (const point of stroke.points.slice(1)) context.lineTo(point.x, point.y);
+      for (const point of stroke.points.slice(1))
+        context.lineTo(point.x, point.y);
       context.stroke();
     }
     previousOpacity = opacity;
@@ -126,13 +159,32 @@ function maskCoverage(
 
 export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
   function MaskCanvas(
-    { brushRatio, softness: requestedSoftness = 0, descriptionId, height, onChange, width, initialDraft, disabled = false, label = "局部重绘掩码画布", selectionTone = "white" },
+    {
+      brushRatio,
+      softness: requestedSoftness = 0,
+      descriptionId,
+      height,
+      onChange,
+      width,
+      initialDraft,
+      disabled = false,
+      label = "局部重绘掩码画布",
+      selectionTone = "white",
+    },
     forwardedRef,
   ) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const activePointer = useRef<number | null>(null);
-    const softness = Number.isFinite(requestedSoftness) ? Math.max(0, Math.min(1, requestedSoftness)) : 0;
-    const [strokes, setStrokes] = useState<readonly Stroke[]>(() => initialDraft?.width === width && initialDraft.height === height ? initialDraft.strokes : []);
+    const softness = Number.isFinite(requestedSoftness)
+      ? Math.max(0, Math.min(1, requestedSoftness))
+      : 0;
+    const [strokes, setStrokes] = useState<readonly Stroke[]>(() =>
+      isMaskCanvasDraft(initialDraft) &&
+      initialDraft.width === width &&
+      initialDraft.height === height
+        ? initialDraft.strokes
+        : [],
+    );
 
     const redraw = useCallback(
       (nextStrokes: readonly Stroke[]): void => {
@@ -143,7 +195,10 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
         context.clearRect(0, 0, width, height);
         context.lineCap = "round";
         context.lineJoin = "round";
-        const color = selectionTone === "currentColor" && canvasRef.current ? getComputedStyle(canvasRef.current).color : "#ffffff";
+        const color =
+          selectionTone === "currentColor" && canvasRef.current
+            ? getComputedStyle(canvasRef.current).color
+            : "#ffffff";
         context.strokeStyle = color;
         context.fillStyle = color;
 
@@ -166,18 +221,43 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
       const pointFrom = (event: globalThis.PointerEvent): Point => {
         const bounds = canvas.getBoundingClientRect();
         return {
-          x: ((event.clientX - bounds.left) / bounds.width) * width,
-          y: ((event.clientY - bounds.top) / bounds.height) * height,
+          x: Math.max(
+            0,
+            Math.min(
+              width,
+              ((event.clientX - bounds.left) / bounds.width) * width,
+            ),
+          ),
+          y: Math.max(
+            0,
+            Math.min(
+              height,
+              ((event.clientY - bounds.top) / bounds.height) * height,
+            ),
+          ),
         };
       };
       const pointerDown = (event: globalThis.PointerEvent): void => {
-        if (disabled || event.button !== 0) return;
+        if (
+          disabled ||
+          event.button !== 0 ||
+          activePointer.current !== null ||
+          event.isPrimary === false
+        )
+          return;
         event.preventDefault();
         event.stopPropagation();
         activePointer.current = event.pointerId;
         canvas.setPointerCapture(event.pointerId);
         const point = pointFrom(event);
-        setStrokes((current) => [...current, { points: [point], lineWidth: Math.max(8, Math.min(width, height) * brushRatio), softness }]);
+        setStrokes((current) => [
+          ...current,
+          {
+            points: [point],
+            lineWidth: Math.max(8, Math.min(width, height) * brushRatio),
+            softness,
+          },
+        ]);
       };
       const pointerMove = (event: globalThis.PointerEvent): void => {
         event.stopPropagation();
@@ -192,24 +272,32 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
           ];
         });
       };
+      const releasePointer = (): void => {
+        const pointerId = activePointer.current;
+        activePointer.current = null;
+        if (pointerId !== null && canvas.hasPointerCapture(pointerId)) {
+          canvas.releasePointerCapture(pointerId);
+        }
+      };
       const finishPointer = (event: globalThis.PointerEvent): void => {
         event.stopPropagation();
-        if (activePointer.current !== event.pointerId) return;
-        activePointer.current = null;
-        if (canvas.hasPointerCapture(event.pointerId)) {
-          canvas.releasePointerCapture(event.pointerId);
-        }
+        if (activePointer.current === event.pointerId) releasePointer();
       };
 
       canvas.addEventListener("pointercancel", finishPointer);
+      canvas.addEventListener("lostpointercapture", finishPointer);
       canvas.addEventListener("pointerdown", pointerDown);
       canvas.addEventListener("pointermove", pointerMove);
       canvas.addEventListener("pointerup", finishPointer);
+      window.addEventListener("blur", releasePointer);
       return () => {
+        releasePointer();
         canvas.removeEventListener("pointercancel", finishPointer);
+        canvas.removeEventListener("lostpointercapture", finishPointer);
         canvas.removeEventListener("pointerdown", pointerDown);
         canvas.removeEventListener("pointermove", pointerMove);
         canvas.removeEventListener("pointerup", finishPointer);
+        window.removeEventListener("blur", releasePointer);
       };
     }, [brushRatio, disabled, height, softness, width]);
 
@@ -217,12 +305,17 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
       forwardedRef,
       () => ({
         addCenterRegion: () =>
+          !disabled &&
           setStrokes((current) => [
             ...current,
             centerRegionStroke(width, height, brushRatio, softness),
           ]),
-        clear: () => setStrokes([]),
-        undo: () => setStrokes((current) => current.slice(0, -1)),
+        clear: () => {
+          if (!disabled) setStrokes([]);
+        },
+        undo: () => {
+          if (!disabled) setStrokes((current) => current.slice(0, -1));
+        },
         exportPng: async () => {
           const source = canvasRef.current;
           if (!source) throw new Error("掩码画布尚未就绪");
@@ -244,12 +337,13 @@ export const MaskCanvas = forwardRef<MaskCanvasHandle, MaskCanvasProps>(
           });
         },
       }),
-      [brushRatio, height, softness, width],
+      [brushRatio, disabled, height, softness, width],
     );
 
     return (
       <canvas
         aria-label={label}
+        data-disabled={disabled}
         aria-describedby={descriptionId}
         className={styles.maskCanvas}
         data-stroke-count={strokes.length}

@@ -4,6 +4,7 @@ export * from "./amux-claude.client";
 export { rootStringFields } from "./stream-json";
 export * from "./env";
 export * from "./provider.interface";
+export * from "./generation-image-inputs";
 export * from "./providers/amux.adapter";
 export * from "./providers/dashscope.adapter";
 export * from "./providers/mock.adapter";

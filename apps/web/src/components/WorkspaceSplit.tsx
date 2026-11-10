@@ -4,9 +4,10 @@ import { Children, useEffect, useLayoutEffect, useRef, type ComponentProps, type
 import { Group, Panel, Separator, useGroupRef, usePanelRef, type Layout } from "react-resizable-panels";
 import { useAuth } from "../modules/auth/AuthProvider";
 import styles from "./workspace-split.module.css";
+import { readWorkspacePreference, workspacePreferenceKey } from "./workspace-preferences";
 
-export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId, panelLabel = "设计助手面板", ...props }: ComponentProps<"div"> & {
-  children: ReactNode; docked: boolean; open: boolean; onOpenChange: (open: boolean) => void; projectId: string; panelLabel?: string;
+export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId, panelLabel = "设计助手面板", manageOpenPreference = true, focusInputOnOpen = true, ...props }: ComponentProps<"div"> & {
+  children: ReactNode; docked: boolean; open: boolean; onOpenChange: (open: boolean) => void; projectId: string; panelLabel?: string; manageOpenPreference?: boolean; focusInputOnOpen?: boolean;
 }) {
   const { session } = useAuth();
   const group = useGroupRef();
@@ -20,24 +21,30 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
   const skipPreference = useRef(false);
   const latest = useRef({ open, onOpenChange });
   useLayoutEffect(() => { latest.current = { open, onOpenChange }; }, [open, onOpenChange]);
-  const storageKey = session ? `fashion:workspace-split:${session.user.id}:${projectId}` : "";
+  const storageKey = session ? workspacePreferenceKey(session.user.id, projectId) : "";
   useEffect(() => {
     if (!docked) return;
     let width = 384;
-    try { const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null") as { width?: number; open?: boolean } | null; if (saved?.width) width = Math.max(320, Math.min(480, saved.width)); if (saved?.open !== undefined && !new URLSearchParams(window.location.search).has("conversationId")) latest.current.onOpenChange(saved.open); } catch { /* Defaults remain usable. */ }
+    const saved = readWorkspacePreference(storageKey);
+    width = saved.width;
+    if (manageOpenPreference && saved.open !== undefined && !new URLSearchParams(window.location.search).has("conversationId")) latest.current.onOpenChange(saved.open);
     lastWidth.current = width;
-    const frame = requestAnimationFrame(() => assistant.current?.resize(width));
+    const frame = requestAnimationFrame(() => {
+      if (latest.current.open) assistant.current?.resize(width);
+      else assistant.current?.collapse();
+    });
     return () => cancelAnimationFrame(frame);
-  }, [storageKey, docked, assistant]);
+  }, [storageKey, docked, assistant, manageOpenPreference]);
   useEffect(() => {
     if (!docked) return;
-    if (open) assistant.current?.expand(); else assistant.current?.collapse();
-    if (lastOpen.current !== null && lastOpen.current !== open && storageKey && !skipPreference.current) {
+    if (open) { assistant.current?.expand(); assistant.current?.resize(lastWidth.current); }
+    else assistant.current?.collapse();
+    if (manageOpenPreference && lastOpen.current !== null && lastOpen.current !== open && storageKey && !skipPreference.current) {
       try { localStorage.setItem(storageKey, JSON.stringify({ width: lastWidth.current, open })); } catch { /* Optional layout preferences. */ }
     }
     skipPreference.current = false;
     lastOpen.current = open;
-  }, [open, docked, assistant, storageKey]);
+  }, [open, docked, assistant, storageKey, manageOpenPreference]);
   useEffect(() => {
     const cancel = () => {
       if (!start.current) return;
@@ -66,7 +73,7 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
       if (modal && !dialog.open) {
         previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         dialog.showModal();
-        dialog.querySelector<HTMLElement>("textarea, button")?.focus({ preventScroll: true });
+        dialog.querySelector<HTMLElement>(focusInputOnOpen ? "textarea" : "button")?.focus({ preventScroll: true });
       } else if (!modal && dialog.open) {
         dialog.close();
         if (!open && previous?.isConnected) previous.focus({ preventScroll: true });
@@ -74,7 +81,7 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
     };
     update(); mobile.addEventListener("change", update);
     return () => { mobile.removeEventListener("change", update); if (dialog.open) dialog.close(); };
-  }, [docked, open, panelLabel]);
+  }, [docked, open, panelLabel, focusInputOnOpen]);
   const panels = Children.toArray(children);
   return <div {...props} ref={host} className={`${props.className ?? ""} ${styles.root}`} data-split-docked={docked}>
     <Group className={styles.group} groupRef={group} disabled={!docked} resizeTargetMinimumSize={{ fine: 8, coarse: 44 }} onLayoutChanged={(layout, meta) => {
@@ -86,7 +93,7 @@ export function WorkspaceSplit({ children, docked, open, onOpenChange, projectId
     }}>
       <Panel id="artwork" minSize={docked ? 640 : 0} className={styles.panel}>{panels[0]}</Panel>
       <Separator aria-label="调整侧栏宽度" className={styles.separator} hidden={!docked || !open} onPointerDownCapture={() => { start.current = group.current?.getLayout() ?? null; canceled.current = false; }} onKeyDownCapture={event => { if (event.key !== "Escape") canceled.current = false; }} onDoubleClick={() => { lastWidth.current = 384; assistant.current?.resize(384); try { if (storageKey) localStorage.setItem(storageKey, JSON.stringify({ width: 384, open: true })); } catch { /* Optional layout preference. */ } }} />
-      <Panel id="assistant" panelRef={assistant} defaultSize={384} minSize={docked ? 320 : 0} maxSize={docked ? 480 : "100%"} collapsible collapsedSize={0} collapsedThreshold={48} groupResizeBehavior="preserve-pixel-size" className={styles.panel}><dialog ref={overlay} role="presentation" className={styles.overlay} data-inline={docked} onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); onOpenChange(false); }}>{panels[1]}</dialog></Panel>
+      <Panel id="assistant" panelRef={assistant} defaultSize={open ? 384 : 0} minSize={docked ? 320 : 0} maxSize={docked ? 480 : "100%"} collapsible collapsedSize={0} collapsedThreshold={48} groupResizeBehavior="preserve-pixel-size" className={styles.panel}><dialog ref={overlay} role="presentation" className={styles.overlay} data-inline={docked} onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); onOpenChange(false); }}>{panels[1]}</dialog></Panel>
     </Group>
   </div>;
 }

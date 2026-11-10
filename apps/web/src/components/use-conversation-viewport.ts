@@ -18,21 +18,25 @@ export function useConversationViewport(conversationId: string) {
   const scrollWrite = useRef(false);
   const readingPointer = useRef(false);
   const [newMessages, setNewMessages] = useState(false);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const stopScroll = useCallback(() => { cancelAnimationFrame(frame.current); frame.current = 0; }, []);
   const capture = useCallback(() => {
     const view = conversationView.current;
-    if (!view) return;
+    if (!view || view.closest("[hidden]")) return;
     const top = view.getBoundingClientRect().top;
     const item = Array.from(view.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.getBoundingClientRect().bottom > top);
     readingAnchor.current = item?.dataset.messageId ? { id: item.dataset.messageId, offset: item.getBoundingClientRect().top - top } : null;
   }, []);
   const scrollToLatest = useCallback((view: HTMLElement, instant = false) => {
     stopScroll();
+    if (view.closest("[hidden]") || !view.querySelector("[data-message-id]")) return;
     const start = view.scrollTop;
     const at = performance.now();
     const step = (now: number) => {
+      if (view.closest("[hidden]")) { frame.current = 0; return; }
       const progress = instant || matchMedia("(prefers-reduced-motion: reduce)").matches ? 1 : Math.min(1, (now - at) / 180);
       view.scrollTop = start + (view.scrollHeight - view.clientHeight - start) * (1 - (1 - progress) ** 3);
+      if (progress === 1) setAwayFromLatest(false);
       frame.current = progress < 1 ? requestAnimationFrame(step) : 0;
     };
     frame.current = requestAnimationFrame(step);
@@ -44,20 +48,22 @@ export function useConversationViewport(conversationId: string) {
     const view = conversationView.current;
     if (!view) return;
     let alive = true;
+    let releaseFrame = 0;
     const reconcile = () => {
       stopScroll();
       frame.current = requestAnimationFrame(() => {
         frame.current = 0;
-        if (!alive) return;
+        if (!alive || view.closest("[hidden]")) return;
         scrollWrite.current = true;
-        requestAnimationFrame(() => { scrollWrite.current = false; });
-        if (followMessages.current) view.scrollTop = view.scrollHeight;
+        cancelAnimationFrame(releaseFrame);
+        releaseFrame = requestAnimationFrame(() => { scrollWrite.current = false; });
+        if (followMessages.current) view.scrollTop = view.querySelector("[data-message-id]") ? view.scrollHeight : 0;
         else {
           const anchor = readingAnchor.current;
           const node = anchor && Array.from(view.querySelectorAll<HTMLElement>("[data-message-id]")).find(item => item.dataset.messageId === anchor.id);
           if (node && anchor) view.scrollTop += node.getBoundingClientRect().top - view.getBoundingClientRect().top - anchor.offset;
-          setNewMessages(Boolean(view.querySelector("[data-message-id]")) && view.scrollHeight - view.scrollTop - view.clientHeight > STUDIO_LAYOUT.followThreshold);
         }
+        setAwayFromLatest(Boolean(view.querySelector("[data-message-id]")) && view.scrollHeight - view.scrollTop - view.clientHeight > STUDIO_LAYOUT.followThreshold);
       });
     };
     const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reconcile);
@@ -66,6 +72,7 @@ export function useConversationViewport(conversationId: string) {
     for (const child of view.children) resize?.observe(child);
     const mutation = new MutationObserver(records => {
       for (const record of records) for (const child of record.addedNodes) if (child instanceof Element) resize?.observe(child);
+      for (const record of records) for (const child of record.removedNodes) if (child instanceof Element) resize?.unobserve(child);
       reconcile();
     });
     mutation.observe(view, { childList: true });
@@ -74,13 +81,19 @@ export function useConversationViewport(conversationId: string) {
       positions.set(conversationId, { follow: followMessages.current, anchor: readingAnchor.current });
       const oldest = positions.keys().next().value;
       if (positions.size > 100 && oldest) positions.delete(oldest);
-      alive = false; stopScroll(); resize?.disconnect(); mutation.disconnect();
+      alive = false; stopScroll(); cancelAnimationFrame(releaseFrame); scrollWrite.current = false;
+      readingPointer.current = false; resize?.disconnect(); mutation.disconnect();
     };
   }, [conversationId, stopScroll]);
+  const preserveReading = useCallback(() => {
+    stopScroll();
+    capture();
+    followMessages.current = false;
+  }, [capture, stopScroll]);
   const interrupt = () => { scrollIntentUntil.current = performance.now() + 1200; stopScroll(); capture(); };
   return {
     conversationView, composerSurface, followMessages, readingAnchor, followedConversation,
-    newMessages, setNewMessages, stopScroll, scrollToLatest,
+    newMessages, awayFromLatest, setNewMessages, stopScroll, scrollToLatest, preserveReading,
     viewportProps: {
       onWheel: (event: React.WheelEvent) => { interrupt(); if (event.deltaY < 0) followMessages.current = false; },
       onPointerDown: (event: React.PointerEvent) => {
@@ -93,9 +106,10 @@ export function useConversationViewport(conversationId: string) {
       onScroll: () => {
         if (frame.current || scrollWrite.current || performance.now() > scrollIntentUntil.current) return;
         const view = conversationView.current;
-        if (!view) return;
+        if (!view || view.closest("[hidden]")) return;
         scrollIntentUntil.current = performance.now() + 1200;
         followMessages.current = view.scrollHeight - view.scrollTop - view.clientHeight <= STUDIO_LAYOUT.followThreshold;
+        setAwayFromLatest(!followMessages.current);
         if (followMessages.current) { setNewMessages(false); readingAnchor.current = null; } else capture();
       },
     },

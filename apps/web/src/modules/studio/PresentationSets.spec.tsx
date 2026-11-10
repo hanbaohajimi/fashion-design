@@ -22,9 +22,30 @@ const props = () => ({
   beforeChange: vi.fn(async () => true),
   onGenerate: vi.fn(),
 });
+const savedPresentationResponse = async (_input: unknown, init?: RequestInit) => {
+  const { payload } = JSON.parse(String(init?.body));
+  const revision = { id: "presentation-r1", revision: 1, payload, createdAt: "2026-11-09T00:00:00Z" };
+  return new Response(JSON.stringify({ id: "presentation-1", type: "PRESENTATION_SET", version: 1, currentRevision: revision, revisions: [revision] }), { status: 200 });
+};
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it("展示包保存后列表失败仍选中保存结果，下一次保存更新同一文档", async () => {
+  const values = props();
+  values.onSaved.mockRejectedValue(new Error("列表不可用"));
+  const fetcher = vi.fn().mockImplementation(savedPresentationResponse);
+  vi.stubGlobal("fetch", fetcher);
+  render(<PresentationSets {...values} />);
+  fireEvent.change(screen.getByLabelText("展示包名称"), { target: { value: "夹克商品展示" } });
+  fireEvent.click(screen.getByRole("button", { name: "选择图片 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await screen.findByText(/展示包已经保存，资料列表暂未刷新/);
+  fireEvent.change(screen.getByLabelText("展示包名称"), { target: { value: "夹克商品展示更新" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存修订" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toMatchObject({ documentId: "presentation-1", expectedVersion: 1, payload: { name: "夹克商品展示更新", styleRevisionId: "style-r1" } });
 });
 it("requires manual image review before completing a presentation set", async () => {
   vi.stubGlobal("fetch", vi.fn());
@@ -45,9 +66,7 @@ it("saves a reviewed set against the exact style revision", async () => {
   const values = props();
   const fetcher = vi
     .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ id: "presentation-1" }), { status: 200 }),
-    );
+    .mockImplementation(savedPresentationResponse);
   vi.stubGlobal("fetch", fetcher);
   render(<PresentationSets {...values} />);
   fireEvent.change(screen.getByLabelText("展示包名称"), {
@@ -131,9 +150,7 @@ it("preserves insertion order, removes only the chosen item, and saves a draft w
   const values = props();
   const fetcher = vi
     .fn()
-    .mockResolvedValue(
-      new Response(JSON.stringify({ id: "presentation-1" }), { status: 200 }),
-    );
+    .mockImplementation(savedPresentationResponse);
   vi.stubGlobal("fetch", fetcher);
   render(<PresentationSets {...values} />);
   fireEvent.change(screen.getByLabelText("展示包名称"), {

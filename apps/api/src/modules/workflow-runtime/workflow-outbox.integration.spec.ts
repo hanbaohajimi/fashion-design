@@ -76,6 +76,12 @@ describe("durable workflow execution observations", () => {
     expect(graph.nodes.filter((node) => node.type === "candidate")).toHaveLength(4);
     expect(await prisma.workflowOutbox.count({ where: { executionId: h.execution.id, eventType: "execution.terminal" } })).toBe(1);
     expect(await prisma.agentMessage.count({ where: { conversationId: h.conversation.id, origin: "execution_result" } })).toBe(1);
+    const receipt = await prisma.agentMessage.findFirstOrThrow({ where: { conversationId: h.conversation.id, origin: "execution_result" } });
+    expect(receipt.context).toMatchObject({ executionResult: { executionId: h.execution.id, status: "completed", attempts: { completed: 4, failed: 0, canceled: 0 } } });
+    const resultImages = (receipt.context as { executionResult: { images: { assetId: string; nodeId: string }[] } }).executionResult.images;
+    expect(resultImages).toHaveLength(4);
+    expect(new Set(resultImages.map(image => image.assetId)).size).toBe(4);
+    expect(resultImages.every(image => graph.nodes.some(node => node.id === image.nodeId && (node.payload as { assetId?: string }).assetId === image.assetId))).toBe(true);
     expect(await prisma.agentMessage.count({ where: { conversationId: h.conversation.id, origin: "background_analysis" } })).toBe(1);
     expect(h.model.generateJson).toHaveBeenCalledOnce();
     await h.consumer.reconcile();
@@ -94,6 +100,9 @@ describe("durable workflow execution observations", () => {
     await h.consumer.drainFacts();
     await h.consumer.drainObservations();
     expect((await workflows.get(h.user.id, h.project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
+    const receipt = await prisma.agentMessage.findFirstOrThrow({ where: { conversationId: h.conversation.id, origin: "execution_result" } });
+    expect(receipt.context).toMatchObject({ executionResult: { status: "completed", attempts: { completed: 1, failed: 0, canceled: 0 } } });
+    expect((receipt.context as { executionResult: { images: unknown[] } }).executionResult.images).toHaveLength(1);
     expect(await prisma.workflowOutbox.count({ where: { executionId: h.execution.id, eventType: "generation.terminal" } })).toBe(1);
     expect(h.model.generateJson).toHaveBeenCalledOnce();
   });
@@ -106,6 +115,9 @@ describe("durable workflow execution observations", () => {
     await h.consumer.drainFacts();
     await h.consumer.drainObservations();
     expect((await prisma.workflowExecution.findUniqueOrThrow({ where: { id: h.execution.id } })).status).toBe("partial_failed");
+    const partialReceipt = await prisma.agentMessage.findFirstOrThrow({ where: { conversationId: h.conversation.id, origin: "execution_result" } });
+    expect(partialReceipt.context).toMatchObject({ executionResult: { status: "partial_failed", attempts: { completed: 1, failed: 1, canceled: 0 } } });
+    expect((partialReceipt.context as { executionResult: { images: unknown[] } }).executionResult.images).toHaveLength(1);
     expect((await workflows.get(h.user.id, h.project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
     expect(await prisma.agentMessage.count({ where: { conversationId: h.conversation.id, origin: "execution_result" } })).toBe(1);
     expect(await prisma.agentMessage.count({ where: { conversationId: h.conversation.id, origin: "background_analysis" } })).toBe(0);
@@ -121,6 +133,8 @@ describe("durable workflow execution observations", () => {
     expect(await prisma.workflowExecution.findUnique({ where: { id: h.execution.id } })).toMatchObject({ status: status.toLowerCase() });
     expect(await prisma.workflowAttempt.findUnique({ where: { id: required(h.attempts[0]).id } })).toMatchObject({ status: status.toLowerCase() });
     expect((await workflows.get(h.user.id, h.project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(0);
+    const receipt = await prisma.agentMessage.findFirstOrThrow({ where: { conversationId: h.conversation.id, origin: "execution_result" } });
+    expect((receipt.context as { executionResult: { images: unknown[] } }).executionResult.images).toEqual([]);
     expect(await prisma.agentMessage.count({ where: { conversationId: h.conversation.id, origin: "execution_result" } })).toBe(1);
     expect(h.generation.createFromAgent).toHaveBeenCalledOnce();
   });

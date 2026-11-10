@@ -7,6 +7,9 @@ import type {
   AgentPlanStepSpec,
   AgentDomainActionView,
   WorkflowReferenceSummary,
+  VisualContextCoverage,
+  WorkflowExecutionResult,
+  WorkflowExecutionProgress,
 } from "@fashion/shared";
 import type { WorkflowProposal } from "../workflow/workflow-api";
 
@@ -50,12 +53,8 @@ export interface WorkflowConversationContext {
   }[];
   readonly nodes?: readonly { readonly id: string; readonly title: string; readonly type: string; readonly kind?: string }[];
   readonly coverage?: Readonly<Record<string, unknown>>;
-  readonly visualCoverage: {
-    readonly total: number;
-    readonly ready: number;
-    readonly pending: number;
-    readonly failed: number;
-    readonly attachedNodeIds: readonly string[];
+  readonly visualCoverage: Omit<VisualContextCoverage, "unreadNodeIds"> & {
+    readonly unreadNodeIds?: readonly string[];
   };
 }
 
@@ -65,7 +64,7 @@ export type WorkflowMessageView = Omit<AgentMessageView, "context"> & {
   readonly origin?: "user" | "execution_result" | "background_analysis";
   readonly executionId?: string | null;
   readonly sourceEventId?: string | null;
-  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary; readonly executionReceipt?: { readonly status: string; readonly nodeId: string | null }; readonly referenceSnapshots?: readonly { readonly nodeId: string; readonly nodeVersionId: string; readonly assetId: string | null }[] }) | null;
+  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary; readonly executionProgress?: WorkflowExecutionProgress; readonly executionResult?: WorkflowExecutionResult; readonly executionReceipt?: { readonly status: string; readonly nodeId: string | null }; readonly referenceSnapshots?: readonly { readonly nodeId: string; readonly nodeVersionId: string; readonly assetId: string | null }[] }) | null;
 };
 
 interface CursorPage<T> {
@@ -169,17 +168,26 @@ async function apiError(response: Response, fallback: string): Promise<Error> {
 export async function listAgentConversations(
   projectId: string,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<CursorPage<WorkflowConversationSummary>> {
   const query = new URLSearchParams({ limit: "50" });
   if (cursor) query.set("cursor", cursor);
   const response = await fetch(
     `/api/projects/${encodeURIComponent(projectId)}/agent-conversations?${query.toString()}`,
-    { cache: "no-store", credentials: "include" },
+    { cache: "no-store", credentials: "include", ...(signal ? { signal } : {}) },
   );
   if (!response.ok) {
     throw await apiError(response, "会话列表读取失败");
   }
   return (await response.json()) as CursorPage<WorkflowConversationSummary>;
+}
+
+export function getAgentConversation(projectId: string, conversationId: string, signal?: AbortSignal): Promise<WorkflowConversationSummary> {
+  return workflowConversationRequest(
+    `/api/projects/${encodeURIComponent(projectId)}/agent-conversations/${encodeURIComponent(conversationId)}`,
+    signal ? { signal } : undefined,
+    "这段对话读取失败，请重试或从历史对话重新选择。",
+  );
 }
 
 export async function createAgentConversation(

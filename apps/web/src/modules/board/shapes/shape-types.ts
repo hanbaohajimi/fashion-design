@@ -51,6 +51,9 @@ declare module "tldraw" {
       generationStatus?: string;
       generationTaskId?: string;
       h: number;
+      imageWidth?: number;
+      imageHeight?: number;
+      imageSource?: string;
       mounts?: readonly Mount[];
       role: string;
       roleConfidence?: number | undefined;

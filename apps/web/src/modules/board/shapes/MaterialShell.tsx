@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { useSvgExportContext } from "tldraw";
 import type { MaterialAppearance, Mount } from "./material-appearance";
 import { generateEdgePath } from "./edge-path";
 import { buildFabricSilhouette } from "./fabric-silhouette";
@@ -51,10 +52,12 @@ export function MaterialShell({
   width,
   height,
   children,
-  lod = "high",
+  lod: requestedLod = "high",
   userMounts,
   onRemoveMount,
 }: MaterialShellProps) {
+  const exporting = Boolean(useSvgExportContext());
+  const lod = exporting ? "high" : requestedLod;
   const { substrate, edge, shadow, imperfections, seed } = appearance;
 
   const [hoveredMountId, setHoveredMountId] = useState<string | null>(null);
@@ -110,6 +113,7 @@ export function MaterialShell({
         left: `${-substrate.padding}px`,
       }}
       data-material={substrate.material}
+      data-exporting={exporting ? "true" : undefined}
       data-lod={lod}
       data-pinned={hasPins ? "true" : undefined}
     >

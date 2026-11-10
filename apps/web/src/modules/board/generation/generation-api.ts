@@ -26,12 +26,14 @@ interface CreateGenerationInput extends GenerationParameters {
 
 export async function fetchDesignPath(
   assetId: string,
+  signal?: AbortSignal,
 ): Promise<DesignPathView> {
   const response = await fetch(
     `/api/design-assets/${encodeURIComponent(assetId)}/path`,
     {
       cache: "no-store",
       credentials: "include",
+      ...(signal ? { signal } : {}),
     },
   );
   if (!response.ok) throw await apiError(response, "设计路径读取失败");
@@ -60,6 +62,7 @@ export async function recordDesignDecision(
 export async function fetchAssetVersions(
   assetId: string,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<{
   readonly items: readonly DesignAssetVersion[];
   readonly nextCursor: string | null;
@@ -68,7 +71,7 @@ export async function fetchAssetVersions(
   if (cursor) query.set("cursor", cursor);
   const response = await fetch(
     `/api/design-assets/${encodeURIComponent(assetId)}/versions?${query}`,
-    { cache: "no-store", credentials: "include" },
+    { cache: "no-store", credentials: "include", ...(signal ? { signal } : {}) },
   );
   if (!response.ok) {
     throw await apiError(response, "版本历史读取失败");
