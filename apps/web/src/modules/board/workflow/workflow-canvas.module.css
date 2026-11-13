@@ -2637,8 +2637,8 @@
   flex: 1 1 0;
 }
 .workflowMessage {
-  border-bottom: var(--border-hairline) solid var(--color-divider);
-  padding: var(--space-4) 0;
+  /* v4：去掉分隔线，用 margin 控制消息间距，消息流更干净 */
+  padding: var(--space-2) 0;
   margin: 0;
   /* Long assistant histories stay scrollable without laying out every old reply. */
   content-visibility: auto;
@@ -2661,8 +2661,31 @@
   word-break: break-word;
 }
 .assistantReply {
-  font-size: var(--text-base);
-  line-height: var(--leading-relaxed);
+  /* v4：AI prose 升级——更宽松行高，段落间距，消除旧 pre-wrap */
+  font-size: var(--text-body, 14px);
+  line-height: 1.75;
+  white-space: normal;
+}
+.assistantReply p {
+  margin: 0 0 var(--space-3);
+}
+.assistantReply p:last-child {
+  margin-bottom: 0;
+}
+/* prose 代码片段：去掉错误红，用纸面底色 */
+.assistantReply code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--color-ink);
+  background: var(--surface-1);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+/* prose 链接用动作色 */
+.assistantReply a {
+  color: var(--color-action);
+  text-underline-offset: 2px;
 }
 .composer {
   flex: none;

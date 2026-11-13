@@ -1619,20 +1619,17 @@ export function WorkflowAssistantPanel({
         />
       ) : null}
       {workflowPlannerOpen && !legacy && conversationId ? (
-        <section className={ui.planner} aria-label="分步设计计划">
-          <header className={ui.plannerHeader}>
-            <div>
-              <strong>分步设计计划</strong>
-              <span>先规划、逐步确认，每一步都保留可追溯结果。</span>
-            </div>
+        <details className={ui.planner} open aria-label="分步设计计划">
+          <summary className={ui.plannerSummary}>
+            <span>分步设计计划</span>
             <button
               className={ui.plannerClose}
-              onClick={() => setWorkflowPlannerOpen(false)}
+              onClick={(e) => { e.preventDefault(); setWorkflowPlannerOpen(false); }}
               type="button"
             >
               返回讨论
             </button>
-          </header>
+          </summary>
           <div className={ui.plannerBody}>
             <AgentWorkflowPanel
               conversationId={conversationId}
@@ -1649,7 +1646,7 @@ export function WorkflowAssistantPanel({
               onTaskCreated={plannerTaskCreated}
             />
           </div>
-        </section>
+        </details>
       ) : null}
       <div className={styles.conversationViewport} hidden={workflowPlannerOpen}>
       <div
