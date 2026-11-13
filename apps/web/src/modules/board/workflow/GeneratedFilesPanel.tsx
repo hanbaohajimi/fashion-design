@@ -18,7 +18,7 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", ti
 type Props = {
   projectId: string; onClose: () => void; onLocate: (nodeId: string) => boolean;
   canPlace?: boolean;
-  isPlaced?: (assetId: string) => boolean;
+  isPlaced?: (resourceId: string, domain?: "asset" | "runway") => boolean;
   onPreparePlacement?: () => Promise<{ x: number; y: number }>;
   onPlaced?: (result: Awaited<ReturnType<typeof runCanvasCommand>>) => Promise<void>;
 };
@@ -41,11 +41,13 @@ function GeneratedFilesContent({ projectId, accountId, onClose, onLocate, canPla
   const [placementPreparing, setPlacementPreparing] = useState(false);
   const [placementError, setPlacementError] = useState<string | null>(null);
   const [placedNode, setPlacedNode] = useState<string | null>(null);
+  const [placedMedia, setPlacedMedia] = useState(false);
   const [placedFiles, setPlacedFiles] = useState<ReadonlyMap<string, string>>(new Map());
   const placementLock = useRef(false);
   const placement = useGeneratedFilePlacement(projectId, async result => {
     if (!onPlaced) throw new Error("当前白板尚未就绪，请返回后重试。");
     await onPlaced(result);
+    setPlacedMedia(result.graph.nodes.some(node => node.id === result.nodeId && node.type === "media"));
     setPlacedNode(result.nodeId); setNotice("已放入白板，可关闭列表继续编辑。");
   });
   const flight = useRef<AbortController | null>(null);
@@ -81,9 +83,13 @@ function GeneratedFilesContent({ projectId, accountId, onClose, onLocate, canPla
     try {
       const position = await onPreparePlacement?.();
       if (!active.current) return;
-      const assetId = file?.resourceId ?? placement.pending?.command.assetId;
-      const nodeId = await placement.execute(file ? { assetId: file.resourceId, title: file.title, archived: file.archived, ...(position ? { position } : {}) } : undefined);
-      if (active.current && assetId && nodeId) setPlacedFiles(previous => new Map(previous).set(assetId, nodeId));
+      const mediaPosition = file?.domain === "runway" && position && window.innerWidth < 768
+        ? { x: position.x - 155, y: position.y + 110 }
+        : position;
+      const pending = placement.pending?.command;
+      const resourceKey = file?.id ?? (pending?.type === "place_generated_media" ? `runway:${pending.mediaId}` : pending ? `asset:${pending.assetId}` : undefined);
+      const nodeId = await placement.execute(file ? { assetId: file.resourceId, title: file.title, archived: file.archived, domain: file.domain === "runway" ? "runway" : "asset", ...(mediaPosition ? { position: mediaPosition } : {}) } : undefined);
+      if (active.current && resourceKey && nodeId) setPlacedFiles(previous => new Map(previous).set(resourceKey, nodeId));
     } catch (cause) { if (active.current) setPlacementError(cause instanceof Error ? cause.message : "放入白板尚未完成，请重试。"); }
     finally { placementLock.current = false; if (active.current) setPlacementPreparing(false); }
   };
@@ -110,7 +116,10 @@ function GeneratedFilesContent({ projectId, accountId, onClose, onLocate, canPla
       if (onLocate(file.nodeId ?? "")) close();
       else setNotice("当前画布中已没有这个结果，仍可在这里预览和下载。");
     }}>定位到画布</button> : null}
-    {placedFiles.has(file.resourceId) ? <button type="button" onClick={() => { const id = placedFiles.get(file.resourceId); if (id && onLocate(id)) close(); }}>查看已放入的版本</button> : canPlace && file.domain === "asset" && file.kind === "image" && !isPlaced?.(file.resourceId) ? <button type="button" disabled={!placement.ready || placementPreparing || placement.busy || Boolean(placement.pending) || file.status !== "ready"} onClick={() => void place(file)}>{file.archived ? "以新版本放入画布" : "放入画布"}</button> : null}
+    {placedFiles.has(file.id) ? <button type="button" onClick={() => {
+      if (file.domain === "runway") { close(); return; }
+      const id = placedFiles.get(file.id); if (id && onLocate(id)) close();
+    }}>查看已放入的{file.domain === "runway" ? "媒体" : "版本"}</button> : canPlace && ((file.domain === "asset" && file.kind === "image") || (file.domain === "runway" && ["video", "audio"].includes(file.kind))) && !isPlaced?.(file.resourceId, file.domain as "asset" | "runway") ? <button type="button" disabled={!placement.ready || placementPreparing || placement.busy || Boolean(placement.pending) || file.status !== "ready"} onClick={() => void place(file)}>{file.domain === "asset" && file.archived ? "以新版本放入画布" : "放入画布"}</button> : null}
     {file.sourceHref ? <a href={file.sourceHref} onClick={close}>{expired(file) ? "回到来源重新导出" : "查看来源"}</a> : null}
   </div>;
   return <Dialog label="生成文件" onClose={() => selected ? back() : close()} returnFocusSelector="[data-canvas-chrome] summary" className={styles.dialog}>
@@ -120,7 +129,7 @@ function GeneratedFilesContent({ projectId, accountId, onClose, onLocate, canPla
         {placement.pending ? <><span>{placement.pending.title} 的放置尚待确认</span>{canPlace ? <button type="button" disabled={placement.busy || placementPreparing} onClick={() => void place()}>{placement.busy || placementPreparing ? "正在放入画布…" : "继续确认放置"}</button> : <span>当前只能查看，请恢复编辑权限后继续。</span>}</> : placementPreparing ? <span role="status">正在准备白板…</span> : null}
         {placement.error || placementError ? <p role="alert">{placement.error ?? placementError}</p> : null}
         {!placement.ready && placement.error ? <button type="button" onClick={() => void placement.reload()}>重新读取放置记录</button> : null}
-        {placedNode && !placement.pending ? <><span role="status">已放入白板</span><button type="button" onClick={() => { if (onLocate(placedNode)) close(); }}>查看已放入的图片</button></> : null}
+        {placedNode && !placement.pending ? <><span role="status">已放入白板</span><button type="button" onClick={() => { if (placedMedia) close(); else if (onLocate(placedNode)) close(); }}>{placedMedia ? "返回白板" : "查看已放入的图片"}</button></> : null}
       </section> : null}
       <div hidden={Boolean(selected)} className={styles.listView} inert={Boolean(selected)}>
         <div className={styles.controls}><label className={styles.search}>查找<input type="search" value={search} maxLength={120} onChange={event => setSearch(event.target.value)} placeholder="名称、操作或文件编号" aria-label="查找生成文件" /></label>

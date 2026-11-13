@@ -3,8 +3,9 @@
 import { Select } from "../../../components/ui";
 import { AssistantMentionInput } from "./AssistantMentionInput";
 import { AssistantStarters } from "./AssistantStarters";
+import { AssistantDelegationsPanel } from "./AssistantDelegationsPanel";
 import { AssistantReferencePreview, referenceLabel, referenceTypeLabel } from "./AssistantReferencePreview";
-import { Button, Notice, Skeleton, Menu } from "../../../components/ui";
+import { Button, Input, Notice, Skeleton, Menu } from "../../../components/ui";
 import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
 import type { AssistantStreamEvent } from "@fashion/shared";
 import prose from "../../../components/reading.module.css";
@@ -18,6 +19,20 @@ import { AssistantResultGallery } from "./AssistantResultGallery";
 import { AssistantResultViewer } from "./AssistantResultViewer";
 import { AssistantExecutionStatus } from "./AssistantExecutionStatus";
 import { WorkspaceIcon } from "./WorkspaceIcon";
+import {
+  BUILT_IN_ASSISTANT_SKILLS,
+  MAX_ASSISTANT_SKILLS,
+  createAssistantSkill,
+  mergeAssistantSkills,
+  readAssistantSkills,
+  writeAssistantSkills,
+  type AssistantSkill,
+} from "./assistant-skills";
+import {
+  createAssistantSkillRemote,
+  deleteAssistantSkillRemote,
+  fetchAssistantSkills,
+} from "./assistant-skills-api";
 import { resultImageNode } from "./assistant-result-data";
 import { workflowExecutionResultSchema, workflowExecutionProgressSchema, type WorkflowResultImage } from "@fashion/shared";
 import type { AssistantImageImportResult } from "./assistant-image-uploads";
@@ -31,6 +46,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -54,6 +70,7 @@ import {
 import ui from "./assistant-context.module.css";
 import { ProposalReview } from "./ProposalReview";
 import { acceptAndExecuteProposal } from "./proposal-execution";
+import { AgentWorkflowPanel } from "../agent/AgentWorkflowPanel";
 import {
   createAgentConversation,
   cancelAssistantReply,
@@ -80,6 +97,15 @@ import {
 import { displayNodeTitle } from "./workflow-graph";
 import styles from "./workflow-canvas.module.css";
 
+export interface WorkflowAssistantDraftRequest {
+  readonly nonce: number;
+  readonly prompt: string;
+  readonly nodeIds?: readonly string[];
+  readonly notice?: string;
+  readonly focusInput?: boolean;
+  readonly onConsumed?: () => void;
+}
+
 interface Props {
   readonly graph: WorkflowGraph;
   readonly projectId: string;
@@ -98,6 +124,7 @@ interface Props {
     readonly nonce: number;
     readonly instances?: ReferenceInstances;
     readonly conversationId?: string | null;
+    readonly notice?: string;
     readonly onConsumed?: () => void;
   } | null;
   readonly referencesPreparing?: boolean;
@@ -112,6 +139,8 @@ interface Props {
   readonly renderLegacyRuns: (conversationId: string) => ReactNode;
   readonly onConversationChange?: (conversationId: string | null) => void;
   readonly onActivityChange?: (activity: ChatActivity) => void;
+  readonly starterPrompt?: string | null;
+  readonly assistantDraftRequest?: WorkflowAssistantDraftRequest | null;
 }
 
 type ConversationDraft = {
@@ -123,6 +152,15 @@ type ConversationDraft = {
 type LocalSubmission = { conversationId: string; clientRequestId: string; content: string; phase: "sending" | "uncertain" };
 const messageDisplayKey = (conversationId: string, message: Pick<WorkflowMessageView, "role" | "clientRequestId" | "id">) =>
   message.role === "user" && message.clientRequestId ? `request:${conversationId}:${message.clientRequestId}` : message.id;
+
+function readPersonalSkills(accountId: string): AssistantSkill[] {
+  if (typeof window === "undefined" || !accountId) return [];
+  try {
+    return readAssistantSkills(window.localStorage, accountId);
+  } catch {
+    return [];
+  }
+}
 
 export function WorkflowAssistantPanel({
   graph,
@@ -136,6 +174,7 @@ export function WorkflowAssistantPanel({
   renderLegacyRuns,
   onConversationChange,
   onActivityChange,
+  starterPrompt = null,
   onOpenResult,
   onAddMaterial,
   focusRequest = 0,
@@ -149,6 +188,7 @@ export function WorkflowAssistantPanel({
   onImageImported,
   referencePlacement,
   onOpenGeneratedFiles,
+  assistantDraftRequest = null,
 }: Props) {
   const inputId = useId();
   const { session } = useAuth();
@@ -218,6 +258,7 @@ export function WorkflowAssistantPanel({
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [resultIndexOpen, setResultIndexOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
@@ -230,7 +271,150 @@ export function WorkflowAssistantPanel({
   );
   const [legacyReload, setLegacyReload] = useState(0);
   const [legacyRunsOpen, setLegacyRunsOpen] = useState(false);
+  const [workflowPlannerOpen, setWorkflowPlannerOpen] = useState(false);
+  const accountId = session?.user.id ?? "";
+  const [skillState, setSkillState] = useState<{
+    readonly accountId: string;
+    readonly projectId: string;
+    readonly items: readonly AssistantSkill[];
+  }>(() => {
+    if (typeof window === "undefined" || !accountId) {
+      return { accountId, projectId, items: [] };
+    }
+    return {
+      accountId,
+      projectId,
+      items: readPersonalSkills(accountId),
+    };
+  });
+  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [delegationsOpen, setDelegationsOpen] = useState(false);
+  const [skillName, setSkillName] = useState("");
+  const [skillScope, setSkillScope] = useState<"PERSONAL" | "WORKSPACE">("PERSONAL");
+  const [skillStatus, setSkillStatus] = useState<string | null>(null);
+  const [skillSavingScope, setSkillSavingScope] = useState<string | null>(null);
+  const skillScopeKey = `${accountId}:${projectId}`;
+  const skillSaving = skillSavingScope === skillScopeKey;
+  const liveSkillScope = useRef(skillScopeKey);
+  const skillRequest = useRef<{ fingerprint: string; skill: AssistantSkill } | null>(null);
+  useLayoutEffect(() => {
+    liveSkillScope.current = skillScopeKey;
+    return () => { liveSkillScope.current = ""; };
+  }, [skillScopeKey]);
+  const personalSkills = useMemo(() => {
+    if (skillState.accountId === accountId && skillState.projectId === projectId) return skillState.items;
+    return readPersonalSkills(accountId);
+  }, [accountId, projectId, skillState]);
+  useEffect(() => {
+    if (!accountId || skillState.accountId !== accountId || skillState.projectId !== projectId) return;
+    try { writeAssistantSkills(window.localStorage, accountId, skillState.items); } catch { /* Storage is optional. */ }
+  }, [accountId, projectId, skillState]);
+  useEffect(() => {
+    if (!accountId) return;
+    const controller = new AbortController();
+    let active = true;
+    void fetchAssistantSkills(projectId, controller.signal)
+      .then((remote) => {
+        if (!active) return;
+        setSkillState(current => ({
+          accountId, projectId,
+          items: mergeAssistantSkills(remote, current.accountId === accountId && current.projectId === projectId ? current.items : readPersonalSkills(accountId)),
+        }));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [accountId, projectId]);
+  const persistPersonalSkills = useCallback(
+    (update: readonly AssistantSkill[] | ((current: readonly AssistantSkill[]) => readonly AssistantSkill[])) => {
+      if (!accountId || liveSkillScope.current !== skillScopeKey) return;
+      setSkillState(current => {
+        const previous = current.accountId === accountId && current.projectId === projectId ? current.items : readPersonalSkills(accountId);
+        const next = typeof update === "function" ? update(previous) : update;
+        return { accountId, projectId, items: next };
+      });
+    },
+    [accountId, projectId, skillScopeKey],
+  );
+  const applyAssistantSkill = useCallback(
+    (skill: AssistantSkill) => {
+      setPrompt(skill.prompt);
+      setReferencedIds([]);
+      setReferenceInstances({});
+      setSkillsOpen(false);
+      setSkillStatus(null);
+      setDraftNotice(`已载入“${skill.name}”，发送前可以继续修改。`);
+      requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+    },
+    [],
+  );
+  const saveCurrentSkill = useCallback(() => {
+    if (skillSaving) return;
+    if (!accountId) {
+      setSkillStatus("当前账号尚未恢复，暂时不能保存技能。");
+      return;
+    }
+    const fingerprint = JSON.stringify([skillScopeKey, skillScope, skillName.trim(), prompt.trim()]);
+    const pending = skillRequest.current?.fingerprint === fingerprint ? skillRequest.current.skill : null;
+    const limit = skillScope === "WORKSPACE" ? 48 : MAX_ASSISTANT_SKILLS;
+    if (personalSkills.filter(item => (item.scope ?? "PERSONAL") === skillScope && item.id !== pending?.id).length >= limit) {
+      setSkillStatus(`${skillScope === "WORKSPACE" ? "工作区" : "个人"}技能最多保存 ${limit} 条，请先删除一条再保存。`);
+      return;
+    }
+    const next = pending ?? createAssistantSkill({
+      id: crypto.randomUUID(),
+      name: skillName,
+      prompt,
+      scope: skillScope,
+      now: new Date().toISOString(),
+    });
+    if (!next) {
+      setSkillStatus("请填写技能名称，并确保当前草稿不为空。");
+      return;
+    }
+    skillRequest.current = { fingerprint, skill: next };
+    setSkillSavingScope(skillScopeKey);
+    if (skillScope === "PERSONAL") persistPersonalSkills(current => [next, ...current.filter(item => item.id !== next.id)]);
+    setSkillStatus(`正在保存“${next.name}”…`);
+    void createAssistantSkillRemote(
+      projectId,
+      {
+        description: next.description,
+        name: next.name,
+        prompt: next.prompt,
+        scope: skillScope,
+      },
+      next.id,
+    ).then(
+      (remote) => {
+        if (liveSkillScope.current !== skillScopeKey) return;
+        const synced = {
+          createdAt: remote.createdAt,
+          description: remote.description,
+          id: remote.id,
+          name: remote.name,
+          prompt: remote.prompt,
+          scope: remote.scope,
+          serverId: remote.id,
+          workspaceId: remote.workspaceId,
+          updatedAt: remote.updatedAt,
+        };
+        persistPersonalSkills(current => [synced, ...current.filter(item => item.id !== next.id && item.id !== synced.id)]);
+        skillRequest.current = null;
+        setSkillName("");
+        setSkillStatus(synced.scope === "WORKSPACE" ? `已保存“${synced.name}”，当前工作区的成员可使用。` : `已保存并同步“${synced.name}”，可在其他项目中继续使用。`);
+      },
+      () => {
+        if (liveSkillScope.current === skillScopeKey) setSkillStatus(skillScope === "WORKSPACE"
+          ? `“${next.name}”尚未共享成功，正文和名称已保留，可以重试。`
+          : `“${next.name}”已保存在本机，服务端暂时无法同步，可以重试。`);
+      },
+    ).finally(() => { if (liveSkillScope.current === skillScopeKey) setSkillSavingScope(null); });
+  }, [accountId, personalSkills, persistPersonalSkills, projectId, prompt, skillName, skillScope, skillSaving, skillScopeKey]);
   const activeId = useRef(conversationId);
+  const starterPromptPending = useRef(Boolean(starterPrompt));
   const initializedMessages = useRef("");
   const messageEpoch = useRef(0);
   const contextEpoch = useRef(0);
@@ -256,6 +440,17 @@ export function WorkflowAssistantPanel({
       message.origin !== "execution_result",
   );
   const collaborationReadOnly = legacy || agentVersion === 1;
+  const contextRequirements = context?.state?.requirements ?? context?.requirements ?? [];
+  const contextPreferences = context?.state?.preferences ?? context?.preferences ?? [];
+  const activeContextItems = [...contextRequirements, ...contextPreferences].filter(
+    (item) => item.status !== "inactive",
+  );
+  const focusSummary = context?.focusNodeIds.length
+    ? `${context.focusNodeIds.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")).length} 个白板对象`
+    : "整个项目";
+  const visualCoverageSummary = context?.visualCoverage.total
+    ? `${context.visualCoverage.ready}/${context.visualCoverage.total} 份视觉资料已就绪`
+    : null;
   const waitingForConfirmation = !collaborationReadOnly && messages.some(message => message.proposal?.status === "pending");
   const activityPhase: ChatActivity["phase"] = legacy ? "idle"
     : sending || submittingProposal ? "sending"
@@ -281,9 +476,10 @@ export function WorkflowAssistantPanel({
     restore: (draft) => { setPrompt(draft.prompt); setReferencedIds(draft.referencedIds); setAdjustment(draft.adjustment); setReferenceInstances(draft.referenceInstances ?? {}); },
   });
   const uploadEnabled = canUploadReferences && Boolean(onPrepareImageImport && onImageImported) && !collaborationReadOnly && !loading && localDraft.ready && !sending && !contextSaving;
+  const assistantReferenceNodes = useMemo(() => graph.nodes.filter(node => node.type !== "media"), [graph.nodes]);
   const uploads = useAssistantImageUploads({ accountId: session?.user.id ?? "", projectId, editor: draftScope?.editor ?? "workspace", conversationId }, {
     enabled: uploadEnabled,
-    slots: MAX_ASSISTANT_REFERENCES - resolveDraftReferences(graph.nodes, prompt, referencedIds).ids.length,
+    slots: MAX_ASSISTANT_REFERENCES - resolveDraftReferences(assistantReferenceNodes, prompt, referencedIds.filter(id => assistantReferenceNodes.some(node => node.id === id))).ids.length,
     checkpointDraft: () => localDraft.checkpoint({ prompt, referencedIds, adjustment, ...instanceDraft }, JSON.stringify({ prompt: "", referencedIds: [], adjustment: null })),
     beforeImport: async signal => {
       if (!onPrepareImageImport) throw new Error("当前白板尚未准备好，请稍后继续。");
@@ -296,7 +492,7 @@ export function WorkflowAssistantPanel({
     reference: async (result, signal) => {
       signal.throwIfAborted();
       if (!uploadEnabled) throw new Error("当前对话暂时不可添加引用，图片已加入项目。请稍后继续添加。");
-      const next = appendDraftReferences(result.graph.nodes, prompt, referencedIds, [result.nodeId]);
+      const next = appendDraftReferences(result.graph.nodes.filter(node => node.type !== "media"), prompt, referencedIds.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")), [result.nodeId]);
       if (next.error) throw new Error(next.error);
       const shapes = result.canvas.bindings.filter(binding => binding.nodeId === result.nodeId && !binding.removed).map(binding => binding.shapeId);
       const instances = { ...draftInstances, ...(shapes.length ? { [result.nodeId]: shapes } : {}) };
@@ -333,7 +529,12 @@ export function WorkflowAssistantPanel({
         onError("正在提交当前内容，请完成后再添加引用。");
         return false;
       }
-      const result = appendDraftReferences(graph.nodes, prompt, referencedIds, incoming);
+      const mediaIds = incoming.filter(id => graph.nodes.some(node => node.id === id && node.type === "media"));
+      if (mediaIds.length) {
+        onError("视频和音频可在白板播放，但当前助手与图片生成暂不支持分析媒体内容；请回到服装秀来源查看原文件。");
+        return false;
+      }
+      const result = appendDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, referencedIds.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")), incoming.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")));
       if (result.error) { onError(result.error); return false; }
       if (result.ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("还在准备的图片也占用引用名额，请先完成或移除部分附件。"); return false; }
       setReferencedIds(result.ids);
@@ -350,6 +551,7 @@ export function WorkflowAssistantPanel({
   );
   const addReference = useCallback((id: string) => addReferences([id], true), [addReferences]);
   const consumedReference = useRef<unknown>(null);
+  const consumedAssistantDraft = useRef<number | null>(null);
   useEffect(() => {
     if (referenceRequest && consumedReference.current !== referenceRequest && referenceRequest.conversationId !== undefined && referenceRequest.conversationId !== (conversationId || null)) {
       consumedReference.current = referenceRequest;
@@ -367,8 +569,86 @@ export function WorkflowAssistantPanel({
     consumedReference.current = referenceRequest;
     const ids = referenceRequest.nodeIds ?? (referenceRequest.nodeId ? [referenceRequest.nodeId] : []);
     if (ids.length) addReferences(ids, false, referenceRequest.instances);
+    if (referenceRequest.notice) setDraftNotice(referenceRequest.notice);
     referenceRequest.onConsumed?.();
   }, [addReferences, conversationId, loading, localDraft.ready, onError, referenceRequest]);
+  useEffect(() => {
+    const request = assistantDraftRequest;
+    if (
+      !request ||
+      loading ||
+      !localDraft.ready ||
+      consumedAssistantDraft.current === request.nonce ||
+      sending ||
+      contextSaving
+    )
+      return;
+    consumedAssistantDraft.current = request.nonce;
+    if (collaborationReadOnly) {
+      onError("当前对话不可编辑，请先新建设计对话再整理修订意见。");
+      request.onConsumed?.();
+      return;
+    }
+    const references = appendDraftReferences(
+      graph.nodes,
+      prompt,
+      referencedIds,
+      request.nodeIds ?? [],
+    );
+    if (references.error) {
+      onError(references.error);
+      request.onConsumed?.();
+      return;
+    }
+    const nextPrompt = prompt.trim()
+      ? `${prompt.trim()}\n\n${request.prompt.trim()}`
+      : request.prompt.trim();
+    if (!nextPrompt) {
+      onError("修订意见为空，请先选择至少一条图片意见。");
+      request.onConsumed?.();
+      return;
+    }
+    if (nextPrompt.length > MAX_AGENT_MESSAGE_LENGTH) {
+      onError("当前对话草稿已接近输入上限，请先精简原有内容，再整理修订意见。");
+      request.onConsumed?.();
+      return;
+    }
+    const nextInstances = retainReferenceInstances(draftInstances, references.ids);
+    setPrompt(nextPrompt);
+    setReferencedIds(references.ids);
+    setReferenceInstances(nextInstances);
+    setDraftNotice(request.notice ?? "已保存图片意见并准备修订计划；核对后再发送给设计助手。");
+    void localDraft
+      .checkpoint(
+        {
+          prompt: nextPrompt,
+          referencedIds: references.ids,
+          adjustment,
+          ...(Object.keys(nextInstances).length
+            ? { referenceInstances: nextInstances }
+            : {}),
+        },
+        JSON.stringify({ prompt: "", referencedIds: [], adjustment: null }),
+      )
+      .catch(() => setDraftNotice("修订计划已准备，但本机暂存失败；请在离开前核对草稿。"));
+    onError(null);
+    if (request.focusInput !== false)
+      requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+    request.onConsumed?.();
+  }, [
+    adjustment,
+    assistantDraftRequest,
+    collaborationReadOnly,
+    contextSaving,
+    draftInstances,
+    graph.nodes,
+    loading,
+    localDraft,
+    onError,
+    prompt,
+    referencedIds,
+    sending,
+  ]);
   useEffect(() => {
     activeId.current = conversationId;
   }, [conversationId]);
@@ -396,6 +676,13 @@ export function WorkflowAssistantPanel({
       }
       const draft = draftStore.current.get(`${projectId}:${id}`);
       const cached = messagePages.current.get(id);
+      const seedStarter = Boolean(
+        starterPromptPending.current &&
+          starterPrompt &&
+          !draft &&
+          !(cached?.messages.length),
+      );
+      starterPromptPending.current = false;
       conversationResolution.current?.abort();
       olderRequest.current?.abort();
       olderRequest.current = null;
@@ -420,9 +707,11 @@ export function WorkflowAssistantPanel({
       setContextError(null);
       setReferencedIds(draft?.referencedIds ?? []);
       setReferenceInstances(draft?.referenceInstances ?? {});
-      setPrompt(draft?.prompt ?? "");
+      setPrompt(draft?.prompt ?? (seedStarter ? starterPrompt ?? "" : ""));
       setDraftNotice(
-        draft &&
+        seedStarter
+          ? "已根据你的创作方向准备一份未发送的设计需求，可以先修改再发送。"
+          : draft &&
           (draft.prompt || draft.referencedIds.length || draft.adjustment)
           ? "已恢复此对话的未发送草稿，请核对后发送。草稿保留在本机。"
           : null,
@@ -437,7 +726,7 @@ export function WorkflowAssistantPanel({
       setLoading(Boolean(id) && !cached);
       onProposal(null);
     },
-    [onProposal, projectId, setNewMessages],
+    [onProposal, projectId, setNewMessages, starterPrompt],
   );
 
   useEffect(() => {
@@ -790,8 +1079,8 @@ export function WorkflowAssistantPanel({
       onError(`设计需求最多 ${MAX_AGENT_MESSAGE_LENGTH} 个字符`);
       return;
     }
-    const references = resolveDraftReferences(
-      graph.nodes,
+      const references = resolveDraftReferences(
+        assistantReferenceNodes,
       content,
       referencedIds,
     );
@@ -822,7 +1111,7 @@ export function WorkflowAssistantPanel({
         // identity before sending, instead of silently changing the preview.
         setReferencedIds(prepared.nodeIds);
         setReferenceInstances(prepared.instances);
-        setPrompt(current => removeReferenceMentions(current, graph.nodes, refs.filter(id => !prepared.nodeIds.includes(id))));
+        setPrompt(current => removeReferenceMentions(current, assistantReferenceNodes, refs.filter(id => !prepared.nodeIds.includes(id))));
         setLocalSubmission(null);
         onError("引用素材已更新，预览已同步。请核对后再次发送。");
         return;
@@ -833,7 +1122,7 @@ export function WorkflowAssistantPanel({
       const submittedDraft = { prompt, referencedIds, adjustment, ...instanceDraft };
       const acknowledgeDraft = await localDraft.captureAcknowledgement(submittedDraft);
       const targetId = conversationId || (await createConversation(true));
-      const focus = refs.length ? refs : (context?.focusNodeIds ?? []);
+      const focus = refs.length ? refs : (context?.focusNodeIds ?? []).filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"));
       const key = JSON.stringify({
         targetId,
         content,
@@ -1058,12 +1347,12 @@ export function WorkflowAssistantPanel({
   };
 
   const draftReferences = resolveDraftReferences(
-    graph.nodes,
+    graph.nodes.filter(node => node.type !== "media"),
     prompt,
     referencedIds,
   );
   const missingReferenceIds = referencedIds.filter(
-    (id) => !graph.nodes.some((node) => node.id === id),
+    (id) => !graph.nodes.some((node) => node.id === id && node.type !== "media"),
   );
   const currentAdjustment = adjustment
     ? (messages.find((message) => message.proposal?.id === adjustment.id)
@@ -1075,14 +1364,61 @@ export function WorkflowAssistantPanel({
     !loading &&
     (!currentAdjustment || currentAdjustment.status !== "pending"),
   );
-  const discussionIds = draftReferences.ids.length
-    ? draftReferences.ids
-    : (context?.focusNodeIds ?? []);
+  const discussionIds = useMemo(
+    () => draftReferences.ids.length
+      ? draftReferences.ids
+      : (context?.focusNodeIds ?? []).filter(id => assistantReferenceNodes.some(node => node.id === id)),
+    [assistantReferenceNodes, context?.focusNodeIds, draftReferences.ids],
+  );
+  const plannerShapeIds = useMemo(
+    () => [...new Set(discussionIds.flatMap(id => draftInstances[id] ?? []))],
+    [discussionIds, draftInstances],
+  );
+  const plannerTaskCreated = useCallback(async () => {
+    window.dispatchEvent(new Event("fashion-workflow:refresh"));
+  }, []);
+  const reviewableCandidates = useMemo(
+    () => graph.nodes.filter(
+      (node) => node.type === "candidate" && node.status !== "proposed",
+    ),
+    [graph.nodes],
+  );
+  const prepareDesignReview = useCallback(() => {
+    if (collaborationReadOnly || sending || contextSaving) return;
+    if (!reviewableCandidates.length) {
+      onError("当前白板还没有可审阅的服装方案。先生成或放入一张方案图片，再开始审阅。");
+      return;
+    }
+    const selectedId = selected?.type === "candidate" && selected.status !== "proposed"
+      ? selected.id
+      : null;
+    const supportNodes = graph.nodes.filter(
+      (node) => node.type === "brief" || node.type === "constraint",
+    );
+    const ids = [...new Set([
+      ...(selectedId ? [selectedId] : []),
+      ...reviewableCandidates.map((node) => node.id),
+      ...supportNodes.map((node) => node.id),
+    ])].slice(0, MAX_ASSISTANT_REFERENCES);
+    setPrompt(
+      "请审阅当前画布中的服装方案：逐项检查设计要求、廓形与细节的一致性，区分已确认事实、可观察问题和需要人工确认的推测；给出依据、风险和下一步建议，暂不生成图片。",
+    );
+    setReferencedIds(ids);
+    setReferenceInstances({});
+    setAdjustment(null);
+    setDraftNotice(
+      ids.length < reviewableCandidates.length
+        ? `已准备设计审阅草稿，并带入 ${ids.length} 项关键上下文；可在发送前继续调整引用。`
+        : `已准备设计审阅草稿，并带入 ${reviewableCandidates.length} 个方案与关键约束。`,
+    );
+    onError(null);
+    requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+  }, [collaborationReadOnly, contextSaving, graph.nodes, onError, reviewableCandidates, selected, sending]);
   const previewReference = graph.nodes.find(node => node.id === previewReferenceId && node.type === "reference_image");
   const clearDiscussion = async () => {
     const target = activeId.current;
     const ids = [
-      ...new Set([...draftReferences.ids, ...(context?.focusNodeIds ?? [])]),
+      ...new Set([...draftReferences.ids, ...(context?.focusNodeIds ?? []).filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"))]),
     ];
     if (
       conversationId &&
@@ -1091,7 +1427,7 @@ export function WorkflowAssistantPanel({
       return;
     if (activeId.current !== target) return;
     setReferencedIds([]);
-    setPrompt((value) => removeReferenceMentions(value, graph.nodes, ids));
+    setPrompt((value) => removeReferenceMentions(value, assistantReferenceNodes, ids));
     composerInput.current?.focus({ preventScroll: true });
   };
   const retryContext = () => {
@@ -1154,6 +1490,23 @@ export function WorkflowAssistantPanel({
     const result = message.origin === "execution_result" ? workflowExecutionResultSchema.safeParse(message.context?.executionResult) : null;
     return result?.success && result.data.executionId === message.executionId && result.data.images.length ? [result.data.executionId] : [];
   })), [messages]);
+  const resultIndex = useMemo(() => messages.flatMap((message) => {
+    if (message.origin !== "execution_result" || !message.executionId) return [];
+    const parsed = workflowExecutionResultSchema.safeParse(message.context?.executionResult);
+    if (!parsed.success || !parsed.data.images.length) return [];
+    const status = parsed.data.status === "completed"
+      ? "已完成"
+      : parsed.data.status === "partial_failed"
+        ? "部分完成"
+        : parsed.data.status === "canceled"
+          ? "已取消"
+          : "未完成";
+    return [{
+      executionId: message.executionId,
+      imageCount: parsed.data.images.length,
+      status,
+    }];
+  }), [messages]);
   const transcript = useMemo(() => ([...messages.map((message) => ({ kind: "server" as const, message })),
           ...(localSubmission && localSubmission.conversationId === conversationId && !messages.some((message) => message.role === "user" && message.clientRequestId === localSubmission.clientRequestId)
             ? [{ kind: "local" as const, submission: localSubmission }] : []),
@@ -1282,6 +1635,23 @@ export function WorkflowAssistantPanel({
           >
             <WorkspaceIcon name="history" />
           </Button>
+          {resultIndex.length ? (
+            <Button
+              size="small"
+              variant="ghost"
+              aria-label={`本轮结果 ${resultIndex.length} 条`}
+              title="本轮结果"
+              aria-expanded={resultIndexOpen}
+              onClick={() => {
+                setResultIndexOpen((value) => !value);
+                setHistoryOpen(false);
+                setSkillsOpen(false);
+                setDelegationsOpen(false);
+              }}
+            >
+              <WorkspaceIcon name="results" />
+            </Button>
+          ) : null}
           <Button
             size="small"
             variant="ghost"
@@ -1298,6 +1668,7 @@ export function WorkflowAssistantPanel({
             size="small"
             variant="ghost"
             aria-label="设计要求"
+            className={ui.secondaryToolbarAction}
             title="设计要求"
             data-assistant-requirements-trigger
             disabled={legacy}
@@ -1305,7 +1676,63 @@ export function WorkflowAssistantPanel({
           >
             <WorkspaceIcon name="requirements" />
           </Button>
+          {!legacy ? (
+            <Button
+              size="small"
+              variant="ghost"
+              aria-label="常用技能"
+              title="常用技能"
+              aria-expanded={skillsOpen}
+              onClick={() => {
+                setSkillsOpen((value) => !value);
+                setSkillStatus(null);
+              }}
+            >
+              <WorkspaceIcon name="skills" />
+            </Button>
+          ) : null}
+          {!legacy ? (
+            <Button
+              size="small"
+              variant="ghost"
+              aria-label="设计委托"
+              className={ui.secondaryToolbarAction}
+              title="设计委托"
+              aria-expanded={delegationsOpen}
+              onClick={() => setDelegationsOpen((value) => !value)}
+            >
+              <WorkspaceIcon name="delegation" />
+            </Button>
+          ) : null}
+          {!legacy && reviewableCandidates.length ? (
+            <Button
+              size="small"
+              variant="ghost"
+              aria-label="审阅当前方案"
+              className={ui.secondaryToolbarAction}
+              title="审阅当前方案"
+              data-assistant-review-trigger
+              disabled={loading || sending || contextSaving}
+              onClick={prepareDesignReview}
+            >
+              <WorkspaceIcon name="review" />
+            </Button>
+          ) : null}
+          {!legacy && conversationId ? (
+            <button
+              className={`${ui.plannerTrigger} ${ui.secondaryToolbarAction}`}
+              disabled={loading || sending || contextSaving}
+              onClick={() => setWorkflowPlannerOpen(true)}
+              type="button"
+            >
+              分步计划
+            </button>
+          ) : null}
           {<Menu label="助手设置" trigger={<WorkspaceIcon name="settings" />}>
+            {!legacy ? <button type="button" onClick={() => setRequirementsOpen(true)}>设计要求</button> : null}
+            {!legacy ? <button type="button" onClick={() => { setSkillsOpen(false); setDelegationsOpen(value => !value); }}>设计委托</button> : null}
+            {!legacy && reviewableCandidates.length ? <button type="button" disabled={loading || sending || contextSaving} onClick={prepareDesignReview}>审阅当前方案</button> : null}
+            {!legacy && conversationId ? <button type="button" disabled={loading || sending || contextSaving} onClick={() => setWorkflowPlannerOpen(true)}>分步计划</button> : null}
             {legacy ? (
               <button
                 onClick={() => setLegacyRunsOpen((value) => !value)}
@@ -1353,7 +1780,235 @@ export function WorkflowAssistantPanel({
           ) : null}
         </div>
       ) : null}
-      <div className={styles.conversationViewport}>
+      {resultIndexOpen ? (
+        <section className={ui.resultIndex} aria-label="本轮执行结果">
+          <header className={ui.resultIndexHeader}>
+            <div>
+              <strong>本轮结果</strong>
+              <span>直接跳到已生成的图片回执，不改变对话顺序。</span>
+            </div>
+            <button
+              aria-label="关闭本轮结果"
+              className={ui.skillsClose}
+              onClick={() => setResultIndexOpen(false)}
+              type="button"
+            >
+              <WorkspaceIcon name="close" />
+            </button>
+          </header>
+          <div className={ui.resultIndexList}>
+            {resultIndex.map((result, index) => (
+              <button
+                className={ui.resultIndexItem}
+                key={result.executionId}
+                onClick={() => {
+                  setResultIndexOpen(false);
+                  revealExecutionResult(result.executionId);
+                }}
+                type="button"
+              >
+                <span>
+                  <strong>第 {index + 1} 次执行</strong>
+                  <small>{result.status} · {result.imageCount} 张图片</small>
+                </span>
+                <span aria-hidden="true">跳转 ↗</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {skillsOpen && !legacy ? (
+        <section className={ui.skillsPanel} aria-label="常用技能">
+          <header className={ui.skillsHeader}>
+            <div>
+              <strong>常用技能</strong>
+              <span>保存成熟的设计步骤，载入后仍需你确认和发送。</span>
+            </div>
+            <button
+              aria-label="关闭常用技能"
+              className={ui.skillsClose}
+              onClick={() => setSkillsOpen(false)}
+              type="button"
+            >
+              ×
+            </button>
+          </header>
+          <div className={ui.skillList}>
+            <span className={ui.skillGroupLabel}>工作室建议</span>
+            {BUILT_IN_ASSISTANT_SKILLS.map((skill) => (
+              <button
+                className={ui.skillItem}
+                key={skill.id}
+                onClick={() => applyAssistantSkill(skill)}
+                type="button"
+              >
+                <span>
+                  <strong>{skill.name}</strong>
+                  <small>{skill.description}</small>
+                </span>
+                <span aria-hidden="true">载入 ↗</span>
+              </button>
+            ))}
+            {personalSkills.length ? <span className={ui.skillGroupLabel}>我的技能</span> : null}
+            {personalSkills.map((skill) => (
+              <div className={ui.personalSkill} key={skill.id}>
+                <button className={ui.skillItem} onClick={() => applyAssistantSkill(skill)} type="button">
+                  <span>
+                    <strong>{skill.name}</strong>
+                    <small>{skill.description}</small>
+                  </span>
+                  <span aria-hidden="true">载入 ↗</span>
+                </button>
+                <button
+                  aria-label={`删除技能 ${skill.name}`}
+                  className={ui.skillDelete}
+                  onClick={() => {
+                    persistPersonalSkills(current => current.filter((item) => item.id !== skill.id));
+                    if (!skill.serverId) {
+                      setSkillStatus(`已删除“${skill.name}”。`);
+                      return;
+                    }
+                    void deleteAssistantSkillRemote(projectId, skill.serverId).then(
+                      () => { if (liveSkillScope.current === skillScopeKey) setSkillStatus(`已删除“${skill.name}”。`); },
+                      () => {
+                        if (liveSkillScope.current !== skillScopeKey) return;
+                        persistPersonalSkills(current => current.some(item => item.id === skill.id) ? current : [skill, ...current]);
+                        setSkillStatus(`服务端删除“${skill.name}”失败，已恢复记录。`);
+                      },
+                    );
+                  }}
+                  type="button"
+                >
+                  删除
+                </button>
+              </div>
+            ))}
+          </div>
+          <form
+            className={ui.skillSave}
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveCurrentSkill();
+            }}
+          >
+            <div>
+              <strong>保存当前草稿</strong>
+              <span>{prompt.trim() ? "下次可以跨项目快速载入这段需求。" : "先在输入框写下需求，再保存为技能。"}</span>
+            </div>
+            <Input
+              aria-label="技能名称"
+              className={ui.skillName}
+              maxLength={48}
+              onChange={(event) => setSkillName(event.target.value)}
+              placeholder="例如：品牌一致性核对"
+              value={skillName}
+            />
+            <div className={ui.skillScope}>
+              <Select
+                aria-label="技能共享范围"
+                onChange={(event) => setSkillScope(event.target.value as "PERSONAL" | "WORKSPACE")}
+                value={skillScope}
+              >
+                <option value="PERSONAL">仅我使用</option>
+                <option value="WORKSPACE">共享到工作区</option>
+              </Select>
+            </div>
+            <Button className={ui.skillSaveButton} disabled={skillSaving || !prompt.trim() || !skillName.trim()} size="small" type="submit">
+              {skillSaving ? "正在保存…" : "保存技能"}
+            </Button>
+          </form>
+          {skillStatus ? <p className={ui.skillStatus} role="status">{skillStatus}</p> : null}
+        </section>
+      ) : null}
+      {delegationsOpen && !legacy ? (
+        <AssistantDelegationsPanel
+          canEdit={!collaborationReadOnly}
+          conversationId={conversationId}
+          onClose={() => setDelegationsOpen(false)}
+          projectId={projectId}
+        />
+      ) : null}
+      {!legacy && conversationId ? (
+        <section
+          aria-label="创作主线"
+          className={ui.continuity}
+          data-context-ready={context ? "true" : "false"}
+        >
+          <header className={ui.continuityHeader}>
+            <span className={ui.continuityLabel}>创作主线</span>
+            <button
+              className={ui.continuityAction}
+              data-assistant-continuity-trigger
+              disabled={loading}
+              onClick={() => setRequirementsOpen(true)}
+              type="button"
+            >
+              查看设计要求
+            </button>
+          </header>
+          {context ? (
+            <>
+              <div className={ui.continuityGrid}>
+                <div>
+                  <span>当前目标</span>
+                  <strong>
+                    {context.currentObjective || "尚未设定，先描述你想做的设计"}
+                  </strong>
+                </div>
+                <div>
+                  <span>正在推进</span>
+                  <strong>
+                    {context.currentTask || "等待助手从对话中整理下一步"}
+                  </strong>
+                </div>
+              </div>
+              <div className={ui.continuityMeta} aria-label="创作上下文摘要">
+                <span>讨论对象 · {focusSummary}</span>
+                <span>已记录要求 · {activeContextItems.length} 条</span>
+                {visualCoverageSummary ? <span>{visualCoverageSummary}</span> : null}
+              </div>
+            </>
+          ) : (
+            <p role="status">
+              {contextError ? "项目记忆暂时不可用，请重试。" : "正在恢复项目目标与设计记忆…"}
+            </p>
+          )}
+        </section>
+      ) : null}
+      {workflowPlannerOpen && !legacy && conversationId ? (
+        <section className={ui.planner} aria-label="分步设计计划">
+          <header className={ui.plannerHeader}>
+            <div>
+              <strong>分步设计计划</strong>
+              <span>先规划、逐步确认，每一步都保留可追溯结果。</span>
+            </div>
+            <button
+              className={ui.plannerClose}
+              onClick={() => setWorkflowPlannerOpen(false)}
+              type="button"
+            >
+              返回讨论
+            </button>
+          </header>
+          <div className={ui.plannerBody}>
+            <AgentWorkflowPanel
+              conversationId={conversationId}
+              contextReady={!conversationId || Boolean(context)}
+              contextItems={
+                <p className={ui.plannerContext}>
+                  {discussionIds.length
+                    ? `当前讨论引用 ${discussionIds.length} 项工作流素材。`
+                    : "当前计划从整段设计目标开始，可在节点中继续补充素材。"}
+                </p>
+              }
+              initialIntent={prompt.trim() || context?.currentObjective || "请把当前设计目标拆成可确认的执行步骤"}
+              shapeIds={plannerShapeIds}
+              onTaskCreated={plannerTaskCreated}
+            />
+          </div>
+        </section>
+      ) : null}
+      <div className={styles.conversationViewport} hidden={workflowPlannerOpen}>
       <div
         ref={conversationView}
         {...viewportProps}
@@ -1419,10 +2074,12 @@ export function WorkflowAssistantPanel({
                   disabled={collaborationReadOnly || loading || sending || contextSaving}
                   hasDraft={Boolean(prompt)}
                   hasReferences={draftReferences.ids.length > 0}
+                  hasCandidates={reviewableCandidates.length > 0}
                   onChoose={value => {
                     setPrompt(value);
                     composerInput.current?.focus({ preventScroll: true });
                   }}
+                  onReview={prepareDesignReview}
                 />
               </>
             ) : null}
@@ -1462,6 +2119,7 @@ export function WorkflowAssistantPanel({
       <div
         ref={composerSurface}
         className={styles.composer}
+        hidden={workflowPlannerOpen}
         data-guide="workspace-assistant"
         data-guide-variant={legacy ? "history" : agentVersion === 1 ? "paused" : "input"}
         data-assistant-image-drop
@@ -1553,7 +2211,7 @@ export function WorkflowAssistantPanel({
                         onClick={() => node?.type === "reference_image" ? setPreviewReferenceId(id) : onLocate(id)}
                         type="button"
                       >
-                        {node ? <AssistantReferencePreview node={node} /> : null}
+          {node && node.type !== "media" ? <AssistantReferencePreview node={node} /> : null}
                         <span className={ui.referenceCaption}>
                           <span>{label}</span>
                           {node ? <small>{referenceTypeLabel(node)}</small> : null}
@@ -1569,7 +2227,7 @@ export function WorkflowAssistantPanel({
                               current.filter((item) => item !== id),
                             );
                             setPrompt((value) =>
-                              removeReferenceMentions(value, graph.nodes, [id]),
+                              removeReferenceMentions(value, assistantReferenceNodes, [id]),
                             );
                           }}
                           type="button"
@@ -1660,7 +2318,7 @@ export function WorkflowAssistantPanel({
               id={inputId}
               ref={composerInput}
               contextKey={`${projectId}:${conversationId}`}
-              nodes={graph.nodes}
+              nodes={graph.nodes.filter(node => node.type !== "media")}
               referencedIds={referencedIds}
               onAddReference={addReference}
               aria-describedby={`${inputId}-hint`}
@@ -1753,12 +2411,12 @@ export function WorkflowAssistantPanel({
           graph={graph}
           selectedIds={draftReferences.ids}
           onApply={(ids) => {
-            if (resolveDraftReferences(graph.nodes, prompt, ids).ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("待添加图片和所选引用合并后超过 16 项，请先减少部分内容。"); return; }
+            if (resolveDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, ids.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"))).ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("待添加图片和所选引用合并后超过 16 项，请先减少部分内容。"); return; }
             setReferencedIds(ids);
             setPrompt((value) =>
               removeReferenceMentions(
                 value,
-                graph.nodes,
+                assistantReferenceNodes,
                 draftReferences.ids.filter((id) => !ids.includes(id)),
               ),
             );

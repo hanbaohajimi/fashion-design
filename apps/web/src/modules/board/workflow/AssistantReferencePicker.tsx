@@ -47,12 +47,12 @@ export function AssistantReferencePicker({
     }
   }
   const availableIds = useMemo(
-    () => ids.filter((id) => graph.nodes.some((node) => node.id === id)),
+    () => ids.filter((id) => graph.nodes.some((node) => node.id === id && node.type !== "media")),
     [ids, graph.nodes],
   );
   const matches = useMemo(
     () =>
-      graph.nodes.filter((node) =>
+      graph.nodes.filter((node) => node.type !== "media" &&
         displayNodeTitle(node)
           .toLocaleLowerCase()
           .includes(query.trim().toLocaleLowerCase()),

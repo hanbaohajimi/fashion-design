@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 
-type WorkspaceIconName = "image" | "annotate" | "comment" | "remove_background" | "erase" | "resize" | "inpaint" | "variation" | "download" | "share" | "close" | "chevron" | "orient" | "adjust" | "rotate_left" | "flip_horizontal" | "flip_vertical" | "reset" | "text_edit" | "history" | "new_chat" | "requirements" | "settings";
+type WorkspaceIconName = "image" | "annotate" | "comment" | "remove_background" | "erase" | "resize" | "inpaint" | "variation" | "download" | "share" | "close" | "chevron" | "orient" | "adjust" | "rotate_left" | "flip_horizontal" | "flip_vertical" | "reset" | "text_edit" | "history" | "results" | "new_chat" | "requirements" | "settings" | "review" | "skills" | "delegation";
 
 const paths: Record<WorkspaceIconName, ReactNode> = {
   history: <><path d="M3 4v5h5M3 9a9 9 0 1 1 0 7" /><path d="M12 7v5l3 2" /></>,
+  results: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5M8 17h3" /></>,
   new_chat: <><path d="M14 4H5a2 2 0 0 0-2 2v15l5-4h11a2 2 0 0 0 2-2v-4M18 2v6m-3-3h6" /></>,
   requirements: <><path d="M9 5h11M9 12h11M9 19h11M3 5l1 1 2-3M3 12l1 1 2-3M3 19l1 1 2-3" /></>,
   settings: <><path d="M4 7h9m4 0h3M4 17h3m4 0h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>,
+  review: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16.5 9" /></>,
+  skills: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4" /><circle cx="12" cy="12" r="4" /><path d="m5.6 5.6 2.8 2.8m7.2 7.2 2.8 2.8m0-12.8-2.8 2.8m-7.2 7.2-2.8 2.8" /></>,
+  delegation: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2M4 4l-1.5 1.5M20 4l1.5 1.5" /></>,
   text_edit: <><path d="M4 5V3h16v2M12 3v18M8 21h8" /></>,
   image: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1" /><path d="m3 17 5-5 4 4 3-3 6 6" /></>,
   annotate: <><path d="m4 16-1 5 5-1L20 8a2.1 2.1 0 0 0-4-4Z" /><path d="m14 6 4 4M4 16l4 4" /></>,

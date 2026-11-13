@@ -87,3 +87,50 @@ it("过滤已删除对象，不将失效 id 发送给助手", () => {
   fireEvent.click(screen.getByRole("button", { name: "使用所选引用" }));
   expect(onApply).toHaveBeenCalledWith(["candidate-0"]);
 });
+
+it("不把视频和音频作为尚未支持的视觉输入提供给助手", () => {
+  const mediaGraph = {
+    ...graph,
+    nodes: [...graph.nodes,
+      { id: "video-result", kind: "asset", type: "media", title: "视频成片", payload: { mediaKind: "video" } },
+      { id: "audio-result", kind: "asset", type: "media", title: "服装秀配乐", payload: { mediaKind: "audio" } },
+    ],
+  } as unknown as WorkflowGraph;
+  const onApply = vi.fn();
+  render(<AssistantReferencePicker graph={mediaGraph} selectedIds={[]} onApply={onApply} onClose={vi.fn()} onAddMaterial={vi.fn()} />);
+  expect(screen.queryByRole("checkbox", { name: /视频成片/ })).toBeNull();
+  expect(screen.queryByRole("checkbox", { name: /服装秀配乐/ })).toBeNull();
+});
+
+it("保留设计工具作为助手引用", () => {
+  const toolGraph = {
+    ...graph,
+    nodes: [
+      ...graph.nodes,
+      {
+        id: "tool-design",
+        kind: "tool",
+        type: "generate_design",
+        title: "版型搭配建议",
+        payload: {},
+      },
+    ],
+  } as unknown as WorkflowGraph;
+  const onApply = vi.fn();
+  render(
+    <AssistantReferencePicker
+      graph={toolGraph}
+      selectedIds={[]}
+      onApply={onApply}
+      onClose={vi.fn()}
+      onAddMaterial={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByText("设计工具（1）"));
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "版型搭配建议 设计工具" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "使用所选引用" }));
+
+  expect(onApply).toHaveBeenCalledWith(["tool-design"]);
+});

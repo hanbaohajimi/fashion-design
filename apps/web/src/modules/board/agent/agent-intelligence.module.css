@@ -155,8 +155,9 @@
 .refinement :where(button, summary):focus-visible,
 .brief summary:focus-visible,
 .rationale summary:focus-visible {
-  outline: 2px solid var(--color-error);
-  outline-offset: 3px;
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
 }
 
 .actionStatus {

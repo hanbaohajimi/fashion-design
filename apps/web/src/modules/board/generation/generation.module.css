@@ -2363,6 +2363,93 @@
   grid-column: 1 / -1;
 }
 
+.exportBatchAction {
+  min-height: 42px;
+  border: var(--border-hairline) solid var(--color-action);
+  background: var(--color-paper);
+  color: var(--color-action);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+.exportBatchAction:hover:not(:disabled) {
+  background: var(--color-action-subtle);
+}
+.exportBatchAction:disabled {
+  color: var(--color-disabled-ink);
+  border-color: var(--color-disabled-border);
+  cursor: not-allowed;
+}
+.batchProgress {
+  display: grid;
+  gap: var(--space-2);
+  border: var(--border-hairline) solid var(--color-border-strong);
+  padding: var(--space-3);
+  background: var(--color-surface);
+}
+.batchProgress > header,
+.batchProgress li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.batchProgress > header {
+  border-bottom: var(--border-hairline) solid var(--color-border);
+  padding-bottom: var(--space-2);
+}
+.batchProgress > header span,
+.batchProgress small {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+}
+.batchProgress ul {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.batchProgress li {
+  min-height: 32px;
+  border-bottom: var(--border-hairline) solid var(--color-divider);
+  font-size: var(--text-sm);
+}
+.batchProgress li:last-child {
+  border-bottom: 0;
+}
+.batchProgress li > strong {
+  margin-left: auto;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.batchProgress li > a {
+  color: var(--color-action);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.batchProgress li > button {
+  min-height: 28px;
+  border: var(--border-hairline) solid var(--color-action);
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--color-action);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+.batchProgress li > button:disabled {
+  border-color: var(--color-disabled-border);
+  color: var(--color-disabled-ink);
+  cursor: not-allowed;
+}
+.batchProgress small {
+  line-height: 1.5;
+}
+
 .exportProgress,
 .exportLoading {
   display: grid;

@@ -14,6 +14,7 @@ export interface ImageCommentDraft {
 export function ImageCommentsPanel({
   feedback, draft, selected, locked, inputRef, onDraft, onSelect, onEdit,
   onDelete, onClear, onAdd, onSave, onSubmit,
+  onPrepareAssistant,
 }: {
   feedback: ImageFeedback;
   draft: ImageCommentDraft;
@@ -28,6 +29,7 @@ export function ImageCommentsPanel({
   onAdd: () => void;
   onSave: () => void;
   onSubmit: () => void;
+  onPrepareAssistant: (() => void) | undefined;
 }) {
   const number = draft.editingId ? feedback.comments.findIndex(c => c.id === draft.editingId) + 1 : feedback.comments.length + 1;
   const composing = Boolean(draft.text || draft.point || draft.editingId || draft.annotationIds.length);
@@ -82,6 +84,12 @@ export function ImageCommentsPanel({
     <div className={styles.commentSubmit}>
       {composing ? <p>先{draft.editingId ? "更新" : "添加"}这条意见，或取消草稿，再提交修改。</p> : null}
       <button type="button" disabled={locked || composing} onClick={onSave}>保存评论</button>
+      {onPrepareAssistant ? <>
+        <p className={styles.handoffHint}>保存后打开同一设计助手，先整理修订计划，不会自动生成。</p>
+        <button type="button" className={styles.assistantHandoff} disabled={locked || !selected.length || composing} onClick={onPrepareAssistant}>
+          交给设计助手制定修订计划
+        </button>
+      </> : null}
       <button type="button" className={styles.primary} disabled={locked || !selected.length || composing} onClick={onSubmit}>按选中意见修改</button>
     </div>
   </>;

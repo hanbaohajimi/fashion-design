@@ -29,6 +29,7 @@ import {
 } from "@fashion/shared";
 import { ImageViewer, type ImageSize } from "./ImageViewer";
 import { ImageCommentsPanel, type ImageCommentDraft } from "./ImageCommentsPanel";
+import { createImageFeedbackHandoff } from "./image-feedback-handoff";
 import { ImageOrientationControls } from "./ImageOrientationControls";
 import { ImageAdjustmentControls } from "./ImageAdjustmentControls";
 import { ImageOutpaintControls } from "./ImageOutpaintControls";
@@ -89,6 +90,13 @@ export interface WorkflowAssetWorkspaceProps {
   onClose: () => void;
   onGraphRefresh: () => void;
   onEnsureConversation?: () => Promise<string>;
+  onPrepareAssistantFeedback?: (request: {
+    assetId: string;
+    title: string;
+    revision: number;
+    prompt: string;
+    commentIds: readonly string[];
+  }) => void | Promise<void>;
   tasks?: readonly WorkflowNode[];
   candidates?: readonly WorkflowNode[];
   onSelectAsset?: (id: string) => void;
@@ -135,6 +143,7 @@ function ImageWorkspace({
   onClose,
   onGraphRefresh,
   onEnsureConversation,
+  onPrepareAssistantFeedback,
   candidates = [],
   tasks = [],
   onSelectAsset,
@@ -562,6 +571,23 @@ function ImageWorkspace({
     }));
     setSelected((old) => [...new Set([...old, value.id])]);
     clearComment();
+  };
+  const prepareAssistantFeedback = async (saved: ImageFeedback) => {
+    if (!onPrepareAssistantFeedback) return;
+    const comments = saved.comments.filter((value) => selected.includes(value.id));
+    const handoff = createImageFeedbackHandoff({
+      title,
+      revision: saved.revision,
+      comments,
+      annotations: saved.annotations,
+    });
+    await onPrepareAssistantFeedback({
+      assetId,
+      title,
+      revision: saved.revision,
+      prompt: handoff.prompt,
+      commentIds: handoff.commentIds,
+    });
   };
   const legacy =
     mode === "erase" ||
@@ -995,6 +1021,11 @@ function ImageWorkspace({
                   if (editingComment === id) clearComment();
                 }}
                 onSave={() => void act(async () => { await save(); setNotice("评论已保存"); })}
+                onPrepareAssistant={onPrepareAssistantFeedback ? () => void act(async () => {
+                  const saved = await save();
+                  await prepareAssistantFeedback(saved);
+                  closeWorkspace();
+                }) : undefined}
                 onSubmit={() => void act(async () => {
                   const saved = await save();
                   await submit({ ...generationParams(), intent: "feedback", prompt: "按照选定的修改意见调整服装，保留未要求修改的内容。", feedbackRevision: saved.revision, commentIds: selected });

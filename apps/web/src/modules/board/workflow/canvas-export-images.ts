@@ -11,6 +11,7 @@ function imageSource(shape: TLShape, editor: Editor): { source: string; title: s
   const props = shape.props as unknown as Record<string, unknown>;
   const title = typeof props.title === "string" && props.title ? props.title.slice(0, 60) : "画布图片";
   let source: unknown;
+  if (shape.type === "fashion-media") throw new Error(`媒体“${title}”不能导出为静态图片。请从媒体卡片下载原文件，或先隐藏媒体后导出画布。`);
   if (shape.type === "fashion-image") {
     source = props.url;
     if (!source) throw new Error(`图片“${title}”尚未就绪，请等待完成或隐藏后再导出。`);

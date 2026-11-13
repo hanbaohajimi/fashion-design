@@ -31,7 +31,7 @@ import {
   updateAgentRunPlan,
   validateAgentMessage,
 } from "./agent-api";
-import styles from "./board-agent-panel.module.css";
+import styles from "./agent-workflow-panel.module.css";
 import { AgentPlanEditor } from "./AgentPlanEditor";
 import { attemptStatusLabel } from "./agent-plan-graph";
 import {

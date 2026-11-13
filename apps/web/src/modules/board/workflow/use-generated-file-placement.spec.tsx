@@ -18,6 +18,21 @@ function setup(onPlaced = vi.fn(async () => {})) {
 }
 const input = { assetId: "archived-image", archived: true, title: "旧稿", position: { x: 100, y: 200 } };
 
+it("媒体放置仅传真实文件身份，图片与媒体的未知操作不会串用", async () => {
+  const h = setup(), view = h.mount(); await waitFor(() => expect(view.result.current.ready).toBe(true));
+  api.run.mockRejectedValueOnce(new Error("媒体回执丢失"));
+  const media = { ...input, domain: "runway" as const, assetId: "video-a", archived: false };
+  await act(async () => { await expect(view.result.current.execute(media)).rejects.toThrow("媒体回执丢失"); });
+  const command = view.result.current.pending?.command;
+  expect(command).toMatchObject({ type: "place_generated_media", mediaId: "video-a", position: input.position });
+  expect(command).not.toHaveProperty("assetId");
+  await act(async () => { await expect(view.result.current.execute({ ...input, assetId: "video-a" })).rejects.toThrow("原操作"); });
+  expect(api.run).toHaveBeenCalledTimes(1);
+  api.run.mockResolvedValueOnce({ nodeId: "media-node" });
+  await act(async () => { await view.result.current.execute(); });
+  expect(api.run.mock.calls[1]?.[1]).toEqual(command);
+});
+
 it("刷新不自动提交，重新确认使用相同编号和位置", async () => {
   const h = setup(), first = h.mount();
   await waitFor(() => expect(first.result.current.ready).toBe(true));
@@ -53,7 +68,7 @@ it("连续点击共用在途操作，切换或关闭面板取消读取且不应�
   view.unmount(); expect(signal.aborted).toBe(true);
   await act(async () => { resolve({ nodeId: "late" }); await a; });
   expect(h.onPlaced).not.toHaveBeenCalled();
-  const next = h.mount(); await waitFor(() => expect(next.result.current.pending?.command.assetId).toBe(input.assetId));
+  const next = h.mount(); await waitFor(() => expect(next.result.current.pending?.command).toMatchObject({ type: "place_generated_asset", assetId: input.assetId }));
 });
 
 it("明确拒绝清除待确认编号，存储失败不发送请求", async () => {
@@ -71,7 +86,7 @@ it("另一窗口已有操作时保留其编号，不覆盖成新图片", async (
   await waitFor(() => expect(first.result.current.ready && second.result.current.ready).toBe(true));
   api.run.mockRejectedValueOnce(new Error("网络未确认"));
   await act(async () => { await expect(first.result.current.execute(input)).rejects.toThrow(); });
-  await act(async () => { await expect(second.result.current.execute({ ...input, assetId: "different" })).rejects.toThrow("上一张图片"); });
+  await act(async () => { await expect(second.result.current.execute({ ...input, assetId: "different" })).rejects.toThrow("上次素材"); });
   expect(api.run).toHaveBeenCalledTimes(1);
   expect(second.result.current.pending?.command).toEqual(first.result.current.pending?.command);
 });

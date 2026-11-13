@@ -131,6 +131,7 @@ const NODE_TYPE_TITLES: Readonly<Record<string, string>> = {
   fabric: "面料参考",
   generate_design: "生成设计方案",
   legacy: "历史记录",
+  media: "媒体素材",
   reference_image: "参考图片",
   reference_text: "参考文字",
   restore_version: "恢复历史版本",
@@ -156,6 +157,7 @@ const NODE_TYPE_CODES: Readonly<Record<string, string>> = {
   fabric: "FABRIC",
   generate_design: "TOOL",
   legacy: "ARCHIVE",
+  media: "MEDIA",
   reference_image: "REFERENCE",
   reference_text: "REFERENCE",
   restore_version: "TOOL",
@@ -202,6 +204,7 @@ export function displayNodeTitle(
 
 export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Partial<Pick<WorkflowNode, "title">>): string {
   const payload = node.payload;
+  if (node.type === "media") return `${payload.mediaKind === "audio" ? "音频" : "视频"}记录，可在白板卡片播放并回看来源`;
   if (
     node.type === "candidate" &&
     payload.decision &&

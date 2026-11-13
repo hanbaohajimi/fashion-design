@@ -46,7 +46,7 @@
 .search input { width: 100%; min-width: 0; height: 36px; padding: 0; background: transparent; border: 0; outline: 0; font: inherit; color: var(--color-ink); }
 .search input::placeholder { color: var(--color-ink-secondary); }
 .list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 2px 6px 8px; scrollbar-width: thin; }
-.row { display: flex; align-items: center; min-height: 40px; padding-inline-start: calc(var(--object-depth) * 12px); border-radius: 6px; }
+.row { display: flex; align-items: center; min-height: 40px; padding-inline-start: calc(var(--object-depth, 0) * 12px); border-radius: 6px; }
 .row[data-selected="true"] { background: var(--color-navigation-selected); }
 .row[data-selected="true"] .select { color: var(--color-action); }
 .panel .disclosure { min-width: 24px; width: 24px; padding: 2px; }
@@ -77,7 +77,7 @@
   .panel { left: 8px; max-width: calc(100% - 16px); }
   .panel button { min-width: 44px; min-height: 44px; }
   .search input { height: 44px; font-size: 16px; }
-  .row { min-height: 44px; padding-inline-start: calc(min(var(--object-depth), 3) * 8px); }
+  .row { min-height: 44px; padding-inline-start: calc(min(var(--object-depth, 0), 3) * 8px); }
   .row:has(.history) { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px 44px; }
   .row:has(.history) .history { grid-column: 2; grid-row: 2; justify-self: start; }
   .history { gap: 4px; }

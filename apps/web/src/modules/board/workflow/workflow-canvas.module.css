@@ -637,16 +637,25 @@
   z-index: 2;
   display: flex;
   flex-direction: column;
-  background: var(--color-paper);
-  box-shadow: var(--shadow-sm);
-  /* 侧边栏入场：从右侧滑入 */
-  animation: slideInFromRight var(--dur-layout) var(--ease-enter) backwards;
+  /* v4：libtv 式悬浮卡片——四边留 12px 间隙，大圆角，hairline 边框，float 投影。
+     不再贴边铺满，让画布底色从边缘透出，增加"浮在画布上"的层次感。 */
+  margin: var(--assistant-gap, 12px);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-2xl, 16px);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
+  overflow: hidden;
+  /* 入场动画调整为轻滑入（12px，原 24px 过重） */
+  animation: slideInFromRight var(--motion-page-enter, 220ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)) backwards;
 }
 
 @keyframes slideInFromRight {
   from {
     opacity: 0;
-    transform: translateX(24px);
+    transform: translateX(12px);
   }
   to {
     opacity: 1;
@@ -654,10 +663,13 @@
   }
 }
 
-/* 侧栏头部：移除 overline，让 tab 栏直接成为唯一顶部元素 */
+/* 侧栏头部：玻璃感（仅此一处用 backdrop-filter） */
 .sidebarHeader {
   flex: none;
-  border-bottom: var(--border-hairline) solid var(--color-divider);
+  background: var(--glass-paper, color-mix(in oklab, var(--surface-2) 82%, transparent));
+  backdrop-filter: var(--glass-blur, blur(14px) saturate(1.06));
+  -webkit-backdrop-filter: var(--glass-blur, blur(14px) saturate(1.06));
+  border-bottom: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
 }
 
 /* overline（DESIGN COPILOT）移除 */
@@ -993,30 +1005,45 @@
 }
 
 .composer {
-  background: var(--color-paper);
-  /* 原来的阴影 0 5px 18px 太重，改为极轻 UI 阴影 */
-  box-shadow: var(--shadow-ui);
+  /* v4：大圆角浮动 composer——纸面最亮层，hairline 边框，常态 ui 阴影。
+     四边留 12px 外边距，与 .sidebar 的悬浮卡片语言一致。
+     focus-within 时升级为 shadow-composer-glow + 墨绿描边（光晕替代 outline）。 */
+  margin: 0 var(--assistant-gap, 12px) var(--assistant-gap, 12px);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-2xl, 16px);
+  background: var(--surface-3, oklch(100% 0.004 96));
+  box-shadow: var(--shadow-ui, 0 1px 2px rgba(24,24,24,.05));
+  transition:
+    box-shadow var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    border-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+  overflow: hidden;
 }
 
-/* 空状态时输入框占据更多视觉比重 */
-.assistantBody:has(.assistantConversation[data-empty="true"])
-  .composer
-  textarea {
-  min-height: 140px;
+.composer:focus-within {
+  border-color: color-mix(in oklab, var(--color-focus-ring, #256b52) 45%, var(--border-thin));
+  box-shadow: var(--shadow-composer-glow), var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
 }
 
 .composer textarea {
   display: block;
   width: 100%;
-  min-height: 88px;
-  resize: vertical;
+  /* v4：min-height 56px（Lovart 式大输入），field-sizing 自动撑高，max 240px 避免占满面板 */
+  min-height: 56px;
+  max-height: 240px;
+  resize: none;
   border: 0;
   outline: none;
-  padding: 5px 3px;
+  /* 移除原来的 5px 3px 过小内边距，改为符合 16px 大型 composer 的节奏 */
+  padding: var(--space-3) var(--space-4) 0;
   background: transparent;
   color: var(--color-ink);
-  font-size: var(--text-base);
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  font-size: var(--text-body, 14px);
+  line-height: 1.6;
+  field-sizing: content;
 }
 
 .composerActions button {
@@ -2616,11 +2643,20 @@
   contain-intrinsic-size: 0 180px;
 }
 .workflowMessage[data-role="user"] {
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border-bottom: 0;
+  /* v4：用户消息改为纸面软卡，右对齐，hairline 边框 */
+  align-self: flex-end;
+  display: block;
+  max-width: 86%;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  background: var(--surface-1);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-bottom: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   margin: var(--space-2) 0;
+  font-size: var(--text-body, 14px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .assistantReply {
   font-size: var(--text-base);
@@ -2628,25 +2664,36 @@
 }
 .composer {
   flex: none;
+  /* v4：与上方 .composer 规则合并，只保留内联（mobile/overlay）区域的兜底 */
   padding: var(--space-3);
-  border: var(--border-hairline) solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-2xl, 16px);
+  background: var(--surface-3);
   max-height: 60%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  transition: box-shadow 120ms var(--ease-enter);
+  transition:
+    box-shadow var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    border-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
 }
-.composer:focus-within { box-shadow: var(--shadow-input-focus); }
-.composer textarea:focus { outline: none !important; box-shadow: none !important; }
+.composer:focus-within {
+  border-color: color-mix(in oklab, var(--color-focus-ring, #256b52) 45%, var(--border-thin));
+  box-shadow: var(--shadow-composer-glow), var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
+}
+.composer textarea:focus { outline: none; box-shadow: none; }
 @media (forced-colors: active) { .composer:focus-within { border-color: Highlight; border-style: dashed; } }
 .composer textarea,
 .assistantBody:has(.assistantConversation[data-empty="true"])
   .composer
   textarea {
-  min-height: 64px;
-  max-height: 180px;
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
+  min-height: 56px;
+  max-height: 240px;
+  font-size: var(--text-body, 14px);
+  line-height: 1.6;
+  padding: var(--space-3) var(--space-4) 0;
 }
 .composerActions {
   display: flex;

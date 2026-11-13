@@ -27,6 +27,8 @@ import {
   SWATCH_SHAPE_TYPE,
 } from "../shapes";
 import styles from "./legacy-board-history.module.css";
+import { CanvasLicenseRequired } from "../CanvasLicenseRequired";
+import { tldrawLicenseKey, tldrawLicenseRequired } from "../canvas-license";
 
 export interface LegacyBoardImport {
   readonly shapeId: string;
@@ -164,8 +166,6 @@ function SelectionObserver({
 
   return null;
 }
-
-const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 
 export function LegacyBoardHistory({
   projectId,
@@ -316,6 +316,8 @@ export function LegacyBoardHistory({
             <div className={styles.message} role="status">
               正在读取历史白板…
             </div>
+          ) : tldrawLicenseRequired ? (
+            <CanvasLicenseRequired compact />
           ) : (
             <Tldraw
               hideUi

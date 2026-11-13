@@ -1,0 +1,835 @@
+/**
+ * 助手面板共享视觉模块 — assistant-ui.module.css
+ *
+ * Lovart / libtv 级助手视觉语言：
+ * - 面板 = 浮在画布上的工作台纸（大圆角、hairline 边框、shadow-float）
+ * - 玻璃只在 header 与 composer（不在滚动区，避免 backdrop-filter + content-visibility 掉帧）
+ * - AI 痕迹用茜草 --color-ai 细签名，不铺色块
+ * - 消息四类：用户软卡、AI prose、工具时间线、结果卡
+ *
+ * 只含视觉类，不含业务逻辑。WorkflowAssistantPanel 通过 CSS Module
+ * composes: 或直接引用这些类。
+ */
+
+/* ============================================================
+   面板外壳 — libtv 式悬浮卡片
+   ============================================================ */
+
+.surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* 四边留 12px 间隙，让画布透出 */
+  margin: var(--assistant-gap, 12px);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-2xl, 16px);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
+  overflow: hidden;
+  /* 入场：从右侧轻滑入 */
+  animation: assistantEnter var(--motion-page-enter, 220ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)) backwards;
+}
+
+@keyframes assistantEnter {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface { animation: none; }
+}
+
+/* ============================================================
+   头部工具栏 — 玻璃感（唯一用 backdrop-filter 的区域）
+   ============================================================ */
+
+.surfaceHeader {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  background: var(--glass-paper, color-mix(in oklab, var(--surface-2) 82%, transparent));
+  backdrop-filter: var(--glass-blur, blur(14px) saturate(1.06));
+  -webkit-backdrop-filter: var(--glass-blur, blur(14px) saturate(1.06));
+  border-bottom: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.surfaceTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body, 14px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.headerBtn {
+  display: grid;
+  place-items: center;
+  width: var(--density-control, 32px);
+  height: var(--density-control, 32px);
+  border-radius: var(--radius-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.headerBtn:hover {
+  background: var(--color-action-subtle);
+  color: var(--color-ink);
+}
+
+.headerBtn[data-active="true"] {
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
+}
+
+.headerBtn:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+/* ============================================================
+   消息滚动区
+   ============================================================ */
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  scroll-padding-bottom: var(--space-4);
+}
+
+.scrollArea::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollArea::-webkit-scrollbar-thumb {
+  background: var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-full);
+}
+
+/* ============================================================
+   消息组 — 通用容器
+   ============================================================ */
+
+.messageGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-5);
+}
+
+/* 新消息入场 stagger */
+.messageGroup[data-new="true"] {
+  animation: messageEnter var(--motion-page-enter, 220ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)) both;
+}
+
+@keyframes messageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messageGroup[data-new="true"] { animation: none; }
+}
+
+/* 组级时间戳（>5 分钟间隔才显示） */
+.messageTimestamp {
+  display: block;
+  text-align: center;
+  margin: var(--space-4) 0 var(--space-3);
+  font-size: var(--text-caption, 11px);
+  color: var(--color-ink-tertiary);
+  letter-spacing: 0.03em;
+}
+
+/* ============================================================
+   消息类型 1：用户软卡（纸面，右对齐）
+   ============================================================ */
+
+.messageUser {
+  align-self: flex-end;
+  max-width: 86%;
+  padding: 10px 14px;
+  background: var(--surface-1);
+  color: var(--color-ink);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+  font-size: var(--text-body, 14px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   消息类型 2：AI prose（无气泡，直接排版）
+   ============================================================ */
+
+.messageAssistant {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+/* 茜草 AI 签名圆点 */
+.aiSignature {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-ai-bg, #f6e7df);
+  color: var(--color-ai, #a2563f);
+  font-size: 10px;
+  margin-top: 3px;
+  /* 只在 AI 消息的第一行出现 */
+  align-self: flex-start;
+}
+
+.messageAssistantContent {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body, 14px);
+  line-height: 1.75;
+  color: var(--color-ink);
+}
+
+/* prose 内段落间距 */
+.messageAssistantContent p {
+  margin: 0 0 var(--space-3);
+}
+
+.messageAssistantContent p:last-child {
+  margin-bottom: 0;
+}
+
+/* prose 内标题：不巨型化，保持阅读节奏 */
+.messageAssistantContent :is(h1, h2, h3, h4) {
+  font-size: var(--text-base, 14px);
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--color-ink);
+}
+
+/* prose 代码：不用错误红 */
+.messageAssistantContent code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--color-ink);
+  background: var(--surface-1);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+
+/* prose 链接：用动作色 */
+.messageAssistantContent a {
+  color: var(--color-action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============================================================
+   消息类型 3：工具/思考时间线行
+   ============================================================ */
+
+.activityTimeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 20px;
+  margin: var(--space-2) 0;
+}
+
+/* 左侧竖线串联 */
+.activityTimeline::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 26px;
+  padding: 2px 0;
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-tertiary);
+}
+
+.activityIcon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--color-ink-tertiary);
+  transition: color var(--duration-fast, 140ms) var(--ease-standard);
+}
+
+.activityRow[data-status="running"] .activityIcon {
+  color: var(--color-ai, #a2563f);
+  animation: activitySpin 1s linear infinite;
+}
+
+.activityRow[data-status="done"] .activityIcon {
+  color: var(--color-status-success, #4a6b57);
+}
+
+.activityRow[data-status="error"] .activityIcon {
+  color: var(--color-status-error, #b92727);
+}
+
+@keyframes activitySpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activityRow[data-status="running"] .activityIcon {
+    animation: none;
+  }
+}
+
+.activityLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityMeta {
+  flex: none;
+  font-size: var(--text-caption, 11px);
+  color: var(--color-ink-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 折叠摘要 */
+.activitySummary {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 26px;
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-tertiary);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.activitySummary::marker,
+.activitySummary::-webkit-details-marker {
+  display: none;
+}
+
+.activitySummary:hover {
+  color: var(--color-ink-secondary);
+}
+
+/* ============================================================
+   Composer 框架 — 大圆角浮动卡片
+   ============================================================ */
+
+.composerFrame {
+  flex: none;
+  margin: 0 var(--space-3) var(--space-3);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-2xl, 16px);
+  background: var(--surface-3, oklch(100% 0.004 96));
+  box-shadow: var(--shadow-ui, 0 1px 2px rgba(24,24,24,.05));
+  transition:
+    box-shadow var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    border-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+  overflow: hidden;
+}
+
+.composerFrame:focus-within {
+  border-color: color-mix(in oklab, var(--color-focus-ring, #256b52) 45%, var(--border-thin));
+  box-shadow: var(--shadow-composer-glow), var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
+}
+
+/* 空状态时 composer 居中大号呈现 */
+.composerFrameSpotlight {
+  margin: 0 auto var(--space-3);
+  max-width: 580px;
+  width: calc(100% - var(--space-6));
+}
+
+/* chips 行（引用/图片托盘） */
+.composerChips {
+  padding: var(--space-2) var(--space-3) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.composerChips:empty {
+  display: none;
+}
+
+/* textarea */
+.composerTextarea {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  max-height: 240px;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: var(--space-3) var(--space-4) 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body, 14px);
+  line-height: 1.6;
+  /* field-sizing: content 在支持的浏览器自动高度 */
+  field-sizing: content;
+}
+
+.composerTextarea:focus-visible {
+  /* 光晕在 composerFrame:focus-within 上，textarea 本身不要额外焦点环 */
+  outline: none;
+}
+
+.composerTextarea::placeholder {
+  color: var(--color-ink-tertiary);
+}
+
+/* 底部操作条 */
+.composerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.composerActionLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.composerHint {
+  flex: 1;
+  text-align: center;
+  font-size: var(--text-caption, 11px);
+  color: var(--color-ink-tertiary);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 发送按钮 — 32px 圆形墨绿 */
+.composerSend {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--color-action, #1f5c47);
+  color: var(--color-action-on, #fff);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    background-color var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    transform var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.composerSend:hover:not(:disabled) {
+  background: var(--color-action-hover, #174a39);
+}
+
+.composerSend:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+.composerSend:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.composerSend:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+/* 附件/引用图标按钮 — ghost 32px */
+.composerIconBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)), color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.composerIconBtn:hover {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.composerIconBtn:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+/* ============================================================
+   结果卡 — 内嵌媒体卡（宿主提供内容）
+   ============================================================ */
+
+.resultCard {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.resultMedia {
+  position: relative;
+  /* 服装图默认 3:4，单图用 contain，多图用 cover（宿主控制 data-fit） */
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--image-stage-background, #e7e9e2);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+}
+
+.resultMedia img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.resultMedia[data-fit="contain"] img {
+  object-fit: contain;
+}
+
+/* hover 覆盖层 */
+.resultOverlay {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  align-items: flex-end;
+  padding: var(--space-3);
+  background: linear-gradient(
+    transparent,
+    color-mix(in oklab, var(--color-ink) 44%, transparent)
+  );
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    transform var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.resultCard:hover .resultOverlay,
+.resultCard:focus-within .resultOverlay {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 触屏：常显操作 */
+@media (hover: none) {
+  .resultOverlay {
+    opacity: 1;
+    transform: none;
+    position: static;
+    background: none;
+    padding: var(--space-2) 0 0;
+  }
+}
+
+/* 覆盖层内圆形玻璃按钮 */
+.resultOverlayBtn {
+  width: 30px;
+  height: 30px;
+  min-width: 44px; /* 触控目标 */
+  min-height: 30px;
+  border-radius: var(--radius-full);
+  border: 0;
+  background: color-mix(in oklab, var(--surface-3) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--color-ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: background-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.resultOverlayBtn:hover {
+  background: color-mix(in oklab, var(--surface-3) 100%, transparent);
+}
+
+.resultOverlayBtn:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+}
+
+/* 结果胶片条（≥3 张） */
+.resultFilmstrip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(46%, 200px);
+  gap: var(--space-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.resultFilmstrip > * {
+  scroll-snap-align: start;
+}
+
+.resultFilmstrip::-webkit-scrollbar {
+  display: none;
+}
+
+/* 320px 视口下每张占 78%，确保触控尺寸 */
+@media (max-width: 360px) {
+  .resultFilmstrip {
+    grid-auto-columns: 78%;
+  }
+}
+
+/* ============================================================
+   空状态建议卡 2×2
+   ============================================================ */
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-6) 0 var(--space-5);
+}
+
+.welcomeOverline {
+  display: block;
+  font-size: var(--text-caption, 11px);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ai, #a2563f);
+  margin-bottom: var(--space-2);
+}
+
+.welcomeTitle {
+  font-size: var(--text-title, 20px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2);
+}
+
+.welcomeSubtitle {
+  font-size: var(--text-label, 12px);
+  line-height: 1.7;
+  color: var(--color-ink-secondary);
+  max-width: 32ch;
+  margin: 0 0 var(--space-5);
+}
+
+.startersGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.starterCard {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: start;
+  padding: var(--space-3);
+  text-align: left;
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  background: var(--surface-3, oklch(100% 0.004 96));
+  color: var(--color-ink);
+  cursor: pointer;
+  position: relative;
+  transition:
+    transform var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)),
+    border-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.starterCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-card-hover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
+}
+
+@media (hover: hover) {
+  .starterCard:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--color-action) 24%, var(--border-thin));
+  }
+  .starterCard:hover:not(:disabled)::after {
+    opacity: 1;
+  }
+}
+
+.starterCard:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.starterCard:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.starterCard:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+.starterIcon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--color-ai-bg, #f6e7df);
+  color: var(--color-ai, #a2563f);
+  align-self: start;
+  margin-top: 1px;
+}
+
+.starterTitle {
+  font-size: var(--text-body, 14px);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-ink);
+}
+
+.starterDetail {
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .startersGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .starterCard,
+  .starterCard::after {
+    transition: none;
+  }
+  .starterCard:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   折叠 rail（48px 竖条）
+   ============================================================ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-3) 0;
+  gap: var(--space-2);
+}
+
+.railToggle {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-lg);
+  border: 0;
+  background: var(--color-action);
+  color: var(--color-action-on);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.railToggle:hover {
+  background: var(--color-action-hover);
+}
+
+.railLabel {
+  writing-mode: vertical-lr;
+  font-size: var(--text-caption, 11px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-ink-tertiary);
+  user-select: none;
+  margin-top: var(--space-2);
+}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+
+@media (max-width: 767px) {
+  .composerHint {
+    display: none;
+  }
+
+  .surfaceHeader {
+    min-height: 48px;
+  }
+}

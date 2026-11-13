@@ -1,0 +1,252 @@
+/**
+ * AgentWorkflowPanel 样式 —— v4
+ *
+ * 原先依赖 board-agent-panel.module.css（已删除），此文件提供
+ * AgentWorkflowPanel 使用的全部类名，用 v4 token 重写。
+ */
+
+.workflowPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  color: var(--color-ink);
+}
+
+.workflowIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+}
+
+.workflowIntro span {
+  font-size: var(--text-caption, 11px);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ai, #a2563f);
+}
+
+.workflowIntro strong {
+  font-size: var(--text-title, 20px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.workflowIntro p {
+  margin: 0;
+  font-size: var(--text-label, 12px);
+  line-height: 1.6;
+  color: var(--color-ink-secondary);
+}
+
+.workflowSkeleton {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-label, 12px);
+}
+
+.workflowSkeleton i {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  animation: workflowSkel 1s ease-in-out infinite alternate;
+}
+
+.workflowSkeleton i:nth-child(2) { width: 70%; }
+.workflowSkeleton i:nth-child(3) { width: 50%; }
+
+@keyframes workflowSkel { to { opacity: 0.4; } }
+
+.workflowError {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-hairline-width, 1px) solid var(--color-status-error, #b92727);
+  border-radius: var(--radius-md);
+  background: var(--color-status-error-bg, #ffebed);
+  color: var(--color-status-error, #b92727);
+  font-size: var(--text-label, 12px);
+}
+
+.workflowError button {
+  min-height: var(--density-control, 32px);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-status-error, #b92727);
+  color: var(--color-status-error-bg, #ffebed);
+  font: inherit;
+  font-size: var(--text-label, 12px);
+  cursor: pointer;
+  justify-self: start;
+}
+
+.workflowError button:focus-visible,
+.workflowSelector select:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+.workflowSelector {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.workflowSelector label {
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-secondary);
+}
+
+.workflowComposer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.workflowPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--density-control, 32px);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-action, #1f5c47);
+  color: var(--color-action-on, #fff);
+  font: inherit;
+  font-size: var(--text-label, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    transform var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.workflowPrimary:hover:enabled { background: var(--color-action-hover, #174a39); }
+.workflowPrimary:active:enabled { transform: scale(0.98); }
+.workflowPrimary:disabled { opacity: 0.4; cursor: not-allowed; }
+.workflowPrimary:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+.workflowStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-secondary);
+}
+
+.workflowIntent {
+  margin: 0;
+  font-size: var(--text-body, 14px);
+  color: var(--color-ink);
+}
+
+.workflowLegacyNotice {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-status-warning-bg, #fff6eb);
+  color: var(--color-status-warning, #8c5831);
+  font-size: var(--text-label, 12px);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-status-error, #b92727);
+  font-size: var(--text-label, 12px);
+}
+
+.workflowNodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.workflowNode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+
+.workflowNodeMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-tertiary);
+}
+
+.workflowSource {
+  font-size: var(--text-caption, 11px);
+  color: var(--color-ink-tertiary);
+}
+
+.workflowPrompt {
+  font-size: var(--text-body, 14px);
+  line-height: 1.6;
+  color: var(--color-ink);
+}
+
+.workflowTaskNotice {
+  margin: 0;
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-secondary);
+}
+
+.workflowResults {
+  display: grid;
+  gap: var(--space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.workflowControls {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.workflowCancel {
+  min-height: var(--density-control, 32px);
+  padding: 0 var(--space-3);
+  border: var(--border-hairline-width, 1px) solid var(--border-thin-strong, color-mix(in oklab, var(--color-ink) 14%, transparent));
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-label, 12px);
+  cursor: pointer;
+  transition: background-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
+}
+
+.workflowCancel:hover { background: var(--color-surface); }
+
+.workflowCancel:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflowSkeleton i { animation: none; }
+  .workflowPrimary,
+  .workflowCancel { transition: none; }
+}

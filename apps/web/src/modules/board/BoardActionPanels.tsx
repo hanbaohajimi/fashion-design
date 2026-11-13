@@ -8,6 +8,7 @@ import { useEditor, useValue } from "tldraw";
 import { ErrorBoundary } from "../../observability/ErrorBoundary";
 import { AtelierTopBar } from "./AtelierTopBar";
 import { BoardProjectContext } from "./board-context";
+import { renderCanvasExport } from "./workflow/canvas-export-images";
 import { CollectionDrawer } from "./generation/CollectionDrawer";
 import {
   collectionKeys,
@@ -28,6 +29,8 @@ import { IMAGE_SHAPE_TYPE, type ImageShape } from "./shapes";
 import styles from "./atelier-topbar.module.css";
 
 type CollectionAction = "creating" | "importing" | "idle" | "uploading";
+type CanvasExportFormat = "jpeg" | "png";
+type CanvasExportScope = "all" | "selected";
 
 export function BoardActionPanels({
   collectionLauncherOpen,
@@ -52,6 +55,11 @@ export function BoardActionPanels({
     null,
   );
   const [exportingCanvas, setExportingCanvas] = useState(false);
+  const [canvasExportFormat, setCanvasExportFormat] =
+    useState<CanvasExportFormat>("png");
+  const [canvasExportScale, setCanvasExportScale] = useState<1 | 2 | 3>(2);
+  const [canvasExportScope, setCanvasExportScope] =
+    useState<CanvasExportScope>("all");
   const collectionFileInput = useRef<HTMLInputElement>(null);
   const collectionsQuery = useQuery({
     queryFn: () => listCollections(projectId),
@@ -92,6 +100,15 @@ export function BoardActionPanels({
     () => editor.getCurrentPageShapes().length,
     [editor],
   );
+  const selectedShapeIds = useValue(
+    "canvas-export-selected-shapes",
+    () => editor.getSelectedShapeIds(),
+    [editor],
+  );
+  const effectiveCanvasExportScope: CanvasExportScope =
+    canvasExportScope === "selected" && selectedShapeIds.length === 0
+      ? "all"
+      : canvasExportScope;
   const selectedImage = selectedImageState.image;
   const selectedAssetReady = Boolean(
     selectedImage &&
@@ -102,27 +119,34 @@ export function BoardActionPanels({
 
   const exportEntireCanvas = async (): Promise<void> => {
     if (exportingCanvas) return;
-    const shapeIds = editor.getCurrentPageShapes().map((shape) => shape.id);
+    const shapeIds =
+      effectiveCanvasExportScope === "selected" && selectedShapeIds.length > 0
+        ? selectedShapeIds
+        : editor.getCurrentPageShapes().map((shape) => shape.id);
     if (shapeIds.length === 0) {
-      toast.error("画布为空", {
-        description: "请先添加内容后再导出",
+      toast.error("没有可导出的内容", {
+        description:
+          effectiveCanvasExportScope === "selected"
+            ? "请先在画布中选择至少一个元素"
+            : "请先添加内容后再导出",
       });
       return;
     }
 
     setExportingCanvas(true);
+    const controller = new AbortController();
     try {
-      const rendered = await editor.toImage(shapeIds, {
+      const rendered = await renderCanvasExport(editor, shapeIds, {
         background: true,
-        format: "png",
-        padding: 64,
-        pixelRatio: 2,
-      });
+        format: canvasExportFormat,
+        padding: effectiveCanvasExportScope === "selected" ? 40 : 64,
+        pixelRatio: canvasExportScale,
+      }, controller.signal);
       if (!rendered.blob.size) throw new Error("画布渲染结果为空");
 
       const downloadUrl = URL.createObjectURL(rendered.blob);
       const link = document.createElement("a");
-      link.download = `fashion-canvas-${projectId}.png`;
+      link.download = `fashion-canvas-${effectiveCanvasExportScope}-${projectId}.${canvasExportFormat === "jpeg" ? "jpg" : "png"}`;
       link.href = downloadUrl;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
@@ -132,6 +156,7 @@ export function BoardActionPanels({
         description: error instanceof Error ? error.message : "画布导出失败，请稍后重试",
       });
     } finally {
+      controller.abort();
       setExportingCanvas(false);
     }
   };
@@ -448,23 +473,73 @@ export function BoardActionPanels({
         >
           <header>
             <span>EXPORT</span>
-            <strong>导出整个画布</strong>
+            <strong>准备交付文件</strong>
           </header>
-          <div className={styles.actionPopoverState}>
+          <div className={styles.actionPopoverBody}>
+            <label>
+              <span>导出范围</span>
+              <select
+                disabled={exportingCanvas}
+                onChange={(event) =>
+                  setCanvasExportScope(event.target.value as CanvasExportScope)
+                }
+                value={effectiveCanvasExportScope}
+              >
+                <option value="all">全部画布 · {canvasShapeCount} 个元素</option>
+                <option disabled={!selectedShapeIds.length} value="selected">
+                  当前选中 · {selectedShapeIds.length} 个元素
+                </option>
+              </select>
+            </label>
+            <label>
+              <span>文件格式</span>
+              <select
+                disabled={exportingCanvas}
+                onChange={(event) =>
+                  setCanvasExportFormat(event.target.value as CanvasExportFormat)
+                }
+                value={canvasExportFormat}
+              >
+                <option value="png">PNG · 保留清晰边缘</option>
+                <option value="jpeg">JPEG · 适合快速分享</option>
+              </select>
+            </label>
+            <label>
+              <span>清晰度</span>
+              <select
+                disabled={exportingCanvas}
+                onChange={(event) =>
+                  setCanvasExportScale(Number(event.target.value) as 1 | 2 | 3)
+                }
+                value={canvasExportScale}
+              >
+                <option value="1">1× · 轻量预览</option>
+                <option value="2">2× · 推荐交付</option>
+                <option value="3">3× · 高清打印素材</option>
+              </select>
+            </label>
             <p>
-              {canvasShapeCount > 0
-                ? `将画布中的全部 ${canvasShapeCount} 个元素导出为高清 PNG。`
-                : "画布为空，请先添加图片、草图或其他设计元素。"}
+              {effectiveCanvasExportScope === "selected" && selectedShapeIds.length > 0
+                ? `将当前选中的 ${selectedShapeIds.length} 个元素整理为一张交付图。`
+                : canvasShapeCount > 0
+                  ? `将画布中的全部 ${canvasShapeCount} 个元素整理为一张交付图。`
+                  : "画布为空，请先添加图片、草图或其他设计元素。"}
             </p>
             <button
-              disabled={canvasShapeCount === 0 || exportingCanvas}
+              disabled={
+                (effectiveCanvasExportScope === "selected"
+                  ? selectedShapeIds.length
+                  : canvasShapeCount) === 0 || exportingCanvas
+              }
               onClick={() => void exportEntireCanvas()}
               type="button"
             >
               {exportingCanvas
                 ? "正在导出…"
-                : canvasShapeCount > 0
-                  ? "下载整个画布"
+                : (effectiveCanvasExportScope === "selected"
+                      ? selectedShapeIds.length
+                      : canvasShapeCount) > 0
+                  ? "下载交付图"
                   : "画布暂无内容"}
             </button>
           </div>

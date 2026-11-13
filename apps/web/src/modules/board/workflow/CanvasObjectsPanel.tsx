@@ -22,6 +22,7 @@ const paths: Record<string, ReactNode> = {
   backward: <path d="M12 4v16m-5-5 5 5 5-5" />,
   back: <><path d="M5 20h14M12 4v12m-5-5 5 5 5-5" /></>,
   image: <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8" cy="8" r="1" /><path d="m3 17 5-5 4 4 3-3 6 6" /></>,
+  media: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m10 8 6 4-6 4Z" /></>,
   note: <><path d="M4 3h16v13l-5 5H4ZM15 21v-5h5M8 8h8M8 12h5" /></>,
   frame: <path d="M7 2v20M17 2v20M2 7h20M2 17h20" />,
   group: <><rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="3 3" /><path d="M7 7h4v4H7ZM13 13h4v4h-4Z" /></>,

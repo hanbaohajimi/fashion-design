@@ -17,7 +17,7 @@ import { isRejectedCanvasCommand, runCanvasCommand } from "./canvas-api";
 
 type PlacementCommand = Extract<
   CanvasCommand,
-  { type: "place_generated_asset" | "place_reference_image" }
+  { type: "place_generated_asset" | "place_generated_media" | "place_reference_image" }
 >;
 type PlacementKind = PlacementCommand["type"];
 export type PlacementResult = Awaited<ReturnType<typeof runCanvasCommand>>;
@@ -33,13 +33,13 @@ interface State<Kind extends PlacementKind> {
   error: string | null;
 }
 const sourceId = (command: PlacementCommand) =>
-  command.type === "place_generated_asset" ? command.assetId : command.nodeId;
+  command.type === "place_generated_asset" ? `asset:${command.assetId}` : command.type === "place_generated_media" ? `media:${command.mediaId}` : command.nodeId;
 
 /** One durable receipt for an explicit image placement, shared by project files and chat references. */
 export function useImagePlacement<Kind extends PlacementKind>(
   projectId: string,
   objectKey: string,
-  kind: Kind,
+  kind: Kind | readonly Kind[],
   onPlaced: (result: PlacementResult, signal: AbortSignal) => Promise<void>,
   expectedSource?: string,
 ) {
@@ -70,7 +70,7 @@ export function useImagePlacement<Kind extends PlacementKind>(
       const parsed = canvasCommandSchema.safeParse(record.value?.command);
       if (
         !parsed.success ||
-        parsed.data.type !== kind ||
+        !(Array.isArray(kind) ? kind.includes(parsed.data.type as Kind) : parsed.data.type === kind) ||
         typeof record.value?.title !== "string" ||
         (expectedSource &&
           sourceId(parsed.data as PlacementCommand) !== expectedSource)
@@ -138,9 +138,9 @@ export function useImagePlacement<Kind extends PlacementKind>(
             input &&
             sourceId(record.value.command) !== sourceId(input.command)
           )
-            throw new Error("上一张图片的放置尚未确认，请先继续原操作。");
+            throw new Error("上次素材的放置尚未确认，请先继续原操作。");
           if (!record) {
-            if (!input) throw new Error("没有待确认的放置，请重新选择图片。");
+            if (!input) throw new Error("没有待确认的放置，请重新选择素材。");
             record = await draftRepository.write(
               {
                 key,

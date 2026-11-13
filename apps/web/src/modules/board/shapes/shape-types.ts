@@ -8,6 +8,7 @@ export const NOTE_SHAPE_TYPE = "fashion-note";
 export const SWATCH_SHAPE_TYPE = "fashion-swatch";
 export const FRAME_SHAPE_TYPE = "fashion-frame";
 export const FABRIC_SHAPE_TYPE = "fashion-fabric";
+export const MEDIA_SHAPE_TYPE = "fashion-media";
 
 export const BOARD_ROLES = BOARD_ELEMENT_ROLES;
 export type BoardRole = BoardElementRole;
@@ -41,6 +42,16 @@ export function normalizeImageRole(
 
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
+    [MEDIA_SHAPE_TYPE]: {
+      w: number;
+      h: number;
+      title: string;
+      mediaId: string;
+      mediaKind: "video" | "audio";
+      mediaUrl: string;
+      sourceHref: string;
+      durationMs: number;
+    };
     [IMAGE_SHAPE_TYPE]: {
       appearance?: MaterialAppearance;
       assetId?: string;
@@ -110,6 +121,7 @@ export type NoteShape = TLShape<typeof NOTE_SHAPE_TYPE>;
 export type SwatchShape = TLShape<typeof SWATCH_SHAPE_TYPE>;
 export type FrameShape = TLShape<typeof FRAME_SHAPE_TYPE>;
 export type FabricShape = TLShape<typeof FABRIC_SHAPE_TYPE>;
+export type MediaShape = TLShape<typeof MEDIA_SHAPE_TYPE>;
 export type BoardShape =
   ImageShape | NoteShape | SwatchShape | FrameShape | FabricShape;
 

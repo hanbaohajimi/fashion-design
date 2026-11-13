@@ -8,7 +8,8 @@ import {
 } from "./use-image-placement";
 
 export type PendingFilePlacement =
-  PendingImagePlacement<"place_generated_asset">;
+  PendingImagePlacement<"place_generated_asset" | "place_generated_media">;
+const PLACEMENT_TYPES = ["place_generated_asset", "place_generated_media"] as const;
 export function useGeneratedFilePlacement(
   projectId: string,
   onPlaced: (result: PlacementResult) => Promise<void>,
@@ -16,7 +17,7 @@ export function useGeneratedFilePlacement(
   const placement = useImagePlacement(
     projectId,
     "generated-file-placement",
-    "place_generated_asset",
+    PLACEMENT_TYPES,
     onPlaced,
   );
   const executePlacement = placement.execute;
@@ -25,13 +26,19 @@ export function useGeneratedFilePlacement(
       assetId: string;
       title: string;
       archived: boolean;
+      domain?: "asset" | "runway";
       position?: { x: number; y: number };
     }) =>
       executePlacement(
         input
           ? {
               title: input.title,
-              command: {
+              command: input.domain === "runway" ? {
+                type: "place_generated_media",
+                mutationId: crypto.randomUUID(),
+                mediaId: input.assetId,
+                ...(input.position ? { position: input.position } : {}),
+              } : {
                 type: "place_generated_asset",
                 mutationId: crypto.randomUUID(),
                 assetId: input.assetId,

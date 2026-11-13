@@ -1,54 +1,150 @@
+/**
+ * 建议起点卡片样式 —— v4 重构
+ *
+ * 升级：单行文字按钮 → 2×2 带图标的卡片网格
+ * 保留：accessible name、disabled 状态、条件渲染逻辑
+ */
+
 .root {
-  margin-top: 18px;
+  margin-top: var(--space-5);
 }
-.root > p {
-  margin: 0 0 10px;
-  font-size: 12px;
-  line-height: 1.6;
+
+/* 编辑式标题层 */
+.overline {
+  display: block;
+  font-size: var(--text-caption, 11px);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ai, #a2563f);
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  font-size: var(--text-title, 20px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-ink);
+  margin: 0 0 var(--space-2);
+}
+
+.subtitle {
+  font-size: var(--text-label, 12px);
+  line-height: 1.7;
   color: var(--color-ink-secondary);
+  max-width: 32ch;
+  margin: 0 0 var(--space-5);
 }
+
+/* 2×2 网格 */
 .options {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
 }
+
+/* 卡片按钮 */
 .options button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
-  width: 100%;
-  padding: 10px 12px;
-  border: var(--border-hairline) solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-paper);
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: start;
+  padding: var(--space-3);
+  text-align: left;
+  border: var(--border-hairline-width, 1px) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  background: var(--surface-3, oklch(100% 0.004 96));
   color: var(--color-ink);
   font: inherit;
-  text-align: left;
   cursor: pointer;
+  position: relative;
+  transition:
+    transform var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)),
+    border-color var(--motion-lift, 160ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
 }
-.options button > span:first-child {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
+
+/* 叠影（::after，不过渡 box-shadow） */
+.options button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-card-hover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
 }
-.options strong {
-  font-size: 14px;
-  font-weight: 500;
+
+@media (hover: hover) {
+  .options button:hover:enabled {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--color-action) 24%, var(--border-thin));
+  }
+  .options button:hover:enabled::after {
+    opacity: 1;
+  }
 }
-.options small {
-  font-size: 12px;
-  color: var(--color-ink-secondary);
+
+.options button:active:enabled {
+  transform: translateY(0) scale(0.99);
 }
-.options button:hover:enabled {
-  background: var(--color-surface);
-  border-color: var(--color-control-border);
-}
-.options button:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 3px;
-}
+
 .options button:disabled {
-  opacity: 0.6;
+  opacity: 0.45;
   cursor: default;
+}
+
+.options button:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+}
+
+/* 茜草图标底 */
+.icon {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--color-ai-bg, #f6e7df);
+  color: var(--color-ai, #a2563f);
+  align-self: start;
+  margin-top: 1px;
+  flex: none;
+}
+
+.cardTitle {
+  font-size: var(--text-body, 14px);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--color-ink);
+  display: block;
+}
+
+.cardDetail {
+  font-size: var(--text-label, 12px);
+  color: var(--color-ink-secondary);
+  line-height: 1.5;
+  display: block;
+}
+
+@media (max-width: 520px) {
+  .options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options button,
+  .options button::after {
+    transition: none;
+  }
+  .options button:hover:enabled {
+    transform: none;
+  }
 }

@@ -45,6 +45,7 @@ import styles from "./workflow-canvas.module.css";
 import { useWorkspaceDraft } from "./workspace-drafts";
 import { TryOnReferenceEntry } from "./TryOnReferenceEntry";
 import { WardrobeReferenceEntry } from "./WardrobeReferenceEntry";
+import { projectCanvasMedia, mediaDuration } from "./canvas-media";
 
 const REFERENCE_ROLE_OPTIONS = [
   { value: "style_ref", label: "风格参考" },
@@ -130,6 +131,7 @@ export function NodeDetails({
   const outputs = outgoingEdges(graph, node.id);
   const state = taskState(node.status);
   const summary = nodeSummary(node);
+  const media = projectCanvasMedia(node, projectId);
   const nodeError =
     typeof node.payload.error === "string" ? node.payload.error : null;
   const brief =
@@ -176,6 +178,12 @@ export function NodeDetails({
       {summary && summary !== node.title && !(embedded && node.kind === "tool") ? (
         <p className={styles.detailSummary}>{summary}</p>
       ) : null}
+      {media ? <section className={styles.detailSection} aria-label="媒体来源">
+        <h4>{media.props.mediaKind === "video" ? "视频记录" : "音频记录"}</h4>
+        {mediaDuration(media.props.durationMs) ? <p>时长 {mediaDuration(media.props.durationMs)}</p> : null}
+        <p>在白板卡片中播放或下载原文件。引用媒体记录不会自动分析视频画面或音频内容。</p>
+        <a href={media.props.sourceHref}>回到服装秀来源</a>
+      </section> : null}
       {nodeImageUrl(node) && !(embedded && node.type === "candidate") ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

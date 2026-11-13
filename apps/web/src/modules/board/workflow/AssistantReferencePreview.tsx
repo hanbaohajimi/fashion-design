@@ -7,6 +7,7 @@ import ui from "./assistant-context.module.css";
 
 export function referenceTypeLabel(node: WorkflowNode) {
   if (node.kind === "tool") return "设计工具";
+  if (node.type === "media") return node.payload.mediaKind === "audio" ? "音频记录" : "视频记录";
   return ({ candidate: "服装方案", fabric: "面料", sketch: "草图", swatch: "色卡", reference_text: "文字素材", reference_image: "参考图片" } as Record<string, string>)[node.type] ?? "参考素材";
 }
 

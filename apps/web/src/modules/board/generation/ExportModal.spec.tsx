@@ -71,3 +71,115 @@ it("uses a fresh key for an explicit new export even after changing its format",
   expect(keys[0]).not.toBe("");
   expect(keys[0]).not.toBe("old-jpg-request");
 });
+
+it("sends the selected aspect preset and keeps it in the idempotency fingerprint", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    return new Response(JSON.stringify(String(input).includes("capabilities")
+      ? { downloadLinkHours: 24 }
+      : String(input).includes("exports?")
+        ? { items: [] }
+        : { id: "square-export", status: "queued", format: "png", quality: "standard", aspect: "square", createdAt: new Date().toISOString(), error: null }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "aspect", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  fireEvent.click(await screen.findByRole("button", { name: "1:1" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始导出" }));
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  expect(bodies[0]).toMatchObject({ aspect: "square", format: "png", sourceType: "asset" });
+});
+
+it("allows a single asset to be sent to the print PDF pipeline", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    return new Response(JSON.stringify(String(input).includes("capabilities")
+      ? { downloadLinkHours: 24 }
+      : String(input).includes("exports?")
+        ? { items: [] }
+        : { id: "print-export", status: "queued", format: "pdf", quality: "standard", aspect: "original", createdAt: new Date().toISOString(), error: null }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "print", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  fireEvent.click(await screen.findByRole("button", { name: "PDF" }));
+  fireEvent.click(screen.getByRole("button", { name: "开始导出" }));
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  expect(bodies[0]).toMatchObject({ aspect: "original", format: "pdf", sourceType: "asset" });
+});
+
+it("creates one independent export task for each batch aspect", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      bodies.push(body);
+      return new Response(JSON.stringify({ id: `batch-${String(body.aspect)}`, status: "queued", ...body, createdAt: new Date().toISOString(), error: null }), { status: 202, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify(String(input).includes("capabilities") ? { downloadLinkHours: 24 } : { items: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "batch", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  fireEvent.click(await screen.findByRole("button", { name: "批量导出四种比例" }));
+  await waitFor(() => expect(bodies).toHaveLength(4));
+  expect(bodies.map((body) => body.aspect).sort()).toEqual(["landscape", "original", "portrait", "square"]);
+  expect(screen.getByRole("status", { name: "批量导出进度" })).toBeTruthy();
+});
+
+it("retries only the failed batch ratio with a new stable request key", async () => {
+  const requests: { body: Record<string, unknown>; key: string }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      const key = new Headers(init.headers).get("Idempotency-Key") ?? "";
+      requests.push({ body, key });
+      const failed = body.aspect === "square" && requests.filter(item => item.body.aspect === "square").length === 1;
+      return new Response(JSON.stringify({ id: `retry-${requests.length}`, status: failed ? "failed" : "queued", ...body, createdAt: new Date().toISOString(), error: failed ? { message: "模拟失败" } : null }), { status: 202, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify(String(input).includes("capabilities") ? { downloadLinkHours: 24 } : { items: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "batch-retry", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  fireEvent.click(await screen.findByRole("button", { name: "批量导出四种比例" }));
+  await waitFor(() => expect(requests).toHaveLength(4));
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  await waitFor(() => expect(requests).toHaveLength(5));
+  expect(requests.at(-1)?.body.aspect).toBe("square");
+  expect(requests.at(-1)?.key).toContain(":square:retry");
+});
+
+it("sends an explicitly selected brand revision with the export snapshot", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ id: "brand-export", status: "queued", format: "png", quality: "standard", aspect: "original", brandRevisionId: "brand-r2", createdAt: new Date().toISOString(), error: null }), { status: 202, headers: { "Content-Type": "application/json" } });
+    }
+    const url = String(input);
+    if (url.includes("/studio")) return new Response(JSON.stringify({ brandProfiles: [{ type: "BRAND_PROFILE", currentRevision: { id: "brand-r2", revision: 2, payload: { name: "森野" } } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(url.includes("capabilities") ? { downloadLinkHours: 24 } : { items: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "brand-export", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  await screen.findByLabelText("导出品牌资料");
+  fireEvent.click(screen.getByRole("radio", { name: /森野/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "开始导出" }));
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  expect(bodies[0]).toMatchObject({ brandRevisionId: "brand-r2" });
+});
+
+it("defaults the only current brand revision into a new export snapshot", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ id: "brand-default", status: "queued", format: "png", quality: "standard", aspect: "original", brandRevisionId: "brand-r2", createdAt: new Date().toISOString(), error: null }), { status: 202, headers: { "Content-Type": "application/json" } });
+    }
+    const url = String(input);
+    if (url.includes("/studio")) return new Response(JSON.stringify({ brandProfiles: [{ type: "BRAND_PROFILE", currentRevision: { id: "brand-r2", revision: 2, payload: { name: "森野" } } }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(url.includes("capabilities") ? { downloadLinkHours: 24 } : { items: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<BoardProjectContext.Provider value="project"><ExportModal onClose={vi.fn()} source={{ type: "asset", assetId: "brand-default", previewUrl: "/image" }} /></BoardProjectContext.Provider>);
+  await screen.findByLabelText("导出品牌资料");
+  await waitFor(() => expect(screen.getByRole("radio", { name: /森野/ }).getAttribute("aria-checked")).toBe("true"));
+  fireEvent.click(await screen.findByRole("button", { name: "开始导出" }));
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  expect(bodies[0]).toMatchObject({ brandRevisionId: "brand-r2" });
+});

@@ -1,6 +1,7 @@
 import { privateFetch as fetch } from "../../auth/private-fetch";
-export type ExportFormat = "jpg" | "pdf" | "png";
+export type ExportFormat = "jpg" | "pdf" | "png" | "webp";
 export type ExportQuality = "high" | "standard";
+export type ExportAspect = "landscape" | "original" | "portrait" | "square";
 export type ExportStatus =
   "expired" | "failed" | "queued" | "running" | "succeeded";
 
@@ -19,6 +20,8 @@ export interface ExportJob {
   readonly expiresAt: string | null;
   readonly fileName: string | null;
   readonly format: ExportFormat;
+  readonly aspect: ExportAspect;
+  readonly brandRevisionId: string | null;
   readonly id: string;
   readonly maxEdge: number | null;
   readonly mimeType: string;
@@ -66,7 +69,9 @@ export async function createExport(
   source: ExportSource,
   format: ExportFormat,
   quality: ExportQuality,
+  aspect: ExportAspect = "original",
   requestKey?: string,
+  brandRevisionId?: string,
 ): Promise<ExportJob> {
   const body =
     source.type === "asset"
@@ -74,12 +79,15 @@ export async function createExport(
           assetId: source.assetId,
           format,
           quality,
+          aspect,
+          ...(brandRevisionId ? { brandRevisionId } : {}),
           sourceType: "asset",
         }
       : {
           collectionId: source.collectionId,
           format: "pdf",
           quality: "standard",
+          ...(brandRevisionId ? { brandRevisionId } : {}),
           sourceType: "collection",
         };
   const response = await fetch("/api/exports", {

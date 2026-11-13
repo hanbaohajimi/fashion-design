@@ -14,6 +14,7 @@ export type WorkflowAssetType =
   | "evaluation"
   | "trend"
   | "fabric"
+  | "media"
   | "legacy";
 
 export type WorkflowToolType =

@@ -546,6 +546,22 @@
   --z-canvas-hud: 150;
   --z-command: 700;
 
+  /* ============================================================
+     v4 助手面板专属 token —— Lovart / libtv 级助手视觉
+     ============================================================
+     助手是一张浮在画布上的工作台纸：大圆角、玻璃头部/composer、
+     茜草色做 AI 细签名。玻璃只在 header 与 composer 两处，
+     不在滚动区用 backdrop-filter（与 content-visibility 冲突掉帧）。
+  */
+  --radius-2xl: 16px;
+  --glass-paper: color-mix(in oklab, var(--surface-2) 82%, transparent);
+  --glass-blur: blur(14px) saturate(1.06);
+  --shadow-composer-glow:
+    0 0 0 1px color-mix(in oklab, var(--color-focus-ring) 16%, transparent),
+    0 2px 4px rgba(28, 43, 38, 0.05),
+    0 8px 24px -8px rgba(28, 43, 38, 0.14);
+  --assistant-gap: 12px;
+
   /* ── fabrics.module.css 使用的旧 token ──────────────────────────────────
      这些 token 来自之前的设计系统版本，用 fallback 方式保持兼容，
      同时让面料库直接继承样衣间的颜色。 */

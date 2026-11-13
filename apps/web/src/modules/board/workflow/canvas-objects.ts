@@ -21,6 +21,7 @@ export interface CanvasObjectRow extends CanvasObject {
 
 const names: Record<string, string> = {
   "fashion-image": "图片",
+  "fashion-media": "媒体",
   "fashion-note": "便签",
   "fashion-swatch": "色卡",
   "fashion-frame": "画框",

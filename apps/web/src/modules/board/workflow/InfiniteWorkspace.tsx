@@ -37,6 +37,8 @@ import {
 } from "../../../components/drafts/use-persistent-draft";
 import { boardShapeUtils } from "../shapes";
 import { MountTool } from "../tools/MountTool";
+import { CanvasLicenseRequired } from "../CanvasLicenseRequired";
+import { tldrawLicenseKey, tldrawLicenseRequired } from "../canvas-license";
 import { createSwatchColor } from "../shapes/swatch-colors";
 import {
   completeUpload,
@@ -70,6 +72,8 @@ import {
 import { useCanvasCommand } from "./use-canvas-command";
 import { canvasShapeVisibility, locateCanvasMaterial, protectHiddenCanvasSelection } from "./canvas-visibility";
 import { initialCanvasImageSize } from "./canvas-image-sizing";
+import { projectCanvasMedia } from "./canvas-media";
+import { CanvasMediaActivity } from "./canvas-media-context";
 import styles from "./infinite-workspace.module.css";
 export { selectedMaterialShapes } from "./canvas-placements";
 type CanvasMaterialResult = Awaited<
@@ -93,6 +97,7 @@ interface Props {
   projectId: string;
   graph: WorkflowGraph;
   active: boolean;
+  mediaActive?: boolean;
   onGraph: (graph: WorkflowGraph) => void;
   onEditor: (editor: Editor | null) => void;
   onReady: (handle: InfiniteWorkspaceHandle | null) => void;
@@ -116,7 +121,9 @@ export function InfiniteWorkspace(props: Props) {
       createTLStore({ shapeUtils: utils, bindingUtils: defaultBindingUtils }),
     [],
   );
-  const licenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
+  if (tldrawLicenseRequired) {
+    return props.active ? <CanvasLicenseRequired compact /> : null;
+  }
   return (
     <CanvasInteractionContext.Provider
       value={{
@@ -133,6 +140,7 @@ export function InfiniteWorkspace(props: Props) {
         aria-label="无限白板"
         hidden={!props.active}
       >
+          <CanvasMediaActivity value={props.active && props.mediaActive !== false}>
         <Tldraw
           store={store}
           shapeUtils={[...boardShapeUtils]}
@@ -144,16 +152,19 @@ export function InfiniteWorkspace(props: Props) {
           onMount={(editor) => {
             editor.updateInstanceState({ isReadonly: true });
           }}
-          {...(licenseKey ? { licenseKey } : {})}
+          {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
         >
           <WorkspaceDocument {...props} />
         </Tldraw>
+        </CanvasMediaActivity>
       </div>
     </CanvasInteractionContext.Provider>
   );
 }
 
-function projection(node: WorkflowNode) {
+function projection(node: WorkflowNode, projectId: string) {
+  const media = projectCanvasMedia(node, projectId);
+  if (media) return media;
   const payload = node.payload;
   const url = nodeImageUrl(node);
   if (url || ["candidate", "reference_image", "sketch"].includes(node.type))
@@ -391,7 +402,7 @@ function WorkspaceDocument(props: Props) {
             const known = bindings.current.has(id);
             bindings.current.set(id, node.id);
             const existing = editor.getShape(id);
-            const material = projection(node);
+            const material = projection(node, data.projectId);
             if (!existing && (load || !known || remoteChanged)) {
               const count = editor.getCurrentPageShapes().length;
               const hint = object(object(data.snapshot.placementHints)[id]);

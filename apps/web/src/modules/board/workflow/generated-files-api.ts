@@ -45,7 +45,7 @@ export async function fetchGeneratedFiles(project: string, kind: GeneratedFileFi
 }
 
 /** The API checks access and storage afresh; attachment downloads use the browser's streaming path. */
-export async function downloadGeneratedFile(project: string, file: ProjectGeneratedFile, controller: AbortController): Promise<void> {
+export async function downloadGeneratedFile(project: string, file: Pick<ProjectGeneratedFile, "domain" | "resourceId">, controller: AbortController): Promise<void> {
   const signal = privateRequestSignal(controller.signal);
   const response = await privateFetch(`/api/projects/${encodeURIComponent(project)}/generated-files/${file.domain}/${encodeURIComponent(file.resourceId)}/download`, { credentials: "include", cache: "no-store", signal });
   if (!response.ok) throw new Error(await readErrorMessage(response, "下载暂未开始，请重试。"));
