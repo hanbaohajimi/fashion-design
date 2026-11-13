@@ -62,7 +62,7 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   readonly variant?: "primary" | "secondary" | "ghost" | "danger";
-  readonly size?: "default" | "small";
+  readonly size?: "default" | "small" | "large";
   readonly loading?: boolean;
   readonly interaction?: "none" | "ripple" | "magnetic" | "spring";
   readonly feedback?: SubmitFeedbackSnapshot | undefined;

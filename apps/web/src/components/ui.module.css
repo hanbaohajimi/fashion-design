@@ -60,6 +60,12 @@
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-base);
 }
+.button[data-size="large"] {
+  min-height: 48px;
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-lg);
+  border-radius: var(--radius-lg);
+}
 .button:disabled {
   background: var(--color-disabled-bg);
   color: var(--color-disabled-ink);
