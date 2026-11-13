@@ -936,6 +936,8 @@
   align-self: flex-start;
 }
 .trendCard {
+  /* v3：与项目卡同一套浮起语言。 */
+  box-shadow: var(--shadow-card-rest);
   transition: box-shadow var(--duration-fast);
 }
 .trendCard:focus-within {
@@ -943,7 +945,7 @@
 }
 @media (hover: hover) {
   .trendCard:hover {
-    box-shadow: var(--shadow-material-1);
+    box-shadow: var(--shadow-card-hover);
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -734,6 +734,8 @@
   background: var(--color-paper);
   color: var(--color-ink);
   text-decoration: none;
+  /* v3：Quick Start 是首屏之后最重要的行动入口，给一层静止投影提示可点击。 */
+  box-shadow: var(--shadow-card-rest);
   transition:
     border-color var(--duration-fast) var(--ease-standard),
     box-shadow var(--duration-fast) var(--ease-standard),
@@ -742,7 +744,7 @@
 
 .quickStartCard:hover {
   border-color: var(--color-selection-border);
-  box-shadow: 0 4px 16px rgb(32 51 46 / 8%);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-2px);
 }
 
@@ -763,7 +765,8 @@
 
 .quickStartArrow {
   align-self: flex-end;
-  color: var(--color-action);
+  /* v3：创作瞬间用茜草，与绿色主操作区分。 */
+  color: var(--color-ai);
   font-size: 18px;
   line-height: 1;
   transition: transform var(--duration-fast) var(--ease-standard);

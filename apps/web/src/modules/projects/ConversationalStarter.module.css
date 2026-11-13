@@ -13,6 +13,7 @@
   border-radius: var(--radius-lg);
   background: var(--color-starter-focus-bg);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  box-shadow: var(--shadow-card-rest);
   transition: border-color var(--duration-fast) var(--ease-standard),
               box-shadow var(--duration-fast) var(--ease-standard);
 }

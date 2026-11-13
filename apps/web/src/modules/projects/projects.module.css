@@ -940,6 +940,11 @@
   border-radius: var(--radius-xl);
   overflow: visible;
   background: var(--color-paper);
+  /* v3：卡片在更深的画布上需要浮起感；静止一层浅影，悬停加深。 */
+  box-shadow: var(--shadow-card-rest);
+  transition:
+    box-shadow var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 .projectCover {
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
@@ -950,7 +955,7 @@
 .projectCard:hover {
   transform: none;
   border-color: var(--color-border-strong);
-  box-shadow: none;
+  box-shadow: var(--shadow-card-hover);
 }
 .cardBody {
   padding: var(--space-4);
@@ -1164,14 +1169,17 @@
   background: var(--color-paper);
   color: var(--color-ink);
   text-decoration: none;
+  box-shadow: var(--shadow-card-rest);
   transition:
     border-color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard);
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .resumeCard:hover {
   border-color: var(--color-border-strong);
-  background: var(--color-discovery-hover);
+  background: var(--color-overlay);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .resumeCardLabel {

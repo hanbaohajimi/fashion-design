@@ -257,7 +257,8 @@
   }
 }
 .canvasSection[data-canvas-view="workbench"] {
-  background: var(--color-canvas);
+  /* v3：设计工作台与流程画布共用同一档深色桌面，切换视图不跳色。 */
+  background: var(--color-studio-canvas);
 }
 .canvasSection[data-canvas-view="workbench"] .viewSwitch {
   top: 68px;
@@ -571,7 +572,7 @@
   box-shadow: var(--shadow-popup);
   /* review-animations: popover 从触发器方向缩放，非中心 */
   transform-origin: left bottom;
-  animation: popFromBottom var(--dur-enter) var(--ease-spring);
+  animation: popFromBottom var(--dur-enter) var(--ease-enter);
 }
 
 @keyframes popFromBottom {
@@ -2610,6 +2611,9 @@
   border-bottom: var(--border-hairline) solid var(--color-divider);
   padding: var(--space-4) 0;
   margin: 0;
+  /* Long assistant histories stay scrollable without laying out every old reply. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 180px;
 }
 .workflowMessage[data-role="user"] {
   padding: var(--space-3);
@@ -2668,6 +2672,10 @@
   flex-direction: column;
   min-height: var(--space-4);
   flex: 1 1 0;
+}
+.conversationViewport[hidden],
+.composer[hidden] {
+  display: none !important;
 }
 .newMessages {
   position: absolute;
@@ -3192,7 +3200,7 @@
 }
 
 .sourceRecovery p { margin-block: 12px; }
-.sourceRecovery p[role="alert"] { color: var(--color-danger); }
+.sourceRecovery p[role="alert"] { color: var(--color-status-error); }
 .sourcePreview { display: flex; gap: 12px; align-items: center; margin-block-start: 12px; }
 .sourcePreview > :first-child { width: 64px; height: 80px; flex: none; object-fit: contain; }
 .sourcePreview img { width: 64px; height: 80px; object-fit: contain; }

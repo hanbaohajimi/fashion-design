@@ -54,12 +54,13 @@ function activeStyles() {
 }
 
 describe("active design token contract", () => {
-  it("keeps four warm surfaces 1.5 lightness points apart and excludes pure black UI paint", () => {
+  it("keeps the four warm surfaces strictly ascending and excludes pure black UI paint", () => {
     const styles = activeStyles();
     const theme = styles.get(resolve(process.cwd(), "src/styles/design-system.css")) ?? "";
-    const levels = [...theme.matchAll(/--surface-[0-3]:\s*oklch\(([\d.]+)%\s+0\.008\s+100\)/gu)].map((match) => Number(match[1]));
-    expect(levels).toEqual([94.5, 96, 97.5, 99]);
-    for (let i = 1; i < levels.length; i++) expect((levels[i] ?? 0) - (levels[i - 1] ?? 0)).toBe(1.5);
+    // v3 阶梯：画布 92.5 → 纸面 98，总跨度 5.5 个亮度点，层与层至少 1.5 点可辨。
+    const levels = [...theme.matchAll(/--surface-[0-3]:\s*oklch\(([\d.]+)%/gu)].map((match) => Number(match[1]));
+    expect(levels).toEqual([92.5, 95.5, 98, 99.5]);
+    for (let i = 1; i < levels.length; i++) expect((levels[i] ?? 0) - (levels[i - 1] ?? 0)).toBeGreaterThanOrEqual(1.5);
     for (const [path, source] of styles) {
       // Isolated comparison prototypes have their own visual worlds, outside production refinement.
       if (path.replaceAll("\\", "/").includes("/src/prototypes/")) continue;

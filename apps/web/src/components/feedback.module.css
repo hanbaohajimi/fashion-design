@@ -14,7 +14,7 @@
   border: var(--border-hairline) solid var(--color-border);
   border-radius: var(--radius-xl);
   background: var(--color-paper);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-panel-v3);
 }
 .brand {
   color: var(--color-ink-secondary);
@@ -41,6 +41,12 @@
 }
 .card p[data-error="true"] {
   color: var(--color-error);
+}
+.errorMeta {
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  overflow-wrap: anywhere;
 }
 .card a {
   display: inline-flex;

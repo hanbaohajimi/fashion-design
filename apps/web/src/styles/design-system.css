@@ -1,25 +1,27 @@
 /**
- * 新时尚 AI 设计平台 — 设计系统
+ * 新时尚 AI 设计平台 — 设计系统 v3
  *
  * 视觉主张：织物档案。暖白导航与编辑区、深绿重点；作品、当前对象和下一步优先。
- * §2.1/§2.8/§5.2：品牌、动作、选中、焦点和状态分别命名。
+ * v3（视觉系统重构）：拉开「墙/纸/台」阶梯 —— 画布更深、纸面更亮，
+ *   动作色加深提高对比，茜草作为第二强调色用于 AI 与创作瞬间。
  * 本文件是唯一运行时主题；颜色清单和预览从这里导出。
  */
 
 :root {
   --border-hairline: 0.5px;
   color-scheme: light;
-  --surface-0: oklch(94.5% 0.008 100);
-  --surface-1: oklch(96% 0.008 100);
-  --surface-2: oklch(97.5% 0.008 100);
-  --surface-3: oklch(99% 0.008 100);
+  /* 表面阶梯 v3：画布从 94.5% 加深到 92.5%，纸面提亮到 98%，层级可辨。 */
+  --surface-0: oklch(92.5% 0.011 96);
+  --surface-1: oklch(95.5% 0.009 96);
+  --surface-2: oklch(98% 0.007 96);
+  --surface-3: oklch(99.5% 0.004 96);
   --shadow-input-focus: 0 0 0 2px var(--color-focus-ring), 0 0 0 5px color-mix(in srgb, var(--color-focus-ring) 22%, transparent);
   --color-navigation: var(--surface-2);
-  --color-navigation-ink: #20332e;
-  --color-navigation-muted: #586a60;
+  --color-navigation-ink: #1c2b26;
+  --color-navigation-muted: #52645b;
   --color-navigation-hover: var(--surface-1);
-  --color-navigation-selected: #e7eee2;
-  --color-navigation-border: #e0e4db;
+  --color-navigation-selected: #e3ebdd;
+  --color-navigation-border: #dfe3d8;
   --control-height: 36px;
   --control-height-compact: 32px;
   --control-height-primary: 40px;
@@ -85,9 +87,11 @@
 
   /* 工作室画布专用表面 —— 只给设计工作台用。
      全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
-     因此工作台另开一档中性的图像台底色，让节点真正浮起来。 */
-  --color-studio-canvas: var(--surface-0);
-  --color-studio-canvas-edge: var(--surface-0);
+     因此工作台另开一档中性的图像台底色，让节点真正浮起来。
+     v3：工作台底色比全局画布再深一档（约 90% 亮度），与 98% 的纸面相距 8 个点，
+     节点卡片和图片能清楚"浮"在桌面上，这是设计工具最重要的层次。 */
+  --color-studio-canvas: oklch(90% 0.013 96);
+  --color-studio-canvas-edge: oklch(88.5% 0.013 96);
 
   /* ============================================================
      二、文字层级 —— 墨
@@ -95,30 +99,37 @@
      不用纯黑。纯黑在浅色底上过于尖锐，长时间阅读疲劳。
   */
 
-  --color-ink: #20332e;
-  --color-ink-secondary: #586a60;
-  --color-ink-tertiary: #5d6d63;
+  /* 墨色 v3：加深主文字，提升正文对比度；次级仍保持低存在感。 */
+  --color-ink: #1c2b26;
+  --color-ink-secondary: #52645b;
+  --color-ink-tertiary: #68786e;
   --color-ink-disabled: var(--color-disabled-ink);
 
   /* ============================================================
      三、强调色 —— 染料
      ============================================================
-     主操作靛蓝与品牌茜草分开，导航与对象选中使用浅色表面。
+     动作色（深绿）承担一切可点击的主操作；
+     茜草（madder）是第二强调色，只用于 AI / 创作瞬间的标识，
+     不做大面积底色，不与动作色竞争。
   */
 
-  /* generate_palette.py --base 'hsl(228,60%,48%)' --extended --cap 8 */
-  --color-action: #286452;
-  --color-action-hover: #1c4c3d;
-  --color-action-active: #183f35;
+  --color-action: #1f5c47;
+  --color-action-hover: #174a39;
+  --color-action-active: #123a2d;
   --color-action-on: #ffffff;
-  --color-action-subtle: #f0f4ea;
-  --color-selection-bg: #e7eee2;
-  --color-selection-ink: #1c4c3d;
-  --color-selection-border: #286452;
-  --color-focus-ring: #2b7058;
-  --color-brand: #286452;
-  --color-brand-hover: #1c4c3d;
-  --color-brand-bg: #e7eee2;
+  --color-action-subtle: #eef3e8;
+  --color-selection-bg: #e3ebdd;
+  --color-selection-ink: #174a39;
+  --color-selection-border: #1f5c47;
+  --color-focus-ring: #256b52;
+  --color-brand: #1f5c47;
+  --color-brand-hover: #174a39;
+  --color-brand-bg: #e3ebdd;
+  /* 第二强调色 —— 茜草：AI 标识、创作瞬间、新内容提示。 */
+  --color-ai: #a2563f;
+  --color-ai-strong: #8a4632;
+  --color-ai-bg: #f6e7df;
+  --color-ai-border: #d9b4a5;
   /* 兼容调用保留解析能力；活跃组件按用途迁移到语义变量。 */
   --color-signal: var(--color-action);
   --color-signal-hover: var(--color-action-hover);
@@ -131,9 +142,10 @@
      线是结构，不是装饰。宁可少用。
   */
 
-  --color-border: #d8ddd3;
-  --color-border-strong: #a6b2a7;
-  --color-divider: #e0e4db;
+  /* 边框 v3：随画布加深而加强，保证结构线在更深底面上仍清晰。 */
+  --color-border: #ccd2c5;
+  --color-border-strong: #97a49a;
+  --color-divider: #dde1d5;
 
   /* 遮罩层 —— 模态背景、聚焦遮罩，需要足够暗以隔离内容 */
   --color-scrim: rgba(24, 24, 24, 0.72);
@@ -226,17 +238,20 @@
   --font-mono:
     "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 
-  /* 字号 —— 基于 4px 栅格 */
+  /* 字号 —— v3 恢复真实阶梯：12 / 13 / 14 / 16 / 20 / 28 / 36 / 44。
+     旧版把 16 以上全部压成 24，标题与正文挤在一起，是页面"没层级"的主因。
+     2xl 及以上的别名统一指向 display 档，避免旧引用打出超大字。 */
   --text-2xs: 12px;
   --text-xs: 12px;
-  --text-sm: 12px;
+  --text-sm: 13px;
   --text-base: 14px;
   --text-lg: 16px;
-  --text-xl: 16px;
-  --text-2xl: 24px;
-  --text-3xl: 24px;
-  --text-4xl: 24px;
-  --text-5xl: 24px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 36px;
+  --text-5xl: 44px;
+  --text-display: 44px;
 
   /* 字重 */
   --font-normal: 400;
@@ -317,6 +332,13 @@
   /* 浮层 */
   --shadow-popup: 0 4px 16px rgba(24, 24, 24, 0.12);
   --shadow-modal: 0 12px 40px rgba(24, 24, 24, 0.18);
+
+  /* v3 分层投影 —— 卡片与面板在更深的画布上需要更明确的浮起感。
+     色调统一带暖绿偏移，避免灰色阴影把暖白底压脏。 */
+  --shadow-card-rest: 0 1px 2px rgba(28, 43, 38, 0.05), 0 2px 8px -2px rgba(28, 43, 38, 0.06);
+  --shadow-card-hover: 0 2px 4px rgba(28, 43, 38, 0.06), 0 8px 24px -6px rgba(28, 43, 38, 0.14);
+  --shadow-panel-v3: 0 1px 3px rgba(28, 43, 38, 0.06), 0 12px 32px -12px rgba(28, 43, 38, 0.16);
+  --shadow-nav-v3: 0 1px 2px rgba(28, 43, 38, 0.04), 0 4px 16px -8px rgba(28, 43, 38, 0.1);
 
   /* ============================================================
      十一、动效
