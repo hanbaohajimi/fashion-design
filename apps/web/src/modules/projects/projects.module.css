@@ -1330,6 +1330,7 @@
   cursor: pointer;
   gap: 12px;
   text-align: left;
+  box-shadow: var(--shadow-card-rest);
   transition:
     transform 220ms var(--ease-out),
     border-color 180ms var(--ease-standard),
@@ -1340,7 +1341,7 @@
 .quickStartCard:hover:not(:disabled) {
   border-color: var(--color-action);
   background: var(--color-paper);
-  box-shadow: 0 12px 28px rgb(32 51 46 / 9%);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-3px);
 }
 
@@ -1364,8 +1365,8 @@
   height: 70px;
   overflow: hidden;
   border-radius: 9px;
-  background: #dfe8db;
-  color: #29483c;
+  background: var(--color-selection-bg);
+  color: var(--color-selection-ink);
   place-items: end start;
   padding: 7px;
 }
