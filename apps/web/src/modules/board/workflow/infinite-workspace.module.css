@@ -3,7 +3,12 @@
   inset: 0;
   isolation: isolate;
   z-index: 0;
-  background: var(--color-paper);
+  /* v4：画布底色再降一档，让节点卡片真实"浮"在桌面上；
+     叠加 24px 静态网格点，增加工具感而不喧宾夺主。 */
+  background:
+    radial-gradient(circle, var(--color-canvas-dot, rgba(24,24,24,0.1)) 0.75px, transparent 0.75px),
+    var(--color-studio-canvas, oklch(89% 0.013 96));
+  background-size: 24px 24px, 100% 100%;
 }
 .workspace[hidden] {
   display: none;

@@ -1,0 +1,89 @@
+/**
+ * Sonner Toast 主题层 — 对齐设计系统 v4 token。
+ *
+ * sonner 默认样式偏 Tailwind 风（圆角偏大、阴影偏灰），
+ * 此文件把它压回暖米/墨绿/茜草体系。
+ * 通过 layout.tsx 的 Toaster toastOptions.classNames 注入。
+ */
+
+.toastBase {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm, 13px);
+  line-height: var(--leading-normal);
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel-v3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 成功：左侧 2px 墨绿条 */
+.toastSuccess {
+  composes: toastBase;
+  border-inline-start: 2px solid var(--color-status-success);
+}
+
+/* 错误：左侧 2px 红条 */
+.toastError {
+  composes: toastBase;
+  border-inline-start: 2px solid var(--color-status-error);
+}
+
+/* 警告：左侧 2px 暖棕条 */
+.toastWarning {
+  composes: toastBase;
+  border-inline-start: 2px solid var(--color-status-warning);
+}
+
+/* 信息：左侧 2px 深绿条 */
+.toastInfo {
+  composes: toastBase;
+  border-inline-start: 2px solid var(--color-status-info);
+}
+
+/* 标题：14px / 500 */
+.toastTitle {
+  font-weight: var(--font-medium);
+  font-size: var(--text-base, 14px);
+}
+
+/* 描述：12px / 次级墨色 */
+.toastDescription {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-xs, 12px);
+}
+
+/* 操作按钮：墨绿文字 */
+.toastAction {
+  color: var(--color-action);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-sm);
+}
+
+.toastAction:hover {
+  background: var(--color-action-subtle);
+}
+
+/* 关闭按钮 */
+.toastClose {
+  color: var(--color-ink-tertiary);
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.toastClose:hover {
+  color: var(--color-ink);
+  background: var(--color-surface);
+}
+
+.toastClose:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* 载入中 spinner 用墨绿 */
+.toastLoading {
+  color: var(--color-action);
+}

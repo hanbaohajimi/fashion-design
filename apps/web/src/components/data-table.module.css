@@ -1,0 +1,159 @@
+/**
+ * DataTable 样式 — 对齐设计系统 v4 token。
+ * sticky 表头、hairline 行分隔、tabular-nums、36px 行高。
+ */
+
+/* 滚动容器：overflow 由外层控制 */
+.wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base, 14px);
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表头 */
+.thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-surface);
+}
+
+.headerRow {
+  border-bottom: 1px solid var(--border-thin-strong, color-mix(in oklab, var(--color-ink) 14%, transparent));
+}
+
+.th {
+  padding: var(--space-2) var(--space-3);
+  height: 36px;
+  font-size: var(--text-label, 12px);
+  font-weight: var(--font-medium, 500);
+  letter-spacing: var(--tracking-wide, 0.06em);
+  color: var(--color-ink-secondary);
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.th.numeric {
+  text-align: right;
+}
+
+.th.sortable {
+  cursor: pointer;
+}
+
+.th.sortable:hover {
+  color: var(--color-ink);
+}
+
+.thContent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* 排序图标 */
+.sortIcon {
+  flex: none;
+  opacity: 0.3;
+  transition: opacity var(--duration-fast, 140ms) var(--ease-standard);
+}
+
+.th.sortable:hover .sortIcon {
+  opacity: 0.6;
+}
+
+.sortActive {
+  opacity: 1 !important;
+  color: var(--color-action);
+}
+
+.sortDesc path:first-child {
+  opacity: 0.4;
+}
+
+.sortDesc path:last-child {
+  opacity: 1;
+}
+
+/* 表体 */
+.tbody tr + tr {
+  border-top: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+}
+
+.tr {
+  transition: background-color var(--duration-fast, 140ms) var(--ease-standard);
+}
+
+.trClickable {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .tr:hover {
+    background: color-mix(in oklab, var(--color-ink) 2.5%, transparent);
+  }
+}
+
+.trSelected {
+  background: var(--color-action-subtle, #eef3e8);
+  border-inline-start: 2px solid var(--color-action);
+}
+
+.td {
+  padding: var(--space-2) var(--space-3);
+  height: var(--density-row, 36px);
+  vertical-align: middle;
+  color: var(--color-ink);
+}
+
+.td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 复选框列 */
+.checkCell {
+  width: 40px;
+  padding: var(--space-2);
+  text-align: center;
+}
+
+.checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-action);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.checkbox:focus-visible {
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+
+/* 空状态 */
+.emptyCell {
+  padding: var(--space-10) var(--space-4);
+  text-align: center;
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-sm, 13px);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .tr,
+  .sortIcon {
+    transition: none;
+  }
+}

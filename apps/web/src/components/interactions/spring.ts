@@ -1,9 +1,16 @@
 import { reducedMotion } from "./motion-policy";
 
 export const SPRINGS = {
-  drag: { stiffness: 1200, damping: 80, mass: 1, clamp: true },
-  button: { stiffness: 380, damping: 18, mass: 1, clamp: false },
+  drag:   { stiffness: 1200, damping: 80,  mass: 1, clamp: true  },
+  button: { stiffness:  380, damping: 18,  mass: 1, clamp: false },
+  /** 按钮 press：短促即时，90ms 内稳定 */
+  press:  { stiffness:  520, damping: 22,  mass: 1, clamp: true  },
+  /** 卡片/工具条 hover lift：轻盈上浮，带温柔过冲 */
+  lift:   { stiffness:  300, damping: 26,  mass: 1, clamp: true  },
+  /** 面板开合：饱满的入场弹性，退出时 clamp 避免拖尾 */
+  panel:  { stiffness:  220, damping: 30,  mass: 1, clamp: true  },
 } as const;
+export type SpringPresetName = keyof typeof SPRINGS;
 export type SpringPreset = { stiffness: number; damping: number; mass: number; clamp: boolean };
 
 /** Exact unit-step response; independent of frame rate and background-tab timing. */

@@ -8,9 +8,11 @@
     var(--font-sans);
   font-variant-numeric: tabular-nums;
   transition:
-    color var(--duration-fast),
-    background-color var(--duration-fast),
-    border-color var(--duration-fast);
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 .button {
   position: relative;
@@ -73,7 +75,9 @@
   cursor: not-allowed;
 }
 .button:active:enabled {
-  transform: none;
+  transform: translateY(0.5px) scale(0.985);
+  transition-duration: var(--motion-press, 90ms);
+  transition-timing-function: var(--ease-snappy);
 }
 .button[data-interaction="ripple"][data-variant="primary"] {
   --interaction-ripple-ink: rgb(255 255 255 / 24%);
@@ -574,15 +578,22 @@ textarea.input {
   );
   margin: auto;
   padding: 0;
-  border: var(--border-hairline) solid var(--color-border);
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   border-radius: var(--radius-xl);
-  background: var(--color-overlay);
+  background: var(--color-paper);
   color: var(--color-ink);
-  box-shadow: var(--shadow-modal);
+  box-shadow: var(--shadow-panel-v3);
   overflow: auto;
 }
 .dialog::backdrop {
-  background: var(--color-scrim-soft);
+  background: color-mix(in oklab, var(--color-ink) 28%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  /* Fallback for browsers without backdrop-filter support */
+  /* stylelint-disable-next-line */
+  @supports not (backdrop-filter: blur(1px)) {
+    background: color-mix(in oklab, var(--color-ink) 48%, transparent);
+  }
   opacity: var(--sheet-dim, 1);
 }
 .dialog[data-phase="opening"]::backdrop { animation: backdrop-in var(--motion-dialog-enter) var(--ease-enter) both; }
@@ -634,8 +645,9 @@ textarea.input {
   .menuPanel button,
   .menuPanel a
 ):focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 3px;
+  outline: 1.5px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
 }
 @media (pointer: coarse) {
   .button,
@@ -654,5 +666,55 @@ textarea.input {
   .menu summary,
   .menu button {
     transition: none;
+  }
+  .button:active:enabled {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   카드 Hover Lift — 通用 .card 类
+   ============================================================
+   卡片悬浮抬升 2px，通过 ::after 伪元素叠加影子，
+   只过渡 opacity（不过渡 box-shadow，避免无法 GPU 加速）。
+   @media (hover:none) 关闭，避免触屏误触卡态残留。
+*/
+.card {
+  position: relative;
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  background: var(--color-paper);
+  transition: transform var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
+}
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-card-hover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
+}
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-2px);
+  }
+  .card:hover::after {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+  .card::after {
+    transition: none;
+  }
+  .card:hover {
+    transform: none;
+  }
+  .card:hover::after {
+    opacity: 1;
   }
 }

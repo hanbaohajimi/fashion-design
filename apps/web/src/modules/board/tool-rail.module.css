@@ -9,11 +9,18 @@
   height: 52px;
   display: flex;
   align-items: center;
-  border: 1px solid var(--color-border);
+  /* v4：玻璃感浮条——半透明底 + backdrop-blur，轻盈悬浮在画布上。
+     border 改用 hairline，box-shadow 用 float 投影表达高度。 */
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   border-radius: 14px;
   padding: 5px;
-  background: var(--color-paper);
-  box-shadow: 0 2px 8px var(--shadow-ui);
+  background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
   transform: translateX(-50%);
   pointer-events: all;
   transition:
@@ -72,40 +79,41 @@
   border: 1.5px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--color-ink-black);
+  color: var(--color-ink);
   cursor: pointer;
   display: grid;
   place-items: center;
   transition:
-    background 100ms ease,
-    border-color 100ms ease,
-    color 100ms ease,
-    box-shadow 100ms ease;
+    background var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    border-color var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    color var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1)),
+    transform var(--motion-press, 90ms) var(--ease-snappy, cubic-bezier(0.2,0,0,1));
 }
 
 .toolButton:hover:not(:disabled) {
-  background: var(--color-paper-beige);
-  border-color: rgb(32 51 46 / 18%);
+  background: var(--color-surface);
+  border-color: var(--border-thin-strong, color-mix(in oklab, var(--color-ink) 14%, transparent));
 }
 
 .toolButton[aria-pressed="true"] {
-  border-color: var(--color-ink-black);
-  background: var(--color-ink-black);
-  color: var(--color-warm-white);
-  box-shadow: 0 1px 4px rgb(32 51 46 / 20%);
+  border-color: var(--color-action);
+  background: var(--color-action);
+  color: var(--color-action-on);
+  /* 选中胶囊：用投影表达凸起感 */
+  box-shadow: 0 1px 3px rgba(28,43,38,.18), 0 1px 1px rgba(28,43,38,.1);
 }
 
 .toolButton[aria-pressed="true"]:hover:not(:disabled) {
-  background: var(--color-ink-black);
-  color: var(--color-warm-white);
+  background: var(--color-action-hover);
+  border-color: var(--color-action-hover);
 }
 
 .toolButton:active:not(:disabled) {
-  background: var(--color-ink-black);
-  border-color: var(--color-ink-black);
-  color: var(--color-warm-white);
+  background: var(--color-action);
+  border-color: var(--color-action);
+  color: var(--color-action-on);
   box-shadow: none;
-  transform: scale(0.95);
+  transform: scale(0.93);
 }
 
 .toolButton:disabled {
@@ -114,8 +122,9 @@
 }
 
 .toolButton:focus-visible {
-  outline: 2px solid var(--color-accent-terracotta);
+  outline: 1.5px solid var(--color-focus-ring);
   outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
 }
 
 .toolButton svg {

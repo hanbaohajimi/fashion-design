@@ -10,11 +10,13 @@
 :root {
   --border-hairline: 0.5px;
   color-scheme: light;
-  /* 表面阶梯 v3：画布从 94.5% 加深到 92.5%，纸面提亮到 98%，层级可辨。 */
-  --surface-0: oklch(92.5% 0.011 96);
+  /* 表面阶梯 v4：暖米墙面与纯白纸面拉开 6 个亮度点，浮层最亮。
+     v4 把 surface-2 提到 98.5%，让面板/卡片在更深的墙面上有真实"浮起"感。
+     surface-0 → 1 差 3.5，surface-1 → 2 差 3，surface-2 → 3 差 1.5，均 ≥ 1.5。 */
+  --surface-0: oklch(92% 0.011 96);
   --surface-1: oklch(95.5% 0.009 96);
-  --surface-2: oklch(98% 0.007 96);
-  --surface-3: oklch(99.5% 0.004 96);
+  --surface-2: oklch(98.5% 0.007 96);
+  --surface-3: oklch(100% 0.004 96);
   --shadow-input-focus: 0 0 0 2px var(--color-focus-ring), 0 0 0 5px color-mix(in srgb, var(--color-focus-ring) 22%, transparent);
   --color-navigation: var(--surface-2);
   --color-navigation-ink: #1c2b26;
@@ -28,7 +30,7 @@
   --control-height-touch: 44px;
   --studio-header-height: 56px;
   --app-header-height: 56px;
-  --workspace-nav-width: 184px;
+  --workspace-nav-width: 200px;
   --workspace-mobile-nav-height: 64px;
   --inspector-width: 320px;
   --editor-header-height: 64px;
@@ -88,10 +90,10 @@
   /* 工作室画布专用表面 —— 只给设计工作台用。
      全局 --color-canvas 同时被登录、项目库、趋势库复用，改动会波及非画布页面，
      因此工作台另开一档中性的图像台底色，让节点真正浮起来。
-     v3：工作台底色比全局画布再深一档（约 90% 亮度），与 98% 的纸面相距 8 个点，
+     v4：工作台底色比全局画布再深一档（约 89% 亮度），与 98.2% 的纸面相距约 9 个点，
      节点卡片和图片能清楚"浮"在桌面上，这是设计工具最重要的层次。 */
-  --color-studio-canvas: oklch(90% 0.013 96);
-  --color-studio-canvas-edge: oklch(88.5% 0.013 96);
+  --color-studio-canvas: oklch(89% 0.013 96);
+  --color-studio-canvas-edge: oklch(87.5% 0.013 96);
 
   /* ============================================================
      二、文字层级 —— 墨
@@ -232,8 +234,10 @@
   --font-serif:
     "Palatino Linotype", Palatino, "Book Antiqua", "Songti SC", "Noto Serif SC",
     "Source Han Serif SC", serif;
+  /* v4：next/font 通过 --font-inter 变量注入 Inter，CSS 链天然生效。
+     保留完整中文回退顺序，PingFang SC 优先苹果平台。 */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    var(--font-inter, "Inter"), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
     "Noto Sans SC", -apple-system, system-ui, sans-serif;
   --font-mono:
     "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
@@ -255,7 +259,7 @@
 
   /* 字重 */
   --font-normal: 400;
-  --font-medium: 400;
+  --font-medium: 500;
   --font-semibold: 600;
   --font-bold: 600;
 
@@ -352,6 +356,10 @@
   /* 保留当前实际生效的兼容曲线，避免尾部别名覆盖另一条定义。 */
   --ease-in-out: var(--ease-enter);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* v4：弹簧曲线修正——真实过冲回弹（cubic 仅近似，WAAPI spring 路径由 spring.ts 生成）。
+     之前这两条被降级为 --ease-enter/standard，完全没有回弹，是"手感生硬"的根因。 */
+  --ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
 
   --duration-instant: 90ms;
   /* Atelier: event-bound decorative timelines, shared by CSS and Mo.js. */
@@ -427,8 +435,6 @@
   --dur-ai-pulse: 900ms;
   --dur-ai-spin: 700ms;
   --ease-state: var(--ease-standard);
-  --ease-spring: var(--ease-enter);
-  --ease-snappy: var(--ease-standard);
   --ease-material-drop: var(--ease-enter);
   --ease-material-pin: var(--ease-enter);
   --t-state: var(--duration-fast) var(--ease-standard);
@@ -436,9 +442,9 @@
   --t-enter: var(--duration-normal) var(--ease-enter);
   --t-exit: var(--duration-fast) var(--ease-exit);
   --t-layout: var(--duration-normal) var(--ease-standard);
-  --stagger-xs: 0ms;
-  --stagger-sm: 0ms;
-  --stagger-md: 0ms;
+  --stagger-xs: 12ms;
+  --stagger-sm: 24ms;
+  --stagger-md: 32ms;
 
   /* Atelier 系列 */
   --atelier-canvas: var(--color-canvas);
@@ -491,6 +497,54 @@
 
   /* 缺失的 canvas 底色（用于 body 整体背景，比 canvas 略深） */
   --color-parchment: var(--color-canvas);
+
+  /* ============================================================
+     v4 精度 token —— hairline 边框 / 密度 / 选中 / 打字阶 / 动效时长
+     ============================================================
+     Figma 级精度的来源：1px 暖灰 hairline（常态近不可见）、密度可控、
+     选中态用内环 + 外柔影而非粗暴描边、编辑式标题层。
+     边框从墨色派生（color-mix），不混入暖米描边色。
+  */
+  --border-thin: color-mix(in oklab, var(--color-ink) 7%, transparent);
+  --border-thin-strong: color-mix(in oklab, var(--color-ink) 14%, transparent);
+  /* 2dppx 以上启用 0.5px，避免高 DPI 下 hairline 看不见 */
+  --border-hairline-width: 1px;
+
+  --density-control-compact: 28px;
+  --density-control: 32px;
+  --density-control-comfortable: 36px;
+  --density-row: 36px;
+  --density-gap: 8px;
+
+  /* 选中态：内 1px 动作色环 + 两层柔影，均匀照射感，不用纯黑 */
+  --shadow-selection:
+    0 0 0 1px color-mix(in oklab, var(--color-action) 45%, transparent),
+    0 2px 8px -2px rgba(28, 43, 38, 0.14),
+    0 12px 32px -12px rgba(28, 43, 38, 0.18);
+  --shadow-float:
+    0 2px 4px rgba(28, 43, 38, 0.05),
+    0 8px 24px -8px rgba(28, 43, 38, 0.14),
+    0 16px 40px -16px rgba(28, 43, 38, 0.10);
+
+  /* 编辑式打字阶：标题紧排、小字正排，语义名不删旧名 */
+  --text-caption: 11px;
+  --text-label: 12px;
+  --text-body: 14px;
+  --text-title: 20px;
+  --text-headline: clamp(28px, 3.2vw, 44px);
+  --tracking-headline: -0.02em;
+  --tracking-caption: 0.01em;
+
+  /* 动效时长：press 即时反馈、lift 悬浮、page 页面转场、stagger 步进 */
+  --motion-press: 90ms;
+  --motion-lift: 160ms;
+  --motion-page-enter: 220ms;
+  --motion-page-exit: 140ms;
+  --motion-stagger-step: 24ms;
+
+  /* z 层级补充：画布 HUD 与命令面板 */
+  --z-canvas-hud: 150;
+  --z-command: 700;
 
   /* ── fabrics.module.css 使用的旧 token ──────────────────────────────────
      这些 token 来自之前的设计系统版本，用 fallback 方式保持兼容，
@@ -573,6 +627,26 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* 背景纸纹：静态 feTurbulence 噪点，极低不透明度，混合到底色。
+   不带任何动画——只增加纸面质感，让纯色背景不显廉价。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 高 DPI 下 hairline 用 0.5px，低 DPI 仍为 1px，保证可见性 */
+@media (min-resolution: 2dppx) {
+  :root {
+    --border-hairline-width: 0.5px;
+  }
 }
 
 ::selection {

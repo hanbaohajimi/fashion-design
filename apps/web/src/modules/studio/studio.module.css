@@ -124,16 +124,21 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: var(--control-height);
+  /* v4：条目压到 32px，工具感密度 */
+  min-height: var(--density-control, 32px);
   padding: var(--space-1) var(--space-3);
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-ink-secondary);
   font: inherit;
+  font-size: var(--text-base);
   text-align: left;
   cursor: pointer;
   width: 100%;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 .workspaceNavigation .navigationDisclosure {
   font-size: var(--text-base);

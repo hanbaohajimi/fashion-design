@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
+import { Inter } from "next/font/google";
+import styles from "../components/sonner.module.css";
 
 import { AuthProvider } from "../modules/auth/AuthProvider";
 import { QueryProvider } from "../modules/projects/QueryProvider";
@@ -12,6 +14,13 @@ import { Suspense } from "react";
 
 import "./globals.css";
 import "tldraw/tldraw.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+  preload: true,
+});
 
 export const metadata: Metadata = {
   applicationName: "森织设计工作室",
@@ -44,7 +53,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className={inter.variable}>
       <body>
         <MotionEnvironment />
         <a className="skip-link" href="#main-content">
@@ -69,10 +78,18 @@ export default function RootLayout({ children }: RootLayoutProps) {
           mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", right: "calc(16px + env(safe-area-inset-right, 0px))", left: "calc(16px + env(safe-area-inset-left, 0px))" }}
           toastOptions={{
             closeButtonAriaLabel: "关闭通知",
-            style: {
-              fontFamily: "var(--font-sans)",
-              fontSize: "var(--text-sm, 13px)",
-            },
+            classNames: {
+              toast: styles.toastBase,
+              success: styles.toastSuccess,
+              error: styles.toastError,
+              warning: styles.toastWarning,
+              info: styles.toastInfo,
+              title: styles.toastTitle,
+              description: styles.toastDescription,
+              actionButton: styles.toastAction,
+              closeButton: styles.toastClose,
+              loader: styles.toastLoading,
+            } as Record<string, string>,
           }}
         />
       </body>

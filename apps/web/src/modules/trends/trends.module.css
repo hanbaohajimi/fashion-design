@@ -12,13 +12,20 @@
   margin: 0 auto;
 }
 
+/* v4：sticky 筛选条 + 毛玻璃 */
 .pageHeader {
   display: flex;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 100);
   min-height: 4.75rem;
   align-items: center;
   justify-content: space-between;
-  border-bottom: var(--border-hairline) solid var(--color-border-strong);
+  border-bottom: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   gap: 1.5rem;
+  background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 .pageHeader span,

@@ -367,7 +367,47 @@
 }
 
 .projectCard {
+  position: relative;
   min-width: 0;
+  /* v4：卡片 hover lift——通过 ::after 叠影 + opacity 过渡，不过渡 box-shadow。
+     抬升 2px，hairline 边框，Figma 级悬浮感。 */
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-lg);
+  background: var(--color-paper);
+  transition: transform var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
+}
+
+.projectCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-card-hover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-lift, 160ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1));
+  z-index: -1;
+}
+
+@media (hover: hover) {
+  .projectCard:hover {
+    transform: translateY(-2px);
+  }
+  .projectCard:hover::after {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projectCard {
+    transition: none;
+  }
+  .projectCard::after {
+    transition: none;
+  }
+  .projectCard:hover {
+    transform: none;
+  }
 }
 
 .projectOpen {
@@ -380,11 +420,16 @@
 
 .projectCover {
   position: relative;
-  border: var(--border-hairline) solid var(--color-border);
+  border: var(--border-hairline) solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-bottom: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   background-color: var(--color-surface);
   background-position: center;
   background-size: cover;
-  transition: border-color var(--duration-fast);
+  /* v4：封面统一 4:3 比例 */
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+  transition: none;
 }
 
 .projectCover:not([data-has-cover="true"]) {

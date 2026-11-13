@@ -1,0 +1,189 @@
+/**
+ * 命令面板样式 — 对齐设计系统 v4 token。
+ * 玻璃态面板 + 精准 hairline 边框 + 墨绿选中态。
+ */
+
+/* 半透明遮罩：点击关闭 */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in oklab, var(--color-ink) 20%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: var(--z-command, 700);
+}
+
+/* 面板容器：居中浮动，玻璃感 */
+.panel {
+  position: fixed;
+  top: 20vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: calc(var(--z-command, 700) + 1);
+  width: min(640px, calc(100vw - 32px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--color-paper) 92%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
+  overflow: hidden;
+  animation: panelEnter var(--motion-page-enter, 220ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)) both;
+}
+
+@keyframes panelEnter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+/* 搜索行 */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  flex: none;
+}
+
+.searchIcon {
+  flex: none;
+  color: var(--color-ink-tertiary);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-lg, 16px);
+  color: var(--color-ink);
+  line-height: var(--leading-normal);
+}
+
+.searchInput::placeholder {
+  color: var(--color-ink-tertiary);
+}
+
+.escKbd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption, 11px);
+  font-weight: var(--font-medium, 500);
+  color: var(--color-ink-tertiary);
+  background: var(--color-surface);
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  line-height: 1.6;
+}
+
+/* 列表区：可滚动 */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2) 0;
+  list-style: none;
+  margin: 0;
+}
+
+/* 分组 */
+.group {
+  display: contents;
+}
+
+.groupLabel {
+  padding: var(--space-2) var(--space-4) 2px;
+  font-size: var(--text-caption, 11px);
+  font-weight: var(--font-medium, 500);
+  letter-spacing: var(--tracking-wider, 0.12em);
+  text-transform: uppercase;
+  color: var(--color-ink-tertiary);
+}
+
+.groupItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 命令项 */
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  border-radius: 0;
+  user-select: none;
+  font-size: var(--text-base, 14px);
+  color: var(--color-ink);
+  transition: background-color var(--duration-fast, 140ms) var(--ease-standard);
+}
+
+.itemActive {
+  background: var(--color-action-subtle, #eef3e8);
+  color: var(--color-ink);
+}
+
+.itemDisabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.itemIcon {
+  flex: none;
+  display: flex;
+  color: var(--color-ink-secondary);
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemDesc {
+  flex: none;
+  font-size: var(--text-xs, 12px);
+  color: var(--color-ink-tertiary);
+  white-space: nowrap;
+}
+
+/* 空状态 */
+.empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm, 13px);
+  color: var(--color-ink-tertiary);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
+  .item {
+    transition: none;
+  }
+}

@@ -57,9 +57,9 @@ describe("active design token contract", () => {
   it("keeps the four warm surfaces strictly ascending and excludes pure black UI paint", () => {
     const styles = activeStyles();
     const theme = styles.get(resolve(process.cwd(), "src/styles/design-system.css")) ?? "";
-    // v3 阶梯：画布 92.5 → 纸面 98，总跨度 5.5 个亮度点，层与层至少 1.5 点可辨。
+    // v4 阶梯：画布 92% → 纸面 98.5% → 浮层 100%，总跨度 8 个亮度点，层与层至少 1.5 点可辨。
     const levels = [...theme.matchAll(/--surface-[0-3]:\s*oklch\(([\d.]+)%/gu)].map((match) => Number(match[1]));
-    expect(levels).toEqual([92.5, 95.5, 98, 99.5]);
+    expect(levels).toEqual([92, 95.5, 98.5, 100]);
     for (let i = 1; i < levels.length; i++) expect((levels[i] ?? 0) - (levels[i - 1] ?? 0)).toBeGreaterThanOrEqual(1.5);
     for (const [path, source] of styles) {
       // Isolated comparison prototypes have their own visual worlds, outside production refinement.

@@ -5,12 +5,13 @@
   left: 12px;
   right: var(--board-agent-current-width, 400px);
   display: flex;
-  height: 44px;
+  /* v4：收至 48px，更紧凑；transition 保留助手宽度响应 */
+  height: 48px;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px 0 0;
   background: transparent;
-  color: var(--color-ink-black);
+  color: var(--color-ink);
   pointer-events: none;
   transition: right 200ms ease;
 }
@@ -19,14 +20,19 @@
 .topBarRight {
   position: relative;
   display: flex;
+  /* v4：浮动胶囊——玻璃感，hairline 边框，float 投影 */
   min-height: 44px;
   align-items: center;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-thin, color-mix(in oklab, var(--color-ink) 7%, transparent));
   border-radius: var(--radius-lg);
   padding: var(--space-1);
-  background: var(--color-paper);
-  /* v3：顶栏浮在更深的画布上，用导航级投影保持"纸张浮起"。 */
-  box-shadow: var(--shadow-nav-v3);
+  background: color-mix(in srgb, var(--color-paper) 90%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: var(--shadow-float,
+    0 2px 4px rgba(28,43,38,.05),
+    0 8px 24px -8px rgba(28,43,38,.14),
+    0 16px 40px -16px rgba(28,43,38,.10));
   gap: var(--space-1);
   pointer-events: all;
 }
@@ -134,8 +140,9 @@
 }
 
 .actionButton:focus-visible {
-  outline: 2px solid var(--color-accent-terracotta);
+  outline: 1.5px solid var(--color-focus-ring);
   outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
 }
 
 .actionPopover {
