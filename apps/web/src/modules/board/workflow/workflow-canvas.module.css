@@ -1,6 +1,8 @@
 .canvasSection :global(.tl-theme__light) {
   --tl-color-selection-fill: var(--color-selection-bg);
   --tl-color-selection-stroke: var(--color-selection-border);
+  /* v4：让 tldraw 内置背景透明，网格点底从 .workspace 层透出 */
+  --tl-color-background: transparent;
 }
 /* A selected connection owns its reconnect handle even at overview zoom. */
 .canvasSection
