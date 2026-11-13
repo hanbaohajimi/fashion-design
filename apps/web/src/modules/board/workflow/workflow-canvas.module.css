@@ -4,6 +4,10 @@
   /* v4：让 tldraw 内置背景透明，网格点底从 .workspace 层透出 */
   --tl-color-background: transparent;
 }
+/* tldraw 内部的 .tl-background div 覆盖了我们的网格点，强制透明 */
+.canvasSection :global(.tl-background) {
+  background: transparent !important;
+}
 /* A selected connection owns its reconnect handle even at overview zoom. */
 .canvasSection
   :global(.tl-shape):has([data-workflow-edge][data-selected="true"]) {

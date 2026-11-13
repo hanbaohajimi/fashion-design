@@ -1522,12 +1522,12 @@ export function WorkflowAssistantPanel({
             {!legacy && BUILT_IN_ASSISTANT_SKILLS.length ? <>
               <p className={ui.menuHint} style={{marginBottom: 0}}>快速载入技能</p>
               {BUILT_IN_ASSISTANT_SKILLS.map((skill) => (
-                <button key={skill.id} type="button" onClick={() => { applyAssistantSkill(skill); }}>
+                <button key={`builtin:${skill.id}`} type="button" onClick={() => { applyAssistantSkill(skill); }}>
                   {skill.name}
                 </button>
               ))}
               {personalSkills.map((skill) => (
-                <button key={skill.id} type="button" onClick={() => { applyAssistantSkill(skill); }}>
+                <button key={`personal:${skill.id}`} type="button" onClick={() => { applyAssistantSkill(skill); }}>
                   {skill.name}
                 </button>
               ))}
