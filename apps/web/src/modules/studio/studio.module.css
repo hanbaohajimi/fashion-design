@@ -16,6 +16,8 @@
   padding: var(--space-4) var(--space-3);
   border-right: var(--border-hairline) solid var(--color-divider);
   background: var(--color-paper);
+  /* v3：与目录导航同一套"纸张浮起"语言。 */
+  box-shadow: var(--shadow-nav-v3);
   overflow-y: auto;
 }
 .projectIdentity {

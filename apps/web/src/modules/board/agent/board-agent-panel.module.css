@@ -20,7 +20,8 @@
   flex-direction: column;
   border-left: 1px solid var(--color-border);
   background: var(--color-paper);
-  box-shadow: -4px 0 16px var(--shadow-ui);
+  /* v3：对话面板浮在画布上，用面板级投影表达层叠关系。 */
+  box-shadow: var(--shadow-panel-v3);
   animation: panel-enter var(--dur-enter, 260ms) var(--ease-enter, cubic-bezier(0.16,1,0.3,1)) both;
 }
 

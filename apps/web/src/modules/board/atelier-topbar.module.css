@@ -25,7 +25,8 @@
   border-radius: var(--radius-lg);
   padding: var(--space-1);
   background: var(--color-paper);
-  box-shadow: var(--shadow-sm);
+  /* v3：顶栏浮在更深的画布上，用导航级投影保持"纸张浮起"。 */
+  box-shadow: var(--shadow-nav-v3);
   gap: var(--space-1);
   pointer-events: all;
 }
