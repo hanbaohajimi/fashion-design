@@ -5,7 +5,7 @@ import { AssistantMentionInput } from "./AssistantMentionInput";
 import { AssistantStarters } from "./AssistantStarters";
 import { AssistantDelegationsPanel } from "./AssistantDelegationsPanel";
 import { AssistantReferencePreview, referenceLabel, referenceTypeLabel } from "./AssistantReferencePreview";
-import { Button, Input, Notice, Skeleton, Menu } from "../../../components/ui";
+import { Button, Notice, Skeleton, Menu } from "../../../components/ui";
 import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
 import type { AssistantStreamEvent } from "@fashion/shared";
 import prose from "../../../components/reading.module.css";
@@ -21,16 +21,12 @@ import { AssistantExecutionStatus } from "./AssistantExecutionStatus";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import {
   BUILT_IN_ASSISTANT_SKILLS,
-  MAX_ASSISTANT_SKILLS,
-  createAssistantSkill,
   mergeAssistantSkills,
   readAssistantSkills,
   writeAssistantSkills,
   type AssistantSkill,
 } from "./assistant-skills";
 import {
-  createAssistantSkillRemote,
-  deleteAssistantSkillRemote,
   fetchAssistantSkills,
 } from "./assistant-skills-api";
 import { resultImageNode } from "./assistant-result-data";
@@ -46,7 +42,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -287,20 +282,7 @@ export function WorkflowAssistantPanel({
       items: readPersonalSkills(accountId),
     };
   });
-  const [skillsOpen, setSkillsOpen] = useState(false);
   const [delegationsOpen, setDelegationsOpen] = useState(false);
-  const [skillName, setSkillName] = useState("");
-  const [skillScope, setSkillScope] = useState<"PERSONAL" | "WORKSPACE">("PERSONAL");
-  const [skillStatus, setSkillStatus] = useState<string | null>(null);
-  const [skillSavingScope, setSkillSavingScope] = useState<string | null>(null);
-  const skillScopeKey = `${accountId}:${projectId}`;
-  const skillSaving = skillSavingScope === skillScopeKey;
-  const liveSkillScope = useRef(skillScopeKey);
-  const skillRequest = useRef<{ fingerprint: string; skill: AssistantSkill } | null>(null);
-  useLayoutEffect(() => {
-    liveSkillScope.current = skillScopeKey;
-    return () => { liveSkillScope.current = ""; };
-  }, [skillScopeKey]);
   const personalSkills = useMemo(() => {
     if (skillState.accountId === accountId && skillState.projectId === projectId) return skillState.items;
     return readPersonalSkills(accountId);
@@ -327,92 +309,16 @@ export function WorkflowAssistantPanel({
       controller.abort();
     };
   }, [accountId, projectId]);
-  const persistPersonalSkills = useCallback(
-    (update: readonly AssistantSkill[] | ((current: readonly AssistantSkill[]) => readonly AssistantSkill[])) => {
-      if (!accountId || liveSkillScope.current !== skillScopeKey) return;
-      setSkillState(current => {
-        const previous = current.accountId === accountId && current.projectId === projectId ? current.items : readPersonalSkills(accountId);
-        const next = typeof update === "function" ? update(previous) : update;
-        return { accountId, projectId, items: next };
-      });
-    },
-    [accountId, projectId, skillScopeKey],
-  );
   const applyAssistantSkill = useCallback(
     (skill: AssistantSkill) => {
       setPrompt(skill.prompt);
       setReferencedIds([]);
       setReferenceInstances({});
-      setSkillsOpen(false);
-      setSkillStatus(null);
-      setDraftNotice(`已载入“${skill.name}”，发送前可以继续修改。`);
+      setDraftNotice(`已载入”${skill.name}”，发送前可以继续修改。`);
       requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
     },
     [],
   );
-  const saveCurrentSkill = useCallback(() => {
-    if (skillSaving) return;
-    if (!accountId) {
-      setSkillStatus("当前账号尚未恢复，暂时不能保存技能。");
-      return;
-    }
-    const fingerprint = JSON.stringify([skillScopeKey, skillScope, skillName.trim(), prompt.trim()]);
-    const pending = skillRequest.current?.fingerprint === fingerprint ? skillRequest.current.skill : null;
-    const limit = skillScope === "WORKSPACE" ? 48 : MAX_ASSISTANT_SKILLS;
-    if (personalSkills.filter(item => (item.scope ?? "PERSONAL") === skillScope && item.id !== pending?.id).length >= limit) {
-      setSkillStatus(`${skillScope === "WORKSPACE" ? "工作区" : "个人"}技能最多保存 ${limit} 条，请先删除一条再保存。`);
-      return;
-    }
-    const next = pending ?? createAssistantSkill({
-      id: crypto.randomUUID(),
-      name: skillName,
-      prompt,
-      scope: skillScope,
-      now: new Date().toISOString(),
-    });
-    if (!next) {
-      setSkillStatus("请填写技能名称，并确保当前草稿不为空。");
-      return;
-    }
-    skillRequest.current = { fingerprint, skill: next };
-    setSkillSavingScope(skillScopeKey);
-    if (skillScope === "PERSONAL") persistPersonalSkills(current => [next, ...current.filter(item => item.id !== next.id)]);
-    setSkillStatus(`正在保存“${next.name}”…`);
-    void createAssistantSkillRemote(
-      projectId,
-      {
-        description: next.description,
-        name: next.name,
-        prompt: next.prompt,
-        scope: skillScope,
-      },
-      next.id,
-    ).then(
-      (remote) => {
-        if (liveSkillScope.current !== skillScopeKey) return;
-        const synced = {
-          createdAt: remote.createdAt,
-          description: remote.description,
-          id: remote.id,
-          name: remote.name,
-          prompt: remote.prompt,
-          scope: remote.scope,
-          serverId: remote.id,
-          workspaceId: remote.workspaceId,
-          updatedAt: remote.updatedAt,
-        };
-        persistPersonalSkills(current => [synced, ...current.filter(item => item.id !== next.id && item.id !== synced.id)]);
-        skillRequest.current = null;
-        setSkillName("");
-        setSkillStatus(synced.scope === "WORKSPACE" ? `已保存“${synced.name}”，当前工作区的成员可使用。` : `已保存并同步“${synced.name}”，可在其他项目中继续使用。`);
-      },
-      () => {
-        if (liveSkillScope.current === skillScopeKey) setSkillStatus(skillScope === "WORKSPACE"
-          ? `“${next.name}”尚未共享成功，正文和名称已保留，可以重试。`
-          : `“${next.name}”已保存在本机，服务端暂时无法同步，可以重试。`);
-      },
-    ).finally(() => { if (liveSkillScope.current === skillScopeKey) setSkillSavingScope(null); });
-  }, [accountId, personalSkills, persistPersonalSkills, projectId, prompt, skillName, skillScope, skillSaving, skillScopeKey]);
   const activeId = useRef(conversationId);
   const starterPromptPending = useRef(Boolean(starterPrompt));
   const initializedMessages = useRef("");
@@ -440,17 +346,6 @@ export function WorkflowAssistantPanel({
       message.origin !== "execution_result",
   );
   const collaborationReadOnly = legacy || agentVersion === 1;
-  const contextRequirements = context?.state?.requirements ?? context?.requirements ?? [];
-  const contextPreferences = context?.state?.preferences ?? context?.preferences ?? [];
-  const activeContextItems = [...contextRequirements, ...contextPreferences].filter(
-    (item) => item.status !== "inactive",
-  );
-  const focusSummary = context?.focusNodeIds.length
-    ? `${context.focusNodeIds.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")).length} 个白板对象`
-    : "整个项目";
-  const visualCoverageSummary = context?.visualCoverage.total
-    ? `${context.visualCoverage.ready}/${context.visualCoverage.total} 份视觉资料已就绪`
-    : null;
   const waitingForConfirmation = !collaborationReadOnly && messages.some(message => message.proposal?.status === "pending");
   const activityPhase: ChatActivity["phase"] = legacy ? "idle"
     : sending || submittingProposal ? "sending"
@@ -1622,10 +1517,22 @@ export function WorkflowAssistantPanel({
           </Button>
           {<Menu label="助手设置" trigger={<WorkspaceIcon name="settings" />}>
             <button type="button" onClick={() => setHistoryOpen((v) => !v)}>历史对话</button>
-            {resultIndex.length ? <button type="button" onClick={() => { setResultIndexOpen((v) => !v); setHistoryOpen(false); setSkillsOpen(false); setDelegationsOpen(false); }}>本轮结果 ({resultIndex.length})</button> : null}
+            {resultIndex.length ? <button type="button" onClick={() => { setResultIndexOpen((v) => !v); setHistoryOpen(false); setDelegationsOpen(false); }}>本轮结果 ({resultIndex.length})</button> : null}
             {!legacy ? <button type="button" onClick={() => setRequirementsOpen(true)}>设计要求</button> : null}
-            {!legacy ? <button type="button" onClick={() => { setSkillsOpen((v) => !v); setSkillStatus(null); }}>常用技能</button> : null}
-            {!legacy ? <button type="button" onClick={() => { setSkillsOpen(false); setDelegationsOpen((v) => !v); }}>设计委托</button> : null}
+            {!legacy && BUILT_IN_ASSISTANT_SKILLS.length ? <>
+              <p className={ui.menuHint} style={{marginBottom: 0}}>快速载入技能</p>
+              {BUILT_IN_ASSISTANT_SKILLS.map((skill) => (
+                <button key={skill.id} type="button" onClick={() => { applyAssistantSkill(skill); }}>
+                  {skill.name}
+                </button>
+              ))}
+              {personalSkills.map((skill) => (
+                <button key={skill.id} type="button" onClick={() => { applyAssistantSkill(skill); }}>
+                  {skill.name}
+                </button>
+              ))}
+            </> : null}
+            {!legacy ? <button type="button" onClick={() => { setDelegationsOpen((v) => !v); }}>设计委托</button> : null}
             {!legacy && reviewableCandidates.length ? <button type="button" disabled={loading || sending || contextSaving} onClick={prepareDesignReview}>审阅当前方案</button> : null}
             {!legacy && conversationId ? <button type="button" disabled={loading || sending || contextSaving} onClick={() => setWorkflowPlannerOpen(true)}>分步计划</button> : null}
             {legacy ? <button onClick={() => setLegacyRunsOpen((v) => !v)} type="button">旧设计运行</button> : null}
@@ -1703,109 +1610,6 @@ export function WorkflowAssistantPanel({
           </div>
         </section>
       ) : null}
-      {skillsOpen && !legacy ? (
-        <section className={ui.skillsPanel} aria-label="常用技能">
-          <header className={ui.skillsHeader}>
-            <div>
-              <strong>常用技能</strong>
-              <span>保存成熟的设计步骤，载入后仍需你确认和发送。</span>
-            </div>
-            <button
-              aria-label="关闭常用技能"
-              className={ui.skillsClose}
-              onClick={() => setSkillsOpen(false)}
-              type="button"
-            >
-              ×
-            </button>
-          </header>
-          <div className={ui.skillList}>
-            <span className={ui.skillGroupLabel}>工作室建议</span>
-            {BUILT_IN_ASSISTANT_SKILLS.map((skill) => (
-              <button
-                className={ui.skillItem}
-                key={skill.id}
-                onClick={() => applyAssistantSkill(skill)}
-                type="button"
-              >
-                <span>
-                  <strong>{skill.name}</strong>
-                  <small>{skill.description}</small>
-                </span>
-                <span aria-hidden="true">载入 ↗</span>
-              </button>
-            ))}
-            {personalSkills.length ? <span className={ui.skillGroupLabel}>我的技能</span> : null}
-            {personalSkills.map((skill) => (
-              <div className={ui.personalSkill} key={skill.id}>
-                <button className={ui.skillItem} onClick={() => applyAssistantSkill(skill)} type="button">
-                  <span>
-                    <strong>{skill.name}</strong>
-                    <small>{skill.description}</small>
-                  </span>
-                  <span aria-hidden="true">载入 ↗</span>
-                </button>
-                <button
-                  aria-label={`删除技能 ${skill.name}`}
-                  className={ui.skillDelete}
-                  onClick={() => {
-                    persistPersonalSkills(current => current.filter((item) => item.id !== skill.id));
-                    if (!skill.serverId) {
-                      setSkillStatus(`已删除“${skill.name}”。`);
-                      return;
-                    }
-                    void deleteAssistantSkillRemote(projectId, skill.serverId).then(
-                      () => { if (liveSkillScope.current === skillScopeKey) setSkillStatus(`已删除“${skill.name}”。`); },
-                      () => {
-                        if (liveSkillScope.current !== skillScopeKey) return;
-                        persistPersonalSkills(current => current.some(item => item.id === skill.id) ? current : [skill, ...current]);
-                        setSkillStatus(`服务端删除“${skill.name}”失败，已恢复记录。`);
-                      },
-                    );
-                  }}
-                  type="button"
-                >
-                  删除
-                </button>
-              </div>
-            ))}
-          </div>
-          <form
-            className={ui.skillSave}
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveCurrentSkill();
-            }}
-          >
-            <div>
-              <strong>保存当前草稿</strong>
-              <span>{prompt.trim() ? "下次可以跨项目快速载入这段需求。" : "先在输入框写下需求，再保存为技能。"}</span>
-            </div>
-            <Input
-              aria-label="技能名称"
-              className={ui.skillName}
-              maxLength={48}
-              onChange={(event) => setSkillName(event.target.value)}
-              placeholder="例如：品牌一致性核对"
-              value={skillName}
-            />
-            <div className={ui.skillScope}>
-              <Select
-                aria-label="技能共享范围"
-                onChange={(event) => setSkillScope(event.target.value as "PERSONAL" | "WORKSPACE")}
-                value={skillScope}
-              >
-                <option value="PERSONAL">仅我使用</option>
-                <option value="WORKSPACE">共享到工作区</option>
-              </Select>
-            </div>
-            <Button className={ui.skillSaveButton} disabled={skillSaving || !prompt.trim() || !skillName.trim()} size="small" type="submit">
-              {skillSaving ? "正在保存…" : "保存技能"}
-            </Button>
-          </form>
-          {skillStatus ? <p className={ui.skillStatus} role="status">{skillStatus}</p> : null}
-        </section>
-      ) : null}
       {delegationsOpen && !legacy ? (
         <AssistantDelegationsPanel
           canEdit={!collaborationReadOnly}
@@ -1813,53 +1617,6 @@ export function WorkflowAssistantPanel({
           onClose={() => setDelegationsOpen(false)}
           projectId={projectId}
         />
-      ) : null}
-      {!legacy && conversationId ? (
-        <section
-          aria-label="创作主线"
-          className={ui.continuity}
-          data-context-ready={context ? "true" : "false"}
-        >
-          <header className={ui.continuityHeader}>
-            <span className={ui.continuityLabel}>创作主线</span>
-            <button
-              className={ui.continuityAction}
-              data-assistant-continuity-trigger
-              disabled={loading}
-              onClick={() => setRequirementsOpen(true)}
-              type="button"
-            >
-              查看设计要求
-            </button>
-          </header>
-          {context ? (
-            <>
-              <div className={ui.continuityGrid}>
-                <div>
-                  <span>当前目标</span>
-                  <strong>
-                    {context.currentObjective || "尚未设定，先描述你想做的设计"}
-                  </strong>
-                </div>
-                <div>
-                  <span>正在推进</span>
-                  <strong>
-                    {context.currentTask || "等待助手从对话中整理下一步"}
-                  </strong>
-                </div>
-              </div>
-              <div className={ui.continuityMeta} aria-label="创作上下文摘要">
-                <span>讨论对象 · {focusSummary}</span>
-                <span>已记录要求 · {activeContextItems.length} 条</span>
-                {visualCoverageSummary ? <span>{visualCoverageSummary}</span> : null}
-              </div>
-            </>
-          ) : (
-            <p role="status">
-              {contextError ? "项目记忆暂时不可用，请重试。" : "正在恢复项目目标与设计记忆…"}
-            </p>
-          )}
-        </section>
       ) : null}
       {workflowPlannerOpen && !legacy && conversationId ? (
         <section className={ui.planner} aria-label="分步设计计划">
