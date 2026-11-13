@@ -125,7 +125,7 @@
 
 .primaryAction:hover {
   background: var(--color-action-hover);
-  box-shadow: 0 8px 20px rgb(32 51 46 / 14%);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
 }
 
@@ -160,7 +160,7 @@
   border: var(--border-hairline) solid var(--color-border-strong);
   padding: 20px;
   background: var(--color-paper);
-  box-shadow: 0 18px 42px rgb(32 51 46 / 12%);
+  box-shadow: var(--shadow-panel-v3);
   transform: rotate(1.2deg);
 }
 
