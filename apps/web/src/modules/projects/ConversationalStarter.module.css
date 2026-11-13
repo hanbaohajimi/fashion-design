@@ -1,0 +1,104 @@
+.starter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  border: 1px solid var(--color-starter-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-starter-focus-bg);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.inputWrap:focus-within {
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-starter-focus);
+}
+
+.input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 160px;
+  border: none;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
+  resize: none;
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-ink-tertiary);
+}
+
+.input:disabled {
+  opacity: var(--opacity-disabled);
+}
+
+.sendButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-action);
+  color: var(--color-action-on);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--color-action-hover);
+}
+
+.sendButton:active:not(:disabled) {
+  background: var(--color-action-active);
+}
+
+.sendButton:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-paper);
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--color-selection-border);
+  color: var(--color-selection-ink);
+}
+
+.chip:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+}

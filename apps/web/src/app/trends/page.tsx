@@ -34,51 +34,57 @@ function firstSearchValue(
 
 export default async function TrendsPage({ searchParams }: TrendsPageProps) {
   const query = await searchParams;
-  resolveTrendReturnTarget(
-    firstSearchValue(query.from),
-    firstSearchValue(query.boardId),
-  );
+  const source = firstSearchValue(query.from);
+  const boardId = firstSearchValue(query.boardId);
+  const returnParams = new URLSearchParams();
+  if (source) returnParams.set("from", source);
+  if (boardId) returnParams.set("boardId", boardId);
+  const returnTo = `/trends${returnParams.toString() ? `?${returnParams.toString()}` : ""}`;
+  resolveTrendReturnTarget(source, boardId);
 
   return (
-    <><AppHeader current="trends" projectId={firstSearchValue(query.from) === "board" ? firstSearchValue(query.boardId) : undefined} /><main className={`${styles.trendsPage} ${controls.controlSurface}`}>
-      <div className={styles.editorialFrame}>
+    <>
+      <AppHeader
+        current="discover"
+        projectId={source === "board" ? boardId : undefined}
+      />
+      <main className={`${styles.discoverPage} ${controls.controlSurface}`}>
+        <div className={styles.editorialFrame}>
+          <section className={styles.discoverHero} data-workspace-heading>
+            <h1>发现</h1>
+            <p className={styles.discoverHeroLead}>
+              汇聚时尚趋势、关键来源与行业参考，帮你更快找到设计方向。
+            </p>
+          </section>
 
+          <TrendArchive
+            returnTo={returnTo}
+            projectId={source === "board" ? boardId : undefined}
+          />
 
-        <section className={styles.hero} data-workspace-heading>
-          <h1>趋势档案</h1>
-        </section>
-
-        <TrendArchive
-          projectId={
-            firstSearchValue(query.from) === "board"
-              ? firstSearchValue(query.boardId)
-              : undefined
-          }
-        />
-
-        <details className={styles.externalSources}><summary>外部时尚资料 8 个来源</summary><section className={styles.sourceLayout}>
-          <nav aria-label="时尚趋势平台" className={styles.platformIndex}>
-            {TREND_PLATFORMS.map((platform, index) => (
-              <a
-                className={styles.sourceRow}
-                href={platform.url}
-                key={platform.name}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <span className={styles.sourceIndex}>
-                  {(index + 1).toString().padStart(2, "0")}
-                </span>
-                <strong className={styles.sourceName}>{platform.name}</strong>
-                <span aria-hidden="true" className={styles.externalArrow}>
-                  ↗
-                </span>
-              </a>
-            ))}
-          </nav>
-
-        </section></details>
-      </div>
-    </main></>
+          <aside className={styles.externalSourcesSidebar}>
+            <h2 className={styles.externalSourcesTitle}>外部来源</h2>
+            <nav aria-label="时尚趋势平台" className={styles.externalSourcesList}>
+              {TREND_PLATFORMS.map((platform) => (
+                <a
+                  className={styles.externalSourceItem}
+                  href={platform.url}
+                  key={platform.name}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <span className={styles.sourceName}>{platform.name}</span>
+                  <span aria-hidden="true" className={styles.externalArrow}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 13 13 3M5 3h8v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </a>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      </main>
+    </>
   );
 }

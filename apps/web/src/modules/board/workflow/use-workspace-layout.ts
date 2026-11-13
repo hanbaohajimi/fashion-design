@@ -66,7 +66,8 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
       setLayout((current) => {
         const result = changeWorkspaceMode(current, next, initial);
         if (!initial) return result;
-        const deepLink = new URLSearchParams(window.location.search).has("conversationId");
+        const search = new URLSearchParams(window.location.search);
+        const deepLink = search.has("conversationId") || search.has("starter");
         const saved = storageKey ? readWorkspacePreference(storageKey) : null;
         const open = deepLink || (saved?.open ?? defaultOpen ?? next === "docked");
         return { ...result, sidebarOpen: open, mobileView: open ? "assistant" : "canvas" };

@@ -78,6 +78,7 @@ import {
 } from "tldraw";
 
 import { fetchProject } from "../../projects/projects-api";
+import { clearProjectIntake, peekProjectIntake } from "../../projects/project-intake";
 import {
   fetchAgentRun,
   listAgentRuns,
@@ -89,6 +90,8 @@ import { createCollection } from "../generation/collection-api";
 import { GenerationWorkspace } from "../generation/GenerationWorkspace";
 import { userFacingError } from "../../../components/user-facing-error";
 import { BoardSkeleton } from "../BoardSkeleton";
+import { CanvasLicenseRequired } from "../CanvasLicenseRequired";
+import { tldrawLicenseKey, tldrawLicenseRequired } from "../canvas-license";
 import {
   LegacyBoardHistory,
   type LegacyBoardImport,
@@ -139,7 +142,7 @@ import {
   type InputEdit,
   type PlannedInputEdit,
 } from "./workflow-editing";
-import { WorkflowAssistantPanel } from "./WorkflowAssistantPanel";
+import { WorkflowAssistantPanel, type WorkflowAssistantDraftRequest } from "./WorkflowAssistantPanel";
 import { useWorkflowLayoutSave } from "./use-workflow-layout-save";
 import type { WorkflowLayoutSave } from "./workflow-layout-save";
 import { NodeDetails, ToolSettings } from "./WorkflowNodeDetails";
@@ -149,7 +152,6 @@ import {
 } from "./WorkflowMaterialDialogs";
 import { useSerialPolling } from "../../use-serial-polling";
 
-const tldrawLicenseKey = process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY;
 const cameraActionIds = new Set([
   "zoom-in",
   "zoom-in-on-cursor",
@@ -194,6 +196,47 @@ const ASSET_OPTIONS: readonly {
   { type: "trend", title: "趋势档案", hint: "引用趋势库的原始条目" },
   { type: "fabric", title: "面料库", hint: "引用现有面料记录" },
 ];
+
+const CREATIVE_STARTER_PROMPTS: Readonly<Record<string, string>> = {
+  collection:
+    "我想从一件适合秋冬通勤的外套开始做一组小系列。请先帮我梳理廓形、目标人群、面料方向与需要补充的信息，暂不生成图片。",
+  material:
+    "我想从一块自然肌理面料出发建立设计方向。请先分析它适合的触感、廓形、配色和穿着场景，整理成可以继续验证的设计约束，暂不生成图片。",
+  lookbook:
+    "我想为一个服装品牌做一组视觉提案。请先帮我梳理统一的视觉语言、画面结构、单品关系和需要补充的参考，暂不生成图片。",
+  research:
+    "我刚整理了一份趋势简报。请读取画布中的趋势来源和简报，先总结设计目标、来源依据与待验证假设，再整理成下一步设计计划，暂不生成图片。",
+};
+
+function readProjectIntakeBrief(projectId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return peekProjectIntake(window.sessionStorage, projectId);
+  } catch {
+    return null;
+  }
+}
+
+function readCreativeStarterPrompt(intakeBrief: string | null): string | null {
+  if (typeof window === "undefined") return null;
+  const id = new URLSearchParams(window.location.search).get("starter");
+  const starter = id ? CREATIVE_STARTER_PROMPTS[id] ?? null : null;
+  return [starter, intakeBrief ? `设计者补充的初始简报：\n${intakeBrief}` : null]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n") || null;
+}
+
+function readStarterReferenceNodeIds(): string[] {
+  if (typeof window === "undefined") return [];
+  const params = new URLSearchParams(window.location.search);
+  const multiple = (params.get("referenceNodeIds") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0 && value.length <= 128);
+  if (multiple.length) return [...new Set(multiple)].slice(0, 16);
+  const single = params.get("referenceNodeId");
+  return single && single.length <= 128 ? [single] : [];
+}
 
 const toolInputHints = {
   analyze_brief: "需求与参考",
@@ -679,6 +722,9 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
 function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const { session } = useAuth();
   const { startGuide } = useFeatureGuide();
+  const [intakeBrief] = useState<string | null>(() => readProjectIntakeBrief(projectId));
+  const [starterPrompt] = useState<string | null>(() => readCreativeStarterPrompt(intakeBrief));
+  const [starterReferenceNodeIds] = useState<string[]>(readStarterReferenceNodeIds);
   const store = useMemo(
     () =>
       createTLStore({
@@ -706,10 +752,14 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     nonce: number;
     instances?: Readonly<Record<string, readonly string[]>>;
     conversationId?: string | null;
+    notice?: string;
     onConsumed?: () => void;
   } | null>(null);
+  const [assistantDraftRequest, setAssistantDraftRequest] = useState<WorkflowAssistantDraftRequest | null>(null);
   const [referencesPreparing, setReferencesPreparing] = useState(false);
   const referenceFlight = useRef(false);
+  const starterReferenceHandled = useRef(false);
+  const intakeBriefFlight = useRef(false);
   const referenceConversation = useRef(activeConversationId);
   const canvasHandle = useRef<InfiniteWorkspaceHandle | null>(null);
   const changeAssistantConversation = useCallback((id: string | null) => {
@@ -738,6 +788,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const pendingExport = useRef(false);
   const executionConversation = useRef<Promise<string> | null>(null);
   const graphRef = useRef<WorkflowGraph | null>(null);
+  const assistantDraftSequence = useRef(0);
   const editorRef = useRef<Editor | null>(null);
   const [projectName, setProjectName] = useState("设计项目");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -750,6 +801,34 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const [sketchOpen, setSketchOpen] = useState(false);
   const [editingSketch, setEditingSketch] = useState<WorkflowNode | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!starterPrompt && !starterReferenceNodeIds.length) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("starter");
+    url.searchParams.delete("referenceNodeId");
+    url.searchParams.delete("referenceNodeIds");
+    window.history.replaceState(window.history.state, "", url);
+  }, [projectId, starterPrompt, starterReferenceNodeIds]);
+  useEffect(() => {
+    if (!starterReferenceNodeIds.length || !graph || starterReferenceHandled.current) return;
+    const referenceNodeIds = starterReferenceNodeIds.filter((id) => graph.nodes.some((node) => node.id === id));
+    if (!referenceNodeIds.length) return;
+    const nonce = Date.now();
+    const frame = requestAnimationFrame(() => {
+      setReferenceRequest(current => {
+        starterReferenceHandled.current = true;
+        return current ?? {
+          nodeIds: referenceNodeIds,
+          nonce,
+          notice: referenceNodeIds.length > 1
+            ? "已将研究报告、moodboard 和色彩参考带入本次讨论；核对后再发送。"
+            : "已将刚保存的趋势简报带入本次讨论；核对后再发送。",
+          onConsumed: () => setReferenceRequest(current => current?.nonce === nonce ? null : current),
+        };
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [graph, starterReferenceNodeIds]);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("collectionId");
     if (!requested || requested.length > 128) return;
@@ -795,6 +874,28 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     setMobileView("assistant");
     if (focusInput) setAssistantFocusRequest(value => value + 1);
   }, [setSidebarOpen, setMobileView]);
+  const prepareAssistantFeedback = useCallback(async (request: {
+    assetId: string;
+    title: string;
+    revision: number;
+    prompt: string;
+    commentIds: readonly string[];
+  }) => {
+    const source = graphRef.current?.nodes.find(
+      node => node.type === "candidate" && node.payload.assetId === request.assetId,
+    );
+    const count = request.commentIds.length;
+    setAssistantDraftRequest({
+      nonce: ++assistantDraftSequence.current,
+      prompt: request.prompt,
+      ...(source ? { nodeIds: [source.id] } : {}),
+      notice: source
+        ? `已带入「${request.title}」和 ${count} 条已保存意见（图片意见 r${request.revision}）。发送前可继续编辑。`
+        : `已带入 ${count} 条已保存意见（图片意见 r${request.revision}）。图片来源暂未定位，请发送前核对。`,
+      onConsumed: () => setAssistantDraftRequest(null),
+    });
+    openAssistant(true);
+  }, [openAssistant]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canvasInitAttempt, setCanvasInitAttempt] = useState(0);
@@ -1399,6 +1500,45 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     [canvasMode, commitGraph, mutate, projectId, selectedId],
   );
 
+  useEffect(() => {
+    if (!intakeBrief || !graph || loading || intakeBriefFlight.current) return;
+    const existing = graph.nodes.find(
+      (node) => node.type === "brief" && node.payload.text === intakeBrief,
+    );
+    if (existing) {
+      intakeBriefFlight.current = true;
+      try {
+        clearProjectIntake(window.sessionStorage, projectId);
+      } catch {
+        // Optional session storage must not block an already recovered brief.
+      }
+      return;
+    }
+
+    intakeBriefFlight.current = true;
+    // The intake is an explicit user request; persist it as a graph node after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void addNode(
+      "asset",
+      "brief",
+      "初始设计简报",
+      {
+        text: intakeBrief,
+        source: "project-intake",
+      },
+    )
+      .then(() => {
+        try {
+          clearProjectIntake(window.sessionStorage, projectId);
+        } catch {
+          // The brief is already persisted in the workflow graph.
+        }
+      })
+      .catch(() => {
+        intakeBriefFlight.current = false;
+      });
+  }, [addNode, graph, intakeBrief, loading, projectId]);
+
   const handleAssetOption = (type: WorkflowAssetType) => {
     if (type === "sketch") {
       setEditingSketch(null);
@@ -1634,10 +1774,12 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
         >
           <section
             aria-label="设计工作流画布"
+            aria-hidden={layoutMode === "mobile" && sidebarOpen ? true : undefined}
             className={styles.canvasSection}
             data-canvas-view={canvasView}
             data-mobile-list-open={mobileListOpen ? "true" : "false"}
             data-canvas-panel-open={canvasPanelOpen ? "true" : "false"}
+            inert={layoutMode === "mobile" && sidebarOpen ? true : undefined}
           >
             <div className={styles.canvasChrome} data-canvas-chrome hidden={Boolean(focusedEditor) || layoutMode === "mobile" && sidebarOpen}>
               <Menu label="项目菜单" className={styles.canvasProjectMenu} trigger={<><span title={projectName}>{projectName}</span><span aria-hidden="true">⌄</span></>}>
@@ -1820,6 +1962,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       projectId={projectId}
                       graph={graph}
                       active={canvasView === "workbench"}
+                      mediaActive={!detailOpen && !generatedFilesOpen && !objectHistoryOpen && !collectionsOpen && !historyOpen && !helpOpen && !sketchOpen && !menuTab && !mobileListOpen && !(layoutMode === "mobile" && canvasPanelOpen)}
                       onEditor={(editor) => { editorRef.current = editor; }}
                       onReady={(handle) => { canvasHandle.current = handle; setSourceEditor(handle?.editor ?? null); }}
                       onGraph={commitGraph}
@@ -1881,7 +2024,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         setSelectedId(nodeIds[0] ?? null);
                       }}
                     /> : canvasView === "workbench" ? <DesignWorkbench graph={graph} assistantOpen={sidebarOpen} pendingProposal={proposal?.status === "pending"} onOpen={openDetails} onAdd={() => setMenuTab("assets")} onStart={() => { setSidebarOpen(true); setMobileView("assistant"); setAssistantFocusRequest((value) => value + 1); }} onReference={(nodeId) => { setSelectedId(nodeId); setReferenceRequest({ nodeId, nonce: Date.now() }); setSidebarOpen(true); setMobileView("assistant"); }} /> : null}
-                  {canvasView === "workflow" ? (
+                  {canvasView === "workflow" ? tldrawLicenseRequired ? (
+                    <CanvasLicenseRequired compact />
+                  ) : (
                     <WorkflowInteractionProvider
                       readOnly={canvasMode === "canvas"}
                       graph={graph}
@@ -1927,7 +2072,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   <div className={styles.emptyState}>
                     <h2>让想法成为设计方案</h2>
                     <p>
-                      在助手里描述需求，确认后生成。素材与结果会自动保存在画布上。
+                      在左侧助手里描述需求，确认后生成。素材与结果会自动保存在画布上。
                     </p>
                     <button
                       onClick={() => {
@@ -1937,7 +2082,21 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       }}
                       type="button"
                     >
-                      开始设计
+                      开始设计对话
+                    </button>
+                  </div>
+                ) : null}
+                {canvasView === "workbench" && graph.nodes.length === 0 && !sidebarOpen ? (
+                  <div className={styles.emptyState}>
+                    <h2>从一个想法开始</h2>
+                    <p>
+                      打开助手，描述设计方向；或拖入参考图、趋势卡片直接开始。
+                    </p>
+                    <button
+                      onClick={() => openAssistant(true)}
+                      type="button"
+                    >
+                      打开设计助手
                     </button>
                   </div>
                 ) : null}
@@ -2296,6 +2455,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                                 }}
                                 onClose={closeSession}
                                 onEnsureConversation={ensureConversation}
+                                onPrepareAssistantFeedback={prepareAssistantFeedback}
                                 onGraphRefresh={() => {
                                   void reload().catch((cause: unknown) =>
                                     setError(
@@ -2356,6 +2516,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             <div className={styles.assistantMount}>
               <WorkflowAssistantPanel
                 graph={graph}
+                starterPrompt={starterPrompt}
+                assistantDraftRequest={assistantDraftRequest}
                 onOpenGeneratedFiles={() => setGeneratedFilesOpen(true)}
                 canUploadReferences={canvasMode === "canvas" && canvasView === "workbench" && Boolean(sourceEditor && !sourceEditor.getIsReadonly())}
                 referencePlacement={{
@@ -2594,7 +2756,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
         ) : null}
         {generatedFilesOpen ? <GeneratedFilesPanel projectId={projectId} onClose={() => setGeneratedFilesOpen(false)}
           canPlace={canvasMode === "canvas" && canvasView === "workbench" && Boolean(sourceEditor && !sourceEditor.getIsReadonly())}
-          isPlaced={assetId => Boolean(sourceEditor?.getCurrentPageShapes().some(shape => "assetId" in shape.props && shape.props.assetId === assetId))}
+          isPlaced={(resourceId, domain = "asset") => Boolean(sourceEditor?.getCurrentPageShapes().some(shape => domain === "runway"
+            ? "mediaId" in shape.props && shape.props.mediaId === resourceId
+            : "assetId" in shape.props && shape.props.assetId === resourceId))}
           onPreparePlacement={async () => {
             const handle = canvasHandle.current;
             if (!handle || handle.editor.getIsReadonly()) throw new Error("当前白板不可编辑，请核对权限后重试。");
@@ -2609,6 +2773,17 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             commitGraph(result.graph);
             handle.applyResult(result.canvas, result.graph);
             await handle.flushLayout();
+            if (result.graph.nodes.some(node => node.id === result.nodeId && node.type === "media")) {
+              handle.locate(result.nodeId);
+              const shapeIds = handle.editor.getCurrentPageShapes().filter(shape => shape.meta.canvasNodeId === result.nodeId).map(shape => shape.id);
+              if (shapeIds.length) handle.editor.bringToFront(shapeIds);
+              if (layoutMode === "mobile") {
+                const camera = handle.editor.getCamera();
+                handle.editor.setCamera({ ...camera, x: camera.x - 40 / camera.z });
+              }
+              handle.editor.setSelectedShapes([]);
+              await handle.flushLayout();
+            }
           }}
           onLocate={nodeId => {
           if (!graph.nodes.some(node => node.id === nodeId)) return false;

@@ -1,6 +1,17 @@
 /*
  * 新时尚 AI 设计工作台 - 通用组件样式
  * 基于 V2 设计系统
+ *
+ * DEPRECATED（P0 重构，2026-11-13）：
+ *   .button-primary / .button-secondary / .button-ghost / .button-icon
+ *     → 使用 apps/web/src/components/ui.tsx 的 <Button variant="...">
+ *   .spinner
+ *     → 使用 apps/web/src/components/ui.module.css 的 .feedbackSpinner
+ *   .skeleton（底部块）
+ *     → 使用 apps/web/src/components/ui.module.css 的 .skeleton / .skeletonGroup
+ *
+ * 以下规则保留以防旧代码仍在引用；新组件不应引用本文件中的按钮/加载类。
+ * 迁移完成后统一删除带 DEPRECATED 注释的块。
  */
 
 /* ==================== 按钮组件 ==================== */

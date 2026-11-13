@@ -325,6 +325,7 @@
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   /* 进入：强 ease-out，与 design-tokens.css 的 --ease-out 保持一致 */
   --ease-enter: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out: var(--ease-enter);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   /* 保留当前实际生效的兼容曲线，避免尾部别名覆盖另一条定义。 */
   --ease-in-out: var(--ease-enter);
@@ -483,6 +484,32 @@
   --accent-primary: var(--color-signal);
   --accent-secondary: var(--color-signal-hover);
   --transition-base: var(--duration-normal);
+
+  /* ── P0 重构新增 token ──────────────────────────────────────────────────
+     对话面板、发现页、起步输入框专用；不影响已有组件。 */
+
+  /* 对话面板表面（比 paper 略深，区分于画布白板背景） */
+  --color-chat-surface: oklch(97% 0.007 100);
+  --color-chat-input-bg: var(--surface-3);
+  --color-chat-bubble-user: var(--color-brand-bg);
+  --color-chat-bubble-ai: var(--surface-3);
+
+  /* 对话面板浮层投影 */
+  --shadow-panel: 0 2px 8px rgba(24,24,24,0.08), 0 1px 2px rgba(24,24,24,0.04);
+  --shadow-panel-raised: 0 4px 20px rgba(24,24,24,0.12), 0 2px 4px rgba(24,24,24,0.06);
+
+  /* 发现页卡片悬停 */
+  --color-discovery-hover: oklch(96.5% 0.009 100);
+
+  /* 创作起步输入框（比普通 input 更突出） */
+  --color-starter-border: var(--color-border-strong);
+  --color-starter-focus-bg: var(--surface-3);
+  --shadow-starter-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 18%, transparent);
+
+  /* 字号扩充档位（向后兼容；已有 xs/base/lg/2xl 不变） */
+  --text-sm:   13px;   /* 次要文字过渡档（新增） */
+  --text-xl:   20px;   /* 模块标题（新增） */
+  --text-3xl:  36px;   /* Hero 文字，Landing / 发现页（新增） */
 }
 
 /* ============================================================

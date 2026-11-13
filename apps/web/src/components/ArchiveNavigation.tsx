@@ -8,7 +8,7 @@ import { useWorkspaceChrome } from "./WorkspaceChrome";
 import styles from "./archive-navigation.module.css";
 
 export type ArchiveSection =
-  "projects" | "design" | "studio" | "fabrics" | "trends";
+  "projects" | "design" | "studio" | "fabrics" | "trends" | "discover" | "assets";
 
 function NavigationIcon({ name }: { readonly name: ArchiveSection }) {
   return (
@@ -30,21 +30,20 @@ function NavigationIcon({ name }: { readonly name: ArchiveSection }) {
           <rect x="3" y="14" width="7" height="7" />
           <rect x="14" y="14" width="7" height="7" />
         </>
-      ) : name === "design" ? (
-        <>
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <path d="m3 16 5-5 5 5 3-3 5 5" />
-          <circle cx="8" cy="7" r="1" />
-        </>
-      ) : name === "studio" ? (
-        <>
-          <path d="M5 3h9l5 5v13H5Z" />
-          <path d="M14 3v6h5M8 13h8M8 17h6" />
-        </>
       ) : name === "fabrics" ? (
         <>
           <rect x="3" y="4" width="18" height="16" rx="2" />
           <path d="M8 4v16M16 4v16M3 10h18M3 15h18" />
+        </>
+      ) : name === "discover" || name === "trends" ? (
+        <>
+          <circle cx="12" cy="12" r="10" />
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+        </>
+      ) : name === "assets" ? (
+        <>
+          <rect x="3" y="7" width="13" height="13" rx="2" />
+          <path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
         </>
       ) : (
         <>
@@ -75,28 +74,12 @@ export function ArchiveNavigation({
   const context = projectId
     ? `?from=board&boardId=${encodeURIComponent(projectId)}`
     : "";
+  // 固定 4 项导航，不随 projectId 变化；项目内二级导航由项目页内部 tab 实现
   const entries: { id: ArchiveSection; title: string; href: string }[] = [
-    { id: "projects", title: "项目库", href: "/" },
-    ...(projectId
-      ? [
-          {
-            id: "design" as const,
-            title: "设计工作台",
-            href: `/${encodeURIComponent(projectId)}`,
-          },
-          {
-            id: "studio" as const,
-            title: "款式与交付",
-            href: `/${encodeURIComponent(projectId)}/studio`,
-          },
-        ]
-      : []),
-    { id: "fabrics", title: "面料库", href: `/fabrics${context}` },
-    {
-      id: "trends",
-      title: "趋势档案",
-      href: `/trends${context || "?from=projects"}`,
-    },
+    { id: "projects", title: "项目", href: "/" },
+    { id: "discover", title: "发现", href: `/trends${context || "?from=projects"}` },
+    { id: "fabrics",  title: "面料库", href: `/fabrics${context}` },
+    { id: "assets",   title: "资产", href: "/assets" },
   ];
   const links = entries.map((entry) => (
     <Link
@@ -109,6 +92,9 @@ export function ArchiveNavigation({
       <span>{entry.title}</span>
     </Link>
   ));
+  // 工作空间：项目 + 发现；灵感与资料：面料库 + 资产
+  const workspaceEntries = links.slice(0, 2);
+  const referenceEntries = links.slice(2);
   const directory = (
     <aside
       className={styles.rail}
@@ -135,10 +121,25 @@ export function ArchiveNavigation({
         <button className={styles.toggle} type="button" aria-label="收起工作区目录" onClick={() => {
           setOpen(false);
           requestAnimationFrame(() => document.getElementById("workspace-navigation-toggle")?.focus());
-        }}><span aria-hidden="true">‹</span></button>
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+        </button>
       </div>
+      <Link className={styles.newProject} href="/?new=1">
+        <span aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.5v11M2.5 8h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></span>
+        <span>新建</span>
+      </Link>
       <nav aria-label="工作区导航" className={styles.navigation} data-guide="projects-navigation">
-        <div className={styles.desktopLinks}>{links}</div>
+        <div className={styles.desktopLinks}>
+          <div className={styles.navGroup}>
+            <span className={styles.navGroupLabel}>工作空间</span>
+            {workspaceEntries}
+          </div>
+          <div className={styles.navGroup}>
+            <span className={styles.navGroupLabel}>灵感与资料</span>
+            {referenceEntries}
+          </div>
+        </div>
       </nav>
       {projectName ? (
         <div className={styles.project}>

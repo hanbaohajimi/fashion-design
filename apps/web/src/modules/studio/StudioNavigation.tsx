@@ -1,8 +1,9 @@
 "use client";
 
 /* Refactoring UI §2.1/§2.4/§3.6: three common tasks first; specialist groups disclosed on demand.
- * Navigation uses --workspace-nav-width; controls use --control-height. */
-import { useEffect, useState } from "react";
+ * Navigation uses --workspace-nav-width; controls use --control-height.
+ * P7：分组可折叠，默认只展开当前 tab 所在组，降低 12 项平铺的认知负担。 */
+import { useEffect, useMemo, useState } from "react";
 import { STUDIO_GROUPS, type StudioTab } from "./studio-navigation";
 import styles from "./studio.module.css";
 
@@ -16,6 +17,32 @@ export function StudioNavigation({
   readonly onChange: (value: StudioTab) => void;
 }) {
   const [focused, setFocused] = useState<StudioTab | null>(null);
+  // 默认展开当前 tab 所在组
+  const initialOpenGroup = STUDIO_GROUPS.find((group) =>
+    group.items.some((item) => item.value === value),
+  )?.label ?? STUDIO_GROUPS[0]?.label ?? "";
+  const [manualOpenGroups, setManualOpenGroups] = useState<ReadonlySet<string>>(
+    () => new Set([initialOpenGroup]),
+  );
+  // 当前 tab 所在组始终展开（派生计算，不用 effect）
+  const openGroups = useMemo(() => {
+    const activeGroup = STUDIO_GROUPS.find((group) =>
+      group.items.some((item) => item.value === value),
+    )?.label;
+    if (activeGroup && !manualOpenGroups.has(activeGroup)) {
+      const next = new Set(manualOpenGroups);
+      next.add(activeGroup);
+      return next as ReadonlySet<string>;
+    }
+    return manualOpenGroups;
+  }, [manualOpenGroups, value]);
+  const toggleGroup = (label: string) =>
+    setManualOpenGroups((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   useEffect(() => {
     let frame = 0;
     let active = true;
@@ -39,7 +66,9 @@ export function StudioNavigation({
     reveal();
     return () => { active = false; cancelAnimationFrame(frame); resize?.disconnect(); document.fonts.removeEventListener("loadingdone", reveal); };
   }, [id, value]);
-  const visibleTabs = STUDIO_GROUPS.flatMap((group) => [...group.items]);
+  const visibleTabs = STUDIO_GROUPS
+    .filter((group) => openGroups.has(group.label))
+    .flatMap((group) => [...group.items]);
   return (
     <div
       className={styles.workspaceNavigation}
@@ -53,62 +82,75 @@ export function StudioNavigation({
       }}
     >
       {STUDIO_GROUPS.map((group) => {
+        const isOpen = openGroups.has(group.label);
         return (
           <div
             className={styles.navigationGroup}
+            data-group-open={isOpen}
             key={group.label}
             role="presentation"
           >
-            <span className={styles.navigationLabel}>{group.label}</span>
-            <div id={`${id}-group-${group.label}`}>
-              {group.items.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  role="tab"
-                  data-guide={value === item.value ? "studio-navigation" : undefined}
-                  id={`${id}-tab-${item.value}`}
-                  aria-controls={`${id}-panel-${item.value}`}
-                  aria-selected={value === item.value}
-                  tabIndex={(focused ?? value) === item.value ? 0 : -1}
-                  onClick={() => onChange(item.value)}
-                  onKeyDown={(event) => {
-                    if (
-                      !["ArrowUp", "ArrowDown", "Home", "End"].includes(
-                        event.key,
+            <button
+              className={styles.navigationGroupToggle}
+              type="button"
+              aria-expanded={isOpen}
+              aria-controls={`${id}-group-${group.label}`}
+              onClick={() => toggleGroup(group.label)}
+            >
+              <span className={styles.navigationLabel}>{group.label}</span>
+              <span aria-hidden="true" className={styles.navigationChevron} data-open={isOpen}>›</span>
+            </button>
+            {isOpen ? (
+              <div id={`${id}-group-${group.label}`}>
+                {group.items.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    role="tab"
+                    data-guide={value === item.value ? "studio-navigation" : undefined}
+                    id={`${id}-tab-${item.value}`}
+                    aria-controls={`${id}-panel-${item.value}`}
+                    aria-selected={value === item.value}
+                    tabIndex={(focused ?? value) === item.value ? 0 : -1}
+                    onClick={() => onChange(item.value)}
+                    onKeyDown={(event) => {
+                      if (
+                        !["ArrowUp", "ArrowDown", "Home", "End"].includes(
+                          event.key,
+                        )
                       )
-                    )
-                      return;
-                    event.preventDefault();
-                    const index = visibleTabs.findIndex(
-                      (entry) => entry.value === item.value,
-                    );
-                    const next =
-                      event.key === "Home"
-                        ? visibleTabs[0]
-                        : event.key === "End"
-                          ? visibleTabs.at(-1)
-                          : visibleTabs[
-                              (index +
-                                (event.key === "ArrowDown" ? 1 : -1) +
-                                visibleTabs.length) %
-                                visibleTabs.length
-                            ];
-                    if (next) {
-                      setFocused(next.value);
-                      document
-                        .getElementById(`${id}-tab-${next.value}`)
-                        ?.focus();
-                    }
-                  }}
-                >
-                  <span>{item.label}</span>
-                  {value === item.value ? (
-                    <span aria-hidden="true">›</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
+                        return;
+                      event.preventDefault();
+                      const index = visibleTabs.findIndex(
+                        (entry) => entry.value === item.value,
+                      );
+                      const next =
+                        event.key === "Home"
+                          ? visibleTabs[0]
+                          : event.key === "End"
+                            ? visibleTabs.at(-1)
+                            : visibleTabs[
+                                (index +
+                                  (event.key === "ArrowDown" ? 1 : -1) +
+                                  visibleTabs.length) %
+                                  visibleTabs.length
+                              ];
+                      if (next) {
+                        setFocused(next.value);
+                        document
+                          .getElementById(`${id}-tab-${next.value}`)
+                          ?.focus();
+                      }
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    {value === item.value ? (
+                      <span aria-hidden="true">›</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         );
       })}

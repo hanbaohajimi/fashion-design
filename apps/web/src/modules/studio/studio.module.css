@@ -80,6 +80,34 @@
 .navigationGroup {
   display: grid;
 }
+.navigationGroupToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.navigationGroupToggle:hover {
+  background: var(--color-surface);
+}
+.navigationGroupToggle .navigationLabel {
+  padding: 0;
+}
+.navigationChevron {
+  font-size: var(--text-base);
+  color: var(--color-ink-tertiary);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.navigationChevron[data-open="true"] {
+  transform: rotate(90deg);
+}
 .navigationLabel {
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-xs);
@@ -706,6 +734,80 @@
   grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   gap: var(--space-6);
   align-items: start;
+}
+.reviewShare {
+  display: grid;
+  gap: var(--space-3);
+  border-top: var(--border-hairline) solid var(--color-border);
+  margin-block: var(--space-5);
+  padding-top: var(--space-4);
+}
+.reviewShare h3,
+.reviewShare p {
+  margin: 0;
+}
+.reviewShare h3 {
+  font-size: var(--text-base);
+}
+.reviewShare p {
+  margin-top: 4px;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.reviewShare .toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.reviewShare input {
+  min-width: min(360px, 100%);
+  flex: 1 1 260px;
+}
+.reviewShareList {
+  display: grid;
+  gap: var(--space-2);
+  border-top: var(--border-hairline) solid var(--color-border);
+  padding-top: var(--space-3);
+}
+.reviewShareListHeader,
+.reviewShareRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.reviewShareListHeader {
+  color: var(--color-ink-secondary);
+  font-size: var(--text-sm);
+}
+.reviewShareListHeader span,
+.reviewShareRow span {
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-xs);
+}
+.reviewShareRow {
+  min-width: 0;
+  border-top: var(--border-hairline) solid var(--color-divider);
+  padding-block: 10px;
+}
+.reviewShareRow > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.reviewShareActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+.reviewShareRow strong {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .reviewHeader {
   flex-wrap: wrap;
