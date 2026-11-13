@@ -15,6 +15,11 @@ type ReferenceChoice = {
   readonly title: string;
   readonly kind: string;
 };
+type SkillChoice = {
+  readonly id: string;
+  readonly name: string;
+  readonly prompt: string;
+};
 type Props = Omit<
   ComponentProps<typeof AssistantComposer>,
   "value" | "onChange"
@@ -25,6 +30,9 @@ type Props = Omit<
   referencedIds: readonly string[];
   onValueChange: (value: string) => void;
   onAddReference: (id: string) => boolean;
+  /** 技能列表，敲 / 触发浮层，选取后替换输入框内容 */
+  skillChoices?: readonly SkillChoice[];
+  onApplySkill?: (skill: SkillChoice) => void;
 };
 
 export function AssistantMentionInput({
@@ -34,6 +42,8 @@ export function AssistantMentionInput({
   referencedIds,
   onValueChange,
   onAddReference,
+  skillChoices = [],
+  onApplySkill,
   ref,
   ...props
 }: Props) {
@@ -60,6 +70,34 @@ export function AssistantMentionInput({
       ? findDraftMention(value, selection.start, selection.end, nodes)
       : null;
   const open = mention !== null;
+
+  // 斜杠命令：光标前紧接 / 触发技能选择浮层
+  const slashQuery = (() => {
+    if (!focused || composing || props.disabled || selection.value !== value || !skillChoices.length) return null;
+    const before = value.slice(0, selection.start);
+    const m = /(^|[\s\n])\/([\w一-龥]*)$/.exec(before);
+    return m ? { query: (m[2] ?? "").toLowerCase(), slashPos: before.length - 1 - (m[2]?.length ?? 0) } : null;
+  })();
+  const slashOpen = slashQuery !== null && dismissed !== key;
+  const [slashChosen, setSlashChosen] = useState({ key: "", id: "" });
+  const slashChoices = slashQuery
+    ? skillChoices.filter((s) => !slashQuery.query || s.name.toLowerCase().includes(slashQuery.query)).slice(0, 6)
+    : [];
+  const slashActiveIndex = slashChosen.key === key ? Math.max(0, slashChoices.findIndex((s) => s.id === slashChosen.id)) : 0;
+  const activeSkill = slashChoices[slashActiveIndex];
+
+  function chooseSkill(skill: SkillChoice) {
+    if (!slashQuery) return;
+    const before = value.slice(0, slashQuery.slashPos);
+    const after = value.slice(selection.start);
+    const cleaned = (before + after).trimStart();
+    setDismissed(key);
+    onValueChange(cleaned);
+    requestAnimationFrame(() => {
+      onApplySkill?.(skill);
+      input.current?.focus({ preventScroll: true });
+    });
+  }
   const choices = mention
     ? nodes
         .filter(
@@ -206,6 +244,40 @@ export function AssistantMentionInput({
           setFocused(false);
       }}
     >
+      {slashOpen && slashChoices.length > 0 && container
+        ? createPortal(
+            <div
+              className={styles.popup}
+              ref={popup}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.stopPropagation();
+                setDismissed(key);
+                input.current?.focus({ preventScroll: true });
+              }}
+            >
+              <p className={styles.hint}>↑ ↓ 选择，Enter 载入技能，Esc 关闭</p>
+              <div role="listbox" aria-label="常用技能" className={styles.choices}>
+                {slashChoices.map((skill, index) => (
+                  <button
+                    key={skill.id}
+                    role="option"
+                    aria-selected={index === slashActiveIndex}
+                    type="button"
+                    tabIndex={-1}
+                    onPointerDown={(e) => { if (e.pointerType !== "touch") e.preventDefault(); }}
+                    onPointerMove={(e) => { if (e.pointerType === "mouse") setSlashChosen({ key, id: skill.id }); }}
+                    onClick={() => chooseSkill(skill)}
+                  >
+                    <span>/{skill.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>,
+            container,
+          )
+        : null}
       {mention && container
         ? createPortal(
             <div
@@ -314,6 +386,27 @@ export function AssistantMentionInput({
           props.onCompositionEnd?.(event);
         }}
         onKeyDown={(event) => {
+          // 斜杠技能命令键盘导航（优先于 @ mention）
+          if (slashOpen && slashChoices.length > 0 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setDismissed(key);
+              return;
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              const index = (slashActiveIndex + (event.key === "ArrowDown" ? 1 : -1) + slashChoices.length) % slashChoices.length;
+              const skill = slashChoices[index];
+              if (skill) setSlashChosen({ key, id: skill.id });
+              return;
+            }
+            if (!event.shiftKey && event.key === "Enter" && activeSkill && !event.repeat) {
+              event.preventDefault();
+              chooseSkill(activeSkill);
+              return;
+            }
+          }
           if (mention && !event.ctrlKey && !event.metaKey && !event.altKey) {
             if (event.key === "Escape") {
               event.preventDefault();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import NumberFlow from "@number-flow/react";
 import type {
   WorkflowExecutionResult,
   WorkflowResultImage,
@@ -113,7 +114,7 @@ export function AssistantResultGallery({
     >
       <header className={styles.header}>
         <strong>{status}</strong>
-        <span className={styles.count}>{result.images.length} 张图片</span>
+        <span className={styles.count}><NumberFlow value={result.images.length} /> 张图片</span>
       </header>
       {result.attempts.failed || result.attempts.canceled ? (
         <p className={styles.outcome}>

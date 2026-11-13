@@ -1929,6 +1929,14 @@ export function WorkflowAssistantPanel({
               nodes={graph.nodes.filter(node => node.type !== "media")}
               referencedIds={referencedIds}
               onAddReference={addReference}
+              skillChoices={[...BUILT_IN_ASSISTANT_SKILLS, ...personalSkills]}
+              onApplySkill={(skill) => {
+                setPrompt(skill.prompt);
+                setReferencedIds([]);
+                setReferenceInstances({});
+                setDraftNotice(`已载入"${skill.name}"，发送前可以继续修改。`);
+                requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+              }}
               disabled={loading || !localDraft.ready || sending || contextSaving}
               maxLength={MAX_AGENT_MESSAGE_LENGTH}
               onValueChange={setPrompt}
