@@ -1,4 +1,4 @@
-.dialog { width: min(1180px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); padding: 16px; color: var(--ink-primary, #20332e); background: transparent; border: 1px solid transparent; border-radius: 12px; isolation: isolate; }
+.dialog { width: min(1180px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 24px); padding: 16px; color: var(--color-ink); background: transparent; border: 1px solid transparent; border-radius: 12px; isolation: isolate; }
 .surface { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--paper-base, #fffefa); border: 1px solid var(--control-border, #7c8d81); pointer-events: none; }
 .dialog::backdrop { background: rgb(13 24 20 / var(--picture-shade, .9)); }
 .dialog[data-closing]::backdrop, .dialog[data-closing] .surface { animation: picture-fade-out var(--picture-close, 500ms) var(--ease-exit, ease-in) forwards; }
