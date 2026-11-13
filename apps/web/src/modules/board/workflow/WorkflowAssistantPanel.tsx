@@ -181,7 +181,7 @@ export function WorkflowAssistantPanel({
   referenceRequest,
   referencesPreparing = false,
   onBeforeSend,
-  directExecution = false,
+  directExecution: _directExecution = false,
   onExecution,
   canUploadReferences = false,
   onPrepareImageImport,
@@ -1415,21 +1415,6 @@ export function WorkflowAssistantPanel({
     requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
   }, [collaborationReadOnly, contextSaving, graph.nodes, onError, reviewableCandidates, selected, sending]);
   const previewReference = graph.nodes.find(node => node.id === previewReferenceId && node.type === "reference_image");
-  const clearDiscussion = async () => {
-    const target = activeId.current;
-    const ids = [
-      ...new Set([...draftReferences.ids, ...(context?.focusNodeIds ?? []).filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"))]),
-    ];
-    if (
-      conversationId &&
-      (!context || !(await updateContext({ focusNodeIds: [] })))
-    )
-      return;
-    if (activeId.current !== target) return;
-    setReferencedIds([]);
-    setPrompt((value) => removeReferenceMentions(value, assistantReferenceNodes, ids));
-    composerInput.current?.focus({ preventScroll: true });
-  };
   const retryContext = () => {
     void refreshContext().catch((error: unknown) =>
       setContextError(
@@ -1628,125 +1613,26 @@ export function WorkflowAssistantPanel({
           <Button
             size="small"
             variant="ghost"
-            aria-label="历史对话"
-            title="历史对话"
-            aria-expanded={historyOpen}
-            onClick={() => setHistoryOpen((value) => !value)}
-          >
-            <WorkspaceIcon name="history" />
-          </Button>
-          {resultIndex.length ? (
-            <Button
-              size="small"
-              variant="ghost"
-              aria-label={`本轮结果 ${resultIndex.length} 条`}
-              title="本轮结果"
-              aria-expanded={resultIndexOpen}
-              onClick={() => {
-                setResultIndexOpen((value) => !value);
-                setHistoryOpen(false);
-                setSkillsOpen(false);
-                setDelegationsOpen(false);
-              }}
-            >
-              <WorkspaceIcon name="results" />
-            </Button>
-          ) : null}
-          <Button
-            size="small"
-            variant="ghost"
             aria-label="新建对话"
             title="新建对话"
-            disabled={
-              loading || sending || contextSaving
-            }
+            disabled={loading || sending || contextSaving}
             onClick={newConversation}
           >
             <WorkspaceIcon name="new_chat" />
           </Button>
-          <Button
-            size="small"
-            variant="ghost"
-            aria-label="设计要求"
-            className={ui.secondaryToolbarAction}
-            title="设计要求"
-            data-assistant-requirements-trigger
-            disabled={legacy}
-            onClick={() => setRequirementsOpen(true)}
-          >
-            <WorkspaceIcon name="requirements" />
-          </Button>
-          {!legacy ? (
-            <Button
-              size="small"
-              variant="ghost"
-              aria-label="常用技能"
-              title="常用技能"
-              aria-expanded={skillsOpen}
-              onClick={() => {
-                setSkillsOpen((value) => !value);
-                setSkillStatus(null);
-              }}
-            >
-              <WorkspaceIcon name="skills" />
-            </Button>
-          ) : null}
-          {!legacy ? (
-            <Button
-              size="small"
-              variant="ghost"
-              aria-label="设计委托"
-              className={ui.secondaryToolbarAction}
-              title="设计委托"
-              aria-expanded={delegationsOpen}
-              onClick={() => setDelegationsOpen((value) => !value)}
-            >
-              <WorkspaceIcon name="delegation" />
-            </Button>
-          ) : null}
-          {!legacy && reviewableCandidates.length ? (
-            <Button
-              size="small"
-              variant="ghost"
-              aria-label="审阅当前方案"
-              className={ui.secondaryToolbarAction}
-              title="审阅当前方案"
-              data-assistant-review-trigger
-              disabled={loading || sending || contextSaving}
-              onClick={prepareDesignReview}
-            >
-              <WorkspaceIcon name="review" />
-            </Button>
-          ) : null}
-          {!legacy && conversationId ? (
-            <button
-              className={`${ui.plannerTrigger} ${ui.secondaryToolbarAction}`}
-              disabled={loading || sending || contextSaving}
-              onClick={() => setWorkflowPlannerOpen(true)}
-              type="button"
-            >
-              分步计划
-            </button>
-          ) : null}
           {<Menu label="助手设置" trigger={<WorkspaceIcon name="settings" />}>
+            <button type="button" onClick={() => setHistoryOpen((v) => !v)}>历史对话</button>
+            {resultIndex.length ? <button type="button" onClick={() => { setResultIndexOpen((v) => !v); setHistoryOpen(false); setSkillsOpen(false); setDelegationsOpen(false); }}>本轮结果 ({resultIndex.length})</button> : null}
             {!legacy ? <button type="button" onClick={() => setRequirementsOpen(true)}>设计要求</button> : null}
-            {!legacy ? <button type="button" onClick={() => { setSkillsOpen(false); setDelegationsOpen(value => !value); }}>设计委托</button> : null}
+            {!legacy ? <button type="button" onClick={() => { setSkillsOpen((v) => !v); setSkillStatus(null); }}>常用技能</button> : null}
+            {!legacy ? <button type="button" onClick={() => { setSkillsOpen(false); setDelegationsOpen((v) => !v); }}>设计委托</button> : null}
             {!legacy && reviewableCandidates.length ? <button type="button" disabled={loading || sending || contextSaving} onClick={prepareDesignReview}>审阅当前方案</button> : null}
             {!legacy && conversationId ? <button type="button" disabled={loading || sending || contextSaving} onClick={() => setWorkflowPlannerOpen(true)}>分步计划</button> : null}
-            {legacy ? (
-              <button
-                onClick={() => setLegacyRunsOpen((value) => !value)}
-                type="button"
-              >
-                旧设计运行
-              </button>
-            ) : null}
+            {legacy ? <button onClick={() => setLegacyRunsOpen((v) => !v)} type="button">旧设计运行</button> : null}
             <button disabled={sending} onClick={toggleAgent} type="button">
               {agentVersion === 2 ? "暂停本项目设计助手" : "恢复设计助手"}
             </button>
-            <p className={ui.menuHint}>
-              设置作用于整个项目；暂停后，已有任务继续运行。
-            </p>
+            <p className={ui.menuHint}>设置作用于整个项目；暂停后，已有任务继续运行。</p>
           </Menu>}
         </div>
       </div>
@@ -2064,24 +1950,17 @@ export function WorkflowAssistantPanel({
                   : "先说说你想做的服装"}
             </h3>
             {!legacy ? (
-              <>
-                <p>
-                  {graph.nodes.some((node) => node.type === "candidate")
-                    ? directExecution ? "在白板中选择作品，写下要调整和保留的细节。也可以描述一个新想法。" : "选择作品旁的“继续修改”，写下要调整和保留的细节。也可以描述一个新想法。"
-                    : "写下款式、穿着场景和想保留的细节，也可以添加参考素材。"}
-                </p>
-                <AssistantStarters
-                  disabled={collaborationReadOnly || loading || sending || contextSaving}
-                  hasDraft={Boolean(prompt)}
-                  hasReferences={draftReferences.ids.length > 0}
-                  hasCandidates={reviewableCandidates.length > 0}
-                  onChoose={value => {
-                    setPrompt(value);
-                    composerInput.current?.focus({ preventScroll: true });
-                  }}
-                  onReview={prepareDesignReview}
-                />
-              </>
+              <AssistantStarters
+                disabled={collaborationReadOnly || loading || sending || contextSaving}
+                hasDraft={Boolean(prompt)}
+                hasReferences={draftReferences.ids.length > 0}
+                hasCandidates={reviewableCandidates.length > 0}
+                onChoose={value => {
+                  setPrompt(value);
+                  composerInput.current?.focus({ preventScroll: true });
+                }}
+                onReview={prepareDesignReview}
+              />
             ) : null}
           </div>
         ) : null}
@@ -2172,82 +2051,57 @@ export function WorkflowAssistantPanel({
               </div>
             ) : null}
             <div className={ui.discussion} aria-label="正在讨论" data-has-references={discussionIds.length > 0}>
-              <span>
-                {draftReferences.ids.length ? "本次发送的引用" : "当前讨论对象"}
-                {draftReferences.ids.length ? <span className={ui.referenceCount}> {draftReferences.ids.length} / {MAX_ASSISTANT_REFERENCES}</span> : null}
-              </span>
               {discussionIds.length > 0 ? (
-                <button
-                  className={styles.actionQuiet}
-                  disabled={
-                    sending ||
-                    pendingReply ||
-                    contextSaving ||
-                    (Boolean(conversationId) && !context)
-                  }
-                  onClick={() => void clearDiscussion()}
-                  type="button"
-                >
-                  改为讨论整个项目
-                </button>
-              ) : null}
-              <div className={ui.discussionReferences} data-discussion-references>
-                {discussionIds.length ? (
-                  discussionIds.map((id) => {
-                    const node = graph.nodes.find(item => item.id === id);
-                    const label = node ? referenceLabel(node, graph.nodes) : "已移除节点";
-                    return (
-                    <span
-                      className={ui.referenceChip}
-                      data-assistant-reference-id={id}
-                      key={id}
-                    >
-                      <button
-                        className={ui.referenceLocate}
-                        data-reference-preview={id}
-                        title={node?.type === "reference_image" ? `预览：${label}` : `在画布中定位：${label}`}
-                        aria-label={label}
-                        disabled={!node}
-                        onClick={() => node?.type === "reference_image" ? setPreviewReferenceId(id) : onLocate(id)}
-                        type="button"
+                <>
+                  <div className={ui.discussionReferences} data-discussion-references>
+                    {discussionIds.map((id) => {
+                      const node = graph.nodes.find(item => item.id === id);
+                      const label = node ? referenceLabel(node, graph.nodes) : "已移除节点";
+                      return (
+                      <span
+                        className={ui.referenceChip}
+                        data-assistant-reference-id={id}
+                        key={id}
                       >
-          {node && node.type !== "media" ? <AssistantReferencePreview node={node} /> : null}
-                        <span className={ui.referenceCaption}>
-                          <span>{label}</span>
-                          {node ? <small>{referenceTypeLabel(node)}</small> : null}
-                        </span>
-                      </button>
-                      {draftReferences.ids.length ? (
                         <button
-                          className={ui.removeReference}
-                          disabled={sending || contextSaving}
-                          aria-label={`移除引用 ${node ? label : id}`}
-                          onClick={() => {
-                            setReferencedIds((current) =>
-                              current.filter((item) => item !== id),
-                            );
-                            setPrompt((value) =>
-                              removeReferenceMentions(value, assistantReferenceNodes, [id]),
-                            );
-                          }}
+                          className={ui.referenceLocate}
+                          data-reference-preview={id}
+                          title={node?.type === "reference_image" ? `预览：${label}` : `在画布中定位：${label}`}
+                          aria-label={label}
+                          disabled={!node}
+                          onClick={() => node?.type === "reference_image" ? setPreviewReferenceId(id) : onLocate(id)}
                           type="button"
                         >
-                          ×
+            {node && node.type !== "media" ? <AssistantReferencePreview node={node} /> : null}
+                          <span className={ui.referenceCaption}>
+                            <span>{label}</span>
+                            {node ? <small>{referenceTypeLabel(node)}</small> : null}
+                          </span>
                         </button>
-                      ) : null}
-                    </span>
-                    );
-                  })
-                ) : (
-                  <span>
-                    {conversationId && !context
-                      ? contextError
-                        ? "讨论对象读取失败"
-                        : "正在读取…"
-                      : "整个项目"}
-                  </span>
-                )}
-              </div>
+                        {draftReferences.ids.length ? (
+                          <button
+                            className={ui.removeReference}
+                            disabled={sending || contextSaving}
+                            aria-label={`移除引用 ${node ? label : id}`}
+                            onClick={() => {
+                              setReferencedIds((current) =>
+                                current.filter((item) => item !== id),
+                              );
+                              setPrompt((value) =>
+                                removeReferenceMentions(value, assistantReferenceNodes, [id]),
+                              );
+                            }}
+                            type="button"
+                          >
+                            ×
+                          </button>
+                        ) : null}
+                      </span>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
             </div>
             {contextError ? (
               <p role="alert">
@@ -2321,7 +2175,6 @@ export function WorkflowAssistantPanel({
               nodes={graph.nodes.filter(node => node.type !== "media")}
               referencedIds={referencedIds}
               onAddReference={addReference}
-              aria-describedby={`${inputId}-hint`}
               disabled={loading || !localDraft.ready || sending || contextSaving}
               maxLength={MAX_AGENT_MESSAGE_LENGTH}
               onValueChange={setPrompt}
@@ -2334,11 +2187,6 @@ export function WorkflowAssistantPanel({
               rows={3}
               value={prompt}
             />
-            <p className={ui.helper} id={`${inputId}-hint`}>
-              {pendingReply
-                ? "助手正在回复，你可以先写下下一条需求。"
-                : directExecution ? "讨论不生图，明确要求生成或修改时执行。" : "发送后先讨论需求，生成前会请你确认。"}
-            </p>
           </>
         )}
         <div className={styles.composerActions}>
