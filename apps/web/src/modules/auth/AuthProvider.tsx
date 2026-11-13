@@ -25,6 +25,7 @@ import {
   identifyAnalyticsUser,
   resetAnalyticsUser,
 } from "../../observability/analytics";
+import { currentAuthReturnTo, loginPathWithReturnTo } from "./auth-return";
 
 export const SESSION_CHANGE_KEY = "fashion:session-change";
 export function announceSessionChange(): void {
@@ -56,7 +57,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [sessionCheck, setSessionCheck] = useState(0);
   const isPrototypePath = process.env.NODE_ENV !== "production" && pathname === "/prototypes/impeccable";
-  const isPublicPath = isPrototypePath || PUBLIC_AUTH_PATHS.has(pathname) || /^\/share\/[\w-]+$/u.test(pathname);
+  const isMarketingPath = pathname === "/";
+  const isPublicPath = isPrototypePath || PUBLIC_AUTH_PATHS.has(pathname) || /^\/(?:share|review)\/[\w-]+$/u.test(pathname);
   const draftOwner = useRef<string | null>(null);
   const clearOwnedDrafts = useCallback(() => {
     const owner = draftOwner.current;
@@ -110,7 +112,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           clearOwnedDrafts();
           sessionRef.current = null;
           setSession(null);
-          router.replace("/login");
+          if (!isMarketingPath) router.replace(loginPathWithReturnTo(currentAuthReturnTo()));
           return;
         }
         if (!refreshed.ok) throw new Error("会话刷新暂时不可用");
@@ -124,7 +126,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           clearOwnedDrafts();
           sessionRef.current = null;
           setSession(null);
-          router.replace("/login");
+          if (!isMarketingPath) router.replace(loginPathWithReturnTo(currentAuthReturnTo()));
           return;
         }
         if (!sessionRef.current) {
@@ -148,7 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const promise = task().finally(() => { if (flight.current === promise) flight.current = null; });
     flight.current = promise;
     return promise;
-  }, [clearOwnedDrafts, isPublicPath, router]);
+  }, [clearOwnedDrafts, isMarketingPath, isPublicPath, router]);
 
   const logout = useCallback((): Promise<void> => {
     if (logoutFlight.current) return logoutFlight.current;

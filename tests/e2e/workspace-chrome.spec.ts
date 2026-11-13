@@ -62,6 +62,34 @@ test("画布完全释放导航占位，开合保留视野与聊天草稿，菜�
   expect(state.errors).toEqual([]);
 });
 
+test("项目任务抽屉展示运行概览与最近活动", async ({ page }) => {
+  const state = await prepareZhiya(page, {
+    realClock: true,
+    activity: {
+      ...emptyActivity(),
+      preparing: 2,
+      queued: 1,
+      executing: 1,
+      awaitingUser: 2,
+      waiting: { input: 1, confirmation: 1, resume: 0 },
+      recent: [{ id: "agent:recent", domain: "agent", outcome: "completed", updatedAt: "2026-11-08T12:00:00Z" }],
+    },
+  });
+  await loadZhiya(page);
+  const trigger = page.getByRole("button", { name: /^项目任务/ });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "项目任务", exact: true });
+  const overview = dialog.getByRole("region", { name: "项目运行概览", exact: true });
+  await expect(overview).toContainText("5 项工作正在推进或等待你的决定");
+  await expect(overview).toContainText("准备中");
+  await expect(overview).toContainText("补充输入 1");
+  await overview.locator("summary").click();
+  await expect(overview).toContainText("设计运行");
+  await expect(overview).toContainText("已完成");
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
 test("资料和画布分别记忆，表单草稿、离开保护、图片聚焦和断网提示保留", async ({ page }) => {
   await prepareZhiya(page);
   await page.route(`**/api/projects/${PROJECT}/studio`, route => route.fulfill({ json: workspaceFixture() }));

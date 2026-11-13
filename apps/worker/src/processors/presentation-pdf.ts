@@ -3,6 +3,13 @@ import sharp from "sharp";
 import { studioPresentationSchema } from "@fashion/shared";
 import type { TechPackPdfImage } from "./tech-pack-pdf";
 
+interface BrandPdfSnapshot {
+  readonly colors: readonly { readonly hex: string; readonly name: string }[];
+  readonly logo?: Buffer;
+  readonly name: string;
+  readonly revision: number;
+}
+
 const MARGIN = 42;
 const BOTTOM = 520;
 const DISCLAIMER = "展示图用于视觉说明。AI 生成或编辑的图像不能确认真实版型、合体度、面料性能或商品成分，交付前应逐张核对商品外观。";
@@ -13,6 +20,7 @@ export async function renderPresentationPdf(input: {
   styleCode: string;
   styleName: string;
   images: TechPackPdfImage[];
+  brand?: BrandPdfSnapshot;
 }, font: (document: PDFKit.PDFDocument, text: string) => string): Promise<Buffer> {
   const set = studioPresentationSchema.parse(input.payload);
   const document = new PDFDocument({ autoFirstPage: false, bufferPages: true, size: "A4", layout: "landscape", margin: MARGIN,
@@ -34,6 +42,8 @@ export async function renderPresentationPdf(input: {
       document.font(bodyFont).fillColor("#687168").fontSize(9).text(input.styleCode + " / REV " + input.revision, MARGIN, 29,
         { width: width(), height: 14, lineBreak: false, ellipsis: true });
       document.fillColor("#242824").fontSize(21).text(title + (continued ? " / 续页" : ""), MARGIN, 54, { width: width() });
+      if (input.brand?.logo)
+        document.image(input.brand.logo, document.page.width - MARGIN - 42, 24, { fit: [42, 42] });
       cursor = Math.max(104, document.y + 16);
     };
     const ensure = (height: number) => { if (cursor + height > BOTTOM) page(section, true); };
@@ -59,6 +69,8 @@ export async function renderPresentationPdf(input: {
     };
     page(set.name);
     line(input.styleCode + " · " + input.styleName);
+    if (input.brand)
+      line("品牌资料：" + input.brand.name + " r" + input.brand.revision + " · 色彩：" + input.brand.colors.map((color) => `${color.name} ${color.hex}`).join("、"));
     line("商品展示包 / " + ({ marketplace: "电商", social: "社交", lookbook: "系列" } as const)[set.channel]);
     line(set.status === "READY" ? "交付准备已完成 · 所有图片已人工复核" : "草稿 · 图片仍需人工复核");
     line("绑定款式修订：" + set.styleRevisionId + "；展示包版本：" + input.revision);

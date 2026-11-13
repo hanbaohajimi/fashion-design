@@ -1,4 +1,4 @@
-import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
+import { ExportAspect, ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
 import sharp from "sharp";
 import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,7 @@ function exportRecord(overrides: Record<string, unknown> = {}) {
     expiresAt: null,
     fileName: null,
     format: ExportFormat.PNG,
+    aspect: ExportAspect.ORIGINAL,
     id: "export-a",
     maxEdge: 1_600,
     mimeType: null,
@@ -43,7 +44,6 @@ describe("export processor", () => {
     vi.unstubAllEnvs();
   });
   const database = {
-    studioDocument: { findUnique: vi.fn() },
     designAsset: { findMany: vi.fn() },
     $transaction: vi.fn(),
     workflowOutbox: {
@@ -56,6 +56,7 @@ describe("export processor", () => {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    studioDocument: { findUnique: vi.fn(), findFirst: vi.fn() },
   };
   const storage = {
     delete: vi.fn(),
@@ -79,6 +80,7 @@ describe("export processor", () => {
       fn(database),
     );
     database.exportJob.updateMany.mockResolvedValue({ count: 1 });
+    database.studioDocument.findUnique.mockResolvedValue(null);
   });
 
   it("fails the entire PDF when any required Look image cannot be read", async () => {
@@ -239,6 +241,99 @@ describe("export processor", () => {
       format: "jpeg",
       width: 2_400,
     });
+  });
+
+  it("固定比例导出按主体注意力裁切并保留标准长边", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({ aspect: ExportAspect.SQUARE }),
+    );
+    const processExport = createExportProcessor({
+      database: database as never,
+      download: async () => source,
+      storage,
+    });
+
+    await processExport("export-a");
+
+    const output = storage.putTemporary.mock.calls[0]?.[1] as Buffer;
+    expect(await sharp(output).metadata()).toMatchObject({
+      format: "png",
+      width: 1_600,
+      height: 1_600,
+    });
+  });
+
+  it("单图 PDF 使用打印页并保留当前比例裁切", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({ aspect: ExportAspect.PORTRAIT, format: ExportFormat.PDF }),
+    );
+    const processExport = createExportProcessor({
+      database: database as never,
+      download: async () => source,
+      storage,
+    });
+
+    await processExport("export-a");
+
+    const output = storage.putTemporary.mock.calls[0]?.[1] as Buffer;
+    expect(output.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(storage.putTemporary).toHaveBeenCalledWith(
+      expect.stringMatching(/\.pdf$/u),
+      expect.any(Buffer),
+      "application/pdf",
+    );
+  });
+
+  it("打印 PDF 读取明确的品牌修订和项目身份快照", async () => {
+    database.exportJob.findUnique.mockResolvedValue(
+      exportRecord({
+        brandRevisionId: "brand-r2",
+        format: ExportFormat.PDF,
+        project: { name: "秋冬通勤系列" },
+      }),
+    );
+    database.studioDocument.findUnique.mockResolvedValue({
+      payload: {
+        avoid: [],
+        colors: [],
+        fabricPreferences: [],
+        name: "森野",
+        notes: "",
+        referenceAssetIds: [],
+        signatureDetails: [],
+        silhouettes: [],
+      },
+      revision: 2,
+      type: "BRAND_PROFILE",
+    });
+    const processExport = createExportProcessor({
+      database: database as never,
+      download: async () => source,
+      storage,
+    });
+
+    await processExport("export-a");
+
+    expect(database.studioDocument.findUnique).toHaveBeenCalledWith({
+      select: { payload: true, revision: true, type: true },
+      where: { id: "brand-r2", projectId: "project-a", ownerId: "user-a", type: "BRAND_PROFILE" },
+    });
+    expect(database.exportJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fileName: expect.stringContaining("秋冬通勤系列"),
+        }),
+      }),
+    );
+  });
+
+  it("旧的排队导出也重新核验品牌归属，拒绝后不读取或发布图片", async () => {
+    database.exportJob.findUnique.mockResolvedValue(exportRecord({ brandRevisionId: "private-brand", format: ExportFormat.PDF }));
+    database.studioDocument.findUnique.mockResolvedValue(null);
+    const download = vi.fn();
+    await expect(createExportProcessor({ database: database as never, storage, download })("export-a")).rejects.toMatchObject({ code: "EXPORT_BRAND_UNAVAILABLE" });
+    expect(download).not.toHaveBeenCalled();
+    expect(storage.putTemporary).not.toHaveBeenCalled();
   });
 
   it("Lookbook PDF 含系列 Look 网格并输出 PDF", async () => {

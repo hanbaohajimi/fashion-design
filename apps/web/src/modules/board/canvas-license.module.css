@@ -1,0 +1,52 @@
+.surface {
+  display: grid;
+  min-height: min(620px, calc(100dvh - 140px));
+  align-content: center;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: clamp(28px, 6vw, 84px);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+.compact {
+  min-height: 100%;
+  padding: var(--space-6);
+}
+.mark {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: var(--border-hairline) solid var(--color-action);
+  border-radius: 50%;
+  color: var(--color-action);
+  font-family: var(--font-serif);
+  font-size: 24px;
+}
+.surface h1 {
+  max-width: 18ch;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.surface p,
+.surface small {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+.surface small {
+  color: var(--color-ink-tertiary);
+  font-size: var(--text-sm);
+}
+.surface code {
+  margin-inline: 3px;
+  color: var(--color-action-hover);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}

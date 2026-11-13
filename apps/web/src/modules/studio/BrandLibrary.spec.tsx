@@ -69,7 +69,7 @@ it("replays the exact brand patch after losing a successful response", async () 
   fireEvent.click(screen.getByRole("button", { name: "将此修订加入画布" }));
   await screen.findByText("响应丢失");
   fireEvent.click(screen.getByRole("button", { name: "将此修订加入画布" }));
-  await screen.findByText(/品牌规则与认可案例已加入画布/);
+  await screen.findByText(/品牌规则、标识与认可案例已加入画布/);
   expect(fetchWorkflow).toHaveBeenCalledTimes(1);
   expect(patchWorkflow).toHaveBeenCalledTimes(2);
   expect(vi.mocked(patchWorkflow).mock.calls[0]).toEqual(
@@ -87,6 +87,23 @@ it("replays the exact brand patch after losing a successful response", async () 
       },
     ],
   });
+});
+it("adds a selected logo as a dedicated workflow reference without duplicating it as an approved case", async () => {
+  const logoBrand = {
+    ...brand,
+    currentRevision: {
+      ...brand.currentRevision,
+      payload: { ...brand.currentRevision.payload, logoAssetId: "asset-front", referenceAssetIds: ["asset-front"] },
+    },
+  } as StudioDocumentView;
+  render(<BrandLibrary {...props()} data={studioFixture({ brandProfiles: [logoBrand] })} />);
+  await screen.findByDisplayValue("山岚");
+  fireEvent.click(screen.getByRole("button", { name: "将此修订加入画布" }));
+  await waitFor(() => expect(patchWorkflow).toHaveBeenCalledTimes(1));
+  const operations = vi.mocked(patchWorkflow).mock.calls[0]?.[1].operations ?? [];
+  expect(operations.filter((operation) => operation.type === "add_node" && operation.node.type === "reference_image")).toHaveLength(1);
+  const logo = operations.find((operation) => operation.type === "add_node" && operation.node.payload.brandAssetRole === "logo");
+  expect(logo).toMatchObject({ type: "add_node", node: { payload: { assetId: "asset-front", brandAssetRole: "logo", role: "detail_ref" } } });
 });
 it("imports an accessible source revision with a stable retry key", async () => {
   const values = props();

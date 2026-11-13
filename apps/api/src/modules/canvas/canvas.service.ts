@@ -31,6 +31,7 @@ const materialTypes = new Set([
   "trend",
   "fabric",
   "legacy",
+  "media",
 ]);
 
 @Injectable()

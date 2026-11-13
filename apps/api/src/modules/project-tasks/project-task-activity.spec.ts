@@ -5,11 +5,20 @@ const group = (status: string, count: number) => ({ status, _count: { _all: coun
 const end = (id: string, status: string, at = "2026-11-08T10:00:00Z") => ({ id, status, updatedAt: new Date(at) });
 function setup() {
   const table = () => ({ groupBy: vi.fn().mockResolvedValue([]), findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) });
-  const db = { generationTask: table(), workflowExecution: table(), agentRun: table(), runwayRun: table(), exportJob: table(), agentMessage: table(), workflowProposal: table(), workflowAttempt: table() };
-  return { db, read: () => readProjectTaskActivity(db as never, "project-a") };
+  const db = { generationTask: table(), workflowExecution: table(), agentRun: table(), runwayRun: table(), exportJob: table(), agentMessage: table(), workflowProposal: table(), workflowAttempt: table(), studioDocument: table(), studioReviewRead: table() };
+  return { db, read: () => readProjectTaskActivity(db as never, "user-a", "project-a") };
 }
 
 describe("项目活动的权威摘要", () => {
+  it("待处理评审总数独立于最近终态窗口和列表分页", async () => {
+    const { db, read } = setup();
+    db.studioDocument.count.mockResolvedValue(27);
+    const result = await read();
+    expect(result).toMatchObject({ counts: { attention: 27 }, activity: { awaitingUser: 27, waiting: { confirmation: 27 } } });
+    expect(db.studioDocument.count).toHaveBeenCalledWith({ where: { projectId: "project-a", type: "REVIEW", payload: { path: ["decision"], equals: "CHANGES_REQUESTED" }, reviewReads: { none: { userId: "user-a" } } } });
+    expect(db.studioDocument.findMany).not.toHaveBeenCalled();
+    expect(db.studioReviewRead.findMany).not.toHaveBeenCalled();
+  });
   it("分开历史失败与等待用户，按子任务的真实执行状态区分排队、分析与创作", async () => {
     const { db, read } = setup();
     db.generationTask.groupBy.mockResolvedValue([group("QUEUED", 2), group("RUNNING", 1), group("FAILED", 50)]);

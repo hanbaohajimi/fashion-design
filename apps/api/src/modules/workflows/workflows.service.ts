@@ -1,4 +1,4 @@
-import { sketchDocumentSchema, swatchColorsSchema } from "@fashion/shared";
+import { canvasMediaPayloadSchema, canvasMediaUrl, sketchDocumentSchema, swatchColorsSchema } from "@fashion/shared";
 import { ProjectAccessPolicy, type ProjectAction } from "../studio/project-access.policy";
 import { requireProjectFile } from "../files/project-file-access";
 import {
@@ -620,6 +620,16 @@ export class WorkflowsService {
     nodes: ReadonlyMap<string, GraphNode>,
   ): Promise<void> {
     for (const node of nodes.values()) {
+      if (node.type === "media") {
+        const parsed = canvasMediaPayloadSchema.safeParse(node.payload);
+        if (!parsed.success || node.kind !== "asset") throw invalidGraph("媒体素材必须使用有效的项目文件身份");
+        const media = await transaction.runwayMedia.findFirst({ where: { id: parsed.data.mediaId, projectId }, select: { mimeType: true, source: true, width: true, height: true, durationMs: true, runId: true, run: { select: { showId: true } } } });
+        if (!media || (media.source as Record<string, unknown> | null)?.input === true || !/^(video|audio)\//u.test(media.mimeType)
+          || parsed.data.mimeType !== media.mimeType || parsed.data.mediaKind !== (media.mimeType.startsWith("video/") ? "video" : "audio")
+          || parsed.data.mediaUrl !== canvasMediaUrl(projectId, parsed.data.mediaId) || parsed.data.runId !== media.runId || parsed.data.showId !== media.run.showId
+          || parsed.data.width !== media.width || parsed.data.height !== media.height || parsed.data.durationMs !== media.durationMs)
+          throw invalidGraph("媒体身份、来源或文件信息与项目记录不一致，请刷新后重试");
+      }
       if (node.type === "sketch" && node.payload.sketchDocument !== undefined) {
         const parsed = sketchDocumentSchema.safeParse(node.payload.sketchDocument);
         if (!parsed.success) throw invalidGraph("草图笔画格式无效或超过大小限制");

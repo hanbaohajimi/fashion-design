@@ -50,7 +50,7 @@ export function useRealtimeOutfit({ projectId, draft, revisions, base, capabilit
   }, [projectId]);
   useEffect(() => {
     if (!enabled || !supported) return;
-    const timer = setTimeout(() => void drain(), 350);
+    const timer = setTimeout(() => void drain(), attempt > 0 ? 0 : 350);
     return () => clearTimeout(timer);
   }, [enabled, supported, signature, attempt, drain]);
   return {

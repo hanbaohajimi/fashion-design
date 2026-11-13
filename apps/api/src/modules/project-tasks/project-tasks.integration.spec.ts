@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@fashion/db";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { ProjectTasksService } from "./project-tasks.service";
@@ -98,4 +99,38 @@ it("真实父子记录只计一次，父执行的创作状态跟随图片子任�
     await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } });
     await prisma.project.delete({ where: { id: project.id } });
   }
+});
+
+it("较早未处理评审可连续翻页，待处理计数不受20条样本影响且按账号确认", async () => {
+  const project = await prisma.project.create({ data: { wsId: workspaceId, name: "评审分页隔离项目" } });
+  try {
+    const oldest = new Date("2026-11-01T00:00:00Z");
+    await prisma.studioDocument.createMany({ data: Array.from({ length: 36 }, (_, index) => ({
+      id: `review-${randomUUID()}`, projectId: project.id, ownerId, type: "REVIEW" as const, documentId: randomUUID(), revision: 1,
+      createdAt: new Date(oldest.getTime() + index * 1000),
+      payload: { name: "隔离评审", targetType: "STYLE", targetRevisionId: "fixed-style", decision: index < 5 ? "CHANGES_REQUESTED" : "APPROVED", text: index < 5 ? "请调整袖口" : "已核对" },
+    })) });
+    const pending: string[] = [];
+    let next: string | undefined;
+    do {
+      const page = await service.list(ownerId, project.id, { group: "attention", limit: 2, ...(next ? { cursor: next } : {}), activity: true });
+      expect(page.counts.attention).toBe(5);
+      expect(page.activity?.awaitingUser).toBe(5);
+      pending.push(...page.items.map(item => item.id));
+      next = page.nextCursor ?? undefined;
+    } while (next);
+    expect(new Set(pending).size).toBe(5);
+    expect(pending).toHaveLength(5);
+    const acknowledgedId = pending[0]?.slice("review:".length);
+    if (!acknowledgedId) throw new Error("缺少待处理评审");
+    await prisma.studioReviewRead.create({ data: { projectId: project.id, userId: ownerId, studioDocumentId: acknowledgedId } });
+    const owner = await service.list(ownerId, project.id, { group: "active", limit: 1, activity: true });
+    const viewer = await service.list(viewerId, project.id, { group: "attention", limit: 1, activity: true });
+    expect(owner.counts.attention).toBe(4);
+    expect(viewer.counts.attention).toBe(5);
+    expect(viewer.items.every(item => item.actions.length === 0)).toBe(true);
+    const ended = await service.list(ownerId, project.id, { group: "ended", limit: 50 });
+    expect(ended.items.filter(item => item.domain === "review")).toHaveLength(32);
+    expect(ended.items.some(item => item.id === `review:${acknowledgedId}`)).toBe(true);
+  } finally { await prisma.project.delete({ where: { id: project.id } }); }
 });

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@fashion/db";
 import { projectTaskGroup, type ProjectTaskActivity, type ProjectTaskDomain, type ProjectTaskTerminal } from "@fashion/shared";
+import { pendingProjectReviews } from "./project-review-tasks";
 
 type StatusCount = { status: string; _count: { _all: number } };
 type TerminalRow = { id: string; status: string; updatedAt: Date };
@@ -15,10 +16,11 @@ const outcomes: Record<ProjectTaskDomain, Record<string, ProjectTaskTerminal["ou
   runway: { SUCCEEDED: "completed", FAILED: "failed", CANCELED: "canceled" },
   export: { SUCCEEDED: "completed", FAILED: "failed" },
   assistant: { COMPLETED: "completed", FAILED: "failed", CANCELED: "canceled" },
+  review: { APPROVED: "completed", CHANGES_REQUESTED: "failed" },
 };
 
 /** Called only after the existing project read permission has succeeded. */
-export async function readProjectTaskActivity(db: PrismaClient, projectId: string): Promise<{
+export async function readProjectTaskActivity(db: PrismaClient, userId: string, projectId: string): Promise<{
   activity: ProjectTaskActivity;
   counts: { running: number; attention: number };
 }> {
@@ -28,7 +30,7 @@ export async function readProjectTaskActivity(db: PrismaClient, projectId: strin
   const grouped = { by: ["status"] as ["status"], _count: { _all: true as const } };
   const terminal = { select, orderBy: [...orderBy], take: 20 };
   const [generations, workflows, agents, runways, exports, replies, proposals,
-    generationEnds, workflowEnds, agentEnds, runwayEnds, exportEnds, replyEnds, activeWorkflows] = await Promise.all([
+    generationEnds, workflowEnds, agentEnds, runwayEnds, exportEnds, replyEnds, activeWorkflows, pendingReviews] = await Promise.all([
     db.generationTask.groupBy({ ...grouped, where: generation }),
     db.workflowExecution.groupBy({ ...grouped, where: { projectId } }),
     db.agentRun.groupBy({ ...grouped, where: { projectId } }),
@@ -43,6 +45,7 @@ export async function readProjectTaskActivity(db: PrismaClient, projectId: strin
     db.exportJob.findMany({ ...terminal, where: { projectId, status: { in: ["SUCCEEDED", "FAILED"] } } }),
     db.agentMessage.findMany({ ...terminal, where: { ...assistant, status: { in: ["COMPLETED", "FAILED", "CANCELED"] } } }),
     db.workflowExecution.findMany({ where: { projectId, status: { in: ["queued", "pending", "running", "dispatching"] } }, select: { id: true, status: true } }),
+    db.studioDocument.count({ where: pendingProjectReviews(projectId, userId) }),
   ]);
   const attempts = activeWorkflows.length ? await db.workflowAttempt.findMany({
     where: { projectId, executionId: { in: activeWorkflows.map(row => row.id) } },
@@ -50,6 +53,8 @@ export async function readProjectTaskActivity(db: PrismaClient, projectId: strin
   }) : [];
   const counts = { running: 0, attention: proposals };
   const waiting = { input: 0, confirmation: proposals, resume: 0 };
+  counts.attention += pendingReviews;
+  waiting.confirmation += pendingReviews;
   let preparing = 0, queued = 0, executing = 0;
   const groups: [ProjectTaskDomain, StatusCount[]][] = [
     ["generation", generations], ["workflow", workflows], ["agent", agents],

@@ -396,6 +396,7 @@ export type AgentAction =
     };
 
 export * from "./studio";
+export * from "./studio-share";
 export * from "./image-workspace";
 export * from "./image-adjustments";
 export * from "./image-text";
@@ -407,11 +408,16 @@ export * from "./fabric-details";
 export * from "./sketch-document";
 export * from "./runway";
 export * from "./assistant-stream";
+export * from "./assistant-skills";
+export * from "./assistant-delegations";
+export * from "./research";
+export * from "./research-analysis";
 export * from "./project-tasks";
 export * from "./project-generated-files";
 export * from "./realtime-tryon";
 export * from "./wardrobe";
 export * from "./canvas-workspace";
+export * from "./canvas-media";
 export { privateStorageObjectKey } from "./private-storage-url";
 export * from "./generation-image-sources";
 export * from "./workflow-execution-result";

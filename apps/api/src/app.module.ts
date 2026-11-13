@@ -16,6 +16,10 @@ import {
 } from "./health.controller";
 import { AiModule } from "./modules/ai/ai.module";
 import { AgentConversationsModule } from "./modules/agent-conversations/agent-conversations.module";
+import { AssistantSkillsModule } from "./modules/assistant-skills/assistant-skills.module";
+import { AssistantDelegationsModule } from "./modules/assistant-delegations/assistant-delegations.module";
+import { ResearchModule } from "./modules/research/research.module";
+import { StudioSharesModule } from "./modules/studio-shares/studio-shares.module";
 import { AuthGuard } from "./modules/auth/auth.guard";
 import { OriginGuard } from "./security/origin.guard";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -48,6 +52,10 @@ import { SlowApiInterceptor } from "./observability/slow-api.interceptor";
     SecurityModule,
     AiModule,
     AgentConversationsModule,
+    AssistantSkillsModule,
+    AssistantDelegationsModule,
+    ResearchModule,
+    StudioSharesModule,
     AuthModule,
     BillingModule,
     BoardElementsModule,

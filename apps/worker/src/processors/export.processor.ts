@@ -1,10 +1,12 @@
 import { renderTechPackPdf } from "./tech-pack-pdf";
 import { renderPresentationPdf } from "./presentation-pdf";
-import { studioStyleSchema, studioTechPackSchema, studioPresentationSchema } from "@fashion/shared";
+import { studioBrandSchema, studioStyleSchema, studioTechPackSchema, studioPresentationSchema } from "@fashion/shared";
 import {
+  ExportAspect,
   ExportFormat,
   ExportStatus,
   appendWorkflowOutbox,
+  readAuthorizedStudioBrand,
   type PrismaClient,
 } from "@fashion/db";
 import { EXPORT_RETENTION_MS, PLATFORM_NAME } from "@fashion/shared";
@@ -18,6 +20,13 @@ import type { ExportStorage, ThumbnailStorage } from "../storage";
 interface PaletteColor {
   readonly hex: string;
   readonly name: string;
+}
+interface BrandSnapshot {
+  readonly colors: readonly PaletteColor[];
+  readonly logo?: Buffer;
+  readonly logoAssetId?: string;
+  readonly name: string;
+  readonly revision: number;
 }
 
 interface ExportProcessorDependencies {
@@ -43,6 +52,9 @@ const exportInclude = {
   },
   designAsset: {
     select: { url: true },
+  },
+  project: {
+    select: { name: true },
   },
 } as const;
 
@@ -134,6 +146,36 @@ export function createExportProcessor({
       if (!exportJob) {
         throw exportFailure("EXPORT_NOT_FOUND", "导出任务不存在或已被清理");
       }
+      const brandRevisionId = (exportJob as { readonly brandRevisionId?: string | null }).brandRevisionId;
+      const brandRevision = brandRevisionId
+        ? await database.studioDocument.findUnique({
+            where: { id: brandRevisionId, projectId: exportJob.projectId, ownerId: exportJob.userId, type: "BRAND_PROFILE" },
+            select: { type: true, revision: true, payload: true },
+          })
+        : null;
+      if (brandRevisionId && !brandRevision)
+        throw exportFailure("EXPORT_BRAND_UNAVAILABLE", "品牌资料修订不存在或当前账号无权使用，请重新选择品牌资料。");
+      const parsedBrand = brandRevision?.type === "BRAND_PROFILE"
+        ? studioBrandSchema.safeParse(brandRevision.payload)
+        : null;
+      let brand: BrandSnapshot | null = parsedBrand?.success
+        ? {
+            colors: parsedBrand.data.colors.map((color) => ({ hex: color.hex, name: color.name })),
+            name: parsedBrand.data.name,
+            revision: brandRevision?.revision ?? 0,
+            ...( "logoAssetId" in parsedBrand.data && typeof parsedBrand.data.logoAssetId === "string"
+              ? { logoAssetId: parsedBrand.data.logoAssetId }
+              : {}),
+          }
+        : null;
+      if (brand?.logoAssetId) {
+        const logoAsset = await database.designAsset.findFirst({
+          where: { id: brand.logoAssetId, projectId: exportJob.projectId },
+          select: { url: true },
+        });
+        if (!logoAsset) throw exportFailure("EXPORT_BRAND_LOGO_MISSING", "品牌标识图片不存在或不属于当前项目");
+        brand = { ...brand, logo: await downloadStored(logoAsset.url, storage, download) };
+      }
 
       const rendered = exportJob.studioRevisionId
         ? await renderStudioTechPack(
@@ -142,12 +184,20 @@ export function createExportProcessor({
             database,
             (stored) => downloadStored(stored, storage, download),
           )
-        : exportJob.format === ExportFormat.PDF
+        : exportJob.collection
           ? await renderLookbook(exportJob, (stored) =>
               downloadStored(stored, storage, download),
+            {
+              brand,
+              projectName: exportJob.project?.name,
+            },
             )
           : await renderImage(exportJob, (stored) =>
               downloadStored(stored, storage, download),
+            {
+              brand,
+              projectName: exportJob.project?.name,
+            },
             );
       const extension = exportJob.format.toLowerCase();
       if (leaseLost || now().getTime() >= deadline)
@@ -361,6 +411,38 @@ async function renderStudioTechPack(
   }
   const presentation = revision.type === "PRESENTATION_SET";
   const payload = presentation ? studioPresentationSchema.parse(revision.payload) : studioTechPackSchema.parse(revision.payload);
+  const brandRevisionId = "brandRevisionId" in payload && typeof payload.brandRevisionId === "string"
+    ? payload.brandRevisionId
+    : undefined;
+  const brandRevision = brandRevisionId
+    ? await readAuthorizedStudioBrand(database, {
+        projectId: revision.projectId, actorId: revision.createdById ?? revision.ownerId,
+        brandRevisionId, inherited: revision,
+      })
+    : null;
+  if (brandRevisionId && !brandRevision)
+    throw exportFailure("TECH_PACK_BRAND_UNAVAILABLE", "交付资料引用的品牌修订尚未获准使用，请先核对品牌资料。");
+  const parsedBrand = brandRevision?.type === "BRAND_PROFILE"
+    ? studioBrandSchema.safeParse(brandRevision.payload)
+    : null;
+  let brand: BrandSnapshot | null = parsedBrand?.success
+    ? {
+        colors: parsedBrand.data.colors.map((color) => ({ hex: color.hex, name: color.name })),
+        name: parsedBrand.data.name,
+        revision: brandRevision?.revision ?? 0,
+        ...( "logoAssetId" in parsedBrand.data && typeof parsedBrand.data.logoAssetId === "string"
+          ? { logoAssetId: parsedBrand.data.logoAssetId }
+          : {}),
+      }
+    : null;
+  if (brand?.logoAssetId) {
+    const logoAsset = await database.designAsset.findFirst({
+      where: { id: brand.logoAssetId, projectId: revision.projectId },
+      select: { url: true },
+    });
+    if (!logoAsset) throw exportFailure("TECH_PACK_BRAND_LOGO_MISSING", "品牌标识图片不存在或不属于当前项目");
+    brand = { ...brand, logo: await download(logoAsset.url) };
+  }
   if (payload.styleRevisionId !== revision.styleRevision.id) {
     throw exportFailure(
       "TECH_PACK_REVISION_MISMATCH",
@@ -396,6 +478,7 @@ async function renderStudioTechPack(
       styleCode: style.code,
       styleName: style.name,
       images,
+      ...(brand ? { brand } : {}),
     },
     useCjkFont,
   );
@@ -410,40 +493,138 @@ async function renderStudioTechPack(
 async function renderImage(
   exportJob: {
     readonly designAsset: { readonly url: string } | null;
+    readonly aspect?: ExportAspect;
     readonly format: ExportFormat;
     readonly id: string;
     readonly maxEdge: number | null;
+    readonly project?: { readonly name: string } | null;
   },
   download: (url: string) => Promise<Buffer>,
+  metadata: {
+    readonly brand?: BrandSnapshot | null;
+    readonly projectName?: string | null;
+  } = {},
 ) {
   if (!exportJob.designAsset) {
     throw exportFailure("EXPORT_ASSET_MISSING", "待导出的原始 Look 已不存在");
   }
   const source = await download(exportJob.designAsset.url);
-  let pipeline = sharp(source, { failOn: "error" }).rotate();
-  if (exportJob.maxEdge) {
-    pipeline = pipeline.resize({
-      fit: "inside",
-      height: exportJob.maxEdge,
-      width: exportJob.maxEdge,
-      withoutEnlargement: true,
-    });
+  const rotated = sharp(source, { failOn: "error" }).rotate();
+  let prepared: Buffer;
+  const aspect = exportJob.aspect ?? ExportAspect.ORIGINAL;
+  if (aspect === ExportAspect.ORIGINAL) {
+    let pipeline = rotated;
+    if (exportJob.maxEdge) {
+      pipeline = pipeline.resize({
+        fit: "inside",
+        height: exportJob.maxEdge,
+        width: exportJob.maxEdge,
+        withoutEnlargement: true,
+      });
+    }
+    prepared = await pipeline.toBuffer();
+  } else {
+    const upright = await rotated.toBuffer();
+    const metadata = await sharp(upright).metadata();
+    const sourceWidth = metadata.width ?? 0;
+    const sourceHeight = metadata.height ?? 0;
+    if (!sourceWidth || !sourceHeight)
+      throw exportFailure("EXPORT_IMAGE_DIMENSIONS_MISSING", "无法读取原图尺寸，请重新上传后导出");
+    const maxEdge = Math.min(
+      exportJob.maxEdge ?? Math.max(sourceWidth, sourceHeight),
+      Math.max(sourceWidth, sourceHeight),
+    );
+    const target = aspectDimensions(maxEdge, aspect);
+    prepared = await sharp(upright)
+      .resize({ width: target.width, height: target.height, fit: "cover", position: "attention" })
+      .toBuffer();
   }
-  const prepared = await pipeline.toBuffer();
 
   const format = exportJob.format;
+  if (format === ExportFormat.PDF)
+    return renderSingleImagePdf(prepared, exportJob.id, metadata);
   const body =
     format === ExportFormat.PNG
       ? await sharp(prepared).png({ compressionLevel: 9 }).toBuffer()
+      : format === ExportFormat.WEBP
+        ? await sharp(prepared).webp({ quality: 92 }).toBuffer()
       : await sharp(prepared)
           .flatten({ background: "#f5f2eb" })
           .jpeg({ chromaSubsampling: "4:4:4", quality: 92 })
           .toBuffer();
   return {
     body,
-    fileName: `look-${exportJob.id.slice(0, 8)}.${format.toLowerCase()}`,
-    mimeType: format === ExportFormat.PNG ? "image/png" : "image/jpeg",
+    fileName: `${safeFileName(metadata.projectName ?? "look")}-look-${exportJob.id.slice(0, 8)}.${format.toLowerCase()}`,
+    mimeType: format === ExportFormat.PNG
+      ? "image/png"
+      : format === ExportFormat.WEBP
+        ? "image/webp"
+        : "image/jpeg",
   };
+}
+
+async function renderSingleImagePdf(
+  image: Buffer,
+  exportId: string,
+  metadata: {
+    readonly brand?: BrandSnapshot | null;
+    readonly projectName?: string | null;
+  } = {},
+) {
+  const imageMetadata = await sharp(image).metadata();
+  const landscape = (imageMetadata.width ?? 1) >= (imageMetadata.height ?? 1);
+  const info = {
+    Author: metadata.brand?.name || metadata.projectName || PLATFORM_NAME,
+    Creator: PLATFORM_NAME,
+    Title: `${metadata.projectName || "Look"} ${exportId.slice(0, 8)}`,
+    ...(metadata.brand ? { Subject: `品牌资料 r${metadata.brand.revision}` } : {}),
+  };
+  const document = new PDFDocument({
+    info,
+    layout: landscape ? "landscape" : "portrait",
+    margin: 36,
+    size: "A4",
+  });
+  const chunks: Buffer[] = [];
+  const body = await new Promise<Buffer>((resolve, reject) => {
+    document.on("data", (chunk: Buffer) => chunks.push(chunk));
+    document.on("end", () => resolve(Buffer.concat(chunks)));
+    document.on("error", reject);
+    const label = [
+      metadata.projectName,
+      metadata.brand ? `${metadata.brand.name} r${metadata.brand.revision}` : null,
+    ].filter(Boolean).join(" · ");
+    const top = label ? (metadata.brand?.colors.length ? 126 : 54) : 36;
+    if (metadata.brand?.logo)
+      document.image(metadata.brand.logo, 36, 18, { fit: [28, 28] });
+    if (label) {
+      const headerX = metadata.brand?.logo ? 76 : 36;
+      document.fontSize(9).fillColor("#5e615e").text(label, headerX, 22, {
+        align: "center",
+        width: document.page.width - headerX - 36,
+      });
+    }
+    if (metadata.brand?.colors.length) drawPalette(document, metadata.brand.colors, 36, 54);
+    document.image(image, 36, top, {
+      align: "center",
+      fit: [document.page.width - 72, document.page.height - top - 36],
+      valign: "center",
+    });
+    document.end();
+  });
+  return {
+    body,
+    fileName: `${safeFileName(metadata.projectName ?? "look")}-look-${exportId.slice(0, 8)}.pdf`,
+    mimeType: "application/pdf",
+  };
+}
+
+function aspectDimensions(maxEdge: number, aspect: ExportAspect) {
+  if (aspect === ExportAspect.SQUARE) return { width: maxEdge, height: maxEdge };
+  const shortEdge = Math.max(1, Math.round(maxEdge * 9 / 16));
+  return aspect === ExportAspect.LANDSCAPE
+    ? { width: maxEdge, height: shortEdge }
+    : { width: shortEdge, height: maxEdge };
 }
 
 async function renderLookbook(
@@ -460,6 +641,10 @@ async function renderLookbook(
     readonly id: string;
   },
   download: (url: string) => Promise<Buffer>,
+  metadata: {
+    readonly brand?: BrandSnapshot | null;
+    readonly projectName?: string | null;
+  } = {},
 ) {
   if (!exportJob.collection) {
     throw exportFailure("EXPORT_COLLECTION_MISSING", "待导出的系列已不存在");
@@ -502,6 +687,8 @@ async function renderLookbook(
       ordinal: look.ordinal,
     })),
     palette: parsePalette(collection.dna?.palette),
+    ...(metadata.brand !== undefined ? { brand: metadata.brand } : {}),
+    ...(metadata.projectName !== undefined ? { projectName: metadata.projectName } : {}),
   });
   return {
     body,
@@ -511,6 +698,7 @@ async function renderLookbook(
 }
 
 async function createLookbookPdf(input: {
+  readonly brand?: BrandSnapshot | null;
   readonly collectionName: string;
   readonly looks: readonly {
     readonly garmentTypeLabel: string | null;
@@ -518,13 +706,14 @@ async function createLookbookPdf(input: {
     readonly ordinal: number;
   }[];
   readonly palette: readonly PaletteColor[];
+  readonly projectName?: string | null;
 }): Promise<Buffer> {
   const document = new PDFDocument({
     autoFirstPage: false,
     bufferPages: true,
     info: {
-      Author: PLATFORM_NAME,
-      Subject: "Collection Lookbook",
+      Author: input.brand?.name || input.projectName || PLATFORM_NAME,
+      Subject: input.brand ? `品牌资料 r${input.brand.revision}` : "Collection Lookbook",
       Title: input.collectionName,
     },
     layout: "landscape",
@@ -551,6 +740,11 @@ async function createLookbookPdf(input: {
   document.fontSize(31).text(input.collectionName, 42, 88, {
     width: 650,
   });
+  const identity = [input.projectName, input.brand ? `${input.brand.name} r${input.brand.revision}` : null].filter(Boolean).join(" · ");
+  if (identity)
+    document.fillColor("#66645f").fontSize(9).text(identity, 42, 132, { width: 650 });
+  if (input.brand?.logo)
+    document.image(input.brand.logo, document.page.width - 120, 36, { fit: [72, 72] });
   document
     .fillColor("#66645f")
     .fontSize(10)
@@ -560,6 +754,13 @@ async function createLookbookPdf(input: {
     .fillColor("#66645f")
     .fontSize(9)
     .text("DNA / COLOR PALETTE", 42, 276, { characterSpacing: 1.4 });
+  if (input.brand?.colors.length) {
+    drawPalette(document, input.brand.colors, 42, 330);
+    document
+      .fillColor("#66645f")
+      .fontSize(9)
+      .text("BRAND / COLOR PALETTE", 42, 408, { characterSpacing: 1.4 });
+  }
 
   const looksPerPage = 4;
   for (let start = 0; start < input.looks.length; start += looksPerPage) {

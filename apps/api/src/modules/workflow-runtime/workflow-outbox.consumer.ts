@@ -18,7 +18,7 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private queue?: Queue;
   private worker?: Worker;
-  private factsBusy = false;
+  private factsInFlight: Promise<void> | undefined;
   private observationsBusy = false;
   private miningBusy = false;
   private stopping = false;
@@ -81,9 +81,9 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
   }
 
   async drainFacts(limit = 20) {
-    if (this.factsBusy || this.stopping) return;
-    this.factsBusy = true;
-    try {
+    if (this.stopping) return;
+    if (this.factsInFlight) return this.factsInFlight;
+    const run = (async () => {
       for (let index = 0; index < limit; index++) {
         const event = await this.claim("facts");
         if (!event) break;
@@ -95,11 +95,22 @@ export class WorkflowOutboxConsumer implements OnModuleInit, OnModuleDestroy {
           await this.finish(event);
         } catch (error) { await this.fail(event, error, 8); }
       }
-    } finally { this.factsBusy = false; }
+    })();
+    this.factsInFlight = run;
+    try {
+      await run;
+    } finally {
+      if (this.factsInFlight === run) this.factsInFlight = undefined;
+    }
   }
 
   async drainObservations(limit = 4) {
     if (this.observationsBusy || this.stopping) return;
+    // The execution result is the durable boundary for observation. A worker
+    // wakeup can arrive while a scheduled facts drain is still projecting the
+    // terminal task, so wait for that drain instead of reading a half-written
+    // graph and deferring or losing the assistant receipt.
+    await this.factsInFlight;
     this.observationsBusy = true;
     try {
       for (let index = 0; index < limit; index++) {

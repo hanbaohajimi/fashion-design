@@ -1859,6 +1859,7 @@ test("后台结果持续恢复，移除重复工作计划后不再轮询计划",
   let planRequests = 0;
   page.on("request", (request) => { if (/\/agent-conversations\/[^/]+\/plan$/u.test(request.url())) planRequests++; });
   mocked.setPlan({ goal: "改进通勤风衣", milestones: [{ id: "inspect", title: "比较实际候选", status: "active", completionCriteria: ["确认肩线和袖型"], evidenceRefs: ["candidate-a"] }], activeMilestoneId: "inspect", nextGoal: "确定修改范围", completionCriteria: ["设计师选定方案"] });
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);

@@ -305,6 +305,7 @@ export async function seedVisualApp(page: Page, { guides = false, firstAssistant
         pageSize: 60,
         hasMore: false,
       });
+    if (/^\/projects\/[^/]+\/(assistant-skills|assistant-delegations)$/u.test(path) && route.request().method() === "GET") return json([]);
     if (/^\/projects\/[^/]+\/tasks$/u.test(path)) return json({ items: [], nextCursor: null, counts: { running: 0, attention: 0 } });
     if (path === "/auth/login") return json({ ok: true });
     throw new Error(

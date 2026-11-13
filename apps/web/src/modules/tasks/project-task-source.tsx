@@ -16,7 +16,7 @@ export async function fetchTaskPage(url: string, signal: AbortSignal): Promise<P
   const value = await taskRequest<ProjectTaskPage>(url, { signal });
   if (!value || !Array.isArray(value.items) || !value.counts || !Number.isInteger(value.counts.running) || !Number.isInteger(value.counts.attention)) throw new Error("任务状态响应无效，请重新读取");
   const activity = value.activity;
-  if (activity && (![activity.preparing, activity.queued, activity.executing, activity.awaitingUser, activity.waiting?.input, activity.waiting?.confirmation, activity.waiting?.resume].every(count => Number.isInteger(count) && count >= 0) || !Array.isArray(activity.recent) || activity.recent.length > 20 || activity.recent.some(item => !item.id || !["assistant", "workflow", "generation", "agent", "export", "runway"].includes(item.domain) || !["completed", "failed", "canceled"].includes(item.outcome) || !Number.isFinite(Date.parse(item.updatedAt))))) throw new Error("项目活动响应无效，请重新读取");
+  if (activity && (![activity.preparing, activity.queued, activity.executing, activity.awaitingUser, activity.waiting?.input, activity.waiting?.confirmation, activity.waiting?.resume].every(count => Number.isInteger(count) && count >= 0) || !Array.isArray(activity.recent) || activity.recent.length > 20 || activity.recent.some(item => !item.id || !["assistant", "workflow", "generation", "agent", "export", "runway", "review"].includes(item.domain) || !["completed", "failed", "canceled"].includes(item.outcome) || !Number.isFinite(Date.parse(item.updatedAt))))) throw new Error("项目活动响应无效，请重新读取");
   return value;
 }
 

@@ -27,7 +27,7 @@ export class ProjectGeneratedFilesService {
       ...(input.kind === "all" ? [] : [{ mimeType: { startsWith: `${input.kind}/` } }]),
       ...(q ? [{ OR: [{ id: contains }, { originalName: contains }, { run: { show: { title: contains } } }, { kind: { in: Object.entries(mediaLabels).filter(([, label]) => label.includes(q)).map(([kind]) => kind) } }] }] : [])] };
     const exportWhere: Prisma.ExportJobWhereInput = { projectId, status: { in: [ExportStatus.SUCCEEDED, ExportStatus.EXPIRED] },
-      AND: [generatedFileBoundary(cursor, "export"), ...(input.kind === "document" ? [{ format: "PDF" as const }] : input.kind === "image" ? [{ format: { in: ["PNG" as const, "JPG" as const] } }] : []),
+      AND: [generatedFileBoundary(cursor, "export"), ...(input.kind === "document" ? [{ format: "PDF" as const }] : input.kind === "image" ? [{ format: { in: ["PNG" as const, "JPG" as const, "WEBP" as const] } }] : []),
         ...(q ? [{ OR: [{ id: contains }, { fileName: contains }, { collection: { name: contains } }] }] : [])] };
     const [assets, media, exports] = await Promise.all([
       ["all", "image"].includes(input.kind) ? this.db.designAsset.findMany({ where: assetWhere, orderBy, take, select: { id: true, operation: true, createdAt: true, archivedAt: true, width: true, height: true, url: true, thumbnailUrl: true, designStep: { select: { intent: true, tool: true } } } }) : [],
@@ -55,13 +55,18 @@ export class ProjectGeneratedFilesService {
     ];
     const result = mergeGeneratedFiles(rows, projectId, input);
     const assetIds = result.items.filter(row => row.domain === "asset").map(row => row.resourceId);
+    const mediaIds = result.items.filter(row => row.domain === "runway").map(row => row.resourceId);
     const documentIds = exports.filter(row => result.items.some(item => item.id === `export:${row.id}`)).flatMap(row => row.studioRevisionId ? [row.studioRevisionId] : []);
     const [nodes, documents] = await Promise.all([
-      assetIds.length ? this.db.workflowNode.findMany({ where: { projectId, kind: "asset", OR: assetIds.map(id => ({ payload: { path: ["assetId"], equals: id } })) }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, payload: true } }) : [],
+      assetIds.length || mediaIds.length ? this.db.workflowNode.findMany({ where: { projectId, kind: "asset", OR: [
+        ...assetIds.map(id => ({ payload: { path: ["assetId"], equals: id } })),
+        ...mediaIds.map(id => ({ type: "media", payload: { path: ["mediaId"], equals: id } })),
+      ] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, payload: true } }) : [],
       documentIds.length ? this.db.studioDocument.findMany({ where: { projectId, id: { in: documentIds } }, select: { id: true, type: true, documentId: true, styleRevisionId: true } }) : [],
     ]);
     for (const item of result.items) {
       if (item.domain === "asset") item.nodeId = nodes.find(node => (node.payload as Record<string, unknown>)?.assetId === item.resourceId)?.id ?? null;
+      if (item.domain === "runway") item.nodeId = nodes.find(node => (node.payload as Record<string, unknown>)?.mediaId === item.resourceId)?.id ?? null;
       if (item.domain === "export") {
         const document = documents.find(row => row.id === exports.find(row => row.id === item.resourceId)?.studioRevisionId);
         if (document) item.sourceHref = `${base}/studio?tab=${document.type === "TECH_PACK" ? "tech" : "presentation"}&documentId=${encodeURIComponent(document.documentId)}&documentRevisionId=${encodeURIComponent(document.id)}${document.styleRevisionId ? `&styleRevisionId=${encodeURIComponent(document.styleRevisionId)}` : ""}`;

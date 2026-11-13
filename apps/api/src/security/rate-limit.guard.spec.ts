@@ -121,4 +121,96 @@ describe("RateLimitGuard", () => {
       status: 429,
     });
   });
+
+  it("公开评审同时限制分享令牌与来源 IP，并只存储摘要桶", async () => {
+    const counts = new Map<string, number>();
+    const consume = vi.fn(async (bucket: string) => {
+      const count = (counts.get(bucket) ?? 0) + 1;
+      counts.set(bucket, count);
+      return { count, retryAfterSeconds: 3600 };
+    });
+    const store: RateLimitStore = { consume };
+    const policy: RateLimitPolicy = {
+      ipLimit: 3,
+      keyBy: "publicShare",
+      limit: 2,
+      name: "studio-public-review",
+      windowSeconds: 3600,
+    };
+    const reflector = { getAllAndOverride: vi.fn().mockReturnValue(policy) };
+    const response = { setHeader: vi.fn() };
+    const request = {
+      ip: "203.0.113.8",
+      params: { token: "share-secret-a" },
+      socket: { remoteAddress: "203.0.113.8" },
+    };
+    const context = {
+      getClass: () => class PublicReviewController {},
+      getHandler: () => function addReview() {},
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => response,
+      }),
+    } as unknown as ExecutionContext;
+    const guard = new RateLimitGuard(
+      reflector as unknown as Reflector,
+      store,
+    );
+
+    await guard.canActivate(context);
+    request.params.token = "share-secret-b";
+    await guard.canActivate(context);
+    request.params.token = "share-secret-c";
+    await guard.canActivate(context);
+    request.params.token = "share-secret-d";
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      status: 429,
+    });
+    expect(consume).toHaveBeenCalledTimes(8);
+    expect(JSON.stringify(consume.mock.calls)).not.toContain("share-secret");
+    expect(response.setHeader).toHaveBeenCalledWith("Retry-After", "3600");
+  });
+
+  it("同一分享链接跨 IP 仍共享令牌上限", async () => {
+    const counts = new Map<string, number>();
+    const store: RateLimitStore = {
+      consume: vi.fn(async (bucket) => {
+        const count = (counts.get(bucket) ?? 0) + 1;
+        counts.set(bucket, count);
+        return { count, retryAfterSeconds: 60 };
+      }),
+    };
+    const policy: RateLimitPolicy = {
+      ipLimit: 10,
+      keyBy: "publicShare",
+      limit: 1,
+      name: "studio-public-review",
+      windowSeconds: 3600,
+    };
+    const reflector = { getAllAndOverride: vi.fn().mockReturnValue(policy) };
+    const request = {
+      ip: "203.0.113.8",
+      params: { token: "share-secret-a" },
+      socket: { remoteAddress: "203.0.113.8" },
+    };
+    const context = {
+      getClass: () => class PublicReviewController {},
+      getHandler: () => function addReview() {},
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => ({ setHeader: vi.fn() }),
+      }),
+    } as unknown as ExecutionContext;
+    const guard = new RateLimitGuard(
+      reflector as unknown as Reflector,
+      store,
+    );
+
+    await guard.canActivate(context);
+    request.ip = "203.0.113.9";
+    request.socket.remoteAddress = "203.0.113.9";
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      status: 429,
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
+import { ExportAspect, ExportFormat, ExportQuality, ExportStatus } from "@fashion/db";
 import { ForbiddenException } from "@nestjs/common";
 import type { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,6 +47,7 @@ describe("ExportsService", () => {
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    studioDocument: { findFirst: vi.fn() },
     user: { findUnique: vi.fn() },
   };
   const jobs = { enqueue: vi.fn() };
@@ -81,6 +82,7 @@ describe("ExportsService", () => {
         workspace: { ownerId: "user-a" },
       },
     });
+    database.studioDocument.findFirst.mockResolvedValue({ id: "brand-r1" });
     database.exportJob.create.mockImplementation(
       ({ data }: { data: Record<string, unknown> }) =>
         exportRecord({
@@ -189,6 +191,44 @@ describe("ExportsService", () => {
     expect(database.exportJob.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ maxEdge: null, watermark: false }),
     });
+  });
+
+  it("保存单图固定比例并让历史回执携带同一规格", async () => {
+    const result = await service.create("user-a", {
+      assetId: "asset-a",
+      aspect: "square",
+      format: "png",
+      quality: "standard",
+      sourceType: "asset",
+    });
+
+    expect(result).toMatchObject({ aspect: "square" });
+    expect(database.exportJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ aspect: ExportAspect.SQUARE }),
+    });
+  });
+
+  it("保存明确选择的品牌修订并让导出历史携带该快照", async () => {
+    const result = await service.create("user-a", {
+      assetId: "asset-a",
+      brandRevisionId: "brand-r1",
+      format: "png",
+      quality: "standard",
+      sourceType: "asset",
+    });
+
+    expect(result).toMatchObject({ brandRevisionId: "brand-r1" });
+    expect(database.studioDocument.findFirst).toHaveBeenCalledWith({ where: { id: "brand-r1", projectId: "project-a", type: "BRAND_PROFILE", ownerId: "user-a" }, select: { id: true } });
+    expect(database.exportJob.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ brandRevisionId: "brand-r1" }),
+    });
+  });
+
+  it("同项目其他成员的私有品牌不能被引用到导出任务", async () => {
+    database.studioDocument.findFirst.mockImplementation(async ({ where }) => where.ownerId === "user-a" ? null : { id: "private-brand" });
+    await expect(service.create("user-a", { sourceType: "asset", assetId: "asset-a", brandRevisionId: "private-brand", format: "pdf", quality: "standard" })).rejects.toThrow("品牌资料修订不存在或不属于当前项目");
+    expect(database.exportJob.create).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 
   it("系列 PDF 统一不加水印", async () => {

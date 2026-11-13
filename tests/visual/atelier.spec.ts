@@ -131,6 +131,14 @@ for (const viewport of [
         await expect(page.locator("main")).toBeVisible();
         if (screen === "projects")
           await expect(page.locator("article")).toHaveCount(2);
+        if (screen === "projects") {
+          await expect(
+            page.getByRole("link", { name: "浏览趋势档案", exact: true }),
+          ).toHaveAttribute("href", "/trends?from=projects");
+          await expect(
+            page.getByRole("link", { name: "浏览面料库", exact: true }),
+          ).toHaveAttribute("href", "/fabrics?from=projects");
+        }
         if (screen === "fabrics")
           await expect(
             page
@@ -232,6 +240,23 @@ test("project empty and failure states", async ({ page }) => {
     page.getByText("项目暂时无法读取，请重试", { exact: true }),
   ).toBeVisible();
   await expect(page).toHaveScreenshot("projects-error.png");
+});
+
+test("侧栏新建项目入口打开并关闭创建对话框", async ({ page }) => {
+  await page.goto("/");
+  const newProject = page.getByRole("link", { name: "新建项目", exact: true });
+
+  await newProject.click();
+  await expect(page).toHaveURL(/\/\?new=1$/u);
+  await expect(
+    page.getByRole("dialog", { name: "给新系列一个名字" }),
+  ).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "给新系列一个名字" }),
+  ).toBeHidden();
+  await expect(page).toHaveURL(/\/$/u);
 });
 
 test("readonly technical revision remains readable", async ({ page }) => {

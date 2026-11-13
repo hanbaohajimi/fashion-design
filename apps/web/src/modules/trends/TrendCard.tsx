@@ -115,7 +115,12 @@ export function TrendCard({
 
         <div className={styles.sourceProof}>
           <a href={trend.sourceUrl} rel="noreferrer" target="_blank">
-            <span aria-hidden="true">▧</span> 查看原文 - {platform}
+            <span aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2.5h5l3 3v8H4zM9 2.5v3h3M6 9h4M6 11.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            查看原文 - {platform}
           </a>
           <time dateTime={trend.publishedAt ?? undefined}>
             {publishedDate(trend.publishedAt)}
@@ -124,7 +129,12 @@ export function TrendCard({
 
         <section aria-label="AI整理摘要" className={styles.aiSummary}>
           <div className={styles.aiBoundary}>
-            <span aria-hidden="true">⚠</span>
+            <span aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="m8 2.25 6 11H2z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+                <path d="M8 6v3M8 11.25v.1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </span>
             <strong>AI整理，建议结合原文判断</strong>
           </div>
           <p
@@ -166,7 +176,9 @@ export function TrendCard({
           type="button"
         >
           {importing ? "正在存入…" : importLabel}
-          <span aria-hidden="true">↗</span>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 13 13 3M5 3h8v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </div>
     </article>

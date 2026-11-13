@@ -50,6 +50,12 @@ export function fetchStudio(projectId: string, signal?: AbortSignal) {
     signal ? { signal } : undefined,
   );
 }
+export function acknowledgeReview(projectId: string, reviewId: string) {
+  return request<{ ok: true }>(
+    base(projectId) + "/reviews/" + encodeURIComponent(reviewId) + "/acknowledge",
+    { method: "POST" },
+  );
+}
 export function saveStyle(
   projectId: string,
   payload: StudioStyleInput,

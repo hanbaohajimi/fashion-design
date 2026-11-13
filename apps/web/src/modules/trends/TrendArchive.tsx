@@ -1,8 +1,15 @@
 "use client";
 import { importCanvasMaterials } from "../board/workflow/import-canvas-materials";
+import { loginPathWithReturnTo } from "../auth/auth-return";
 
 import Link from "next/link";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 
 import {
@@ -18,11 +25,29 @@ import styles from "./trends.module.css";
 import { Button, Skeleton, SkeletonGroup } from "../../components/ui";
 import { motionEase, motionTime, observeMotionCancellation } from "../../components/interactions/motion-policy";
 import { userFacingError } from "../../components/user-facing-error";
+import { readActiveBoardId } from "./active-board";
+
+const subscribeActiveBoard = (onStoreChange: () => void) => {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
+};
+
+const readRememberedProjectId = () => {
+  try {
+    return readActiveBoardId() ?? "";
+  } catch {
+    return "";
+  }
+};
+
+const readServerRememberedProjectId = () => "";
 
 export function TrendArchive({
   projectId,
+  returnTo = "/trends",
 }: {
   readonly projectId?: string | undefined;
+  readonly returnTo?: string;
 }) {
   const trends = useTrends();
   const grid = useRef<HTMLDivElement>(null);
@@ -51,6 +76,13 @@ export function TrendArchive({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [destination, setDestination] = useState<string | null>(null);
+  const rememberedProjectId =
+    useSyncExternalStore(
+      subscribeActiveBoard,
+      readRememberedProjectId,
+      readServerRememberedProjectId,
+    ) || null;
+  const researchProjectId = projectId ?? rememberedProjectId;
   const categories = useMemo(
     () => [...new Set(trends.items.map((item) => item.category))],
     [trends.items],
@@ -185,6 +217,24 @@ export function TrendArchive({
           ))}
         </nav>
       </section>
+      <section aria-label="趋势研究入口" className={styles.researchBridge}>
+        <div>
+          <h2>从来源到设计简报</h2>
+          <p>
+            先核对趋势原文与 AI 摘要，再把目标、品牌规则和探索方向保存到项目工作流。
+          </p>
+        </div>
+        <Link
+          className={styles.researchBridgeAction}
+          href={researchProjectId ? `/${encodeURIComponent(researchProjectId)}/studio?tab=trends` : "/"}
+        >
+          {projectId
+            ? "整理成趋势简报"
+            : rememberedProjectId
+              ? "继续整理趋势简报"
+              : "先选择一个项目"}
+        </Link>
+      </section>
       {error ? (
         <p className={styles.archiveError} role="alert">
           {userFacingError(error, "趋势加入工作流失败，请重试")}
@@ -195,7 +245,10 @@ export function TrendArchive({
           {notice}{" "}
           {destination ? (
             <Link href={`/${encodeURIComponent(destination)}`}>
-              打开设计工作流 →
+              打开设计工作流
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 13 13 3M5 3h8v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </Link>
           ) : null}
         </p>
@@ -204,11 +257,19 @@ export function TrendArchive({
       {trends.isLoading && !trends.items.length ? (
         <div role="status" aria-label="正在读取趋势档案"><SkeletonGroup className={styles.archiveGrid ?? ""}>{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} label="正在加载趋势" className={styles.archiveSkeleton} />)}</SkeletonGroup></div>
       ) : trends.error && !trends.items.length ? (
-        <div className={styles.archiveState}>
-          <p role="alert">{userFacingError(trends.error, "趋势暂时无法加载，请重试")}</p>
-          <Button loading={trends.isRefreshing} onClick={trends.refresh}>
-            重新加载档案
-          </Button>
+        <div className={`${styles.archiveState} ${trends.authUnavailable ? styles.authState : ""}`}>
+          <p role="alert">
+            {trends.authUnavailable
+              ? "登录状态暂时无法恢复，趋势资料需要登录后读取。"
+              : userFacingError(trends.error, "趋势暂时无法加载，请重试")}
+            {trends.authUnavailable ? <span>登录后可以读取已采集趋势、搜索来源并整理成设计简报。</span> : null}
+          </p>
+          <div className={styles.archiveStateActions}>
+            {trends.authUnavailable ? <Link href={loginPathWithReturnTo(returnTo)}>进入登录</Link> : null}
+            <Button loading={trends.isRefreshing} onClick={trends.refresh}>
+              {trends.authUnavailable ? "重试会话" : "重新加载档案"}
+            </Button>
+          </div>
         </div>
       ) : items.length ? (
         <div ref={grid} className={styles.archiveGrid}>

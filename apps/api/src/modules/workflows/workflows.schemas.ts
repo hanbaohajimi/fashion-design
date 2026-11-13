@@ -12,6 +12,7 @@ export const workflowAssetTypes = [
   "trend",
   "fabric",
   "legacy",
+  "media",
 ] as const;
 
 export const workflowToolTypes = [

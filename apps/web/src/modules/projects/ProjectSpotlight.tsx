@@ -44,10 +44,10 @@ export function ProjectSpotlight({
         )}
       </Link>
       <div className={styles.copy}>
-        <span className={styles.eyebrow}>
-          {resume ? "继续你在本机的创作" : "最近更新的项目"}
-        </span>
         <h2>{recent.name}</h2>
+        <p className={styles.context}>
+          {resume ? "继续你在本机的创作" : "最近更新的项目"}
+        </p>
       </div>
       <Link
         className={styles.primary}
@@ -56,7 +56,10 @@ export function ProjectSpotlight({
         href={resume ? visitPath : `/${recent.id}`}
       >
         <span ref={visualRef} className={`${styles.primaryVisual} ${effects.magneticVisual}`}>
-          继续创作 <span aria-hidden="true">→</span>
+          继续创作
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </span>
       </Link>
     </section>

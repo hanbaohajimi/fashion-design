@@ -1,8 +1,9 @@
 import { GenerationTaskStatus, ExportStatus, type PrismaClient } from "@fashion/db";
-import { type ProjectTaskAction, type ProjectTaskDomain, type ProjectTaskPage, type ProjectTaskView, projectTaskGroup } from "@fashion/shared";
+import { studioReviewSchema, type ProjectTaskAction, type ProjectTaskDomain, type ProjectTaskPage, type ProjectTaskView, projectTaskGroup } from "@fashion/shared";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { readProjectTaskActivity } from "./project-task-activity";
+import { endedProjectReviews, pendingProjectReviews } from "./project-review-tasks";
 
 export const PROJECT_TASKS_DB = Symbol("PROJECT_TASKS_DB");
 type Group = "active" | "running" | "attention" | "ended";
@@ -15,7 +16,7 @@ function decodeCursor(value?: string): Cursor | null {
   try {
     const cursor = JSON.parse(Buffer.from(value, "base64url").toString()) as Cursor;
     if (typeof cursor.id !== "string" || cursor.id.length > 256 ||
-      !/^(assistant|workflow|generation|agent|export|runway):.+$/u.test(cursor.id) ||
+      !/^(assistant|workflow|generation|agent|export|runway|review):.+$/u.test(cursor.id) ||
       typeof cursor.date !== "string" || !Number.isFinite(Date.parse(cursor.date))) throw new Error();
     return { id: cursor.id, date: new Date(cursor.date).toISOString() };
   }
@@ -54,7 +55,7 @@ export class ProjectTasksService {
     const exportWhere = (group: Group) => ({ projectId, status: states(group, [ExportStatus.QUEUED, ExportStatus.RUNNING], [ExportStatus.FAILED]) });
     const assistantWhere = (group: Group) => ({ conversation: { projectId }, role: "ASSISTANT" as const, replyToId: { not: null }, status: states(group, ["PENDING" as const], ["FAILED" as const]) });
     const proposalWhere = (group: Group) => ({ projectId, status: states(group, [], ["pending"]) });
-    const [generations, executions, agents, runways, exports, messages, proposals] = await Promise.all([
+    const [generations, executions, agents, runways, exports, messages, proposals, reviews] = await Promise.all([
       this.db.generationTask.findMany({ where: { ...generationWhere(input.group), ...boundaryFor("generation") }, orderBy, take, select: { ...rowSelect, parentAssetId: true, generatedAssets: { select: { id: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1 } } }),
       this.db.workflowExecution.findMany({ where: { ...workflowWhere(input.group), ...boundaryFor("workflow") }, orderBy, take, select: { ...rowSelect, toolNodeId: true, conversationId: true } }),
       this.db.agentRun.findMany({ where: { ...agentWhere(input.group), ...boundaryFor("agent") }, orderBy, take, select: { ...rowSelect, conversationId: true, revision: true } }),
@@ -62,15 +63,28 @@ export class ProjectTasksService {
       this.db.exportJob.findMany({ where: { ...exportWhere(input.group), ...boundaryFor("export") }, orderBy, take, select: { ...rowSelect, fileName: true, studioRevisionId: true, designAssetId: true, collectionId: true } }),
       this.db.agentMessage.findMany({ where: { ...assistantWhere(input.group), ...boundaryFor("assistant") }, select: { ...rowSelect, conversationId: true, replyTo: { select: { clientRequestId: true } } }, orderBy, take }),
       input.group === "running" || input.group === "ended" ? Promise.resolve([]) : this.db.workflowProposal.findMany({ where: { ...proposalWhere(input.group), ...boundaryFor("workflow") }, orderBy, take, select: { ...rowSelect, evidence: true, conversationId: true } }),
+      input.group !== "running"
+        ? this.db.studioDocument.findMany({
+            where: { AND: [input.group === "ended" ? endedProjectReviews(projectId, userId) : pendingProjectReviews(projectId, userId), boundaryFor("review")] },
+            orderBy, take,
+            select: { id: true, createdAt: true, payload: true, reviewReads: { where: { userId }, select: { id: true }, take: 1 } },
+          })
+        : Promise.resolve([]),
     ]);
     const countsFor = async (group: "running" | "attention") => (await Promise.all([
       this.db.generationTask.count({ where: generationWhere(group) }), this.db.workflowExecution.count({ where: workflowWhere(group) }),
       this.db.agentRun.count({ where: agentWhere(group) }), this.db.runwayRun.count({ where: runwayWhere(group) }), this.db.exportJob.count({ where: exportWhere(group) }),
-      this.db.agentMessage.count({ where: assistantWhere(group) }), group === "attention" ? this.db.workflowProposal.count({ where: proposalWhere(group) }) : 0,
+      this.db.agentMessage.count({ where: assistantWhere(group) }),
+      group === "attention"
+        ? Promise.all([
+            this.db.workflowProposal.count({ where: proposalWhere(group) }),
+            this.db.studioDocument.count({ where: pendingProjectReviews(projectId, userId) }),
+          ]).then(([proposalsCount, reviewsCount]) => proposalsCount + reviewsCount)
+        : 0,
     ])).reduce((sum, count) => sum + count, 0);
     const revisionIds = [...new Set(exports.flatMap(row => row.studioRevisionId ? [row.studioRevisionId] : []))];
     const [observation, attempts, documents] = await Promise.all([
-      input.activity ? readProjectTaskActivity(this.db, projectId) : Promise.all([countsFor("running"), countsFor("attention")]).then(([running, attention]) => ({ counts: { running, attention }, activity: undefined })),
+      input.activity ? readProjectTaskActivity(this.db, userId, projectId) : Promise.all([countsFor("running"), countsFor("attention")]).then(([running, attention]) => ({ counts: { running, attention }, activity: undefined })),
       executions.length ? this.db.workflowAttempt.findMany({ where: { projectId, executionId: { in: executions.map(row => row.id) }, generationTask: { status: { in: ["QUEUED", "RUNNING"] } } }, select: { generationTaskId: true, executionId: true } }) : [],
       revisionIds.length ? this.db.studioDocument.findMany({ where: { projectId, id: { in: revisionIds } }, select: { id: true, type: true, styleRevisionId: true } }) : [],
     ]);
@@ -84,6 +98,25 @@ export class ProjectTasksService {
       if (row.designAssetId) return `${base}/studio?tab=styles&assetId=${encodeURIComponent(row.designAssetId)}`;
       return `${base}/studio?tab=presentation`;
     };
+    const reviewRows = reviews.flatMap((row) => {
+      const parsed = studioReviewSchema.safeParse(row.payload);
+      if (!parsed.success) return [];
+      const acknowledged = Boolean(row.reviewReads?.length);
+      const status = parsed.data.decision === "CHANGES_REQUESTED" && !acknowledged ? "awaiting_review" : "completed";
+      const group = projectTaskGroup(status);
+      const visible = input.group === "active" ? group !== "ended" : input.group === group;
+      if (!visible) return [];
+      return [toView(
+        "review",
+        { id: row.id, status, createdAt: row.createdAt, updatedAt: row.createdAt },
+        parsed.data.decision === "CHANGES_REQUESTED" ? "评审要求修改" : "评审已批准",
+        `${base}/studio?tab=team&reviewId=${encodeURIComponent(row.id)}`,
+        parsed.data.decision === "CHANGES_REQUESTED" && !acknowledged && editable
+          ? [{ kind: "acknowledge_review" as const, targetId: row.id }]
+          : [],
+        parsed.data.targetRevisionId,
+      )];
+    });
     const rows = [
       ...generations.map(row => toView("generation", row, "图片生成", row.generatedAssets[0] ? `${base}/studio?tab=styles&assetId=${encodeURIComponent(row.generatedAssets[0].id)}` : `${base}?taskId=${encodeURIComponent(row.id)}`, ["QUEUED", "RUNNING"].includes(row.status) ? [{ kind: "cancel_generation", targetId: row.id }] : [], row.parentAssetId)),
       ...executions.map(row => toView("workflow", row, "设计步骤", `${base}?nodeId=${encodeURIComponent(row.toolNodeId)}`, row.status === "failed" ? [{ kind: "retry_workflow", targetId: row.toolNodeId }] : ["queued", "running"].includes(row.status) ? attempts.filter(item => item.executionId === row.id && item.generationTaskId).map(item => ({ kind: "cancel_generation" as const, targetId: item.generationTaskId ?? "" })) : [], row.toolNodeId, row.conversationId)),
@@ -92,10 +125,12 @@ export class ProjectTasksService {
       ...exports.map(row => toView("export", row, row.fileName ?? "导出文件", exportHref(row), [], row.studioRevisionId ?? row.designAssetId ?? row.collectionId)),
       ...messages.map(row => toView("assistant", row, "设计助手回复", `${base}?conversationId=${encodeURIComponent(row.conversationId)}`, row.status === "PENDING" && row.replyTo?.clientRequestId ? [{ kind: "cancel_reply", targetId: row.id, conversationId: row.conversationId, requestId: row.replyTo.clientRequestId }] : [], row.id, row.conversationId)),
       ...proposals.map(row => toView("workflow", { ...row, status: "awaiting_approval" }, "生成方案待确认", `${base}?nodeId=${encodeURIComponent(String((row.evidence as Record<string, unknown>)?.toolNodeId ?? ""))}${row.conversationId ? `&conversationId=${encodeURIComponent(row.conversationId)}` : ""}`, [], String((row.evidence as Record<string, unknown>)?.toolNodeId ?? ""), row.conversationId)),
+      ...reviewRows,
     ].filter(row => !cursor || row.createdAt < cursor.date || row.createdAt === cursor.date && row.id < cursor.id)
       .sort((a, b) => compareDescending(a.createdAt, b.createdAt) || compareDescending(a.id, b.id));
     const items = rows.slice(0, input.limit);
     const last = items.at(-1);
     return { items, counts: observation.counts, ...(observation.activity ? { activity: observation.activity } : {}), nextCursor: rows.length > input.limit && last ? Buffer.from(JSON.stringify({ date: last.createdAt, id: last.id })).toString("base64url") : null };
   }
+
 }

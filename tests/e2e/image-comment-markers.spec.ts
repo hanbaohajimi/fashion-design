@@ -135,6 +135,21 @@ test("切换标记不会覆盖当前草稿，提交等待与丢失回执保留�
   await expect(workspace.getByRole("button", { name: "查看编辑结果" })).toBeVisible();
 });
 
+test("已保存的图片意见可以带入同一设计助手并先形成修订计划", async ({ page }) => {
+  const state = await prepare(page);
+  const { workspace } = state;
+  await workspace.getByLabel("图片评论").fill("收窄袖口，保留面料纹理");
+  await composer(workspace).getByRole("button", { name: "添加评论", exact: true }).click();
+  await workspace.getByRole("button", { name: "交给设计助手制定修订计划", exact: true }).click();
+  await expect.poll(() => state.feedback().comments.length).toBe(1);
+  const assistant = page.locator("#workflow-design-assistant");
+  await expect(assistant).toBeVisible();
+  await expect(assistant.getByRole("textbox", { name: "描述设计需求", exact: true })).toHaveValue(/收窄袖口，保留面料纹理/u);
+  await expect(assistant.getByRole("status")).toContainText("已带入「藏蓝通勤外套」");
+  await expect(assistant.getByLabel("正在讨论").locator("[data-assistant-reference-id=material-0]")).toBeVisible();
+  await expect.poll(() => state.commands.length).toBe(0);
+});
+
 test("画面标注明确关联对应意见，取消全部勾选后恢复仍需主动选择", async ({ page }) => {
   const state = await prepare(page, 1440, {
     revision: 1, comments: [], annotations: [

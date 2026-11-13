@@ -7,6 +7,7 @@ import { BrandLockup } from "../../../components/BrandLockup";
 import { useSubmitFeedback } from "../../../components/interactions/use-submit-feedback";
 import { motionEase, motionTime } from "../../../components/interactions/motion-policy";
 import { readErrorMessage } from "../../../modules/auth/auth-api";
+import { safeAuthReturnTo, rememberAuthReturnTo } from "../../../modules/auth/auth-return";
 import styles from "./forest-login.module.css";
 
 type FormState = "idle" | "sending" | "sent";
@@ -20,8 +21,12 @@ export default function LoginPage() {
   const [formatError, setFormatError] = useState<string | null>(null);
   const [formatValid, setFormatValid] = useState(false);
   const [composing, setComposing] = useState(false);
+  const returnTo = useRef("/");
   const feedback = useSubmitFeedback();
   const flight = useRef(false);
+  useEffect(() => {
+    returnTo.current = safeAuthReturnTo(new URLSearchParams(window.location.search).get("returnTo"));
+  }, []);
   const validate = () => {
     const valid = emailInputRef.current?.validity.valid ?? false;
     const message = valid ? null : "请输入有效的邮箱地址。";
@@ -45,6 +50,7 @@ export default function LoginPage() {
     }
 
     const normalizedEmail = targetEmail.trim().toLowerCase();
+    rememberAuthReturnTo(returnTo.current);
     setError(null);
     setState("sending");
     flight.current = true;

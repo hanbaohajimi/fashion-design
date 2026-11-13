@@ -19,6 +19,7 @@ import { loginRequestSchema } from "../modules/auth/auth-request.schema";
 import { REFRESH_TOKEN_COOKIE } from "../modules/auth/auth.constants";
 
 const RATE_LIMIT_METADATA = "fashion:rate-limit";
+const REDIS_READY_TIMEOUT_MS = 1_500;
 const RATE_LIMIT_SCRIPT = `
 local current = redis.call("INCR", KEYS[1])
 if current == 1 then
@@ -33,9 +34,17 @@ export const RATE_LIMIT_STORE = Symbol("RATE_LIMIT_STORE");
 export interface RateLimitPolicy {
   readonly name: string;
   readonly limit: number;
+  readonly ipLimit?: number;
   readonly windowSeconds: number;
-  readonly keyBy: "login" | "user";
+  readonly keyBy: "login" | "user" | "publicShare";
   readonly limitEnv?: string;
+}
+
+interface RateLimitRule {
+  readonly name: string;
+  readonly identity: string;
+  readonly limit: number;
+  readonly windowSeconds: number;
 }
 
 export interface RateLimitResult {
@@ -63,6 +72,7 @@ export class RedisRateLimitStore
     this.redis = new Redis(
       process.env.REDIS_URL ?? "redis://127.0.0.1:6379",
       {
+        connectTimeout: REDIS_READY_TIMEOUT_MS,
         enableOfflineQueue: false,
         lazyConnect: true,
         maxRetriesPerRequest: 1,
@@ -75,26 +85,66 @@ export class RedisRateLimitStore
     bucket: string,
     windowSeconds: number,
   ): Promise<RateLimitResult> {
-    if (this.redis.status === "wait") {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await this.ensureReady();
+        const response = await this.redis.eval(
+          RATE_LIMIT_SCRIPT,
+          1,
+          bucket,
+          windowSeconds,
+        );
+        if (
+          !Array.isArray(response) ||
+          typeof response[0] !== "number" ||
+          typeof response[1] !== "number"
+        ) {
+          throw new Error("Redis 限流响应无效");
+        }
+        return {
+          count: response[0],
+          retryAfterSeconds: Math.max(response[1], 1),
+        };
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0) {
+          // A first request can race Redis reconnecting. Force a fresh connection
+          // once, then let the guard fail closed if the dependency remains down.
+          if (this.redis.status !== "end") this.redis.disconnect();
+        }
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Redis 限流服务不可用");
+  }
+
+  private async ensureReady(): Promise<void> {
+    if (this.redis.status === "wait" || this.redis.status === "end") {
       await this.redis.connect();
+      return;
     }
-    const response = await this.redis.eval(
-      RATE_LIMIT_SCRIPT,
-      1,
-      bucket,
-      windowSeconds,
-    );
-    if (
-      !Array.isArray(response) ||
-      typeof response[0] !== "number" ||
-      typeof response[1] !== "number"
-    ) {
-      throw new Error("Redis 限流响应无效");
-    }
-    return {
-      count: response[0],
-      retryAfterSeconds: Math.max(response[1], 1),
-    };
+    if (this.redis.status === "ready") return;
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("Redis 限流服务连接超时"));
+      }, REDIS_READY_TIMEOUT_MS);
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const cleanup = () => {
+        clearTimeout(timeout);
+        this.redis.off("ready", onReady);
+        this.redis.off("error", onError);
+      };
+      this.redis.once("ready", onReady);
+      this.redis.once("error", onError);
+    });
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -121,10 +171,17 @@ export class RateLimitGuard implements CanActivate {
     const http = context.switchToHttp();
     const request = http.getRequest<AuthenticatedRequest>();
     const response = http.getResponse<Response>();
-    const rules = policy.keyBy === "login" ? this.loginRules(request) : [{
-      name: policy.name, identity: this.resolveIdentity(policy, request),
-      limit: this.configuredLimit(policy), windowSeconds: policy.windowSeconds,
-    }];
+    const rules =
+      policy.keyBy === "login"
+        ? this.loginRules(request)
+        : policy.keyBy === "publicShare"
+          ? this.publicShareRules(policy, request)
+          : [{
+              name: policy.name,
+              identity: this.resolveIdentity(policy, request),
+              limit: this.configuredLimit(policy),
+              windowSeconds: policy.windowSeconds,
+            }];
     for (const rule of rules) {
       let result: RateLimitResult;
       try { result = await this.store.consume(this.bucket(rule.name, rule.identity), rule.windowSeconds); }
@@ -172,6 +229,41 @@ export class RateLimitGuard implements CanActivate {
     const token = request.cookies?.[REFRESH_TOKEN_COOKIE] as unknown;
     // The bucket helper hashes this value; neither the cookie nor the raw identity is stored or logged.
     return [{ name: "auth-refresh", identity: typeof token === "string" && token ? token : `missing:${ip}`, limit: 30, windowSeconds: 60 }];
+  }
+
+  private publicShareRules(
+    policy: RateLimitPolicy,
+    request: AuthenticatedRequest,
+  ): RateLimitRule[] {
+    const token = (request.params as Record<string, unknown> | undefined)?.token;
+    if (typeof token !== "string" || !token) {
+      throw new BadRequestException({
+        code: "RATE_LIMIT_IDENTITY_UNAVAILABLE",
+        message: "无法确认公开评审链接",
+      });
+    }
+    const ip = request.ip ?? request.socket.remoteAddress ?? "unknown";
+    const ipLimit = policy.ipLimit ?? policy.limit;
+    if (!Number.isSafeInteger(ipLimit) || ipLimit < 1) {
+      throw new ServiceUnavailableException({
+        code: "RATE_LIMIT_CONFIGURATION_ERROR",
+        message: "请求保护配置无效",
+      });
+    }
+    return [
+      {
+        name: policy.name + ":share",
+        identity: token,
+        limit: this.configuredLimit(policy),
+        windowSeconds: policy.windowSeconds,
+      },
+      {
+        name: policy.name + ":ip",
+        identity: ip,
+        limit: ipLimit,
+        windowSeconds: policy.windowSeconds,
+      },
+    ];
   }
 
   private resolveIdentity(

@@ -16,6 +16,7 @@ import { DesignAssetsService } from "./design-assets.service";
 const service = new DesignAssetsService(prisma, {
   createDownloadUrl: async (objectKey: string) =>
     `https://signed.test/${objectKey}`,
+  head: async () => ({ contentLength: 1, contentType: "image/png" }),
 } as never);
 
 describe("DesignAssetsService lineage integration", () => {

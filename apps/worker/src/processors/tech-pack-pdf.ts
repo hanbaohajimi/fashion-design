@@ -10,6 +10,12 @@ export interface TechPackPdfImage {
   id: string;
   body: Buffer;
 }
+interface BrandPdfSnapshot {
+  readonly colors: readonly { readonly hex: string; readonly name: string }[];
+  readonly logo?: Buffer;
+  readonly name: string;
+  readonly revision: number;
+}
 
 const MARGIN = 42;
 const CONTENT_BOTTOM = 775;
@@ -22,6 +28,7 @@ export async function renderTechPackPdf(
     styleCode: string;
     styleName: string;
     images: TechPackPdfImage[];
+    brand?: BrandPdfSnapshot;
   },
   font: (document: PDFKit.PDFDocument, text: string) => string,
 ): Promise<Buffer> {
@@ -84,6 +91,8 @@ export async function renderTechPackPdf(
           61,
           { width: width(), lineGap: 2 },
         );
+      if (input.brand?.logo)
+        document.image(input.brand.logo, document.page.width - MARGIN - 42, 28, { fit: [42, 42] });
       cursor = Math.max(document.y + 20, 112);
     };
     const nextPage = () => page(section, true);
@@ -145,6 +154,8 @@ export async function renderTechPackPdf(
     };
     page(pack.name);
     line(input.styleCode + " · " + input.styleName);
+    if (input.brand)
+      line("品牌资料：" + input.brand.name + " r" + input.brand.revision + " · 色彩：" + input.brand.colors.map((color) => `${color.name} ${color.hex}`).join("、"));
     line(
       pack.status === "PUBLISHED"
         ? "已发布 · 已记录人工复核"

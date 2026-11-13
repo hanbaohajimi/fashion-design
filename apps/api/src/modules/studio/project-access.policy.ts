@@ -17,6 +17,7 @@ export type StudioDatabase = Pick<
   | "styleRevision"
   | "studioDocument"
   | "studioMutation"
+  | "studioReviewRead"
   | "designAsset"
   | "collection"
   | "user"

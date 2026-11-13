@@ -1,7 +1,7 @@
 export type ProjectTaskGroup = "running" | "attention" | "ended";
-export type ProjectTaskDomain = "assistant" | "workflow" | "generation" | "agent" | "export" | "runway";
+export type ProjectTaskDomain = "assistant" | "workflow" | "generation" | "agent" | "export" | "runway" | "review";
 export interface ProjectTaskAction {
-  kind: "retry_workflow" | "cancel_reply" | "cancel_generation" | "resume_agent" | "cancel_agent" | "pause_agent" | "cancel_runway";
+  kind: "retry_workflow" | "cancel_reply" | "cancel_generation" | "resume_agent" | "cancel_agent" | "pause_agent" | "cancel_runway" | "acknowledge_review";
   targetId: string;
   conversationId?: string;
   requestId?: string;

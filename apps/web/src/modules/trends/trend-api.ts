@@ -77,6 +77,7 @@ export function useTrends() {
   const lastPage = query.data?.at(-1);
   useEffect(() => { if (query.error) Sentry.captureException(query.error, { tags: { area: "trends" } }); }, [query.error]);
   return {
+    authUnavailable: Boolean(!session && authError),
     error: query.error instanceof Error ? query.error : !session && authError ? new Error(authError) : null,
     hasMore: Boolean(lastPage?.hasMore),
     isLoading: loading || (!session && !authError) || query.isLoading,

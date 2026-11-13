@@ -3,6 +3,8 @@ import { ensureWorkflowNodeVersions } from "@fashion/db";
 import {
   type CanvasCommand,
   type CanvasDocumentView,
+  canvasMediaPayloadSchema,
+  canvasMediaUrl,
   parseWorkflowToolParameters,
   workflowToolKeySchema,
 } from "@fashion/shared";
@@ -11,6 +13,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import {
   CanvasService,
@@ -178,6 +181,27 @@ export class CanvasCommandService {
           nodeId = source.id;
           const existingPlacement = await tx.canvasObjectBinding.findFirst({ where: { projectId, nodeId, removedAt: null } });
           if (!existingPlacement) placements.push({ shapeId: `shape:reference-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (command.type === "place_generated_media") {
+          const media = await tx.runwayMedia.findFirst({ where: { id: command.mediaId, projectId }, include: { run: { select: { showId: true, show: { select: { title: true } } } } } });
+          if (!media || canvasObject(media.source).input === true || !/^(video|audio)\//u.test(media.mimeType))
+            throw new BadRequestException("生成媒体不存在或无法放入当前项目，请刷新文件列表。");
+          try {
+            const head = await this.storage.head(media.objectKey);
+            if (head.contentLength < 1 || head.contentLength !== media.sizeBytes || head.contentType?.split(";")[0]?.trim().toLowerCase() !== media.mimeType.toLowerCase()) throw new Error("媒体文件与记录不一致");
+          } catch {
+            throw new ServiceUnavailableException("媒体原文件暂时无法读取，尚未放入白板。请稍后继续原操作。");
+          }
+          await this.canvas.writable(userId, projectId, tx);
+          const payload = canvasMediaPayloadSchema.parse({
+            mediaId: media.id, mediaKind: media.mimeType.startsWith("video/") ? "video" : "audio", mimeType: media.mimeType,
+            mediaUrl: canvasMediaUrl(projectId, media.id), runId: media.runId, showId: media.run.showId,
+            width: media.width, height: media.height, durationMs: media.durationMs,
+          });
+          const existing = graph.nodes.find(node => node.type === "media" && canvasObject(node.payload).mediaId === media.id);
+          nodeId = existing?.id ?? directMutationId(`generated-media:${projectId}:${command.mutationId}`);
+          if (!existing) operations.push({ type: "add_node", node: { id: nodeId, kind: "asset", type: "media", title: media.originalName.trim().slice(0, 160) || media.run.show.title, status: "completed", payload,
+            x: command.position?.x ?? 0, y: command.position?.y ?? 0 } });
+          placements.push({ shapeId: `shape:generated-media-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
         } else if (command.type === "place_generated_asset") {
           const source = await tx.designAsset.findFirst({
             where: { AND: [visibleStudioAssets(projectId), { id: command.assetId, operation: { not: "IMPORTED" } }] },

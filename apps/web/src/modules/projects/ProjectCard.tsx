@@ -304,7 +304,12 @@ export function ProjectCard({
           </span>
         </div>
 
-        {!project.optimistic && !project.archived ? <Link className={styles.continueProject} href={`/${project.id}`}>继续设计 <span aria-hidden="true">↗</span></Link> : null}
+        {!project.optimistic && !project.archived ? <Link className={styles.continueProject} href={`/${project.id}`}>
+          继续设计
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 13 13 3M5 3h8v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Link> : null}
         {confirmingDelete ? (
           <div className={styles.confirmPanel} role="group">
             <span>DISCARD 不可撤销</span>

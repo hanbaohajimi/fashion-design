@@ -164,6 +164,7 @@ it("退出失败后补查退出期间另一标签切换的账号", async () => {
 });
 
 it("服务端确认会话失效时清理账号草稿", async () => {
+  mocks.pathname = "/atelier-1";
   mocks.fetchMe.mockResolvedValueOnce(sessionResponse("a")).mockResolvedValueOnce(new Response(null, { status: 401 }));
   mocks.refreshSession.mockResolvedValueOnce(new Response(null, { status: 401 }));
   const { result } = renderHook(useAuth, { wrapper: AuthProvider });
@@ -171,7 +172,7 @@ it("服务端确认会话失效时清理账号草稿", async () => {
   await act(async () => { await result.current.refresh(); });
   expect(result.current.session).toBeNull();
   expect(mocks.clearAccount).toHaveBeenCalledExactlyOnceWith("a");
-  expect(mocks.router.replace).toHaveBeenCalledWith("/login");
+  expect(mocks.router.replace).toHaveBeenCalledWith("/login?returnTo=%2F");
 });
 
 it("旧请求延迟解析出的错误不会覆盖新会话", async () => {

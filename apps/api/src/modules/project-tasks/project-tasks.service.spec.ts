@@ -24,6 +24,7 @@ function setup(editable = true) {
     workflowProposal: store(),
     workflowAttempt: store(),
     studioDocument: store(),
+    studioReviewRead: store(),
   };
   const access = { require: vi.fn().mockResolvedValue({ capabilities: { edit: editable } }) };
   return { database, access, service: new ProjectTasksService(database as never, access as never) };
@@ -72,7 +73,7 @@ describe("项目任务聚合", () => {
     expect(byId.get("export:tech")?.href).toBe("/project%2Fa/studio?tab=tech&styleRevisionId=style-b");
     expect(byId.get("export:image")?.href).toBe("/project%2Fa/studio?tab=styles&assetId=asset%2Fa");
     expect(byId.get("export:collection")?.objectId).toBe("collection-a");
-    expect(database.studioDocument.findMany).toHaveBeenCalledOnce();
+    expect(database.studioDocument.findMany).toHaveBeenCalledTimes(2);
     expect(database.studioDocument.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { projectId: "project/a", id: { in: ["presentation-document", "tech-document"] } },
     }));
@@ -130,6 +131,48 @@ describe("项目任务聚合", () => {
     const page = await service.list("viewer-a", "project-a", { group: "running", limit: 30 });
     expect(access.require).toHaveBeenCalledWith("viewer-a", "project-a", "read");
     expect(page.items[0]).toMatchObject({ group: "running", actions: [], href: "/project-a?conversationId=conversation-a" });
-    expect(database.studioDocument.findMany).not.toHaveBeenCalled();
+    expect(database.studioDocument.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { projectId: "project-a", type: "REVIEW", payload: { path: ["decision"], equals: "CHANGES_REQUESTED" }, reviewReads: { none: { userId: "viewer-a" } } } }),
+    );
+  });
+
+  it("公开评审要求修改会进入待处理，批准记录不会继续占用 attention", async () => {
+    const { database, service } = setup();
+    database.studioDocument.findMany.mockResolvedValue([
+      row("review-change", {
+        payload: {
+          name: "公开评审",
+          targetType: "STYLE",
+          targetRevisionId: "style-r3",
+          decision: "CHANGES_REQUESTED",
+          text: "请重新核对袖口结构",
+        },
+      }),
+      row("review-approved", {
+        payload: {
+          name: "公开评审",
+          targetType: "STYLE",
+          targetRevisionId: "style-r2",
+          decision: "APPROVED",
+          text: "当前版本可以继续交付",
+        },
+      }),
+    ]);
+
+    const page = await service.list("user-a", "project-a", { group: "attention", limit: 30 });
+
+    expect(page.items).toMatchObject([
+      {
+        id: "review:review-change",
+        domain: "review",
+        group: "attention",
+        href: "/project-a/studio?tab=team&reviewId=review-change",
+        objectId: "style-r3",
+      },
+    ]);
+    expect(database.studioDocument.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [expect.objectContaining({ payload: { path: ["decision"], equals: "CHANGES_REQUESTED" }, reviewReads: { none: { userId: "user-a" } } }), {}] },
+      take: 31,
+    }));
   });
 });

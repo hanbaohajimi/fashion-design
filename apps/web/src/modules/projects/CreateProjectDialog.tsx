@@ -1,13 +1,13 @@
 "use client";
 import { useRef, useState } from "react";
-import { Button, Dialog, Input } from "../../components/ui";
+import { Button, Dialog, Field, Input, Textarea } from "../../components/ui";
 import styles from "./projects.module.css";
 import motion from "./project-motion.module.css";
 import { PROJECT_NAME_HINT, useProjectNameValidation } from "./project-name";
 
 interface CreateProjectDialogProps {
   readonly onClose: () => void;
-  readonly onCreate: (name: string) => Promise<void>;
+  readonly onCreate: (name: string, brief?: string) => Promise<void>;
   readonly open: boolean;
 }
 export function CreateProjectDialog({
@@ -16,6 +16,7 @@ export function CreateProjectDialog({
   open,
 }: CreateProjectDialogProps) {
   const [name, setName] = useState("");
+  const [brief, setBrief] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pending = useRef(false);
@@ -34,7 +35,7 @@ export function CreateProjectDialog({
     setSubmitting(true);
     setError(null);
     try {
-      await onCreate(value);
+      await onCreate(value, brief.trim() || undefined);
       pending.current = false;
       close();
     } catch (cause) {
@@ -49,7 +50,7 @@ export function CreateProjectDialog({
   return (
     <Dialog
       open={open}
-      onAfterClose={() => { setName(""); setError(null); validation.reset(); }}
+      onAfterClose={() => { setName(""); setBrief(""); setError(null); validation.reset(); }}
       label="给新系列一个名字"
       onClose={close}
       className={styles.createDialog}
@@ -93,6 +94,18 @@ export function CreateProjectDialog({
         <p className={motion.fieldFeedback} id="create-project-error" aria-live="polite" data-valid={validation.valid && !error || undefined}>
           {error || validation.error ? <span>{error ?? validation.error}</span> : validation.valid ? <span>✓ 名称格式有效</span> : null}
         </p>
+        <Field
+          hint="可先写目标、受众、场景和不能改变的条件；进入白板后会作为待确认的设计简报，不会自动生成图片。"
+          label="设计目标（可选）"
+        >
+          <Textarea
+            maxLength={1200}
+            onChange={(event) => setBrief(event.target.value)}
+            placeholder="例：为 25–35 岁通勤人群设计一组轻量防风外套，保留自然肌理和低饱和配色，先确认廓形与面料方向。"
+            rows={4}
+            value={brief}
+          />
+        </Field>
         <div className={styles.dialogActions}>
           <Button disabled={submitting} onClick={close}>
             取消

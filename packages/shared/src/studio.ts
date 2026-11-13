@@ -68,6 +68,7 @@ export const studioBrandSchema = z
     fabricPreferences: tags,
     avoid: tags,
     notes: text.default(""),
+    logoAssetId: id.optional(),
     referenceAssetIds: z.array(id).max(20).default([]),
     copiedFromRevisionId: id.optional(),
   })
@@ -119,6 +120,7 @@ export const studioTechPackSchema = z
   .object({
     name,
     styleRevisionId: id,
+    brandRevisionId: id.optional(),
     status: z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"),
     views: z.array(studioViewSchema).max(20).default([]),
     annotations: z.array(studioAnnotationSchema).max(100).default([]),
@@ -266,6 +268,7 @@ export const studioPresentationSchema = z
   .object({
     name,
     styleRevisionId: id,
+    brandRevisionId: id.optional(),
     status: z.enum(["DRAFT", "READY"]).default("DRAFT"),
     channel: z
       .enum(["marketplace", "social", "lookbook"])

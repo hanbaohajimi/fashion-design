@@ -37,6 +37,12 @@ const materialInput = {
 export const canvasCommandSchema = z.discriminatedUnion("type", [
   z.object({
     ...common,
+    type: z.literal("place_generated_media"),
+    mediaId: id,
+    position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
+  }).strict(),
+  z.object({
+    ...common,
     type: z.literal("import_reference_image"),
     fileId: id,
     placement: z.enum(["canvas", "reference"]).optional(),

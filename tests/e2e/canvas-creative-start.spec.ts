@@ -143,6 +143,129 @@ test("起步区上传与草图入口可用，退出后仍为原白板", async ({
   expect(state.errors).toEqual([]);
 });
 
+test("快捷起步链接为设计助手预填未发送简报", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 0, realClock: true });
+  await loadZhiya(page, "/atelier-visual?starter=collection");
+  await openZhiya(page);
+
+  await expect(page).toHaveURL(/\/atelier-visual$/u);
+  await expect(page.getByRole("region", { name: "创作主线", exact: true })).toContainText("秋冬通勤服装设计");
+  await expect(page.getByRole("region", { name: "创作主线", exact: true })).toContainText("探索外套方案");
+  await expect(
+    page.getByRole("textbox", { name: "描述设计需求", exact: true }),
+  ).toHaveValue(/秋冬通勤/);
+  await expect(
+    page.getByText("已根据你的创作方向准备一份未发送的设计需求，可以先修改再发送。", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test("趋势简报接力会预填研究型设计计划且不自动发送", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 0, realClock: true });
+  await loadZhiya(page, "/atelier-visual?starter=research");
+  await openZhiya(page);
+
+  await expect(page).toHaveURL(/\/atelier-visual$/u);
+  await expect(
+    page.getByRole("textbox", { name: "描述设计需求", exact: true }),
+  ).toHaveValue(/趋势简报.*待验证假设/);
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test("趋势简报深链会把已保存报告作为明确助手引用", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 1, realClock: true });
+  await loadZhiya(page, "/atelier-visual?starter=research&referenceNodeId=material-0");
+  await openZhiya(page);
+
+  await expect(page).toHaveURL(/\/atelier-visual$/u);
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("通勤外套 1");
+  await expect(page.getByRole("status")).toContainText("刚保存的趋势简报");
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test("已有方案可一键准备设计审阅上下文且不自动发送", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 3, realClock: true });
+  await loadZhiya(page);
+  await openZhiya(page);
+
+  await page.getByRole("button", { name: "审阅当前方案", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "描述设计需求", exact: true }),
+  ).toHaveValue(/审阅当前画布/);
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("通勤外套 1");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("通勤外套 2");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("通勤外套 3");
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test("常用技能可以载入建议并保存当前草稿，不自动发送", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 0, realClock: true });
+  let remoteSkills: Record<string, unknown>[] = [];
+  await page.route("**/api/projects/atelier-visual/assistant-skills", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: remoteSkills });
+      return;
+    }
+    const body = route.request().postDataJSON() as Record<string, string>;
+    const skill = {
+      id: "remote-skill-1",
+      ownerId: "visual-designer",
+      workspaceId: null,
+      scope: body.scope ?? "PERSONAL",
+      name: body.name,
+      description: body.description,
+      prompt: body.prompt,
+      createdAt: "2026-11-11T00:00:00.000Z",
+      updatedAt: "2026-11-11T00:00:00.000Z",
+    };
+    remoteSkills = [skill];
+    await route.fulfill({ json: skill });
+  });
+  await loadZhiya(page);
+  await openZhiya(page);
+
+  await page.getByRole("button", { name: "常用技能", exact: true }).click();
+  const skills = page.getByRole("region", { name: "常用技能", exact: true });
+  await expect(skills).toBeVisible();
+  await skills.getByRole("button", { name: /整理设计方向/u }).click();
+  const input = page.getByRole("textbox", { name: "描述设计需求", exact: true });
+  await expect(input).toHaveValue(/整理当前项目的设计目标/u);
+
+  await page.getByRole("button", { name: "常用技能", exact: true }).click();
+  const reopened = page.getByRole("region", { name: "常用技能", exact: true });
+  await reopened.getByRole("textbox", { name: "技能名称", exact: true }).fill("我的通勤核对");
+  await reopened.getByRole("button", { name: "保存技能", exact: true }).click();
+  await expect(reopened).toContainText("已保存并同步“我的通勤核对”");
+  await expect(reopened.getByRole("button", { name: /^我的通勤核对/u })).toBeVisible();
+  expect(state.mutations.filter((path) => !path.includes("/assistant-skills"))).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
+test("主设计助手可以打开真实分步计划视图而不离开当前对话", async ({ page }) => {
+  const state = await prepareZhiya(page, { count: 1, realClock: true });
+  await page.route("**/api/agent-conversations/*/plans", route =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await loadZhiya(page);
+  await openZhiya(page);
+
+  await page.getByRole("button", { name: "分步计划", exact: true }).click();
+  const planner = page.getByRole("region", { name: "分步设计计划", exact: true });
+  await expect(planner).toBeVisible();
+  await expect(planner.getByLabel(/设计目标/u)).toBeVisible();
+  await expect(planner.getByText("当前计划从整段设计目标开始，可在节点中继续补充素材。", { exact: true })).toBeVisible();
+  await planner.getByRole("button", { name: "返回讨论", exact: true }).click();
+  await expect(planner).toBeHidden();
+  expect(state.mutations).toEqual([]);
+  expect(state.errors).toEqual([]);
+});
+
 test.describe("触屏输入", () => {
   test.use({ hasTouch: true });
   test("320px 触屏起步不强制聚焦输入，短屏操作保持可达", async ({ page }) => {

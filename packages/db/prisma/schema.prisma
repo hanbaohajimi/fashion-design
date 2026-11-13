@@ -75,6 +75,7 @@ model User {
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
   agentRuns          AgentRun[]
+  assistantDelegations AssistantDelegation[]
   workflowProposals  WorkflowProposal[]
   auditLogs          AuditLog[]
   designDecisions    DesignAssetDecision[]
@@ -83,6 +84,9 @@ model User {
   styleRevisions StyleRevision[]
   studioDocuments StudioDocument[] @relation("StudioDocumentOwner")
   createdStudioDocuments StudioDocument[] @relation("StudioDocumentAuthor")
+  studioShareLinks StudioShareLink[]
+  studioReviewReads StudioReviewRead[]
+  assistantSkills AssistantSkill[]
   studioMutations StudioMutation[]
   studioExperiments StudioExperiment[]
 
@@ -97,12 +101,20 @@ enum AccountPlan {
 enum ExportFormat {
   PNG
   JPG
+  WEBP
   PDF
 }
 
 enum ExportQuality {
   STANDARD
   HIGH
+}
+
+enum ExportAspect {
+  ORIGINAL
+  SQUARE
+  LANDSCAPE
+  PORTRAIT
 }
 
 enum ExportStatus {
@@ -452,6 +464,7 @@ model Workspace {
   owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   projects  Project[]
   members WorkspaceMember[]
+  assistantSkills AssistantSkill[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -500,8 +513,11 @@ model Project {
   workflowOutbox WorkflowOutbox[]
   agentTurns AgentTurn[]
   agentPlanRevisions AgentPlanRevision[]
+  assistantDelegations AssistantDelegation[]
   styles Style[]
   studioDocuments StudioDocument[]
+  studioShareLinks StudioShareLink[]
+  studioReviewReads StudioReviewRead[]
   studioMutations StudioMutation[]
   studioExperiments StudioExperiment[]
 
@@ -676,6 +692,8 @@ model ExportJob {
   collectionId  String?       @map("collection_id")
   format        ExportFormat
   quality       ExportQuality
+  aspect        ExportAspect  @default(ORIGINAL)
+  brandRevisionId String?      @map("brand_revision_id")
   status        ExportStatus  @default(QUEUED)
   watermark     Boolean
   maxEdge       Int?          @map("max_edge")
@@ -1140,6 +1158,7 @@ model AgentConversation {
   runs        AgentRun[]
   proposals   WorkflowProposal[]
   contextSummary AgentContextSummary?
+  assistantDelegations AssistantDelegation[]
 
   @@index([projectId, updatedAt])
   @@index([createdById, updatedAt])
@@ -1319,6 +1338,26 @@ enum WorkspaceRole {
   VIEWER
 }
 
+enum AssistantSkillScope {
+  PERSONAL
+  WORKSPACE
+}
+
+enum AssistantDelegationCadence {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum AssistantDelegationStatus {
+  ACTIVE
+  PAUSED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 enum StyleStatus {
   DESIGNING
   REVIEW
@@ -1336,6 +1375,11 @@ enum StudioDocumentType {
   PRINT_PATTERN
   COMMENT
   REVIEW
+}
+
+enum StudioShareTarget {
+  STYLE
+  TECH_PACK
 }
 
 model WorkspaceMember {
@@ -1383,6 +1427,7 @@ model StyleRevision {
   sourceAsset DesignAsset @relation(fields: [sourceAssetId], references: [id], onDelete: Restrict)
   author User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
   documents StudioDocument[]
+  shareLinks StudioShareLink[]
   @@unique([styleId, revision])
   @@map("style_revisions")
 }
@@ -1510,9 +1555,103 @@ model StudioDocument {
   author User? @relation("StudioDocumentAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   collection Collection? @relation(fields: [collectionId], references: [id], onDelete: Restrict)
   styleRevision StyleRevision? @relation(fields: [styleRevisionId], references: [id], onDelete: Restrict)
+  shareLinks StudioShareLink[]
+  reviewReads StudioReviewRead[]
   @@unique([documentId, revision])
   @@index([projectId, type, createdAt])
   @@map("studio_documents")
+}
+
+model StudioReviewRead {
+  id              String         @id @default(uuid())
+  projectId       String         @map("project_id")
+  userId          String         @map("user_id")
+  studioDocumentId String        @map("studio_document_id")
+  acknowledgedAt  DateTime       @default(now()) @map("acknowledged_at")
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studioDocument StudioDocument  @relation(fields: [studioDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, studioDocumentId])
+  @@index([projectId, userId, acknowledgedAt])
+  @@map("studio_review_reads")
+}
+
+model StudioShareLink {
+  id               String            @id @default(uuid())
+  projectId        String            @map("project_id")
+  ownerId          String            @map("owner_id")
+  targetType       StudioShareTarget @map("target_type")
+  styleRevisionId  String?           @map("style_revision_id")
+  studioDocumentId String?           @map("studio_document_id")
+  tokenHash        String            @unique @map("token_hash")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  expiresAt        DateTime          @map("expires_at")
+  revokedAt        DateTime?         @map("revoked_at")
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  styleRevision    StyleRevision?    @relation(fields: [styleRevisionId], references: [id], onDelete: Cascade)
+  studioDocument   StudioDocument?   @relation(fields: [studioDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([expiresAt])
+  @@map("studio_share_links")
+}
+
+model AssistantSkill {
+  id          String             @id @default(cuid(2))
+  ownerId     String             @map("owner_id")
+  workspaceId String?            @map("workspace_id")
+  scope       AssistantSkillScope @default(PERSONAL)
+  requestKey  String             @map("request_key")
+  fingerprint String
+  name        String             @db.VarChar(80)
+  description String             @db.VarChar(200)
+  prompt      String             @db.Text
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  owner       User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workspace   Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, requestKey])
+  @@index([ownerId, updatedAt])
+  @@index([workspaceId, scope, updatedAt])
+  @@map("assistant_skills")
+}
+
+model AssistantDelegation {
+  id String @id @default(cuid(2))
+  projectId String @map("project_id")
+  ownerId String @map("owner_id")
+  conversationId String @map("conversation_id")
+  requestKey String @map("request_key")
+  fingerprint String
+  name String @db.VarChar(80)
+  prompt String @db.Text
+  cadence AssistantDelegationCadence
+  status AssistantDelegationStatus @default(ACTIVE)
+  nextRunAt DateTime @map("next_run_at")
+  lastRunAt DateTime? @map("last_run_at")
+  lastError String? @db.Text @map("last_error")
+  runCount Int @default(0) @map("run_count")
+  timeZone String @default("Asia/Shanghai") @map("time_zone") @db.VarChar(80)
+  scheduledLocalDayOfMonth Int @map("scheduled_local_day_of_month")
+  scheduledLocalHour Int @map("scheduled_local_hour")
+  scheduledLocalMinute Int @map("scheduled_local_minute")
+  scheduledLocalSecond Int @default(0) @map("scheduled_local_second")
+  leaseToken String? @map("lease_token")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, requestKey])
+  @@index([status, nextRunAt])
+  @@index([projectId, updatedAt])
+  @@index([conversationId, updatedAt])
+  @@map("assistant_delegations")
 }
 
 model StudioMutation {

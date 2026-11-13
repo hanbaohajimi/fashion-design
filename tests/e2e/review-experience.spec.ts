@@ -28,6 +28,80 @@ test("登录样式契约、发送和失败状态", async ({ page }) => {
   await page.screenshot({ path: "output/playwright/review-login-error-after.png" });
 });
 
+test("未登录首页展示公开工作室入口而不是受保护页面错误态", async ({ page }) => {
+  await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
+  await page.route("**/api/auth/login", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: /让每一版服装方案/u })).toBeVisible();
+    await expect(page.getByRole("link", { name: "进入设计工作室", exact: true })).toHaveAttribute("href", "/login");
+    await expect(page.getByRole("link", { name: "开始设计", exact: true })).toHaveAttribute("href", "/login");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await contrastFailures(page)).toEqual([]);
+    expect(await controlFontFailures(page)).toEqual([]);
+    await page.screenshot({ path: `output/playwright/public-landing-${viewport.width}.png`, fullPage: true });
+  }
+});
+
+test("只读评审链接展示确切修订、视图与人工决定", async ({ page }) => {
+  await page.route("**/api/studio-shares/**", async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({ json: { ok: true } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        expiresAt: "2026-11-18T00:00:00.000Z",
+        projectName: "秋冬通勤服装设计",
+        revision: 3,
+        status: "REVIEW",
+        targetType: "STYLE",
+        title: "轻量通勤外套",
+        code: "AW26-017",
+        styleRevisionId: "style-r3",
+        views: [
+          { assetId: "review-front", height: 800, kind: "front", label: "正面", reviewed: true, thumbnailUrl: "/review-garment.svg", url: "/review-garment.svg", width: 600 },
+          { assetId: "review-back", height: 800, kind: "back", label: "背面", reviewed: false, thumbnailUrl: "/review-garment.svg", url: "/review-garment.svg", width: 600 },
+        ],
+        reviews: [
+          { createdAt: "2026-11-11T08:00:00.000Z", decision: "APPROVED", name: "品牌团队", text: "廓形与配色已确认，继续整理交付资料。" },
+        ],
+        comments: [],
+      },
+    });
+  });
+  await page.route("**/review-garment.svg", (route) =>
+    route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#e9e5df"/><path d="M200 120 300 70 400 120 470 260 380 290 370 690 230 690 220 290 130 260Z" fill="#263950"/></svg>' }),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/review/${"b".repeat(43)}`);
+  await expect(page.getByRole("heading", { name: "轻量通勤外套", exact: true })).toBeVisible();
+  await expect(page.getByText("秋冬通勤服装设计 · AW26-017 · 修订 3", { exact: true })).toBeVisible();
+  await expect(page.getByText("已批准", { exact: true })).toBeVisible();
+  await expect(page.getByText("廓形与配色已确认，继续整理交付资料。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "正面" })).toBeVisible();
+  await page.getByRole("textbox", { name: "评审意见", exact: true }).fill("请保持肩线，继续核对袖口结构");
+  await page.getByRole("button", { name: "提交评审", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("评审已提交");
+  await page.getByRole("radiogroup", { name: "反馈类型", exact: true }).getByRole("radio", { name: "补充意见", exact: true }).click();
+  await page.getByRole("textbox", { name: "评审意见", exact: true }).fill("补充意见：请保留自然肌理的面料观感");
+  await page.getByRole("button", { name: "提交意见", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("评审已提交");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await contrastFailures(page)).toEqual([]);
+  expect(await controlFontFailures(page)).toEqual([]);
+  await page.screenshot({ path: "output/playwright/review-share-1440.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/review/${"b".repeat(43)}`);
+  await expect(page.getByRole("heading", { name: "轻量通勤外套", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "评审意见", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await contrastFailures(page)).toEqual([]);
+  expect(await controlFontFailures(page)).toEqual([]);
+  await page.screenshot({ path: "output/playwright/review-share-390.png", fullPage: true });
+});
+
 test("后台会话变更时隔离项目缓存，旧请求不会回填新账号", async ({ page }) => {
   let identity = "a";
   let delayOld = false;

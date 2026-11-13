@@ -1,6 +1,7 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import {
   ExportFormat,
+  ExportAspect,
   ExportQuality,
   ExportStatus,
   Prisma,
@@ -31,6 +32,7 @@ const MIME_BY_FORMAT = {
   [ExportFormat.JPG]: "image/jpeg",
   [ExportFormat.PDF]: "application/pdf",
   [ExportFormat.PNG]: "image/png",
+  [ExportFormat.WEBP]: "image/webp",
 } as const;
 
 @Injectable()
@@ -138,7 +140,23 @@ export class ExportsService {
                 ? "TECH_PACK"
                 : "PRESENTATION_SET",
             );
+    const brandRevisionId = "brandRevisionId" in input ? input.brandRevisionId : undefined;
+    if (brandRevisionId) {
+      const brand = await this.database.studioDocument.findFirst({
+        where: {
+          id: brandRevisionId,
+          projectId: source.projectId,
+          type: "BRAND_PROFILE",
+          ownerId: userId,
+        },
+        select: { id: true },
+      });
+      if (!brand) throw new NotFoundException("品牌资料修订不存在或不属于当前项目");
+    }
     const format = toFormat(input.format);
+    const aspect = input.sourceType === "asset"
+      ? toAspect(input.aspect)
+      : ExportAspect.ORIGINAL;
     const quality =
       input.quality === "high" ? ExportQuality.HIGH : ExportQuality.STANDARD;
     const maxEdge =
@@ -155,6 +173,8 @@ export class ExportsService {
                 ? { collectionId: input.collectionId }
                 : { studioRevisionId: input.studioRevisionId }),
             format,
+            aspect,
+            ...(brandRevisionId ? { brandRevisionId } : {}),
             maxEdge,
             projectId: source.projectId,
             quality,
@@ -343,6 +363,8 @@ export class ExportsService {
     readonly expiresAt: Date | null;
     readonly fileName: string | null;
     readonly format: ExportFormat;
+    readonly aspect?: ExportAspect;
+    readonly brandRevisionId?: string | null;
     readonly id: string;
     readonly maxEdge: number | null;
     readonly mimeType: string | null;
@@ -359,6 +381,8 @@ export class ExportsService {
       expiresAt: exportJob.expiresAt,
       fileName: exportJob.fileName,
       format: exportJob.format.toLowerCase(),
+      aspect: exportJob.aspect?.toLowerCase() ?? "original",
+      brandRevisionId: exportJob.brandRevisionId ?? null,
       id: exportJob.id,
       maxEdge: exportJob.maxEdge,
       mimeType: exportJob.mimeType ?? MIME_BY_FORMAT[exportJob.format],
@@ -379,5 +403,15 @@ function toFormat(format: CreateExportInput["format"]): ExportFormat {
     jpg: ExportFormat.JPG,
     pdf: ExportFormat.PDF,
     png: ExportFormat.PNG,
+    webp: ExportFormat.WEBP,
   }[format];
+}
+
+function toAspect(aspect: Extract<CreateExportInput, { sourceType: "asset" }>["aspect"] | undefined): ExportAspect {
+  return {
+    original: ExportAspect.ORIGINAL,
+    square: ExportAspect.SQUARE,
+    landscape: ExportAspect.LANDSCAPE,
+    portrait: ExportAspect.PORTRAIT,
+  }[aspect ?? "original"];
 }

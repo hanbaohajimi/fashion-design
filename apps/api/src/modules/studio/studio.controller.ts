@@ -67,6 +67,14 @@ export class StudioController {
   ) {
     return this.studio.saveDocument(user.userId, projectId, body);
   }
+  @Post("reviews/:reviewId/acknowledge")
+  acknowledgeReview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("reviewId") reviewId: string,
+  ) {
+    return this.studio.acknowledgeReview(user.userId, projectId, reviewId);
+  }
   @Post("members")
   createMember(
     @CurrentUser() user: AuthenticatedUser,

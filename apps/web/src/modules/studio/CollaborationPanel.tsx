@@ -7,6 +7,8 @@ import { BoundStyleContext } from "./studio-object-context";
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为确切修订的图片、意见与审批；成员管理移入次级页签。保留两份草稿，动作服从原权限。 */
 
 import { useCallback, useEffect, useId, useState } from "react";
+import { useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import type {
   StudioDocumentInput,
   StudioMemberView,
@@ -27,6 +29,7 @@ import {
 } from "../../components/ui";
 import {
   removeMember,
+  acknowledgeReview,
   saveMember,
   saveStudioDocument,
   updateMember,
@@ -37,6 +40,13 @@ import { errorMessage } from "./studio-ui";
 import styles from "./studio.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
+import {
+  createStudioShare,
+  fetchStudioShares,
+  revokeStudioShare,
+  rotateStudioShare,
+  type StudioShareRecord,
+} from "../studio-shares/studio-shares-api";
 
 type MemberRole = "EDITOR" | "REVIEWER" | "VIEWER";
 type Comment = Extract<StudioDocumentInput, { type: "COMMENT" }>["payload"];
@@ -314,9 +324,15 @@ function ReviewForm({
   onDirty,
   onSaved,
 }: StudioPanelProps & { readonly data: StudioSummary }) {
+  const searchParams = useSearchParams();
+  const linkedReviewId = searchParams.get("reviewId");
+  const linkedReview = linkedReviewId
+    ? data.reviews.find((item) => item.id === linkedReviewId)
+    : undefined;
+  const linkedPayload = linkedReview?.currentRevision.payload as Partial<Review> | undefined;
   const initial: ReviewDraft = {
-    targetType: "STYLE",
-    targetRevisionId: data.styles[0]?.currentRevision.id ?? "",
+    targetType: linkedPayload?.targetType === "TECH_PACK" ? "TECH_PACK" : "STYLE",
+    targetRevisionId: linkedPayload?.targetRevisionId ?? data.styles[0]?.currentRevision.id ?? "",
     text: "",
     anchored: false,
     assetId: "",
@@ -328,6 +344,26 @@ function ReviewForm({
   const [reviewMode, setReviewMode] = useState<"comment" | "decision">(
     data.capabilities.edit ? "comment" : "decision",
   );
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shares, setShares] = useState<readonly StudioShareRecord[]>([]);
+  const [shareActionId, setShareActionId] = useState<string | null>(null);
+  const acknowledgementSent = useRef(false);
+  useEffect(() => {
+    if (!linkedReviewId || !linkedReview || acknowledgementSent.current) return;
+    acknowledgementSent.current = true;
+    void acknowledgeReview(projectId, linkedReviewId).catch(() => {
+      acknowledgementSent.current = false;
+    });
+  }, [linkedReview, linkedReviewId, projectId]);
+  useEffect(() => {
+    let active = true;
+    void fetchStudioShares(projectId)
+      .then((items) => { if (active) setShares(items); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [projectId]);
   const targetOptions =
     draft.targetType === "STYLE"
       ? data.styles.flatMap((style) =>
@@ -442,6 +478,8 @@ function ReviewForm({
                   assetId: "",
                   anchored: false,
                 }));
+                setShareUrl(null);
+                setShareError(null);
               }}
             >
               <option value="STYLE">款式</option>
@@ -452,12 +490,16 @@ function ReviewForm({
             <Select
               value={draft.targetRevisionId}
               onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  targetRevisionId: event.target.value,
-                  anchored: false,
-                  assetId: "",
-                }))
+                (() => {
+                  setDraft((current) => ({
+                    ...current,
+                    targetRevisionId: event.target.value,
+                    anchored: false,
+                    assetId: "",
+                  }));
+                  setShareUrl(null);
+                  setShareError(null);
+                })()
               }
             >
               <option value="">选择修订</option>
@@ -470,6 +512,105 @@ function ReviewForm({
           </Field>
         </div>
       </StudioEditSection>
+      <section className={styles.reviewShare} aria-label="只读评审链接">
+        <div>
+          <h3>只读评审链接</h3>
+          <p>只分享当前确切修订的视图和评审决定，链接七天后失效。</p>
+        </div>
+        <div className={styles.toolbar}>
+          <Button
+            disabled={shareBusy || !draft.targetRevisionId}
+            loading={shareBusy}
+            onClick={() => {
+              setShareBusy(true);
+              setShareError(null);
+              void createStudioShare(projectId, draft.targetType, draft.targetRevisionId)
+                .then((result) => setShareUrl(new URL(result.path, window.location.origin).href))
+                .then(() => fetchStudioShares(projectId).then(setShares).catch(() => undefined))
+                .catch((cause: unknown) => setShareError(cause instanceof Error ? cause.message : "评审链接创建失败"))
+                .finally(() => setShareBusy(false));
+            }}
+          >
+            创建只读链接
+          </Button>
+          {shareUrl ? (
+            <>
+              <Input aria-label="只读评审链接" readOnly value={shareUrl} />
+              <Button
+                onClick={() =>
+                  void navigator.clipboard.writeText(shareUrl).catch(() =>
+                    setShareError("复制失败，请手动复制评审链接"),
+                  )
+                }
+                variant="ghost"
+              >
+                复制链接
+              </Button>
+            </>
+          ) : null}
+        </div>
+        {shareError ? <Notice tone="error">{shareError}</Notice> : null}
+        <div className={styles.reviewShareList} aria-label="已有评审链接">
+          <div className={styles.reviewShareListHeader}>
+            <strong>已有链接</strong>
+            <span>{shares.length} 条</span>
+          </div>
+          {shares.length ? shares.map((share) => {
+            const target = share.targetType === "STYLE"
+              ? data.styles.flatMap((style) => style.revisions).find((revision) => revision.id === share.styleRevisionId)
+              : data.techPacks.flatMap((pack) => pack.revisions).find((revision) => revision.id === share.studioDocumentId);
+            const label = target
+              ? `${share.targetType === "STYLE" ? "款式" : "技术包"} · ${target.revision} · ${target.payload.name}`
+              : share.targetType === "STYLE" ? "款式修订" : "技术包修订";
+            return (
+              <div className={styles.reviewShareRow} key={share.id}>
+                <div>
+                  <strong>{label}</strong>
+                  <span>{share.revokedAt ? "已撤销" : share.expired ? "已过期" : `有效至 ${new Date(share.expiresAt).toLocaleDateString("zh-CN")}`}</span>
+                </div>
+                <div className={styles.reviewShareActions}>
+                  <Button
+                    disabled={shareActionId === share.id}
+                    loading={shareActionId === share.id}
+                    onClick={() => {
+                      setShareActionId(share.id);
+                      setShareError(null);
+                      void rotateStudioShare(projectId, share.id)
+                        .then((result) => {
+                          setShareUrl(new URL(result.path, window.location.origin).href);
+                          return fetchStudioShares(projectId).then(setShares);
+                        })
+                        .catch((cause: unknown) => setShareError(cause instanceof Error ? cause.message : "评审链接生成失败"))
+                        .finally(() => setShareActionId(null));
+                    }}
+                    size="small"
+                    variant="ghost"
+                  >
+                    生成新链接
+                  </Button>
+                  {!share.revokedAt && !share.expired ? (
+                    <Button
+                      disabled={shareActionId === share.id}
+                      onClick={() => {
+                        setShareActionId(share.id);
+                        setShareError(null);
+                        void revokeStudioShare(projectId, share.id)
+                          .then(() => fetchStudioShares(projectId).then(setShares))
+                          .catch((cause: unknown) => setShareError(cause instanceof Error ? cause.message : "评审链接撤销失败"))
+                          .finally(() => setShareActionId(null));
+                      }}
+                      size="small"
+                      variant="ghost"
+                    >
+                      撤销
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          }) : <p className={styles.muted}>当前项目还没有其他评审链接。</p>}
+        </div>
+      </section>
       <div className={styles.reviewWorkspace}>
         <div className={styles.reviewImage}>
           {previewUrl ? (
@@ -501,6 +642,7 @@ function ReviewForm({
                   </Badge>
                   <p>{review.text}</p>
                   <small className={styles.muted}>
+                    {review.name} · {" "}
                     {new Date(item.currentRevision.createdAt).toLocaleString(
                       "zh-CN",
                     )}
@@ -521,6 +663,7 @@ function ReviewForm({
                     </small>
                   ) : null}
                   <small className={styles.muted}>
+                    {comment.name} · {" "}
                     {new Date(item.currentRevision.createdAt).toLocaleString(
                       "zh-CN",
                     )}

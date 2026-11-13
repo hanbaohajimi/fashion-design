@@ -1,0 +1,4 @@
+CREATE TYPE "ExportAspect" AS ENUM ('ORIGINAL', 'SQUARE', 'LANDSCAPE', 'PORTRAIT');
+
+ALTER TABLE "export_jobs"
+ADD COLUMN "aspect" "ExportAspect" NOT NULL DEFAULT 'ORIGINAL';

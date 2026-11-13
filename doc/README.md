@@ -10,6 +10,10 @@
 
 ## 现行入口
 
+2026-11-12生成视频/音频明确放回无限白板，带权限与原文件核验、点击播放、来源定位、恢复与性能记录；详情见[媒体白板验收](design/canvas-media-validation.md)。素材仍需用户明确添加，静态画布遇媒体时不会静默漏图导出。
+
+2026-11-12审批发现的七项问题、窄屏修正与实际数据库回归见[审批问题修正验证](design/workspace-approval-fixes-validation.md)，覆盖私有品牌引用、登录返回、WEBP迁移、研究响应、委托状态、技能作用域和评审分页；整体产品优化继续进行。
+
 无限白板已接入毛绒「织芽」，作为现有设计助手聊天框的收起形态。见 [正式接入说明](design/assistant-seed/integration.md)、[接入验证记录](design/assistant-seed/validation.md) 与 [形象探索历史](design/assistant-seed/README.md)（2026-11-08）。
 
 全平台目录折叠、画布顶栏精简和织芽关键话语的本轮结果见 [导航与话语验收](design/assistant-seed/navigation-dialogue-validation.md)（2026-11-09），含截图、短录屏、初次48项浏览器功能用例及100对象白板性能记录；同日接续补齐旧接口话语基线和气泡退出暂停，46项单元、30项浏览器复测通过，并独立记录性能结果。最终交接复核另记录当前48项单元和11项浏览器测试通过，重复用例不累加。

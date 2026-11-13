@@ -502,6 +502,14 @@ describe("reviewer scope and retained sample verification", () => {
     ],
     colors: [{ name: "黑色", hex: "#111111", reviewed: true }],
   });
+  it("保存交付资料不能引用同项目另一账号的个人品牌", async () => {
+    const f = fixture();
+    f.database.studioDocument.findFirst.mockImplementation(async ({ where }) => where.ownerId === "editor-a" ? null : { id: "private-brand", ownerId: "owner-a" });
+    await expect(f.service.saveDocument("editor-a", "project-a", {
+      requestKey: "private-brand-save", type: "TECH_PACK", payload: { ...pack, brandRevisionId: "private-brand" },
+    })).rejects.toThrow("品牌资料修订不存在或不属于当前项目");
+    expect(f.database.studioDocument.create).not.toHaveBeenCalled();
+  });
   function setup(
     role: "OWNER" | "EDITOR" | "REVIEWER",
     kind: "TECH_PACK" | "SAMPLE_ROUND",

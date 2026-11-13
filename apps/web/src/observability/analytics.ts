@@ -23,7 +23,8 @@ export interface AnalyticsEventMap {
       "color" | "detail" | "fabric" | "garmentType" | "silhouette" | "styling";
   };
   readonly export_completed: {
-    readonly format: "jpg" | "pdf" | "png";
+    readonly aspect: "landscape" | "original" | "portrait" | "square";
+    readonly format: "jpg" | "pdf" | "png" | "webp";
     readonly quality: "high" | "standard";
     readonly source_type: "asset" | "collection";
   };
@@ -48,7 +49,7 @@ const SAFE_PROPERTIES: {
   board_element_added: new Set(["element_type"]),
   collection_created: new Set(),
   collection_look_generated: new Set(["garment_type", "variation_axis"]),
-  export_completed: new Set(["format", "quality", "source_type"]),
+  export_completed: new Set(["aspect", "format", "quality", "source_type"]),
   generation_adopted: new Set(["task_type"]),
   generation_submitted: new Set([
     "has_reference",

@@ -15,6 +15,15 @@ function setup() {
 }
 
 describe("项目生成文件", () => {
+  it("媒体行定位原节点，图片筛选包含已支持的WEBP导出", async () => {
+    const { db, service } = setup();
+    db.runwayMedia.findMany.mockResolvedValue([{ id: "video", kind: "FINAL_VIDEO", mimeType: "video/mp4", createdAt: at, width: 240, height: 160, durationMs: 2000, sizeBytes: 100, originalName: "demo.mp4", runId: "run", run: { showId: "show", show: { title: "秋冬成片", archived: false } } }]);
+    db.workflowNode.findMany.mockResolvedValue([{ id: "media-node", payload: { mediaId: "video" } }]);
+    const page = await service.list("user", "project", { ...input, kind: "video" });
+    expect(page.items[0]).toMatchObject({ domain: "runway", kind: "video", nodeId: "media-node" });
+    await service.list("user", "project", { ...input, kind: "image" });
+    expect(db.exportJob.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ AND: expect.arrayContaining([{ format: { in: ["PNG", "JPG", "WEBP"] } }]) }) }));
+  });
   it("读取权限在查询和签名前核验，不泄露跨项目结果", async () => {
     const { db, access, storage, service } = setup(); access.require.mockRejectedValue(new ForbiddenException());
     await expect(service.list("outsider", "project", input)).rejects.toThrow(ForbiddenException);

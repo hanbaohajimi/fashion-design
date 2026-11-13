@@ -20,6 +20,9 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
   };
   let patchCount = 0;
   let legacyWrites = 0;
+  await page.addInitScript(() => {
+    localStorage.setItem("fashion.active-board-id:trend-user", "workflow-trends");
+  });
   await page.route("**/api/me", (route) =>
     route.fulfill({
       json: {
@@ -111,6 +114,9 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
   await expect(
     page.getByRole("heading", { name: "趋势档案", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "整理成趋势简报", exact: true }),
+  ).toHaveAttribute("href", "/workflow-trends/studio?tab=trends");
   await expect(page.getByRole("heading", { name: "秋冬通勤色彩", exact: true })).toBeHidden();
   await page.getByText("本周趋势综述", { exact: true }).click();
   await expect(page.getByRole("heading", { name: "秋冬通勤色彩", exact: true })).toBeVisible();
@@ -139,6 +145,10 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
   await expect(
     page.getByRole("link", { name: "打开设计工作流" }),
   ).toHaveAttribute("href", "/workflow-trends");
+  await page.goto("/trends?from=projects");
+  await expect(
+    page.getByRole("link", { name: "继续整理趋势简报", exact: true }),
+  ).toHaveAttribute("href", "/workflow-trends/studio?tab=trends");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
     path: "output/playwright/workflow-trend-library-verified.png",

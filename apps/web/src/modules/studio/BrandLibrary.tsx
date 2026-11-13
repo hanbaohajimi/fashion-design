@@ -289,7 +289,27 @@ function BrandEditor({
             },
           },
         ];
-        draft.referenceAssetIds.forEach((assetId, index) =>
+        const referenceIds = draft.referenceAssetIds.filter((assetId) => assetId !== draft.logoAssetId);
+        if (draft.logoAssetId) operations.push({
+          type: "add_node",
+          node: {
+            id: prefix + "-logo",
+            kind: "asset",
+            type: "reference_image",
+            title: draft.name + " 品牌标识",
+            payload: {
+              assetId: draft.logoAssetId,
+              brandAssetRole: "logo",
+              imageUrl: data.assets.find((asset) => asset.id === draft.logoAssetId)?.url ?? "",
+              role: "detail_ref",
+              roleSource: "manual",
+              studioRevisionId: existing.currentRevision.id,
+            },
+            x: 40,
+            y: graph.nodes.length * 40 + 340,
+          },
+        });
+        referenceIds.forEach((assetId, index) =>
           operations.push({
             type: "add_node",
             node: {
@@ -353,8 +373,8 @@ function BrandEditor({
         </Notice>
       ) : null}
       {applied ? (
-        <Notice tone="success">
-          品牌规则与认可案例已加入画布，继续连入需要使用的任务。
+      <Notice tone="success">
+          品牌规则、标识与认可案例已加入画布，继续连入需要使用的任务。
         </Notice>
       ) : null}
       {existing ? (
@@ -480,6 +500,17 @@ function BrandEditor({
               onChange={(event) => update("notes", event.target.value)}
             />
           </Field>
+          <section className={styles.brandReferences}>
+            <AssetPicker
+              compact
+              disabled={!canEdit || form.busy}
+              assets={data.assets}
+              selected={draft.logoAssetId ? [draft.logoAssetId] : []}
+              max={1}
+              onChange={(ids) => update("logoAssetId", ids[0] || undefined)}
+              label="品牌标识图片（可选）"
+            />
+          </section>
           <section className={styles.brandReferences}>
             <AssetPicker
               compact

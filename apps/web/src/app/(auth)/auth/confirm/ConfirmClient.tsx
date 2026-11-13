@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { readErrorMessage } from "../../../../modules/auth/auth-api";
 import { announceSessionChange } from "../../../../modules/auth/AuthProvider";
+import { consumeAuthReturnTo } from "../../../../modules/auth/auth-return";
 
 export function ConfirmClient() {
   const router = useRouter();
@@ -52,8 +53,9 @@ export function ConfirmClient() {
           readonly projectId?: string;
         };
         announceSessionChange();
+        const returnTo = consumeAuthReturnTo();
         router.replace(
-          body.projectId ? `/${encodeURIComponent(body.projectId)}` : "/",
+          returnTo ?? (body.projectId ? `/${encodeURIComponent(body.projectId)}` : "/"),
         );
         router.refresh();
       } catch {

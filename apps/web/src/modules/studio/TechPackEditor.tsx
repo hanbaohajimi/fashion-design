@@ -546,6 +546,21 @@ function TechPackForm({
               )}
             </Select>
           </Field>
+          {data.brandProfiles.length ? (
+            <Field label="采用品牌资料修订">
+              <Select
+                value={draft.brandRevisionId ?? ""}
+                onChange={(event) => update("brandRevisionId", event.target.value || undefined)}
+              >
+                <option value="">不指定品牌资料</option>
+                {data.brandProfiles.map((brand) => (
+                  <option key={brand.currentRevision.id} value={brand.currentRevision.id}>
+                    {String((brand.currentRevision.payload as { name?: unknown }).name ?? "品牌资料")} r{brand.currentRevision.revision}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
         </div>
         <section
           data-tech-chapter="views"

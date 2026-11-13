@@ -1,5 +1,6 @@
 import {
   Prisma,
+  readAuthorizedStudioBrand,
   type Style,
   type StyleRevision,
   type StudioDocument,
@@ -223,6 +224,21 @@ export class StudioService {
       collections,
       assets,
     };
+  }
+
+  async acknowledgeReview(userId: string, projectId: string, reviewId: string) {
+    await this.access.require(userId, projectId, "read");
+    const review = await this.database.studioDocument.findFirst({
+      where: { id: reviewId, projectId, type: "REVIEW" },
+      select: { id: true },
+    });
+    if (!review) throw new NotFoundException("评审记录不存在或不属于当前项目");
+    await this.database.studioReviewRead.upsert({
+      where: { userId_studioDocumentId: { userId, studioDocumentId: review.id } },
+      create: { projectId, userId, studioDocumentId: review.id },
+      update: { acknowledgedAt: new Date() },
+    });
+    return { ok: true };
   }
   async brandLibrary(
     userId: string,
@@ -518,6 +534,15 @@ export class StudioService {
           throw new BadRequestException("不能更换资料类型");
         if (previous?.type === "BRAND_PROFILE" && previous.ownerId !== userId)
           throw new ForbiddenException("品牌资料为个人私有");
+        const brandRevisionId = "brandRevisionId" in input.payload
+          ? input.payload.brandRevisionId
+          : undefined;
+        if (brandRevisionId) {
+          const brand = await readAuthorizedStudioBrand(tx, {
+            projectId, actorId: userId, brandRevisionId, ...(previous ? { inherited: previous } : {}),
+          });
+          if (!brand) throw new BadRequestException("品牌资料修订不存在或不属于当前项目");
+        }
         let styleRevisionId: string | undefined;
         let collectionId: string | undefined;
         switch (input.type) {
@@ -545,7 +570,12 @@ export class StudioService {
             await this.assertAssets(
               tx,
               projectId,
-              input.payload.referenceAssetIds,
+              [
+                ...input.payload.referenceAssetIds,
+                ...("logoAssetId" in input.payload && typeof input.payload.logoAssetId === "string"
+                  ? [input.payload.logoAssetId]
+                  : []),
+              ],
             );
             break;
           case "COLLECTION_SLOT": {
