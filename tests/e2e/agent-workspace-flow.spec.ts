@@ -332,6 +332,7 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await page.getByRole("button", { name: "适合画布", exact: true }).click();
   await expect(page.getByRole("button", { name: /生成通勤风衣/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

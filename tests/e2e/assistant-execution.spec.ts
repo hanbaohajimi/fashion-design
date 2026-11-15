@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openCanvasFunction } from "./canvas-function-navigation";
 import type { WorkflowMessageView } from "../../apps/web/src/modules/board/agent/agent-api";
 import { assistantExecutionFixture } from "./assistant-execution-fixture";
 const status = (page: Page) =>
@@ -162,7 +163,7 @@ test("同一执行已有结果回执时旧确认只提供定位，不重复图�
   expect(state.executionRequests).toEqual([]);
   expect(state.errors).toEqual([]);
 });
-test("任务详情打开现有任务中心，只读记录不提供停止按钮", async ({ page }) => {
+test("任务中心可查看只读执行，记录不提供停止按钮", async ({ page }) => {
   const state = await assistantExecutionFixture(page, { canEdit: false });
   await state.open();
   await expect(
@@ -171,10 +172,7 @@ test("任务详情打开现有任务中心，只读记录不提供停止按钮",
       exact: true,
     }),
   ).toHaveCount(0);
-  await status(page).locator("summary").click();
-  await status(page)
-    .getByRole("button", { name: "查看任务详情", exact: true })
-    .click();
+  await openCanvasFunction(page, "项目任务");
   await expect(
     page.getByRole("dialog", { name: "项目任务", exact: true }),
   ).toBeVisible();
@@ -198,7 +196,8 @@ test("损坏的旧结果摘要保留可读聊天，不虚构图片或重新执�
   });
   await state.open();
   await expect(page.getByText("这是旧执行的历史记录。", { exact: true })).toBeVisible();
-  await expect(status(page)).toContainText("排队 2 项");
+  await expect(status(page)).toContainText("生成任务排队中");
+  await expect(status(page)).toContainText("已完成 0 / 2");
   await expect(
     page.getByRole("region", { name: "本次图片结果", exact: true }),
   ).toHaveCount(0);
