@@ -23,11 +23,11 @@ beforeEach(() => { vi.clearAllMocks(); mocks.presentation.mockResolvedValue(item
 afterEach(cleanup);
 
 it("keeps repaired output in the bound side slot and requires a new explicit review and presentation save", async () => {
-  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
+  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
   expect(mocks.repair).toMatchObject({ sidePreparationId: "side-preparation", source: { assetId: "side-candidate", url: "/side-candidate.png" } });
   fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(screen.getByRole("button", { name: "返回模拟修复候选" }));
-  expect(screen.getByRole("img", { name: "透明修复前的侧挂候选" }).getAttribute("src")).toBe("/api/design-assets/side-candidate/content");
-  expect(screen.getByRole("img", { name: "待核对侧挂候选" }).getAttribute("src")).toBe("/derived-side.png");
+  expect(screen.getByRole("img", { name: "透明修复前的侧挂图" }).getAttribute("src")).toBe("/api/design-assets/side-candidate/content");
+  expect(screen.getByRole("img", { name: "待核对侧挂图" }).getAttribute("src")).toBe("/derived-side.png");
   expect(screen.getByRole("button", { name: "确认侧挂展示图" }).hasAttribute("disabled")).toBe(true);
   expect(mocks.mount).toMatchObject({ view: "side", item: { assetId: "confirmed-front", url: "/confirmed-front.png", presentation: { sideDisplay: { assetId: "derived-side", source: "generated", materialProcessing: processing, orientation: "left" } } } });
   expect(mocks.repair?.sidePreparationId).toBe("derived-side-preparation");
@@ -40,9 +40,9 @@ it("keeps repaired output in the bound side slot and requires a new explicit rev
 
 it("retains the prior side when a returned repair has lost its front or orientation binding", () => {
   mocks.result = { ...derived, presentation: { view: "side", revisionId: "other-front", orientation: "right" } };
-  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" })); fireEvent.click(screen.getByRole("button", { name: "返回模拟修复候选" }));
-  expect(screen.getByText(/修复候选与当前侧挂修订或方向不匹配/)).toBeDefined();
-  expect(screen.getByRole("img", { name: "待核对侧挂候选" }).getAttribute("src")).toBe("/side-candidate.png");
+  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" })); fireEvent.click(screen.getByRole("button", { name: "返回模拟修复候选" }));
+  expect(screen.getByText(/修复图片与当前侧挂修订或方向不匹配/)).toBeDefined();
+  expect(screen.getByRole("img", { name: "待核对侧挂图" }).getAttribute("src")).toBe("/side-candidate.png");
   expect(mocks.presentation).not.toHaveBeenCalled(); expect(mocks.confirm).not.toHaveBeenCalled();
 });
 
@@ -57,12 +57,12 @@ it("retains private processing provenance on an already saved side display", () 
 
 it("labels a local RGB correction accurately and still leaves the front and side confirmation untouched", () => {
   mocks.result = { ...derived, materialProcessing: { ...processing, kind: "masked-edit", algorithm: "masked-provider-rgb-preserve-alpha-v1" } };
-  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
+  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
   fireEvent.click(screen.getByRole("button", { name: "返回模拟局部修正候选" }));
-  expect(screen.getByText(/局部细节修正候选。保留原图透明度与外轮廓/)).toBeDefined();
+  expect(screen.getByText(/局部细节修正图片。保留原图透明度与外轮廓/)).toBeDefined();
   expect(screen.queryByText(/半透明区域、细边和轮廓附近保持原样/)).toBeNull();
-  expect(screen.getByRole("img", { name: "局部修正前的侧挂候选" }).getAttribute("src")).toBe("/api/design-assets/side-candidate/content");
-  expect(screen.queryByText(/透明材质修复候选/)).toBeNull();
+  expect(screen.getByRole("img", { name: "局部修正前的侧挂图" }).getAttribute("src")).toBe("/api/design-assets/side-candidate/content");
+  expect(screen.queryByText(/透明材质修复图片/)).toBeNull();
   expect(screen.getByRole("button", { name: "确认侧挂展示图" }).hasAttribute("disabled")).toBe(true);
   expect(mocks.mount?.item.assetId).toBe("confirmed-front"); expect(mocks.presentation).not.toHaveBeenCalled(); expect(mocks.confirm).not.toHaveBeenCalled();
 });
@@ -70,7 +70,7 @@ it("labels a local RGB correction accurately and still leaves the front and side
 it("describes v2 interior protection without changing its side binding or automatic confirmation", () => {
   const interior: WardrobeMaterialProcessing = { ...processing, kind: "masked-edit", algorithm: "masked-provider-rgb-interior-v2", alphaThreshold: 240, interiorRadius: 2 };
   mocks.result = { ...derived, materialProcessing: interior };
-  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
+  render(<PrepareSideDisplay {...props} />); fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
   fireEvent.click(screen.getByRole("button", { name: "返回模拟局部修正候选" }));
   expect(screen.getByText(/只调整不透明面料内部，半透明区域、细边和轮廓附近保持原样/)).toBeDefined();
   expect(screen.getByRole("button", { name: "确认侧挂展示图" }).hasAttribute("disabled")).toBe(true);

@@ -259,7 +259,7 @@ describe("DesignAssetsService lineage integration", () => {
         actor: "agent",
         tool: "i2i",
         intent: "调整衣领，保留袖口",
-        constraints: { notes: ["保留袖口"] },
+        constraints: { notes: ["素材1（素材1）：保留袖口"] },
         sources: expect.arrayContaining([
           expect.objectContaining({ elementId: note.id, text: "保留袖口" }),
           expect.objectContaining({ assetId: root.id, role: "edit_source" }),

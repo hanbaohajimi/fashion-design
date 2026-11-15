@@ -105,6 +105,13 @@ export async function chooseValue(
 }
 
 export async function expectValue(control: Locator, value: string) {
+  if ((await control.getAttribute("aria-label")) === "历史对话") {
+    if ((await control.getAttribute("aria-expanded")) !== "true") await control.click();
+    await expect(control.page().locator(`[data-conversation-id="${value}"]`)).toHaveAttribute("aria-current", "true");
+    await control.page().keyboard.press("Escape");
+    await expect(control).toHaveAttribute("aria-expanded", "false");
+    return;
+  }
   const proxy = control
     .locator("xpath=ancestor-or-self::*[@data-choice-control][1]")
     .locator("select");

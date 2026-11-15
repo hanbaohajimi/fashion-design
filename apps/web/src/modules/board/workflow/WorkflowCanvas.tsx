@@ -920,7 +920,16 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   useEffect(() => {
     let active = true;
     void initializeCanvas(projectId)
-      .then((document) => { if (active) { setCanvasMode("canvas"); setCanvasCanEdit(document.canEdit); setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: null }); } })
+      .then((document) => {
+        if (!active) return;
+        setCanvasMode(document.mode);
+        if (document.mode === "node") {
+          try { if (sessionStorage.getItem("fashion:canvas-view") === "workflow") setCanvasView("workflow"); }
+          catch { /* Legacy mode remains usable when browser storage is blocked. */ }
+        }
+        setCanvasCanEdit(document.canEdit);
+        setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: null });
+      })
       .catch((cause: unknown) => { if (active) setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: cause instanceof Error ? cause.message : "白板初始化失败，原数据保持不变" }); });
     return () => { active = false; };
   }, [projectId, canvasInitAttempt]);

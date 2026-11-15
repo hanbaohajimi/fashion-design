@@ -125,7 +125,8 @@ describe("WorkflowReadGateway", () => {
     expect(fragments.at(-1)?.complete).toBe(true);
     const fields = fragments.flatMap((fragment) => fragment.fields);
     expect(fields.some((field) => field.range)).toBe(true);
-    expect(fields.filter((field) => field.path[0] === "inputBindings" && field.path[2] === "sourceNodeId").map((field) => field.value)).toEqual(inputs.map((input) => input.sourceNodeId));
+    const reconstructedIds = inputs.map((_, index) => fields.filter(field => field.path[0] === "inputBindings" && field.path[1] === index && field.path[2] === "sourceNodeId").map(field => field.value).join(""));
+    expect(reconstructedIds).toEqual(inputs.map(input => input.sourceNodeId));
     const promptParts = fields.filter((field) => field.path.join("/") === "content/parameters/prompt");
     expect(promptParts.map((field) => field.value).join("")).toBe("藏蓝".repeat(1_500));
     const negativeParts = fields.filter((field) => field.path.join("/") === "content/parameters/negativePrompt");

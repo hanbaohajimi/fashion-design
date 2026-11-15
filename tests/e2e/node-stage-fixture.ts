@@ -166,6 +166,10 @@ export async function canvasCommandFixture(page: Page, route: Route) {
  * New canvas behavior is exercised by canvas-workspace.spec.ts and real-e2e.
  */
 export async function seedNodeInteraction(page: Page) {
+  await page.route("**/api/projects/*/tasks?**", route => route.fulfill({ json: {
+    items: [], nextCursor: null, counts: { running: 0, attention: 0 },
+    activity: { preparing: 0, queued: 0, executing: 0, awaitingUser: 0, waiting: { input: 0, confirmation: 0, resume: 0 }, recent: [] },
+  } }));
   await page.route("**/api/projects/*/canvas/commands", (route) =>
     canvasCommandFixture(page, route),
   );

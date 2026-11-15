@@ -42,12 +42,12 @@ function picker(ids: readonly string[] = []) {
 it("区分同名对象，搜索不会丢失已选引用，确认前不提交", () => {
   const { onApply } = picker();
   fireEvent.click(
-    screen.getByRole("checkbox", { name: "同名风衣（2） 服装方案" }),
+    screen.getByRole("checkbox", { name: "同名风衣（2） 设计图" }),
   );
   fireEvent.change(screen.getByRole("textbox", { name: "搜索项目对象" }), {
     target: { value: "方案 3" },
   });
-  fireEvent.click(screen.getByRole("checkbox", { name: "方案 3 服装方案" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "方案 3 设计图" }));
   expect(onApply).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "使用所选引用" }));
   expect(onApply).toHaveBeenCalledWith(["candidate-1", "candidate-3"]);
@@ -56,13 +56,13 @@ it("区分同名对象，搜索不会丢失已选引用，确认前不提交", (
 it("16 项时说明上限，取消选择后允许添加", () => {
   const { onApply } = picker(graph.nodes.slice(0, 16).map((node) => node.id));
   const next = screen.getByRole("checkbox", {
-    name: "方案 17 服装方案",
+    name: "方案 17 设计图",
   }) as HTMLInputElement;
   expect(next.disabled).toBe(true);
   expect(screen.getByRole("status").textContent).toContain(
     "请先取消一项再添加",
   );
-  fireEvent.click(screen.getByRole("checkbox", { name: "方案 2 服装方案" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "方案 2 设计图" }));
   expect(next.disabled).toBe(false);
   fireEvent.click(next);
   fireEvent.click(screen.getByRole("button", { name: "使用所选引用" }));
@@ -74,7 +74,7 @@ it("16 项时说明上限，取消选择后允许添加", () => {
 
 it("取消不改变引用，去添加素材有明确回调", () => {
   const { onApply, onClose, onAddMaterial } = picker();
-  fireEvent.click(screen.getByRole("checkbox", { name: "方案 2 服装方案" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "方案 2 设计图" }));
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(onClose).toHaveBeenCalledOnce();
   expect(onApply).not.toHaveBeenCalled();

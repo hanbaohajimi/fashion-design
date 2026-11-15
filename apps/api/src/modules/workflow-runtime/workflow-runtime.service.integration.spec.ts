@@ -58,7 +58,7 @@ describe("WorkflowRuntimeService integration", () => {
       expect((await workflows.get(user.id, project.id)).nodes.find((node) => node.id === tool)?.status).toBe("ready");
     } finally { await prisma.user.delete({ where: { id: user.id } }); }
   });
-  it("uses referenced tools as context and keeps candidate constraints on their own branch", async () => {
+  it("rejects retired evaluation proposals and keeps edit constraints on their own branch", async () => {
     const user = await prisma.user.create({
       data: {
         email: `workflow-proposal-${crypto.randomUUID()}@example.com`,
@@ -111,14 +111,9 @@ describe("WorkflowRuntimeService integration", () => {
         ],
       });
 
-      const toolReferenced = await runtime.propose(user.id, project.id, {
+      await expect(runtime.propose(user.id, project.id, {
         content: "请评估这个生成节点的候选", referencedNodeIds: [generatorA], mutationId: crypto.randomUUID(),
-      });
-      expect(proposedEdges(toolReferenced)).toEqual(expect.arrayContaining([
-        expect.objectContaining({ sourceNodeId: candidateA, targetPort: "candidate" }),
-        expect.objectContaining({ sourceNodeId: constraintA, targetPort: "constraint" }),
-      ]));
-      expect(proposedEdges(toolReferenced).some((edge) => edge?.sourceNodeId === generatorA)).toBe(false);
+      })).rejects.toThrow();
       expect(JSON.parse(model.generateJson.mock.calls[0]?.[0].prompt ?? "{}")).toMatchObject({
         context: expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ id: generatorA, type: "generate_design" })]) }),
       });
@@ -144,15 +139,9 @@ describe("WorkflowRuntimeService integration", () => {
         content: "请比较两个分支的候选", referencedNodeIds: [candidateA, candidateB], mutationId: crypto.randomUUID(),
       })).rejects.toMatchObject({ status: 400 });
 
-      const explicitConstraint = await runtime.propose(user.id, project.id, {
+      await expect(runtime.propose(user.id, project.id, {
         content: "请按通勤约束比较两个候选", referencedNodeIds: [candidateA, candidateB, constraintA], mutationId: crypto.randomUUID(),
-      });
-      expect(proposedEdges(explicitConstraint)).toEqual(expect.arrayContaining([
-        expect.objectContaining({ sourceNodeId: candidateA, targetPort: "candidate" }),
-        expect.objectContaining({ sourceNodeId: candidateB, targetPort: "candidate" }),
-        expect.objectContaining({ sourceNodeId: constraintA, targetPort: "constraint" }),
-      ]));
-
+      })).rejects.toThrow();
       const overrideConstraint = await runtime.propose(user.id, project.id, {
         content: "请按运动约束修改这件通勤风衣", referencedNodeIds: [candidateA, constraintB], mutationId: crypto.randomUUID(),
       });
@@ -357,7 +346,7 @@ describe("WorkflowRuntimeService integration", () => {
       for (const [, request] of createFromAgent.mock.calls) {
         expect(request).toMatchObject({ taskType, parentAssetId: imported.id, referenceImageUrl: `s3://${file.objectKey}` });
         if (taskType === "inpaint") expect(request).toHaveProperty("maskImageUrl", `s3://${mask.objectKey}`);
-        else expect(request).toHaveProperty("referenceImages", [{ order: 0, role: "detail_ref", url: `https://storage.example.test/${mask.objectKey}`, weight: 0.7 }]);
+        else expect(request).toHaveProperty("referenceImages", [{ order: 0, url: imported.url }, { order: 1, url: `https://storage.example.test/${mask.objectKey}` }]);
       }
       const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: toolIds[0] } });
       expect(attempt.requestSnapshot).toMatchObject({ request: { parentAssetId: imported.id }, inputSnapshot: expect.arrayContaining([
@@ -424,7 +413,7 @@ describe("WorkflowRuntimeService integration", () => {
     }
   });
 
-  it("uses selected image roles and library summaries in the actual generation request", async () => {
+  it("uses ordered reference images and explicit colors without inferred roles or library summaries", async () => {
     const user = await prisma.user.create({
       data: {
         email: `workflow-reference-${crypto.randomUUID()}@example.com`,
@@ -487,16 +476,17 @@ describe("WorkflowRuntimeService integration", () => {
 
       await runtime.execute(user.id, project.id, toolId, { mutationId: crypto.randomUUID() });
       expect(createFromAgent).toHaveBeenCalledTimes(1);
-      const request = createFromAgent.mock.calls[0]?.[1] as { prompt: string; referenceImages: Array<{ role: string }> } | undefined;
-      expect(request?.prompt).toContain(trend.summary);
-      expect(request?.prompt).toContain("羊毛混纺保暖面料");
+      const request = createFromAgent.mock.calls[0]?.[1] as { prompt: string; referenceImages: Array<{ url: string; role?: string; weight?: number }> } | undefined;
+      expect(request?.prompt).not.toContain(trend.summary);
+      expect(request?.prompt).not.toContain("羊毛混纺保暖面料");
       expect(request?.prompt).toContain("雾蓝: #40536D\n暖象牙: #E6D8C6\n追加陶土: #A87F65");
       expect(request?.prompt).toContain("旧单色卡: #112233");
       expect(request?.prompt).not.toContain("不可引用的洋红");
       expect(request?.prompt).not.toContain("#FF00FF");
-      expect(request?.referenceImages.map((reference) => reference.role)).toEqual(["detail_ref", "style_ref", "fabric_texture"]);
+      expect(request?.referenceImages.map(reference => reference.url)).toEqual(Array(3).fill(`https://storage.example.test/${file.objectKey}`));
+      expect(request?.referenceImages.every(reference => !("role" in reference) && !("weight" in reference))).toBe(true);
       const attempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { projectId: project.id, toolNodeId: toolId } });
-      expect((attempt.requestSnapshot as { request: { referenceImages: Array<{ role: string }> } }).request.referenceImages[0]?.role).toBe("detail_ref");
+      expect((attempt.requestSnapshot as { request: { referenceImages: Array<{ url: string }> } }).request.referenceImages).toEqual(request?.referenceImages);
       if (!attempt.generationTaskId) throw new Error("generation task missing");
       const outputIds = [crypto.randomUUID(), crypto.randomUUID()];
       await prisma.designAsset.createMany({ data: outputIds.map((id) => ({
@@ -523,7 +513,7 @@ describe("WorkflowRuntimeService integration", () => {
     }
   });
 
-  it("runs analysis, two candidates, evaluation and an edit branch with durable attempts", async () => {
+  it("generates two candidates and an edit branch with durable attempts while rejecting retired evaluation", async () => {
     const user = await prisma.user.create({
       data: {
         email: `workflow-runtime-${crypto.randomUUID()}@example.com`,
@@ -541,14 +531,15 @@ describe("WorkflowRuntimeService integration", () => {
     const model = {
       generateJson: vi.fn(async (request: { schemaName: string; prompt: string; parse: (value: unknown) => unknown }) => {
         switch (request.schemaName) {
+          case "canvas_text": return request.parse({ text: "按明确要求起草的设计文字" });
           case "fashion_workflow_collaboration": {
             const input = JSON.parse(request.prompt);
             const nodes = input.context.nodes as { id: string; type: string }[];
             const candidate = nodes.find((node) => node.type === "candidate");
             const constraint = nodes.find((node) => node.type === "constraint");
             return request.parse({ kind: "propose", message: "依据真实画布准备下一步", preferences: [], objectiveUpdate: null,
-              plan: { tool: candidate ? "evaluate_design" : "analyze_brief", title: "下一步", prompt: "整理需求与参考", rationale: "依据设计需求提取约束", newObjective: null,
-                inputs: candidate && constraint ? [{ nodeId: candidate.id, port: "candidate" }, { nodeId: constraint.id, port: "constraint" }] : [{ nodeId: briefId, port: "goal" }] } });
+              plan: { tool: candidate ? "edit_design" : "generate_design", title: "下一步", prompt: "整理需求与参考", rationale: "依据设计需求提取约束", newObjective: null,
+                inputs: candidate && constraint ? [{ nodeId: candidate.id, port: "source" }, { nodeId: constraint.id, port: "constraint" }] : [{ nodeId: briefId, port: "goal" }] } });
           }
           case "fashion_design_brief":
             return request.parse({
@@ -666,29 +657,12 @@ describe("WorkflowRuntimeService integration", () => {
         }],
       });
 
-      const proposal = await runtime.propose(user.id, project.id, {
-        content: "请先分析这款秋冬通勤风衣的需求",
-        referencedNodeIds: [briefId],
-        mutationId: crypto.randomUUID(),
-      });
-      const accepted = await runtime.accept(user.id, project.id, proposal.id, {
-        baseRevision: proposal.baseRevision,
-        mutationId: crypto.randomUUID(),
-      });
-      const duplicateAccept = await runtime.accept(user.id, project.id, proposal.id, {
-        baseRevision: proposal.baseRevision,
-        mutationId: crypto.randomUUID(),
-      });
-      expect(duplicateAccept.nodes.filter((node) => node.type === "analyze_brief")).toHaveLength(1);
-      const analysis = accepted.nodes.find((node) => node.type === "analyze_brief");
-      expect(analysis).toBeDefined();
-      if (!analysis) return;
-      await runtime.execute(user.id, project.id, analysis.id, { mutationId: crypto.randomUUID() });
       let graph = await workflows.get(user.id, project.id);
-      const constraint = graph.nodes.find((node) => node.type === "constraint");
-      expect(constraint).toBeDefined();
-      expect(graph.edges.some((edge) => edge.sourceNodeId === analysis.id && edge.targetNodeId === constraint?.id)).toBe(true);
-      if (!constraint) return;
+      const constraint = { id: crypto.randomUUID() };
+      graph = await workflows.patch(user.id, project.id, {
+        mode: "semantic", baseRevision: graph.revision, mutationId: crypto.randomUUID(),
+        operations: [{ type: "add_node", node: { id: constraint.id, kind: "asset", type: "constraint", title: "设计要求", payload: { text: "秋冬通勤风衣，保留肩线" }, x: 400, y: 120 } }],
+      });
 
       const generateId = crypto.randomUUID();
       await workflows.patch(user.id, project.id, {
@@ -723,9 +697,9 @@ describe("WorkflowRuntimeService integration", () => {
       expect(createFromAgent).toHaveBeenCalledTimes(2);
       expect((await workflows.get(user.id, project.id)).nodes.filter((node) => node.type === "candidate")).toHaveLength(2);
       const generatedPath = await assets.path(user.id, (firstCandidate.payload as { assetId: string }).assetId);
-      expect(generatedPath.steps.map((step) => step.tool)).toEqual(["analyze_brief", "generate_design"]);
-      expect(generatedPath.steps[0]?.sources).toEqual(expect.arrayContaining([expect.objectContaining({ elementId: briefId, title: "设计需求" })]));
-      expect(generatedPath.steps[1]?.outputs).toHaveLength(2);
+      expect(generatedPath.steps.map((step) => step.tool)).toEqual(["generate_design"]);
+      expect(generatedPath.steps[0]?.sources).toEqual(expect.arrayContaining([expect.objectContaining({ elementId: constraint.id, title: "设计要求" })]));
+      expect(generatedPath.steps[0]?.outputs).toHaveLength(2);
 
       const evaluateId = crypto.randomUUID();
       await workflows.patch(user.id, project.id, {
@@ -736,41 +710,10 @@ describe("WorkflowRuntimeService integration", () => {
           ...candidates.map((candidate) => ({ type: "add_edge" as const, edge: { id: crypto.randomUUID(), sourceNodeId: candidate.id, targetNodeId: evaluateId, sourcePort: "out" as const, targetPort: "candidate" as const } })),
         ],
       });
-      await runtime.execute(user.id, project.id, evaluateId, { mutationId: crypto.randomUUID() });
+      await expect(runtime.execute(user.id, project.id, evaluateId, { mutationId: crypto.randomUUID() })).rejects.toThrow();
       graph = await workflows.get(user.id, project.id);
-      const report = graph.nodes.find((node) => node.type === "evaluation");
-      expect(report).toBeDefined();
-      expect((report?.payload as { report?: { evaluations?: unknown[] } }).report?.evaluations).toHaveLength(2);
-      expect(storage.readPrefix).toHaveBeenCalledTimes(2);
-      const evaluationCalls = model.generateJson.mock.calls.filter(([request]) => request.schemaName === "fashion_design_evaluation");
-      expect(evaluationCalls).toHaveLength(2);
-      for (const [request] of evaluationCalls) {
-        const data = JSON.parse((request as unknown as { prompt: string }).prompt);
-        expect(data.evaluationTask).toBe("逐项检查约束");
-        expect(data.prompt).not.toBe(data.evaluationTask);
-        expect(data.prompt).toBe((generationSnapshot.requestSnapshot as { request: { prompt: string } }).request.prompt);
-        expect(data.step.prompt).toBe(data.prompt);
-        expect(data.auxiliaryContext).toMatchObject({ constraintNodeId: constraint.id,
-          producerAttemptId: expect.any(String), promptSource: "frozen_generation_request" });
-        expect(data.auxiliaryContext.history.some((entry: { toolNodeId: string }) => entry.toolNodeId === generateId)).toBe(true);
-      }
-      const evaluationAttempt = await prisma.workflowAttempt.findFirstOrThrow({ where: { toolNodeId: evaluateId } });
-      const snapshot = evaluationAttempt.requestSnapshot as { evaluationTask?: string; evaluationInputs?: { prompt: string; auxiliaryContext?: { graphRevision: number } }[] };
-      expect(snapshot.evaluationTask).toBe("逐项检查约束");
-      expect(snapshot.evaluationInputs).toHaveLength(2);
-      expect(snapshot.evaluationInputs?.every((entry) => entry.auxiliaryContext?.graphRevision !== undefined)).toBe(true);
-
-      const referenceOnlyEvaluationId = crypto.randomUUID();
-      await workflows.patch(user.id, project.id, {
-        mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision,
-        operations: [
-          { type: "add_node", node: { id: referenceOnlyEvaluationId, kind: "tool", type: "evaluate_design", title: "仅参考的候选", payload: { toolKey: "evaluate_design", toolVersion: "1", params: { prompt: "检查候选端口" } }, x: 1300, y: 900 } },
-          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: constraint.id, targetNodeId: referenceOnlyEvaluationId, sourcePort: "out", targetPort: "constraint" } },
-          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: firstCandidate.id, targetNodeId: referenceOnlyEvaluationId, sourcePort: "out", targetPort: "reference" } },
-        ],
-      });
-      await expect(runtime.execute(user.id, project.id, referenceOnlyEvaluationId, { mutationId: crypto.randomUUID() })).rejects.toMatchObject({ status: 400 });
-      graph = await workflows.get(user.id, project.id);
+      expect(graph.nodes.filter(node => node.type === "evaluation")).toHaveLength(0);
+      expect(await prisma.workflowAttempt.count({ where: { projectId: project.id, toolNodeId: evaluateId } })).toBe(0);
 
       const editId = crypto.randomUUID();
       await workflows.patch(user.id, project.id, {
@@ -1017,8 +960,8 @@ describe("WorkflowRuntimeService integration", () => {
       await workflows.patch(user.id, project.id, {
         mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision,
         operations: [
-          { type: "add_node", node: { id: analysisReplayId, kind: "tool", type: "analyze_brief", title: "崩溃恢复分析", payload: { toolKey: "analyze_brief", toolVersion: "1", params: { prompt: "分析输入" } }, x: 3200, y: 100 } },
-          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: analysisReplayId, sourcePort: "out", targetPort: "goal" } },
+          { type: "add_node", node: { id: analysisReplayId, kind: "tool", type: "generate_text", title: "崩溃恢复分析", payload: { toolKey: "generate_text", toolVersion: "1", params: { prompt: "分析输入" } }, x: 3200, y: 100 } },
+          { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: analysisReplayId, sourcePort: "out", targetPort: "reference" } },
         ],
       });
       const beforeResult = workflows.applySystemMutation.bind(workflows);
@@ -1050,8 +993,8 @@ describe("WorkflowRuntimeService integration", () => {
 
       const acknowledgedLateId = crypto.randomUUID();
       await workflows.patch(user.id, project.id, { mode: "semantic", mutationId: crypto.randomUUID(), baseRevision: graph.revision, operations: [
-        { type: "add_node", node: { id: acknowledgedLateId, kind: "tool", type: "analyze_brief", title: "提交确认丢失", payload: { toolKey: "analyze_brief", toolVersion: "1", params: { prompt: "分析输入" } }, x: 3500, y: 100 } },
-        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: acknowledgedLateId, sourcePort: "out", targetPort: "goal" } },
+        { type: "add_node", node: { id: acknowledgedLateId, kind: "tool", type: "generate_text", title: "提交确认丢失", payload: { toolKey: "generate_text", toolVersion: "1", params: { prompt: "分析输入" } }, x: 3500, y: 100 } },
+        { type: "add_edge", edge: { id: crypto.randomUUID(), sourceNodeId: briefId, targetNodeId: acknowledgedLateId, sourcePort: "out", targetPort: "reference" } },
       ] });
       const transactionBeforeAck = prisma.$transaction;
       let lostAck = false;
@@ -1080,5 +1023,5 @@ describe("WorkflowRuntimeService integration", () => {
       await prisma.workflowAttempt.deleteMany({ where: { projectId: project.id } });
       await prisma.user.delete({ where: { id: user.id } });
     }
-  });
+  }, 60_000);
 });

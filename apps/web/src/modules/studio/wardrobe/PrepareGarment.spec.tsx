@@ -19,7 +19,7 @@ it("compares a processed candidate with its original image rather than itself an
   render(<PrepareGarment projectId="project" assets={[{ id: "derived", url: "/derived.png", thumbnailUrl: null }]} preparations={[{ ...ready, sourceAssetId: "derived", materialProcessing, candidates: [{ assetId: "derived", url: "/derived.png" }] }]} canEdit generationEnabled onChanged={async () => {}} onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "查看与继续" }));
   expect(screen.getByRole("img", { name: "原始服装图片" }).getAttribute("src")).toBe("/api/design-assets/original-lace/content");
-  expect(screen.getByRole("img", { name: "待确认单品候选" }).getAttribute("src")).toBe("/derived.png");
+  expect(screen.getByRole("img", { name: "待确认单品图" }).getAttribute("src")).toBe("/derived.png");
   fireEvent.click(screen.getByText("查看修复来源"));
   expect(screen.getByRole("img", { name: "处理中间图（不能直接入架）" }).getAttribute("src")).toBe("/api/design-assets/model-intermediate/content");
   expect(screen.getByRole("img", { name: "所选区域" }).getAttribute("src")).toBe("/api/design-assets/selected-region/content");
@@ -79,7 +79,7 @@ it("previews the current candidate and mount edits without preparing or confirmi
   expect((screen.getByRole("spinbutton", { name: "挂点纵向 %" }) as HTMLInputElement).value).toBe("92.5");
   expect(garment?.dataset.display).toBe("shelf");
   expect(screen.getByText(/鞋底或配饰底部的实际落点/)).toBeDefined();
-  fireEvent.click(screen.getByRole("radio", { name: "候选 2" }));
+  fireEvent.click(screen.getByRole("radio", { name: "图片 2" }));
   expect(preview.querySelector("img")?.getAttribute("src")).toBe("/candidate-2.png");
   expect(screen.getByRole("button", { name: "确认单品并挂上衣架" }).hasAttribute("disabled")).toBe(true);
   expect(api.prepare).not.toHaveBeenCalled();
@@ -90,9 +90,9 @@ it("describes sketch completion as a reviewed realistic candidate without select
   render(<PrepareGarment projectId="project" assets={[{ id: "source", url: "/source.png", thumbnailUrl: null }]} preparations={[]} canEdit generationEnabled initialAssetId="source" onChanged={async () => {}} onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole("radio", { name: "设计草图" }));
   expect(screen.getByRole("radio", { name: "使用已有独立单品图" }).getAttribute("aria-checked")).toBe("true");
-  expect(screen.getByRole("radio", { name: "生成写实单品候选" })).toBeDefined();
+  expect(screen.getByRole("radio", { name: "生成写实单品图" })).toBeDefined();
   expect(screen.getByRole("radio", { name: "从图片中提取单品" })).toBeDefined();
-  fireEvent.click(screen.getByRole("radio", { name: "生成写实单品候选" }));
+  fireEvent.click(screen.getByRole("radio", { name: "生成写实单品图" }));
   expect(screen.getByText(/面料材质和草图未说明的结构需要人工核对/)).toBeDefined();
   expect(api.prepare).not.toHaveBeenCalled();
   expect(api.confirm).not.toHaveBeenCalled();
@@ -104,7 +104,7 @@ it("switches all inspection backgrounds without changing partial-alpha imagery o
   const transparent = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="120"><path d="M10 10H90V110H10Z" fill="white" fill-opacity=".35"/></svg>')}`;
   const { container } = render(<PrepareGarment projectId="project" assets={[{ id: "source", url: transparent, thumbnailUrl: null }]} preparations={[{ ...ready, candidates: [{ assetId: "alpha-candidate", url: transparent, imageBounds: { width: 100, height: 120, x: 10, y: 10, contentWidth: 80, contentHeight: 100 } }] }]} canEdit generationEnabled onChanged={async () => {}} onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "查看与继续" }));
-  const candidate = screen.getByRole("img", { name: "待确认单品候选" });
+  const candidate = screen.getByRole("img", { name: "待确认单品图" });
   const confirm = screen.getByRole("button", { name: "确认单品并挂上衣架" });
   for (const [label, background, color] of [["白", "white", "rgb(255, 255, 255)"], ["深灰", "dark", "rgb(48, 48, 48)"], ["场景灰", "scene", "rgb(228, 227, 229)"]] as const) {
     fireEvent.click(screen.getByRole("button", { name: label }));

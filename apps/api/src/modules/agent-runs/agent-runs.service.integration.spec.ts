@@ -844,7 +844,7 @@ describe("AgentRunsService PostgreSQL integration", () => {
         where: { stepId: required(running.steps[0]).id },
       });
       expect(firstAttempt.compiledSnapshot).toMatchObject({
-        notes: ["保留落肩袖"],
+        notes: ["素材1（素材1）：保留落肩袖"],
       });
       expect(firstAttempt.requestSnapshot).toMatchObject({
         taskType: "t2i",

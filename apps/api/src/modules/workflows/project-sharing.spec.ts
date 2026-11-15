@@ -272,6 +272,8 @@ describe("共享工作流的恢复身份", () => {
       expect.objectContaining({ projectId: "project" }),
       "frozen-execution-key",
       "大衣",
+      undefined,
+      true,
     );
     expect(h.database.workflowAttempt.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -179,10 +179,10 @@ it("renders image thumbnails and clean names without node IDs, type metadata or 
     ],
   });
   fill("@");
-  const option = screen.getByRole("option", { name: "设计方案" });
+  const option = screen.getByRole("option", { name: "设计图" });
   expect(option.querySelector("img")?.getAttribute("src")).toBe("/coat.png");
-  expect(option.textContent).toBe("设计方案");
-  expect(option.getAttribute("title")).toBe("设计方案");
+  expect(option.textContent).toBe("设计图");
+  expect(option.getAttribute("title")).toBe("设计图");
   expect(screen.getAllByRole("option")).toHaveLength(1);
   expect(screen.queryByText("后台执行参数")).toBeNull();
   expect(screen.queryByText("内部模型参数")).toBeNull();

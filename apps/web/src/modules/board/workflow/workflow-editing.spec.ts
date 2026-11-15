@@ -241,7 +241,7 @@ describe("manual workflow inputs", () => {
     );
   });
   it("allows multiple evaluation candidates and checks the shared type matrix", () => {
-    expect(workflowInputPorts("brief", "generate_design")).toEqual([]);
+    expect(workflowInputPorts("brief", "generate_design")).toEqual(["reference"]);
     expect(workflowInputPorts("fabric", "generate_design")).toEqual([
       "reference",
     ]);

@@ -3290,8 +3290,8 @@
 .sourcePreview small { display: block; font-size: 12px; margin-block-start: 4px; }
 .sourceActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .sourceActions a { color: inherit; min-height: 44px; display: inline-flex; align-items: center; }
-.creativeActivity { color: var(--color-text-secondary); font-size: 13px; }
-.creativeActivity summary { cursor: pointer; padding: 10px 0; min-height: 40px; color: var(--color-text); }
+.creativeActivity { color: var(--color-ink-secondary); font-size: 13px; }
+.creativeActivity summary { cursor: pointer; padding: 10px 0; min-height: 40px; color: var(--color-ink); }
 .creativeActivity p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
 .creativeActivity > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .creativeActivity > div > button { border: .5px solid var(--color-border); background: var(--surface-1); color: var(--color-action); border-radius: 5px; padding: 6px 8px; font-size: 12px; }

@@ -22,11 +22,11 @@ const payload = {
 };
 
 describe("fabric drag payload", () => {
-  it("解析有效载荷并自动生成 fabric_ref 角色", () => {
+  it("解析有效载荷并统一使用 reference 角色", () => {
     expect(decodeFabricDragPayload(JSON.stringify(payload))).toEqual(payload);
     expect(fabricToShapeProps(payload)).toMatchObject({
       fabricId: "fabric-1",
-      role: "fabric_ref",
+      role: "reference",
     });
   });
 
@@ -250,10 +250,7 @@ describe("finalized fashion sketch", () => {
       },
       props: {
         fileId: "file-sketch",
-        role: "silhouette_ref",
-        roleInferenceState: "ready",
-        roleLabel: "fashion_sketch",
-        roleSource: "manual",
+        role: "reference",
         url: "/api/files/file-sketch/thumbnail/1024",
       },
       type: "fashion-image",

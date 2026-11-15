@@ -19,7 +19,7 @@ beforeEach(() => vi.clearAllMocks()); afterEach(cleanup);
 it("requires explicit internal-detail notes and selection before correction generation", async () => {
   render(<RepairTransparentMaterial {...props} operation="correction" />);
   fireEvent.click(screen.getByRole("button", { name: "局部细节修正" }));
-  expect(screen.getByText(/外形或长度调整请使用其他候选修正流程/)).toBeDefined();
+  expect(screen.getByText(/外形或长度调整请使用其他图片修正流程/)).toBeDefined();
   expect(screen.getByText(/半透明区域、细边和轮廓附近会保持原样/)).toBeDefined();
   expect(mocks.brush).toHaveBeenLastCalledWith(.5);
   fireEvent.click(screen.getByRole("button", { name: "柔" }));
@@ -27,7 +27,7 @@ it("requires explicit internal-detail notes and selection before correction gene
   expect(mocks.start).not.toHaveBeenCalled();
   expect(screen.queryByText(/只涂选后方能看到背景的透纱/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "模拟涂选" }));
-  const submit = screen.getByRole("button", { name: "生成修正候选" });
+  const submit = screen.getByRole("button", { name: "生成修正图片" });
   expect(submit.hasAttribute("disabled")).toBe(true);
   fireEvent.change(screen.getByRole("textbox", { name: "修正说明" }), { target: { value: "  " } });
   expect(submit.hasAttribute("disabled")).toBe(true); expect(mocks.start).not.toHaveBeenCalled();

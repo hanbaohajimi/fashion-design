@@ -20,7 +20,7 @@ afterEach(cleanup);
 it("generates a side candidate only explicitly and saves it separately from the unchanged front", async () => {
   render(<PrepareSideDisplay {...props} />);
   expect(api.prepare).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "确认生成侧挂候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认生成侧挂图" }));
   const confirm = await screen.findByRole("button", { name: "确认侧挂展示图" });
   expect(api.prepare).toHaveBeenCalledWith("project", expect.objectContaining({ sourceAssetId: "front-asset", mode: "complete", presentation: { view: "side", revisionId: "front-revision", orientation: "left" } }));
   expect(confirm.hasAttribute("disabled")).toBe(true);
@@ -36,7 +36,7 @@ it("generates a side candidate only explicitly and saves it separately from the 
 
 it("saves support width without starting generation or replacing a side image", async () => {
   render(<PrepareSideDisplay {...props} generationEnabled={false} />);
-  expect(screen.getByRole("button", { name: "确认生成侧挂候选" }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("button", { name: "确认生成侧挂图" }).hasAttribute("disabled")).toBe(true);
   fireEvent.change(screen.getByRole("spinbutton", { name: "挂具宽度 / 正面主体宽度 %" }), { target: { value: "48" } });
   fireEvent.click(screen.getByRole("button", { name: "仅保存挂具设置" }));
   await waitFor(() => expect(api.presentation).toHaveBeenCalled());
@@ -90,11 +90,11 @@ it("calibrates one rearward shelf plane in both views without generating or chan
 it("retains the reviewed side candidate after a version conflict", async () => {
   api.presentation.mockRejectedValue(new Error("单品已有新修订，请重新核对"));
   render(<PrepareSideDisplay {...props} preparations={[ready]} />);
-  fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
   fireEvent.click(screen.getByRole("checkbox"));
   fireEvent.click(screen.getByRole("button", { name: "确认侧挂展示图" }));
   await screen.findByText("单品已有新修订，请重新核对");
-  expect(screen.getByRole("img", { name: "待核对侧挂候选" })).toBeDefined();
+  expect(screen.getByRole("img", { name: "待核对侧挂图" })).toBeDefined();
   expect(props.onSaved).not.toHaveBeenCalled();
 });
 
@@ -109,7 +109,7 @@ it("keeps one optional pose reference separate from the front and only submits i
   expect(screen.queryByRole("img", { name: "侧挂姿态参考" })).toBeNull();
   fireEvent.change(screen.getByLabelText(/上传侧挂姿态参考/), { target: { files: [file] } });
   await screen.findByRole("img", { name: "侧挂姿态参考" });
-  fireEvent.click(screen.getByRole("button", { name: "确认生成侧挂候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认生成侧挂图" }));
   await waitFor(() => expect(api.prepare).toHaveBeenCalledWith("project", expect.objectContaining({ sourceAssetId: "front-asset", sourceKind: "isolated", referenceAssetIds: ["pose-asset"], presentation: { view: "side", revisionId: "front-revision", orientation: "left" } })));
   expect(api.confirm).not.toHaveBeenCalled();
 });
@@ -117,8 +117,8 @@ it("keeps one optional pose reference separate from the front and only submits i
 it("uses the same three inspection backgrounds for side comparison and mount without generating or saving", () => {
   const transparent = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1200"><path d="M100 100H900V1100H100Z" fill="white" fill-opacity=".35"/></svg>')}`;
   const { container } = render(<PrepareSideDisplay {...props} preparations={[{ ...ready, candidates: [{ assetId: "side-alpha", url: transparent, imageBounds }] }]} />);
-  fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
-  const candidate = screen.getByRole("img", { name: "待核对侧挂候选" });
+  fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
+  const candidate = screen.getByRole("img", { name: "待核对侧挂图" });
   fireEvent.click(screen.getByRole("checkbox"));
   for (const label of ["深灰", "白", "场景灰"]) fireEvent.click(screen.getByRole("button", { name: label }));
   expect(container.querySelectorAll('[data-preview-background="scene"]')).toHaveLength(3);
@@ -131,21 +131,21 @@ it("uses the same three inspection backgrounds for side comparison and mount wit
 it("repairs a selected side candidate only after explicit notes and preserves its original view and lineage", async () => {
   api.prepare.mockResolvedValue({ ...ready, id: "repair-preparation", status: "queued", candidates: [], taskId: "repair-task" });
   render(<PrepareSideDisplay {...props} preparations={[ready]} />);
-  fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
   fireEvent.click(screen.getByRole("button", { name: "朝右" }));
-  fireEvent.click(screen.getByRole("button", { name: "修正此候选" }));
-  const submit = screen.getByRole("button", { name: "确认修正侧挂候选" });
+  fireEvent.click(screen.getByRole("button", { name: "修正此图片" }));
+  const submit = screen.getByRole("button", { name: "确认修正侧挂图" });
   expect(submit.hasAttribute("disabled")).toBe(true);
-  fireEvent.change(screen.getByRole("textbox", { name: "候选修正说明" }), { target: { value: "  " } });
+  fireEvent.change(screen.getByRole("textbox", { name: "图片修正说明" }), { target: { value: "  " } });
   expect(submit.hasAttribute("disabled")).toBe(true);
-  fireEvent.change(screen.getByRole("textbox", { name: "候选修正说明" }), { target: { value: " 保留角度和框架，只修正镜片局部透明度 " } });
+  fireEvent.change(screen.getByRole("textbox", { name: "图片修正说明" }), { target: { value: " 保留角度和框架，只修正镜片局部透明度 " } });
   expect(api.prepare).not.toHaveBeenCalled();
   fireEvent.click(submit);
   await waitFor(() => expect(api.prepare).toHaveBeenCalledWith("project", expect.objectContaining({ sourceAssetId: "side-asset", sourceKind: "isolated", mode: "extract",
     notes: "保留角度和框架，只修正镜片局部透明度", referenceAssetIds: [], presentation: { view: "side", revisionId: "front-revision", orientation: "left", repairPreparationId: "side-preparation" } })));
   expect(api.prepare.mock.calls[0]?.[1]).not.toHaveProperty("region");
   expect(screen.getByRole("button", { name: "取消侧挂准备" })).toBeDefined();
-  expect(screen.getByRole("button", { name: "核对侧挂候选" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "核对侧挂图" })).toBeDefined();
   expect(screen.queryByRole("button", { name: "确认侧挂展示图" })).toBeNull();
   expect(api.presentation).not.toHaveBeenCalled(); expect(api.confirm).not.toHaveBeenCalled();
   expect(item.currentRevision.assetId).toBe("front-asset");
@@ -154,19 +154,19 @@ it("repairs a selected side candidate only after explicit notes and preserves it
 it("requires choosing the new repair source after switching candidates and retries a failure with the same request key", async () => {
   api.prepare.mockRejectedValue(new Error("候选修正暂不可用"));
   render(<PrepareSideDisplay {...props} preparations={[{ ...ready, candidates: [...ready.candidates, { assetId: "second-side", url: "/second-side.png", imageBounds }] }]} />);
-  fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
-  fireEvent.click(screen.getByRole("button", { name: "修正此候选" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "候选修正说明" }), { target: { value: "第一候选的修正" } });
-  fireEvent.click(screen.getByRole("button", { name: "侧挂候选 2" }));
-  expect(screen.queryByRole("textbox", { name: "候选修正说明" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
+  fireEvent.click(screen.getByRole("button", { name: "修正此图片" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "图片修正说明" }), { target: { value: "第一候选的修正" } });
+  fireEvent.click(screen.getByRole("button", { name: "侧挂图 2" }));
+  expect(screen.queryByRole("textbox", { name: "图片修正说明" })).toBeNull();
   expect(api.prepare).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "修正此候选" }));
-  expect((screen.getByRole("textbox", { name: "候选修正说明" }) as HTMLTextAreaElement).value).toBe("");
-  fireEvent.change(screen.getByRole("textbox", { name: "候选修正说明" }), { target: { value: "保留第二候选角度，只修正袖口纹理" } });
-  fireEvent.click(screen.getByRole("button", { name: "确认修正侧挂候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "修正此图片" }));
+  expect((screen.getByRole("textbox", { name: "图片修正说明" }) as HTMLTextAreaElement).value).toBe("");
+  fireEvent.change(screen.getByRole("textbox", { name: "图片修正说明" }), { target: { value: "保留第二候选角度，只修正袖口纹理" } });
+  fireEvent.click(screen.getByRole("button", { name: "确认修正侧挂图" }));
   await screen.findByText("候选修正暂不可用");
-  expect(screen.getByRole("img", { name: "待核对侧挂候选" }).getAttribute("src")).toBe("/second-side.png");
-  fireEvent.click(screen.getByRole("button", { name: "确认修正侧挂候选" }));
+  expect(screen.getByRole("img", { name: "待核对侧挂图" }).getAttribute("src")).toBe("/second-side.png");
+  fireEvent.click(screen.getByRole("button", { name: "确认修正侧挂图" }));
   await waitFor(() => expect(api.prepare).toHaveBeenCalledTimes(2));
   expect(api.prepare.mock.calls[0]?.[1]).toMatchObject({ sourceAssetId: "second-side", requestKey: api.prepare.mock.calls[1]?.[1].requestKey });
   expect(api.presentation).not.toHaveBeenCalled();
@@ -174,10 +174,10 @@ it("requires choosing the new repair source after switching candidates and retri
 
 it.each([{ canEdit: false, generationEnabled: true }, { canEdit: true, generationEnabled: false }])("does not allow candidate repair without edit and generation capability: %j", permissions => {
   render(<PrepareSideDisplay {...props} {...permissions} preparations={[ready]} />);
-  fireEvent.click(screen.getByRole("button", { name: "核对侧挂候选" }));
-  const repair = screen.getByRole("button", { name: "修正此候选" });
+  fireEvent.click(screen.getByRole("button", { name: "核对侧挂图" }));
+  const repair = screen.getByRole("button", { name: "修正此图片" });
   expect(repair.hasAttribute("disabled")).toBe(true);
   fireEvent.click(repair);
-  expect(screen.queryByRole("textbox", { name: "候选修正说明" })).toBeNull();
+  expect(screen.queryByRole("textbox", { name: "图片修正说明" })).toBeNull();
   expect(api.prepare).not.toHaveBeenCalled();
 });

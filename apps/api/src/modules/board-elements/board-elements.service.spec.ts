@@ -205,15 +205,15 @@ describe("BoardElementsService", () => {
       create: expect.objectContaining({
         fileAssetId: "file-sketch",
         record,
-        role: "silhouette_ref",
-        roleSource: RoleSource.MANUAL,
+        role: "reference",
+        roleInferenceState: RoleInferenceState.NONE,
         shapeType: "fashion-image",
       }),
       update: expect.objectContaining({
         fileAssetId: "file-sketch",
         record,
-        role: "silhouette_ref",
-        roleSource: RoleSource.MANUAL,
+        role: "reference",
+        roleInferenceState: RoleInferenceState.NONE,
         shapeType: "fashion-image",
       }),
     });

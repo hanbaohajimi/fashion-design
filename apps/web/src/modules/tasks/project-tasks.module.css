@@ -1,6 +1,6 @@
 .counts { display: inline-flex; margin-inline-start: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .trigger .iconTrigger { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: .5px solid var(--color-border); border-radius: 10px; background: var(--color-paper); }
-.iconCount { position: absolute; right: -3px; top: -4px; min-width: 17px; padding: 1px 4px; border-radius: 9px; background: var(--color-action); color: var(--color-on-action); font-size: 12px; line-height: 16px; }
+.iconCount { position: absolute; right: -3px; top: -4px; min-width: 17px; padding: 1px 4px; border-radius: 9px; background: var(--color-action); color: var(--color-paper); font-size: 12px; line-height: 16px; }
 .dialog { width: min(680px, calc(100vw - 32px)); padding: 24px; }
 .dialog > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .dialog h2 { margin: 0; font-size: 24px; }

@@ -177,9 +177,9 @@ describe("Fig. 8 action and execution integration", () => {
       expect(attempts).toHaveLength(3);
       for (const attempt of attempts) {
         expect(attempt.nodeVersionId).toBe(after[1]?.id);
-        expect(attempt.requestSnapshot).toMatchObject({ params: action.parameters, inputNodeIds: expect.arrayContaining([f.constraint, f.referenceB]), request: {
+        expect(attempt.requestSnapshot).toMatchObject({ params: { ...action.parameters, referenceInputs: [{ nodeId: f.referenceB }] }, inputNodeIds: expect.arrayContaining([f.constraint, f.referenceB]), request: {
           width: 1024, height: 1024, quality: "medium", negativePrompt: "不要更改领型",
-          referenceImages: [{ role: "detail_ref", weight: 0.4, url: `https://storage.test/${encodeURIComponent(f.fileB.objectKey)}` }],
+          referenceImages: [{ url: `https://storage.test/${encodeURIComponent(f.fileB.objectKey)}` }],
         } });
         expect(JSON.stringify(attempt.requestSnapshot)).not.toContain(f.fileA.objectKey);
         expect(JSON.stringify(attempt.requestSnapshot)).not.toContain(encodeURIComponent(f.fileA.objectKey));

@@ -91,7 +91,7 @@ describe("画布工作区草稿", () => {
 
   it("工具宽度跟随显示名称，长标题有上限，素材尺寸独立", () => {
     expect(nodeSize({ kind: "tool", type: "generate_design" })).toEqual({
-      w: 112,
+      w: 96,
       h: 44,
     });
     expect(nodeSize({ kind: "tool", type: "analyze_brief" })).toEqual({
@@ -101,7 +101,7 @@ describe("画布工作区草稿", () => {
     expect(nodeSize({ kind: "tool", type: "generate_design", title: "方案生成" }).w).toBe(96);
     expect(nodeSize({ kind: "tool", type: "generate_design", title: "方案生成 1" }).w).toBe(104);
     expect(nodeSize({ kind: "tool", type: "generate_design", title: "超长工具名称".repeat(10) }).w).toBe(224);
-    expect(nodeSize({ kind: "tool", type: "generate_design", title: "a".repeat(32) }).w).toBe(112);
+    expect(nodeSize({ kind: "tool", type: "generate_design", title: "a".repeat(32) }).w).toBe(96);
     expect(nodeSize({ kind: "asset", type: "brief" }).h).toBeGreaterThan(44);
   });
 });

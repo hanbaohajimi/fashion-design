@@ -78,6 +78,7 @@ describe("active design token contract", () => {
     const supplied = [
       "--cover-color",
       "--similarity-alpha",
+      "--refine-stage",
       "--studio-sidebar-width",
     ];
     const defined = new Set([

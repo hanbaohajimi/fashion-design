@@ -1,6 +1,6 @@
 import { seedNodeInteraction } from "./node-stage-fixture";
 import { valueControl, chooseValue, expectValue } from "./choice-control";
-import { closeNodeDetails, openImageDetails } from "./workflow-navigation";
+import { closeNodeDetails } from "./workflow-navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
@@ -143,6 +143,11 @@ async function mockWorkspace(page: Page) {
     }
     return route.fulfill({ json: { items: conversations, nextCursor: null } });
   });
+  await page.route("**/api/projects/" + PROJECT_ID + "/agent-conversations/*", route => {
+    const id = new URL(route.request().url()).pathname.split("/").at(-1);
+    const conversation = conversations.find(item => item.id === id);
+    return conversation ? route.fulfill({ json: conversation }) : route.fulfill({ status: 404, json: { message: "会话不存在" } });
+  });
   await page.route("**/api/agent-conversations/*/messages*", (route) => {
     const conversationId = new URL(route.request().url()).pathname.split("/").at(-2) ?? "";
     if (route.request().method() === "POST") {
@@ -195,7 +200,12 @@ async function selectNode(page: Page, title: string) {
   return details;
 }
 
-test("逐节点执行先保存参数，失败可恢复，选定第二个候选后刷新保留设计路径", async ({ page }) => {
+async function openDesignAssistant(page: Page) {
+  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
+}
+
+test("逐节点执行先保存参数，失败可恢复，查看第二张图片后刷新保留执行结果", async ({ page }) => {
   const mocked = await mockWorkspace(page);
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/" + PROJECT_ID);
@@ -220,78 +230,48 @@ test("逐节点执行先保存参数，失败可恢复，选定第二个候选�
   await expect(details.getByRole("button", { name: "确认并执行" })).toHaveCount(0);
   expect(mocked.executionRequests).toHaveLength(2);
   await selectNode(page, "风衣候选 2");
-  await openImageDetails(page);
-  await details.locator("summary:visible").filter({ hasText: "来源与路径" }).click();
-  await expect(details.getByRole("button", { name: "保存决定" })).toBeDisabled();
-  await details.getByPlaceholder("记录选择或否决理由").fill("保留第二个候选的肩线与腰部比例");
-  await details.getByRole("button", { name: "保存决定" }).click();
-  await expect.poll(() => mocked.decisions.length).toBe(1);
-  expect(mocked.decisions[0]).toMatchObject({ assetId: "asset-2", kind: "selected", reason: "保留第二个候选的肩线与腰部比例" });
+  const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await expect(image).toBeVisible();
+  expect(mocked.decisions).toEqual([]);
   await page.reload();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
   await selectNode(page, "风衣候选 2");
-  await openImageDetails(page);
-  await details.locator("summary:visible").filter({ hasText: "来源与路径" }).click();
-  await expect(details.getByText("原图 生成通勤风衣", { exact: true })).toBeVisible();
-  expect(mocked.getGraph().nodes.find((item) => item.id === "candidate-2")?.payload.decision).toBe("selected");
+  await expect(image).toBeVisible();
+  expect(mocked.getGraph().nodes.find(item => item.id === "candidate-2")?.payload.assetId).toBe("asset-2");
+  expect(mocked.decisions).toEqual([]);
   expect(mocked.executionRequests).toHaveLength(2);
 });
 
-test("领域评估按真实候选显示约束检查，反馈提案先预览后确认且不自动生成", async ({ page }) => {
+test("历史评估报告保持可查看，普通设计讨论不重跑评估或生成图片", async ({ page }) => {
   const mocked = await mockWorkspace(page);
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto("/" + PROJECT_ID);
-  const details = await selectNode(page, "风衣设计约束");
-  await expect(details.getByText("必须 明确提出").first()).toBeVisible();
-  await expect(details.getByText("偏好 解释性建议")).toBeVisible();
-  await expect(details.getByText("需实测或规格确认")).toBeVisible();
-  await expect(details.getByText("待确认：尚未提供面料性能检测资料")).toBeVisible();
-  await selectNode(page, "生成通勤风衣");
-  await details.getByRole("button", { name: "确认并执行" }).click();
-  await expect(page.locator('[data-type="candidate"]')).toHaveCount(2);
-  const evaluate = node("evaluate", "tool", "evaluate_design", "检查两张候选", 670, 720, { toolKey: "evaluate_design", toolVersion: "1", params: { prompt: "根据宽松、哑光与防水条件检查每张候选" } }, "ready");
-  mocked.setGraph({ ...mocked.getGraph(), nodes: [...mocked.getGraph().nodes, evaluate], edges: [...mocked.getGraph().edges,
+  const base = mocked.getGraph();
+  const report = node("report", "asset", "evaluation", "逐候选评估报告", 1000, 720, {
+    report: { evaluations: [{ assetId: "asset-2", summary: "廓形稳定，面料反光需修正", checks: [
+      { constraintId: "matte", status: "concern", observation: "衣身出现较强镜面反光，需要减弱" },
+      { constraintId: "water", status: "unknown", observation: "不能单凭图像确认防水性能，需要实测" },
+    ] }] },
+  });
+  const candidate = node("candidate-2", "asset", "candidate", "风衣候选 2", 1000, 400, { assetId: "asset-2", imageUrl: "/api/design-assets/asset-2/thumbnail" });
+  const evaluation = node("evaluate", "tool", "evaluate_design", "历史服装评估", 670, 720, {}, "completed");
+  mocked.setGraph({ ...base, nodes: [...base.nodes, candidate, evaluation, report], edges: [...base.edges,
     { id: "check-constraint", sourceNodeId: "constraint", targetNodeId: "evaluate", sourcePort: "out", targetPort: "constraint" },
-    ...[1, 2].map((index) => ({ id: "check-" + index, sourceNodeId: "candidate-" + index, targetNodeId: "evaluate", sourcePort: "out" as const, targetPort: "candidate" as const })),
+    { id: "check-candidate", sourceNodeId: candidate.id, targetNodeId: "evaluate", sourcePort: "out", targetPort: "candidate" },
+    { id: "check-output", sourceNodeId: "evaluate", targetNodeId: "report", sourcePort: "out", targetPort: "source" },
   ] });
-  await page.reload();
-  await selectNode(page, "检查两张候选");
-  await details.getByRole("button", { name: "确认并执行" }).click();
-  await expect(page.locator('[data-type="evaluation"]')).toHaveCount(1);
-  await selectNode(page, "逐候选评估报告");
-  await expect(details.getByText("廓形稳定，面料反光需修正")).toBeVisible();
-  await expect(details.getByText("! 存疑 衣身出现较强镜面反光，需要减弱")).toBeVisible();
-  await expect(details.getByText("? 无法判断 不能单凭图像确认防水性能，需要实测").first()).toBeVisible();
-  await selectNode(page, "风衣候选 2");
-  await openImageDetails(page);
-  await chooseValue(valueControl(details, "设计师决定"), "rejected");
-  await details.getByPlaceholder("记录选择或否决理由").fill("面料反光过强，保持宽松比例并减弱亮面涂层");
-  await details.getByRole("button", { name: "保存决定" }).click();
-  await expect.poll(() => mocked.decisions.length).toBe(1);
-  expect(mocked.decisions[0]).toMatchObject({ assetId: "asset-2", kind: "rejected" });
+  await page.goto("/" + PROJECT_ID);
+  const details = await selectNode(page, "逐候选评估报告");
+  await expect(details.getByText(/不能单凭图像确认防水性能/)).toBeVisible();
   await closeNodeDetails(page);
-  const composer = page.getByRole("textbox", { name: "描述设计需求" });
-  await composer.fill("请根据反馈修订 @风衣候选");
-  await page.getByRole("button", { name: /@风衣候选 2/ }).click();
-  await composer.fill("@风衣候选 2 面料反光过强，请保持宽松比例并减弱亮面涂层");
-  await page.getByRole("button", { name: "发送需求" }).click();
-  await expect(page.locator('[data-type="edit_design"][data-status="proposed"]')).toBeVisible();
-  expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-2"]);
-  expect(mocked.getGraph().nodes.some((item) => item.type === "edit_design")).toBe(false);
-  expect(mocked.executionRequests).toHaveLength(2);
-  await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
-  await expect(page.locator('[data-status="proposed"]')).toHaveCount(0);
-  await composer.fill("@风衣候选 2 保留宽松通勤廓形，使用 matte woven fabric");
-  await page.getByRole("button", { name: "发送需求" }).click();
-  await expect(page.locator('[data-status="proposed"]')).toBeVisible();
-  await page.getByRole("button", { name: /^确认并生成 \d+ 张$/ }).click();
-  await expect(page.locator('[data-type="edit_design"][data-status="completed"]')).toBeVisible();
-  expect(mocked.getGraph().edges.find((item) => item.targetNodeId === "edit-2")?.sourceNodeId).toBe("candidate-2");
-  expect(mocked.executionRequests).toHaveLength(3);
+  await openDesignAssistant(page);
+  await page.getByRole("textbox", { name: "描述设计需求", exact: true }).fill("比较风衣的面料垂坠感");
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
+  await expect(page.getByText("已整理为三个可执行的廓形与面料方向。")).toBeVisible();
+  expect(mocked.executionRequests).toEqual([]);
+  expect(mocked.proposalRequests).toEqual([]);
   await page.reload();
-  await selectNode(page, "调整哑光面料");
-  await expect(details.getByRole("textbox", { name: "执行指令" })).toHaveValue("@风衣候选 2 保留宽松通勤廓形，使用 matte woven fabric");
-  expect(mocked.executionRequests).toHaveLength(3);
+  await selectNode(page, "逐候选评估报告");
+  await expect(details.getByText(/不能单凭图像确认防水性能/)).toBeVisible();
 });
 
 test("持续设计对话里的 pending 助手消息会自动同步为终态", async ({ page }) => {
@@ -301,10 +281,11 @@ test("持续设计对话里的 pending 助手消息会自动同步为终态", as
     { id: "assistant-pending", role: "assistant", content: "正在理解你的设计需求…", status: "pending" },
   ]);
   await page.goto("/" + PROJECT_ID);
-  await expect(page.getByText("正在理解你的设计需求…")).toBeVisible();
+  await openDesignAssistant(page);
+  await expect(page.getByRole("button", { name: "停止回复", exact: true })).toBeVisible();
   mocked.completePending();
   await expect(page.getByText("已创建生成任务。")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("正在理解你的设计需求…")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止回复", exact: true })).toHaveCount(0);
 });
 
 test("长设计备注作为文字参考完整保存，桌面和窄屏可查看原文", async ({ page }) => {
@@ -324,7 +305,6 @@ test("长设计备注作为文字参考完整保存，桌面和窄屏可查看�
   const details = await selectNode(page, "拍摄备注");
   await expect(details.getByText(text, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("group", { name: "工作视图" }).getByRole("button", { name: "画布", exact: true }).click();
   await expect(details.getByText(text, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
@@ -334,6 +314,7 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/" + PROJECT_ID);
   await expect(page.getByRole("region", { name: "设计工作流画布" })).toBeVisible();
+  await openDesignAssistant(page);
   await expect(page.getByRole("complementary", { name: "设计助手", exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByText("AGENT 工作区验收项目", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
@@ -346,12 +327,12 @@ test("持续助手在桌面与窄屏保持会话交互，讨论不会自动提�
   expect(mocked.proposalRequests).toHaveLength(0);
   expect(mocked.executionRequests).toHaveLength(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("group", { name: "工作视图" }).getByRole("button", { name: "助手", exact: true }).click();
   await chooseValue(valueControl(page, "历史对话"), "chat-old");
   await expect(page.getByText("历史中保留的风衣设计需求")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
-  await page.getByRole("button", { name: "节点列表" }).click();
-  await expect(page.getByRole("listitem").filter({ hasText: "生成通勤风衣" })).toBeVisible();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await expect(page.getByRole("button", { name: /生成通勤风衣/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

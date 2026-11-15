@@ -342,12 +342,11 @@ describe("shared project authorization persistence", () => {
         member.id,
         b.id,
         "coat",
-        undefined,
+        ["shape:fabric"],
         { modelCalls: "skip" },
       );
-      expect(fabricContext.fabricReferences).toEqual([
-        expect.objectContaining({ fabricId: fabric.id, labels: ["silk"] }),
-      ]);
+      expect(fabricContext.fabricReferences).toEqual([]);
+      expect(fabricContext.sources).toEqual(expect.arrayContaining([expect.objectContaining({ fabricId: fabric.id, role: "reference" })]));
       const generated = await generation.createFromAgent(
         member.id,
         {

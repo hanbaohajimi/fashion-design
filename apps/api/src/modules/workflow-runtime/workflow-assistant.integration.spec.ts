@@ -62,7 +62,7 @@ afterEach(async () => { for (const id of cleanup.splice(0)) {
 } });
 
 describe("persistent workflow collaboration", () => {
-  it("analyzes a brief and generates in one explicit request, with one bounded continuation", async () => {
+  it("rejects retired analysis decisions without generating or reserving attempts", async () => {
     const h = await harness();
     const access = new ProjectAccessPolicy(prisma);
     const canvas = new CanvasService(prisma, access, workflows);
@@ -78,13 +78,13 @@ describe("persistent workflow collaboration", () => {
     h.generation.createFromAgent.mockImplementation(async () => ({ taskId: (await prisma.generationTask.create({ data: { userId: h.user.id, projectId: h.project.id, taskType: "t2i", input: {} } })).id }));
     const input = { clientRequestId: "canvas-analysis-then-generate", content, referencedNodeIds: [h.ids.brief] };
     const result = await assistant.send(h.user.id, h.conversation.id, input);
-    expect(result.assistantMessage.kind, result.assistantMessage.content).toBe("reply");
-    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(2);
-    expect(h.model.generateJson).toHaveBeenCalledTimes(2);
+    expect(result.assistantMessage.status).toBe("failed");
+    expect(h.generation.createFromAgent).not.toHaveBeenCalled();
+    expect(h.model.generateJson.mock.calls.length).toBeLessThanOrEqual(3);
     await Promise.all([assistant.send(h.user.id, h.conversation.id, input), assistant.recoverStream(h.user.id, h.conversation.id, input.clientRequestId)]);
-    expect(h.generation.createFromAgent).toHaveBeenCalledTimes(2);
-    expect(await prisma.workflowExecution.count({ where: { projectId: h.project.id } })).toBe(2);
-    expect(await prisma.workflowAttempt.count({ where: { projectId: h.project.id } })).toBe(3);
+    expect(h.generation.createFromAgent).not.toHaveBeenCalled();
+    expect(await prisma.workflowExecution.count({ where: { projectId: h.project.id } })).toBe(0);
+    expect(await prisma.workflowAttempt.count({ where: { projectId: h.project.id } })).toBe(0);
   });
 
   it.each(["不要生成图片", "如果生成三张方案会怎样", "先比较这两份约束"])("never executes an unsupported planner intent for %s", async content => {

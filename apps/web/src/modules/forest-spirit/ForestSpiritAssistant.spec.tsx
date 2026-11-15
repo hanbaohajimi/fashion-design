@@ -98,6 +98,7 @@ describe("host integration with mock renderer; not a Live2D visual acceptance", 
     const renderer = mockRenderer();
     render(<ForestSpiritHost {...props} rendererFactory={() => renderer} />);
     const button = await screen.findByRole("button", { name: "展开设计助手" });
+    await waitFor(() => expect(button.parentElement?.dataset.phase).toBe("idle"));
     fireEvent.pointerDown(button, { pointerId: 7, button: 0, isPrimary: true, clientX: 20, clientY: 30 });
     expect(captures.has(7)).toBe(true);
     fireEvent.pointerUp(button, { pointerId: 7, button: 0, clientX: 20, clientY: 30 });
