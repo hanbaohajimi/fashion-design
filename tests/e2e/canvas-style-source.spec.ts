@@ -30,11 +30,8 @@ for (const width of [1440, 320]) {
     await expect(image).toBeVisible();
     expect(state.placementRequests).toHaveLength(1);
     expect(state.placementRequests[0]?.payload.assetId).toBe("look-0");
-    if (width === 320)
-      await image.getByRole("button", { name: "图像", exact: false }).click();
-    await expect(
-      image.getByRole("link", { name: "更新款式修订" }),
-    ).toHaveAttribute("href", /assetId=look-0&styleRevisionId=style-r1/);
+    await expect(image.getByRole("link", { name: "更新款式修订" })).toHaveCount(0);
+    await expect(image.getByRole("button", { name: "版本与对比", exact: true })).toBeVisible();
     expect(state.commands).toHaveLength(0);
     expect(state.styleRequests).toHaveLength(0);
     expect(state.errors).toEqual([]);

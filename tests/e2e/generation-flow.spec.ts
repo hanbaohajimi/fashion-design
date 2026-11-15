@@ -314,8 +314,8 @@ test("新建项目成功后立即进入空白设计工作流", async ({ page }) 
     route.fulfill({ json: { items: [], nextCursor: null } }),
   );
 
-  await page.goto("/");
-  await page.getByRole("button", { name: "新建项目" }).click();
+  await page.goto("/projects");
+  await page.getByRole("button", { name: "新建项目", exact: true }).click();
   await page.getByRole("textbox", { name: "项目名称" }).fill(project.name);
   await page.getByRole("button", { name: "创建项目", exact: true }).click();
 
@@ -591,15 +591,16 @@ test("独立面料库支持点击和拖放上传，并可按原始 ID 引入工�
   await uploadPanel.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(1);
   const clickFabricCard = page.getByRole("article", {
-    name: "click-fabric，拖拽到白板",
+    name: "click-fabric，面料卡片",
   });
-  await expect(clickFabricCard.getByText("#click-fabric")).toBeVisible();
+  await clickFabricCard.getByRole("button", { name: "查看面料规格：click-fabric" }).click();
 
   const manageFabricButton = clickFabricCard.getByRole("button", {
-    name: "管理面料：click-fabric",
+    name: "完整档案：click-fabric",
   });
   await manageFabricButton.click();
   const fabricDialog = page.getByRole("dialog", { name: "管理或删除面料" });
+  await expect(fabricDialog.getByText("#click-fabric")).toBeVisible();
   const closeFabricDialog = fabricDialog.getByRole("button", { name: "关闭" });
   await expect(closeFabricDialog).toBeFocused();
   await page.keyboard.press("Shift+Tab");
@@ -636,8 +637,8 @@ test("独立面料库支持点击和拖放上传，并可按原始 ID 引入工�
   await uploadPanel.getByRole("button", { name: "保存到面料库" }).click();
   await expect.poll(() => uploadCount).toBe(2);
   await expect(
-    page.getByRole("article", { name: "drop-fabric，拖拽到白板" })
-      .getByText("#drop-fabric"),
+    page.getByRole("article", { name: "drop-fabric，面料卡片" })
+      .getByRole("button", { name: "查看面料规格：drop-fabric" }),
   ).toBeVisible();
 
   await page.goto("/e2e-fabric");

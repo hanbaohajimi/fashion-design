@@ -6,6 +6,7 @@ import { useSubmitFeedback } from "./use-submit-feedback";
 import { ConnectionNotice } from "./ConnectionNotice";
 import { useUploadFeedback } from "./use-upload-feedback";
 import { placeFloatingPanel } from "./floating-position";
+import { useEffect, useState } from "react";
 
 let animations: Array<{ onfinish: (() => void) | null; cancel: ReturnType<typeof vi.fn> }>;
 let preferences: Set<() => void>;
@@ -60,6 +61,28 @@ it("interrupts a closing dialog without stale completion stealing focus", () => 
   expect((screen.getByRole("dialog") as HTMLDialogElement).open).toBe(true);
   expect(after).not.toHaveBeenCalled();
   expect((screen.getByRole("textbox") as HTMLElement).inert).toBe(false);
+});
+
+it("keeps an opted-in form and its draft mounted while the native dialog closes", () => {
+  const unmounted = vi.fn();
+  function DraftForm() {
+    const [value, setValue] = useState("");
+    useEffect(() => () => { unmounted(); }, []);
+    return <input aria-label="面板草稿" value={value} onChange={event => setValue(event.target.value)} />;
+  }
+  const { rerender } = render(<Dialog open keepMounted label="画布资料" onClose={() => {}}><DraftForm /></Dialog>);
+  const input = screen.getByRole("textbox", { name: "面板草稿" }) as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "尚未保存的修改" } });
+  unmounted.mockClear();
+  rerender(<Dialog open={false} keepMounted label="画布资料" onClose={() => {}}><DraftForm /></Dialog>);
+  act(() => animations.at(-1)?.onfinish?.());
+  expect(input.isConnected).toBe(true);
+  expect((input.closest("dialog") as HTMLDialogElement).open).toBe(false);
+  expect(input.value).toBe("尚未保存的修改");
+  expect(unmounted).not.toHaveBeenCalled();
+  rerender(<Dialog open keepMounted label="画布资料" onClose={() => {}}><DraftForm /></Dialog>);
+  expect(screen.getByRole("textbox", { name: "面板草稿" })).toBe(input);
+  expect(input.value).toBe("尚未保存的修改");
 });
 
 it("finishes the current presentation on preference changes", () => {

@@ -24,7 +24,7 @@ export function PresentationGallery({
     return (
       <div className={styles.empty}>
         <h3>还没有可用图片</h3>
-        <p>先从任务入口上传草图或在设计工作台生成候选，再来整理展示内容。</p>
+        <p>先从任务入口上传草图或在设计工作台生成图片，再来整理展示内容。</p>
       </div>
     );
   return (

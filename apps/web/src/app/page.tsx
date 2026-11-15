@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ProjectLibrary } from "../modules/projects/ProjectLibrary";
+import { WorkspaceHome } from "../modules/projects/HomePage";
 
 export const metadata: Metadata = {
   title: "从灵感到交付的服装设计工作室",
@@ -17,5 +17,5 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <ProjectLibrary />;
+  return <WorkspaceHome />;
 }

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { loadZhiya, openZhiya, prepareZhiya } from "./zhiya-fixture";
 import { NOW } from "../visual/fixtures";
 
-for (const width of [1440, 320]) test(`${width}px 引用记录区分同图副本、先前补读和未传入图片`, async ({ page }) => {
+for (const width of [1440, 320]) test(`${width}px 消息隐藏引用记录，保留正文和下一条草稿`, async ({ page }) => {
   const state = await prepareZhiya(page, { count: 4, realClock: true, viewport: { width, height: 900 } });
   const titles = ["藏蓝风衣正面", "藏蓝风衣正面 · 对照副本", "袖口细节参考", "领口细节参考"] as const;
   for (const [i, title] of titles.entries()) {
@@ -33,30 +33,26 @@ for (const width of [1440, 320]) test(`${width}px 引用记录区分同图副本
   await expect(input).toBeEnabled();
   await input.fill("下一步单独看领口，保留这份草稿");
   const message = page.locator('[data-message-id="visual-reference-proof"]');
-  const record = message.locator("details").first();
-  await expect(record).not.toHaveAttribute("open");
-  await record.getByText("查看引用记录", { exact: true }).click();
-  const provided = record.locator("section").filter({ has: page.getByRole("heading", { name: "传入图片", exact: true }) });
-  await expect(provided.getByRole("button")).toHaveCount(3);
-  await expect(provided.getByRole("button", { name: titles[0], exact: true })).toBeVisible();
-  const missing = record.locator("section").filter({ has: page.getByRole("heading", { name: "尚未传入的引用图片", exact: true }) });
-  await expect(missing.getByRole("button")).toHaveCount(1);
-  await expect(missing.getByRole("button", { name: titles[3], exact: true })).toBeVisible();
-  await record.getByText("图片统计与读取范围", { exact: true }).click();
-  await expect(record).toContainText("本轮累计传入 2 张图片，对应 3 个画布对象");
-  await expect(record).toContainText("分析不可用 1 项");
-  const statistics = record.getByText(/本轮累计传入 2 张图片/);
-  await statistics.scrollIntoViewIfNeeded();
-  await expect(statistics).toBeInViewport();
+  await expect(message).toContainText("领口图片尚未传入，这部分先留待细看。");
+  await expect(message.getByText("查看引用记录", { exact: true })).toHaveCount(0);
+  await expect(message.getByText("这条回复未保存引用记录", { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await mkdir("output/playwright/assistant-visual-references", { recursive: true });
   await page.screenshot({ path: `output/playwright/assistant-visual-references/record-${width}.png` });
   await expect(input).toHaveValue("下一步单独看领口，保留这份草稿");
+  await expect.poll(() => page.evaluate(() => new Promise<boolean>((resolve, reject) => {
+    const open = indexedDB.open("fashion-workspace-drafts", 1);
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result, request = db.transaction("drafts").objectStore("drafts").getAll();
+      request.onerror = () => { db.close(); reject(request.error); };
+      request.onsuccess = () => { const rows = request.result as { value?: { prompt?: string } }[]; db.close(); resolve(rows.some(row => row.value?.prompt === "下一步单独看领口，保留这份草稿")); };
+    };
+  }))).toBe(true);
   await page.reload();
   await expect(input).toHaveValue("下一步单独看领口，保留这份草稿");
-  await record.getByText("查看引用记录", { exact: true }).click();
-  await record.getByText("图片统计与读取范围", { exact: true }).click();
-  await expect(record).toContainText("本轮累计传入 2 张图片，对应 3 个画布对象");
+  await expect(message.getByText("查看引用记录", { exact: true })).toHaveCount(0);
+  await expect(message).toContainText("可以保留直身廓形，试着让袖口更利落。");
   expect(state.mutations).toEqual([]);
   expect(state.errors).toEqual([]);
 });

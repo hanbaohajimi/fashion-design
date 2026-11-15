@@ -1,0 +1,123 @@
+.frame {
+  position: relative;
+  isolation: isolate;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-1);
+  color: var(--color-ink);
+}
+.media {
+  width: 100%;
+  height: 100%;
+  transition:
+    opacity var(--refine-stage) var(--ease-enter),
+    filter var(--refine-stage) var(--ease-enter);
+}
+.media > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.media[data-previous] {
+  opacity: 0.65;
+  filter: blur(2px) saturate(0.8);
+}
+.frame[data-revealing] .media {
+  opacity: 0;
+  transition: none;
+}
+.frame[data-refine-status="complete"] .media {
+  transition: none;
+}
+.placeholder {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  gap: 1px;
+  opacity: 0.45;
+}
+.placeholder span {
+  background: color-mix(in srgb, var(--color-action) 8%, var(--surface-2));
+}
+.placeholder span:nth-child(3n + 1) {
+  background: color-mix(in srgb, var(--color-action) 13%, var(--surface-2));
+}
+.mosaic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+.frame[data-revealing] .mosaic {
+  opacity: 1;
+}
+.sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    color-mix(in srgb, var(--surface-3) 70%, transparent) 50%,
+    transparent 75%
+  );
+  transform: translateX(-100%);
+  animation: refineSweep 1800ms linear infinite;
+  animation-play-state: paused;
+}
+.frame[data-active="true"] .sweep {
+  animation-play-state: running;
+}
+.chip {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  pointer-events: none;
+}
+.retry {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--color-action);
+  cursor: pointer;
+}
+.frame[data-compact] .chip {
+  left: 6px;
+  bottom: 6px;
+  padding: 5px 7px;
+}
+.frame[data-refine-status="complete"]:not([data-just-completed]) .chip {
+  display: none;
+}
+.frame[data-refine-status="error"] {
+  background: var(--surface-1);
+}
+@keyframes refineSweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sweep {
+    animation: none;
+    display: none;
+  }
+  .media {
+    transition: none;
+    filter: none;
+  }
+}

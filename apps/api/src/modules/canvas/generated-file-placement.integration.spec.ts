@@ -14,6 +14,7 @@ import { S3FileStorage } from "../files/storage.service";
 import { DesignAssetsService } from "../design-assets/design-assets.service";
 import { CanvasCommandService } from "../workflow-runtime/canvas-command.service";
 import { CanvasCommandsController } from "../workflow-runtime/canvas-commands.controller";
+import { CanvasCreationsService } from "../workflow-runtime/canvas-creations.service";
 import { RateLimitGuard } from "../../security/rate-limit.guard";
 
 const storage = new S3FileStorage(), access = new ProjectAccessPolicy(prisma), workflows = new WorkflowsService(prisma, access);
@@ -21,7 +22,7 @@ const canvas = new CanvasService(prisma, access, workflows);
 const commands = new CanvasCommandService(canvas, workflows, {} as never, storage);
 let app: INestApplication;
 beforeAll(async () => {
-  const module = await Test.createTestingModule({ controllers: [CanvasCommandsController], providers: [{ provide: CanvasCommandService, useValue: commands }] }).overrideGuard(RateLimitGuard).useValue({ canActivate: () => true }).compile();
+  const module = await Test.createTestingModule({ controllers: [CanvasCommandsController], providers: [{ provide: CanvasCommandService, useValue: commands }, { provide: CanvasCreationsService, useValue: new CanvasCreationsService(canvas, commands, workflows, access) }] }).overrideGuard(RateLimitGuard).useValue({ canActivate: () => true }).compile();
   app = module.createNestApplication();
   app.use((req: Request & { auth?: unknown }, _res: Response, next: NextFunction) => { req.auth = { userId: req.headers["x-test-user"] }; next(); });
   await app.init();

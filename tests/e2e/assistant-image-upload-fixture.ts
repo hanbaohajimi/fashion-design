@@ -149,6 +149,7 @@ export async function assistantImageUploadFixture(
     return route.fulfill({ json: file });
   });
   await page.route(`**/api/projects/${PROJECT}/canvas**`, async (route) => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: options.canEdit ?? true } });
     if (route.request().url().endsWith("/commands")) {
       const command = canvasCommandSchema.parse(route.request().postDataJSON());
       if (command.type === "place_reference_image") {

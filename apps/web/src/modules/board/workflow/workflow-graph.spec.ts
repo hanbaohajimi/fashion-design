@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkflowEdge, WorkflowGraph, WorkflowNode } from "./workflow-api";
-import { availableInputPorts, imageNodeSize, lineageOf, nodeSize, nodeSummary, projectWorkflowProposal } from "./workflow-graph";
+import { availableInputPorts, imageNodeSize, lineageOf, nodeImageUrl, nodeSize, nodeSummary, projectWorkflowProposal } from "./workflow-graph";
 
 function node(id: string, kind: WorkflowNode["kind"], type: WorkflowNode["type"]): WorkflowNode {
   return {
@@ -22,6 +22,11 @@ function edge(id: string, sourceNodeId: string, targetNodeId: string, targetPort
 }
 
 describe("workflow graph", () => {
+  it("上传视频保留媒体身份，不请求图片缩略图", () => {
+    expect(nodeImageUrl({ payload: { mediaKind: "video", fileAssetId: "video-file", mediaUrl: "/api/files/video-file/content" } })).toBe("");
+    expect(nodeImageUrl({ payload: { mediaKind: "audio", fileAssetId: "audio-file" } })).toBe("");
+    expect(nodeImageUrl({ payload: { fileAssetId: "image-file" } })).toBe("/api/files/image-file/thumbnail/1024");
+  });
   it("renders fabric photos like uploads while omitting duplicated tag captions", () => {
     const fabric = { ...node("fabric", "asset", "fabric"), title: "棉麻 · 斜纹", payload: { imageUrl: "/fabric.jpg", text: "棉麻、斜纹" } };
     expect(nodeSummary(fabric)).toBe("");
@@ -119,7 +124,10 @@ describe("workflow graph", () => {
     const evaluate = node("evaluate", "tool", "evaluate_design");
     const restore = node("restore", "tool", "restore_version");
 
-    expect(availableInputPorts(brief, generate)).toEqual([]);
+    expect(availableInputPorts(brief, generate)).toEqual(["reference"]);
+    expect(availableInputPorts(brief, node("text", "tool", "generate_text"))).toEqual(["reference"]);
+    expect(availableInputPorts(candidate, node("text", "tool", "generate_text"))).toEqual(["reference"]);
+    expect(availableInputPorts(node("video", "asset", "media"), node("text", "tool", "generate_text"))).toEqual([]);
     expect(availableInputPorts(candidate, evaluate)).toEqual(["candidate"]);
     expect(availableInputPorts(candidate, restore)).toEqual(["source"]);
     expect(availableInputPorts(generate, candidate)).toEqual(["source"]);

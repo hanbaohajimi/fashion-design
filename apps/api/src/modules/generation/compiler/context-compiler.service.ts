@@ -1,575 +1,145 @@
 import { FileStatus, type PrismaClient, type Prisma } from "@fashion/db";
 import type { DesignSourceSnapshot } from "@fashion/shared";
-import {
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from "@nestjs/common";
-
-import type {
-  CompiledGenInput,
-  CompilerChannel,
-  ContextModelGateway,
-  FabricReference,
-  ImageReference,
-  SemanticImageChannel,
-} from "./compiler.types";
-import { FabricChannel } from "./fabric.channel";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import type { CompiledGenInput, ContextModelGateway, ImageReference } from "./compiler.types";
 import { compilePaletteColor } from "./palette-channel";
-import { TrendChannel } from "./trend.channel";
 import { RETIRED_BOARD_SHAPE_TYPE } from "../../boards/boards.schemas";
 import { S3FileStorage } from "../../files/storage.service";
 import { ProjectAccessPolicy } from "../../studio/project-access.policy";
 
+export { compilePaletteColor } from "./palette-channel";
 export const COMPILER_DB = Symbol("COMPILER_DB");
 export const CONTEXT_MODEL = Symbol("CONTEXT_MODEL");
-
-type CompilerDatabase = Pick<
-  PrismaClient,
-  "designAsset" | "fabric" | "project" | "trendItem" | "workspaceMember" | "fileAsset"
->;
+type CompilerDatabase = Pick<PrismaClient, "designAsset" | "fabric" | "project" | "trendItem" | "workspaceMember" | "fileAsset">;
 type BoardElement = {
-  fileAsset: {
-    objectKey: string;
-    ownerId: string;
-    status: FileStatus;
-    thumbnail1024Key: string | null;
-  } | null;
   id: string;
   shapeId?: string;
-  fileAssetId?: string | null;
-  role: string;
-  roleLabel: string | null;
-  record: Prisma.JsonValue | null;
   shapeType: string;
+  fileAssetId?: string | null;
+  record: Prisma.JsonValue | null;
+  fileAsset: { objectKey: string; status: FileStatus; thumbnail1024Key: string | null } | null;
 };
+export interface ContextCompilerOptions { readonly modelCalls?: "allow" | "skip"; readonly preserveLegacyPurpose?: boolean }
+const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const text = (value: unknown): string => typeof value === "string" ? value.trim() : "";
+const propsOf = (element: BoardElement) => object(object(element.record).props);
 
-const COMMON_NEGATIVE_TERMS = [
-  "anatomical distortion",
-  "extra limbs",
-  "deformed hands",
-  "garment construction errors",
-  "unwanted text",
-  "watermark",
-  "low-resolution fabric texture",
-] as const;
-const REFERENCE_URL_TTL_SECONDS = 24 * 60 * 60;
-const MAX_PALETTE_COLORS_PER_ELEMENT = 12;
-const EXACT_HEX_COLOR = /^#[\dA-F]{6}$/u;
-
-export interface ContextCompilerOptions {
-  readonly modelCalls?: "allow" | "skip";
+function richText(value: unknown): string {
+  const node = object(value);
+  if (typeof node.text === "string") return node.text;
+  return Array.isArray(node.content) ? node.content.map(richText).filter(Boolean).join(node.type === "doc" ? "\n" : "") : "";
 }
 
-function propsOf(record: Prisma.JsonValue | null): Record<string, unknown> {
-  if (!record || Array.isArray(record) || typeof record !== "object") return {};
-  const props = (record as Record<string, unknown>).props;
-  return props && !Array.isArray(props) && typeof props === "object"
-    ? (props as Record<string, unknown>)
-    : {};
+function paletteFrom(element: BoardElement): string[] {
+  if (!["swatch", "fashion-swatch"].includes(element.shapeType)) return [];
+  const props = propsOf(element);
+  const stored = Array.isArray(props.colors) ? props.colors : [{ color: props.color, label: props.label }];
+  return [...new Set(stored.flatMap((item) => {
+    const value = object(item);
+    const color = compilePaletteColor(value.color, value.label);
+    return color ? [color] : [];
+  }))];
 }
 
-function metaOf(record: Prisma.JsonValue | null): Record<string, unknown> {
-  if (!record || Array.isArray(record) || typeof record !== "object") return {};
-  const meta = (record as Record<string, unknown>).meta;
-  return meta && !Array.isArray(meta) && typeof meta === "object"
-    ? (meta as Record<string, unknown>)
-    : {};
+export function applyExactPaletteConstraint(prompt: string, colors: readonly string[]): string {
+  const hex = [...new Set(colors.filter((color) => /^#[0-9a-f]{6}$/iu.test(color)).map((color) => color.toUpperCase()))];
+  return hex.length && !hex.every((color) => prompt.toUpperCase().includes(color))
+    ? `${prompt}\n参考色卡：${hex.join("、")}` : prompt;
 }
 
-function canUseSilhouetteReference(element: BoardElement): boolean {
-  if (element.role !== "silhouette_ref") return false;
-  if (element.shapeType !== "frame") return true;
-  const meta = metaOf(element.record);
-  if (meta.fashionSketch !== true) return true;
-  return meta.sketchStatus === "ready" && meta.sketchDirty !== true;
-}
-
-function cleanText(value: unknown, limit = 240): string | null {
-  if (typeof value !== "string") return null;
-  const cleaned = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
-  return cleaned ? cleaned.slice(0, limit) : null;
-}
-
-function compilePaletteEntries(props: Record<string, unknown>): string[] {
-  const stored = Array.isArray(props.colors)
-    ? props.colors.slice(0, MAX_PALETTE_COLORS_PER_ELEMENT)
-    : [];
-  const compiled = stored.flatMap((entry) => {
-    if (!entry || Array.isArray(entry) || typeof entry !== "object") return [];
-    const color = entry as Record<string, unknown>;
-    const value = compilePaletteColor(color.color, color.label);
-    return value ? [value] : [];
-  });
-
-  if (compiled.length > 0) return compiled;
-  const legacy = compilePaletteColor(props.color, props.label);
-  return legacy ? [legacy] : [];
-}
-
-function safeRemoteUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:"
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function unique(values: readonly (string | null)[]): string[] {
-  return [
-    ...new Set(values.filter((value): value is string => Boolean(value))),
-  ];
-}
-
-function applyExactPaletteConstraint(
-  prompt: string,
-  colors: readonly string[],
-): string {
-  if (colors.length === 0) return prompt;
-  return [
-    prompt,
-    "Exact garment color constraint, highest priority: use exactly " +
-      `${colors.join(", ")} wherever the selected palette applies. ` +
-      "Hexadecimal values are authoritative; do not reinterpret them from " +
-      "palette names or replace them with any other color.",
-  ].join("\n\n");
-}
-
-function preservesExactPalette(
-  prompt: string,
-  colors: readonly string[],
-): boolean {
-  const normalized = prompt.toUpperCase();
-  return colors.every((color) => normalized.includes(color));
-}
-
+/** Current requests use explicit content and instructions. No role inference or label channels. */
 @Injectable()
 export class ContextCompilerService {
-  private readonly logger = new Logger(ContextCompilerService.name);
-
   constructor(
     @Inject(COMPILER_DB) private readonly database: CompilerDatabase,
-    @Inject(CONTEXT_MODEL) private readonly model: ContextModelGateway,
-    @Inject(S3FileStorage)
-    private readonly storage: Pick<S3FileStorage, "createDownloadUrl">,
+    @Inject(CONTEXT_MODEL) _model: ContextModelGateway,
+    @Inject(S3FileStorage) private readonly storage: Pick<S3FileStorage, "createDownloadUrl">,
     @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
   ) {}
 
-  async compile(
-    userId: string,
-    projectId: string | undefined,
-    userRequest: string,
-    shapeIds?: readonly string[],
-    options: ContextCompilerOptions = {},
-  ): Promise<CompiledGenInput> {
-    const allowModelCalls = options.modelCalls !== "skip";
-    const elements = projectId
-      ? await this.loadOwnedElements(userId, projectId, shapeIds)
-      : [];
-    const swatchPalette = unique(
-      elements
-        .filter((element) => element.role === "palette")
-        .flatMap((element) => compilePaletteEntries(propsOf(element.record))),
-    );
-    const notes = unique(
-      elements
-        .filter((element) => element.role === "note")
-        .map((element) => {
-          const props = propsOf(element.record);
-          return (
-            cleanText(props.text, 500) ??
-            cleanText(props.roleLabel, 500) ??
-            cleanText(element.roleLabel, 500)
-          );
-        }),
-    );
-    const channels = [
-      new FabricChannel(this.database, userId, this.storage, this.access, projectId),
-      new TrendChannel(this.database, this.storage),
-    ] as const satisfies readonly CompilerChannel[];
-    const [structuredFabric, structuredTrend] = await Promise.all([
-      channels[0].compile(elements),
-      channels[1].compile(elements),
-    ]);
-    const structuredFabricElementIds = new Set(
-      structuredFabric.fabricInputs?.map((input) => input.boardElementId) ?? [],
-    );
-    const structuredTrendElementIds = new Set(
-      structuredTrend.refImages.map((reference) => reference.elementId),
-    );
-    const legacyStyleReferences = (
-      await Promise.all(
-        elements
-          .filter(
-            (element) =>
-              (element.role === "style_ref" ||
-                element.role === "garment_ref" ||
-                element.role === "reference_garment") &&
-              !structuredTrendElementIds.has(element.id),
-          )
-          .map((element) => this.referenceFrom(element, userId, projectId)),
-      )
-    ).filter((value): value is ImageReference => Boolean(value));
-    const styleReferences = [
-      ...structuredTrend.refImages,
-      ...legacyStyleReferences,
-    ];
-    const silhouetteReferences = (
-      await Promise.all(
-        elements.filter(canUseSilhouetteReference).map(async (element) => {
-          const reference = await this.referenceFrom(
-            element,
-            userId,
-            projectId,
-          );
-          return reference
-            ? {
-                edgeImageUrl: reference.imageUrl,
-                elementId: element.id,
-              }
-            : null;
-        }),
-      )
-    ).filter((value): value is { edgeImageUrl: string; elementId: string } =>
-      Boolean(value),
-    );
-    const legacyFabricReferences = await this.compileSemanticReferences(
-      elements.filter(
-        (element) =>
-          element.role === "fabric_ref" &&
-          !structuredFabricElementIds.has(element.id),
-      ),
-      "fabric",
-      userId,
-      projectId,
-      allowModelCalls,
-    );
-    const fabricReferences: readonly (FabricReference | ImageReference)[] = [
-      ...structuredFabric.refImages,
-      ...legacyFabricReferences,
-    ];
-    const detailReferences = await this.compileSemanticReferences(
-      elements.filter((element) => element.role === "detail_ref"),
-      "detail",
-      userId,
-      projectId,
-      allowModelCalls,
-    );
-    const paletteReferences = await this.compileSemanticReferences(
-      elements.filter(
-        (element) =>
-          element.role === "palette" &&
-          compilePaletteEntries(propsOf(element.record)).length === 0,
-      ),
-      "palette",
-      userId,
-      projectId,
-      allowModelCalls,
-    );
-    const palette = unique([
-      ...swatchPalette,
-      ...paletteReferences.flatMap((reference) => [...reference.labels]),
-    ]);
-    const exactPaletteColors = swatchPalette.filter((color) =>
-      EXACT_HEX_COLOR.test(color),
-    );
-    const patternReferences = fabricReferences.filter((reference) =>
-      reference.labels.some((label) =>
-        /pattern|print|motif|纹样|图案/i.test(label),
-      ),
-    );
-    const avoidReferences = await this.compileSemanticReferences(
-      elements.filter((element) => element.role === "avoid"),
-      "avoid",
-      userId,
-      projectId,
-      allowModelCalls,
-    );
-    const avoidLabels = unique(
-      avoidReferences.flatMap((reference) => [...reference.labels]),
-    );
-    const fabricTerms = unique(
-      fabricReferences.flatMap((reference) => [...reference.labels]),
-    );
-    const legacyFabricTerms = unique(
-      legacyFabricReferences.flatMap((reference) => [...reference.labels]),
-    );
-    const patternTerms = unique(
-      patternReferences.flatMap((reference) =>
-        reference.labels.filter((label) =>
-          /pattern|print|motif|纹样|图案/i.test(label),
-        ),
-      ),
-    );
-    const detailTerms = unique(
-      detailReferences.flatMap((reference) => [...reference.labels]),
-    );
-    const keywordPositive = this.joinPrompt([
-      cleanText(userRequest, 4000),
-      palette.length ? `palette: ${palette.join(", ")}` : null,
-      structuredFabric.prompt || null,
-      structuredTrend.prompt || null,
-      legacyFabricTerms.length
-        ? `fabric: ${legacyFabricTerms.join(", ")}`
-        : null,
-      patternTerms.length ? `pattern: ${patternTerms.join(", ")}` : null,
-      detailTerms.length ? `details: ${detailTerms.join(", ")}` : null,
-      notes.length ? `design notes: ${notes.join("; ")}` : null,
-    ]);
-    const keywordNegative = unique([
-      ...avoidLabels,
-      ...COMMON_NEGATIVE_TERMS,
-    ]).join(", ");
-
-    let positivePrompt = keywordPositive;
-    let negativePrompt = keywordNegative;
-    let enhancement: "llm" | "keywords" = "keywords";
-    if (allowModelCalls) {
-      try {
-        const enhanced = await this.model.enhancePrompt({
-          avoidTerms: avoidLabels,
-          detailTerms,
-          fabricTerms,
-          keywordNegative,
-          keywordPositive,
-          notes,
-          palette,
-          patternTerms,
-          userRequest: cleanText(userRequest, 4000) ?? "",
-        });
-        if (
-          preservesExactPalette(enhanced.positivePrompt, exactPaletteColors)
-        ) {
-          positivePrompt = enhanced.positivePrompt;
-          negativePrompt = enhanced.negativePrompt;
-          enhancement = "llm";
-        } else {
-          this.logger.warn("提示词增强未保留精确色卡 HEX，已回退为关键词编译");
-        }
-      } catch (error) {
-        this.logger.warn(
-          `提示词增强失败，已回退为关键词编译；reason=${safeModelFailureReason(error)}`,
-        );
-      }
+  async compile(userId: string, projectId: string | undefined, userRequest: string, shapeIds?: readonly string[], _options?: ContextCompilerOptions): Promise<CompiledGenInput> {
+    // Keep the historical call signature without enabling implicit enrichment.
+    void _options;
+    const elements = projectId ? await this.loadOwnedElements(userId, projectId, shapeIds) : [];
+    const orderedReferences: ImageReference[] = [];
+    const notes: string[] = [];
+    const palette: string[] = [];
+    const sources: DesignSourceSnapshot[] = [];
+    for (const [index, element] of elements.entries()) {
+      const props = propsOf(element);
+      const title = text(props.title) || text(props.label) || `素材${index + 1}`;
+      const colors = paletteFrom(element);
+      palette.push(...colors);
+      const content = text(props.text) || richText(props.richText);
+      if (content) notes.push(`素材${index + 1}（${title}）：${content}`);
+      if (colors.length) notes.push(`素材${index + 1}的色值：${colors.join("、")}`);
+      const imageUrl = await this.resolveImage(element, userId, projectId);
+      if (imageUrl) orderedReferences.push({ elementId: element.id, imageUrl, labels: [], order: index });
+      sources.push({ elementId: element.id, role: "reference", title,
+        ...(element.shapeId ? { shapeId: element.shapeId } : {}),
+        ...(element.fileAssetId ? { fileAssetId: element.fileAssetId } : {}),
+        ...(text(props.assetId) ? { assetId: text(props.assetId) } : {}),
+        ...(text(props.fabricId) ? { fabricId: text(props.fabricId) } : {}),
+        ...(text(props.trendItemId) ? { trendItemId: text(props.trendItemId) } : {}),
+        ...(content ? { text: content } : {}), ...(colors.length ? { colors } : {}),
+      });
     }
-
-    positivePrompt = applyExactPaletteConstraint(
-      positivePrompt,
-      exactPaletteColors,
-    );
-
+    const positivePrompt = [userRequest.trim(), ...notes].filter(Boolean).join("\n");
+    if (positivePrompt.length > 4000) throw new BadRequestException("本次要求与引用文字超过4000字，请缩短后再生成");
     return {
-      sources: elements.map(sourceSnapshot),
-      avoidLabels,
-      detailReferences,
-      enhancement,
-      fabricInputs: structuredFabric.fabricInputs ?? [],
-      fabricReferences,
-      mode: elements.length ? "board_guided" : "text_only",
-      negativePrompt,
-      notes,
-      palette,
-      paletteReferences,
-      patternReferences,
-      positivePrompt,
-      silhouetteReferences,
-      styleReferences,
-      version: 1,
+      version: 1, referencePolicy: "instruction", orderedReferences, sources,
+      mode: elements.length ? "board_guided" : "text_only", positivePrompt, negativePrompt: "",
+      palette: [...new Set(palette)], notes, enhancement: "keywords",
+      styleReferences: [], silhouetteReferences: [], fabricReferences: [], fabricInputs: [],
+      patternReferences: [], detailReferences: [], paletteReferences: [], avoidLabels: [],
     };
   }
 
-  private async loadOwnedElements(
-    userId: string,
-    projectId: string,
-    shapeIds?: readonly string[],
-  ): Promise<BoardElement[]> {
+  private async loadOwnedElements(userId: string, projectId: string, shapeIds?: readonly string[]): Promise<BoardElement[]> {
     await this.access.require(userId, projectId, "read");
-    const project = await this.database.project.findUnique({
-      where: { id: projectId },
-      select: {
-        deletedAt: true,
-        workspace: { select: { ownerId: true } },
-        boardElements: {
-          where: {
-            deletedAt: null,
-            shapeType: { not: RETIRED_BOARD_SHAPE_TYPE },
-            ...(shapeIds ? { shapeId: { in: [...shapeIds] } } : {}),
-          },
-          select: {
-            fileAsset: {
-              select: {
-                objectKey: true,
-                ownerId: true,
-                status: true,
-                thumbnail1024Key: true,
-              },
-            },
-            id: true,
-            shapeId: true,
-            fileAssetId: true,
-            record: true,
-            role: true,
-            roleLabel: true,
-            shapeType: true,
-          },
-        },
-      },
+    if (!shapeIds?.length) return [];
+    const project = await this.database.project.findUnique({ where: { id: projectId }, select: {
+      deletedAt: true,
+      boardElements: { where: { deletedAt: null, shapeType: { not: RETIRED_BOARD_SHAPE_TYPE }, shapeId: { in: [...shapeIds] } }, select: {
+        id: true, shapeId: true, fileAssetId: true, record: true, shapeType: true,
+        fileAsset: { select: { objectKey: true, status: true, thumbnail1024Key: true } },
+      } },
+    } });
+    if (!project || project.deletedAt) throw new NotFoundException("项目不存在");
+    const byShape = new Map(project.boardElements.map((element) => [element.shapeId, element]));
+    return [...new Set(shapeIds)].flatMap((shapeId) => {
+      const element = byShape.get(shapeId);
+      if (!element) throw new BadRequestException("引用素材已变化或不可用，请重新选择");
+      return [element];
     });
-    if (!project || project.deletedAt) {
-      throw new NotFoundException({
-        code: "PROJECT_NOT_FOUND",
-        message: "项目不存在",
-      });
+  }
+
+  private async resolveImage(element: BoardElement, userId: string, projectId: string | undefined): Promise<string | null> {
+    const meta = object(object(element.record).meta);
+    if (meta.fashionSketch === true && (meta.sketchDirty === true || meta.sketchStatus !== "ready")) throw new BadRequestException("草图已修改，请先完成渲染再引用");
+    if (element.fileAsset) {
+      if (element.fileAsset.status !== FileStatus.READY) throw new BadRequestException("引用图片仍在处理中，请等待就绪");
+      return this.storage.createDownloadUrl(element.fileAsset.objectKey, 24 * 60 * 60);
     }
-    return project.boardElements;
-  }
-
-  private async referenceFrom(
-    element: BoardElement,
-    userId: string,
-    projectId: string | undefined,
-  ): Promise<ImageReference | null> {
-    const imageUrl = await this.resolveElementImageUrl(
-      element,
-      userId,
-      projectId,
-    );
-    if (!imageUrl) return null;
-    const label = cleanText(element.roleLabel);
-    return {
-      elementId: element.id,
-      imageUrl,
-      labels: label ? [label] : [],
-    };
-  }
-
-  private async compileSemanticReferences(
-    elements: readonly BoardElement[],
-    channel: SemanticImageChannel,
-    userId: string,
-    projectId: string | undefined,
-    allowModelCalls: boolean,
-  ): Promise<ImageReference[]> {
-    return Promise.all(
-      elements.slice(0, 20).map(async (element) => {
-        const reference = await this.referenceFrom(element, userId, projectId);
-        if (!reference) return null;
-        if (reference.labels.length || !allowModelCalls) return reference;
-        try {
-          const labels = unique([
-            ...(await this.model.analyzeImage({
-              channel,
-              imageUrl: reference.imageUrl,
-            })),
-          ]);
-          return { ...reference, labels };
-        } catch {
-          return reference;
-        }
-      }),
-    ).then((values) =>
-      values.filter((value): value is ImageReference => Boolean(value)),
-    );
-  }
-
-  private async resolveElementImageUrl(
-    element: BoardElement,
-    _userId: string,
-    projectId: string | undefined,
-  ): Promise<string | null> {
-    if (
-      element.fileAsset &&
-      element.fileAsset.status === FileStatus.READY
-    ) {
-      return this.storage.createDownloadUrl(
-        element.fileAsset.thumbnail1024Key ?? element.fileAsset.objectKey,
-        REFERENCE_URL_TTL_SECONDS,
-      );
-    }
-
-    const props = propsOf(element.record);
-    const assetId =
-      typeof props.assetId === "string" ? props.assetId.trim() : "";
+    const props = propsOf(element);
+    const assetId = text(props.assetId);
     if (assetId && projectId) {
-      const asset = await this.database.designAsset.findFirst({
-        where: {
-          archivedAt: null,
-          id: assetId,
-          projectId,
-        },
-        select: { url: true },
-      });
-      if (asset) {
-        const objectKey = objectKeyFrom(asset.url);
-        return objectKey
-          ? this.storage.createDownloadUrl(objectKey, REFERENCE_URL_TTL_SECONDS)
-          : safeRemoteUrl(asset.url);
-      }
-      return null;
+      const asset = await this.database.designAsset.findFirst({ where: { id: assetId, projectId, archivedAt: null }, select: { url: true } });
+      if (!asset) throw new BadRequestException("引用图片不存在或不可用");
+      return asset.url.startsWith("s3://") ? this.storage.createDownloadUrl(asset.url.slice(5), 24 * 60 * 60) : asset.url;
     }
-
-    return safeRemoteUrl(props.url);
+    const fabricId = text(props.fabricId);
+    if (fabricId && projectId) {
+      const permission = await this.access.require(userId, projectId, "read");
+      const fabric = await this.database.fabric.findFirst({ where: { id: fabricId, status: "active", OR: [{ scope: "PRESET" }, { ownerId: { in: [userId, permission.ownerId] } }] }, include: { mainFile: true } });
+      if (!fabric || fabric.mainFile.status !== FileStatus.READY) throw new BadRequestException("面料图片不存在或不可用");
+      return this.storage.createDownloadUrl(fabric.mainFile.objectKey, 24 * 60 * 60);
+    }
+    const trendId = text(props.trendItemId);
+    if (trendId) {
+      const trend = await this.database.trendItem.findFirst({ where: { id: trendId, status: "published" }, include: { coverFile: true } });
+      if (trend?.coverFile?.status === FileStatus.READY) return this.storage.createDownloadUrl(trend.coverFile.objectKey, 24 * 60 * 60);
+    }
+    return null;
   }
-
-  private joinPrompt(parts: readonly (string | null)[]): string {
-    return parts.filter((part): part is string => Boolean(part)).join(". ");
-  }
-}
-
-function sourceSnapshot(element: BoardElement): DesignSourceSnapshot {
-  const props = propsOf(element.record);
-  const identity = (name: string) => cleanText(props[name], 128);
-  const assetId = identity("assetId");
-  const fabricId = identity("fabricId");
-  const trendItemId = identity("trendItemId");
-  const text = cleanText(props.text, 4_000);
-  const tags = Array.isArray(props.fabricTags)
-    ? props.fabricTags
-        .flatMap((tag) => {
-          const value = cleanText(tag, 120);
-          return value ? [value] : [];
-        })
-        .slice(0, 30)
-    : [];
-  return {
-    elementId: element.id,
-    role: element.role,
-    title:
-      cleanText(props.title) ??
-      cleanText(props.label) ??
-      cleanText(element.roleLabel) ??
-      element.role,
-    ...(element.shapeId ? { shapeId: element.shapeId } : {}),
-    ...(element.fileAssetId ? { fileAssetId: element.fileAssetId } : {}),
-    ...(assetId ? { assetId } : {}),
-    ...(fabricId ? { fabricId } : {}),
-    ...(trendItemId ? { trendItemId } : {}),
-    ...(text ? { text } : {}),
-    ...(element.role === "palette"
-      ? { colors: compilePaletteEntries(props) }
-      : {}),
-    ...(tags.length ? { tags } : {}),
-  };
-}
-
-function safeModelFailureReason(error: unknown): string {
-  if (!(error instanceof Error)) return "unknown";
-  if (error.name === "AbortError" || error.name === "TimeoutError") {
-    return "timeout";
-  }
-  const httpStatus = /HTTP\s+(\d{3})/u.exec(error.message)?.[1];
-  if (httpStatus) return `upstream_http_${httpStatus}`;
-  if (error.name === "ZodError") return "invalid_schema";
-  if (error.message.includes("有效 JSON")) return "invalid_json";
-  if (error.message.includes("缺少文本内容")) return "missing_content";
-  return "unexpected_response";
-}
-
-function objectKeyFrom(value: string): string | null {
-  return value.startsWith("s3://") ? value.slice("s3://".length) : null;
 }

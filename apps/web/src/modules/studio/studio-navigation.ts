@@ -7,6 +7,7 @@ export const STUDIO_GROUPS = [
       { value: "styles", label: "款式档案" },
       { value: "experiments", label: "色料实验" },
       { value: "patterns", label: "印花工作台" },
+      { value: "planning", label: "系列工作台" },
       { value: "presentation", label: "商品展示" },
       { value: "runway", label: "服装秀" },
     ],
@@ -14,7 +15,6 @@ export const STUDIO_GROUPS = [
   {
     label: "交付",
     items: [
-      { value: "planning", label: "系列规划" },
       { value: "tech", label: "技术包" },
       { value: "samples", label: "样衣反馈" },
       { value: "team", label: "团队评审" },

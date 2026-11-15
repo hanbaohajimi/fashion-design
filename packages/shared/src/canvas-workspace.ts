@@ -35,9 +35,12 @@ const materialInput = {
     .optional(),
 };
 export const canvasCommandSchema = z.discriminatedUnion("type", [
+  z.object({ ...common, type: z.literal("import_reference_video"), fileId: id, placement: z.enum(["canvas", "reference"]).default("canvas"), position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional() }).strict(),
+  z.object({ ...common, type: z.literal("place_canvas_material"), nodeId: id, expectedUpdatedAt: z.string().optional(), placement: z.enum(["canvas", "reference"]).default("canvas"), position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional() }).strict(),
   z.object({
     ...common,
     type: z.literal("place_generated_media"),
+    placement: z.enum(["canvas", "reference"]).optional(),
     mediaId: id,
     position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
   }).strict(),
@@ -97,6 +100,7 @@ export const canvasCommandSchema = z.discriminatedUnion("type", [
     .object({
       ...common,
       type: z.literal("run_tool"),
+      creationRunId: z.uuid().optional(),
       toolKey: workflowToolKeySchema,
       title: z.string().trim().min(1).max(120),
       parameters: payload,

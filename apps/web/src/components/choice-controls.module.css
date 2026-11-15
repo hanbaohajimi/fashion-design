@@ -236,3 +236,17 @@
     outline-offset: -2px;
   }
 }
+.control[data-motion-variant="glide"] .trigger { border-color: transparent; background: transparent; font-size: 13px; gap: 6px; }
+.control[data-motion-variant="glide"] .trigger > span, .glidePopup .option > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.control[data-motion-variant="glide"] .trigger > svg { transition: transform 180ms var(--ease-out); }
+.control[data-motion-variant="glide"] .trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.popup.glidePopup { border-radius: 12px; max-height: min(360px, var(--popup-available-height, calc(100dvh - 16px))); }
+.list[data-glide] { position: relative; }
+.glidePill { position: absolute; inset: 0 0 auto; border-radius: 8px; background: var(--color-navigation-selected); pointer-events: none; transition: transform 220ms var(--ease-out); }
+.list[data-input-mode="keyboard"] .glidePill { transition: none; }
+.glidePopup .option { position: relative; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; font-size: 14px; z-index: 1; }
+.glidePopup .option:hover, .glidePopup .option[data-active], .glidePopup .option[aria-selected="true"] { background: transparent; }
+.glideCheck { flex: none; color: var(--color-action); visibility: hidden; }
+.glideCheck[data-selected="true"] { visibility: visible; }
+@media (max-width: 767px), (any-pointer: coarse) { .glidePopup .option { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .glidePill, .control[data-motion-variant="glide"] .trigger > svg { transition: none; } }

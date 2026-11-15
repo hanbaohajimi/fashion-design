@@ -1,0 +1,138 @@
+.feedback {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.feedback[data-presentation="block"] {
+  padding: 12px;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 10px;
+  background: var(--surface-3);
+}
+.feedback[data-compact] { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 8px; }
+.feedback[data-compact] .title { font-weight: 500; }
+.inlineMethod { font-size: 13px; color: var(--color-ink-secondary); }
+.heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+.title {
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.65;
+}
+.mark {
+  display: inline-flex;
+  flex: 0 0 16px;
+  margin-top: 3px;
+  color: var(--color-action);
+}
+.mark svg {
+  width: 16px;
+  height: 16px;
+}
+.feedback[data-state="failed"] .mark {
+  color: var(--color-error);
+}
+.feedback[data-state="partial_failed"] .mark,
+.feedback[data-state="unconfirmed"] .mark {
+  color: var(--color-warning-ink);
+}
+.feedback[data-state="canceled"] .mark {
+  color: var(--color-ink-secondary);
+}
+.scope {
+  margin-top: 5px;
+  padding-left: 23px;
+  min-width: 0;
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.destination {
+  display: inline-flex;
+  vertical-align: top;
+  max-width: 100%;
+  min-width: 0;
+}
+.destination > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.direction {
+  flex: none;
+  padding: 0 6px;
+  color: var(--color-ink-secondary);
+}
+.method {
+  display: inline-block;
+  max-width: 100%;
+  margin-inline-start: 8px;
+  vertical-align: top;
+}
+.scope > .method:first-child {
+  margin-inline-start: 0;
+}
+.stackedNames {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+.stackedNames + .method {
+  margin-inline-start: 0;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.resourceName {
+  display: inline-block;
+  vertical-align: top;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.resourceName > span {
+  display: inline;
+}
+.nameTrigger {
+  display: inline-block;
+  max-width: 100%;
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+.nameTrigger:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+}
+.fullNameTooltip {
+  max-width: min(var(--tooltip-max-width), calc(100vw - 32px));
+  color: var(--color-ink);
+  background: var(--surface-3);
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+.note,
+.reason {
+  margin: 5px 0 0;
+  padding-left: 23px;
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.reason {
+  color: var(--color-ink);
+}
+.actions {
+  margin-top: 7px;
+  padding-left: 23px;
+}

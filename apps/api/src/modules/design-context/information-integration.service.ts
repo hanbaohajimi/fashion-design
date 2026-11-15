@@ -1,18 +1,27 @@
 import type { PrismaClient } from "@fashion/db";
+import { withoutMaterialPurpose } from "@fashion/shared";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
 import { contextObject, contextText, relatedNodeIds, safeContextText } from "./design-context.projector";
 import { DESIGN_CONTEXT_DB, DesignContextService, type DesignContextSnapshot } from "./design-context.service";
 import { compareVersionTime, projectVersionEpisodes, semanticVersionChanges, versionPredecessorIds } from "./information-integration.projector";
+import { readCreationResource, type ResourceSnapshot } from "../workflow-runtime/canvas-creation-resources";
 
 export interface IntegrationOptions {
   conversationId?: string;
   referencedNodeIds?: readonly string[];
   focusNodeIds?: readonly string[];
+  focusCreationId?: string;
   built?: Awaited<ReturnType<DesignContextService["build"]>>;
   visual?: { index: unknown; coverage: unknown; images?: unknown; imageBindings?: unknown };
   tools?: readonly unknown[];
   currentStep?: unknown;
+}
+function creationDraftContext(kind: string, value: unknown) {
+  const draft = contextObject(value);
+  if (kind === "video") return { mode: "import", generationAvailable: false };
+  if (kind === "text") return { prompt: draft.prompt, inputs: draft.inputs, textMode: draft.textMode, textContent: draft.textContent };
+  return draft;
 }
 function bounded<T>(values: readonly T[], limit: number, compact?: (item: T) => T) {
   let used = 2, compacted = 0;
@@ -127,7 +136,30 @@ export class InformationIntegrationService {
     const executionFacts = executions.slice(0, 50).map((execution) => ({ id: execution.id, toolNodeId: execution.toolNodeId, nodeVersionId: execution.nodeVersionId, conversationId: execution.conversationId, status: execution.status, expectedAttempts: execution.expectedAttempts, completedAt: execution.completedAt?.toISOString() ?? null, createdAt: execution.createdAt.toISOString(), classification: ["failed", "partial_failed", "canceled", "moderation_failed"].includes(execution.status) ? "technical_outcome" : "execution_fact" }));
     const current = contextObject(options.currentStep);
     const plan = contextObject(current.plan ?? options.currentStep);
-    const context = { ...built.context, versionHistory: episodes.items, semanticChanges: changes.items, mutations: mutationFacts, proposalDecisions, executions: executionFacts, objectiveHistory };
+    const creationRecords = await this.database.canvasCreation.findMany({ where: { projectId }, orderBy: { updatedAt: "desc" }, take: 51, include: { runs: { orderBy: { createdAt: "desc" }, take: 5 } } });
+    if (options.focusCreationId && !creationRecords.some((record) => record.id === options.focusCreationId)) {
+      const focused = await this.database.canvasCreation.findFirst({ where: { id: options.focusCreationId, projectId }, include: { runs: { orderBy: { createdAt: "desc" }, take: 5 } } });
+      if (focused) creationRecords.unshift(focused);
+    }
+    creationRecords.sort((a, b) => Number(b.id === options.focusCreationId) - Number(a.id === options.focusCreationId));
+    const creationFacts = await Promise.all(creationRecords.slice(0, 50).map(async (creation) => ({
+      id: creation.id, title: creation.title, module: creation.module, revision: creation.revision, draft: creationDraftContext(creation.module, creation.draft),
+      currentResultNodeId: creation.currentResultNodeId, removed: Boolean(creation.removedAt), resource: contextObject(creation.resource),
+      runs: await Promise.all(creation.runs.map(async (run) => {
+        const snapshot = contextObject(run.command).resourceSnapshot as ResourceSnapshot | undefined;
+        const resource = snapshot ? await readCreationResource(this.database, projectId, snapshot) : null;
+        return { id: run.id, toolNodeId: run.toolNodeId, draft: creationDraftContext(creation.module, run.draftSnapshot),
+          status: run.state === "manual" ? "completed" : resource?.status ?? executions.find((execution) => execution.toolNodeId === run.toolNodeId)?.status ?? (run.error ? "failed" : "not_loaded"), error: resource?.error ?? run.error,
+          resultNodeIds: built.graph.nodes.filter((node) => contextObject(node.payload).canvasCreationRunId === run.id || built.graph.edges.some((edge) => edge.sourceNodeId === run.toolNodeId && edge.targetNodeId === node.id)).map((node) => node.id),
+          moduleRecord: snapshot ? { kind: snapshot.kind, id: snapshot.id, revision: snapshot.revision, title: snapshot.title, taskIds: snapshot.taskIds, assetIds: resource?.assets.map((asset) => asset.id) ?? [],
+            submittedRequirements: (Array.isArray(snapshot.content.items) ? snapshot.content.items.map((item) => contextText(contextObject(item).prompt, 4000)).filter(Boolean) : [contextText(snapshot.content.notes, 4000)].filter(Boolean)),
+            sourceAssetId: contextText(snapshot.content.sourceAssetId ?? snapshot.content.heroAssetId, 128) || null } : null,
+          createdAt: run.createdAt.toISOString() };
+      })),
+    })));
+    const creationBudget = bounded(creationFacts, 20_000);
+    const creations = creationBudget.items;
+    const context = { ...built.context, creations, creationCoverage: { included: creations.length, omittedForBudget: creationBudget.omitted, hasMore: creationRecords.length > 50, runsPerTarget: 5 }, versionHistory: episodes.items, semanticChanges: changes.items, mutations: mutationFacts, proposalDecisions, executions: executionFacts, objectiveHistory };
     const coverage = {
       ...built.context.coverage,
       versionHistory: {
@@ -152,12 +184,13 @@ export class InformationIntegrationService {
     const slots = {
       initialGoal: { initialObjective: context.initialObjective, currentObjective: context.currentObjective, objectiveOrigin: context.objectiveOrigin, objectiveHistory, requirements: context.requirements, ambiguities: context.ambiguities },
       currentStepGoal: { currentTask: context.currentTask, focusNodeIds: context.focusNodeIds, referencedNodeIds: context.referencedNodeIds, plan: Object.keys(plan).length ? plan : null, note: "会话任务和当前步骤目标不能替代项目设计目标" },
+      creativeCanvas: { creations, coverage: context.creationCoverage, note: "creations 是稳定目标，draft 是未执行要求，runs 是冻结的真实执行。连线不代表执行。重跑复用目标；继续创作引用明确结果并建立新目标。不可把历史用途标签或权重写入新请求。" },
       designTrajectory: { nodes: context.nodes, edges: context.edges, trajectory: context.trajectory, episodes: episodes.items, semanticChanges: changes.items, mutations: mutationFacts, attempts: context.attempts, executions: executionFacts, decisions: context.decisions, visualIndex: options.visual?.index ?? [], visualCoverage: coverage.visual, historyCoverage: coverage.versionHistory, historyNote: coverage.historyNote },
       dialogue: { messages: context.dialog, summary: context.dialogSummary, proposalDecisions, note: "最新提案状态和拒绝理由是事实；没有理由的跳过不能形成偏好" },
       implicitIntent: { preferences: context.preferences, scopedMemory: context.scopedMemory, note: "推断仅为有来源的分支偏好，不是项目硬约束；停用记录禁止自动恢复" },
       toolInformation: { tools: options.tools ?? [], selection: "complete_catalog", note: "当前四类工具全量提供；参数能力以合法工具契约为准" },
     };
-    return { graph: built.graph, context: { ...context, coverage }, slots, coverage };
+    return { graph: built.graph, context: withoutMaterialPurpose({ ...context, coverage }), slots: withoutMaterialPurpose(slots), coverage };
   }
 }
 

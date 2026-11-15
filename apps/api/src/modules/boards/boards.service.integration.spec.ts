@@ -51,7 +51,7 @@ describe("BoardsService persistence integration", () => {
           w: 260,
         },
         rotation: 0,
-        type: "fashion-note",
+        type: "fashion-text",
         typeName: "shape",
         x: 100,
         y: 120,
@@ -226,8 +226,8 @@ describe("BoardsService persistence integration", () => {
           x: 80,
           y: 120,
         },
-        role: "note",
-        shapeType: "fashion-note",
+        role: "reference",
+        shapeType: "fashion-text",
       });
       expect(imported.elements[1]).toMatchObject({
         record: {

@@ -16,6 +16,11 @@ function imageSource(shape: TLShape, editor: Editor): { source: string; title: s
     source = props.url;
     if (!source) throw new Error(`图片“${title}”尚未就绪，请等待完成或隐藏后再导出。`);
   } else if (shape.type === "fashion-fabric") source = props.thumbnailUrl;
+  else if (shape.type === "fashion-creation") {
+    if (props.module === "video") throw new Error(`视频“${title}”不能作为静态图片导出，请先隐藏视频或下载源文件。`);
+    source = props.imageUrl;
+    if (!source && !props.text) throw new Error(props.module === "text" ? `文本“${title}”尚未保存，请先保存文本再导出。` : `创作“${title}”尚未产生结果，请等待完成或隐藏后再导出。`);
+  }
   else if (shape.type === "fashion-workflow-node") source = props.imageUrl;
   else if (shape.type === "image") source = shape.props.assetId ? editor.getAsset(shape.props.assetId)?.props.src : undefined;
   return typeof source === "string" && source ? { source, title } : null;

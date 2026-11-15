@@ -1,6 +1,12 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ComponentProps } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
 import { createPortal } from "react-dom";
 import { AssistantComposer } from "../../../components/AssistantComposer";
 import {
@@ -8,12 +14,21 @@ import {
   placeFloatingPanel,
 } from "../../../components/interactions/floating-position";
 import { findDraftMention, insertDraftMention } from "./discussion-references";
+import {
+  AssistantReferencePreview,
+  referenceLabel,
+} from "./AssistantReferencePreview";
+import type { WorkflowNode } from "./workflow-api";
 import styles from "./assistant-mention-input.module.css";
 
 type ReferenceChoice = {
   readonly id: string;
   readonly title: string;
   readonly kind: string;
+  readonly type?: WorkflowNode["type"];
+  readonly payload?: WorkflowNode["payload"];
+  readonly createdAt?: string;
+  readonly status?: string;
 };
 type SkillChoice = {
   readonly id: string;
@@ -48,6 +63,33 @@ export function AssistantMentionInput({
   ...props
 }: Props) {
   const input = useRef<HTMLTextAreaElement | null>(null);
+  const materials = useMemo(
+    () =>
+      nodes
+        .filter(
+          (node) =>
+            node.kind === "asset" &&
+            node.type !== "legacy" &&
+            node.type !== "media" &&
+            node.status !== "proposed" &&
+            node.title.trim(),
+        )
+        .map((node) => ({
+          ...node,
+          kind: "asset" as const,
+          type: node.type ?? ("reference_text" as const),
+          payload: node.payload ?? {},
+        })),
+    [nodes],
+  );
+  const materialChoices = useMemo(
+    () =>
+      materials.map((node) => ({
+        node,
+        label: referenceLabel(node, materials),
+      })),
+    [materials],
+  );
   const popup = useRef<HTMLDivElement | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
   const pendingCaret = useRef<{ value: string; caret: number } | null>(null);
@@ -73,17 +115,41 @@ export function AssistantMentionInput({
 
   // 斜杠命令：光标前紧接 / 触发技能选择浮层
   const slashQuery = (() => {
-    if (!focused || composing || props.disabled || selection.value !== value || !skillChoices.length) return null;
+    if (
+      !focused ||
+      composing ||
+      props.disabled ||
+      selection.value !== value ||
+      !skillChoices.length
+    )
+      return null;
     const before = value.slice(0, selection.start);
     const m = /(^|[\s\n])\/([\w一-龥]*)$/.exec(before);
-    return m ? { query: (m[2] ?? "").toLowerCase(), slashPos: before.length - 1 - (m[2]?.length ?? 0) } : null;
+    return m
+      ? {
+          query: (m[2] ?? "").toLowerCase(),
+          slashPos: before.length - 1 - (m[2]?.length ?? 0),
+        }
+      : null;
   })();
   const slashOpen = slashQuery !== null && dismissed !== key;
   const [slashChosen, setSlashChosen] = useState({ key: "", id: "" });
   const slashChoices = slashQuery
-    ? skillChoices.filter((s) => !slashQuery.query || s.name.toLowerCase().includes(slashQuery.query)).slice(0, 6)
+    ? skillChoices
+        .filter(
+          (s) =>
+            !slashQuery.query ||
+            s.name.toLowerCase().includes(slashQuery.query),
+        )
+        .slice(0, 6)
     : [];
-  const slashActiveIndex = slashChosen.key === key ? Math.max(0, slashChoices.findIndex((s) => s.id === slashChosen.id)) : 0;
+  const slashActiveIndex =
+    slashChosen.key === key
+      ? Math.max(
+          0,
+          slashChoices.findIndex((s) => s.id === slashChosen.id),
+        )
+      : 0;
   const activeSkill = slashChoices[slashActiveIndex];
 
   function chooseSkill(skill: SkillChoice) {
@@ -99,16 +165,16 @@ export function AssistantMentionInput({
     });
   }
   const choices = mention
-    ? nodes
+    ? materialChoices
         .filter(
-          (node) =>
-            node.title &&
+          ({ node, label }) =>
             !referencedIds.includes(node.id) &&
-            node.title
+            `${label} ${node.title}`
               .toLocaleLowerCase()
               .includes(mention.query.toLocaleLowerCase()),
         )
         .slice(0, 6)
+        .map((choice) => choice.node)
     : [];
   const activeIndex =
     chosen.key === key
@@ -164,7 +230,7 @@ export function AssistantMentionInput({
       const above = Math.max(0, bounds.top - edgeTop - 8);
       const below = Math.max(0, bottom - bounds.bottom - 8);
       const isAbove = above >= Math.min(200, below);
-      panel.style.width = `${Math.max(0, Math.min(bounds.width, width))}px`;
+      panel.style.width = `${Math.max(0, Math.min(320, Math.max(220, bounds.width), width))}px`;
       panel.style.maxHeight = `${isAbove ? above : below}px`;
       const size = panel.getBoundingClientRect();
       placeFloatingPanel(
@@ -258,7 +324,11 @@ export function AssistantMentionInput({
               }}
             >
               <p className={styles.hint}>↑ ↓ 选择，Enter 载入技能，Esc 关闭</p>
-              <div role="listbox" aria-label="常用技能" className={styles.choices}>
+              <div
+                role="listbox"
+                aria-label="常用技能"
+                className={styles.choices}
+              >
                 {slashChoices.map((skill, index) => (
                   <button
                     key={skill.id}
@@ -266,8 +336,13 @@ export function AssistantMentionInput({
                     aria-selected={index === slashActiveIndex}
                     type="button"
                     tabIndex={-1}
-                    onPointerDown={(e) => { if (e.pointerType !== "touch") e.preventDefault(); }}
-                    onPointerMove={(e) => { if (e.pointerType === "mouse") setSlashChosen({ key, id: skill.id }); }}
+                    onPointerDown={(e) => {
+                      if (e.pointerType !== "touch") e.preventDefault();
+                    }}
+                    onPointerMove={(e) => {
+                      if (e.pointerType === "mouse")
+                        setSlashChosen({ key, id: skill.id });
+                    }}
                     onClick={() => chooseSkill(skill)}
                   >
                     <span>/{skill.name}</span>
@@ -292,7 +367,10 @@ export function AssistantMentionInput({
                 input.current?.focus({ preventScroll: true });
               }}
             >
-              <p id={hintId} className={styles.hint}>
+              <p
+                id={hintId}
+                className={choices.length ? styles.keyboardHint : styles.hint}
+              >
                 {choices.length
                   ? "↑ ↓ 选择，Enter 或 Tab 引用，Esc 关闭"
                   : "没有匹配的未引用对象，换个名称或使用“添加引用”。"}
@@ -307,7 +385,7 @@ export function AssistantMentionInput({
                 id={listId}
                 role="listbox"
                 aria-label="引用画布节点"
-                className={styles.choices}
+                className={`${styles.choices} ${styles.referenceChoices}`}
               >
                 {choices.map((node, index) => (
                   <button
@@ -317,7 +395,7 @@ export function AssistantMentionInput({
                     aria-selected={index === activeIndex}
                     type="button"
                     tabIndex={-1}
-                    title={node.title}
+                    title={referenceLabel(node, materials)}
                     onPointerDown={(event) => {
                       if (event.pointerType !== "touch") event.preventDefault();
                     }}
@@ -327,14 +405,8 @@ export function AssistantMentionInput({
                     }}
                     onClick={() => choose(node)}
                   >
-                    <span>@{node.title}</span>{" "}
-                    <small>
-                      {node.kind === "asset" ? "素材" : "工具"}
-                      {nodes.filter((item) => item.title === node.title)
-                        .length > 1
-                        ? ` ${node.id}`
-                        : ""}
-                    </small>
+                    <AssistantReferencePreview node={node} compact />
+                    <span>{referenceLabel(node, materials)}</span>
                   </button>
                 ))}
               </div>
@@ -387,7 +459,13 @@ export function AssistantMentionInput({
         }}
         onKeyDown={(event) => {
           // 斜杠技能命令键盘导航（优先于 @ mention）
-          if (slashOpen && slashChoices.length > 0 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          if (
+            slashOpen &&
+            slashChoices.length > 0 &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
             if (event.key === "Escape") {
               event.preventDefault();
               event.stopPropagation();
@@ -396,12 +474,21 @@ export function AssistantMentionInput({
             }
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault();
-              const index = (slashActiveIndex + (event.key === "ArrowDown" ? 1 : -1) + slashChoices.length) % slashChoices.length;
+              const index =
+                (slashActiveIndex +
+                  (event.key === "ArrowDown" ? 1 : -1) +
+                  slashChoices.length) %
+                slashChoices.length;
               const skill = slashChoices[index];
               if (skill) setSlashChosen({ key, id: skill.id });
               return;
             }
-            if (!event.shiftKey && event.key === "Enter" && activeSkill && !event.repeat) {
+            if (
+              !event.shiftKey &&
+              event.key === "Enter" &&
+              activeSkill &&
+              !event.repeat
+            ) {
               event.preventDefault();
               chooseSkill(activeSkill);
               return;

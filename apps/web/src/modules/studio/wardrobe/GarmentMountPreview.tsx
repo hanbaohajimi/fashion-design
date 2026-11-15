@@ -65,7 +65,7 @@ export function GarmentMountPreview({ projectId, item, view = "front", backgroun
   return (
     <details className={styles.preview} open>
       <summary>挂架预览</summary>
-      <p className={styles.hint}>使用当前候选查看挂点和挂具的衔接。调整后请再核对；这里不会生成或确认入架。</p>
+      <p className={styles.hint}>使用当前图片查看挂点和挂具的衔接。调整后请再核对；这里不会生成或确认入架。</p>
       <div ref={stage} className={styles.stage} data-preview-background={background} style={previewBackgroundStyle(background)} role="img" aria-label={`挂架预览：${item.name || "待确认单品"}`}>
         <div ref={scene} className={styles.scene} onLoadCapture={() => schedule.current?.()} onErrorCapture={() => schedule.current?.()}>
           <GarmentDisplay key={item.assetId} projectId={projectId} item={imageBounds ? { ...item, imageBounds } : item} view={view} large />

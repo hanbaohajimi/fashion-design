@@ -25,6 +25,12 @@ type FileRecord = Awaited<ReturnType<FilesDatabase["fileAsset"]["findUnique"]>>;
 
 const IMAGE_SIGNATURE_BYTES = 24;
 
+export function detectVideoMime(bytes: Uint8Array): string | null {
+  if (bytes.length >= 16 && ascii(bytes, 4, 8) === "ftyp" && ["isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "dash"].includes(ascii(bytes, 8, 12))) return "video/mp4";
+  if (bytes.length >= 16 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 && ascii(bytes, 4, bytes.length).includes("webm")) return "video/webm";
+  return null;
+}
+
 function checksumSha256Base64(sha256: string): string {
   return Buffer.from(sha256, "hex").toString("base64");
 }
@@ -272,9 +278,9 @@ export class FilesService {
     try {
       const prefix = await this.storage.readPrefix(
         file.objectKey,
-        IMAGE_SIGNATURE_BYTES,
+        file.mimeType.startsWith("video/") ? 4096 : IMAGE_SIGNATURE_BYTES,
       );
-      detectedMime = detectImageMime(prefix);
+      detectedMime = file.mimeType.startsWith("video/") ? detectVideoMime(prefix) : detectImageMime(prefix);
     } catch (error) {
       throw new ServiceUnavailableException(
         {
@@ -293,7 +299,7 @@ export class FilesService {
           updatedAt: file.updatedAt,
         },
         data: {
-          errorMessage: "文件内容不是有效图片或与声明类型不一致",
+          errorMessage: file.mimeType.startsWith("video/") ? "文件内容不是有效视频或与声明类型不一致" : "文件内容不是有效图片或与声明类型不一致",
           status: FileStatus.FAILED,
         },
       });
@@ -312,8 +318,8 @@ export class FilesService {
       }
       // Reclaim under the cleanup row lock so an immediate retry cannot lose its new object.
       throw new BadRequestException({
-        code: "INVALID_IMAGE_CONTENT",
-        message: "文件内容不是有效图片或与声明类型不一致",
+        code: file.mimeType.startsWith("video/") ? "INVALID_VIDEO_CONTENT" : "INVALID_IMAGE_CONTENT",
+        message: file.mimeType.startsWith("video/") ? "文件内容不是有效视频或与声明类型不一致" : "文件内容不是有效图片或与声明类型不一致",
       });
     }
 
@@ -328,7 +334,7 @@ export class FilesService {
       data: {
         completedAt,
         errorMessage: null,
-        status: FileStatus.PROCESSING,
+        status: file.mimeType.startsWith("video/") ? FileStatus.READY : FileStatus.PROCESSING,
       },
     });
     if (claim.count === 0) {
@@ -345,6 +351,7 @@ export class FilesService {
       });
     }
 
+    if (file.mimeType.startsWith("video/")) return this.toResponse(await this.assertFileOwnership(userId, fileId));
     const processing = {
       ...file,
       completedAt,
@@ -360,6 +367,12 @@ export class FilesService {
 
   async get(userId: string, fileId: string) {
     return this.toResponse(await requireProjectFile(this.database, this.access, userId, fileId));
+  }
+
+  async contentUrl(userId: string, fileId: string) {
+    const file = await requireProjectFile(this.database, this.access, userId, fileId);
+    if (file.status !== FileStatus.READY) throw new BadRequestException("文件尚未就绪");
+    return this.storage.createDownloadUrl(file.objectKey, 300);
   }
 
   async thumbnailUrl(

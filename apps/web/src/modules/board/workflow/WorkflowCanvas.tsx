@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { discardWorkspaceDrafts } from "../../../components/drafts/draft-repository";
 import { ProjectTaskCenter } from "../../tasks/ProjectTaskCenter";
 import { ProjectTaskProvider } from "../../tasks/project-task-source";
@@ -13,13 +14,13 @@ import { useWorkspaceFocusMode } from "../../../components/WorkspaceChrome";
 import { ZhiyaAssistant, ZHIYA_ENABLED } from "../../assistant-character/ZhiyaAssistant";
 import { IDLE_CHAT_ACTIVITY, type ChatActivity } from "../../assistant-character/project-activity";
 import { useWorkspaceLayout } from "./use-workspace-layout";
-import { WorkflowProjectPanels } from "./WorkflowProjectPanels";
 import { GeneratedFilesPanel } from "./GeneratedFilesPanel";
 import type { ImageToolEntryRequest } from "./image-tool-entry";
 import { InfiniteWorkspace, type InfiniteWorkspaceHandle } from "./InfiniteWorkspace";
 import { initializeCanvas, runCanvasCommand } from "./canvas-api";
 import { useCanvasCommand } from "./use-canvas-command";
 import { DesignWorkbench } from "./DesignWorkbench";
+import { CanvasAction } from "./CanvasAction";
 import { canvasMaterialTypeSchema, workflowToolKeySchema } from "@fashion/shared";
 import { markResultArrival } from "./result-arrivals";
 import { ImageResultArrivals } from "./image-result-arrivals";
@@ -38,11 +39,12 @@ import {
 } from "./workspace-drafts";
 import detailStyles from "./workflow-detail-workspace.module.css";
 
-import { AppHeader } from "../../../components/AppHeader";
+import { CanvasProjectMenu, RenameProjectDialog } from "./CanvasProjectMenu";
+import { CanvasShortcutEntry } from "./CanvasShortcutEntry";
+import { canvasProjectFunctions, type CanvasProjectPanel } from "./canvas-project-functions";
 import {
   Button,
   Dialog,
-  Menu,
   SegmentedControl,
   Tooltip,
   TooltipGroup,
@@ -108,7 +110,6 @@ import {
   type WorkflowToolType,
   WorkflowApiError,
   fetchWorkflow,
-  inferWorkflowNodeRole,
   patchWorkflow,
 } from "./workflow-api";
 import {
@@ -239,11 +240,12 @@ function readStarterReferenceNodeIds(): string[] {
 }
 
 const toolInputHints = {
+  generate_text: "要求与参考",
   analyze_brief: "需求与参考",
   generate_design: "约束与参考",
-  evaluate_design: "候选与约束",
-  edit_design: "候选",
-  transform_image: "候选图片",
+  evaluate_design: "图片与约束",
+  edit_design: "图片",
+  transform_image: "设计图片",
 };
 const TOOL_OPTIONS = getWorkflowToolCatalog().map((tool) => ({
   type: tool.key,
@@ -252,7 +254,7 @@ const TOOL_OPTIONS = getWorkflowToolCatalog().map((tool) => ({
 }));
 
 const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
-  candidate: "候选方案",
+  candidate: "设计图",
   constraint: "设计约束",
   goal: "设计目标",
   reference: "参考素材",
@@ -719,7 +721,12 @@ export default function WorkflowCanvas({ projectId }: WorkflowCanvasProps) {
   return <ProjectTaskProvider key={`${session?.user.id ?? "guest"}:${projectId}`} projectId={projectId}><WorkflowCanvasSession projectId={projectId} /></ProjectTaskProvider>;
 }
 
+const CanvasProjectWorkspace = dynamic(() => import("./CanvasProjectWorkspace"), { ssr: false });
+
 function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
+  const [functionsReady, setFunctionsReady] = useState(false);
+  const [projectWorkspace, setProjectWorkspace] = useState<{ active: CanvasProjectPanel | null; visited: CanvasProjectPanel[] }>({ active: null, visited: [] });
+  const [renamingProject, setRenamingProject] = useState(false);
   const { session } = useAuth();
   const { startGuide } = useFeatureGuide();
   const [intakeBrief] = useState<string | null>(() => readProjectIntakeBrief(projectId));
@@ -762,29 +769,26 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const intakeBriefFlight = useRef(false);
   const referenceConversation = useRef(activeConversationId);
   const canvasHandle = useRef<InfiniteWorkspaceHandle | null>(null);
+  const openShortcut = useCallback(async (entryId: string, requestId: string) => {
+    const handle = canvasHandle.current;
+    if (!handle) throw new Error("画布尚未就绪，请稍后重试。");
+    await handle.openFunction(entryId, requestId);
+    if (canvasHandle.current?.editor !== handle.editor) throw new Error("工作区已切换，请回到原项目继续。");
+  }, []);
   const changeAssistantConversation = useCallback((id: string | null) => {
     referenceConversation.current = id;
     setActiveConversationId(id);
   }, []);
   const [sourceEditor, setSourceEditor] = useState<Editor | null>(null);
+  const sourceReadOnly = useValue("canvas-image-tool-permission", () => sourceEditor?.getIsReadonly() ?? true, [sourceEditor]);
   const [canvasMode, setCanvasMode] = useState<"canvas" | "node">("canvas");
+  const [canvasCanEdit, setCanvasCanEdit] = useState(false);
   const [unavailableCharacter, setUnavailableCharacter] = useState<string | null>(null);
   const [manualTool, setManualTool] = useState<{ node: WorkflowNode; inputs: string[]; instances: Readonly<Record<string, readonly string[]>> } | null>(null);
   const manualCommand = useCanvasCommand(projectId, "manual-tool-command");
   const [retryingManual, setRetryingManual] = useState(false);
   const canvasSelection = useRef<string[]>([]);
-  const [canvasView, setCanvasView] = useState<"workbench" | "workflow">(() => {
-    try {
-      if (
-        typeof window !== "undefined" &&
-        sessionStorage.getItem("fashion:canvas-view") === "workflow"
-      )
-        return "workflow";
-    } catch {
-      /* Optional view preference. */
-    }
-    return "workbench";
-  });
+  const [canvasView, setCanvasView] = useState<"workbench" | "workflow">("workbench");
   const pendingExport = useRef(false);
   const executionConversation = useRef<Promise<string> | null>(null);
   const graphRef = useRef<WorkflowGraph | null>(null);
@@ -792,6 +796,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const editorRef = useRef<Editor | null>(null);
   const [projectName, setProjectName] = useState("设计项目");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedCreationId, setFocusedCreationId] = useState<string | null>(null);
   const [arrivals, setArrivals] = useState<string[]>([]);
   const [menuTab, setMenuTab] = useState<MenuTab | null>(null);
   const [draftType, setDraftType] = useState<WorkflowAssetType | null>(null);
@@ -835,7 +840,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     const frame = requestAnimationFrame(() => setCollectionId(requested));
     return () => cancelAnimationFrame(frame);
   }, [projectId]);
-  const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
   const [detailSessions, setDetailSessions] = useState<string[]>([]);
@@ -858,6 +862,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const [inspectedId, setInspectedId] = useState<string | null>(null);
   const inspectedRef = useRef<string | null>(null);
   const detailReturnFocus = useRef<HTMLElement | null>(null);
+  const detailReturnFocusSelector = useRef<string | null>(null);
   useLayoutEffect(() => {
     inspectedRef.current = inspectedId;
   }, [inspectedId]);
@@ -867,12 +872,22 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     setSidebarOpen,
     mobileView,
     setMobileView,
-  } = useWorkspaceLayout({ projectId, ...(session ? { accountId: session.user.id } : {}), defaultOpen: false });
+    canDock,
+    setPresentation,
+  } = useWorkspaceLayout({ projectId, ...(session ? { accountId: session.user.id } : {}), defaultOpen: false, assistantWindow: true });
   const openAssistant = useCallback((focusInput = assistantPointer.current !== "touch") => {
     setAssistantFocusInput(focusInput);
     setSidebarOpen(true);
     setMobileView("assistant");
     if (focusInput) setAssistantFocusRequest(value => value + 1);
+  }, [setSidebarOpen, setMobileView]);
+  const closeAssistant = useCallback(() => {
+    setSidebarOpen(false);
+    setMobileView("canvas");
+    requestAnimationFrame(() => {
+      const trigger = document.querySelector<HTMLElement>("[data-zhiya]:not([hidden]) [role=button]") ?? document.querySelector<HTMLElement>("[data-canvas-assistant-entry]");
+      trigger?.focus({ preventScroll: true });
+    });
   }, [setSidebarOpen, setMobileView]);
   const prepareAssistantFeedback = useCallback(async (request: {
     assetId: string;
@@ -905,7 +920,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   useEffect(() => {
     let active = true;
     void initializeCanvas(projectId)
-      .then((document) => { if (active) { setCanvasMode(document.mode); setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: null }); } })
+      .then((document) => { if (active) { setCanvasMode("canvas"); setCanvasCanEdit(document.canEdit); setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: null }); } })
       .catch((cause: unknown) => { if (active) setCanvasInitResult({ projectId, attempt: canvasInitAttempt, error: cause instanceof Error ? cause.message : "白板初始化失败，原数据保持不变" }); });
     return () => { active = false; };
   }, [projectId, canvasInitAttempt]);
@@ -916,6 +931,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   useEffect(() => () => { exportFlight.current?.abort(); }, [projectId]);
   const [mobileListOpen, setMobileListOpen] = useState(false);
   const [canvasPanelOpen, setCanvasPanelOpen] = useState(false);
+  const [creationPanelOpen, setCreationPanelOpen] = useState(false);
   const [objectHistoryOpen, setObjectHistoryOpen] = useState(false);
   const [generatedFilesOpen, setGeneratedFilesOpen] = useState(false);
   const changeCanvasView = (view: "workbench" | "workflow") => {
@@ -991,21 +1007,21 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     }
   };
   const hasUnsavedDetails = useCallback(() => draftStore.hasDirty() || Boolean(canvasHandle.current?.hasUnsaved()), [draftStore]);
-  const closeDetails = useCallback(() => {
-    setDetailOpen(false);
-    requestAnimationFrame(() => {
-      const target = Array.from(
-        document.querySelectorAll<HTMLElement>("[data-node-id]"),
-      ).find(
-        (element) =>
-          element.dataset.nodeId === inspectedId &&
-          element.getAttribute("role") === "group",
-      );
-      const focus = target ?? detailReturnFocus.current;
-      if (focus?.isConnected && focus.checkVisibility())
-        focus.focus({ preventScroll: true });
-    });
+  const restoreDetailsFocus = useCallback(() => {
+    const active = document.activeElement;
+    if (document.hidden || active instanceof HTMLElement && active !== document.body && !active.closest('[aria-label="节点详情工作区"]')) return;
+    const target = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-node-id]"),
+    ).find(
+      (element) =>
+        element.dataset.nodeId === inspectedId &&
+        element.getAttribute("role") === "group",
+    );
+    const focus = (detailReturnFocusSelector.current ? document.querySelector<HTMLElement>(detailReturnFocusSelector.current) : null) ?? target ?? detailReturnFocus.current;
+    if (focus?.isConnected && focus.checkVisibility())
+      focus.focus({ preventScroll: true });
   }, [inspectedId]);
+  const closeDetails = useCallback(() => setDetailOpen(false), []);
   const selectNode = useCallback((id: string | null) => {
     setSelectedId(id);
   }, []);
@@ -1025,6 +1041,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           ? document.activeElement
           : null);
       detailReturnFocus.current = trigger;
+      detailReturnFocusSelector.current = null;
       const bounds = element?.getBoundingClientRect();
       const keyboard =
         document.activeElement?.matches(":focus-visible") ?? false;
@@ -1246,10 +1263,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       graph?.nodes.some(
         (node) =>
           node.status === "running" ||
-          node.status === "pending" ||
-          ((node.type === "reference_image" || node.type === "sketch") &&
-            node.payload.roleInferenceState === "pending" &&
-            node.payload.roleSource !== "manual"),
+          node.status === "pending",
       ),
     ),
     3000,
@@ -1699,7 +1713,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       }}
       onOpenAsset={() =>
         document
-          .querySelector<HTMLElement>('[aria-label="候选资产操作"] button')
+          .querySelector<HTMLElement>('[aria-label="图片资产操作"] button')
           ?.focus()
       }
       onDelete={async (nodeId) => {
@@ -1713,28 +1727,12 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
       onSavePayload={async (nodeId, payload) => {
         await mutate([{ type: "update_node", nodeId, payload }]);
       }}
-      onInferRole={async (nodeId) => {
-        try {
-          commitGraph(await inferWorkflowNodeRole(projectId, nodeId));
-          setNotice("参考图角色已更新");
-        } catch (cause) {
-          setError(
-            cause instanceof Error ? cause.message : "参考图角色识别失败",
-          );
-        }
-      }}
       setError={setError}
     />
   );
 
   return (
     <>
-      <AppHeader
-        current="design"
-        projectId={projectId}
-        projectName={projectName}
-        hideProjectReturn
-      />
       <main
         className={styles.shell}
         data-guide-page="workspace"
@@ -1754,13 +1752,6 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             event.stopPropagation();
         }}
       >
-        <WorkflowProjectPanels
-          projectId={projectId}
-          onCollection={setCollectionId}
-          collectionsOpen={collectionsOpen}
-          onCollectionsOpenChange={setCollectionsOpen}
-          hideTrigger
-        />
         <WorkspaceSplit
           className={styles.workspace}
           docked={layoutMode === "docked"}
@@ -1769,6 +1760,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           manageOpenPreference={false}
           focusInputOnOpen={assistantFocusInput}
           projectId={projectId}
+          assistantWindow={{ mode: layoutMode === "mobile" ? "mobile" : layoutMode === "docked" ? "docked" : "floating", canDock, onPresentationChange: setPresentation, onClose: closeAssistant }}
           data-mobile-view={mobileView}
           data-sidebar-open={sidebarOpen ? "true" : "false"}
         >
@@ -1782,27 +1774,21 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             inert={layoutMode === "mobile" && sidebarOpen ? true : undefined}
           >
             <div className={styles.canvasChrome} data-canvas-chrome hidden={Boolean(focusedEditor) || layoutMode === "mobile" && sidebarOpen}>
-              <Menu label="项目菜单" className={styles.canvasProjectMenu} trigger={<><span title={projectName}>{projectName}</span><span aria-hidden="true">⌄</span></>}>
-                <button type="button" onClick={() => setCollectionsOpen(true)}>系列</button>
-                <button type="button" onClick={() => setGeneratedFilesOpen(true)}>生成文件</button>
-                <button data-export disabled={exporting} type="button" onClick={() => void exportCanvas()}>{exporting ? "导出中…" : "导出画布 PNG"}</button>
-                {graph.legacyAvailable ? <button type="button" onClick={() => setHistoryOpen(true)}>历史白板</button> : null}
-                <button type="button" onClick={() => setHelpOpen(true)}>画布操作说明</button>
-              </Menu>
-              <ProjectTaskCenter projectId={projectId} />
+              <CanvasProjectMenu projectId={projectId} projectName={projectName} canEdit={canvasCanEdit} />
             </div>
+            {session ? <CanvasShortcutEntry key={`${session.user.id}:${projectId}`} accountId={session.user.id} projectId={projectId}
+              canvasReady={Boolean(sourceEditor) && !canvasInitializing && !canvasInitError} functionsReady={functionsReady} onOpen={openShortcut} /> : null}
             {sync.error || canvasMode === "node" && layoutSave.state === "error" ? <div className={styles.canvasSyncNotice} role="status">
               {sync.error ? <><span>画布同步异常：{sync.error}</span><Button onClick={sync.retry}>重试同步</Button></> : <><span>画布未保存</span><Button onClick={() => void layoutSave.queue.flush().catch(() => undefined)}>重试保存</Button></>}
             </div> : canvasMode === "node" ? <CanvasSaveStatus className={styles.canvasSyncNotice} label={layoutSave.state === "saving" ? "保存中…" : layoutSave.state === "dirty" ? "等待保存" : "已保存"} /> : null}
-            {canvasView === "workbench" && !sidebarOpen && !focusedEditor && (canvasMode !== "canvas" || !ZHIYA_ENABLED || unavailableCharacter === projectId || canvasInitError) ? <button
-              className={styles.canvasAssistantEntry}
+            {canvasView === "workbench" && !sidebarOpen && !focusedEditor && (canvasMode !== "canvas" || !ZHIYA_ENABLED || unavailableCharacter === projectId || canvasInitError) ? <div className={styles.canvasAssistantEntry}><CanvasAction
               data-canvas-assistant-entry
               data-guide="workspace-assistant"
               data-guide-variant="collapsed"
-              aria-label="展开设计助手"
+              label="展开设计助手" icon="comment"
               type="button"
               onClick={event => openAssistant(event.detail === 0 || assistantPointer.current !== "touch")}
-            >设计助手</button> : null}
+            /></div> : null}
             {!focusedEditor && !(layoutMode === "mobile" && sidebarOpen) ? <CanvasSourceRecovery key={projectId} projectId={projectId} graph={graph}
               editor={sourceEditor}
               canPlace={canvasMode === "canvas" && canvasView === "workbench" && !canvasInitializing && !canvasInitError && Boolean(sourceEditor)}
@@ -1817,7 +1803,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               chatOpen={sidebarOpen}
               mobile={layoutMode === "mobile"}
               chatActivity={chatActivity}
-              suspended={canvasInitializing || Boolean(canvasInitError) || detailOpen || Boolean(menuTab) || mobileListOpen || generatedFilesOpen || objectHistoryOpen || collectionsOpen || historyOpen || helpOpen || sketchOpen || layoutMode === "mobile" && canvasPanelOpen}
+              suspended={canvasInitializing || Boolean(canvasInitError) || detailOpen || Boolean(menuTab) || mobileListOpen || generatedFilesOpen || objectHistoryOpen || Boolean(collectionId) || historyOpen || helpOpen || sketchOpen || creationPanelOpen || Boolean(projectWorkspace.active) || layoutMode === "mobile" && canvasPanelOpen}
               onOpenChat={openAssistant}
               onUnavailable={() => setUnavailableCharacter(projectId)}
             /> : null}
@@ -1827,7 +1813,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
               data-detail-open={detailOpen && Boolean(inspected)}
               data-initializing={canvasInitializing || Boolean(canvasInitError)}
             >
-              <div className={styles.viewSwitch} data-guide="workspace-views">
+              {canvasMode === "node" ? <div className={styles.viewSwitch} data-guide="workspace-views">
                 <SegmentedControl
                   label="画布呈现"
                   value={canvasView}
@@ -1837,7 +1823,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   ]}
                   onChange={changeCanvasView}
                 />
-              </div>
+              </div> : null}
               <div className={styles.canvasHeading}>
                 <div>
                   {/* 画布不需要一个标签告诉用户"这是画布"。标题保留给辅助技术。 */}
@@ -1939,30 +1925,22 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   disabled={canvasMode === "canvas" && canvasView === "workflow"}
                   editor={() => editorRef.current}
                   onAdd={async (type, title, payload, point) => {
-                    const id = await addNode(
+                    await addNode(
                       "asset",
                       type,
                       title,
                       payload,
                       point,
                     );
-                    if (type === "reference_image") {
-                      try {
-                        commitGraph(await inferWorkflowNodeRole(projectId, id));
-                      } catch {
-                        setError(
-                          "图片已加入工作流；角色识别暂不可用，可在节点详情重试或手动选择。",
-                        );
-                      }
-                    }
                   }}
                 >
                     {canvasInitializing || canvasInitError ? null : canvasMode === "canvas" ? <InfiniteWorkspace
                       key={projectId}
                       projectId={projectId}
                       graph={graph}
+                      onEnsureConversation={ensureConversation}
                       active={canvasView === "workbench"}
-                      mediaActive={!detailOpen && !generatedFilesOpen && !objectHistoryOpen && !collectionsOpen && !historyOpen && !helpOpen && !sketchOpen && !menuTab && !mobileListOpen && !(layoutMode === "mobile" && canvasPanelOpen)}
+                      mediaActive={!detailOpen && !generatedFilesOpen && !objectHistoryOpen && !collectionId && !historyOpen && !helpOpen && !sketchOpen && !menuTab && !mobileListOpen && !projectWorkspace.active && !(layoutMode === "mobile" && canvasPanelOpen)}
                       onEditor={(editor) => { editorRef.current = editor; }}
                       onReady={(handle) => { canvasHandle.current = handle; setSourceEditor(handle?.editor ?? null); }}
                       onGraph={commitGraph}
@@ -1970,34 +1948,57 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       onOpen={openDetails}
                       onAddMaterial={() => setMenuTab("assets")}
                       toolActions={{
+                        onFunctionsReady: setFunctionsReady,
+                        projectFunctions: canvasProjectFunctions.filter(item => item.id !== "canvas-legacy" || graph.legacyAvailable).map(item => ({ ...item, disabled: item.id === "project-rename" ? !canvasCanEdit : item.id === "canvas-export" ? exporting : false })),
+                        onProjectFunction: async (id) => {
+                          const item = canvasProjectFunctions.find(item => item.id === id);
+                          if (item?.panel) {
+                            const tab = item.panel;
+                            setProjectWorkspace(current => ({ active: tab, visited: current.visited.includes(tab) ? current.visited : [...current.visited, tab] }));
+                          } else if (id === "project-rename" && canvasCanEdit) setRenamingProject(true);
+                          else if (id === "project-files") setGeneratedFilesOpen(true);
+                          else if (id === "project-tasks") window.dispatchEvent(new CustomEvent("fashion-project:tasks", { detail: { projectId } }));
+                          else if (id === "canvas-export" && !exporting) await exportCanvas();
+                          else if (id === "canvas-legacy" && graph.legacyAvailable) setHistoryOpen(true);
+                          else if (id === "canvas-help") setHelpOpen(true);
+                        },
                         onCanvasPanelOpenChange: setCanvasPanelOpen,
+                        onCreationPanelOpenChange: setCreationPanelOpen,
                         onObjectHistoryOpenChange: setObjectHistoryOpen,
                         onOpenAssetHistory: (nodeId, assetId) => {
-                          const target = graphRef.current?.nodes.find(node => node.id === nodeId && node.type === "candidate" && node.payload.assetId === assetId && node.status !== "proposed");
+                          const target = graphRef.current?.nodes.find(node => node.id === nodeId && ["candidate", "reference_image", "sketch"].includes(node.type) && node.payload.assetId === assetId && node.status !== "proposed");
                           if (!target) return false;
                           openDetails(nodeId);
                           setAssetHistoryRequest({ nodeId, assetId, action: "history", nonce: ++assetHistorySequence.current });
                           return true;
                         },
-                        imageToolNodeIds: graph.nodes.filter(node => node.type === "candidate" && node.status !== "proposed" && (node.canEditPayload === true || node.canForkPayload !== false)).map(node => node.id),
+                        imageToolNodeIds: graph.nodes.filter(node => ["candidate", "reference_image", "sketch"].includes(node.type) && node.status !== "proposed").map(node => node.id),
                         onOpenImageTool: (nodeId, assetId, action) => {
-                          const target = graphRef.current?.nodes.find(node => node.id === nodeId && node.type === "candidate" && node.payload.assetId === assetId && node.status !== "proposed");
-                          if (!target || sourceEditor?.getIsReadonly() || target.canForkPayload === false && target.canEditPayload !== true) return;
+                          const target = graphRef.current?.nodes.find(node => node.id === nodeId && ["candidate", "reference_image", "sketch"].includes(node.type) && node.payload.assetId === assetId && node.status !== "proposed");
+                          if (!target || sourceReadOnly) return;
                           openDetails(nodeId);
-                          detailReturnFocus.current = document.querySelector<HTMLElement>("[data-canvas-image-tools] summary");
+                          const primary = `[data-creation-image-tools] [data-image-action="${action}"]`;
+                          const more = '[data-creation-image-tools] [aria-label="更多图片操作"]';
+                          const selector = document.querySelector(primary) ? primary : document.querySelector(more) ? more : '[data-guide="workspace-functions"]';
+                          detailReturnFocusSelector.current = selector;
+                          detailReturnFocus.current = document.querySelector<HTMLElement>(selector);
                           setAssetHistoryRequest({ nodeId, assetId, action, nonce: ++assetHistorySequence.current });
                         },
                         assistantOpen: sidebarOpen,
                         onStartConversation: openAssistant,
                         toolsOpen: menuTab === "tools",
-                        collectionsOpen,
-                        onOpenCollections: () => setCollectionsOpen(true),
+                        collectionsOpen: Boolean(collectionId) || projectWorkspace.active === "planning",
+                        onOpenCollections: () => setProjectWorkspace(current => ({ active: "planning", visited: current.visited.includes("planning") ? current.visited : [...current.visited, "planning"] })),
                         onOpenFabrics: () => handleAssetOption("fabric"),
                         onOpenTrends: () => handleAssetOption("trend"),
                         onOpenSketch: () => handleAssetOption("sketch"),
                         onUpload: () => handleAssetOption("reference_image"),
                         onUseTools: () => setMenuTab(current => current === "tools" ? null : "tools"),
                         referencesPreparing,
+                        onReferenceNodeIds: (nodeIds) => {
+                          setReferenceRequest({ nodeIds: [...nodeIds], conversationId: referenceConversation.current, nonce: Date.now() });
+                          openAssistant(false);
+                        },
                         onReference: () => {
                           const canvas = canvasHandle.current;
                           if (!canvas || referenceFlight.current) return;
@@ -2020,6 +2021,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                         },
                       }}
                       onSelection={(nodeIds) => {
+                        const creationId = canvasHandle.current?.editor.getOnlySelectedShape()?.meta.canvasCreationId;
+                        setFocusedCreationId(typeof creationId === "string" ? creationId : null);
                         canvasSelection.current = nodeIds;
                         setSelectedId(nodeIds[0] ?? null);
                       }}
@@ -2086,7 +2089,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                     </button>
                   </div>
                 ) : null}
-                {canvasView === "workbench" && graph.nodes.length === 0 && !sidebarOpen ? (
+                {canvasMode !== "canvas" && canvasView === "workbench" && graph.nodes.length === 0 && !sidebarOpen ? (
                   <div className={styles.emptyState}>
                     <h2>从一个想法开始</h2>
                     <p>
@@ -2299,13 +2302,14 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 }} />
             </WorkflowDetailWorkspace> : null}
             <WorkflowDetailWorkspace
-              fullScreen={inspected?.type === "candidate"}
+              fullScreen={Boolean(inspected && ["candidate", "reference_image", "sketch"].includes(inspected.type) && typeof inspected.payload.assetId === "string" && (inspected.type !== "sketch" || assetHistoryRequest?.nodeId === inspected.id))}
               open={detailOpen && Boolean(inspected)}
               title={inspected ? displayNodeTitle(inspected) : "节点详情"}
               status={inspected?.status ?? "ready"}
               origin={detailOrigin}
               dirty={Boolean(inspectedId && draftStore.ownerDirty(inspectedId))}
               onClose={closeDetails}
+              onAfterClose={restoreDetailsFocus}
             >
               {detailSessions.map((id) => {
                 const sessionNode = graph.nodes.find((node) => node.id === id);
@@ -2324,6 +2328,8 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 const editable = (canvasMode === "node" || canvasView === "workbench") && (
                   sessionNode.canEditPayload === true ||
                   sessionNode.canForkPayload !== false);
+                // Image tools save new versions; payload flags protect the original history.
+                const imageEditable = canvasMode === "canvas" ? canvasView === "workbench" && !sourceReadOnly && sessionNode.status !== "proposed" : editable;
                 const closeSession = () => {
                   if (inspectedRef.current === id) closeDetails();
                 };
@@ -2390,7 +2396,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                             }}
                           />
                         ) : sessionNode.type === "sketch" &&
-                          (editable || dirty) ? (
+                          (editable || dirty) && assetHistoryRequest?.nodeId !== id ? (
                           <WorkflowSketchEditor
                             embedded
                             ignoreStoredDraft={(detailEpochs[id] ?? 0) > 0}
@@ -2416,13 +2422,10 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                                   ...asset,
                                   sourceNodeId: id,
                                   source: "designer_sketch",
-                                  role: "silhouette_ref",
-                                  roleSource: "default",
-                                  roleInferenceState: "pending",
                                 });
                             }}
                           />
-                        ) : sessionNode.type === "candidate" &&
+                        ) : ["candidate", "reference_image", "sketch"].includes(sessionNode.type) &&
                           typeof sessionNode.payload.assetId === "string" ? (
                           <>
                             <BoardProjectContext.Provider value={projectId}>
@@ -2431,10 +2434,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                                 assetId={sessionNode.payload.assetId}
                                 entryRequest={assetHistoryRequest?.nodeId === id && assetHistoryRequest.assetId === sessionNode.payload.assetId ? assetHistoryRequest : undefined}
                                 active={detailOpen && inspectedId === id}
-                                canEdit={!conflict && editable && (canvasMode !== "canvas" || Boolean(sourceEditor && !sourceEditor.getIsReadonly()))}
+                                canEdit={!conflict && imageEditable}
                                 open
                                 projectId={projectId}
-                                details={renderDetails(sessionNode)}
                                 tasks={graph.nodes.filter(
                                   (node) =>
                                     node.kind === "tool" &&
@@ -2493,28 +2495,19 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             className={`${styles.sidebar} ${controls.controlSurface}`}
             hidden={!sidebarOpen}
           >
-            <div className={styles.sidebarHeader}>
-              <h2 tabIndex={-1}>设计助手</h2>
-              <div className={styles.sidebarActions}>
-                <button
-                  aria-label="收起设计助手"
-                  className={styles.sidebarCollapse}
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    setMobileView("canvas");
-                    requestAnimationFrame(() => {
-                      const trigger = document.querySelector<HTMLElement>("[data-zhiya]:not([hidden]) [role=button]") ?? document.querySelector<HTMLElement>("[data-canvas-assistant-entry]") ?? document.querySelector<HTMLElement>("[data-guide='workspace-views'] button");
-                      trigger?.focus({ preventScroll: true });
-                    });
-                  }}
-                  type="button"
-                >
-                  {layoutMode === "mobile" ? "返回画布" : "收起"}
-                </button>
-              </div>
-            </div>
             <div className={styles.assistantMount}>
               <WorkflowAssistantPanel
+                canManageAssistant={canvasCanEdit}
+                onVisitReference={(nodeId, instances) => {
+                  const handle = canvasHandle.current;
+                  if (!handle || canvasMode !== "canvas") return false;
+                  if (layoutMode !== "mobile") return handle.visitReference(nodeId, instances);
+                  if (!handle.editor.getCurrentPageShapes().some(shape => shape.meta.canvasNodeId === nodeId && !handle.editor.isShapeHidden(shape))) return false;
+                  setMobileView("canvas"); setSidebarOpen(false);
+                  requestAnimationFrame(() => handle.visitReference(nodeId, instances, () => { setSidebarOpen(true); setMobileView("assistant"); }));
+                  return true;
+                }}
+                focusedCreationId={focusedCreationId}
                 graph={graph}
                 starterPrompt={starterPrompt}
                 assistantDraftRequest={assistantDraftRequest}
@@ -2545,7 +2538,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   },
                   locate: nodeId => {
                     setMobileView("canvas");
-                    if (layoutMode !== "docked") setSidebarOpen(false);
+                    if (layoutMode === "mobile" || layoutMode === "overlay") setSidebarOpen(false);
                     canvasHandle.current?.locate(nodeId);
                   },
                 }}
@@ -2567,13 +2560,30 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 referenceRequest={referenceRequest}
                 referencesPreparing={referencesPreparing}
                 directExecution={canvasMode === "canvas"}
-                onExecution={() => setCanvasView("workbench")}
+                onExecution={() => { setCanvasView("workbench"); window.dispatchEvent(new Event("fashion-creations:refresh")); }}
                 onBeforeSend={async (ids, instances) => {
                   if (canvasMode === "node") return { nodeIds: [...ids], instances };
                   const canvas = canvasHandle.current;
                   if (!canvas) throw new Error("白板尚未载入完成，请稍后发送");
+                  const creationContext = await canvas.prepareAssistantContext();
                   await canvas.flush();
+                  if (canvasHandle.current !== canvas) throw new Error("工作区已切换，尚未发送给助手。");
+                  const observation = canvas.observeAssistantCanvas();
+                  return { ...canvas.resolveReferences(ids, instances), ...creationContext, ...(observation ? { canvasObservation: observation } : {}) };
+                }}
+                onBeforeEnhance={async (ids, instances) => {
+                  if (canvasMode === "node") return { nodeIds: [...ids], instances };
+                  const canvas = canvasHandle.current;
+                  if (!canvas) throw new Error("白板尚未载入完成，请稍后增强。");
+                  await canvas.flush();
+                  if (canvasHandle.current !== canvas) throw new Error("工作区已切换，原文已保留。");
                   return canvas.resolveReferences(ids, instances);
+                }}
+                onExecuteCanvasAction={async envelope => {
+                  const canvas = canvasHandle.current;
+                  if (!canvas || canvasView !== "workbench") throw new Error("请返回当前项目画布后继续操作。");
+                  if (envelope.action.type === "open_panel" && layoutMode === "mobile") { setMobileView("canvas"); setSidebarOpen(false); }
+                  return canvas.executeAssistantCanvasAction(envelope);
                 }}
                 focusRequest={assistantFocusRequest}
                 onOpenResult={(nodeId) => {
@@ -2588,7 +2598,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 onActivityChange={setChatActivity}
                 onAddMaterial={() => {
                   setMobileView("canvas");
-                  if (layoutMode !== "docked") setSidebarOpen(false);
+                  if (layoutMode === "mobile" || layoutMode === "overlay") setSidebarOpen(false);
                   setMenuTab("assets");
                   requestAnimationFrame(() =>
                     document
@@ -2605,6 +2615,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 projectId={projectId}
                 selected={selected}
                 onLocate={(nodeId) => {
+                  if (layoutMode === "mobile" || layoutMode === "overlay") { setMobileView("canvas"); setSidebarOpen(false); }
                   if (canvasView === "workbench") {
                     if (canvasMode === "canvas") canvasHandle.current?.locate(nodeId);
                     else openDetails(nodeId);
@@ -2685,7 +2696,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
             projectId={projectId}
           />
         ) : null}
-          <Dialog open={helpOpen} label="工作室使用帮助" onClose={() => setHelpOpen(false)}>
+          <Dialog open={helpOpen} label="工作室使用帮助" onClose={() => setHelpOpen(false)} returnFocusSelector='[data-guide="workspace-functions"]'>
             <div className={styles.entryDialog}>
               <h2>开始你的设计</h2>
               <ol>
@@ -2703,7 +2714,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </li>
                 <li>
                   “导出画布
-                  PNG”保存设计路径。候选图与系列在各自工作区导出交付文件，关闭窗口不会取消任务。
+                  PNG”保存设计路径。设计图与系列在各自工作区导出交付文件，关闭窗口不会取消任务。
                 </li>
               </ol>
               <div className={styles.dialogActions}>
@@ -2735,25 +2746,32 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                   },
                 ]);
               } else {
-                const id = await addNode("asset", "sketch", title, {
+                await addNode("asset", "sketch", title, {
                   ...asset,
                   source: "designer_sketch",
-                  role: "silhouette_ref",
-                  roleSource: "default",
-                  roleInferenceState: "pending",
                   ...(editingSketch ? { sourceNodeId: editingSketch.id } : {}),
                 });
-                try {
-                  commitGraph(await inferWorkflowNodeRole(projectId, id));
-                } catch {
-                  setNotice("草图已保存，可在节点详情重试角色识别");
-                }
               }
             }}
             open
             projectId={projectId}
           />
         ) : null}
+        <ProjectTaskCenter projectId={projectId} hideTrigger />
+        {session && projectWorkspace.visited.length > 0 ? <CanvasProjectWorkspace key={`${session.user.id}:${projectId}`} accountId={session.user.id}
+          projectId={projectId} projectName={projectName} activeTab={projectWorkspace.active} visitedTabs={projectWorkspace.visited}
+          onClose={() => setProjectWorkspace(current => ({ ...current, active: null }))}
+          onOpenPanel={tab => setProjectWorkspace(current => ({ active: tab, visited: current.visited.includes(tab) ? current.visited : [...current.visited, tab] }))}
+          onRefreshCanvas={async () => { await reload(); await canvasHandle.current?.refresh(); }}
+          onEditAsset={(assetId, styleRevisionId) => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("assetId", assetId);
+            url.searchParams.set("styleRevisionId", styleRevisionId);
+            window.history.replaceState(window.history.state, "", url);
+            const node = graphRef.current?.nodes.find(item => item.payload.assetId === assetId);
+            if (node) { canvasHandle.current?.locate(node.id); openDetails(node.id); }
+          }} /> : null}
+        {renamingProject ? <RenameProjectDialog projectId={projectId} projectName={projectName} onRename={setProjectName} onClose={() => setRenamingProject(false)} /> : null}
         {generatedFilesOpen ? <GeneratedFilesPanel projectId={projectId} onClose={() => setGeneratedFilesOpen(false)}
           canPlace={canvasMode === "canvas" && canvasView === "workbench" && Boolean(sourceEditor && !sourceEditor.getIsReadonly())}
           isPlaced={(resourceId, domain = "asset") => Boolean(sourceEditor?.getCurrentPageShapes().some(shape => domain === "runway"
@@ -2795,7 +2813,9 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
           <BoardProjectContext.Provider value={projectId}>
             <GenerationWorkspace>
               <CollectionDrawer
+                key={collectionId}
                 collectionId={collectionId}
+                canEdit={canvasCanEdit}
                 onClose={() => setCollectionId(null)}
               />
             </GenerationWorkspace>
@@ -2922,7 +2942,7 @@ function LegacyRunHistory({
                       ) : null}
                       {attempt.candidates.length ? (
                         <p>
-                          候选：
+                          图片：
                           {attempt.candidates
                             .map((candidate) => candidate.assetId)
                             .join("、")}
@@ -2947,7 +2967,7 @@ function LegacyRunHistory({
                 <div className={styles.legacyAttempt} key={action.id}>
                   <strong>
                     {action.kind === "evaluate_candidate"
-                      ? "候选评价"
+                      ? "图片评价"
                       : "修订建议"}{" "}
                     {action.status}
                   </strong>

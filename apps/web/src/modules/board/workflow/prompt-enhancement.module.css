@@ -1,0 +1,64 @@
+.busy svg {
+  animation: enhancing 1000ms linear infinite;
+}
+.feedback {
+  max-height: 140px;
+  overflow: auto;
+  padding: var(--space-2) 0;
+  color: var(--color-ink-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.feedback p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.row,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.row > p,
+.row > span {
+  flex: 1;
+}
+.feedback button {
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+  background: var(--color-action-subtle);
+  color: var(--color-action);
+  cursor: pointer;
+  font: inherit;
+}
+.feedback summary {
+  cursor: pointer;
+  color: var(--color-action);
+}
+.preview {
+  max-height: 100px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--color-ink);
+}
+.actions {
+  margin-top: var(--space-2);
+}
+@keyframes enhancing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .feedback button {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy svg {
+    animation: none;
+  }
+}

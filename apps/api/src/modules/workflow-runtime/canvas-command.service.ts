@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ensureWorkflowNodeVersions } from "@fashion/db";
+import { ensureWorkflowNodeVersions, type Prisma } from "@fashion/db";
 import {
   type CanvasCommand,
   type CanvasDocumentView,
@@ -7,6 +7,7 @@ import {
   canvasMediaUrl,
   parseWorkflowToolParameters,
   workflowToolKeySchema,
+  isRetiredWorkflowTool,
 } from "@fashion/shared";
 import {
   BadRequestException,
@@ -23,10 +24,7 @@ import {
 } from "../canvas/canvas.service";
 import { WorkflowsService } from "../workflows/workflows.service";
 import type { WorkflowSemanticPatchInput } from "../workflows/workflows.schemas";
-import {
-  compileWorkflowAction,
-  upstreamConstraintIds,
-} from "./workflow-planner";
+import { compileWorkflowAction } from "./workflow-planner";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
 import { directMutationId } from "./direct-execution";
 import { S3FileStorage } from "../files/storage.service";
@@ -50,6 +48,7 @@ export class CanvasCommandService {
     projectId: string,
     command: CanvasCommand,
     guard?: { intentEpoch?: number; nodeVersions?: Record<string, string> },
+    beforeApply?: (tx: Prisma.TransactionClient) => Promise<void>,
   ): Promise<{
     nodeId: string;
     graph: Awaited<ReturnType<WorkflowsService["get"]>>;
@@ -57,76 +56,6 @@ export class CanvasCommandService {
   }> {
     await this.canvas.writable(userId, projectId);
     const database = this.canvas.database;
-    if (
-      command.type === "run_tool" &&
-      command.toolKey === "generate_design" &&
-      !command.inputs.some((input) => input.port === "constraint")
-    ) {
-      try {
-        parseWorkflowToolParameters(command.toolKey, command.parameters);
-      } catch {
-        throw new BadRequestException("生成参数无效，请检查指令与数量");
-      }
-      const goals = command.inputs.filter((input) => input.port === "goal");
-      if (goals.length > 1 || (!goals.length && !command.newObjective))
-        throw new BadRequestException("请选择一份设计需求，或填写本次设计目标");
-      const analysis = await this.execute(
-        userId,
-        projectId,
-        {
-          type: "run_tool",
-          mutationId: directMutationId(`canvas:${command.mutationId}:brief`),
-          toolKey: "analyze_brief",
-          title: "分析设计需求",
-          parameters: {
-            prompt: String(
-              command.parameters.prompt ??
-                command.newObjective ??
-                "分析所选设计需求",
-            ),
-          },
-          inputs: command.inputs.filter(
-            (input) => input.port === "goal" || input.port === "reference",
-          ),
-          ...(command.newObjective
-            ? { newObjective: command.newObjective }
-            : {}),
-          ...(command.conversationId
-            ? { conversationId: command.conversationId }
-            : {}),
-        },
-        guard,
-      );
-      const outputs = analysis.graph.edges
-        .filter((edge) => edge.sourceNodeId === analysis.nodeId)
-        .map((edge) => edge.targetNodeId);
-      const constraints = analysis.graph.nodes.filter(
-        (node) =>
-          outputs.includes(node.id) &&
-          node.type === "constraint" &&
-          node.status === "completed",
-      );
-      const constraint = constraints[0];
-      if (constraints.length !== 1 || !constraint)
-        throw new ConflictException(
-          "需求分析尚未形成唯一约束，请查看任务状态后重试原操作",
-        );
-      const next = { ...command };
-      delete next.baseGraphRevision;
-      delete next.newObjective;
-      return this.execute(
-        userId,
-        projectId,
-        {
-          ...next,
-          inputs: [
-            { nodeId: constraint.id, port: "constraint" },
-            ...command.inputs.filter((input) => input.port === "reference"),
-          ],
-        },
-        guard,
-      );
-    }
     const receipt = await database.$transaction(
       async (tx) => {
         await this.canvas.writable(userId, projectId, tx);
@@ -141,6 +70,7 @@ export class CanvasCommandService {
             throw new ConflictException("请求编号已用于其他业务操作");
           return canvasObject(previous.result);
         }
+        await beforeApply?.(tx);
         const graph = await this.workflows.get(userId, projectId);
         if (
           command.baseGraphRevision !== undefined &&
@@ -155,7 +85,24 @@ export class CanvasCommandService {
           nodeId: string;
           position?: { x: number; y: number };
         }[] = [];
-        if (command.type === "import_reference_image") {
+        if (command.type === "place_canvas_material") {
+          const source = graph.nodes.find(node => node.id === command.nodeId && node.kind === "asset" && !canvasObject(node.payload).retiredNote);
+          if (!source) throw new BadRequestException("素材不存在或不属于当前项目");
+          if (command.expectedUpdatedAt && source.updatedAt.toISOString() !== command.expectedUpdatedAt) throw new ConflictException("素材已更新，请重新选择");
+          nodeId = source.id;
+          if (command.placement !== "reference") placements.push({ shapeId: `shape:material-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (command.type === "import_reference_video") {
+          const file = await requireProjectFile(tx, new ProjectAccessPolicy(tx), userId, command.fileId, projectId, tx);
+          if (file.status !== "READY" || !["video/mp4", "video/webm"].includes(file.mimeType)) throw new BadRequestException("视频尚未完成上传或格式不受支持");
+          try { const head = await this.storage.head(file.objectKey); if (head.contentLength !== file.sizeBytes || head.contentType?.split(";")[0]?.trim().toLowerCase() !== file.mimeType) throw new Error("Video mismatch"); }
+          catch { throw new ServiceUnavailableException("视频文件暂时不可用，请重试原操作"); }
+          const existing = graph.nodes.find(node => node.type === "media" && canvasObject(node.payload).fileAssetId === file.id);
+          nodeId = existing?.id ?? directMutationId(`video-upload:${projectId}:${command.mutationId}`);
+          if (!existing) operations.push({ type: "add_node", node: { id: nodeId, kind: "asset", type: "media", title: file.originalName.slice(0, 160), status: "completed", x: command.position?.x ?? 0, y: command.position?.y ?? 0,
+            payload: canvasMediaPayloadSchema.parse({ mediaId: file.id, fileAssetId: file.id, mediaKind: "video", mimeType: file.mimeType, mediaUrl: canvasMediaUrl(projectId, file.id, file.id), width: file.width, height: file.height, durationMs: null, ...(command.placement === "reference" ? { canvasPlacement: "manual" } : {}) }),
+          } });
+          if (command.placement === "canvas") placements.push({ shapeId: `shape:video-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+        } else if (command.type === "import_reference_image") {
           const file = await requireProjectFile(tx, new ProjectAccessPolicy(tx), userId, command.fileId, projectId, tx);
           if (file.status !== "READY" || !file.thumbnail1024Key || !file.width || !file.height || !file.mimeType.startsWith("image/")) throw new BadRequestException("参考图片尚未处理完成，请稍后重试。");
           await requireRestoreSourceFile(this.storage, `s3://${file.objectKey}`, { code: "REFERENCE_IMAGE_UNAVAILABLE", message: "参考原图暂时无法读取，尚未加入项目。请稍后继续添加。" });
@@ -165,7 +112,6 @@ export class CanvasCommandService {
           if (!existing) operations.push({ type: "add_node", node: { id: nodeId, kind: "asset", type: "reference_image",
             title: file.originalName.trim().slice(0, 200) || "上传参考图", x: command.position?.x ?? 0, y: command.position?.y ?? 0,
             payload: { fileAssetId: file.id, sourceName: file.originalName, imageUrl: `/api/files/${encodeURIComponent(file.id)}/thumbnail/1024`, width: file.width, height: file.height,
-              role: "style_ref", roleSource: "default", roleInferenceState: "none",
               ...(command.placement === "reference" ? { canvasPlacement: "manual" } : {}),
             },
           } });
@@ -196,12 +142,13 @@ export class CanvasCommandService {
             mediaId: media.id, mediaKind: media.mimeType.startsWith("video/") ? "video" : "audio", mimeType: media.mimeType,
             mediaUrl: canvasMediaUrl(projectId, media.id), runId: media.runId, showId: media.run.showId,
             width: media.width, height: media.height, durationMs: media.durationMs,
+            ...(command.placement === "reference" ? { canvasPlacement: "manual" } : {}),
           });
           const existing = graph.nodes.find(node => node.type === "media" && canvasObject(node.payload).mediaId === media.id);
           nodeId = existing?.id ?? directMutationId(`generated-media:${projectId}:${command.mutationId}`);
           if (!existing) operations.push({ type: "add_node", node: { id: nodeId, kind: "asset", type: "media", title: media.originalName.trim().slice(0, 160) || media.run.show.title, status: "completed", payload,
             x: command.position?.x ?? 0, y: command.position?.y ?? 0 } });
-          placements.push({ shapeId: `shape:generated-media-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
+          if (command.placement !== "reference") placements.push({ shapeId: `shape:generated-media-${command.mutationId}`, nodeId, ...(command.position ? { position: command.position } : {}) });
         } else if (command.type === "place_generated_asset") {
           const source = await tx.designAsset.findFirst({
             where: { AND: [visibleStudioAssets(projectId), { id: command.assetId, operation: { not: "IMPORTED" } }] },
@@ -360,42 +307,11 @@ export class CanvasCommandService {
               },
             ];
         } else if (command.type === "run_tool") {
+          if (isRetiredWorkflowTool(command.toolKey)) {
+            const reserved = command.creationRunId ? await tx.canvasCreationRun.findFirst({ where: { id: command.creationRunId, projectId, actorId: userId, mutationId: command.mutationId, state: "preparing" } }) : null;
+            if (!reserved || canvasObject(reserved.command).toolKey !== command.toolKey) throw new BadRequestException("旧分析和评估流程已退役，请在助手对话中讨论。");
+          }
           const inputs = [...command.inputs];
-          if (
-            command.toolKey === "evaluate_design" &&
-            !inputs.some((input) => input.port === "constraint")
-          ) {
-            const constraints = [
-              ...new Set(
-                inputs
-                  .filter((input) => input.port === "candidate")
-                  .flatMap((input) =>
-                    upstreamConstraintIds(graph, input.nodeId),
-                  ),
-              ),
-            ];
-            if (constraints.length !== 1 || !constraints[0])
-              throw new BadRequestException(
-                "评价对象需要唯一的设计约束，请明确本次评价依据",
-              );
-            inputs.push({ nodeId: constraints[0], port: "constraint" });
-          }
-          if (
-            command.toolKey === "edit_design" &&
-            command.parameters.taskType !== "inpaint" &&
-            !inputs.some((input) => input.port === "constraint")
-          ) {
-            const source = inputs.find((input) => input.port === "source");
-            const constraints = source
-              ? upstreamConstraintIds(graph, source.nodeId)
-              : [];
-            if (constraints.length > 1)
-              throw new BadRequestException(
-                "母图存在多个约束来源，请明确本次约束",
-              );
-            if (constraints[0])
-              inputs.push({ nodeId: constraints[0], port: "constraint" });
-          }
           try {
             operations = compileWorkflowAction(
               graph,
@@ -425,7 +341,15 @@ export class CanvasCommandService {
             (operation) =>
               operation.type === "add_node" && operation.node.kind === "tool",
           );
-          if (tool?.type === "add_node") nodeId = tool.node.id;
+          if (tool?.type === "add_node") {
+            nodeId = tool.node.id;
+            if (command.creationRunId) {
+              const run = await tx.canvasCreationRun.findFirst({ where: { id: command.creationRunId, projectId, actorId: userId, mutationId: command.mutationId } });
+              if (!run) throw new BadRequestException("创作执行记录不存在或不属于本次请求");
+              tool.node.payload = { ...tool.node.payload, canvasCreationId: run.creationId, canvasCreationRunId: run.id };
+              await tx.canvasCreationRun.update({ where: { id: run.id }, data: { toolNodeId: nodeId } });
+            }
+          }
           actualInputIds = operations.flatMap((operation) =>
             operation.type === "add_edge" &&
             operation.edge.targetNodeId === nodeId
@@ -436,6 +360,7 @@ export class CanvasCommandService {
           const node = graph.nodes.find(
             (item) => item.id === nodeId && item.kind === "tool",
           );
+          if (node && isRetiredWorkflowTool(node.type)) throw new BadRequestException("此旧流程已退役，历史记录仍可查看。");
           if (
             !node ||
             node.status !== "ready" ||
@@ -482,7 +407,7 @@ export class CanvasCommandService {
             undefined,
             undefined,
             tx,
-            command.type === "import_reference_image" ? userId : undefined,
+            ["import_reference_image", "import_reference_video"].includes(command.type) ? userId : undefined,
           );
         if (command.type === "update_material") {
           const priorBinding = !command.shapeId

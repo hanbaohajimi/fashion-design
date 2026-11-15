@@ -21,9 +21,7 @@ type Options = {
   bounds: { width: number; height: number };
   host: RefObject<HTMLDivElement | null>;
   frame: RefObject<HTMLDivElement | null>;
-  readout: RefObject<HTMLSpanElement | null>;
   onCommit: (scale: number, pan: Point, fitted: boolean) => void;
-  onPreview?: ((percent: number | null) => void) | undefined;
   previous?: boolean | undefined;
   next?: boolean | undefined;
   onNavigate?: ((direction: -1 | 1) => void) | undefined;
@@ -42,7 +40,6 @@ export function useImageViewport(options: Options) {
   const wheelEnd = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animation = useRef<Animation | null>(null);
   const neighborAnimation = useRef<Animation | null>(null);
-  const previewAt = useRef(0);
   const paint = () => {
     frame.current = 0;
     const opts = current.current;
@@ -50,13 +47,10 @@ export function useImageViewport(options: Options) {
     opts.frame.current?.style.setProperty("--image-y", `${visual.current.y}px`);
     opts.frame.current?.style.setProperty("--image-scale", String(visual.current.scale));
     opts.host.current?.style.setProperty("--gallery-x", `${visual.current.swipe}px`);
-    if (opts.readout.current) opts.readout.current.textContent = `${Math.round(visual.current.scale * 100)}%`;
-    if ((gesture.current || wheelEnd.current) && performance.now() - previewAt.current >= 100) { opts.onPreview?.(visual.current.scale * 100); previewAt.current = performance.now(); }
   };
   const schedule = () => { if (!frame.current) frame.current = requestAnimationFrame(paint); };
   const commit = () => {
     cancelAnimationFrame(frame.current); paint();
-    current.current.onPreview?.(null);
     current.current.onCommit(visual.current.scale, visual.current, Math.abs(visual.current.scale - current.current.fit) < .0001);
   };
   const cancel = (save = true) => {

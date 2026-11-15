@@ -95,7 +95,7 @@ export function PrepareSideDisplay({ projectId, item, preparations, canEdit, gen
         const file = event.target.files?.[0]; if (!file) return;
         event.currentTarget.value = "";
         void run(async () => { upload.current?.abort(); const controller = new AbortController(); upload.current = controller; setUploaded(await uploadWardrobeSource(projectId, file, controller.signal)); setReviewed(false); await onChanged(); });
-      }} /> : <Notice>根据确认正面生成侧挂候选，按项目规则计费。生成的侧缝和褶皱需人工核对，不代表已知背面结构。</Notice>}
+      }} /> : <Notice>根据确认正面生成侧挂图，按项目规则计费。生成的侧缝和褶皱需人工核对，不代表已知背面结构。</Notice>}
       {mode === "generate" ? <>
         <UploadInput key={poseUploadKey} label="上传侧挂姿态参考（可选）" accept="image/jpeg,image/png,image/webp" disabled={!canEdit || busy} hint="仅参考陈列角度与支撑姿态；服装款式、颜色和材质仍以已确认正面为准" onChange={event => {
           const file = event.target.files?.[0]; if (!file) return;
@@ -108,10 +108,10 @@ export function PrepareSideDisplay({ projectId, item, preparations, canEdit, gen
         </div> : null}
       </> : null}
       {uploaded && mode === "upload" ? <p className={styles.muted}>侧挂来源已上传，尚未确认用于陈列。</p> : null}
-      <Button disabled={!canEdit || busy || (mode === "generate" ? !generationEnabled : !uploaded)} onClick={() => void prepare()}>{mode === "generate" ? "确认生成侧挂候选" : "继续核对上传侧挂图"}</Button>
+      <Button disabled={!canEdit || busy || (mode === "generate" ? !generationEnabled : !uploaded)} onClick={() => void prepare()}>{mode === "generate" ? "确认生成侧挂图" : "继续核对上传侧挂图"}</Button>
       {mode === "generate" && !generationEnabled ? <p className={styles.muted}>当前项目未启用单品生成，可上传已有侧挂图。</p> : null}
-      {history.length ? <section className={styles.history}><h3>本修订的侧挂准备</h3>{history.map(value => <div className={styles.historyRow} key={value.id}><span>{value.name}</span><span>{TASK_LABELS[value.status]}</span><Button onClick={() => { setImmediate(value); setCandidateId(null); setReviewed(false); setRepairFor(null); setRepairNotes(""); }}>核对侧挂候选</Button></div>)}</section> : null}
-      {current ? <><p role="status">侧挂候选：{TASK_LABELS[current.status]}</p>{current.error ? <Notice tone="error">{current.error}</Notice> : null}
+      {history.length ? <section className={styles.history}><h3>本修订的侧挂准备</h3>{history.map(value => <div className={styles.historyRow} key={value.id}><span>{value.name}</span><span>{TASK_LABELS[value.status]}</span><Button onClick={() => { setImmediate(value); setCandidateId(null); setReviewed(false); setRepairFor(null); setRepairNotes(""); }}>核对侧挂图</Button></div>)}</section> : null}
+      {current ? <><p role="status">侧挂图：{TASK_LABELS[current.status]}</p>{current.error ? <Notice tone="error">{current.error}</Notice> : null}
         {(current.status === "running" || current.status === "queued") && current.taskId ? <Button disabled={!canEdit || busy} onClick={() => void run(async () => { const taskId = current.taskId; if (taskId) await cancelGeneration(taskId); await onChanged(); })}>取消侧挂准备</Button> : null}
       </> : null}
       {current?.status === "ready" && candidate ? <>
@@ -119,23 +119,23 @@ export function PrepareSideDisplay({ projectId, item, preparations, canEdit, gen
         {repairSourceUrl ? <details><summary>对照已确认正面</summary><div className={styles.compareImage} data-preview-background={background} style={previewBackgroundStyle(background)}><ImagePreview src={front.url} alt="侧挂核对的确认正面" /></div></details> : null}
         <PreviewBackgroundControl value={background} onChange={setBackground} />
         <div className={styles.comparison}>
-          <figure><figcaption>{repairSourceUrl ? current.materialProcessing?.kind === "masked-edit" ? "修正前侧挂图" : "修复前侧挂图" : "已确认正面"}</figcaption><div className={styles.compareImage} data-preview-background={background} style={previewBackgroundStyle(background)}><ImagePreview src={repairSourceUrl ?? front.url} alt={repairSourceUrl ? current.materialProcessing?.kind === "masked-edit" ? "局部修正前的侧挂候选" : "透明修复前的侧挂候选" : "侧挂核对的确认正面"} /></div></figure>
-          <figure><figcaption className={styles.actions}><span>侧挂候选</span><span>{current.presentation?.orientation === "right" ? "朝右" : "朝左"}</span><span>点击实际挂点</span></figcaption><div className={styles.anchorStage} data-preview-background={background} style={previewBackgroundStyle(background)} onClick={event => {
+          <figure><figcaption>{repairSourceUrl ? current.materialProcessing?.kind === "masked-edit" ? "修正前侧挂图" : "修复前侧挂图" : "已确认正面"}</figcaption><div className={styles.compareImage} data-preview-background={background} style={previewBackgroundStyle(background)}><ImagePreview src={repairSourceUrl ?? front.url} alt={repairSourceUrl ? current.materialProcessing?.kind === "masked-edit" ? "局部修正前的侧挂图" : "透明修复前的侧挂图" : "侧挂核对的确认正面"} /></div></figure>
+          <figure><figcaption className={styles.actions}><span>侧挂图</span><span>{current.presentation?.orientation === "right" ? "朝右" : "朝左"}</span><span>点击实际挂点</span></figcaption><div className={styles.anchorStage} data-preview-background={background} style={previewBackgroundStyle(background)} onClick={event => {
             const box = event.currentTarget.getBoundingClientRect(); setAnchor({ x: Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)), y: Math.max(0, Math.min(1, (event.clientY - box.top) / box.height)) }); setReviewed(false);
-          }}><ImagePreview src={candidate.url} alt="待核对侧挂候选" /><span className={styles.anchorPoint} style={{ left: `${anchor.x * 100}%`, top: `${anchor.y * 100}%` }} aria-hidden="true" /></div></figure>
+          }}><ImagePreview src={candidate.url} alt="待核对侧挂图" /><span className={styles.anchorPoint} style={{ left: `${anchor.x * 100}%`, top: `${anchor.y * 100}%` }} aria-hidden="true" /></div></figure>
         </div>
-        {current.candidates.length > 1 ? <div className={styles.actions}>{current.candidates.map((value, index) => <Button key={value.assetId} aria-pressed={candidate.assetId === value.assetId} onClick={() => { setCandidateId(value.assetId); setReviewed(false); setRepairFor(null); setRepairNotes(""); }}>侧挂候选 {index + 1}</Button>)}</div> : null}
+        {current.candidates.length > 1 ? <div className={styles.actions}>{current.candidates.map((value, index) => <Button key={value.assetId} aria-pressed={candidate.assetId === value.assetId} onClick={() => { setCandidateId(value.assetId); setReviewed(false); setRepairFor(null); setRepairNotes(""); }}>侧挂图 {index + 1}</Button>)}</div> : null}
         {current.presentation?.revisionId === front.id ? (["transparency", "correction"] as const).map(operation => <RepairTransparentMaterial key={`${projectId}:${front.id}:${current.id}:${candidate.assetId}:${operation}`} operation={operation} projectId={projectId} sidePreparationId={current.id}
           source={{ assetId: candidate.assetId, url: candidate.url, name: front.name, category: front.category, imageBounds: candidate.imageBounds }} canEdit={canEdit && !busy} generationEnabled={generationEnabled} onPrepared={value => {
-            if (value.presentation?.revisionId !== front.id || value.presentation.orientation !== current.presentation?.orientation) { setError("修复候选与当前侧挂修订或方向不匹配，原候选已保留。请重新打开本修订核对。"); return; }
+            if (value.presentation?.revisionId !== front.id || value.presentation.orientation !== current.presentation?.orientation) { setError("修复图片与当前侧挂修订或方向不匹配，原图片已保留。请重新打开本修订核对。"); return; }
             setImmediate(value); setCandidateId(null); setReviewed(false); setRepairFor(null); setRepairNotes(""); setView("side"); packet.current = null;
             void onChanged().catch(cause => setError(userFacingError(cause)));
           }} />) : null}
-        <div className={styles.actions}><Button disabled={!canEdit || busy || !generationEnabled} aria-expanded={repairFor === candidate.assetId} onClick={() => setRepairFor(repairFor === candidate.assetId ? null : candidate.assetId)}>修正此候选</Button></div>
+        <div className={styles.actions}><Button disabled={!canEdit || busy || !generationEnabled} aria-expanded={repairFor === candidate.assetId} onClick={() => setRepairFor(repairFor === candidate.assetId ? null : candidate.assetId)}>修正此图片</Button></div>
         {repairFor === candidate.assetId ? <>
-          <Field label="候选修正说明"><Textarea value={repairNotes} maxLength={1500} onChange={event => setRepairNotes(event.target.value)} placeholder="例如：保留当前角度、结构和颜色，只修正镜片局部透明度；说明需要保留的细节。" /></Field>
-          <Notice>以当前选中的侧挂候选修正，按项目规则计费。保留当前展示角度；新结果仍需重新核对，原候选保留在准备历史中。</Notice>
-          <Button disabled={!canEdit || busy || !generationEnabled || !repairNotes.trim()} onClick={() => void repair()}>确认修正侧挂候选</Button>
+          <Field label="图片修正说明"><Textarea value={repairNotes} maxLength={1500} onChange={event => setRepairNotes(event.target.value)} placeholder="例如：保留当前角度、结构和颜色，只修正镜片局部透明度；说明需要保留的细节。" /></Field>
+          <Notice>以当前选中的侧挂图修正，按项目规则计费。保留当前展示角度；新结果仍需重新核对，原图片保留在准备历史中。</Notice>
+          <Button disabled={!canEdit || busy || !generationEnabled || !repairNotes.trim()} onClick={() => void repair()}>确认修正侧挂图</Button>
         </> : null}
         <p className={styles.muted}>核对领口、袖长、材质、印花、朝向和侧缝。挂点选实际领口、腰头或承托处，不选透明留白。</p>
         <div className={styles.formRow}>{(["x", "y"] as const).map(key => <Field key={key} label={`侧挂点${key === "x" ? "横向" : "纵向"} %`}><Input type="number" min={0} max={100} step={0.1} value={Number((anchor[key] * 100).toFixed(2))} onChange={event => { setAnchor({ ...anchor, [key]: Math.max(0, Math.min(1, Number(event.target.value) / 100)) }); setReviewed(false); }} /></Field>)}</div>

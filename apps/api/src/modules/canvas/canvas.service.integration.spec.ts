@@ -268,7 +268,7 @@ describe("independent canvas persistence", () => {
               "shape:material": {
                 id: "shape:material",
                 typeName: "shape",
-                type: "fashion-note",
+                type: "fashion-text",
                 x: 400,
                 y: 900,
               },
@@ -344,7 +344,8 @@ describe("independent canvas persistence", () => {
       });
       const initialized = await canvas.initialize(user.id, project.id);
       expect(initialized.initializedFrom).toBe("legacy");
-      expect(initialized.bindings).toHaveLength(2);
+      expect(initialized.bindings).toHaveLength(1);
+      expect(JSON.stringify(initialized.snapshot)).not.toContain("fashion-note");
       expect(
         canvasObject((await workflows.get(user.id, project.id)).nodes.find(
           (node) => node.type === "swatch",

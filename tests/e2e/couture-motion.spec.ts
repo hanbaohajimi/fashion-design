@@ -141,9 +141,9 @@ test("首页铺稿与创建落款，筛选和历史刷新不重复庆祝", async
   await page.route("**/api/projects/couture-created", (route) =>
     route.fulfill({ json: { id: "couture-created", name: "高定线迹试验" } }),
   );
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(
-    page.getByRole("heading", { name: "项目库", exact: true }),
+    page.getByRole("heading", { name: "项目", exact: true }),
   ).toBeVisible();
   await effect(page, "archive");
   await page.getByRole("searchbox").fill("针织");
@@ -203,7 +203,7 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
 }, info) => {
   await observe(page);
   // Read the existing fixture through its public API, then drive real sync responses.
-  await page.goto("/");
+  await page.goto("/projects");
   await effect(page, "archive");
   const graph = await page.evaluate(async () =>
     (await fetch("/api/projects/atelier-visual/workflow/sync")).json(),
@@ -401,12 +401,12 @@ test("系列签章在新建后播放，重新打开不重播", async ({ page }) 
     .getByRole("button", { name: "设为主推款并建立系列", exact: true })
     .click();
   await effect(page, "seal");
-  await expect(page.getByRole("dialog", { name: "系列 DNA", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "系列工作台", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page
     .getByRole("button", { name: "设为主推款并建立系列", exact: true })
     .click();
-  await expect(page.getByRole("dialog", { name: "系列 DNA", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "系列工作台", exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () =>
@@ -500,9 +500,9 @@ test("减少动态效果时不执行 Mo.js，生产包不预加载图形库", as
     if (/\/_next\/static\/.*\.js(?:\?|$)/u.test(response.url()))
       scripts.push(response.text().catch(() => ""));
   });
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(
-    page.getByRole("heading", { name: "项目库", exact: true }),
+    page.getByRole("heading", { name: "项目", exact: true }),
   ).toBeVisible();
   expect(await page.evaluate(() => "mojs" in window)).toBe(false);
   // Turbopack dev eagerly registers async chunks; verify network splitting on the production build.

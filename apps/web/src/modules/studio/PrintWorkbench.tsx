@@ -33,6 +33,10 @@ export function PrintWorkbench({
   onRefresh,
   onDirty,
   beforeChange,
+  onRecord,
+  initialSourceAssetId,
+  initialDocumentId,
+  requireExplicitSource = false,
 }: {
   projectId: string;
   assets: readonly StudioAssetView[];
@@ -41,16 +45,22 @@ export function PrintWorkbench({
   onRefresh?: () => void;
   onDirty?: (dirty: boolean) => void;
   beforeChange?: () => Promise<boolean>;
+  onRecord?: (document: StudioDocumentView) => void | Promise<void>;
+  initialSourceAssetId?: string;
+  initialDocumentId?: string;
+  requireExplicitSource?: boolean;
 }) {
   const feedback = useSubmitFeedback();
+  const initialDocument = initialDocumentId ? documents.find((item) => item.id === initialDocumentId || item.revisions.some((revision) => revision.id === initialDocumentId)) : initialSourceAssetId || requireExplicitSource ? undefined : documents[0];
+  const initialRevision = initialDocument?.revisions.find((revision) => revision.id === initialDocumentId) ?? initialDocument?.currentRevision;
   const savedPattern = studioPrintPatternSchema.safeParse(
-    documents[0]?.currentRevision.payload,
+    initialRevision?.payload,
   );
   const initial = savedPattern.success
     ? savedPattern.data
     : studioPrintPatternSchema.parse({
         name: "印花方案",
-        sourceAssetId: assets[0]?.id ?? "pending",
+        sourceAssetId: initialSourceAssetId ?? (requireExplicitSource ? "pending" : assets[0]?.id ?? "pending"),
         notes: "",
       });
   const [value, setValue] = useState<Pattern>(initial);
@@ -61,7 +71,7 @@ export function PrintWorkbench({
     return () => onDirty?.(false);
   }, [signature, baseline, onDirty]);
   const [editing, setEditing] = useState<StudioDocumentView | null>(
-    savedPattern.success ? (documents[0] ?? null) : null,
+    savedPattern.success ? initialDocument ?? null : null,
   );
   usePersistentDraft({ value, restore: setValue, baseline, objectKey: editing?.id ?? "new" });
   const [busy, setBusy] = useState(false);
@@ -149,6 +159,7 @@ export function PrintWorkbench({
       pending.current = null;
       setNotice("印花参数已保存为修订 " + saved.version);
       receipt.succeed();
+      await onRecord?.(saved);
       onRefresh?.();
     } catch (cause) {
       receipt.fail();

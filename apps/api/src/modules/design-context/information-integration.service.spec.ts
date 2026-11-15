@@ -10,6 +10,7 @@ function fixture() {
   const built = { graph, context } as unknown as Awaited<ReturnType<DesignContextService["build"]>>;
   const versions: NodeVersionFact[] = [{ id: "v1", projectId: "project", nodeId: "tool-a", version: 1, graphRevision: 1, kind: "tool", type: "generate", title: "方案", payload: { params: { prompt: "灰色" }, url: "https://private.example/secret" }, inputBindings: [], previousVersionId: null, origin: "baseline", baseline: true, createdAt: new Date(1) }, { id: "v2", projectId: "project", nodeId: "tool-a", version: 2, graphRevision: 2, kind: "tool", type: "generate", title: "方案", payload: { params: { prompt: "银色" } }, inputBindings: [], previousVersionId: "v1", origin: "user", baseline: false, createdAt: new Date(2) }];
   const database = {
+    canvasCreation: { findMany: vi.fn(async () => []) },
     project: { findUnique: vi.fn().mockResolvedValue({ id: "project", archived: false, deletedAt: null, workspace: { ownerId: "user" } }), findFirst: vi.fn(async () => ({ id: "project" })) }, agentConversation: { findFirst: vi.fn(async () => ({ id: "conversation" })) },
     workflowNodeVersion: { findMany: vi.fn<(query?: unknown) => Promise<NodeVersionFact[]>>().mockResolvedValue(versions), count: vi.fn(async () => 2) },
     workflowMutation: { findMany: vi.fn(async () => [{ id: "m1", mutationId: "mutation", origin: "user", baseRevision: 1, resultRevision: 2, beforeSnapshot: { nodes: [{ id: "tool-a" }], edges: [] }, afterSnapshot: { nodes: [{ id: "tool-a" }], edges: [] }, createdAt: new Date(2) }]), count: vi.fn(async () => 1) },
@@ -26,7 +27,7 @@ describe("InformationIntegrationService", () => {
     const { service, built, contexts } = fixture();
     const result = await service.integrate("user", "project", { built, conversationId: "conversation", currentStep: { currentStepGoal: "调整袖口" }, tools: [{ key: "edit_design" }] });
     expect(contexts.build).not.toHaveBeenCalled();
-    expect(Object.keys(result.slots)).toEqual(["initialGoal", "currentStepGoal", "designTrajectory", "dialogue", "implicitIntent", "toolInformation"]);
+    expect(Object.keys(result.slots)).toEqual(["initialGoal", "currentStepGoal", "creativeCanvas", "designTrajectory", "dialogue", "implicitIntent", "toolInformation"]);
     expect(result.slots.initialGoal).toMatchObject({ currentObjective: "轻量通勤外套" });
     expect(result.slots.currentStepGoal).toMatchObject({ currentTask: "检查袖口", plan: { currentStepGoal: "调整袖口" } });
     expect(result.context.versionHistory).toContainEqual(expect.objectContaining({ nodeVersionId: "v2", previousVersionId: "v1", changes: [expect.objectContaining({ beforeVersionId: "v1" })] }));

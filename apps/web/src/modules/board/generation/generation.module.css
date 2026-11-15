@@ -1245,7 +1245,24 @@
   /* Opaque paper, not frosted glass: at 96% the blur was invisible anyway
      and cost a composited layer on every scroll frame. */
   background: var(--color-surface);
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.collectionPlanning {
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.collectionNavigation {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  background: var(--color-paper);
+}
+
+.collectionNavigation > .collectionHeader,
+.collectionNavigation > .collectionTabs {
+  position: static;
 }
 
 .collectionTabs button {
@@ -2984,6 +3001,12 @@
   min-height: var(--studio-header-height);
   border-color: var(--color-border);
   padding: var(--space-3) var(--space-5);
+}
+
+@media (max-width: 767px) {
+  .collectionPlanning {
+    padding: var(--space-3);
+  }
 }
 .collectionHeader strong {
   font-size: var(--text-xl);

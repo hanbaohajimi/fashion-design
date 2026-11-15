@@ -1605,3 +1605,6 @@
     transition: none;
   }
 }
+.managementHeader { display: flex; align-items: baseline; flex-wrap: wrap; gap: 16px; width: min(calc(100% - 2 * var(--page-gutter)), var(--content-max-width)); margin: 0 auto 24px; padding-top: 32px; }
+.managementHeader h1 { margin: 0; font-size: 28px; font-weight: 600; }
+.managementHeader p { margin: 0; font-size: 14px; color: var(--color-ink-secondary); }

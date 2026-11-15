@@ -121,7 +121,7 @@ for (const viewport of [
         await page.setViewportSize(viewport);
         await page.goto(
           screen === "projects"
-            ? "/"
+            ? "/projects"
             : screen === "invalid-link"
               ? "/auth/confirm"
               : screen === "share"
@@ -191,6 +191,14 @@ for (const viewport of [
         await expect(page).toHaveScreenshot(`${screen}-${viewport.width}.png`, {
           fullPage: screen !== "fabrics",
         });
+        if (screen === "fabrics") {
+          const card = page.getByRole("article").first();
+          await card.getByRole("button", { name: /查看面料规格：/u }).click();
+          await expect(card.getByRole("button", { name: /完整档案：/u })).toBeVisible();
+          expect(await controlFontFailures(page)).toEqual([]);
+          expect(await contrastFailures(page)).toEqual([]);
+          await expect(page).toHaveScreenshot(`fabrics-back-${viewport.width}.png`);
+        }
       });
     }
   });
@@ -221,7 +229,7 @@ test("project empty and failure states", async ({ page }) => {
   await page.route("**/api/projects?*", (route) =>
     route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }),
   );
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(
     page.getByRole("heading", { name: "从第一个系列开始" }),
   ).toBeVisible();
@@ -242,12 +250,9 @@ test("project empty and failure states", async ({ page }) => {
   await expect(page).toHaveScreenshot("projects-error.png");
 });
 
-test("侧栏新建项目入口打开并关闭创建对话框", async ({ page }) => {
-  await page.goto("/");
-  const newProject = page.getByRole("link", { name: "新建项目", exact: true });
-
-  await newProject.click();
-  await expect(page).toHaveURL(/\/\?new=1$/u);
+test("项目管理保留命名创建链接与对话框", async ({ page }) => {
+  await page.goto("/projects?new=1");
+  await expect(page).toHaveURL(/\/projects\?new=1$/u);
   await expect(
     page.getByRole("dialog", { name: "给新系列一个名字" }),
   ).toBeVisible();
@@ -256,7 +261,7 @@ test("侧栏新建项目入口打开并关闭创建对话框", async ({ page }) 
   await expect(
     page.getByRole("dialog", { name: "给新系列一个名字" }),
   ).toBeHidden();
-  await expect(page).toHaveURL(/\/$/u);
+  await expect(page).toHaveURL(/\/projects$/u);
 });
 
 test("readonly technical revision remains readable", async ({ page }) => {

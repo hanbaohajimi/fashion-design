@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-25T16:29:24.542Z",
+  "generatedAt": "2026-11-14T07:04:53Z",
   "title": "Design System: 森织设计工作室 · 织物档案",
   "extensions": {
     "featureGuide": {
-      "updatedAt": "2026-10-28",
+      "updatedAt": "2026-11-14",
       "source": "apps/web/src/components/feature-guide/",
-      "scope": "projects、workspace、studio、fabrics、trends 五类页面；studio 十二项功能及不同项目共用 studio 偏好。",
+      "scope": "home、assets、projects、workspace、studio、fabrics、trends 七类页面；studio 十二项功能及不同项目共用 studio 偏好。",
       "presentation": "MotionDialog guide 变体使用原生模态 dialog；SVG 遮罩挖洞与暖白/深绿双层轮廓突出当前功能，短说明卡提供上一步、下一步/完成、跳过。",
       "visual": "继承 --color-paper、--color-ink、--color-ink-secondary、--color-action、--color-scrim-soft、--radius-lg、--shadow-modal 与 --font-sans；标题16px、正文14px、步数12px，按钮至少44px。",
       "placement": "桌面比较目标四周候选位置以减少遮挡；<768px优先底部并比较顶部位置。使用visualViewport与安全区，边缘保留16px；卡片过高时内部滚动，目标可滚动到视口。",
@@ -19,7 +19,7 @@
       },
       "automatic": "已登录且页面标记就绪；目标布局稳定600ms，无业务模态/菜单、输入焦点或按住指针。隐藏页面暂停；加载失败不展示、不记已查看。",
       "targets": "仅解析当前有布局且未隐藏、未禁用的 data-guide 目标；缺失或移除时跳过，助手收起时只介绍已有入口。",
-      "copy": "助手按data-guide-variant的collapsed、mobile、input、history、paused适配当前入口与可用操作；资料页仅在data-guide-switcher或data-guide-revision为true时介绍切换或修订。面料说明“规格筛选”的分类、成分、供应商与克重，并区分搜索框的名称、标签、编号；趋势说明搜索标题、摘要、关键词及按主题查看。",
+      "copy": "首页介绍未命名项目直接进入独立画布、先选项目的创作快捷入口和最近更新项目；资产介绍跨项目查找与当前账号的个人评级。助手按data-guide-variant的collapsed、mobile、input、history、paused适配当前入口与可用操作；资料页仅在data-guide-switcher或data-guide-revision为true时介绍切换或修订。面料说明“规格筛选”的分类、成分、供应商与克重，并区分搜索框的名称、标签、编号；趋势说明搜索标题、摘要、关键词及按主题查看。",
       "preference": "localStorage: fashion:feature-guide:v1:<accountId>:<surface>；首次打开记viewed，跳过或Escape记skipped，末步完成记completed。任一有效状态阻止再次自动展示；存储不可用时保留当前Provider内存选择。",
       "replay": "账号菜单“功能指引”；流程画布“工作室帮助”中的“查看界面指引”在原弹窗关闭后重播。",
       "accessibility": "原生模态焦点与Tab循环、Escape退出、关闭后安全返回焦点；步数和说明使用polite播报。",
@@ -69,7 +69,7 @@
       "scope": "/studio 的 11 个子功能；用户在商品展示包样板后明确要求推广；不影响全应用构图。",
       "updatedAt": "2026-10-26",
       "source": "apps/web/src/modules/studio/",
-      "navigation": "仅工作室：StudioWorkspace 传入 currentIsParent，父级“款式与交付”保留 aria-current 路径语义及选择文字色，但 data-current-parent 改为透明底、500 字重。StudioNavigation 的 data-studio-hierarchy 将分组内子功能左缩进8px，实际选中子页保留浅绿底、600 字重；其他全局当前项沿用共享样式。",
+      "navigation": "现行工作室目录由 WorkspaceDirectory 提供，创作工具、交付管理与项目资料从 STUDIO_GROUPS 派生并可折叠。当前 tab 所属组默认展开；子功能保留 aria-selected、aria-controls 与手动激活的方向键/Home/End焦点行为，点击通过 StudioWorkspace 的既有 onChange 和离开保护切换。当前项浅绿底、600字重；不再使用独立的常驻 StudioNavigation 列，其他业务页构图保持原契约。",
       "layout": {
         "stylesSamplesBrand": "minmax(0, 1fr) 296px；max-width:1099px 单列",
         "experimentsPlanningEditing": "minmax(0, 1fr) 340px；max-width:1099px 单列；系列未编辑时单列",
@@ -1286,11 +1286,26 @@
         "name": "busy-pulse",
         "value": "1.2s ease-in-out infinite",
         "purpose": "Button 300ms 后的等待标记；reduce 时 animation:none"
+      },
+      {
+        "name": "motion-select-enter",
+        "value": "180ms",
+        "purpose": "ChoiceSelect 可选 glide 浮层从触发侧以 scale(.95) 和 opacity 进入；键盘即时打开，减弱动态归零。"
+      },
+      {
+        "name": "motion-select-exit",
+        "value": "120ms",
+        "purpose": "ChoiceSelect 可选 glide 浮层退出；退出视觉不可交互，键盘即时关闭，减弱动态归零。"
+      },
+      {
+        "name": "choice-glide-indicator",
+        "value": "220ms var(--ease-out)",
+        "purpose": "glide 选项浅绿高亮的 transform 过渡；源码局部值，键盘与减弱动态不使用过渡。"
       }
     ],
     "breakpoints": [
       {
-        "name": "workspace-menu-bar-max",
+        "name": "workspace-drawer-max",
         "value": "1199px"
       },
       {
@@ -1361,9 +1376,26 @@
         "apps/web/src/modules/studio/TrendBriefPanel.tsx",
         "apps/web/src/modules/studio/BrandLibrary.tsx",
         "apps/web/src/components/BrandLockup.tsx",
-        "apps/web/src/app/(auth)/login/forest-login.module.css"
+        "apps/web/src/app/(auth)/login/forest-login.module.css",
+        "apps/web/src/components/WorkspaceDirectory.tsx",
+        "apps/web/src/components/WorkspaceShell.tsx",
+        "apps/web/src/components/WorkspaceChrome.tsx",
+        "apps/web/src/components/choice-controls.tsx",
+        "apps/web/src/components/choice-controls.module.css",
+        "apps/web/src/components/interactions/use-menu-motion.ts",
+        "apps/web/src/modules/projects/HomePage.tsx",
+        "apps/web/src/modules/projects/ProjectEntryProvider.tsx",
+        "apps/web/src/modules/projects/home.module.css",
+        "apps/web/src/modules/projects/workspace-tools.ts",
+        "apps/web/src/modules/assets/AssetLibrary.tsx",
+        "apps/web/src/modules/assets/assets.module.css",
+        "apps/web/src/modules/board/workflow/CanvasProjectMenu.tsx",
+        "apps/web/src/modules/workspace-route.ts",
+        "apps/web/src/modules/projects/PublicLanding.tsx",
+        "apps/web/src/modules/projects/public-landing.module.css"
       ],
       "authority": [
+        "apps/web/DESIGN.md",
         "apps/web/PRODUCT.md",
         "doc/impeccable/设计契约.md",
         "apps/web/.impeccable/surfaces/redesign-comparison.md",
@@ -1374,7 +1406,11 @@
         "output/impeccable-redesign/production-finish-review/review.md",
         "output/impeccable-redesign/production-finish-review/verdict-1.md",
         "output/studio-redesign/review-final/",
-        "output/unified-navigation/finish-review.md"
+        "output/unified-navigation/finish-review.md",
+        "output/home-assets-redesign/",
+        "output/home-assets-redesign/verification.json",
+        "output/public-landing-redesign/verification.json",
+        "output/public-landing-redesign/screens"
       ],
       "rampMethod": "Eight synthetic OKLCH preview steps, not runtime tokens; alpha is omitted in preview ramps."
     },
@@ -1476,6 +1512,67 @@
         "defaultSsrBrowserReads": false
       },
       "verification": "output/ui-motion and output/playwright/*-motion*; fixture results are not real model validation"
+    },
+    "publicLanding": {
+      "source": "apps/web/src/modules/projects/PublicLanding.tsx",
+      "stylesheet": "apps/web/src/modules/projects/public-landing.module.css",
+      "scope": "仅未登录 / 的公开介绍页；以下是组件局部 CSS 值，既有工作区颜色、字号与动效 token 不变。",
+      "localCss": {
+        "--landing-paper": "#f8f6ef",
+        "--landing-ink": "#193b2c",
+        "--landing-muted": "#526457",
+        "--landing-line": "#d7dbcf",
+        "--landing-gutter": "clamp(24px, 6vw, 112px)"
+      },
+      "typography": {
+        "font": "标题 var(--font-serif)，正文及控件 var(--font-sans)；沿用现有字体族。",
+        "headline": "clamp(42px, 4.08vw, 68px) / 400 / 1.18 / -0.025em；桌面紧凑单行。",
+        "headlineAt900": "clamp(36px, 5.6vw, 48px) / 1.25；两行。",
+        "scope": "公开页的局部编辑式字阶，不扩大工作区的44px上限。"
+      },
+      "layout": {
+        "headerHeight": "68px",
+        "contentMaxWidth": "1440px",
+        "phoneGutter": "20px",
+        "processRatios": [
+          "2 / 1",
+          "1573 / 1000",
+          "2390 / 1024"
+        ],
+        "lookViewportRatio": "3 / 4",
+        "mobileImageSizes": "(max-width: 900px) 300vw；用于主图与造型聚焦图的响应式选图。",
+        "anchorScrollMargin": "88px",
+        "toolsSectionBackground": "#183b2e",
+        "heroDesktopHeight": "clamp(520px, 39.22vw, 700px)",
+        "navigationBreakpointMax": "900px",
+        "singleColumnBreakpointMax": "767px"
+      },
+      "motion": {
+        "heroSettle": "局部760ms var(--ease-out)，scale(1.025) → scale(1)；图片载入后。",
+        "sectionReveal": "局部480ms var(--ease-out)，opacity与18px位移；首次进入视口。",
+        "lookFocus": "局部250ms var(--ease-in-out)，transform；键盘切换即时。",
+        "scrollDrift": "仅支持 animation-timeline:view() 的桌面浏览器，exit 0%–100%至 translateY(8%) scale(1.04)；不接管滚动。",
+        "accessibility": "prefers-reduced-motion关闭过渡与漂移，内容直接可见；hover仅用于精细指针。"
+      },
+      "imagery": {
+        "manifest": "apps/web/assets/plates/SOURCE.md",
+        "files": [
+          "hero-photo.png",
+          "material-photo.png",
+          "sketch-photo.png",
+          "collection-photo.png"
+        ],
+        "location": "apps/web/assets/plates/",
+        "provenance": "四张素材由内置 ImageGen 独立生成；公开页面标明 AI 设计示例，不代表实拍、用户项目或已完成的生成任务。",
+        "interpolation": "主图2003×785 → 2560×1003；系列图1916×821 → 2390×1024，均为等比插值放大，不新增原生细节。材质与草图使用原生尺寸。",
+        "metadata": "完整提示词嵌入各PNG；原生来源、最终哈希、尺寸及处理方式保留在SOURCE.md。"
+      },
+      "evidence": {
+        "verification": "output/public-landing-redesign/verification.json",
+        "screenshots": "output/public-landing-redesign/screens",
+        "typography": "用户批准以获选图的构图与氛围为准，沿用现有衬线字体并按代码实现；自动字体匹配未取得可用结果。",
+        "fontFailureRecord": "output/public-landing-redesign/font-gate-state.json"
+      }
     }
   },
   "components": [
@@ -1528,12 +1625,12 @@
       "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;padding:3px var(--space-2, 8px);border-radius:var(--radius-sm, 4px);background:var(--color-success-bg, #effbf5);color:var(--color-success, #4a6b57);font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif);font-size:var(--text-sm, 12px);font-weight:400;}.ds-status-icon{width:18px;height:18px;flex:none;align-self:center;}"
     },
     {
-      "name": "ArchiveNavigation / 共享目录",
+      "name": "WorkspaceDirectory / 工作空间与资料入口",
       "kind": "nav",
       "refersTo": "navigation",
-      "description": "src/components/ArchiveNavigation.tsx 与 archive-navigation.module.css：统一暖白导航，桌面 184px，<1200px 为 64px 菜单栏。预览为无项目的三项入口，省略彩色 Logo、账户和固定定位以适应面板；真实菜单的 Escape 与焦点管理由共享 Menu 提供。",
-      "html": "<nav class=\"ds-nav\" aria-label=\"工作区导航\"><div class=\"ds-nav-links\"><a href=\"/\" aria-current=\"page\">项目库</a><a href=\"/fabrics\">面料库</a><a href=\"/trends?from=projects\">趋势档案</a></div><details class=\"ds-nav-menu\"><summary aria-label=\"切换工作区\"><span>项目库</span><svg aria-hidden=\"true\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m6 9 6 6 6-6\"/></svg></summary><div class=\"ds-nav-popup\"><a href=\"/\" aria-current=\"page\">项目库</a><a href=\"/fabrics\">面料库</a><a href=\"/trends?from=projects\">趋势档案</a></div></details></nav>",
-      "css": ".ds-nav,.ds-nav a,.ds-nav-menu summary,.ds-nav-popup{box-sizing:border-box}.ds-nav{width:var(--workspace-nav-width,184px);padding:var(--space-5,20px) var(--space-3,12px);background:var(--color-navigation,#fffefa);color:var(--color-navigation-ink,#20332e);border-right:1px solid var(--color-navigation-border,#e0e4db);font:400 var(--text-base,14px)/var(--leading-normal,1.5) var(--font-sans,system-ui,sans-serif)}.ds-nav-links{display:grid;gap:var(--space-1,4px)}.ds-nav a{display:flex;align-items:center;gap:var(--space-2,8px);min-height:40px;padding:var(--space-2,8px) var(--space-3,12px);border-radius:var(--radius-md,6px);color:var(--color-navigation-muted,#586a60);font-size:var(--text-base,14px);text-decoration:none}.ds-nav a:hover{color:var(--color-navigation-ink,#20332e);background:var(--color-navigation-hover,#f7f8f2)}.ds-nav a[aria-current=\"page\"]{color:var(--color-selection-ink,#1c4c3d);background:var(--color-navigation-selected,#e7eee2);font-weight:var(--font-semibold,600)}.ds-nav :focus-visible{outline:2px solid var(--color-focus-ring,#2b7058);outline-offset:3px}.ds-nav-menu{display:none;position:relative}.ds-nav-menu summary{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2,8px);min-height:44px;padding:6px 10px;border:1px solid var(--color-navigation-border,#e0e4db);border-radius:var(--radius-md,6px);background:var(--color-navigation,#fffefa);color:var(--color-navigation-ink,#20332e);font-size:var(--text-base,14px);cursor:pointer;list-style:none}.ds-nav-menu summary::-webkit-details-marker{display:none}.ds-nav-popup{position:absolute;z-index:1;top:calc(100% + 8px);left:0;width:min(280px,calc(100vw - 32px));max-height:calc(100dvh - 88px);overflow-y:auto;min-width:176px;padding:6px;border:1px solid var(--color-border,#d8ddd3);border-radius:var(--radius-lg,8px);background:var(--color-paper,#fffefa);box-shadow:var(--shadow-popup)}@media(max-width:1199px){.ds-nav{display:flex;align-items:center;width:auto;height:var(--workspace-mobile-nav-height,64px);padding:var(--space-2,8px) var(--space-4,16px);border-right:0;border-bottom:1px solid var(--color-navigation-border,#e0e4db)}.ds-nav-links{display:none}.ds-nav-menu{display:block;flex:1}.ds-nav a{min-height:44px}}"
+      "description": "WorkspaceDirectory.tsx 经 ArchiveNavigation 兼容出口提供共享暖白目录；桌面宽200px，<1200px为左侧模态抽屉，独立画布不挂载。预览展示首页/项目/资产与发现/面料入口，省略品牌、快速新建、分组、账户和固定定位；真实抽屉由共享 Dialog 处理焦点与 Escape。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"工作区导航\"><div class=\"ds-nav-group\"><span class=\"ds-nav-label\">工作空间</span><a href=\"/\" aria-current=\"page\">首页</a><a href=\"/projects\">项目</a><a href=\"/assets\">资产</a></div><div class=\"ds-nav-group\"><span class=\"ds-nav-label\">灵感与资料</span><a href=\"/trends?from=projects\">发现</a><a href=\"/fabrics?from=projects\">面料库</a></div></nav>",
+      "css": ".ds-nav{box-sizing:border-box;width:var(--workspace-nav-width,200px);max-width:100%;padding:12px;background:var(--color-navigation,oklch(98.5% 0.007 96));color:var(--color-navigation-ink,#1c2b26);border-right:var(--border-hairline,.5px) solid var(--color-navigation-border,#dfe3d8);font:400 14px/1.5 var(--font-sans,system-ui,sans-serif)}.ds-nav-group{display:grid;gap:3px}.ds-nav-group+.ds-nav-group{margin-top:18px;padding-top:16px;border-top:1px solid var(--color-navigation-border,#dfe3d8)}.ds-nav-label{padding:0 12px 5px;color:var(--color-navigation-muted,#52645b);font-size:12px;font-weight:500}.ds-nav a{display:flex;align-items:center;min-height:40px;padding:8px 12px;border-radius:var(--radius-md,6px);color:var(--color-navigation-muted,#52645b);text-decoration:none}.ds-nav a:hover{color:var(--color-navigation-ink,#1c2b26);background:var(--color-navigation-hover,oklch(95.5% 0.009 96))}.ds-nav a[aria-current=\"page\"]{color:var(--color-selection-ink,#174a39);background:var(--color-navigation-selected,#e3ebdd);font-weight:600}.ds-nav a:focus-visible{outline:2px solid var(--color-focus-ring,#256b52);outline-offset:3px}@media(max-width:1199px){.ds-nav{width:min(280px,calc(100vw - 32px))}.ds-nav a{min-height:44px}}"
     },
     {
       "name": "Planning card",
@@ -1560,12 +1657,28 @@
       "css": ".ds-record{display:grid;grid-template-columns:200px minmax(0,1fr);border:1px solid var(--color-border, #d8ddd3);border-radius:var(--radius-lg, 8px);background:var(--color-paper, #fffefa);color:var(--color-ink, #20332e);font-family:var(--font-sans, \"Inter\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans SC\", -apple-system, system-ui, sans-serif)}.ds-record-image{min-height:180px;background:var(--color-surface, #f7f8f2);border-radius:var(--radius-lg, 8px) 0 0 var(--radius-lg, 8px);display:grid;place-items:center;color:var(--color-ink-secondary, #586a60);font-size:var(--text-sm, 12px)}.ds-record-body{display:flex;flex-direction:column;gap:var(--space-3, 12px);padding:var(--space-5, 20px) var(--space-6, 24px);min-width:0}.ds-record-body h2{font-size:var(--text-section-title, 20px);font-weight:var(--font-semibold, 600)}.ds-record-body p{font-size:var(--text-sm, 12px);color:var(--color-ink-secondary, #586a60)}.ds-record-body a{display:inline-flex;align-items:center;align-self:flex-start;min-height:40px;margin-top:auto;color:var(--color-action, #286452);font-size:var(--text-base, 14px);font-weight:var(--font-semibold, 600);text-decoration:none}.ds-record-body a:hover{text-decoration:underline}.ds-record-body a:focus-visible{outline:2px solid var(--color-focus-ring, #2b7058);outline-offset:2px}@media(max-width:767px){.ds-record{grid-template-columns:96px minmax(0,1fr)}.ds-record-image{min-height:170px}.ds-record-body{padding:var(--space-3, 12px);gap:var(--space-2, 8px)}.ds-record-body h2{font-size:var(--text-lg, 16px)}.ds-record-body a{min-height:44px}}.ds-record:hover{transform:none;border-color:var(--color-border-strong, #a6b2a7);box-shadow:none}"
     },
     {
-      "name": "ArchiveNavigation / 工作室分组功能",
+      "name": "WorkspaceDirectory / 可折叠项目功能",
       "kind": "nav",
       "refersTo": "studio-navigation",
-      "description": "共享暖白目录中嵌入的 StudioNavigation，保留全部 11 项及选中视觉。真实页面在 ≥1200px 的项目功能区独立滚动，选中项 nearest 滚入可见范围；<1200px 改用内容区功能选择器。预览省略全局入口、Logo、账户、固定定位和响应式隐藏；方向键与切换由 React 提供。",
-      "html": "<div class=\"ds-studio-nav\" role=\"tablist\" aria-label=\"设计工作室功能\" aria-orientation=\"vertical\"><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">创作</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>开始任务</span></button><button type=\"button\" role=\"tab\" aria-selected=\"true\" tabindex=\"0\"><span>款式档案</span><span aria-hidden=\"true\">›</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>色料实验</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>印花工作台</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>商品展示</span></button></div><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">交付</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>系列规划</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>技术包</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>样衣反馈</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>团队评审</span></button></div><div class=\"ds-studio-group\" role=\"presentation\"><span class=\"ds-studio-group-label\">资料</span><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>趋势简报</span></button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><span>品牌资料</span></button></div></div>",
-      "css": ".ds-studio-nav{box-sizing:border-box;display:grid;gap:var(--space-3,12px);width:var(--workspace-nav-width,184px);padding:var(--space-5,20px) var(--space-3,12px);background:var(--color-navigation,#fffefa);color:var(--color-ink-secondary,#586a60);border-right:1px solid var(--color-navigation-border,#e0e4db);font:400 var(--text-base,14px)/var(--leading-normal,1.5) var(--font-sans,system-ui,sans-serif)}.ds-studio-group{display:grid}.ds-studio-group-label{margin-top:var(--space-2,8px);padding:var(--space-1,4px) var(--space-3,12px);font-size:var(--text-xs,12px)}.ds-studio-nav button{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2,8px);min-height:40px;width:100%;padding:var(--space-1,4px) var(--space-3,12px);border:0;border-radius:var(--radius-md,6px);background:transparent;color:var(--color-ink-secondary,#586a60);font:inherit;text-align:left;cursor:pointer}.ds-studio-nav button:hover{background:var(--color-surface,#f7f8f2);color:var(--color-ink,#20332e)}.ds-studio-nav button[aria-selected=\"true\"]{background:var(--color-selection-bg,#e7eee2);color:var(--color-selection-ink,#1c4c3d);font-weight:var(--font-semibold,600);box-shadow:none}.ds-studio-nav button:focus-visible{outline:2px solid var(--color-focus-ring,#2b7058);outline-offset:3px}"
+      "description": "同一目录中的创作工具、交付管理、项目资料，保留画布入口和原十二项 studio 功能。当前功能所属组进入时展开，用户可手动收起；预览用原生 details 演示分组形态，产品由 React 管理展开、键盘手动激活及离开保护，不通过预览执行项目操作。",
+      "html": "<nav class=\"ds-studio-nav\" aria-label=\"项目功能\"><details class=\"ds-studio-group\" open><summary>创作工具<svg aria-hidden=\"true\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m9 5 7 7-7 7\"/></svg></summary><div class=\"ds-studio-links\"><button type=\"button\">画布创作</button><button type=\"button\">开始任务</button><button type=\"button\" aria-current=\"page\">款式档案</button><button type=\"button\">色料实验</button><button type=\"button\">印花工作台</button><button type=\"button\">商品展示</button><button type=\"button\">服装秀</button></div></details><details class=\"ds-studio-group\"><summary>交付管理<svg aria-hidden=\"true\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m9 5 7 7-7 7\"/></svg></summary><div class=\"ds-studio-links\"><button type=\"button\">系列规划</button><button type=\"button\">技术包</button><button type=\"button\">样衣反馈</button><button type=\"button\">团队评审</button></div></details><details class=\"ds-studio-group\"><summary>项目资料<svg aria-hidden=\"true\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"m9 5 7 7-7 7\"/></svg></summary><div class=\"ds-studio-links\"><button type=\"button\">趋势简报</button><button type=\"button\">品牌资料</button></div></details></nav>",
+      "css": ".ds-studio-nav{box-sizing:border-box;display:grid;width:var(--workspace-nav-width,200px);max-width:100%;padding:12px;background:var(--color-navigation,oklch(98.5% 0.007 96));color:var(--color-navigation-ink,#1c2b26);font:400 14px/1.5 var(--font-sans,system-ui,sans-serif)}.ds-studio-group summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:8px 12px;border-radius:var(--radius-md,6px);cursor:pointer;list-style:none}.ds-studio-group summary::-webkit-details-marker{display:none}.ds-studio-group summary svg{transition:transform 180ms var(--ease-out,cubic-bezier(.23,1,.32,1))}.ds-studio-group[open] summary svg{transform:rotate(90deg)}.ds-studio-links{display:grid;gap:2px;padding:0 0 6px 12px}.ds-studio-links button{min-height:40px;padding:8px 12px;border:0;border-radius:var(--radius-md,6px);background:transparent;color:var(--color-navigation-muted,#52645b);font:inherit;font-size:13px;text-align:left;cursor:pointer}.ds-studio-links button[aria-current=\"page\"]{color:var(--color-action,#1f5c47);background:var(--color-navigation-selected,#e3ebdd);font-weight:600}.ds-studio-nav :focus-visible{outline:2px solid var(--color-focus-ring,#256b52);outline-offset:3px}@media(hover:hover) and (pointer:fine){.ds-studio-group summary:hover,.ds-studio-links button:hover{background:var(--color-navigation-hover,oklch(95.5% 0.009 96))}}@media(max-width:767px){.ds-studio-links button{min-height:44px}}@media(prefers-reduced-motion:reduce){.ds-studio-group summary svg{transition:none}}"
+    },
+    {
+      "name": "ChoiceSelect / 资产评级 glide",
+      "kind": "custom",
+      "refersTo": "choice-select-glide",
+      "description": "可选 glide 变体复用现有 ChoiceSelect 浮层、listbox、键盘和触屏机制；暖金星、浅绿移动高亮及选中勾同时表达评级。预览是已打开且选中3星的视觉片段，CSS演示指针高亮；真正的选择、浮层定位、180/120ms进出及保存由 React/WAAPI 提供。待保存时使用 aria-disabled/aria-busy 保留触发器焦点。",
+      "html": "<div class=\"ds-rating\"><button class=\"ds-rating-trigger\" type=\"button\" aria-label=\"评级示例资产\" aria-haspopup=\"listbox\" aria-expanded=\"true\" aria-controls=\"ds-asset-rating-list\"><span>3 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m6 15 6-6 6 6\"/></svg></button><div class=\"ds-rating-popup\"><div class=\"ds-rating-list\" id=\"ds-asset-rating-list\" role=\"listbox\" aria-label=\"个人评级\"><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"false\"><span>未评级</span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"false\"><span>1 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"false\"><span>2 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"true\"><span>3 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"false\"><span>4 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><button class=\"ds-rating-option\" type=\"button\" role=\"option\" aria-selected=\"false\"><span>5 星<svg class=\"ds-rating-star\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 2 3 6.5 7 .9-5.1 5 1.3 7.1-6.2-3.4-6.2 3.4 1.3-7.1L2 9.4l7-.9Z\"/></svg></span><svg class=\"ds-rating-check\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"m5 12 4 4L19 6\"/></svg></button><span class=\"ds-rating-pill\" aria-hidden=\"true\"></span></div></div></div>",
+      "css": ".ds-rating{width:176px;font:400 14px/1.5 var(--font-sans,system-ui,sans-serif);color:var(--color-ink,#1c2b26)}.ds-rating-trigger{box-sizing:border-box;display:flex;align-items:center;gap:6px;min-height:var(--control-height,36px);padding:8px 12px;border:1px solid transparent;border-radius:var(--radius-md,6px);background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}.ds-rating-trigger>span,.ds-rating-option>span{display:inline-flex;align-items:center;gap:6px}.ds-rating-star{flex:none;color:#ad6909}.ds-rating-popup{box-sizing:border-box;margin-top:8px;padding:6px;border-radius:12px;background:var(--color-paper,oklch(98.5% 0.007 96));box-shadow:var(--shadow-popup,0 4px 16px rgba(24,24,24,.12))}.ds-rating-list{position:relative;display:grid;--ds-rating-option-height:40px;--ds-rating-active:3}.ds-rating-option{box-sizing:border-box;position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;min-height:var(--ds-rating-option-height);padding:8px 12px;border:0;border-radius:var(--radius-sm,4px);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.ds-rating-pill{position:absolute;inset:0 0 auto;height:var(--ds-rating-option-height);border-radius:8px;background:var(--color-navigation-selected,#e3ebdd);pointer-events:none;transform:translateY(calc(var(--ds-rating-active)*var(--ds-rating-option-height)));transition:transform 220ms var(--ease-out,cubic-bezier(.23,1,.32,1))}.ds-rating-check{flex:none;color:var(--color-action,#1f5c47);visibility:hidden}.ds-rating-option[aria-selected=\"true\"]{font-weight:600}.ds-rating-option[aria-selected=\"true\"] .ds-rating-check{visibility:visible}.ds-rating :focus-visible{outline:2px solid var(--color-focus-ring,#256b52);outline-offset:3px}.ds-rating-list:focus-within .ds-rating-pill{transition:none}@media(hover:hover) and (pointer:fine){.ds-rating-list:has(.ds-rating-option:nth-of-type(1):hover){--ds-rating-active:0}.ds-rating-list:has(.ds-rating-option:nth-of-type(2):hover){--ds-rating-active:1}.ds-rating-list:has(.ds-rating-option:nth-of-type(3):hover){--ds-rating-active:2}.ds-rating-list:has(.ds-rating-option:nth-of-type(4):hover){--ds-rating-active:3}.ds-rating-list:has(.ds-rating-option:nth-of-type(5):hover){--ds-rating-active:4}.ds-rating-list:has(.ds-rating-option:nth-of-type(6):hover){--ds-rating-active:5}}@media(max-width:767px),(any-pointer:coarse){.ds-rating-trigger{min-height:44px}.ds-rating-list{--ds-rating-option-height:44px}}@media(prefers-reduced-motion:reduce){.ds-rating-pill{transition:none}}"
+    },
+    {
+      "name": "PublicLanding / 衬线标题与登录入口",
+      "kind": "custom",
+      "refersTo": "public-landing-entry",
+      "description": "未登录公开页的局部字阶与登录入口；预览省略影像和全页结构，仅呈现源码中的字体、局部配色与操作状态。这些样式不替换已登录工作区规范。",
+      "html": "<section class=\"ds-public-entry\" aria-label=\"公开页创作入口\"><h2 class=\"ds-public-title\"><span>让灵感，</span><span>穿上形状。</span></h2><p class=\"ds-public-lead\">从面料、廓形与色彩出发，与 AI 一起，<br class=\"ds-public-break\">把创意做成可继续的服装系列。</p><div class=\"ds-public-actions\"><a class=\"ds-public-primary\" href=\"/login\">开始创作<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h16m-6-6 6 6-6 6\"/></svg></a><a class=\"ds-public-secondary\" href=\"/#inspiration\">探索设计灵感</a></div></section>",
+      "css": ".ds-public-entry{--landing-paper:#f8f6ef;--landing-ink:#193b2c;--landing-muted:#526457;padding:24px;background:var(--landing-paper);color:var(--landing-ink);font-family:var(--font-sans,\"Inter\",\"PingFang SC\",\"Hiragino Sans GB\",\"Microsoft YaHei\",\"Noto Sans SC\",-apple-system,system-ui,sans-serif)}.ds-public-title{margin:0;font-family:var(--font-serif,\"Palatino Linotype\",Palatino,\"Book Antiqua\",\"Songti SC\",\"Noto Serif SC\",\"Source Han Serif SC\",serif);font-size:clamp(42px,4.08vw,68px);font-weight:400;letter-spacing:-.025em;line-height:1.18;text-wrap:balance}.ds-public-lead{max-width:700px;margin:24px 0 0;color:#263c2d;font-size:clamp(16px,1.28vw,20px);line-height:1.75}.ds-public-break{display:none}.ds-public-actions{display:flex;align-items:center;flex-wrap:wrap;gap:24px;margin-top:34px}.ds-public-primary,.ds-public-secondary{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:12px 26px;border:1px solid var(--color-action,#1f5c47);border-radius:16px;font:inherit;font-size:17px;font-weight:500;text-decoration:none;line-height:1.2;transition:background-color 160ms ease,color 160ms ease,border-color 160ms ease}.ds-public-primary{min-width:244px;gap:16px;background:var(--color-action,#1f5c47);color:var(--color-action-on,#fff)}.ds-public-secondary{min-width:224px;background:rgb(248 246 239 / 14%);color:var(--landing-ink)}.ds-public-entry :focus-visible{outline:2px solid var(--color-focus-ring,#256b52);outline-offset:5px}@media(hover:hover) and (pointer:fine){.ds-public-primary:hover{background:var(--color-action-hover,#174a39);border-color:var(--color-action-hover,#174a39)}.ds-public-secondary:hover{background:var(--landing-paper)}}@media(max-width:900px){.ds-public-title{font-size:clamp(36px,5.6vw,48px);line-height:1.25}.ds-public-title span{display:block}.ds-public-lead{max-width:42ch;margin-top:18px;font-size:16px;line-height:1.9}.ds-public-break{display:initial}.ds-public-actions{gap:12px;flex-wrap:nowrap;margin-top:24px}.ds-public-primary,.ds-public-secondary{flex:1;min-width:0;min-height:48px;padding:12px 18px;font-size:14px;border-radius:10px;white-space:nowrap}.ds-public-primary{gap:8px}}@media(prefers-reduced-motion:reduce){.ds-public-primary,.ds-public-secondary{transition:none}}"
     }
   ],
   "narrative": {
@@ -1576,15 +1689,18 @@
       "Studio / Artwork and Editing": "11 个工作室模块共享对象、主工作面、辅助资料的层级，分别保留素材工作面、平铺画布、制作章节、系列看板、来源阅读和品牌规则；不是全应用统一双栏。推广的 10 页使用 StudioPageHeader，商品展示包保留独立同层级页头。名称在对象页头集中呈现，邻近摘要不重复大标题。\n\nStudioEditSection persistent 输出正常文档流中的 section，字段常驻且手机不启用模态；草稿归所属表单，不表示自动保存。款式、实验、印花、技术包、样衣、评审对象、趋势与品牌采用此模式。兼容的非 persistent 模式仍保留挂载、主动/受控展开、<768px 原生全屏 dialog、Escape 和触发焦点返回。\n\nAssetPicker 分开选择与查看大图，保留完整图片、素材名、aria-pressed、已选顺序和上限提示。SaveBar 区分新资料尚未保存、实际未保存修改、保存中、已保存和只读；长表单保存操作保持可达，保存、生成、人工核对及发布继续显式执行。技术包完整检查仍在复核发布章节，系列位置隐藏后保留草稿且切换经过保护，样衣定位依据真实图片。",
       "Studio / State Layers": "工作室状态分为页面加载/读取错误、对象选择/编辑草稿、权限、请求进行中/失败、保存修订与复核导出；反馈归属对应层级，区域底色不代替状态。刷新失败保留已有资料并显示错误；主动刷新确认离开后才重载和重建面板。项目选项显示角色，缺少编辑权限时显示只读工作区；模块继续依据 capabilities 控制操作。",
       "Studio / Documentation Evidence": "工作室增量依据 `../../doc/impeccable/工作室子功能设计契约.md` 与当前 `src/modules/studio/`。截图记录位于 `../../output/studio-redesign/review-final/`；该目录是模拟项目的页面采集，不能据此推断真实用户反馈或全套验收通过。",
-      "Navigation / Documentation Evidence": "统一导航依据 `../../doc/impeccable/统一浅色导航契约.md`、`ArchiveNavigation` 与当前主题。`../../output/unified-navigation/finish-review.md` 的 ship 仅覆盖统一导航 UI 与指定首屏的 27 张截图；不覆盖登录、流程画布的独立视觉验收、Docker 基线批准或真实业务链路。本次合并仅同步文档与 sidecar，没有重新运行 context、detector、浏览器或应用测试。",
-      "Navigation / Shared Shell": "`ArchiveNavigation` 是全平台现行共享目录，`current` 只决定当前入口，不再决定颜色变体。无项目时显示项目库/面料库/趋势档案；项目内按项目库/设计工作台/款式与交付/面料库/趋势档案排列，资料库直接可达，资源页保留当前位置及返回上下文。当前项使用 aria-current=page、深绿选择文字、浅灰绿选中底与 600 字重；键盘焦点用 `focus-ring` 轮廓。桌面彩色 Logo 在顶部，账户在底部；窄屏使用同一组入口的工作区菜单，Escape 关闭后恢复触发焦点。\n\n工作室在同一全局目录的项目区域中插入 `StudioNavigation`，直接显示创作（开始任务、款式档案、色料实验、印花工作台、商品展示）、交付（系列规划、技术包、样衣反馈、团队评审）、资料（趋势简报、品牌资料）共 11 项，不再折叠专业入口。该区域独立滚动，进入页面或切换功能时，选中项以 nearest 滚动到可见范围。选中项使用浅绿表面、600 字重和箭头，没有旧内侧线；按钮最小高 40px，padding 4px 12px，继承共享目录的焦点轮廓。导航继续保留项目、URL 参数及原有离开保护。\n\nTabs 手动激活：方向键/Home/End 移焦，不自动启动昂贵面板；TabPanel 用 hidden 控制。Studio 的窄屏功能选择器与桌面目录保持同一 tab 值，不另造 URL 协议。"
+      "Navigation / Documentation Evidence": "现行首页、共享目录、跨项目资产库与独立画布依据 apps/web/DESIGN.md 及 extensions.sources 中对应源码；复核资料位于 output/home-assets-redesign/，验证范围见 verification.json。布局截图覆盖1920、1440、1366、390px的首页、资产、评级、预览和画布，使用夹具；真实 PostgreSQL/MinIO 仅覆盖资产库集成链路，不能据此推断付费模型输出或真实用户反馈。旧统一导航审查仅保留为历史证据。",
+      "Navigation / Shared Shell": "`WorkspaceShell` 提供账号/项目/编辑器上下文和统一草稿边界，`WorkspaceChrome` 统一目录开合与全屏编辑状态，`WorkspaceDirectory` 经 `ArchiveNavigation` 兼容出口提供共享目录，页面保留自己的文档流或视口滚动方式。≥1200px目录展开宽度取 `--workspace-nav-width`（200px），收起释放全部占位；<1200px使用左侧模态抽屉，宽度为 `min(280px, calc(100vw - 32px))`，不保留横向导航栏。资料页收起时保留44px展开按钮，<768px主要触控区至少44px。\n\n`/<projectId>` 是独立画布路由，无限白板、流程视图与加载骨架均不挂载工作区目录或展开按钮，`WorkspaceChrome` 使用 `navigation=\"none\"`，各宽度都不预留导航空间。首页、项目、资产、面料、发现及款式与交付沿用资料类布局，桌面首次展开目录，偏好按账号保存在本浏览器并跨项目复用；移动抽屉只保存当前打开状态，不覆盖桌面偏好。目录开合只切换占位，不重建聊天、表单或编辑器。图片与草图全屏编辑继续使用既有聚焦模式。\n\n导航显示状态与编辑器控制命令使用独立上下文；仅需控制目录或聚焦模式的编辑器不订阅目录开合，避免整个白板随目录刷新。目录样式直接作用于实际标题和提示位置，不把频繁变化的尺寸变量继承给所有画布对象。\n\n目录顶部保留彩色品牌与快速新建项目，底部保留账户；工作空间包含首页、项目、资产，灵感与资料包含发现、面料库及项目资料。创作工具、交付管理、项目资料由既有 `STUDIO_GROUPS` 派生为可折叠分组，创作工具增加画布入口，十二项 studio 功能及原 `tab` 值保留。进入或切换功能时展开当前项所属组，用户可手动收起；当前项使用浅绿底、深绿文字与600字重，分组箭头随展开转向。工作室内切换继续调用原 `onChange` 与离开保护，方向键/Home/End只移动焦点，确认后激活；无项目时先选择项目。目录内容可滚动，不增加第二列常驻目录。项目上下文、当前对象、修订与保存状态按各自层级呈现；同页不堆叠同名大标题。\n\n创作视图没有贯穿顶部的项目栏：左上角为“首页”返回按钮与紧凑项目菜单，菜单提供项目列表、有编辑权时的重命名、当前项目的工作区切换，以及原有系列、生成文件、导出、可用时的历史白板和操作说明。返回首页、项目列表及工作区切换经过现有保存/离开保护，保存失败保留当前画布并可重试。款式与交付的项目菜单、任务入口仍合入当前页面操作行，项目菜单承载创作进展和刷新资料。登录、公开分享及原型页保留独立布局。",
+      "Home / Project Entry": "已登录的 `/` 是创作首页；未登录显示以服装作品与设计灵感为中心的公开介绍页，并从 `/login` 进入。首页以满宽、最小高176px的暖白创建区为主入口，深绿加号和“新建项目创作”居中，创建中保留明确文字与禁用反馈，失败给出可重试提示。下方六个图标快捷入口依次是色料实验、印花工作台、商品展示、衣架搭配、实时试穿、服装秀；先选择项目，再进入既有功能。最近项目最多六项，按最近更新时间显示名称、日期与完整 contain 封面，“查看全部”进入 `/projects`。首页内容最大宽1400px，快捷入口桌面六列、手机三列，最近项目从三列到两列、手机单列；创建区不增加营销内容或深色主题。\n\n`/projects` 承担项目搜索、归档和管理；已登录访问旧入口 `/?new=1` 转到 `/projects?new=1`，继续打开命名与简报创建流程。首页与目录的快速创建直接进入未命名项目画布，名称可随后在项目菜单中修改。\n\n项目库的新建对话框同时接受名称与可选的结构化设计目标（目标人群、场景、保留条件和待确认问题）。设计目标在工作流成功载入后落成一个可引用的“设计需求”素材节点，同时作为助手草稿交接；写入成功后才消费本机记录，不会凭空生成图片，也不会把本机暂存误当成服务端已保存的项目资料。损坏或不可用的本机记录按无简报继续，不阻塞白板进入。\n\n设计工作台默认以作品为中心，流程画布为同级高级视图。保留现有URL、studio功能值、来源与修订深链，以及浏览器历史行为。选中作品和引用给助手是独立动作，无引用时范围为整个项目。",
+      "Assets / Library and Rating": "`/assets` 提供全部、图片、视频、音频、文档五类入口及数量，配合搜索、来源、个人评级与排序控件。卡片以3:4预览面承托完整图片，名称、所属项目、日期与评级在图下，过期或不可用文件保留明确状态。桌面网格按最小216px自适应，手机两列；内容最大宽1600px。预览桌面为作品区与300px资料列，手机改为纵向内容；图片和视频保持 contain，媒体由用户主动播放，关闭后卸载。下载与来源跳转沿用权限和离开保护，不以列表预览替代原文件。\n\n个人评级使用“未评级”或1–5星，卡片和预览保持同步；星形是暖金色（局部值 `#ad6909`），同时保留文字和选中勾。保存先反馈新值，失败回退并提示；请求期间以 `aria-disabled` / `aria-busy` 阻止重复操作且保留触发器焦点。成功后刷新已有分页，保持已加载列表、滚动与焦点；若文件不再符合当前筛选，焦点回到相邻预览入口，无结果时回到搜索。\n\n资产来源、评级、排序与卡片评级复用 `ChoiceSelect` 的可选 `glide` 变体，不替换既有浮层定位、键盘、触屏或中文输入法机制。触发器轻量透明，浮层12px圆角，从触发侧以0.95缩放和透明度进入/退出；时长取 `--motion-select-enter`（180ms）和 `--motion-select-exit`（120ms）。指针经过选项时浅绿高亮以220ms移动，键盘操作即时切换；减弱动态取消位移和缩放。未选用该变体的控件保持原行为。",
+      "PublicLanding / Public Introduction": "未登录的 `/` 由 `PublicLanding.tsx` 与 `public-landing.module.css` 呈现，以服装作品、面料肌理、草图和系列造型组织内容，保留森织品牌标记。页面局部变量为象牙白 `--landing-paper: #f8f6ef`、深绿文字 `--landing-ink: #193b2c`、次级文字 `--landing-muted: #526457` 与分隔线 `--landing-line: #d7dbcf`；操作继续使用共享深绿动作色。工具区使用局部深绿底（`#183b2e`），形成明确章节。上述色值与构图只属于公开介绍页，不替换工作区主题。\n\n公开页标题沿用现有 `--font-serif`，正文与控件沿用 `--font-sans`。桌面主标题为紧凑单行，字号 `clamp(42px, 4.08vw, 68px)`、400字重、1.18行高及 `-0.025em` 字距；≤900px使用 `clamp(36px, 5.6vw, 48px)`、1.25行高并明确分为两行。其他公开页编辑式标题按所在章节取30–64px，手机另有29–42px的局部值；这些是公开页面的排版例外，不扩大工作区字阶。\n\n页头固定高68px并随页面 sticky，桌面居中显示“作品与灵感”“创作方式”“设计工具”，右侧保留登录。≤900px导航区仅显示登录与44px导航按钮，展开面板中的三条链接位于按钮之后；桌面链接与移动链接互斥显示，隐藏的一组不进入焦点顺序。Escape关闭并返回按钮，在页头外按下指针或焦点移出页头时关闭；选中锚点后关闭菜单并聚焦相应章节，章节保留88px滚动偏移。它是页面导航面板，不占用工作区目录。\n\n桌面首屏用连续全景工坊影像承托左侧标题、明确的 AI 创作说明与两个入口，高度为 `clamp(520px, 39.22vw, 700px)`；主入口到 `/login`，次入口到 `#inspiration`。≤900px标题与操作排在图片之前，图片保留人物所在的右侧构图；主图和造型聚焦图的响应式 `sizes` 在此宽度段取 `300vw`，为裁切后的展示保留足够像素。内容列最大宽1440px，宽屏侧距取 `clamp(24px, 6vw, 112px)`，≤767px为20px。\n\n创作过程按面料、草图/立裁、系列造型顺序展开，图幅分别使用2:1、1573:1000与2390:1024，桌面构成宽幅连续序列，≤767px纵向排列。系列全图采用 contain，保留完整衣摆和鞋。灵感区的自然肌理、流动廓形、克制色彩三项使用可访问的 tablist/tab/tabpanel；方向键、Home/End与点击切换同一组预置内容，并在3:4窗口中聚焦已有系列图。切换只改变本地展示，不调用创作接口。工具区使用分隔行说明能力，收尾保留简洁起步行，分别进入 `/login?starter=material`、`/login?starter=collection`、`/login?starter=lookbook`；手机的灵感、工具和收尾区改为单列。\n\n动效服务阅读与作品切换：主图加载后以760ms从1.025倍回到原尺度；支持原生滚动时间轴的桌面浏览器可轻微漂移至 `translateY(8%) scale(1.04)`。章节首次进入视口使用480ms透明度与18px位移，造型聚焦轨道使用250ms transform，键盘切换即时完成。hover反馈仅用于精细指针；减弱动态关闭这些过渡和滚动漂移，并使内容直接可见。页面不接管滚动，也不以持续动画掩盖加载或生成状态。\n\n四张生产影像位于 `assets/plates/`：`hero-photo.png`、`material-photo.png`、`sketch-photo.png`、`collection-photo.png`。它们是内置 ImageGen 独立生成的摄影感 AI 设计示例，公开页保留可见的“AI 设计示例”说明，不代表实拍、用户项目或平台已完成的生成任务。主图与系列图经过常规等比插值放大，不能视为新增原生细节；完整提示词、原生来源、尺寸、哈希与后处理说明以 [素材来源](assets/plates/SOURCE.md) 为准，PNG 内保留提示词元数据。"
     },
-    "overview": "本系统记录用户选定 A「织物档案」后落地的生产界面，并合并用户于 2026-10-26 选定第二张参考图、推广至全平台的暖白导航。共享目录使用暖白底、深绿文字、浅灰绿当前项与原彩色 Logo，页面切换保持同一外框。暖白纸面承托工作内容，服装与素材保持自身颜色和完整轮廓。中文无衬线、清楚的对象名称、已保存修订和紧凑索引共同支持持续创作。\n\n这是专业设计工具的工作世界：作品、当前任务和可执行的下一步优先；模块之间延续同一项目与对象。层级依靠表面、细线、字号和留白，材料投影仅服务作品与素材，交互动画用于回应状态变化。",
+    "overview": "本系统记录用户选定 A「织物档案」后落地的生产界面，并延续暖白导航。资料页共享目录使用暖白底、深绿文字、浅灰绿当前项与原彩色 Logo；独立画布不挂载目录，为作品保留完整工作区。暖白纸面承托工作内容，服装与素材保持自身颜色和完整轮廓。中文无衬线、清楚的对象名称、已保存修订和紧凑索引共同支持持续创作。\n\n这是专业设计工具的工作世界：作品、当前任务和可执行的下一步优先；模块之间延续同一项目与对象。层级依靠表面、细线、字号和留白，材料投影仅服务作品与素材，交互动画用于回应状态变化。",
     "keyCharacteristics": [
-      "全平台统一暖白单列目录、深绿文字、浅灰绿选中与彩色 Logo。",
+      "资料页共享暖白单列目录、深绿文字、浅灰绿选中与彩色 Logo；独立画布保留完整工作区。",
       "动作、选择、焦点、状态和品牌分别命名。",
       "作品保持原比例；对象名称与已保存修订随任务保留。",
-      "桌面稳定目录与底部账户，窄屏统一工作区菜单栏；工作室保留分组功能选择器与按需编辑。"
+      "桌面200px目录与底部账户，<1200px左侧模态抽屉；创作、交付和项目资料可折叠，当前功能所属组展开。"
     ],
     "rules": [
       {
@@ -1600,7 +1716,7 @@
     ],
     "dos": [
       "Do 从 `src/styles/design-system.css` 读取现行语义变量；兼容别名只用于延续旧调用。",
-      "Do 复用同一目录和共享控件；保持当前项目、对象名称和已保存修订可定位。",
+      "Do 资料页复用同一目录和共享控件，独立画布使用首页与项目菜单；保持当前项目、对象名称和已保存修订可定位。",
       "Do 在选中、运行、失败和只读状态保留文字、标记或图形；复用已有重试和未保存保护。",
       "Do 保留键盘焦点、原生弹窗焦点返回、触控尺寸与减弱动态分支。",
       "Do 让长表单和交接说明参与正常文档流；宽屏对象列可 sticky，不能以固定高度挤压复核控件。"

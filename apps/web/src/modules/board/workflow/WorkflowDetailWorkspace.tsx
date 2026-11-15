@@ -20,6 +20,7 @@ export function WorkflowDetailWorkspace({
   origin,
   dirty,
   onClose,
+  onAfterClose,
   children,
   fullScreen = false,
 }: {
@@ -30,6 +31,7 @@ export function WorkflowDetailWorkspace({
   origin: DetailOrigin | null;
   dirty: boolean;
   onClose: () => void;
+  onAfterClose?: () => void;
   children: ReactNode;
 }) {
   const root = useRef<HTMLElement>(null);
@@ -37,6 +39,8 @@ export function WorkflowDetailWorkspace({
   const body = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const wasOpen = useRef(false);
+  const afterClose = useRef(onAfterClose);
+  useLayoutEffect(() => { afterClose.current = onAfterClose; }, [onAfterClose]);
   const animations = useRef<Animation[]>([]);
   useLayoutEffect(
     () => () => {
@@ -105,15 +109,20 @@ export function WorkflowDetailWorkspace({
       const focus = fullScreen ? [...element.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.checkVisibility() && !button.disabled) : heading.current;
       focus?.focus({ preventScroll: true });
     }
+    let closed = false;
+    const finishClose = () => {
+      if (open || closed) return;
+      closed = true;
+      element.hidden = true;
+      afterClose.current?.();
+    };
     void animation.finished
-      .then(() => {
-        if (!open) element.hidden = true;
-      })
+      .then(finishClose)
       .catch(() => undefined);
     const resize = () => {
       animation.cancel();
       fade.cancel();
-      if (!open) element.hidden = true;
+      finishClose();
     };
     const stopObservingMotion = observeMotionCancellation(resize);
     let initialResize = true;

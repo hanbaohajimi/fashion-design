@@ -104,20 +104,20 @@ for (const width of [1440, 390, 320]) {
     expect(state.results.size).toBe(1);
     if (width < 768) {
       await workspace
-        .getByRole("button", { name: "图像", exact: false })
+        .getByRole("button", { name: "导出", exact: true })
         .click();
       await expect(
-        workspace.getByRole("button", { name: "下载原图", exact: true }),
+        workspace.getByRole("button", { name: "下载图片", exact: true }),
       ).toBeInViewport({ ratio: 1 });
       await expect(
-        workspace.getByRole("button", { name: "分享", exact: true }),
+        workspace.getByRole("button", { name: "分享链接", exact: true }),
       ).toBeVisible();
       await expect(
         workspace.getByRole("link", { name: "保存为款式", exact: true }),
-      ).toBeVisible();
+      ).toHaveCount(0);
       await page.keyboard.press("Escape");
       await expect(
-        workspace.getByRole("button", { name: "图像", exact: false }),
+        workspace.getByRole("button", { name: "导出", exact: true }),
       ).toBeFocused();
     }
     await workspace.getByRole("button", { name: "关闭图片工作区" }).click();

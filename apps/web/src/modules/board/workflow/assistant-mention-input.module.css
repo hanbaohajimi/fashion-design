@@ -21,6 +21,17 @@
   line-height: 1.5;
   color: var(--color-ink-secondary);
 }
+.keyboardHint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .error {
   margin: 6px;
   font-size: 14px;
@@ -67,6 +78,33 @@
   overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--color-ink-secondary);
+}
+.referenceChoices button {
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.referenceChoices button[aria-selected="true"] {
+  background: var(--color-navigation-selected);
+  outline: none;
+}
+.referenceChoices [data-compact-reference] {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+.referenceChoices [data-compact-reference] svg {
+  width: 18px;
+  height: 18px;
+}
+@media (max-width: 767px), (any-pointer: coarse) {
+  .referenceChoices button {
+    min-height: 44px;
+  }
 }
 .choices button:focus-visible {
   outline: 2px solid var(--color-focus-ring);

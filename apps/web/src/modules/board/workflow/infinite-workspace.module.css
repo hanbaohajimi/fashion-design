@@ -3,12 +3,15 @@
   inset: 0;
   isolation: isolate;
   z-index: 0;
-  /* v4：画布底色再降一档，让节点卡片真实"浮"在桌面上；
-     叠加 24px 静态网格点，增加工具感而不喧宾夺主。 */
-  background:
-    radial-gradient(circle, var(--color-canvas-dot, rgba(24,24,24,0.1)) 0.75px, transparent 0.75px),
-    var(--color-studio-canvas, oklch(89% 0.013 96));
-  background-size: 24px 24px, 100% 100%;
+  /* Keep the repeating image separate from the surface color so its tile size survives CSS compilation. */
+  background-color: var(--color-studio-canvas);
+  background-image: radial-gradient(
+    circle at center,
+    var(--color-canvas-dot) 0 1px,
+    transparent 1.1px
+  );
+  background-size: 24px 24px;
+  background-position: 0 0;
 }
 .workspace[hidden] {
   display: none;
@@ -39,7 +42,7 @@
   padding-inline-start: 6px;
   border-inline-start: var(--border-hairline) solid var(--color-border);
 }
-.railExtras > button,
+.railExtras > [data-warm-tooltip-trigger] > button,
 .railExtras summary,
 .selectionBar button,
 .selectionBar summary,
@@ -62,7 +65,7 @@
   font-size: 12px;
   white-space: nowrap;
 }
-.railExtras > button:hover:not(:disabled),
+.railExtras > [data-warm-tooltip-trigger] > button:hover:not(:disabled),
 .selectionBar button:hover:not(:disabled),
 .selectionBar summary:hover,
 .drawingSettings button:hover:not(:disabled),
@@ -70,7 +73,7 @@
   background: var(--color-surface);
 }
 .drawingSettings button[aria-pressed="true"],
-.railExtras > button[aria-expanded="true"] {
+.railExtras > [data-warm-tooltip-trigger] > button[aria-expanded="true"] {
   background: var(--color-navigation-selected);
   color: var(--color-action);
 }
@@ -89,6 +92,9 @@
   font-weight: 600;
   color: var(--color-action);
 }
+.railExtras > [data-warm-tooltip-trigger] > button,
+.railExtras summary { width: 44px; height: 44px; padding: 0; border-radius: 10px; }
+.railExtras svg[data-bottom-toolbar-icon] { width: 22px; height: 22px; }
 .selectionBar {
   top: calc(116px + env(safe-area-inset-top, 0px));
   display: flex;
@@ -234,7 +240,7 @@
     left: 8px;
     max-width: calc(100% - 16px);
   }
-  .railExtras > button,
+  .railExtras > [data-warm-tooltip-trigger] > button,
   .railExtras summary,
   .selectionBar button,
   .selectionBar summary,

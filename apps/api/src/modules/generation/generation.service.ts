@@ -19,6 +19,7 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { createHash, randomUUID } from "node:crypto";
+import { withoutMaterialPurpose } from "@fashion/shared";
 
 import { GenerationLimitExceededException } from "../billing/billing.errors";
 import type { CompiledGenInput } from "./compiler/compiler.types";
@@ -163,6 +164,7 @@ export class GenerationService {
     idempotencyKey: string,
     rawUserIntent: string,
     frozenCompiled?: CompiledGenInput,
+    preserveLegacyPurpose = false,
   ): Promise<{ taskId: string }> {
     return this.createTask(
       userId,
@@ -170,7 +172,7 @@ export class GenerationService {
       idempotencyKey,
       undefined,
       rawUserIntent,
-      { modelCalls: "skip" },
+      { modelCalls: "skip", ...(preserveLegacyPurpose ? { preserveLegacyPurpose: true } : {}) },
       frozenCompiled,
     );
   }
@@ -276,27 +278,34 @@ export class GenerationService {
     const taskId = createHash("sha256")
       .update(`${userId}\0${idempotencyKey}`)
       .digest("hex");
-    const compiledPrompt =
+    const suppliedPrompt =
       frozenCompiled ??
       (compilerOptions.modelCalls
         ? await this.compiler.compile(
             executionActor,
             request.projectId,
-            request.prompt,
+            compilerOptions.preserveLegacyPurpose ? request.prompt : rawUserIntent,
             request.shapeIds,
             compilerOptions,
           )
         : await this.compiler.compile(
             executionActor,
             request.projectId,
-            request.prompt,
+            compilerOptions.preserveLegacyPurpose ? request.prompt : rawUserIntent,
             request.shapeIds,
           ));
+    // Trusted module snapshots preserve their explicit instructions and real source
+    // identities. Retired purpose channels never participate in a fresh request.
+    const compiledPrompt: CompiledGenInput = compilerOptions.preserveLegacyPurpose ? suppliedPrompt : {
+      ...suppliedPrompt, referencePolicy: "instruction", positivePrompt: frozenCompiled || request.shapeIds?.length ? suppliedPrompt.positivePrompt : rawUserIntent,
+      sources: (suppliedPrompt.sources ?? []).map((source) => { const clean = withoutMaterialPurpose(source); return { ...clean, role: clean.role ?? "reference" }; }),
+      styleReferences: [], silhouetteReferences: [], fabricReferences: [], fabricInputs: [], patternReferences: [], detailReferences: [], paletteReferences: [], avoidLabels: [],
+    };
     const presentationPolicy: PresentationPolicy = wardrobe ? {
       mode: wardrobe.snapshotId ? "on_model" : "garment_only",
       matchedSignals: [wardrobe.snapshotId ? "wardrobe-outfit-tryon" : "wardrobe-item-preparation"],
       version: PRESENTATION_POLICY_VERSION,
-    } : resolvePresentationPolicy(
+    } : !compilerOptions.preserveLegacyPurpose ? { mode: "preserve_source", matchedSignals: [], version: PRESENTATION_POLICY_VERSION } : resolvePresentationPolicy(
       [rawUserIntent, ...(compiledPrompt.notes ?? []), request.negativePrompt]
         .filter(Boolean)
         .join("\n"),
@@ -317,6 +326,13 @@ export class GenerationService {
       },
     });
     if (existing?.userId === userId) {
+      const saved = existing.compiledPrompt && typeof existing.compiledPrompt === "object" && !Array.isArray(existing.compiledPrompt) ? existing.compiledPrompt : null;
+      const priorPolicy = saved?.presentationPolicy;
+      if (priorPolicy && typeof priorPolicy === "object" && !Array.isArray(priorPolicy) && ["on_model", "garment_only", "preserve_source"].includes(String(priorPolicy.mode)) && priorPolicy.version === PRESENTATION_POLICY_VERSION) {
+        // Confirm an already submitted task against its frozen policy; retired label
+        // compilation must not change its fingerprint or create another task.
+        return this.replayExistingTask(existing, userId, generationRequestFingerprint(request, context, priorPolicy as unknown as PresentationPolicy));
+      }
       return this.replayExistingTask(existing, userId, requestFingerprint);
     }
 
@@ -377,7 +393,17 @@ export class GenerationService {
       replaceProviderSource(providerRequest, primaryReference);
       providerRequest.maskImageUrl = maskReference;
     }
+    if (!compilerOptions.preserveLegacyPurpose) {
+      providerRequest.referencePolicy = "instruction";
+      if (providerRequest.referenceImages) {
+        providerRequest.referenceImages = providerRequest.referenceImages.map(({ order, url }) => ({ order, url }));
+      } else if (providerRequest.referenceImages === undefined && providerRequest.referenceImageUrls === undefined && compiledPrompt.orderedReferences?.length) {
+        providerRequest.referenceImages = compiledPrompt.orderedReferences.map((reference, index) => ({ order: reference.order ?? index, url: reference.imageUrl }));
+        providerRequest.referenceImageUrls = providerRequest.referenceImages.map((reference) => reference.url);
+      }
+    }
     if (
+      compilerOptions.preserveLegacyPurpose &&
       providerRequest.taskType === "t2i" &&
       !providerRequest.referenceImageUrl &&
       providerRequest.referenceImages === undefined &&
@@ -477,7 +503,9 @@ export class GenerationService {
     const requestedPalette =
       request.taskType === "inpaint" ? request.palette : undefined;
     const providerPrompts =
-      request.taskType === "inpaint"
+      !compilerOptions.preserveLegacyPurpose && !wardrobe
+        ? { positivePrompt: compiledPrompt.positivePrompt, negativePrompt: request.negativePrompt ?? "" }
+        : request.taskType === "inpaint"
         ? {
             negativePrompt: request.negativePrompt?.trim() ?? "",
             positivePrompt: applyLocalEditPalette(
@@ -495,7 +523,7 @@ export class GenerationService {
       ...providerRequest,
       negativePrompt: providerPrompts.negativePrompt,
       prompt:
-        context && request.taskType !== "inpaint"
+        context && request.taskType !== "inpaint" && compilerOptions.preserveLegacyPurpose
           ? collectionProviderPrompt(
               providerPrompts.positivePrompt,
               request.prompt,
@@ -516,7 +544,8 @@ export class GenerationService {
         ...(inpaintSource.maskObjectKey ? { maskObjectKey: inpaintSource.maskObjectKey } : {}),
       } } : {}),
     };
-    const generationInputs = compiledPrompt.fabricInputs ?? [];
+    const generationInputs = compilerOptions.preserveLegacyPurpose ? compiledPrompt.fabricInputs ?? []
+      : [...new Map((compiledPrompt.sources ?? []).flatMap((source) => source.fabricId ? [[`${source.elementId}:${source.fabricId}`, { boardElementId: source.elementId, fabricId: source.fabricId, role: null, weight: null, tags: source.tags ?? [] }] as const] : [])).values()];
     const stepSnapshot: DesignStepSnapshot = {
       version: 1,
       sources: [

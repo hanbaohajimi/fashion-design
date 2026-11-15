@@ -467,12 +467,9 @@ it.each([
         vi.mocked(files.createDownloadUrl).mockRestore();
       }
       expect(request.taskType).toBe(withSource ? "i2i" : "t2i");
-      expect(request).toMatchObject({
-        referenceImages: [
-          { order: 0, role: "fabric_texture", weight: 0.7 },
-          { order: 1, role: "detail_ref", weight: 0.5 },
-        ],
-      });
+      expect(request.referencePolicy).toBe("instruction");
+      expect(request.referenceImages?.slice(0, 2).map((reference) => ({ order: reference.order, kind: new URL(reference.url).pathname.endsWith("detail.png") ? "detail" : "fabric" }))).toEqual([{ order: 0, kind: "detail" }, { order: 1, kind: "fabric" }]);
+      expect(request.referenceImages?.every((reference) => reference.role === undefined && reference.weight === undefined)).toBe(true);
       const attempt = await prisma.workflowAttempt.findFirstOrThrow({
         where: { generationTaskId: taskId },
       });
@@ -492,10 +489,7 @@ it.each([
           },
         ]),
         request: {
-          referenceImages: [
-            { role: "fabric_texture", weight: 0.7 },
-            { role: "detail_ref", weight: 0.5 },
-          ],
+          referencePolicy: "instruction",
         },
       });
       const signed = await files.createDownloadUrl(fabricKey, 3600);
@@ -574,11 +568,11 @@ it.each([
       if (feedback && !annotation) throw new Error("未生成编号图");
       const expanded = written.get(`image-edit/${taskId}/input.png`);
       if (outpaint && !expanded) throw new Error("未生成扩展画面");
-      const expectedBytes = [
+      const expectedBytes = withSource && !feedback && !outpaint ? [detail, fabric, source] : [
         ...(withSource ? [outpaint ? expanded : source] : []),
         ...(annotation ? [annotation] : []),
-        fabric,
         detail,
+        fabric,
       ];
       expect(
         await Promise.all(
@@ -596,15 +590,10 @@ it.each([
         ).toEqual(expectedBytes);
         expect(finished.attemptCount).toBe(2);
       }
-      const offset = feedback ? 2 : withSource ? 1 : 0;
-      expect(form.get("prompt")).toContain(
-        `fabric texture and material behavior; influence 70%; image ${offset + 1}`,
-      );
-      expect(form.get("prompt")).toContain(
-        `garment construction detail only; influence 50%; image ${offset + 2}`,
-      );
+      expect(form.get("prompt")).not.toMatch(/influence|Reference \d|garment-only|Preserve its identity/u);
+      if (!outpaint && !feedback) expect(form.get("prompt")).toBe(request.prompt);
       if (outpaint) {
-        expect(form.get("prompt")).toContain("Edit only the masked area");
+        expect(form.get("prompt")).not.toContain("fabric texture and material behavior");
         const mask = form.get("mask") as File;
         expect(Buffer.from(await mask.arrayBuffer())).toEqual(written.get(`image-edit/${taskId}/mask.png`));
         expect(await sharp(Buffer.from(await mask.arrayBuffer())).metadata()).toMatchObject({ width: frame.width, height: frame.height });
@@ -613,9 +602,7 @@ it.each([
         expect(alpha[frame.top * frame.width + frame.left]).toBe(255);
         await expect(store.get(`image-edit/${taskId}/mask.png`)).rejects.toMatchObject({ name: "NoSuchKey" });
         await expect(store.get(`image-edit/${taskId}/input.png`)).rejects.toMatchObject({ name: "NoSuchKey" });
-      } else if (withSource)
-        expect(form.get("prompt")).toContain("Image 1 is the source to edit");
-      else expect(form.get("prompt")).not.toContain("Preserve its identity");
+      } else expect(form.get("prompt")).not.toContain("Preserve its identity");
       if (feedback) {
         expect(expectedBytes[1]).not.toEqual(source);
         expect(form.get("prompt")).toContain("意见 1，标记 1");

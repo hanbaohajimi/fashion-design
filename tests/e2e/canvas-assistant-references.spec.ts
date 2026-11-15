@@ -15,10 +15,17 @@ test.afterEach(async ({ page }, info) => {
 const composer = (page: Page) =>
   page.getByRole("textbox", { name: "描述设计需求", exact: true });
 const discussion = (page: Page) => page.getByLabel("正在讨论", { exact: true });
-const shape = (page: Page, index: number) =>
-  page.locator(`.tl-shape[data-shape-id="shape:canvas-material-${index}"]`);
+const shape = (page: Page, index: number) => page.locator(`.tl-shape[data-shape-id="shape:canvas-material-${index}"]`);
+async function clickShape(page: Page, index: number) {
+  const image = shape(page, index);
+  await expect(image).toBeVisible();
+  const box = await image.boundingBox();
+  if (!box) throw new Error("画布图片尚未布局");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
 
 async function pick(page: Page, title: string) {
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
   await picker.getByRole("checkbox", { name: new RegExp(title) }).check();
@@ -31,11 +38,11 @@ test("普通选择和取消选择不改变草稿引用，也不自动提交", as
   await loadZhiya(page);
   await openZhiya(page);
   await composer(page).fill("先整理想法，保留这一份草稿。");
-  await shape(page, 0).click();
+  await clickShape(page, 0);
   await expect(page.getByRole("button", { name: "引用到助手", exact: true })).toBeEnabled();
   // Cover the selection preparation debounce and its completed save.
   await page.waitForTimeout(700);
-  await expect(discussion(page)).toContainText("整个项目");
+  await expect(discussion(page)).toHaveAttribute("data-has-references", "false");
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(0);
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
   await expect(composer(page)).toHaveValue("先整理想法，保留这一份草稿。");
@@ -51,7 +58,7 @@ test("连续引用保留原素材顺序与输入光标，快速选择引用使�
   await composer(page).fill("参考两件外套，保留领口。");
   await composer(page).evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(3, 6));
   const input = await composer(page).elementHandle();
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(2);
   expect(await discussion(page).getByRole("button", { name: /移除引用/ }).evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).toEqual([
@@ -99,6 +106,7 @@ test("合并上限计入正文引用，超限保留全部原引用且不截断",
   const state = await prepareZhiya(page, { realClock: true, count: 20 });
   await loadZhiya(page);
   await openZhiya(page);
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
   for (let index = 3; index < 18; index++) await picker.getByRole("checkbox").nth(index).check();
@@ -107,7 +115,7 @@ test("合并上限计入正文引用，超限保留全部原引用且不截断",
   await composer(page).fill("比较 @通勤外套 1，与这些素材的关系。");
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(16);
   const before = await discussion(page).locator("[data-assistant-reference-id]").evaluateAll(elements => elements.map(element => element.getAttribute("data-assistant-reference-id")));
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "合并后超过 16 项，原引用已保留。" })).toBeVisible();
   expect(await discussion(page).locator("[data-assistant-reference-id]").evaluateAll(elements => elements.map(element => element.getAttribute("data-assistant-reference-id")))).toEqual(before);
@@ -132,7 +140,7 @@ test("保存失败保留旧引用，重试准备时锁定发送并保留点击�
     await gate;
     return route.fallback();
   });
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "白板保存暂时不可用" })).toBeVisible();
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(1);
@@ -141,7 +149,7 @@ test("保存失败保留旧引用，重试准备时锁定发送并保留点击�
   await expect.poll(() => delayed).toBe(true);
   await expect(page.getByRole("button", { name: "正在准备引用…", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeDisabled();
-  await shape(page, 0).click();
+  await clickShape(page, 0);
   release();
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(2);
   await expect(discussion(page)).toContainText("通勤外套 2");
@@ -153,7 +161,7 @@ test("只读设计对话拒绝画布批量引用，不更改现有草稿", async
   const state = await prepareZhiya(page, { realClock: true });
   await page.route(`**/api/projects/${PROJECT}/workflow/tools`, route => route.fulfill({ json: { agentVersion: 1, tools: [] } }));
   await loadZhiya(page);
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "请先打开可编辑的设计对话再引用素材。" })).toBeVisible();
   await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(0);
@@ -170,7 +178,7 @@ test("旧素材失效后追加新素材仍保留失效提示并阻止发送", as
   state.graph.revision++;
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   await expect(page.getByRole("button", { name: "清除失效引用", exact: true })).toBeVisible();
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   await expect(discussion(page)).toContainText("通勤外套 2");
   await expect(page.getByRole("button", { name: "清除失效引用", exact: true })).toBeVisible();
@@ -197,13 +205,14 @@ for (const width of [1440, 320]) test(`${width}px 同名素材可辨认，刷新
   await openZhiya(page);
   await pick(page, "同名通勤外套（2）");
   await composer(page).fill("保留草稿，比较两件同名外套的领口。");
-  await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
-  await shape(page, 0).click();
+  await page.getByRole("button", { name: /^(收起设计助手|返回画布)$/, exact: true }).click();
+  await clickShape(page, 0);
+  if (width < 700) await page.getByRole("button", { name: "更多图片操作", exact: true }).click();
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
-  await expect(discussion(page).getByRole("button", { name: /移除引用/ })).toHaveCount(2);
+  await expect(discussion(page).locator("[data-assistant-reference-id]")).toHaveCount(2);
   await expect(discussion(page).locator("img")).toHaveCount(2);
   await expect.poll(() => discussion(page).locator("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
-  for (const button of await discussion(page).getByRole("button", { name: /移除引用/ }).all()) {
+  for (const button of await discussion(page).locator("[data-reference-preview]").all()) {
     await expect(button).toBeInViewport({ ratio: 1 });
     expect(((await button.boundingBox())?.width ?? 0) + 0.001).toBeGreaterThanOrEqual(width < 768 ? 44 : 32);
   }
@@ -238,12 +247,12 @@ test("系统深色偏好的短屏下长名称与图片读取失败仍可辨认�
   const preview = discussion(page).getByRole("button", { name: title, exact: true });
   await expect(preview).toContainText("服装方案");
   await expect(preview.locator("img")).toHaveCount(0);
-  const remove = discussion(page).getByRole("button", { name: `移除引用 ${title}`, exact: true });
-  await expect(remove).toBeInViewport({ ratio: 1 });
+  await expect(preview).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "output/playwright/canvas-assistant-references/dark-short.png" });
-  await remove.click();
+  await preview.press("Enter");
+  await page.getByRole("dialog", { name: "参考图片预览", exact: true }).getByRole("button", { name: "移除引用", exact: true }).click();
   await expect(discussion(page).locator("[data-assistant-reference-id]")).toHaveCount(0);
   await expect(composer(page)).toHaveValue("保留版型与材质参考");
   expect(state.mutations).toEqual([]);
@@ -262,7 +271,7 @@ test("对话尚在加载时收到画布引用，恢复旧草稿后再追加", as
   await page.route("**/api/agent-conversations/visual-chat/messages*", async route => { await gate; return route.fallback(); });
   await page.reload();
   await expect(shape(page, 1)).toBeVisible();
-  await shape(page, 1).click();
+  await clickShape(page, 1);
   await page.getByRole("button", { name: "引用到助手", exact: true }).click();
   release();
   await expect(composer(page)).toHaveValue("这是刷新前尚未发送的设计要求");

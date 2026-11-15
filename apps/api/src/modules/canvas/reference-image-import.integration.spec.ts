@@ -13,6 +13,7 @@ import { WorkflowsService } from "../workflows/workflows.service";
 import { S3FileStorage } from "../files/storage.service";
 import { CanvasCommandService } from "../workflow-runtime/canvas-command.service";
 import { CanvasCommandsController } from "../workflow-runtime/canvas-commands.controller";
+import { CanvasCreationsService } from "../workflow-runtime/canvas-creations.service";
 import { RateLimitGuard } from "../../security/rate-limit.guard";
 import { requireProjectFile } from "../files/project-file-access";
 import { FilesController } from "../files/files.controller";
@@ -42,6 +43,7 @@ beforeAll(async () => {
     controllers: [CanvasCommandsController, FilesController],
     providers: [
       { provide: CanvasCommandService, useValue: commands },
+      { provide: CanvasCreationsService, useValue: new CanvasCreationsService(canvas, commands, workflows, access) },
       { provide: FilesService, useValue: filesService },
     ],
   })
@@ -290,9 +292,10 @@ it("项目编辑成员能接入自己新上传的图片，名称和地址均取�
         imageUrl: `/api/files/${f.file}/thumbnail/1024`,
         width: 24,
         height: 32,
-        roleInferenceState: "none",
       },
     });
+    expect(node.payload).not.toHaveProperty("role");
+    expect(node.payload).not.toHaveProperty("roleInferenceState");
     expect(response.body.canvas.bindings).toHaveLength(1);
     const mutation = await prisma.workflowMutation.findFirstOrThrow({
       where: { projectId: f.project },

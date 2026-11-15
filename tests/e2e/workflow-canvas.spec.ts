@@ -10,6 +10,7 @@ test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
 const PROJECT_ID = "e2e-workflow-canvas";
 const NOW = "2026-10-14T00:00:00.000Z";
 async function openDesignRequirements(page: Page) {
+  await page.getByRole("button", { name: "助手设置", exact: true }).click();
   await page.getByRole("button", { name: "设计要求", exact: true }).click();
   return page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
 }
@@ -184,7 +185,7 @@ for (const width of [1440, 1280, 390, 320]) {
     }
     await page.getByRole("button", { name: "设计要求", exact: true }).click();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeFocused();
     await page.getByRole("button", { name: "添加引用", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "搜索项目对象" })).toBeFocused();
     await expect(page.getByRole("dialog", { name: "添加引用", exact: true })).toHaveAttribute("data-phase", "open");
@@ -285,7 +286,7 @@ test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读�
 });
 
 for (const width of [1440, 390]) {
-  test(`引用记录 ${width}：历史名称、旧消息和图片失败信息保持准确`, async ({ page }) => {
+  test(`消息展示 ${width}：历史消息保留正文，不显示引用记录`, async ({ page }) => {
     const mocked = await mockWorkflow(page, "workbench");
     await seedOpenAssistant(page);
     const candidate = mocked.getGraph().nodes.find((entry) => entry.id === "candidate-a");
@@ -303,21 +304,17 @@ for (const width of [1440, 390]) {
     await page.goto(`/${PROJECT_ID}`);
     await expect(page.getByRole("textbox", { name: "描述设计需求", exact: true })).toBeVisible();
     const saved = page.locator('[data-message-id="saved"]');
-    await expect(saved.locator("details").first()).not.toHaveAttribute("open");
-    await saved.getByText("查看引用记录", { exact: true }).click();
-    await expect(saved.getByRole("button", { name: "当时的候选 A", exact: true })).toHaveCount(2);
-    await expect(saved.getByRole("button", { name: "已删除候选的历史名称", exact: true })).toBeDisabled();
+    await expect(saved).toContainText("保留衣领，参考这轮讨论的设计。");
+    await expect(saved.getByText("查看引用记录", { exact: true })).toHaveCount(0);
     await expect(saved).not.toContainText("后来改名的风衣");
-    await saved.getByText("图片统计与读取范围", { exact: true }).click();
-    await expect(saved).toContainText("分析不可用 1 项");
+    await expect(saved).not.toContainText("图片统计与读取范围");
     await expect(saved).not.toContainText("已理解");
     const legacy = page.locator('[data-message-id="legacy"]');
-    await legacy.getByText("查看引用记录", { exact: true }).click();
-    await expect(legacy.getByRole("button", { name: "候选 B（当前名称）", exact: true })).toBeVisible();
-    await expect(legacy.getByRole("button", { name: "名称未记录", exact: true })).toBeDisabled();
+    await expect(legacy).toContainText("旧回复只保存了部分记录。");
+    await expect(legacy.getByText("查看引用记录", { exact: true })).toHaveCount(0);
     const missing = page.locator('[data-message-id="unrecorded"]');
     await expect(missing.getByText("查看引用记录", { exact: true })).toHaveCount(0);
-    await expect(missing.getByText("这条回复未保存引用记录", { exact: true })).toBeVisible();
+    await expect(missing.getByText("这条回复未保存引用记录", { exact: true })).toHaveCount(0);
     const conversation = page.getByLabel("设计对话", { exact: true });
     await conversation.hover();
     await page.mouse.wheel(0, -10_000);
@@ -330,7 +327,7 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `output/playwright/context/requirements-${width}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeFocused();
     expect(await conversation.evaluate((element) => element.scrollTop)).toBe(before);
   });
 }
@@ -760,7 +757,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
     await page.getByRole("button", { name: "秋冬配色系列", exact: true }).click();
   };
   await openCollection();
-  const drawer = page.getByRole("dialog", { name: "系列 DNA" });
+  const drawer = page.getByRole("dialog", { name: "系列工作台", exact: true });
   await drawer.getByRole("button", { name: "探索配色" }).click();
   await expect(drawer.getByRole("region", { name: "配色探索" })).toBeVisible();
   await drawer.getByLabel("建议色 1 名称").fill("系列晨雾");
@@ -773,7 +770,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
   await drawer.getByRole("button", { name: "重试保存" }).click();
   await expect.poll(() => palette.length).toBe(5);
   expect(palette.slice(0, 2)).toEqual([{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }]);
-  await drawer.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await drawer.getByRole("button", { name: "关闭系列工作台" }).click();
   await page.reload();
   await openCollection();
   await expect(drawer.getByLabel("颜色 3 名称")).toHaveValue("系列晨雾");
@@ -1487,12 +1484,12 @@ for (const width of [1366, 1280, 375]) {
   });
 }
 
-test("Atelier 精修：图像菜单使用可读语义色和一致图标，关闭后恢复作品焦点", async ({ page }) => {
+test("Atelier 精修：版本菜单使用可读语义色和一致图标，关闭后恢复作品焦点", async ({ page }) => {
   await mockWorkflow(page, "workbench");
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "打开方案 候选 A", exact: true }).click();
   const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
-  await image.getByRole("button", { name: "图像", exact: true }).click();
+  await image.getByRole("button", { name: "版本与对比", exact: true }).click();
   await expect(image.locator("header").getByText(/^\d+ × \d+$/).first()).toHaveCSS("color", "rgb(88, 106, 96)");
   await expect(image.getByRole("button", { name: "标注", exact: true }).locator("svg")).toHaveCount(1);
   await page.screenshot({ path: "output/playwright/atelier-refinement/image-menu.png" });
@@ -2246,7 +2243,7 @@ test("@节点提案先以虚线预览，确认后保留分支并直接执行", a
   await expect(page.getByText("保持藏蓝与宽松廓形，给我两种通勤风衣方案。")).toHaveCount(0);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /@候选 A/ }).click();
+  await page.getByRole("option", { name: /候选 A/ }).click();
   await expect(composer).toHaveValue("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.locator('[data-role="user"]').getByText("请修改 @候选 A", { exact: false })).toBeVisible();
@@ -2771,8 +2768,9 @@ test("候选的大图、版本、局部重绘入口和新草图保存均可从�
   await page.getByRole("button", { name: "详情", exact: true }).click();
   const workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await expect(workspace).toBeVisible();
-  await expect(workspace.getByRole("button", { name: "下载原图" })).toBeVisible();
-  await workspace.getByRole("button", { name: "图像", exact: true }).click();
+  await workspace.getByRole("button", { name: "导出", exact: true }).click();
+  await expect(workspace.getByRole("button", { name: "下载图片", exact: true })).toBeVisible();
+  await workspace.getByRole("button", { name: "版本与对比", exact: true }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await expect(workspace.getByRole("region", { name: "版本时间线" })).toBeVisible();
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
@@ -2872,7 +2870,7 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("status").filter({ hasText: "请从 @列表选择准确节点" })).toBeVisible();
   expect(mocked.proposalRequests).toHaveLength(0);
   await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /@候选 A/ }).last().click();
+  await page.getByRole("option", { name: /候选 A/ }).last().click();
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a-branch"]);
@@ -2976,12 +2974,12 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await openImageDetails(page);
   await details.getByRole("button", { name: "设为主推款并建立系列" }).click();
   await expect.poll(() => mocked.getGraph().nodes.find((item) => item.id === "candidate-a")?.payload.collectionId).toBe("collection-one");
-  await page.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await page.getByRole("button", { name: "关闭系列工作台" }).click();
   await expect(details.getByRole("button", { name: "打开关联系列" })).toBeVisible();
   await details.getByRole("button", { name: "打开关联系列" }).click();
-  const drawer = page.getByRole("dialog", { name: "系列 DNA" });
+  const drawer = page.getByRole("dialog", { name: "系列工作台", exact: true });
   await expect(drawer).toBeVisible();
-  await drawer.getByRole("tab", { name: "Look 扩展" }).click();
+  await drawer.getByRole("tab", { name: "系列扩展" }).click();
   await expect(valueControl(drawer, "服装类型")).toBeVisible();
   expect(createCalls).toBe(1);
 });

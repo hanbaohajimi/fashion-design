@@ -405,7 +405,7 @@ function PresentationForm({
               </div>
               <div className={styles.generate}>
                 <Button disabled={disabled} onClick={onGenerate}>
-                  生成展示候选
+                  生成展示图
                 </Button>
                 <span>进入实验设置，确认后才生成</span>
               </div>

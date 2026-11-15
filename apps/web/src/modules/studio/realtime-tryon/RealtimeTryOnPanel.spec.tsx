@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { RealtimeTryOnPanel } from "./RealtimeTryOnPanel";
+import { PendingTryOnCapture } from "./tryon-asset-flow";
 import { RealtimeTryOnController } from "./realtime-tryon-machine";
 import type { RealtimeTryOnApi, TryOnAdapter, TryOnConnection, TryOnGarment } from "./realtime-tryon-types";
 import type { ComponentProps } from "react";
@@ -124,6 +125,43 @@ it("releases the local camera when the document becomes hidden", async () => {
   expect(f.local.track.stop).toHaveBeenCalled();
   expect(f.controller.getSnapshot().status).toBe("ended");
   expect(f.api.create).not.toHaveBeenCalled();
+});
+
+it("stops a closed canvas panel without forgetting its selection or restarting a camera on reopen", async () => {
+  const f = await preview();
+  fireEvent.click(screen.getByRole("checkbox"));
+  f.rerender(<RealtimeTryOnPanel projectId="project" assets={assets} canEdit active={false} controllerFactory={() => f.controller} />);
+  await waitFor(() => expect(f.local.track.stop).toHaveBeenCalled());
+  expect(f.controller.getSnapshot().status).toBe("ended");
+  f.rerender(<RealtimeTryOnPanel projectId="project" assets={assets} canEdit active controllerFactory={() => f.controller} />);
+  expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+  expect(f.camera).toHaveBeenCalledTimes(1);
+  expect(f.api.create).not.toHaveBeenCalled();
+});
+
+it("retains an unsaved frame for the same retry after the panel closes and its live connection stops", async () => {
+  const f = await preview();
+  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("button", { name: "开始实时试穿" }));
+  await waitFor(() => expect(f.adapter.connect).toHaveBeenCalledTimes(1));
+  const video = screen.getByLabelText("AI 试穿结果") as HTMLVideoElement;
+  Object.defineProperties(video, { videoWidth: { value: 1280 }, videoHeight: { value: 720 }, readyState: { value: 2 } });
+  act(() => { frames.get(video)?.(0, {} as VideoFrameCallbackMetadata); });
+  const capture = vi.spyOn(f.controller, "capture").mockResolvedValue({ blob: new Blob(["frame"], { type: "image/png" }), width: 1280, height: 720, sessionId: "session", garmentAssetId: "garment-a", garmentRevision: 1, capturedAt: "2026-11-15T00:00:00Z" });
+  const save = vi.spyOn(PendingTryOnCapture.prototype, "save").mockRejectedValue(new Error("截图保存中断"));
+  fireEvent.click(screen.getByRole("button", { name: "保存这一帧" }));
+  await screen.findByText("截图保存中断");
+  const pending = save.mock.instances[0];
+  f.rerender(<RealtimeTryOnPanel projectId="project" assets={assets} canEdit active={false} controllerFactory={() => f.controller} />);
+  await waitFor(() => expect(f.connection.disconnect).toHaveBeenCalledTimes(1));
+  expect(f.local.track.stop).toHaveBeenCalled();
+  expect(f.remote.track.stop).toHaveBeenCalled();
+  f.rerender(<RealtimeTryOnPanel projectId="project" assets={assets} canEdit active controllerFactory={() => f.controller} />);
+  fireEvent.click(screen.getByRole("button", { name: "重试保存这一帧" }));
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+  expect(save.mock.instances[1]).toBe(pending);
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(f.camera).toHaveBeenCalledTimes(1);
 });
 
 const outfit: OutfitSnapshotView = { id: "saved-snapshot-v12", outfitId: "outfit", projectId: "project", version: 12, layeringConfirmed: true, name: "秋日完整搭配", referenceAssetId: "garment-a", referenceUrl: "/a.png", prompt: "complete outfit", createdAt: "2026-10-30T00:00:00Z", items: ["衬衫", "大衣"].map((name, index) => ({ id: `revision-${index}`, itemId: `item-${index}`, version: 1, sourceAssetId: `source-${index}`, assetId: `item-asset-${index}`, name, category: index ? "outerwear" : "top", layer: index, wearNote: "", display: "hanger", anchor: { x: 0.5, y: 0.1 }, reviewed: true, sourceKind: "isolated", generatedCompletion: false, url: "/item.png", createdAt: "2026-10-30T00:00:00Z" })) };

@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("弹窗退场、返回焦点和运行中减弱动态", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/projects");
   const trigger = page.getByRole("button", { name: "新建项目", exact: true });
   await trigger.click();
   const dialog = page.getByRole("dialog", { name: "给新系列一个名字" });
@@ -53,7 +53,7 @@ test("登录格式校验和真实返回驱动的等待结果", async ({ page }) 
 });
 
 test("断网提示保留页面并只报告连接恢复", async ({ page, context }) => {
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(page.locator("[data-project-id]").first()).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByRole("status", { name: "网络已断开，已加载的内容仍可查看" })).toBeVisible();
@@ -67,7 +67,7 @@ test("断网提示保留页面并只报告连接恢复", async ({ page, context 
 for (const width of [1600, 1440, 1024, 390, 375]) {
   test(`共享弹层与导航 ${width}px 边界`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/");
+    await page.goto("/projects");
     await page.getByRole("button", { name: "新建项目", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "给新系列一个名字" });
     await expect(dialog).toHaveAttribute("data-phase", "open");

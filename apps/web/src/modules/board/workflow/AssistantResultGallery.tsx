@@ -9,13 +9,17 @@ import type {
 import type { WorkflowGraph } from "./workflow-api";
 import { resultImageNode } from "./assistant-result-data";
 import styles from "./assistant-result-gallery.module.css";
+import { AssistantIconButton } from "./AssistantIconButton";
+import { Button, Menu } from "../../../components/ui";
+import { WorkspaceIcon } from "./WorkspaceIcon";
+import { imageDisplayTitle } from "./assistant-transcript";
 
 /**
- * 生成结果画廊 —— v4 重构。
+ * 生成结果画廊，共用准确的资产与执行身份。
  *
  * 视觉升级：
- * - 缩略图 3:4 比例（服装图标准），object-fit cover（多图）/ contain（单图）
- * - hover 覆盖层：查看/继续修改/比较 三个圆形玻璃按钮
+ * - 缩略图保持原始比例、完整contain，并限制预览大小
+ * - 任务消息以查看画布为主，旧确认区保留已有操作入口
  * - ≥3 张变横向 scroll-snap 胶片条
  * - 触屏（hover:none）操作常显
  *
@@ -45,7 +49,7 @@ function ResultThumbnail({
         aria-label={`查看大图：${image.title}`}
         className={styles.thumbButton}
       >
-        <div className={styles.image} data-fail={failed ? "true" : undefined}>
+        <div className={styles.image} style={{ aspectRatio: `${image.width ?? 3} / ${image.height ?? 4}` }} data-fail={failed ? "true" : undefined}>
           {failed ? (
             <span className={styles.failText}>缩略图暂不可用</span>
           ) : (
@@ -85,6 +89,8 @@ export function AssistantResultGallery({
   onOpen,
   onContinue,
   onCompare,
+  onLocate,
+  showHeader = true,
 }: {
   result: WorkflowExecutionResult;
   graph: WorkflowGraph;
@@ -92,6 +98,8 @@ export function AssistantResultGallery({
   onOpen: (image: WorkflowResultImage) => void;
   onContinue: (image: WorkflowResultImage) => void;
   onCompare: (images: readonly WorkflowResultImage[]) => void;
+  onLocate?: ((image: WorkflowResultImage) => void) | undefined;
+  showHeader?: boolean;
 }) {
   const status =
     result.status === "completed"
@@ -112,11 +120,12 @@ export function AssistantResultGallery({
       aria-label="本次图片结果"
       data-execution-results={result.executionId}
     >
-      <header className={styles.header}>
+      {showHeader ? <header className={styles.header}>
         <strong>{status}</strong>
         <span className={styles.count}><NumberFlow value={result.images.length} /> 张图片</span>
-      </header>
-      {result.attempts.failed || result.attempts.canceled ? (
+        {result.images.length > 1 ? <AssistantIconButton label="比较本次结果" icon="compare" onClick={() => onCompare(result.images)} /> : null}
+      </header> : result.images.length > 1 ? <div className={styles.header}><AssistantIconButton label="比较本次结果" icon="compare" onClick={() => onCompare(result.images)} /></div> : null}
+      {showHeader && (result.attempts.failed || result.attempts.canceled) ? (
         <p className={styles.outcome}>
           {result.attempts.failed
             ? `${result.attempts.failed} 项操作未完成`
@@ -131,7 +140,8 @@ export function AssistantResultGallery({
         className={filmstrip ? styles.filmstrip : styles.grid}
         data-single={single ? "true" : undefined}
       >
-        {result.images.map((image) => {
+        {result.images.map((original) => {
+          const image = { ...original, title: imageDisplayTitle(original.title) };
           const node = resultImageNode(graph, image);
           return (
             <article
@@ -140,39 +150,30 @@ export function AssistantResultGallery({
               data-result-asset={image.assetId}
             >
               <ResultThumbnail image={image} onOpen={() => onOpen(image)} />
-              {/* hover 覆盖层操作 */}
-              <div className={styles.overlay}>
+              {onLocate ? <div className={styles.resultActions}>
+                {node ? <button type="button" className={styles.locate} onClick={() => onLocate(image)}>查看画布</button> : <span className={styles.detached}>已移出画布，仍可查看</span>}
+                <Menu label={`更多图片操作：${image.title}`} trigger={<WorkspaceIcon name="more" />} align="end">
+                  <Button onClick={() => onOpen(image)}>放大查看</Button>
+                  {node ? <Button disabled={disabled} onClick={() => onContinue(image)} aria-label={`继续修改：${image.title}`}>继续修改</Button> : null}
+                </Menu>
+              </div> : <div className={styles.overlay}>
+                <AssistantIconButton className={styles.overlayBtn} label={`放大查看：${image.title}`} icon="expand" onClick={() => onOpen(image)} />
                 {node ? (
-                  <button
+                  <AssistantIconButton
                     className={styles.overlayBtn}
                     disabled={disabled}
-                    type="button"
                     onClick={() => onContinue(image)}
-                    aria-label={`继续修改：${image.title}`}
-                    title="继续修改"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                      <path d="M2 11.5L8.5 5L10 6.5L3.5 13H2v-1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                      <path d="M9 4.5L10.5 3L12 4.5L10.5 6L9 4.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                    label={`继续修改：${image.title}`}
+                    icon="annotate"
+                  />
                 ) : (
                   <span className={styles.detached}>已移出当前画布，仍可查看</span>
                 )}
-              </div>
+              </div>}
             </article>
           );
         })}
       </div>
-      {result.images.length > 1 ? (
-        <button
-          className={styles.compare}
-          type="button"
-          onClick={() => onCompare(result.images)}
-        >
-          比较本次结果
-        </button>
-      ) : null}
     </section>
   );
 }

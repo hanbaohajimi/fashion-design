@@ -8,7 +8,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SignUploadInput } from "./files.schemas";
-import { FilesService } from "./files.service";
+import { detectVideoMime, FilesService } from "./files.service";
 import { BullThumbnailJobs } from "./thumbnail-queue.service";
 
 const input: SignUploadInput = {
@@ -42,6 +42,12 @@ function fileRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("FilesService", () => {
+  it("视频内容签名与扩展名分开校验，不将图片或随机字节当作视频", () => {
+    expect(detectVideoMime(Buffer.from("0000ftypisom0000"))).toBe("video/mp4");
+    expect(detectVideoMime(Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.from("0000webm0000")]))).toBe("video/webm");
+    expect(detectVideoMime(Buffer.from("伪装成.mp4的文本文件"))).toBeNull();
+    expect(detectVideoMime(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]))).toBeNull();
+  });
   const database = {
     fileAsset: {
       create: vi.fn(),

@@ -11,7 +11,7 @@ export const experimentCreateSchema = z
     sourceAssetId: z.string().min(1).max(128),
     mode: experimentModeSchema,
     prompt: z.string().trim().min(1).max(2000),
-    preserve: z.string().trim().min(1).max(1000),
+    preserve: z.string().trim().max(1000).default(""),
     colors: z
       .array(
         z

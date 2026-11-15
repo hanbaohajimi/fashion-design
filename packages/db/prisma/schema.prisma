@@ -71,6 +71,7 @@ model User {
   createdAt          DateTime              @default(now()) @map("created_at")
   exportJobs         ExportJob[]
   files              FileAsset[]
+  assetRatings       AssetRating[]
   fabrics            Fabric[]
   generationTasks    GenerationTask[]
   agentConversations AgentConversation[]
@@ -96,6 +97,19 @@ model User {
 enum AccountPlan {
   FREE
   PRO
+}
+
+model AssetRating {
+  userId     String   @map("user_id")
+  domain     String
+  resourceId String   @map("resource_id")
+  rating     Int      @db.SmallInt
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, domain, resourceId])
+  @@index([userId, rating])
+  @@map("asset_ratings")
 }
 
 enum ExportFormat {
@@ -241,8 +255,8 @@ model GenerationInput {
   inputType        String         @default("fabric") @map("input_type")
   fabricId         String         @map("fabric_id")
   boardElementId   String         @map("board_element_id")
-  role             String
-  weight           Float          @default(0.7)
+  role             String?
+  weight           Float?
   tagsSnapshot     String[]       @map("tags_snapshot")
   createdAt        DateTime       @default(now()) @map("created_at")
   generationTask   GenerationTask @relation(fields: [generationTaskId], references: [id], onDelete: Cascade)
@@ -496,6 +510,8 @@ model Project {
   canvasDocument     CanvasDocument?
   canvasBindings     CanvasObjectBinding[]
   canvasMutations    CanvasMutation[]
+  canvasCreations    CanvasCreation[]
+  canvasCreationRuns CanvasCreationRun[]
   designAssets       DesignAsset[]
   collections        Collection[]
   generationTasks    GenerationTask[]
@@ -834,6 +850,52 @@ model CanvasMutation {
 
   @@unique([projectId, mutationId])
   @@map("canvas_mutations")
+}
+
+model CanvasCreation {
+  id String @id
+  projectId String @map("project_id")
+  createdById String @map("created_by_id")
+  title String
+  module String @default("image")
+  revision Int @default(0)
+  draft Json
+  position Json?
+  resource Json?
+  currentResultNodeId String? @map("current_result_node_id")
+  removedAt DateTime? @map("removed_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs CanvasCreationRun[]
+
+  @@index([projectId, removedAt, createdAt])
+  @@map("canvas_creations")
+}
+
+model CanvasCreationRun {
+  id String @id
+  projectId String @map("project_id")
+  creationId String @map("creation_id")
+  actorId String @map("actor_id")
+  mutationId String @map("mutation_id")
+  requestHash String @map("request_hash")
+  draftRevision Int @map("draft_revision")
+  draftSnapshot Json @map("draft_snapshot")
+  command Json
+  toolNodeId String? @map("tool_node_id")
+  conversationId String? @map("conversation_id")
+  state String @default("preparing")
+  error String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creation CanvasCreation @relation(fields: [creationId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, mutationId])
+  @@index([creationId, createdAt])
+  @@index([projectId, toolNodeId])
+  @@map("canvas_creation_runs")
 }
 
 model WorkflowGraph {

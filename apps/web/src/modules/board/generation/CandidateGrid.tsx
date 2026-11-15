@@ -69,12 +69,12 @@ export function CandidateGrid({
   };
 
   return (
-    <section aria-label="生成候选" className={styles.candidateDock}>
+    <section aria-label="生成图片" className={styles.candidateDock}>
       {renderHeader ? (
         <header>
           <div>
             <span>GENERATED / OPTIONS</span>
-            <strong>候选工作台</strong>
+            <strong>图片工作台</strong>
           </div>
           <b>{candidates.length.toString().padStart(2, "0")}</b>
         </header>
@@ -87,20 +87,20 @@ export function CandidateGrid({
             style={{ animationDelay: `${Math.min(index, 6) * 80}ms` }}
           >
             <button
-              aria-label="打开候选详情"
+              aria-label="打开图片详情"
               className={styles.candidateImageButton}
               onClick={() => setLightbox({ candidate, mode: "view" })}
               type="button"
             >
               {/* Provider result URLs are persisted by the generation task. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="候选设计" src={candidate.url} />
+              <img alt="设计图" src={candidate.url} />
             </button>
             <div className={styles.candidateActions}>
               <div className={styles.candidateMenu}>
                 <button
                   aria-expanded={openMenuCandidateId === candidate.id}
-                  aria-label="更多候选操作"
+                  aria-label="更多图片操作"
                   onClick={() =>
                     setOpenMenuCandidateId((current) =>
                       current === candidate.id ? null : candidate.id,

@@ -52,7 +52,7 @@ export function planInputEdit(
   if (!target || target.kind !== "tool")
     throw new Error("只能编辑素材到工具的输入连接");
   if (target.type === "restore_version")
-    throw new Error("请从候选方案的版本工作台恢复版本");
+    throw new Error("请从设计方案的版本工作台恢复版本");
   if (target.status === "proposed") throw new Error("请先确认这条助手建议");
   const old = edit.edgeId
     ? graph.edges.find(

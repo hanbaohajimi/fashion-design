@@ -1,9 +1,10 @@
+import { workspaceRoute } from "../workspace-route";
 export interface CreativeVisit { projectId: string; path: string; visitedAt: string }
 const key = (userId: string) => `fashion:creative-visit:${userId}`;
 export function readCreativeVisit(userId: string): CreativeVisit | null {
   try {
     const value = JSON.parse(localStorage.getItem(key(userId)) ?? "null") as CreativeVisit | null;
-    if (!value || typeof value.projectId !== "string" || !/^[a-zA-Z0-9-]+$/u.test(value.projectId) ||
+    if (!value || typeof value.projectId !== "string" || workspaceRoute(`/${value.projectId}`).projectId !== value.projectId ||
       !["/" + value.projectId, "/" + value.projectId + "/studio"].some(path => value.path === path || value.path.startsWith(path + "?")) ||
       !Number.isFinite(Date.parse(value.visitedAt))) return null;
     return value;

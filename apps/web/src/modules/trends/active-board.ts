@@ -39,7 +39,7 @@ export function activeBoardPath(
   storage: BrowserStorage | undefined = defaultStorage(),
 ): string {
   const boardId = readActiveBoardId(storage);
-  return boardId ? `/${encodeURIComponent(boardId)}` : "/";
+  return boardId ? `/${encodeURIComponent(boardId)}` : "/projects";
 }
 
 export function boardTrendsPath(boardId: string): string {
@@ -62,7 +62,7 @@ export function resolveTrendReturnTarget(
   }
 
   return {
-    href: "/",
+    href: "/projects",
     label: "← 返回项目库",
   };
 }

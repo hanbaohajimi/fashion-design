@@ -48,6 +48,17 @@ describe("AmuxAdapter", () => {
     adapter = new AmuxAdapter(config, transport, loadReferenceImage);
   });
 
+  it("普通参考生图原样传递用户提示词，图片顺序不被来源身份或旧权重改变", async () => {
+    vi.mocked(transport.edit).mockResolvedValue({ data: [{ b64_json: "iVBORw0KGgo=" }] });
+    vi.mocked(loadReferenceImage).mockImplementation(async (url) => ({ bytes: new TextEncoder().encode(url), contentType: "image/png", filename: new URL(url).pathname.slice(1) }));
+    const prompt = "使用图1的纹理，按图2的构图重新设计";
+    await adapter.submit(aiGenerationRequestSchema.parse({ taskType: "i2i", referencePolicy: "instruction", prompt, width: 1024, height: 1024,
+      referenceImageUrl: "https://source.test/base.png", referenceImages: [{ order: 0, url: "https://source.test/texture.png", role: "fabric_texture", weight: 0.7 }, { order: 1, url: "https://source.test/base.png", role: "silhouette_ref", weight: 1 }] }), new AbortController().signal);
+    const form = vi.mocked(transport.edit).mock.calls[0]?.[0];
+    expect(form?.get("prompt")).toBe(prompt);
+    expect(await Promise.all((form?.getAll("image") as File[]).map((file) => file.text()))).toEqual(["https://source.test/texture.png", "https://source.test/base.png"]);
+  });
+
   it("使用 OpenAI Images 协议提交文生图并保存可恢复的同步结果", async () => {
     vi.mocked(transport.generate).mockResolvedValue({
       created: 1_786_000_000,

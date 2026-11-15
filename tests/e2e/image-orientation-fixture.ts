@@ -54,6 +54,9 @@ export async function prepareImageOrientation(
         type: "candidate",
         title: "藏蓝通勤外套",
         status: "completed",
+        canDelete: false,
+        canEditPayload: false,
+        canForkPayload: false,
         x: 0,
         y: 0,
         createdAt: NOW,
@@ -135,6 +138,7 @@ export async function prepareImageOrientation(
     }),
   );
   await page.route(`**/api/projects/${PROJECT}/canvas**`, async (route) => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: document.canEdit } });
     if (route.request().url().endsWith("/commands")) {
       const body = route.request().postDataJSON() as CanvasCommand;
       if (body.type === "create_material" && body.materialType === "candidate") {
@@ -266,8 +270,15 @@ export async function prepareImageOrientation(
     await expect(image).toBeVisible();
     const box = await image.boundingBox();
     if (!box) throw new Error("白板图片尚未布局");
-    // The material wrapper owns pointer events; exercise its actual visible hit area.
-    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+    // Short screens reposition the selected image and composer after the first
+    // click. Open from the revealed upper area after that layout has settled.
+    if (height < 700) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await expect(page.getByRole("region", { name: "图片创作框", exact: true })).toBeVisible();
+      const selected = await image.boundingBox();
+      if (!selected) throw new Error("所选图片不可见");
+      await page.mouse.dblclick(selected.x + selected.width / 2, selected.y + Math.min(80, selected.height / 4));
+    } else await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
     await expect(
       page.getByRole("dialog", { name: "图片工作区" }),
     ).toBeVisible();
@@ -279,6 +290,7 @@ export async function prepareImageOrientation(
     placementRequests,
     getGraph: () => structuredClone(graph),
     getCanvas: () => structuredClone(document),
+    setCanEdit: (canEdit: boolean) => { document = { ...document, canEdit }; },
     replaceGraph: (next: WorkflowGraph) => {
       graph = next;
       document = { ...document, bindings: next.nodes.filter(node => node.kind === "asset").map(node => ({ shapeId: `shape:canvas-${node.id}`, nodeId: node.id, removed: false })) };

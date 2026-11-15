@@ -2,7 +2,7 @@
 
 import { Select } from "../../../components/ui";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Dialog, Tabs, TabPanel } from "../../../components/ui";
 import controls from "../../../components/ui.module.css";
 
@@ -24,16 +24,30 @@ import { ExportModal } from "./ExportModal";
 import styles from "./generation.module.css";
 import { LookGrid } from "./LookGrid";
 import { MotionReceipt } from "../../../components/motion/MotionReceipt";
+import { flushWorkspaceDrafts, registerDraftFlush } from "../../../components/drafts/draft-repository";
+import { CollectionPlanning } from "../../studio/CollectionPlanning";
 
 type SaveState = "error" | "saved" | "saving" | "unsaved";
-type DrawerTab = "dna" | "looks";
+export type CollectionTab = "dna" | "planning" | "looks";
 
 export function CollectionDrawer({
   collectionId,
   onClose,
+  embedded = false,
+  canEdit = true,
+  onRecord,
+  initialTab = "dna",
+  onDirty,
+  onPlanningSaved,
 }: {
   readonly collectionId: string;
   readonly onClose: () => void;
+  readonly embedded?: boolean;
+  readonly canEdit?: boolean;
+  readonly onRecord?: (() => void | Promise<void>) | undefined;
+  readonly initialTab?: CollectionTab;
+  readonly onDirty?: ((dirty: boolean) => void) | undefined;
+  readonly onPlanningSaved?: (() => Promise<unknown>) | undefined;
 }) {
   const [collection, setCollection] = useState<CollectionDetail | null>(null);
   const [consistency, setConsistency] = useState<CollectionConsistency | null>(
@@ -48,7 +62,8 @@ export function CollectionDrawer({
   const [loadingCollection, setLoadingCollection] = useState(false);
   const [loadingConsistency, setLoadingConsistency] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
-  const [tab, setTab] = useState<DrawerTab>("dna");
+  const [tab, setTab] = useState<CollectionTab>(initialTab);
+  const [planningVisited, setPlanningVisited] = useState(initialTab === "planning");
   const [exportOpen, setExportOpen] = useState(false);
   const [failedHeroUrl, setFailedHeroUrl] = useState("");
   const lastSaved = useRef("");
@@ -62,6 +77,7 @@ export function CollectionDrawer({
 
   const enqueueSave = useCallback(
     (snapshot: CollectionDna): Promise<void> => {
+      if (!canEdit) return Promise.resolve();
       const payload = {
         fabrics: snapshot.fabrics,
         locks: snapshot.locks,
@@ -95,7 +111,7 @@ export function CollectionDrawer({
       saveQueue.current = operation.catch(() => undefined);
       return operation;
     },
-    [collectionId],
+    [canEdit, collectionId],
   );
 
   const flushDna = useCallback(async (): Promise<void> => {
@@ -107,10 +123,14 @@ export function CollectionDrawer({
     }
   }, [enqueueSave]);
 
+  useEffect(() => registerDraftFlush(flushDna), [flushDna]);
+
   const closeAfterSave = useCallback(async (): Promise<void> => {
     try {
       await flushDna();
+      await flushWorkspaceDrafts();
     } catch {
+      setSaveError("当前修改尚未保存，请重试关闭或切换系列。");
       return;
     }
     onClose();
@@ -212,6 +232,7 @@ export function CollectionDrawer({
   const saveSourceGarmentType = async (
     sourceGarmentType: GarmentType | null,
   ): Promise<void> => {
+    if (!canEdit) return;
     setSourceSaving(true);
     setSourceError(null);
     try {
@@ -230,15 +251,16 @@ export function CollectionDrawer({
   };
 
   return (
-    <Dialog
-      label={exportOpen ? "导出成果" : "系列 DNA"}
+    <CollectionSurface embedded={embedded}
+      label={exportOpen ? "导出成果" : "系列工作台"}
       className={`${styles.collectionDrawer} ${controls.controlSurface} ${exportOpen ? styles.collectionExport : ""}`}
       onClose={() => void closeAfterSave()}
     >
       <div className={styles.collectionContents} hidden={exportOpen}>
+      <div className={styles.collectionNavigation}>
       <header className={styles.collectionHeader}>
         <div>
-          <strong>{collection ? <MotionReceipt receiptKey={`collection:${collectionId}`}>系列</MotionReceipt> : "正在读取系列"}</strong>
+          <strong title={collection?.name}>{collection ? <MotionReceipt receiptKey={`collection:${collectionId}`}>{collection.name}</MotionReceipt> : "正在读取系列"}</strong>
         </div>
         <div>
           <SaveIndicator state={saveState} />
@@ -251,18 +273,22 @@ export function CollectionDrawer({
             导出 PDF
           </button>
           <button
-            aria-label="关闭系列抽屉"
+            aria-label={embedded ? "切换系列" : "关闭系列工作台"}
             onClick={() => void closeAfterSave()}
             type="button"
           >
-            关闭
+            {embedded ? "切换系列" : "关闭"}
           </button>
         </div>
       </header>
 
       {collection ? (
-        <Tabs<DrawerTab> id={tabsId} label="系列工作区" className={styles.collectionTabs} value={tab} onChange={setTab} options={[{ value: "dna", label: "DNA 定义" }, { value: "looks", label: "Look 扩展" }]} />
+        <Tabs<CollectionTab> id={tabsId} label="系列工作区" className={styles.collectionTabs} value={tab} onChange={(next) => {
+          if (next === "planning") setPlanningVisited(true);
+          setTab(next);
+        }} options={[{ value: "dna", label: "设计方向" }, { value: "planning", label: "款式规划" }, { value: "looks", label: "系列扩展" }]} />
       ) : null}
+      </div>
 
       {!collection && !collectionError ? (
         <div className={styles.collectionSkeleton} aria-label="正在加载 DNA">
@@ -339,19 +365,23 @@ export function CollectionDrawer({
                 </div>
               </section>
               <SourceGarmentTypeEditor
-                disabled={sourceSaving}
+                disabled={sourceSaving || !canEdit}
                 error={sourceError}
                 key={`${collection.sourceGarmentType?.code ?? "unspecified"}:${collection.sourceGarmentType?.label ?? ""}`}
                 onSave={saveSourceGarmentType}
                 value={collection.sourceGarmentType}
               />
-              <DNACard
+              <fieldset disabled={!canEdit} style={{ border: 0, padding: 0, margin: 0 }}><DNACard
                 dna={draft}
                 onChange={(next) => {
                   setSaveError(null);
                   setDraft(next);
                 }}
-              />
+              /></fieldset>
+            </TabPanel>
+            <TabPanel tabsId={tabsId} value="planning" activeValue={tab} keepMounted className={styles.collectionPlanning}>
+              {planningVisited ? <CollectionPlanning key={`${collection.projectId}:${collectionId}`} projectId={collection.projectId}
+                collectionId={collectionId} canEdit={canEdit} onDirty={onDirty} onSaved={onPlanningSaved} /> : null}
             </TabPanel>
             <TabPanel tabsId={tabsId} value="looks" activeValue={tab} keepMounted>
             {consistency ? (
@@ -361,6 +391,8 @@ export function CollectionDrawer({
               consistency={consistency}
               onRefresh={refreshConsistency}
               sourceGarmentType={collection.sourceGarmentType}
+              canEdit={canEdit}
+              onSubmitted={onRecord}
             />
           ) : (
             <div
@@ -388,8 +420,12 @@ export function CollectionDrawer({
           }}
         />
       ) : null}
-    </Dialog>
+    </CollectionSurface>
   );
+}
+
+function CollectionSurface({ embedded, children, label, className, onClose }: { embedded: boolean; children: ReactNode; label: string; className: string; onClose: () => void }) {
+  return embedded ? <section aria-label={label} className={className} style={{ position: "relative", inset: "auto", width: "100%", height: "auto", maxHeight: "none", overflow: "visible", border: 0, boxShadow: "none" }}>{children}</section> : <Dialog label={label} className={className} onClose={onClose}>{children}</Dialog>;
 }
 
 function SaveIndicator({ state }: { readonly state: SaveState }) {

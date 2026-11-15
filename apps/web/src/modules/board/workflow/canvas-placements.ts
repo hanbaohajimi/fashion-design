@@ -31,7 +31,9 @@ export function placementNodeId(
   bindings: ReadonlyMap<string, string>,
   graph: WorkflowGraph,
 ): string | null {
-  const id = bindings.get(shape.id) ?? shape.meta.canvasNodeId;
+  // A creation target keeps its shape identity while its selected result changes.
+  // Never let an earlier asset binding override the current displayed version.
+  const id = shape.type === "fashion-creation" ? shape.meta.canvasNodeId : bindings.get(shape.id) ?? shape.meta.canvasNodeId;
   return typeof id === "string" &&
     graph.nodes.some((node) => node.id === id && node.kind === "asset")
     ? id

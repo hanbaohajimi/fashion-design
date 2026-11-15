@@ -502,8 +502,8 @@ for (const height of [640, 400])
     await state.open();
     await page.setViewportSize({ width: 320, height });
     await input(page).fill("这是一份保留在输入区的设计要求");
-    await upload(page, ["正面.png", "领口.png", "袖口.png"]);
-    await expect(references(page)).toHaveCount(3);
+    await upload(page, ["正面.png", "领口.png", "袖口.png", "后背.png", "面料.png", "配色.png", "细节.png"]);
+    await expect(references(page)).toHaveCount(7);
     await expect(tray(page)).toHaveCount(0);
     await expect(input(page)).toBeInViewport({ ratio: 1 });
     await expect(
@@ -514,19 +514,19 @@ for (const height of [640, 400])
         (element) => element.getBoundingClientRect().height,
       ),
     ).toBeGreaterThanOrEqual(63);
-    const referenceArea = page.locator("[data-composer-references]");
+    const referenceArea = page.locator("[data-discussion-references]");
     expect(
-      await referenceArea.evaluate((element) => element.scrollHeight),
+      await referenceArea.evaluate((element) => element.scrollWidth),
     ).toBeGreaterThan(
-      await referenceArea.evaluate((element) => element.clientHeight),
+      await referenceArea.evaluate((element) => element.clientWidth),
     );
     await referenceArea.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
+      element.scrollLeft = element.scrollWidth;
     });
     await expect(
       references(page)
         .last()
-        .getByRole("button", { name: /^移除引用/ }),
+        .locator("[data-reference-preview]"),
     ).toBeInViewport({ ratio: 1 });
     expect(state.errors).toEqual([]);
   });

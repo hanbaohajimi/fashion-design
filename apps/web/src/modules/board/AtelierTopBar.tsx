@@ -88,7 +88,7 @@ export function AtelierTopBar({
             aria-label="项目导航"
             ref={projectPopoverRef}
           >
-            <Link href="/">返回项目库</Link>
+            <Link href="/projects">返回项目库</Link>
           </nav>
         ) : null}
       </div>

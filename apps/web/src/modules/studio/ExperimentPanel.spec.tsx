@@ -61,6 +61,7 @@ it("saves a plan without creating generation tasks or dispatching cells", async 
   fireEvent.change(screen.getByLabelText("本轮目标"), {
     target: { value: "只改变颜色" },
   });
+  fireEvent.change(screen.getByLabelText(/配色，每行/), { target: { value: "墨黑 #202020" } });
   fireEvent.click(screen.getByRole("button", { name: "保存实验计划" }));
   await screen.findByText(/实验计划已保存/);
   const posts = fetcher.mock.calls.filter(

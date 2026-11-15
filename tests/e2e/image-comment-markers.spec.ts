@@ -1,3 +1,4 @@
+import { imageScale, zoomImageToDetail } from "./image-workspace-controls";
 import { mkdir } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { prepareImageEditing } from "./image-editing-fixture";
@@ -92,8 +93,9 @@ test("图片外点击、拖动、取消与双指不落标记，200% 标记保持
   await page.keyboard.press("Escape");
   if (!await composer(workspace).isVisible()) await workspace.getByRole("button", { name: "添加评论", exact: true }).click();
   await expect(draftPin(workspace)).toHaveCount(0);
-  const zoom = workspace.getByLabel("缩放比例");
-  await zoom.fill("200"); await zoom.press("Enter");
+  await workspace.getByRole("button", { name: "收起工具", exact: true }).click();
+  await zoomImageToDetail(workspace);
+  await workspace.getByRole("button", { name: "添加评论", exact: true }).click();
   const zoomed = await picture.boundingBox();
   if (!zoomed) throw new Error("缩放图片缺失");
   await page.mouse.click(zoomed.x + zoomed.width / 2, zoomed.y + zoomed.height / 2);
@@ -103,7 +105,7 @@ test("图片外点击、拖动、取消与双指不落标记，200% 标记保持
   expect(pin?.height).toBeCloseTo(44, 0);
   await add(workspace, "缩放后仍指向中心");
   await workspace.getByRole("button", { name: "保存评论", exact: true }).click();
-  await expect(workspace.getByRole("button", { name: "适合窗口 200%", exact: true })).toBeVisible();
+  await expect.poll(() => imageScale(workspace)).toBeCloseTo(2, 2);
   await workspace.screenshot({ path: "output/playwright/image-comment-markers/zoomed.png" });
 });
 

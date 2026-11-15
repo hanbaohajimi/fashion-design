@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button, Dialog } from "../../../components/ui";
 import { useUploadFeedback, UploadFeedbackPreview } from "../../../components/interactions/use-upload-feedback";
 import {
@@ -22,12 +22,20 @@ export function WorkflowProjectPanels({
   collectionsOpen,
   onCollectionsOpenChange,
   hideTrigger = false,
+  embedded = false,
+  initialHeroAssetId,
+  initialHeroLabel = "以所选图片建立系列",
+  canEdit = true,
 }: {
   projectId: string;
   onCollection: (id: string) => void;
   collectionsOpen?: boolean;
   onCollectionsOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  embedded?: boolean;
+  initialHeroAssetId?: string | undefined;
+  initialHeroLabel?: string;
+  canEdit?: boolean;
 }) {
   const [localPanel, setLocalPanel] = useState<"collections" | null>(null);
   const panel = collectionsOpen === undefined ? localPanel : collectionsOpen ? "collections" : null;
@@ -77,16 +85,17 @@ export function WorkflowProjectPanels({
     <>
       {!hideTrigger ? <Button onClick={() => setPanel("collections")}>系列</Button> : null}
       {panel ? (
-        <Dialog
-          label="系列工作台"
+        <CollectionPanelSurface embedded={embedded}
+          label={embedded ? "选择系列" : "系列工作台"}
+          returnFocusSelector={hideTrigger ? '[data-guide="workspace-functions"]' : undefined}
           onClose={() => {
             if (!busy) setPanel(null);
           }}
         >
-          <h2>系列工作台</h2>
-          <Button disabled={busy} onClick={() => setPanel(null)}>
+          <h2>{embedded ? "选择系列" : "系列工作台"}</h2>
+          {!embedded ? <Button disabled={busy} onClick={() => setPanel(null)}>
             关闭
-          </Button>
+          </Button> : null}
           {error ? (
             <p role="alert">
               {error}
@@ -94,12 +103,13 @@ export function WorkflowProjectPanels({
             </p>
           ) : null}
 
+              {initialHeroAssetId && canEdit ? <Button disabled={busy} onClick={() => void action(async () => { const collection = await createCollection(initialHeroAssetId); onCollection(collection.id); if (!embedded) setPanel(null); })}>{initialHeroLabel}</Button> : null}
               <label>
                 上传主推款
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                  disabled={busy}
+                  disabled={busy || !canEdit}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (!file) return;
@@ -133,7 +143,7 @@ export function WorkflowProjectPanels({
                       const collection = await createCollection(asset.id);
                       upload.done(ready.thumbnail256Url ?? ready.thumbnail1024Url);
                       onCollection(collection.id);
-                      setPanel(null);
+                      if (!embedded) setPanel(null);
                       } catch (cause) {
                         upload.fail();
                         if (!upload.signal.aborted) throw cause;
@@ -150,7 +160,7 @@ export function WorkflowProjectPanels({
                     disabled={busy}
                     onClick={() => {
                       onCollection(collection.id);
-                      setPanel(null);
+                      if (!embedded) setPanel(null);
                     }}
                   >
                     {collection.name}
@@ -158,11 +168,15 @@ export function WorkflowProjectPanels({
                 </p>
               ))}
               {!collections.length ? (
-                <p>暂无系列，可上传主推款或从候选方案建立系列。</p>
+                <p>暂无系列，可上传主推款或从设计方案建立系列。</p>
               ) : null}
 
-        </Dialog>
+        </CollectionPanelSurface>
       ) : null}
     </>
   );
+}
+
+function CollectionPanelSurface({ embedded, children, label, onClose, returnFocusSelector }: { embedded: boolean; children: ReactNode; label: string; onClose: () => void; returnFocusSelector?: string | undefined }) {
+  return embedded ? <section aria-label={label}>{children}</section> : <Dialog label={label} onClose={onClose} returnFocusSelector={returnFocusSelector}>{children}</Dialog>;
 }

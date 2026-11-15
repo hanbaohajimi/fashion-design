@@ -17,6 +17,7 @@ import {
 } from "./fabric-api";
 import type { Fabric } from "./fabric-types";
 import { canManageFabric } from "./fabric-filters";
+import { FabricFlipCard } from "./FabricFlipCard";
 import styles from "./fabrics.module.css";
 import { useCoutureMotion } from "../../components/motion/use-couture-motion";
 import {
@@ -275,6 +276,8 @@ interface FabricCardProps {
   readonly adding?: boolean;
   readonly addDisabled?: boolean;
   readonly compact?: boolean;
+  readonly flipped?: boolean | undefined;
+  readonly onFlipChange?: ((flipped: boolean) => void) | undefined;
   readonly fabric: Fabric;
   readonly onAdd?: ((fabric: Fabric) => void) | undefined;
   readonly onChanged?: (() => void) | undefined;
@@ -284,6 +287,8 @@ export function FabricCard({
   adding = false,
   addDisabled = false,
   compact = false,
+  flipped,
+  onFlipChange,
   fabric: sourceFabric,
   onAdd,
   onChanged,
@@ -378,64 +383,81 @@ export function FabricCard({
 
   return (
     <article
-      aria-label={`${label}，拖拽到白板`}
-      className={styles.fabricCard}
+      aria-label={compact ? `${label}，拖拽到白板` : `${label}，面料卡片`}
+      className={compact ? styles.fabricCard : styles.libraryFabricCard}
       data-compact={compact}
-      draggable
-      onDragStart={beginDrag}
+      draggable={compact}
+      onDragStart={compact ? beginDrag : undefined}
     >
-      <div className={styles.cardVisual} data-guide="fabrics-preview">
-        <ImagePreview
-          alt={label}
-          src={fabric.mainImageUrl}
-          fit="cover"
-          retryable={false}
-          draggable={false}
-        />
-        <span className={styles.dragHint}>拖至白板</span>
-        <button
-          aria-label={`${manageable ? "管理" : "查看"}面料：${label}`}
-          className={styles.fabricManageButton}
-          onClick={openManager}
-          type="button"
-        >
-          {manageable ? "管理" : "详情"}
-        </button>
-      </div>
-      <div className={styles.cardBody}>
-        <h3>{fabric.details?.name || "未命名面料"}</h3>
-        <p className={styles.cardSpec}>
-          {[
-            fabric.details?.code,
-            fabric.details?.weightGsm
-              ? `${fabric.details.weightGsm} g/m²`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" ") || "规格未填写"}
-        </p>
-        <div className={styles.fabricTags}>
-          <span className={styles.categoryPill} data-scope={fabric.scope}>
-            {scopeLabel}
-          </span>
-          <p aria-label={`面料标签：${label}`} title={label}>
-            {fabric.tags.map((tag) => `#${tag}`).join("  ")}
-          </p>
-        </div>
-        {onAdd ? (
-          <div className={styles.fabricCardActions}>
+      {compact ? (
+        <>
+          <div className={styles.cardVisual} data-guide="fabrics-preview">
+            <ImagePreview
+              alt={label}
+              src={fabric.mainImageUrl}
+              fit="cover"
+              retryable={false}
+              draggable={false}
+            />
+            <span className={styles.dragHint}>拖至白板</span>
             <button
-              data-guide={!addDisabled && !adding ? "fabrics-add" : undefined}
-              disabled={addDisabled}
-              aria-busy={adding}
-              onClick={() => onAdd(fabric)}
+              aria-label={`${manageable ? "管理" : "查看"}面料：${label}`}
+              className={styles.fabricManageButton}
+              onClick={openManager}
               type="button"
             >
-              {adding ? "正在加入…" : "加入当前项目"}
+              {manageable ? "管理" : "详情"}
             </button>
           </div>
-        ) : null}
-      </div>
+          <div className={styles.cardBody}>
+            <h3>{fabric.details?.name || "未命名面料"}</h3>
+            <p className={styles.cardSpec}>
+              {[
+                fabric.details?.code,
+                fabric.details?.weightGsm
+                  ? `${fabric.details.weightGsm} g/m²`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ") || "规格未填写"}
+            </p>
+            <div className={styles.fabricTags}>
+              <span className={styles.categoryPill} data-scope={fabric.scope}>
+                {scopeLabel}
+              </span>
+              <p aria-label={`面料标签：${label}`} title={label}>
+                {fabric.tags.map((tag) => `#${tag}`).join("  ")}
+              </p>
+            </div>
+            {onAdd ? (
+              <div className={styles.fabricCardActions}>
+                <button
+                  data-guide={
+                    !addDisabled && !adding ? "fabrics-add" : undefined
+                  }
+                  disabled={addDisabled}
+                  aria-busy={adding}
+                  onClick={() => onAdd(fabric)}
+                  type="button"
+                >
+                  {adding ? "正在加入…" : "加入当前项目"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <FabricFlipCard
+          fabric={fabric}
+          label={label}
+          flipped={flipped}
+          onFlipChange={onFlipChange}
+          onOpenDetails={openManager}
+          onAdd={onAdd}
+          adding={adding}
+          addDisabled={addDisabled}
+        />
+      )}
 
       {dialogOpen ? (
         <Dialog

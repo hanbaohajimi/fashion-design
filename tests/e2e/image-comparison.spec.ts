@@ -1,3 +1,4 @@
+import { openImageComparison } from "./image-workspace-controls";
 import { mkdir } from "node:fs/promises";
 import { expect, test, type Locator } from "@playwright/test";
 import { prepareImageComparison } from "./image-comparison-fixture";
@@ -21,7 +22,7 @@ test.afterEach(async ({ page }, info) => {
   );
 });
 const history = async (workspace: Locator) => {
-  await workspace.getByRole("button", { name: "图像", exact: true }).click();
+  await workspace.getByRole("button", { name: "版本与对比", exact: true }).click();
   await workspace
     .getByRole("button", { name: "版本历史", exact: true })
     .click();
@@ -43,9 +44,7 @@ for (const width of [1440, 390, 320]) {
     const state = await prepareImageComparison(page, width);
     await state.open();
     const workspace = page.getByRole("dialog", { name: "图片工作区" });
-    await workspace
-      .getByRole("button", { name: "比较方案", exact: true })
-      .click();
+    await openImageComparison(workspace);
     const comparison = workspace.getByRole("region", {
       name: "比较方案",
       exact: true,
@@ -106,11 +105,9 @@ for (const width of [1440, 390, 320]) {
       .getByRole("button", { name: "返回图片", exact: true })
       .press("Escape");
     await expect(
-      workspace.getByRole("button", { name: "比较方案", exact: true }),
+      workspace.getByRole("button", { name: "版本与对比", exact: true }),
     ).toBeFocused();
-    await workspace
-      .getByRole("button", { name: "比较方案", exact: true })
-      .press("Enter");
+    await openImageComparison(workspace);
     await other
       .getByRole("button", { name: "继续编辑对比图", exact: true })
       .click();
@@ -245,9 +242,7 @@ test("历史读取和比较图片失败均可重试，不提交恢复", async ({
   ).toBeEnabled();
   await workspace.getByRole("button", { name: /返回图片/u }).click();
   state.setImageFailure(true);
-  await workspace
-    .getByRole("button", { name: "比较方案", exact: true })
-    .click();
+  await openImageComparison(workspace);
   const other = workspace.getByRole("region", {
     name: "对比图片",
     exact: true,
@@ -273,9 +268,7 @@ test("多方案切换和往返编辑保留原图的方向草稿", async ({ page 
     .getByRole("button", { name: "旋转与翻转", exact: true })
     .click();
   await workspace.getByLabel("旋转角度", { exact: true }).fill("17");
-  await workspace
-    .getByRole("button", { name: "比较方案", exact: true })
-    .click();
+  await openImageComparison(workspace);
   const comparison = workspace.getByRole("region", {
     name: "比较方案",
     exact: true,

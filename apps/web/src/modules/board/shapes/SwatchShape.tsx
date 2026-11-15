@@ -16,16 +16,13 @@ import {
   type PointerEvent,
 } from "react";
 
-import { RoleBadge } from "./RoleBadge";
 import {
   SWATCH_SHAPE_TYPE,
   type SwatchShape,
-  normalizeBoardRole,
 } from "./shape-types";
 import { MaterialShell } from "./MaterialShell";
 import {
   generateMaterialAppearance,
-  resolveMaterialAppearance,
 } from "./material-appearance";
 import {
   SWATCH_HEIGHT,
@@ -65,7 +62,7 @@ export class SwatchShapeUtil extends BaseBoxShapeUtil<SwatchShape> {
       colors: [createSwatchColor("#c8ab84", "OAT")],
       h: SWATCH_HEIGHT,
       label: "OAT",
-      role: "palette",
+      role: "reference",
       w: computeSwatchWidth(1),
     };
   }
@@ -102,11 +99,10 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
   const editor = useEditor();
   const exporting = Boolean(useSvgExportContext());
   const readOnly = useValue("swatch-readonly", () => editor.getInstanceState().isReadonly, [editor]);
-  const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
   const appearance =
     shape.props.appearance ??
-    generateMaterialAppearance(resolveMaterialAppearance(role), seed);
+    generateMaterialAppearance("color-card", seed);
 
   const zoom = useValue("zoom", () => editor.getZoomLevel(), [editor]);
   const lod = zoom < 0.3 ? "low" : zoom < 0.8 ? "medium" : "high";
@@ -369,7 +365,6 @@ function SwatchShapeContent({ shape }: { readonly shape: SwatchShape }) {
 
   return (
     <MaterialShell
-      annotation={<RoleBadge role={shape.props.role} shapeId={shape.id} />}
       annotationScale={swatchScale}
       appearance={appearance}
       height={shape.props.h}

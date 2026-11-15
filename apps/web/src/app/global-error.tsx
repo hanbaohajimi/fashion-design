@@ -28,7 +28,7 @@ export default function GlobalError({
             <button onClick={reset} type="button">
               重试
             </button>
-            <Link href="/">返回项目库</Link>
+            <Link href="/projects">返回项目库</Link>
           </section>
         </main>
       </body>

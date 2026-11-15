@@ -34,7 +34,7 @@ test("P1 项目重命名防重复、失败留稿、键盘恢复和归档焦点",
     Object.assign(project, route.request().postDataJSON());
     return route.fulfill({ json: project });
   });
-  await page.goto("/");
+  await page.goto("/projects");
   const card = page.locator('[data-project-id="rename-0"]');
   await card.locator("summary").click();
   await page.getByRole("group", { name: /项目操作选项$/ }).getByRole("button", { name: "重命名", exact: true }).click();
@@ -268,7 +268,7 @@ test("认证暂时不可用时显示恢复入口，不把失败显示为空档�
   ).toBeVisible();
 });
 
-test("工作室侧栏保留旧链接、未保存保护与手机全部功能入口", async ({ page }) => {
+test("工作室保留旧规划链接、返回画布的未保存保护与手机工作台", async ({ page }) => {
   await mockWorkspace(page);
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/experience/studio?tab=tasks");
@@ -278,30 +278,25 @@ test("工作室侧栏保留旧链接、未保存保护与手机全部功能入�
   await page
     .getByRole("textbox", { name: "本次任务", exact: true })
     .fill("尚未保存的风衣要求");
-  await page.getByRole("tab", { name: "系列规划", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toHaveValue("尚未保存的风衣要求");
-  await page.getByRole("tab", { name: "系列规划", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await guard.getByRole("button", { name: "丢弃并离开", exact: true }).click();
+  await expect(page).toHaveURL(/\/experience$/);
+  await page.route("**/api/collections*", (route) => route.fulfill({ json: [] }));
+  await page.goto("/experience/studio?tab=planning");
   await expect(page).toHaveURL(/tab=planning/);
-  await expect(
-    page.getByRole("tab", { name: "系列规划", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "选择系列", exact: true })).toBeVisible();
   await page.reload();
-  await expect(
-    page.getByRole("tab", { name: "系列规划", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "选择系列", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel("当前功能", { exact: true }).click();
-  await expect(
-    page.getByRole("group", { name: "当前功能选项", exact: true }).getByRole("button"),
-  ).toHaveCount(12);
-  await expect(page.getByRole("group", { name: "当前功能选项", exact: true }).getByRole("button", { name: "服装秀", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await chooseValue(page.getByLabel("当前功能", { exact: true }), "tech");
+  await expect(page.getByLabel("上传主推款")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/experience/studio?tab=tech");
   await expect(page).toHaveURL(/tab=tech/);
   await expect(page.getByRole("heading", { name: "编辑技术包资料", exact: true })).toBeVisible();
 });

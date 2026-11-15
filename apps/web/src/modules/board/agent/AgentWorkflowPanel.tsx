@@ -62,6 +62,8 @@ const STEP_LABELS: Record<AgentRunStepView["status"], string> = {
 };
 
 export interface AgentWorkflowPanelProps {
+  readonly allowCreate?: boolean;
+  readonly readOnly?: boolean;
   readonly conversationId: string;
   readonly contextReady: boolean;
   readonly contextItems: ReactNode;
@@ -71,6 +73,8 @@ export interface AgentWorkflowPanelProps {
 }
 
 export function AgentWorkflowPanel({
+  allowCreate = true,
+  readOnly = false,
   conversationId,
   contextReady,
   contextItems,
@@ -294,6 +298,7 @@ export function AgentWorkflowPanel({
   }, [onTaskCreated, run]);
 
   const busy =
+    readOnly ||
     control.isPending ||
     edit.isPending ||
     editPlan.isPending ||
@@ -445,7 +450,7 @@ export function AgentWorkflowPanel({
                   </option>
                 ))}
               </Select>
-              <button
+              {allowCreate ? <button
                 disabled={busy}
                 type="button"
                 onClick={() => {
@@ -454,10 +459,11 @@ export function AgentWorkflowPanel({
                 }}
               >
                 {composing ? "收起目标" : "新建计划"}
-              </button>
+              </button> : null}
             </div>
           ) : null}
-          {composing || !list.data?.items.length ? (
+          {!allowCreate && !list.data?.items.length ? <p>这段对话还没有历史计划。</p> : null}
+          {allowCreate && (composing || !list.data?.items.length) ? (
             <form
               className={styles.workflowComposer}
               onSubmit={(event) => {
@@ -513,7 +519,7 @@ export function AgentWorkflowPanel({
                 <AgentDesignBriefPanel intelligence={run.intelligence} />
               ) : run.steps.length > 0 ? (
                 <p className={styles.workflowLegacyNotice}>
-                  此计划创建于设计简报升级前。若要逐项检查候选并根据反馈获得修订建议，请点击上方“新建计划”。
+                  此计划创建于设计简报升级前。若要逐项检查图片并根据反馈获得修订建议，请点击上方“新建计划”。
                 </p>
               ) : null}
               <button
@@ -548,6 +554,7 @@ export function AgentWorkflowPanel({
                           : null
                     }
                     editable={
+                      !readOnly &&
                       (step.canEditInputs ?? step.status === "pending") &&
                       ["ready", "paused", "failed"].includes(run.status)
                     }
@@ -576,7 +583,7 @@ export function AgentWorkflowPanel({
                   />
                 ))}
               </ol>
-              {!terminal ? (
+              {!terminal && !readOnly ? (
                 <footer className={styles.workflowControls}>
                   {executable ? (
                     <button
@@ -896,7 +903,7 @@ function WorkflowNode({
                 结果不满意，重新调整
               </button>
               <p>
-                重新调整需要填写原因。当前候选会记为否决，下一次生成由你主动执行。
+                重新调整需要填写原因。当前图片会记为否决，下一次生成由你主动执行。
               </p>
               <p>确认后可继续下一节点。成图已经放到白板。</p>
             </>
@@ -939,7 +946,7 @@ function WorkflowNode({
                 {!attempt.candidates.length &&
                 ["succeeded", "rejected"].includes(attempt.status)
                   ? "此轮产物已归档或暂不可访问"
-                  : `${attempt.candidates.length} 个候选，历史产物可在节点图中查看设计路径。`}
+                  : `${attempt.candidates.length} 张图片，历史产物可在节点图中查看设计路径。`}
               </p>
             </section>
           ))}

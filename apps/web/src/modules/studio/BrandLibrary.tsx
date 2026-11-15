@@ -49,7 +49,7 @@ const lines = (value: string) =>
     .filter(Boolean);
 
 export function BrandLibrary(
-  props: StudioPanelProps & { readonly data: StudioSummary },
+  props: StudioPanelProps & { readonly data: StudioSummary; readonly onAppliedToCanvas?: () => Promise<void> },
 ) {
   const feedback = useSubmitFeedback();
   const beforeChange = async () => {
@@ -206,12 +206,14 @@ function BrandEditor({
   canEdit,
   onDirty,
   onSaved,
+  onAppliedToCanvas,
   beforeChange,
   feedback,
   existing,
   onCreated,
 }: StudioPanelProps & {
   readonly data: StudioSummary;
+  readonly onAppliedToCanvas?: () => Promise<void>;
   readonly existing: StudioDocumentView | undefined;
   readonly onCreated: (id: string) => void;
 }) {
@@ -346,6 +348,8 @@ function BrandEditor({
       });
       pendingApply.current = null;
       setApplied(true);
+      try { await onAppliedToCanvas?.(); }
+      catch { form.setError("品牌资料已放入画布，画布暂未同步，请关闭面板后刷新资料。"); }
     }, "apply");
   };
   return (

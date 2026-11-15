@@ -36,11 +36,12 @@ const ChromeActionsContext = createContext<ChromeActions>({ compact: false, setO
 export const useWorkspaceChromeActions = () => useContext(ChromeActionsContext);
 
 /** Layout preferences never key or replace the editor, conversation or draft scope. */
-export function WorkspaceChrome({ accountId, kind, routeKey, children }: {
+export function WorkspaceChrome({ accountId, kind, routeKey, children, navigation = "standard" }: {
   accountId: string | null;
   kind: WorkspaceNavigationKind;
   routeKey: string;
   children: ReactNode;
+  navigation?: "standard" | "none";
 }) {
   const compact = useSyncExternalStore(subscribeViewport, compactViewport, desktopViewport);
   const preferredOpen = useSyncExternalStore(subscribePreference,
@@ -51,7 +52,7 @@ export function WorkspaceChrome({ accountId, kind, routeKey, children }: {
   const [focusOwners, setFocusOwners] = useState<string[]>([]);
   const scope = `${accountId ?? ""}:${routeKey}`;
   const focused = focusOwners.length > 0;
-  const open = !focused && (compact ? drawer.scope === scope && drawer.open : preferredOpen);
+  const open = navigation !== "none" && !focused && (compact ? drawer.scope === scope && drawer.open : preferredOpen);
   const setOpen = useCallback((next: boolean) => {
     if (compact) setDrawer({ scope, open: next });
     else if (accountId) saveNavigationPreference(accountId, kind, next);
@@ -63,7 +64,7 @@ export function WorkspaceChrome({ accountId, kind, routeKey, children }: {
   const actions = useMemo(() => ({ compact, setOpen, setFocused }), [compact, setOpen, setFocused]);
   const value = useMemo(() => ({ kind, compact, open, focused, setOpen, setFocused }), [kind, compact, open, focused, setOpen, setFocused]);
   return <ChromeActionsContext value={actions}><ChromeContext value={value}>
-    <div className={styles.chrome} data-workspace-chrome data-navigation-kind={kind} data-nav-reserved={!compact && open} data-nav-open={open} data-focused-editor={focused}>
+    <div className={styles.chrome} data-workspace-chrome data-navigation={navigation} data-navigation-kind={kind} data-nav-reserved={!compact && open} data-nav-open={open} data-focused-editor={focused}>
       {children}
       {/* Keep the server shell stable when auth resolves before this boundary hydrates. */}
       <div className={styles.connection}>{accountId ? <ConnectionNotice /> : null}</div>

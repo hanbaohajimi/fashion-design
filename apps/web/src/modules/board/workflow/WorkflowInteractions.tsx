@@ -53,7 +53,7 @@ const labels: Record<string, string> = {
   goal: "设计目标",
   reference: "参考素材",
   constraint: "设计约束",
-  candidate: "候选方案",
+  candidate: "设计图",
   source: "原图",
 };
 

@@ -29,12 +29,16 @@ export function LookGrid({
   consistency,
   sourceGarmentType,
   onRefresh,
+  canEdit = true,
+  onSubmitted,
 }: {
   readonly beforeGenerate: () => Promise<void>;
   readonly collectionId: string;
   readonly consistency: CollectionConsistency;
   readonly sourceGarmentType: GarmentType | null;
   readonly onRefresh: () => Promise<CollectionConsistency>;
+  readonly canEdit?: boolean;
+  readonly onSubmitted?: (() => void | Promise<void>) | undefined;
 }) {
   const { track } = useGenerationWorkspace();
   const initialType = sourceGarmentType ?? DEFAULT_GARMENT_TYPE;
@@ -50,7 +54,7 @@ export function LookGrid({
   const garmentType = resolveGarmentType(garmentCode, customLabel);
 
   const generate = async (): Promise<void> => {
-    if (busy || !garmentType) return;
+    if (busy || !garmentType || !canEdit) return;
     setBusy(true);
     setError(null);
     try {
@@ -63,6 +67,7 @@ export function LookGrid({
         garmentType,
         `manual-${crypto.randomUUID()}`,
       );
+      await onSubmitted?.();
       await waitForGeneration(taskId);
       await track(taskId);
       captureAnalytics("collection_look_generated", {
@@ -111,7 +116,7 @@ export function LookGrid({
         ) : null}
 
         <button
-          disabled={busy || !garmentType}
+          disabled={busy || !garmentType || !canEdit}
           onClick={() => void generate()}
           type="button"
         >

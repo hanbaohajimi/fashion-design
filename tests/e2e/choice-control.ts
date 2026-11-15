@@ -78,6 +78,11 @@ export async function chooseValue(
       .click();
     return;
   }
+  if ((await control.getAttribute("aria-label")) === "历史对话") {
+    if ((await control.getAttribute("aria-expanded")) !== "true") await control.click();
+    await control.page().locator(`[data-conversation-id="${selected}"]`).click();
+    return;
+  }
   const label = await control.evaluate((element, next) => {
     const proxy = element
       .closest("[data-choice-control]")

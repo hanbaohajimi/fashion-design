@@ -1,0 +1,95 @@
+.root {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.summary,
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.summary > :first-child,
+.status > :first-child {
+  flex: 0 0 16px;
+  margin-top: 4px;
+}
+.summary > span {
+  min-width: 0;
+}
+.summary[role="alert"] {
+  color: var(--color-error);
+}
+.root[data-task-state="partial_failed"] .summary {
+  color: var(--color-warning-ink);
+}
+.details {
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+}
+.details > summary {
+  width: fit-content;
+  min-height: 32px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+.details p {
+  margin: 8px 0;
+}
+.details ol {
+  display: grid;
+  gap: 6px;
+  padding-inline-start: 18px;
+}
+.prompt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.details button,
+.textButton,
+.textResult button {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--color-action);
+  padding: 6px 0;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.textResult {
+  padding: 12px;
+  background: var(--surface-1);
+  border-radius: 10px;
+}
+.textResult p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
+.root :where(button, summary):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .details > summary,
+  .details button,
+  .textButton,
+  .textResult button {
+    min-height: 44px;
+  }
+}

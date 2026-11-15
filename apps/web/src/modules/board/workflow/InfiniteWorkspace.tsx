@@ -27,6 +27,8 @@ import {
 } from "tldraw";
 import {
   readSwatchColors,
+  retireCanvasNotes,
+  stripCanvasTransientDrafts,
   type CanvasCommand,
   type CanvasDocumentView,
   type CanvasSave,
@@ -61,6 +63,13 @@ import {
 } from "./workflow-api";
 import { nodeImageUrl } from "./workflow-graph";
 import { CanvasTools, type CanvasToolActions } from "./CanvasTools";
+import { canvasProjectFunctions } from "./canvas-project-functions";
+import { CreationWorkspace, CreationShapeUtil, type CreationWorkspaceHandle } from "./CreationWorkspace";
+import type { AssistantCreationContext } from "./assistant-creation-context";
+import { AssistantCanvasExecutor, waitForCanvasPanel } from "./assistant-canvas-executor";
+import type { AssistantCanvasEnvelope, AssistantCanvasObservation } from "@fashion/shared";
+import type { WorkflowMessageView } from "../agent/agent-api";
+import { CREATION_SHAPE_TYPE } from "./CreationShape";
 import { resolveReferenceInstances, type CanvasReferenceSelection, type ReferenceInstances } from "./discussion-references";
 import {
   centerCameraForViewport,
@@ -75,17 +84,23 @@ import { initialCanvasImageSize } from "./canvas-image-sizing";
 import { projectCanvasMedia } from "./canvas-media";
 import { CanvasMediaActivity } from "./canvas-media-context";
 import styles from "./infinite-workspace.module.css";
+import { useReferenceNavigation } from "./use-reference-navigation";
 export { selectedMaterialShapes } from "./canvas-placements";
 type CanvasMaterialResult = Awaited<
   ReturnType<typeof import("./canvas-api").runCanvasCommand>
 >;
 
 export interface InfiniteWorkspaceHandle {
+  openFunction: (entryId: string, requestId: string) => Promise<void>;
+  observeAssistantCanvas: () => AssistantCanvasObservation | undefined;
+  executeAssistantCanvasAction: (action: AssistantCanvasEnvelope) => Promise<WorkflowMessageView>;
+  prepareAssistantContext: () => Promise<AssistantCreationContext>;
   editor: Editor;
   flush: () => Promise<void>;
   flushLayout: () => Promise<void>;
   hasUnsaved: () => boolean;
   locate: (nodeId: string) => void;
+  visitReference: (nodeId: string, instances?: readonly string[], onReturn?: () => void) => boolean;
   removePlacement: (nodeId: string) => void;
   refresh: () => Promise<void>;
   applyResult: (data: CanvasDocumentView, graph: WorkflowGraph) => void;
@@ -105,6 +120,7 @@ interface Props {
   onOpen: (nodeId: string) => void;
   onAddMaterial: () => void;
   toolActions: CanvasToolActions;
+  onEnsureConversation?: () => Promise<string>;
   onError: (error: string | null) => void;
 }
 const object = (value: unknown): Record<string, unknown> =>
@@ -114,6 +130,7 @@ const object = (value: unknown): Record<string, unknown> =>
 const utils = [
   ...defaultShapeUtils,
   ...boardShapeUtils,
+  CreationShapeUtil,
 ] as TLAnyShapeUtilConstructor[];
 export function InfiniteWorkspace(props: Props) {
   const store = useMemo(
@@ -143,13 +160,21 @@ export function InfiniteWorkspace(props: Props) {
           <CanvasMediaActivity value={props.active && props.mediaActive !== false}>
         <Tldraw
           store={store}
-          shapeUtils={[...boardShapeUtils]}
+          shapeUtils={[...boardShapeUtils, CreationShapeUtil]}
           tools={[MountTool] as unknown as TLStateNodeConstructor[]}
           hideUi
           getShapeVisibility={canvasShapeVisibility}
           locale="zh-cn"
           options={{ createTextOnCanvasDoubleClick: false }}
           onMount={(editor) => {
+            const tokens = getComputedStyle(editor.getContainer());
+            const selected = tokens.getPropertyValue("--color-action").trim() || "#205b43";
+            const paper = tokens.getPropertyValue("--color-paper").trim() || "#faf9f5";
+            const theme = editor.getCurrentTheme();
+            editor.updateTheme({ ...theme, colors: {
+              light: { ...theme.colors.light, selectionStroke: selected, selectionFill: paper, brushStroke: selected, brushFill: "rgba(32, 91, 67, 0.12)", snap: selected },
+              dark: { ...theme.colors.dark, selectionStroke: selected, selectionFill: paper, brushStroke: selected, brushFill: "rgba(32, 91, 67, 0.12)", snap: selected },
+            } });
             editor.updateInstanceState({ isReadonly: true });
           }}
           {...(tldrawLicenseKey ? { licenseKey: tldrawLicenseKey } : {})}
@@ -172,8 +197,10 @@ function projection(node: WorkflowNode, projectId: string) {
       type: "fashion-image" as const,
       props: {
         ...initialCanvasImageSize(payload),
+        pixelWidth: Number(payload.width ?? payload.imageWidth) || 0,
+        pixelHeight: Number(payload.height ?? payload.imageHeight) || 0,
         imageSource: url,
-        role: node.type === "candidate" ? "garment_ref" : "style_ref",
+        role: "reference",
         title: node.title,
         url,
         ...(typeof payload.assetId === "string"
@@ -195,19 +222,18 @@ function projection(node: WorkflowNode, projectId: string) {
         h: 180,
         color: colors[0]?.color ?? "#c8ab84",
         label: colors[0]?.label ?? node.title,
-        role: "palette",
+        role: "reference",
         colors,
       },
     };
   }
   return {
-    type: "fashion-note" as const,
+    type: "fashion-text" as const,
     props: {
       w: 280,
       h: 220,
-      role: "note",
+      title: node.title,
       text: String(payload.text ?? payload.summary ?? node.title),
-      tone: "#f2d978",
     },
   };
 }
@@ -227,7 +253,7 @@ function materialContent(
       payload: { text },
     };
   }
-  if (shape.type === "fashion-note")
+  if (shape.type === "fashion-text")
     return {
       materialType: "reference_text",
       title: shape.props.text.slice(0, 40).trim() || "文字素材",
@@ -284,6 +310,7 @@ function WorkspaceDocument(props: Props) {
   const { active } = props;
   const document = useRef<CanvasDocumentView | null>(null);
   const lastProjection = useRef<string | null>(null);
+  const creationWorkspace = useRef<CreationWorkspaceHandle>(null);
   const bindings = useRef(new Map<string, string>());
   const pendingLocation = useRef<string | null>(null);
   const materialBaselines = useRef(new Map<string, string>());
@@ -318,12 +345,13 @@ function WorkspaceDocument(props: Props) {
   const restore = useCallback(
     (snapshot: Record<string, unknown>) => {
       lastProjection.current = null;
-      loadSnapshot(editor.store, snapshot as unknown as TLStoreSnapshot);
+      const cleaned = retireCanvasNotes(snapshot, live.current.graph.nodes).snapshot;
+      loadSnapshot(editor.store, cleaned as unknown as TLStoreSnapshot);
       for (const shape of editor.getCurrentPageShapes())
         if (typeof shape.meta.canvasNodeId === "string")
           bindings.current.set(shape.id, shape.meta.canvasNodeId);
       sequence.current++;
-      setDraftValue(snapshot);
+      setDraftValue(cleaned);
     },
     [editor],
   );
@@ -341,6 +369,7 @@ function WorkspaceDocument(props: Props) {
 
   const project = useCallback(
     (data: CanvasDocumentView, graph: WorkflowGraph, load = false) => {
+      data = { ...data, snapshot: retireCanvasNotes(data.snapshot, graph.nodes, data.bindings).snapshot };
       const signature = JSON.stringify({ canvas: data, materials: graph.nodes.filter(node => node.kind === "asset") });
       // Task polling still reads document permissions, but unchanged materials do not
       // need to run another update across every shape in the editor store.
@@ -446,7 +475,7 @@ function WorkspaceDocument(props: Props) {
               } else if (
                 unchanged &&
                 (existing.type === "text" || existing.type === "note") &&
-                material.type === "fashion-note"
+                material.type === "fashion-text"
               ) {
                 editor.updateShape({
                   id,
@@ -548,7 +577,7 @@ function WorkspaceDocument(props: Props) {
         }
       }
       if (load) {
-        const snapshot = object(getSnapshot(editor.store));
+        const snapshot = stripCanvasTransientDrafts(object(getSnapshot(editor.store)));
         setBaseline(JSON.stringify(snapshot));
         setDraftValue(snapshot);
       }
@@ -795,7 +824,7 @@ function WorkspaceDocument(props: Props) {
             return;
           }
           const capturedSequence = sequence.current;
-          const snapshot = object(getSnapshot(editor.store));
+          const snapshot = stripCanvasTransientDrafts(object(getSnapshot(editor.store)));
           if (
             sequence.current === persisted.current &&
             !savingPacket.current &&
@@ -810,6 +839,7 @@ function WorkspaceDocument(props: Props) {
             baseRevision: document.current.revision,
             snapshot,
             bindings: editor.getCurrentPageShapes().flatMap((shape) => {
+              if (shape.type === CREATION_SHAPE_TYPE) return [];
               const nodeId =
                 bindings.current.get(shape.id) ??
                 (typeof shape.meta.canvasNodeId === "string"
@@ -835,7 +865,7 @@ function WorkspaceDocument(props: Props) {
             // otherwise the old React draft becomes a "new" dirty draft and restores
             // obsolete positions/order on reload. Keep edits made during the request.
             const acceptedBaseline = JSON.stringify(document.current.snapshot);
-            const currentSnapshot = object(getSnapshot(editor.store));
+            const currentSnapshot = stripCanvasTransientDrafts(object(getSnapshot(editor.store)));
             setDraftValue(currentSnapshot);
             setBaseline(acceptedBaseline);
             await draftRef.current.checkpoint(currentSnapshot, acceptedBaseline);
@@ -971,6 +1001,28 @@ function WorkspaceDocument(props: Props) {
     };
   }, [cameraKey, editor, ready]);
 
+  const referenceNavigation = useReferenceNavigation(editor, `${scope?.accountId ?? "anonymous"}:${props.projectId}`, (nodeId, instances) => {
+    const node = live.current.graph.nodes.find(item => item.id === nodeId);
+    const creationId = node?.payload.canvasCreationId;
+    const candidates = editor.getCurrentPageShapes().filter(item => item.type === CREATION_SHAPE_TYPE
+      ? item.meta.canvasNodeId === nodeId || item.props.creationId === nodeId || typeof creationId === "string" && item.props.creationId === creationId && item.meta.canvasNodeId === nodeId
+      : bindings.current.get(item.id) === nodeId);
+    return instances?.length ? [...candidates.filter(item => instances.includes(item.id)), ...candidates.filter(item => !instances.includes(item.id))] : candidates;
+  });
+  const visitReference = referenceNavigation.visit;
+  const assistantExecutor = useMemo(() => new AssistantCanvasExecutor({
+    editor, projectId: props.projectId, accountId: scope?.accountId ?? "anonymous", revision: () => document.current?.revision ?? 0,
+    flush, applyResult: (data, graph) => { live.current.onGraph(graph); project(data, graph); },
+    openPanel: async (panel, actionId) => {
+      if (panel === "fabrics") live.current.toolActions.onOpenFabrics();
+      else { if (!creationWorkspace.current) throw new Error("创作工作区尚未就绪。"); await creationWorkspace.current.openAssistantPanel(panel, actionId); }
+      const selector = panel === "objects" ? "[data-canvas-objects]" : panel === "image" ? '[data-guide="workspace-creation"]' : panel.startsWith("image-") ? `[data-canvas-image-tool="${panel.slice(6)}"], [data-canvas-panel="${panel}"]` : `[data-canvas-panel="${panel}"]`;
+      await waitForCanvasPanel(selector);
+    },
+    checkConnection: (id, revision) => { if (!creationWorkspace.current) throw new Error("创作工作区尚未就绪。"); creationWorkspace.current.checkAssistantConnection(id, revision); },
+    acceptCreation: async (saved, baseline) => { if (!creationWorkspace.current) throw new Error("创作工作区尚未就绪。"); await creationWorkspace.current.acceptAssistantCreation(saved, baseline); },
+  }), [editor, props.projectId, scope?.accountId, flush, project]);
+  useEffect(() => { assistantExecutor.activate(); return () => assistantExecutor.dispose(); }, [assistantExecutor]);
   const prepareSelectedMaterials = useCallback(async (shapes: readonly TLShape[], captureDrawings: boolean) => {
     for (const shape of shapes) {
       const id = placementNodeId(shape, bindings.current, live.current.graph);
@@ -1000,12 +1052,15 @@ function WorkspaceDocument(props: Props) {
       project(data, live.current.graph);
     };
     const locate = (nodeId: string) => {
+      const node = live.current.graph.nodes.find((item) => item.id === nodeId);
+      const creationId = node?.payload.canvasCreationId;
       const shapes = editor
         .getCurrentPageShapes()
-        .filter((item) => bindings.current.get(item.id) === nodeId);
+        .filter((item) => item.type === CREATION_SHAPE_TYPE ? item.props.creationId === nodeId || item.meta.canvasNodeId === nodeId || typeof creationId === "string" && item.props.creationId === creationId : bindings.current.get(item.id) === nodeId);
       if (shapes.length) {
         if (!locateCanvasMaterial(editor, shapes)) live.current.onOpen(nodeId);
-      } else if (
+      } else if (node?.kind === "tool") live.current.onOpen(nodeId);
+      else if (
         document.current?.bindings.some(
           (binding) => binding.nodeId === nodeId && binding.removed,
         )
@@ -1015,6 +1070,19 @@ function WorkspaceDocument(props: Props) {
     };
     live.current.onReady({
       editor,
+      openFunction: async (entryId, requestId) => {
+        if (!creationWorkspace.current) throw new Error("创作工作区尚未就绪，请稍后重试。");
+        await creationWorkspace.current.openAssistantPanel(entryId, requestId);
+        const panel = canvasProjectFunctions.find(item => item.id === entryId)?.panel;
+        await waitForCanvasPanel(panel ? `[data-canvas-project-panel="${panel}"]` : `[data-canvas-panel="${entryId}"]`, 15000);
+      },
+      observeAssistantCanvas: () => live.current.active ? assistantExecutor.observe(live.current.graph) : undefined,
+      executeAssistantCanvasAction: value => assistantExecutor.execute(value),
+      prepareAssistantContext: () => {
+        if (!creationWorkspace.current && editor.getOnlySelectedShape()?.type !== CREATION_SHAPE_TYPE) return Promise.resolve({ focusCreationId: null });
+        if (!creationWorkspace.current) throw new Error("创作工作区尚未就绪，请稍后再发送。");
+        return creationWorkspace.current.prepareAssistantContext();
+      },
       flushLayout: flush,
       hasUnsaved: () =>
         sequence.current !== persisted.current || savingPacket.current !== null,
@@ -1022,6 +1090,7 @@ function WorkspaceDocument(props: Props) {
       refresh,
       applyResult: (data, graph) => { project(data, graph); },
       locate,
+      visitReference,
       resolveReferences: (ids, instances) => resolveReferenceInstances(ids, instances, bindings.current),
       selectionInstances: () => {
         const instances: Record<string, string[]> = {};
@@ -1055,7 +1124,7 @@ function WorkspaceDocument(props: Props) {
       },
     });
     return () => live.current.onReady(null);
-  }, [editor, flush, prepareSelectedMaterials, project, ready]);
+  }, [assistantExecutor, editor, flush, prepareSelectedMaterials, project, ready, visitReference]);
   useEffect(() => {
     if (!ready) return;
     let active = true;
@@ -1106,7 +1175,7 @@ function WorkspaceDocument(props: Props) {
         clearTimeout(timer);
         setStatus("尚未保存");
         timer = setTimeout(() => {
-          setDraftValue(object(getSnapshot(editor.store)));
+          setDraftValue(stripCanvasTransientDrafts(object(getSnapshot(editor.store))));
           void flush().catch((error: unknown) =>
             live.current.onError(
               error instanceof Error ? error.message : "白板保存未完成",
@@ -1183,14 +1252,15 @@ function WorkspaceDocument(props: Props) {
   }, [editor, open]);
   return (
     <>
-      {props.active ? <CanvasTools
+{props.active ? <CreationWorkspace ref={creationWorkspace} key={`${scope?.accountId ?? "anonymous"}:${props.projectId}`} projectId={props.projectId} graph={props.graph} ready={ready} canEdit={canEdit} actions={props.toolActions} onGraph={props.onGraph} onError={props.onError} flush={flush} refreshCanvas={async () => { const data = await fetchCanvas(props.projectId); project(data, live.current.graph); }} onVisitReference={visitReference} {...(props.onEnsureConversation ? { onEnsureConversation: props.onEnsureConversation } : {})}><CanvasTools
         projectId={props.projectId}
         actions={props.toolActions}
         ready={ready}
         canEdit={canEdit}
         onOpen={props.onOpen}
         onAddMaterial={props.onAddMaterial}
-      /> : null}
+      /></CreationWorkspace> : null}
+      {props.active ? referenceNavigation.hud : null}
       {!ready ? (
         <section
           className={styles.loadState}
@@ -1238,7 +1308,7 @@ function WorkspaceDocument(props: Props) {
               void (async () => {
                 await queue.current.catch(() => undefined);
                 const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(getSnapshot(editor.store))], {
+                  new Blob([JSON.stringify(stripCanvasTransientDrafts(object(getSnapshot(editor.store))))], {
                     type: "application/json",
                   }),
                 );

@@ -1,4 +1,5 @@
 import { workflowInputPorts } from "@fashion/shared";
+import { imageDisplayTitle } from "../image-display-title";
 import type {
   WorkflowEdge,
   WorkflowGraph,
@@ -103,6 +104,8 @@ export function nodeSize(
 
 export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
   switch (type) {
+    case "generate_text":
+      return "reference";
     case "analyze_brief":
       return "goal";
     case "evaluate_design":
@@ -120,16 +123,17 @@ export function inputPortForTool(type: WorkflowToolType): WorkflowInputPort {
  * 素材/工具类型的中文名，用于在没有可读标题时兜底。
  */
 const NODE_TYPE_TITLES: Readonly<Record<string, string>> = {
+  generate_text: "文本起草",
   transform_image: "调整图片尺寸",
   analyze_brief: "解析设计需求",
   brief: "设计需求",
-  candidate: "设计方案",
+  candidate: "设计图",
   constraint: "设计约束",
   edit_design: "局部修改",
   evaluate_design: "评估设计",
   evaluation: "评估报告",
   fabric: "面料参考",
-  generate_design: "生成设计方案",
+  generate_design: "图片生成",
   legacy: "历史记录",
   media: "媒体素材",
   reference_image: "参考图片",
@@ -199,7 +203,7 @@ export function displayNodeTitle(
     !/\p{Script=Han}/u.test(trimmed)
   )
     return fallback;
-  return trimmed;
+  return node.type === "candidate" ? imageDisplayTitle(trimmed) : trimmed;
 }
 
 export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Partial<Pick<WorkflowNode, "title">>): string {
@@ -238,9 +242,9 @@ export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Parti
     }
   }
   if (node.type === "generate_design")
-    return "输入约束与参考，生成可比较的候选方案";
+    return "输入约束与参考，生成可比较的设计方案";
   if (node.type === "analyze_brief") return "整合目标与参考，提取设计约束";
-  if (node.type === "evaluate_design") return "逐项检查候选方案与设计约束";
+  if (node.type === "evaluate_design") return "逐项检查设计方案与设计约束";
   if (node.type === "edit_design") return "保留既有设计，按指定部位创建新分支";
   if (node.type === "restore_version") return "从历史版本创建新的设计分支";
   if (node.type === "swatch" && typeof payload.color === "string")
@@ -249,6 +253,7 @@ export function nodeSummary(node: Pick<WorkflowNode, "type" | "payload"> & Parti
 }
 
 export function nodeImageUrl(node: Pick<WorkflowNode, "payload">): string {
+  if (node.payload.mediaKind === "video" || node.payload.mediaKind === "audio") return "";
   for (const key of ["imageUrl", "thumbnailUrl", "url"]) {
     const value = node.payload[key];
     if (typeof value === "string" && /^(https?:\/\/|\/)/u.test(value))
@@ -390,6 +395,7 @@ export function availableInputPorts(
   if (source.kind === target.kind || source.id === target.id) return [];
   if (source.kind === "tool") {
     const outputType: Readonly<Record<WorkflowToolType, string>> = {
+      generate_text: "reference_text",
       transform_image: "candidate",
       analyze_brief: "constraint",
       edit_design: "candidate",

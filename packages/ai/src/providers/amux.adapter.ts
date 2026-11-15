@@ -410,16 +410,18 @@ function promptFor(
   images = resolveGenerationImageInputs(request),
 ): string {
   const sections = [request.prompt];
-  if (includeReferenceGuidance && images.urls.length) {
+  if (includeReferenceGuidance && images.urls.length && request.referencePolicy !== "instruction") {
     sections.push(referenceGuidance(request.taskType));
   }
   const referenceInstructions = images.references
     .map(
-      (reference, index) =>
-        `Reference ${index + 1}: ${referenceRoleGuidance(reference.role)}; influence ${Math.round(reference.weight * 100)}%; image ${reference.imageNumber}`,
+      (reference) =>
+        request.referencePolicy !== "instruction" && reference.role && reference.weight !== undefined
+          ? `Reference ${reference.order + 1}: ${referenceRoleGuidance(reference.role)}; influence ${Math.round(reference.weight * 100)}%; image ${reference.imageNumber}`
+          : `Reference ${reference.order + 1} corresponds to image ${reference.imageNumber}. Use it only as described in the user's instructions.`,
     )
     .join("\n");
-  if (includeReferenceGuidance && referenceInstructions) {
+  if (includeReferenceGuidance && referenceInstructions && request.referencePolicy !== "instruction") {
     sections.push(referenceInstructions);
   }
   if (request.negativePrompt) {
@@ -452,7 +454,7 @@ function referenceRoleGuidance(
 
 function referenceGuidance(taskType: AiGenerationRequest["taskType"]): string {
   if (taskType === "t2i") {
-    return "Create a new design from the request. Use the uploaded images only for their specified reference roles; do not treat a reference as a source image to reproduce.";
+    return "Create a new design from the request. The numbered uploaded images are references; follow the user's instructions about what to use from each image.";
   }
   if (taskType === "inpaint") {
     return (

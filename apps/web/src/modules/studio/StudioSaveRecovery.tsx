@@ -29,11 +29,13 @@ type Confirmed = {
 export function StudioSaveRecovery({
   accountId,
   projectId,
+  editor,
   onConfirmed,
   onOpen,
 }: {
   accountId: string;
   projectId: string;
+  editor?: string | undefined;
   onConfirmed: (value: Confirmed) => void;
   onOpen: (value: Confirmed) => Promise<void>;
 }) {
@@ -48,14 +50,14 @@ export function StudioSaveRecovery({
     return pendingStudioSaves(accountId, projectId).then(
       (next) => {
         if (active.current && readVersion.current === version)
-          setRecords(next.filter((record) => !studioSaveInFlight(record.key)));
+          setRecords(next.filter((record) => (!editor || record.value.editor === editor) && !studioSaveInFlight(record.key)));
       },
       () => {
         if (active.current && readVersion.current === version)
           setError("本机保存记录暂时无法读取，请检查浏览器存储后重试。");
       },
     );
-  }, [accountId, projectId]);
+  }, [accountId, projectId, editor]);
   useEffect(() => {
     active.current = true;
     void reload();

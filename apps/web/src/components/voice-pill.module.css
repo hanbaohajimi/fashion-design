@@ -1,0 +1,170 @@
+.pill.pill {
+  --control-height: 32px;
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  isolation: isolate;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--ease-enter);
+}
+.pill:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.pill:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pill:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.capsule {
+  position: absolute;
+  inset: 0 0 0 -108px;
+  border-radius: inherit;
+  background: var(--surface-1);
+  clip-path: inset(0 0 0 108px round 16px);
+  pointer-events: none;
+  transition: clip-path 200ms var(--ease-enter);
+}
+.pill:not([data-voice-state="idle"]) {
+  z-index: 2;
+  color: var(--color-action);
+}
+.pill:not([data-voice-state="idle"]) .capsule {
+  clip-path: inset(0 round 16px);
+}
+.clock {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease-enter);
+}
+.wave {
+  position: absolute;
+  right: calc(100% + 40px);
+  width: 64px;
+  height: 20px;
+  top: calc(50% - 10px);
+  color: var(--color-action);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease-enter);
+}
+.pill:not([data-voice-state="idle"]) .clock,
+.pill:not([data-voice-state="idle"]) .wave {
+  opacity: 1;
+}
+.microphone,
+.stop {
+  grid-area: 1 / 1;
+  z-index: 1;
+  transition:
+    transform 200ms var(--ease-enter),
+    opacity 160ms var(--ease-enter);
+}
+.microphone {
+  display: flex;
+}
+.stop {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: currentColor;
+  opacity: 0;
+  transform: scale(0.7);
+}
+.pill:not([data-voice-state="idle"]) .microphone {
+  opacity: 0;
+  transform: scale(0.7);
+}
+.pill:not([data-voice-state="idle"]) .stop {
+  opacity: 1;
+  transform: none;
+}
+.pill[data-keyboard] *,
+.pill[data-keyboard] {
+  transition-duration: 0ms;
+}
+.feedback {
+  margin-bottom: 8px;
+  padding: 8px 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-ink-secondary);
+}
+.feedback p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.phase,
+.recovery {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.phase > span,
+.phase > p {
+  flex: 1;
+}
+.feedback button {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--color-action-subtle);
+  color: var(--color-action);
+  cursor: pointer;
+}
+.transcript {
+  max-height: 80px;
+  overflow: auto;
+  color: var(--color-ink);
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .pill.pill {
+    --control-height: 44px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 22px;
+  }
+  .feedback button {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .pill * {
+    transition: none;
+    transform: none;
+  }
+  .wave {
+    display: none;
+  }
+  .capsule {
+    left: -44px;
+    clip-path: inset(0 0 0 44px round 22px);
+  }
+}

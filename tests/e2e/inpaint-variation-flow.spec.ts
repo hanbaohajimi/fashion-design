@@ -192,9 +192,8 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ has: page.getByText("局部重绘结果 1", { exact: true }) }).dblclick();
-  await page.getByRole("dialog", { name: "图片工作区" }).getByRole("button", { name: /图像/u }).click();
-  await page.getByRole("button", { name: "来源与设计决策", exact: true }).click();
-  await expect(page.getByRole("button", { name: "从工作流移除节点" })).toBeDisabled();
+  await page.getByRole("dialog", { name: "图片工作区" }).getByRole("button", { name: /版本与对比/u }).click();
+  await expect(page.getByRole("button", { name: "来源与设计决策", exact: true })).toHaveCount(0);
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);
   await page.reload();
   await expect(page.locator('[data-type="candidate"]')).toHaveCount(3);

@@ -6,7 +6,7 @@ export function projectCanvasMedia(node: WorkflowNode, projectId: string) {
   const result = canvasMediaPayloadSchema.safeParse(node.payload);
   if (!result.success) return null;
   const media = result.data;
-  if (media.mediaUrl !== canvasMediaUrl(projectId, media.mediaId)) return null;
+  if (media.mediaUrl !== canvasMediaUrl(projectId, media.mediaId, media.fileAssetId)) return null;
   const compact = typeof window !== "undefined" && window.innerWidth < 768;
   const ratio = media.width && media.height ? media.width / media.height : 16 / 9;
   const maxWidth = compact ? 280 : 360;
@@ -16,7 +16,7 @@ export function projectCanvasMedia(node: WorkflowNode, projectId: string) {
     type: "fashion-media" as const,
     props: { w, h, title: node.title, mediaId: media.mediaId, mediaKind: media.mediaKind, mediaUrl: media.mediaUrl,
       durationMs: media.durationMs ?? 0,
-      sourceHref: `/${encodeURIComponent(projectId)}/studio?tab=runway&showId=${encodeURIComponent(media.showId)}&runId=${encodeURIComponent(media.runId)}` },
+      sourceHref: media.fileAssetId ? "" : `/${encodeURIComponent(projectId)}/studio?tab=runway&showId=${encodeURIComponent(media.showId)}&runId=${encodeURIComponent(media.runId)}` },
   };
 }
 

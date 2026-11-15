@@ -51,6 +51,11 @@
   box-shadow: var(--shadow-ui);
 }
 
+.toolRail[data-embedded="true"] .toolScroller {
+  padding: 4px;
+  margin: -4px;
+}
+
 @media (max-width: 760px) {
   .toolRail[data-embedded="true"]:not(.sketchToolRail) .toolButton,
   .toolRail[data-embedded="true"] .navButton {
@@ -132,6 +137,20 @@
   height: 20px;
   pointer-events: none;
 }
+
+/* The main canvas dock uses one optical size, independent of sketch controls. */
+.toolRail[data-embedded="true"]:not(.sketchToolRail) .toolButton {
+  width: 44px;
+  height: 44px;
+  border-width: .5px;
+  border-radius: 10px;
+}
+.toolRail[data-embedded="true"]:not(.sketchToolRail) .toolButton svg {
+  width: 22px;
+  height: 22px;
+}
+.toolRail[data-embedded="true"]:not(.sketchToolRail) .toolGroup { gap: 3px; }
+.toolRail[data-embedded="true"]:not(.sketchToolRail) .toolButton[aria-pressed="true"] { box-shadow: none; }
 
 /* ─── Fashion sketch focus mode ─────────────────────────────────────────── */
 .sketchFocusShade {

@@ -308,13 +308,13 @@ test.describe("触屏输入", () => {
       name: "引用画布节点",
       exact: true,
     });
-    await list.getByRole("option", { name: /通勤外套 3 / }).tap();
+    await list.getByRole("option", { name: "通勤外套 3", exact: true }).tap();
     await expect(input).toHaveValue("参考@通勤外套 3 ");
     await expect(input).toBeFocused();
     await expect(list).toBeHidden();
     await input.fill("再看看@");
     await expect(list).toBeVisible();
-    await page.getByRole("button", { name: "收起设计助手", exact: true }).tap();
+    await page.getByRole("button", { name: "返回画布", exact: true }).tap();
     await expect(page.locator("[data-assistant-mention-popup]")).toHaveCount(0);
     expect(state.mutations).toEqual([]);
     expect(state.errors).toEqual([]);
@@ -352,7 +352,7 @@ for (const width of [1440, 640, 320]) {
       exact: true,
     });
     await input.fill("参考@通勤，保留衣领。");
-    await input.press("Home");
+    await input.press("Control+Home");
     for (let index = 0; index < 5; index++) await input.press("ArrowRight");
     const list = page.getByRole("listbox", {
       name: "引用画布节点",
@@ -360,7 +360,7 @@ for (const width of [1440, 640, 320]) {
     });
     await expect(list).toBeVisible();
     await input.press("ArrowDown");
-    const option = list.getByRole("option", { name: /通勤外套 2 / });
+    const option = list.getByRole("option", { name: "通勤外套 2", exact: true });
     await expect(option).toHaveAttribute("aria-selected", "true");
     await expect(option).toBeInViewport({ ratio: 1 });
     expect(

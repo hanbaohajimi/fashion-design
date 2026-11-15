@@ -17,6 +17,7 @@ import {
   updateAssistantDelegationRemote,
 } from "./assistant-delegations-api";
 import ui from "./assistant-context.module.css";
+import { WorkspaceIcon } from "./WorkspaceIcon";
 
 const cadenceLabels: Record<AssistantDelegationCadence, string> = {
   DAILY: "每天",
@@ -57,6 +58,7 @@ function replaceItem(
 }
 
 interface Props {
+  readonly allowCreate?: boolean;
   readonly canEdit: boolean;
   readonly conversationId: string;
   readonly onClose: () => void;
@@ -64,6 +66,7 @@ interface Props {
 }
 
 export function AssistantDelegationsPanel({
+  allowCreate = true,
   canEdit,
   conversationId,
   onClose,
@@ -189,14 +192,14 @@ export function AssistantDelegationsPanel({
           onClick={onClose}
           type="button"
         >
-          ×
+          <WorkspaceIcon name="close" />
         </button>
       </header>
-      {!conversationId ? (
+      {!conversationId && allowCreate ? (
         <p className={ui.delegationsEmpty}>先新建或选择持续设计对话，委托才知道要把结果写回哪条创作主线。</p>
       ) : null}
       {loading ? <p className={ui.delegationsEmpty} role="status">正在读取委托…</p> : null}
-      {!loading && !items.length ? <p className={ui.delegationsEmpty}>还没有委托。可以先设置一次“检查当前方案”，再决定是否变成每周复盘。</p> : null}
+      {!loading && !items.length ? <p className={ui.delegationsEmpty}>{allowCreate ? "还没有委托。可以先设置一次“检查当前方案”，再决定是否变成每周复盘。" : "本项目没有历史委托。"}</p> : null}
       {items.length ? (
         <ul className={ui.delegationList}>
           {items.map((item) => (
@@ -227,7 +230,7 @@ export function AssistantDelegationsPanel({
           ))}
         </ul>
       ) : null}
-      {canEdit ? (
+      {canEdit && allowCreate ? (
         <form
           className={ui.delegationSave}
           onSubmit={(event) => {

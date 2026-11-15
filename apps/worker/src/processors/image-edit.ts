@@ -174,7 +174,7 @@ export async function prepareImageEdit(
       markedUrl,
       ...references.map(reference => reference.url),
     ],
-    referenceImages: references.length ? [
+    referenceImages: request.referencePolicy === "instruction" ? request.referenceImages : references.length ? [
       { url: request.referenceImageUrl, order: 0, role: "style_ref", weight: 1 },
       { url: markedUrl, order: 1, role: "detail_ref", weight: 1 },
       ...references.map((reference, index) => ({ ...reference, order: index + 2 })),

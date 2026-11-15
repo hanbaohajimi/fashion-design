@@ -272,7 +272,7 @@ export function LegacyBoardHistory({
   };
 
   return (
-      <Dialog label="历史白板" className={styles.panel} onClose={onClose}>
+      <Dialog label="历史白板" className={styles.panel} onClose={onClose} returnFocusSelector='[data-guide="workspace-functions"]'>
         <header className={styles.header}>
           <div>
             <span className={styles.eyebrow}>历史设计存档</span>

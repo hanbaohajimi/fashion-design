@@ -1,7 +1,7 @@
 "use client";
 import { StudioProjectActions } from "../StudioPageHeader";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { StudioSummary, WardrobeItemView, WardrobeRevisionView, WardrobeSummary } from "@fashion/shared";
 import { Button, Dialog, Notice, SegmentedControl } from "../../../components/ui";
 import { WorkspaceSplit } from "../../../components/WorkspaceSplit";
@@ -17,6 +17,9 @@ import { WardrobeTryOn } from "./WardrobeTryOn";
 import styles from "./wardrobe.module.css";
 
 export interface WardrobeWorkspaceProps {
+  active?: boolean;
+  embedded?: boolean;
+  heading?: ReactNode;
   projectId: string; assets: StudioSummary["assets"]; styles?: StudioSummary["styles"] | undefined;
   canEdit: boolean; initialAssetId?: string | undefined; initialStyleRevisionId?: string | undefined;
   onSaved?: (() => void | Promise<void>) | undefined; onDirty?: ((dirty: boolean) => void) | undefined;
@@ -27,14 +30,15 @@ export function WardrobeWorkspace(props: WardrobeWorkspaceProps) {
 }
 
 function WardrobeLoader(props: WardrobeWorkspaceProps) {
-  const { data, loading, error, refresh } = useWardrobeData(props.projectId);
+  const { data, loading, error, refresh } = useWardrobeData(props.projectId, props.active);
   return <div className={styles.root}>
+    {!data && props.heading ? <header className={styles.toolbar}>{props.heading}</header> : null}
     {error ? <Notice tone="error">衣架资料暂时无法更新：{error}<Button onClick={() => void refresh()}>重新读取</Button></Notice> : null}
     {data ? <WardrobeContent {...props} data={data} refresh={refresh} /> : <p role="status">{loading ? "正在读取项目衣架…" : "项目衣架尚未读取，请重试。"}</p>}
   </div>;
 }
 
-function WardrobeContent({ projectId, assets, styles: projectStyles, canEdit: permitted, initialAssetId, initialStyleRevisionId, onSaved, onDirty, data, refresh }: WardrobeWorkspaceProps & { data: WardrobeSummary; refresh: () => Promise<void> }) {
+function WardrobeContent({ projectId, assets, styles: projectStyles, canEdit: permitted, initialAssetId, initialStyleRevisionId, onSaved, onDirty, heading, active = true, embedded = false, data, refresh }: WardrobeWorkspaceProps & { data: WardrobeSummary; refresh: () => Promise<void> }) {
   const canEdit = permitted && data.canEdit && data.capabilities.enabled;
   const [draft, setDraft] = useState<OutfitDraft>(() => data.outfits[0] ? outfitDraft(data.outfits[0]) : emptyOutfit());
   const [baseline, setBaseline] = useState(() => JSON.stringify(draft));
@@ -103,12 +107,12 @@ function WardrobeContent({ projectId, assets, styles: projectStyles, canEdit: pe
     } finally { locked.current = false; setBusy(false); }
   };
   return <div ref={host} className={styles.workspace}>
-    <header className={styles.toolbar} data-workspace-heading><div><h2>衣架与搭配</h2><p>当前项目的单品陈列，点击服装聚焦查看。</p></div><div className={styles.actions}><StudioProjectActions /><Button disabled={!canEdit} onClick={() => { setEditingItem(null); setPrepare(true); }}>准备单品</Button>{!mobile ? <Button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "收起搭配面板" : "打开搭配面板"}</Button> : null}</div></header>
+    <header className={styles.toolbar} data-workspace-heading>{heading ?? <div><h2>衣橱</h2><p>当前项目的单品陈列，点击服装聚焦查看。</p></div>}<div className={styles.actions}><StudioProjectActions /><Button disabled={!canEdit} onClick={() => { setEditingItem(null); setPrepare(true); }}>准备单品</Button>{!mobile ? <Button aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "收起搭配面板" : "打开搭配面板"}</Button> : null}</div></header>
     {!data.capabilities.enabled ? <Notice>衣架功能当前未启用，已有资料仍可查看。</Notice> : null}
     {error ? <Notice tone="error" onClose={() => setError(null)}>{error}<Button onClick={() => void refresh()}>重新读取</Button>{draft.outfitId ? <Button onClick={() => change({ ...draft, outfitId: null, version: null, name: `${draft.name} 副本`.slice(0, 120) })}>将草稿另存为新搭配</Button> : null}</Notice> : null}
     {message ? <Notice onClose={() => setMessage(null)}>{message}</Notice> : null}
     {mobile ? <SegmentedControl label="衣架工作视图" value={mobileView} options={[{ value: "rack", label: "衣架" }, { value: "outfit", label: "搭配" }, { value: "tryon", label: "试穿" }]} onChange={value => { setMobileView(value); setOpen(value !== "rack"); }} /> : null}
-    {measured ? <WorkspaceSplit className={styles.split} projectId={`wardrobe:${projectId}`} panelLabel="搭配与试衣面板" docked={docked} open={open} onOpenChange={changePanelOpen}>
+    {measured ? <WorkspaceSplit className={styles.split} projectId={`wardrobe:${projectId}`} panelLabel="搭配与试衣面板" embedded={embedded} docked={docked} open={open} onOpenChange={changePanelOpen}>
       <div className={styles.rackPane} hidden={mobile && mobileView !== "rack"}><WardrobeRack projectId={projectId} items={data.items} canEdit={canEdit && !busy} initialAssetId={initialAssetId} selectedRevisionIds={draft.items.map(item => item.revisionId)} additionNotice={message} additionError={error} onUndo={undo.length ? undoLast : undefined} layeringItemIds={data.items.filter(item => !draft.items.some(entry => revisionMap.get(entry.revisionId)?.itemId === item.id) && draft.items.some(entry => { const previous = revisionMap.get(entry.revisionId); return previous && categoriesConflict(previous.category, item.currentRevision.category); })).map(item => item.id)} onLayer={setAdding} onPrepare={() => { setEditingItem(null); setPrepare(true); }} onRevise={item => { setEditingItem(item); setPrepare(true); }} onAdd={item => {
         if (draft.items.some(entry => entry.revisionId === item.id)) { setMessage("这件单品已在当前搭配中。"); return; }
         const replace = draft.items.filter(entry => { const existing = revisionMap.get(entry.revisionId); return existing && (existing.itemId === item.itemId || categoriesConflict(existing.category, item.category)); });
@@ -121,7 +125,7 @@ function WardrobeContent({ projectId, assets, styles: projectStyles, canEdit: pe
       <aside className={styles.sidebar} aria-label="搭配与试衣面板" hidden={!open || mobile && mobileView === "rack"}>
         <header className={styles.panelHeader}><h2>搭配与试衣</h2><Button onClick={() => changePanelOpen(false)}>收起</Button></header>
         <div hidden={mobile && mobileView !== "outfit"}><OutfitEditor draft={draft} revisions={revisionMap} outfits={data.outfits} dirty={dirty} canEdit={canEdit} busy={busy} canUndo={undo.length > 0} onChange={change} onChoose={id => { if (dirty) setSwitchTo(id); else choose(id); }} onUndo={undoLast} onSave={() => void save()} /></div>
-        <div hidden={mobile && mobileView !== "tryon"}><WardrobeTryOn projectId={projectId} assets={assets} data={data} snapshot={snapshot} draft={draft} revisions={revisionMap} dirty={dirty || !outfitIsCurrent(draft, saved)} canEdit={canEdit} onChanged={changed} onDirty={setSelfDirty} /></div>
+        <div hidden={mobile && mobileView !== "tryon"}><WardrobeTryOn projectId={projectId} assets={assets} data={data} snapshot={snapshot} draft={draft} revisions={revisionMap} dirty={dirty || !outfitIsCurrent(draft, saved)} canEdit={canEdit} active={active} onChanged={changed} onDirty={setSelfDirty} /></div>
       </aside>
     </WorkspaceSplit> : null}
     {prepare ? <PrepareGarment key={editingItem?.id ?? "new"} projectId={projectId} assets={assets} styles={projectStyles} preparations={data.preparations} canEdit={canEdit} generationEnabled={data.capabilities.preparationEnabled} initialAssetId={initialAssetId} initialStyleRevisionId={initialStyleRevisionId} existingItem={editingItem} onChanged={changed} onClose={() => setPrepare(false)} /> : null}

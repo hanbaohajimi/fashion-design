@@ -1,6 +1,7 @@
 import { chooseValue, expectValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
+import { generatedVideoBytes } from "./generated-media-fixture";
 import {
   runwayActionSchema,
   runwayCreateShowSchema,
@@ -28,8 +29,9 @@ test.describe("本地视频缓冲反馈", () => {
   test("真实本地媒体保留原生操作，等待反馈不触发自动播放", async ({ page }) => {
     await prepare(page);
     const run = runwayRunFixture({ status: "SUCCEEDED", stage: "finished", pendingInput: null, media: [{
-      ...runwayMediaFixture("buffer-preview", "final_video"), mimeType: "video/webm", contentUrl: "/painting-loaders/irises.webm",
+      ...runwayMediaFixture("buffer-preview", "final_video"), mimeType: "video/mp4", contentUrl: "/test-media/runway-buffer.mp4",
     }] });
+    await page.route("**/test-media/runway-buffer.mp4", route => route.fulfill({ body: generatedVideoBytes, contentType: "video/mp4" }));
     await page.route("**/api/projects/project-1/runway/runs/run-1", route => route.fulfill({ json: run }));
     await page.route("**/api/projects/project-1/runway/shows/show-1", route => route.fulfill({ json: runwayShowFixture({ runs: [run] }) }));
     await page.goto("/project-1/studio?tab=runway&showId=show-1&runId=run-1");

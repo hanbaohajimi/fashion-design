@@ -6,6 +6,13 @@ import type {
   ProjectStatusFilter,
 } from "./project-types";
 
+export class ProjectApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "ProjectApiError";
+  }
+}
+
 async function requestJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -20,7 +27,7 @@ async function requestJson<T>(
   });
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "项目操作失败，请重试"));
+    throw new ProjectApiError(await readErrorMessage(response, "项目操作失败，请重试"), response.status);
   }
 
   return (await response.json()) as T;

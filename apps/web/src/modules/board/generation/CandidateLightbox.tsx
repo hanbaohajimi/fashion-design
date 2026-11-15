@@ -156,7 +156,7 @@ export function CandidateLightbox({
       }}
     >
       <section
-        aria-label="候选设计详情"
+        aria-label="设计图详情"
         aria-modal="true"
         className={styles.lightbox}
         inert={collectionOpen || exportOpen ? true : undefined}
@@ -174,10 +174,10 @@ export function CandidateLightbox({
                   ? "版本与血缘"
                   : mode === "path"
                     ? "设计路径与选择"
-                    : "候选设计"}
+                    : "设计图"}
             </strong>
           </div>
-          <nav aria-label={mode === "inpaint" ? "局部编辑操作" : "候选操作"}>
+          <nav aria-label={mode === "inpaint" ? "局部编辑操作" : "图片操作"}>
             {mode !== "inpaint" ? (
               <>
                 <button
@@ -230,7 +230,7 @@ export function CandidateLightbox({
                 ) : null}
               </>
             ) : null}
-            <button aria-label="关闭候选详情" onClick={onClose} type="button">
+            <button aria-label="关闭图片详情" onClick={onClose} type="button">
               关闭
             </button>
           </nav>
@@ -278,7 +278,7 @@ export function CandidateLightbox({
           <div className={styles.lightboxPreview}>
             <figure>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="候选设计大图" src={activeCandidate.url} />
+              <img alt="设计图大图" src={activeCandidate.url} />
             </figure>
             <VariationControl candidate={activeCandidate} />
           </div>

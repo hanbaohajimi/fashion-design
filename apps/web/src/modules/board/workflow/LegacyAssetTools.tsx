@@ -45,7 +45,6 @@ import {
 import styles from "./workflow-asset-workspace.module.css";
 
 export interface WorkflowAssetWorkspaceProps {
-  readonly styleHref?: string;
   readonly initialTab?: "inpaint" | "variation" | "history" | "erase";
   readonly embedded?: boolean;
   readonly projectId: string;
@@ -114,7 +113,6 @@ function AssetWorkspaceContent({
   onBusyChange,
   embedded,
   initialTab,
-  styleHref,
   readOnly = false,
 }: WorkflowAssetWorkspaceProps) {
   const [storedTab, setTab] = useState<Tab>("preview");
@@ -358,7 +356,7 @@ function AssetWorkspaceContent({
           if (!dimensions) throw new Error("原图尚未就绪");
           const latest = await reloadGraph();
           const current = sourceFor(latest, assetId);
-          if (!current) throw new Error("找不到当前候选节点，无法建立变体分支");
+          if (!current) throw new Error("找不到当前图片节点，无法建立变体分支");
           pendingEditPatch.current = {
             type: "run_tool",
             toolKey: "edit_design",
@@ -438,7 +436,7 @@ function AssetWorkspaceContent({
           );
           const latest = await reloadGraph();
           const current = sourceFor(latest, assetId);
-          if (!current) throw new Error("找不到当前候选节点，无法建立修改分支");
+          if (!current) throw new Error("找不到当前图片节点，无法建立修改分支");
           pendingEditPatch.current = {
             type: "run_tool",
             toolKey: "edit_design",
@@ -474,7 +472,7 @@ function AssetWorkspaceContent({
   return (
     <EmbeddedEditor
       embedded={embedded}
-      label={exportOpen ? "导出成果" : "候选资产工作台"}
+      label={exportOpen ? "导出成果" : "图片资产工作台"}
       className={`${styles.assetDialog} ${controls.controlSurface}`}
       onClose={() => {
         if (!submitting && !pendingRestore) onClose();
@@ -483,11 +481,11 @@ function AssetWorkspaceContent({
       <section hidden={exportOpen}>
         <header className={styles.header}>
           <div>
-            <span>候选方案</span>
-            <h2>{source?.title ?? "候选设计"}</h2>
+            <span>设计方案</span>
+            <h2>{source?.title ?? "设计图"}</h2>
           </div>
           <button
-            aria-label="关闭候选工作台"
+            aria-label="关闭图片工作台"
             disabled={submitting || Boolean(pendingRestore)}
             onClick={onClose}
             type="button"
@@ -497,7 +495,7 @@ function AssetWorkspaceContent({
         </header>
         <Tabs<Tab>
           id={tabsId}
-          label="候选资产操作"
+          label="图片资产操作"
           value={tab}
           onChange={changeTab}
           options={[
@@ -526,7 +524,7 @@ function AssetWorkspaceContent({
           <div className={styles.previewLayout}>
             <figure className={styles.imageStage} data-actual-size={actualSize}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt={source?.title ?? "候选设计原图"} src={previewUrl} />
+              <img alt={source?.title ?? "设计图原图"} src={previewUrl} />
             </figure>
             <aside className={styles.previewAside}>
               <span>原图与设计分支</span>
@@ -546,22 +544,10 @@ function AssetWorkspaceContent({
                   原始比例
                 </Button>
               </div>
-              <h3>沿这张候选继续设计</h3>
+              <h3>沿这张图片继续设计</h3>
               <p>
-                版本恢复和局部修改会创建新的分支；当前候选与它的来源会保留在画布中。
+                版本恢复和局部修改会创建新的分支；当前图片与它的来源会保留在画布中。
               </p>
-              <a
-                href={
-                  styleHref ??
-                  `/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}`
-                }
-                aria-disabled={locked}
-                onClick={(event) => {
-                  if (locked) event.preventDefault();
-                }}
-              >
-                比较并保存为款式
-              </a>
               {dimensions ? (
                 <dl>
                   <div>
@@ -768,15 +754,15 @@ function AssetWorkspaceContent({
           <div className={styles.previewLayout}>
             <figure className={styles.imageStage}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="变体来源候选" src={previewUrl} />
+              <img alt="变体来源图片" src={previewUrl} />
             </figure>
             <aside className={generationStyles.inpaintControls}>
               <div>
                 <span>变体分支</span>
-                <strong>从当前候选生成变体</strong>
+                <strong>从当前图片生成变体</strong>
               </div>
               <p>
-                原候选会保留。确认后，新变体将沿当前候选的来源建立独立分支。
+                原图片会保留。确认后，新变体将沿当前图片的来源建立独立分支。
               </p>
               <label>
                 <span>修改方向</span>

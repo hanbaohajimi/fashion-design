@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { markMotion } from "../../components/motion/events";
 import { useArchiveOpening } from "../../components/motion/use-archive-opening";
@@ -21,8 +20,6 @@ import { CreateProjectDialog } from "./CreateProjectDialog";
 import { EmptyState } from "./EmptyState";
 import { PublicLanding } from "./PublicLanding";
 import { ProjectGrid } from "./ProjectGrid";
-import { ProjectSpotlight } from "./ProjectSpotlight";
-import { ConversationalStarter } from "./ConversationalStarter";
 import type { Project, ProjectStatusFilter } from "./project-types";
 import styles from "./projects.module.css";
 import {
@@ -37,33 +34,6 @@ import {
   readActiveBoardId,
   writeActiveBoardId,
 } from "../trends/active-board";
-
-const QUICK_STARTS = [
-  {
-    id: "collection",
-    starterId: "collection",
-    title: "从一件外套开始做完整系列",
-    description: "先定廓形，再把面料、色彩和搭配一起整理进白板。",
-    projectName: "秋冬通勤外套系列",
-    icon: "silhouette",
-  },
-  {
-    id: "material",
-    starterId: "material",
-    title: "把一块面料变成设计语言",
-    description: "从触感和纹理出发，建立可继续扩展的材质档案。",
-    projectName: "自然肌理面料实验",
-    icon: "material",
-  },
-  {
-    id: "lookbook",
-    starterId: "lookbook",
-    title: "为品牌做一组视觉提案",
-    description: "收集参考、比较方向，再把最有潜力的一版推到交付。",
-    projectName: "品牌视觉提案一号",
-    icon: "campaign",
-  },
-] as const;
 
 function errorMessage(error: unknown): string {
   return userFacingError(error, "操作失败，请稍后重试");
@@ -205,14 +175,6 @@ export function ProjectLibrary() {
     router.push(`/${created.id}${starterId ? `?starter=${encodeURIComponent(starterId)}` : ""}`);
   };
 
-  const runQuickStart = async (item: (typeof QUICK_STARTS)[number]): Promise<void> => {
-    try {
-      await runCreate(item.projectName, item.starterId);
-    } catch (error) {
-      setNotice(errorMessage(error));
-    }
-  };
-
   const runRename = async (project: Project, name: string): Promise<void> => {
     setNotice(null);
 
@@ -319,7 +281,7 @@ export function ProjectLibrary() {
   const closeCreate = (): void => {
     setCreateOpen(false);
     if (openCreateFromNavigation && !navigatingToProject.current) {
-      router.replace("/", { scroll: false });
+      router.replace("/projects", { scroll: false });
     }
     navigatingToProject.current = false;
   };
@@ -350,107 +312,7 @@ export function ProjectLibrary() {
     >
       <AppHeader current="projects" />
 
-      {/* P2：续创入口 —— 仅当有活跃项目且未在搜索时显示 */}
-      {!deferredSearch && projectStatus === "active" && projects.length > 0 ? (() => {
-        const latest = projects[0];
-        if (!latest) return null;
-        return (
-          <section className={styles.resumeSection} aria-label="继续上次创作">
-            <a
-              className={styles.resumeCard}
-              href={`/${latest.id}`}
-              aria-label={`继续上次创作：${latest.name}`}
-            >
-              <span className={styles.resumeCardLabel}>继续创作</span>
-              <span className={styles.resumeCardName}>{latest.name}</span>
-              <span className={styles.resumeCardArrow} aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </a>
-          </section>
-        );
-      })() : null}
-
-      {/* P3：对话式创作起步入口 —— 未在搜索时显示 */}
-      {!deferredSearch && projectStatus === "active" ? (
-        <section className={styles.starterSection} aria-label="新建创作">
-          <ConversationalStarter
-            disabled={createMutation.isPending}
-            onSubmit={(brief) => void runCreate(
-              brief.slice(0, 60) || "新项目",
-              "conversational",
-              brief,
-            )}
-          />
-        </section>
-      ) : null}
-
-      <section className={styles.dashboard} aria-label="项目库" data-workspace-heading>
-        <div className={styles.dashboardCopy}>
-          <h1 className={styles.dashboardTitle}>项目</h1>
-        </div>
-        <dl className={styles.dashboardStats} aria-label="创作概览">
-          <div>
-            <dt>进行中</dt>
-            <dd>{projectStatus === "active" ? total : "—"}</dd>
-          </div>
-          <div>
-            <dt>已载入</dt>
-            <dd>{projects.length}</dd>
-          </div>
-          <div>
-            <dt>设计资料</dt>
-            <dd>{projects.reduce((sum, project) => sum + project.assetCount, 0)}</dd>
-          </div>
-        </dl>
-      </section>
-
-      {!deferredSearch && projectStatus === "active" ? (
-        <section className={styles.quickStart} aria-labelledby="quick-start-title">
-          <div className={styles.quickStartHeader}>
-            <div>
-              <h2 id="quick-start-title">选一个方向，直接进入白板</h2>
-            </div>
-            <p>每个入口都会创建真实项目，之后可以继续补充参考、款式和交付资料。</p>
-          </div>
-          <div className={styles.quickStartGrid}>
-            {QUICK_STARTS.map((item) => (
-              <button
-                className={styles.quickStartCard}
-                disabled={createMutation.isPending}
-                key={item.id}
-                onClick={() => void runQuickStart(item)}
-                type="button"
-              >
-                <span className={`${styles.quickStartIcon} ${styles[`quickStartIcon${item.icon}`]}`} aria-hidden="true">
-                  <span className={styles.quickStartIconMark} />
-                </span>
-                <span className={styles.quickStartBody}>
-                  <strong>{item.title}</strong>
-                  <small>{item.description}</small>
-                </span>
-                <span className={styles.quickStartArrow} aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 13 13 3M5 3h8v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className={styles.quickStartResearch} aria-label="研究资料入口">
-            <p>
-              <strong>先做研究，再决定方向</strong>
-              <span>从可靠来源和真实面料建立设计语境，再回到项目白板继续。</span>
-            </p>
-            <nav className={styles.quickStartResearchLinks} aria-label="研究资料">
-              <Link href="/trends?from=projects">浏览趋势档案</Link>
-              <Link href="/fabrics?from=projects">浏览面料库</Link>
-            </nav>
-          </div>
-        </section>
-      ) : null}
+      <section className={styles.managementHeader} data-workspace-heading><h1>项目</h1><p>整理你的设计项目，随时继续创作。</p></section>
 
       <section className={styles.toolbar} aria-label="项目工具栏">
         <div ref={indicator} style={{ position: "relative" }} className={styles.statusFilters} aria-label="项目状态">
@@ -519,13 +381,6 @@ export function ProjectLibrary() {
         </Button>
       </section>
 
-      {!deferredSearch &&
-      projectStatus === "active" &&
-      !projectsQuery.isError &&
-      !projectsQuery.isPending &&
-      projects.length ? (
-        <ProjectSpotlight projects={projects} userId={session.user.id} />
-      ) : null}
 
       {notice ? (
         <Notice tone="error">

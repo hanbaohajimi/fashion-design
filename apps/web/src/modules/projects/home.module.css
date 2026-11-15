@@ -1,0 +1,334 @@
+.page {
+  min-height: 100dvh;
+  padding: 32px 40px 64px;
+  color: var(--color-ink);
+}
+.content {
+  max-width: 1400px;
+  margin-inline: auto;
+}
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.heading h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+.heading > span {
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+}
+.createCanvas {
+  width: 100%;
+  min-height: 176px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.createMark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 50px;
+  margin-bottom: 2px;
+  border-radius: 12px;
+  background: var(--color-action);
+  color: var(--color-action-on);
+}
+.createCanvas strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+.createCanvas > span:last-child {
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+}
+.createCanvas:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 24px;
+  padding: 28px 16px 0;
+}
+.shortcuts > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+  font-size: 14px;
+}
+.shortcutIcon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 56px;
+  border-radius: 14px;
+  color: var(--color-action);
+  background: var(--surface-1);
+  transition: background-color 160ms ease;
+}
+.shortcuts > button:disabled { cursor: progress; opacity: 0.6; }
+.recent {
+  margin-top: 48px;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.sectionHeading a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+  text-decoration: none;
+}
+.projectGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.project {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px 6px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--color-paper);
+  transition: border-color 160ms ease;
+}
+.projectCover {
+  width: 76px;
+  height: 76px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--color-ink-secondary);
+  overflow: hidden;
+}
+.projectCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.projectInfo {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 9px;
+}
+.projectInfo strong {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.projectInfo time {
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.projectArrow {
+  color: var(--color-action);
+}
+.projectSkeleton {
+  height: 90px;
+}
+.empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+}
+.picker {
+  width: min(560px, calc(100vw - 32px));
+  padding: 24px;
+}
+.pickerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.pickerHeader h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.pickerHeader p {
+  margin: 0;
+  color: var(--color-ink-secondary);
+  font-size: 14px;
+}
+.pickerSearch {
+  width: 100%;
+  padding: 10px 12px;
+  min-height: 44px;
+  border: 1px solid var(--color-control-border);
+  background: var(--color-paper);
+  border-radius: 8px;
+  color: var(--color-ink);
+  font: inherit;
+}
+.pickerList {
+  max-height: min(45dvh, 360px);
+  overflow-y: auto;
+  margin-block: 12px;
+  padding: 4px;
+}
+.pickerProject {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.pickerProject > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pickerProject strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.pickerProject small {
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+}
+.pickerIcon {
+  flex: none;
+  color: var(--color-action);
+}
+.pickerFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+.creationError {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-panel-v3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.page :focus-visible,
+.picker :focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .createCanvas:hover,
+  .project:hover {
+    border-color: var(--color-action);
+  }
+  .shortcuts button:hover .shortcutIcon,
+  .pickerProject:hover {
+    background: var(--color-navigation-selected);
+  }
+}
+@media (max-width: 1199px) {
+  .page {
+    padding: 24px 28px 48px;
+  }
+  .projectGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shortcuts {
+    gap: 12px;
+    padding-inline: 0;
+  }
+}
+@media (max-width: 767px) {
+  .page {
+    padding: 20px 16px 40px;
+  }
+  .heading {
+    min-height: 32px;
+    margin-bottom: 20px;
+  }
+  .heading > span {
+    display: none;
+  }
+  .createCanvas {
+    min-height: 176px;
+  }
+  .shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 12px;
+    padding-top: 24px;
+  }
+  .shortcutIcon {
+    width: 76px;
+  }
+  .recent {
+    margin-top: 32px;
+  }
+  .projectGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .picker {
+    padding: 20px 16px;
+  }
+  .pickerSearch {
+    font-size: 16px;
+  }
+}

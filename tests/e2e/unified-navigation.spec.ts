@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
 import { contrastFailures } from "./review-accessibility";
+import { openCanvasFunction } from "./canvas-function-navigation";
 
 async function openNavigation(page: Page) {
   if ((page.viewportSize()?.width ?? 1440) < 1200) {
@@ -36,8 +37,8 @@ for (const width of [1440, 1366, 1024, 390, 375])
         width === 1366 ? 768 : width === 375 ? 812 : width < 768 ? 844 : 900,
     });
     const pages = [
-      ["projects", "/"],
-      ["design", `/${PROJECT}`],
+      ["home", "/"],
+      ["projects", "/projects"],
       ["tech", `/${PROJECT}/studio?tab=tech`],
       ["fabrics", `/fabrics?from=board&boardId=${PROJECT}`],
       ["trends", `/trends?from=board&boardId=${PROJECT}`],
@@ -98,7 +99,7 @@ for (const width of [1440, 1366, 1024, 390, 375])
       expect(geometry.background).toBe(expectedSurface);
       if (baseline) expect(geometry).toEqual(baseline);
       else baseline = geometry;
-      await expect(rail.locator('a[aria-current="page"]:visible')).toHaveCount(1);
+      await expect(rail.locator('[aria-current="page"]:visible')).toHaveCount(1);
       expect(
         await contrastFailures(page, true, "[data-archive-navigation]"),
       ).toEqual([]);
@@ -113,7 +114,7 @@ for (const width of [1440, 1366, 1024, 390, 375])
         ).toHaveValue("褶线夹克技术资料");
         if (width >= 1200)
           await expect(
-            page.getByRole("tab", { name: "技术包", exact: true }),
+            page.getByRole("button", { name: "返回画布", exact: true }),
           ).toBeInViewport();
       }
       if (process.env.CAPTURE_NAVIGATION) {
@@ -149,37 +150,31 @@ test("工作室导航离开保护与面料返回保留项目", async ({ page }) 
   await expect(page).toHaveURL(
     new RegExp(`/fabrics\\?from=board&boardId=${PROJECT}`),
   );
-  await expect(
-    navigation.getByRole("link", { name: "设计工作台", exact: true }),
-  ).toHaveAttribute("href", `/${PROJECT}`);
+  await page.goBack();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/${PROJECT}$`));
+  await expect(page.locator("[data-archive-navigation]")).toHaveCount(0);
 });
 
 for (const width of [1440, 390])
   test(`连续进入项目、工作台和技术包 ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await page.getByRole("link", { name: "继续创作", exact: true }).click();
+    await page.getByRole("link", { name: /秋冬通勤服装设计/ }).click();
     await expect(page).toHaveURL(new RegExp(`/${PROJECT}$`));
-    const navigation = page.getByRole("navigation", {
-      name: "工作区导航",
-      exact: true,
-    });
-    if (!(await navigation.isVisible())) {
-      await openNavigation(page);
-      if (process.env.CAPTURE_NAVIGATION)
-        await page.screenshot({
-          path: "output/unified-navigation/screens/navigation-menu-390.png",
-        });
-    }
-    await navigation
-      .getByRole("link", { name: "款式与交付", exact: true })
-      .click();
-    await openNavigation(page);
-    await page.getByRole("tab", { name: "技术包", exact: true }).click();
+    await expect(page.locator("[data-archive-navigation]")).toHaveCount(0);
+    await openCanvasFunction(page, "技术包");
     await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue(
       "褶线夹克技术资料",
     );
-    await expect(page).toHaveURL(new RegExp(`/${PROJECT}/studio\\?tab=tech`));
+    await expect(page).toHaveURL(new RegExp(`/${PROJECT}$`));
+    const dialog = page.getByRole("dialog", { name: "技术包", exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "返回画布", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+    await page.getByRole("button", { name: "回到主页", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
     const account = page
       .getByRole("complementary", { name: "工作区目录" })
       .getByRole("button", { name: "designer@example.com", exact: true });

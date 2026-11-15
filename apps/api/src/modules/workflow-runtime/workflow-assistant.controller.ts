@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Header, Headers, Res, Optional, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import type { AssistantTurnView } from "@fashion/shared";
+import { assistantCanvasProofSchema, type AssistantTurnView } from "@fashion/shared";
 import { AssistantStreamsService } from "../agent-conversations/assistant-streams.service";
 import { z } from "zod";
 import { RateLimit, RateLimitGuard } from "../../security/rate-limit.guard";
@@ -45,5 +45,21 @@ export class WorkflowAssistantController {
     if (!this.streams?.enabled(accept)) return response.json(await (this.streams ? this.streams.runCancelable(conversation, input.clientRequestId, observer => this.assistant.send(user.userId, conversation, input, observer) as Promise<AssistantTurnView>, () => this.assistant.recoverStream(user.userId, conversation, input.clientRequestId)) : this.assistant.send(user.userId, conversation, input)));
     await this.assistant.authorizeStream(user.userId, conversation);
     return this.streams.start(response, conversation, input.clientRequestId, async (observer) => await this.assistant.send(user.userId, conversation, input, observer) as AssistantTurnView, () => this.assistant.recoverStream(user.userId, conversation, input.clientRequestId), JSON.stringify(input));
+  }
+
+  @Post("canvas-actions/:messageId/claim")
+  claimCanvas(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Param("messageId") messageId: string, @Body() body: unknown) {
+    const input = parse(z.object({ clientId: z.uuid() }).strict(), body);
+    return this.assistant.claimCanvasAction(user.userId, parse(id, conversationId), parse(id, messageId), input.clientId);
+  }
+  @Post("canvas-actions/:messageId/apply")
+  applyCanvas(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Param("messageId") messageId: string, @Body() body: unknown) {
+    const input = parse(z.object({ clientId: z.uuid() }).strict(), body);
+    return this.assistant.applyCanvasAction(user.userId, parse(id, conversationId), parse(id, messageId), input.clientId);
+  }
+  @Post("canvas-actions/:messageId/receipt")
+  receiptCanvas(@CurrentUser() user: AuthenticatedUser, @Param("id") conversationId: string, @Param("messageId") messageId: string, @Body() body: unknown) {
+    const input = parse(z.object({ clientId: z.uuid(), status: z.enum(["succeeded", "failed"]), proof: assistantCanvasProofSchema, error: z.string().max(1000).optional() }).strict(), body);
+    return this.assistant.finishCanvasAction(user.userId, parse(id, conversationId), parse(id, messageId), input.clientId, input.status, input.proof, input.error);
   }
 }

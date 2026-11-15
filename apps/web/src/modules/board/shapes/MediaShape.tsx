@@ -8,6 +8,8 @@ import { mediaDuration } from "../workflow/canvas-media";
 import { downloadGeneratedFile } from "../workflow/generated-files-api";
 import { WorkspaceIcon } from "../workflow/WorkspaceIcon";
 import styles from "./media-shape.module.css";
+import nameStyles from "./canvas-node-name.module.css";
+import { privateFetch } from "../../auth/private-fetch";
 
 export class MediaShapeUtil extends BaseBoxShapeUtil<MediaShape> {
   static override type = MEDIA_SHAPE_TYPE;
@@ -30,8 +32,7 @@ function safeMediaSource(value: string, mediaId: string): boolean {
   try {
     const url = new URL(value, location.origin);
     return url.origin === location.origin && !url.search && !url.hash
-      && /^\/api\/projects\/[^/]+\/runway\/media\/[^/]+\/content$/u.test(url.pathname)
-      && url.pathname.endsWith(`/media/${encodeURIComponent(mediaId)}/content`);
+      && (/^\/api\/projects\/[^/]+\/runway\/media\/[^/]+\/content$/u.test(url.pathname) && url.pathname.endsWith(`/media/${encodeURIComponent(mediaId)}/content`) || url.pathname === `/api/files/${encodeURIComponent(mediaId)}/content`);
   } catch { return false; }
 }
 
@@ -82,6 +83,13 @@ function MediaContent({ shape }: { shape: MediaShape }) {
     if (downloadRequest.current) return;
     const controller = new AbortController(); downloadRequest.current = controller; setDownloading(true); setNotice("");
     try {
+      if (shape.props.mediaUrl.startsWith("/api/files/")) {
+        const response = await privateFetch(shape.props.mediaUrl, { signal: controller.signal, credentials: "include" });
+        if (!response.ok) throw new Error("视频文件暂不可下载");
+        const blob = await response.blob(); controller.signal.throwIfAborted();
+        const url = URL.createObjectURL(blob), anchor = document.createElement("a"); anchor.href = url; anchor.download = shape.props.title; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
       const projectId = decodeURIComponent(new URL(shape.props.mediaUrl, location.origin).pathname.split("/")[3] ?? "");
       await downloadGeneratedFile(projectId, { domain: "runway", resourceId: shape.props.mediaId }, controller);
       if (!controller.signal.aborted) setNotice("已交给浏览器下载原文件。");
@@ -98,7 +106,7 @@ function MediaContent({ shape }: { shape: MediaShape }) {
     onPause: () => setPlaying(false), onEnded: () => setPlaying(false),
   };
   return <HTMLContainer className={styles.card} data-canvas-node-id={typeof shape.meta.canvasNodeId === "string" ? shape.meta.canvasNodeId : undefined} data-canvas-media={shape.props.mediaId} data-playing={playing}>
-    <header className={styles.header}><span>{shape.props.mediaKind === "video" ? "视频" : "音频"}</span><strong title={shape.props.title}>{shape.props.title}</strong>{mediaDuration(shape.props.durationMs) ? <time>{mediaDuration(shape.props.durationMs)}</time> : null}</header>
+    <header className={styles.header}><span>{shape.props.mediaKind === "video" ? "视频" : "音频"}</span><strong className={nameStyles.name} title={shape.props.title}>{shape.props.title}</strong>{mediaDuration(shape.props.durationMs) ? <time>{mediaDuration(shape.props.durationMs)}</time> : null}</header>
     <div className={styles.player} data-kind={shape.props.mediaKind} onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
       {!sourceValid || failed ? <div className={styles.error} role="alert"><span>{sourceValid ? "媒体暂时无法播放" : "媒体来源尚未核实"}</span>{sourceValid ? <button type="button" onClick={() => { setFailed(false); setEngaged(false); setAttempt(value => value + 1); }}>重新加载媒体</button> : null}</div>
         : enabled ? <>

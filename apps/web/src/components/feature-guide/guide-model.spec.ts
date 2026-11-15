@@ -14,7 +14,9 @@ afterEach(() => {
 
 describe("功能指引页面识别", () => {
   it.each([
-    ["/", "projects"],
+    ["/", "home"],
+    ["/projects", "projects"],
+    ["/assets", "assets"],
     ["/fabrics", "fabrics"],
     ["/trends", "trends"],
     ["/project-a", "workspace"],

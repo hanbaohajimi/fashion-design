@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { retireCanvasNotes } from "@fashion/shared";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const shapeIdSchema = z.string().min(1).max(200);
@@ -7,8 +8,8 @@ export const RETIRED_BOARD_SHAPE_TYPE = "fashion-connector";
 
 export function isRetiredBoardShapeType(
   value: unknown,
-): value is typeof RETIRED_BOARD_SHAPE_TYPE {
-  return value === RETIRED_BOARD_SHAPE_TYPE;
+): value is typeof RETIRED_BOARD_SHAPE_TYPE | "fashion-note" | "note" {
+  return value === RETIRED_BOARD_SHAPE_TYPE || value === "fashion-note" || value === "note";
 }
 
 export function isRetiredBoardShapeRecord(value: unknown): boolean {
@@ -23,22 +24,22 @@ export function stripRetiredBoardShapes(snapshot: unknown): unknown {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
     return snapshot;
   }
-  const root = snapshot as Record<string, unknown>;
+  const root = retireCanvasNotes(snapshot as Record<string, unknown>).snapshot;
   const document = root.document;
   if (!document || typeof document !== "object" || Array.isArray(document)) {
-    return snapshot;
+    return root;
   }
   const documentRecord = document as Record<string, unknown>;
   const store = documentRecord.store;
   if (!store || typeof store !== "object" || Array.isArray(store)) {
-    return snapshot;
+    return root;
   }
   const storeRecord = store as Record<string, unknown>;
   const entries = Object.entries(storeRecord);
   const retainedEntries = entries.filter(
     ([, record]) => !isRetiredBoardShapeRecord(record),
   );
-  if (retainedEntries.length === entries.length) return snapshot;
+  if (retainedEntries.length === entries.length) return root;
   return {
     ...root,
     document: {

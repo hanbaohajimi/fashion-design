@@ -505,13 +505,13 @@ describe("BoardsService ownership and semantic rows", () => {
         role: string;
       }>;
     expect(inserted.map((element) => element.record.type)).toEqual([
-      "fashion-note",
+      "fashion-text",
       "fashion-swatch",
       "fashion-swatch",
       "fashion-image",
     ]);
     expect(inserted.map((element) => element.role)).toEqual([
-      "note",
+      "reference",
       "palette",
       "palette",
       "style_ref",

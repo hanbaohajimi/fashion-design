@@ -103,6 +103,7 @@ export { expect };
 export async function seedVisualApp(page: Page, { guides = false, firstAssistantVisit = false, realClock = false }: { guides?: boolean; firstAssistantVisit?: boolean; realClock?: boolean } = {}) {
   // Existing fixtures represent returning users; guide scenarios opt into the first look.
   if (!guides) await seedReturningFeatureGuideUser(page, ["visual-designer"]);
+  let canvasDocument = { projectId: PROJECT, mode: "canvas", revision: 0, formatVersion: 1, snapshot: {}, bindings: graph.nodes.filter(node => node.kind === "asset").map(node => ({ shapeId: `shape:canvas-${node.id}`, nodeId: node.id, removed: false })), initializedFrom: "workflow", canEdit: true };
   if (!firstAssistantVisit) await page.addInitScript(() => {
     const key = "fashion:workspace-split:visual-designer:atelier-visual";
     if (localStorage.getItem(key) === null) {
@@ -197,6 +198,14 @@ export async function seedVisualApp(page: Page, { guides = false, firstAssistant
         hasMore: false,
       });
     if (path === `/projects/${PROJECT}`) return json(project);
+    if (path.endsWith("/canvas/creations") && route.request().method() === "GET") return json({ items: [], canEdit: true });
+    if (path === `/projects/${PROJECT}/canvas`) {
+      if (route.request().method() === "PATCH") {
+        const input = route.request().postDataJSON();
+        canvasDocument = { ...canvasDocument, revision: canvasDocument.revision + 1, snapshot: input.snapshot, bindings: input.bindings.map((binding: { shapeId: string; nodeId: string }) => ({ ...binding, removed: false })) };
+      }
+      return json(canvasDocument);
+    }
     if (path.endsWith("/canvas/commands")) return canvasCommandFixture(page, route);
     if (path.endsWith("/canvas/initialize")) return json({ projectId: PROJECT, mode: "node", revision: 0, formatVersion: 1, snapshot: {}, bindings: [], initializedFrom: "workflow", canEdit: true });
     if (path.endsWith("/workflow/sync") || path.endsWith("/workflow"))

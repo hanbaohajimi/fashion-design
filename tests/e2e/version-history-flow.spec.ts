@@ -147,16 +147,10 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
-  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
-  await details.getByRole("button", { name: /图像/u }).click();
-  await details.getByRole("button", { name: "来源与设计决策", exact: true }).click();
-  await details.getByText("来源与路径", { exact: true }).click();
-  await expect(details.getByText("挺括羊毛").first()).toBeVisible();
-  await details.getByPlaceholder("记录选择或否决理由").fill("保留肩线，面料表现符合预期");
-  await details.getByRole("button", { name: "保存决定" }).click();
-  await expect.poll(() => decisions).toContain("保留肩线，面料表现符合预期");
+  await expect(page.getByRole("button", { name: "来源与设计决策", exact: true })).toHaveCount(0);
+  expect(decisions).toHaveLength(0);
   let workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
-  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: /版本与对比/u }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
   await expect(workspace.getByText("恢复版本已创建，正在等待加入画布。", { exact: false })).toBeVisible();
@@ -170,7 +164,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
   workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
-  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: /版本与对比/u }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
   await expect.poll(() => graph.nodes.filter((item) => item.payload.assetId === restoredOne.id).length).toBe(1);
@@ -183,7 +177,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" }).first().dblclick();
   workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
-  await workspace.getByRole("button", { name: /图像/u }).click();
+  await workspace.getByRole("button", { name: /版本与对比/u }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "设计变体" }).getByRole("button", { name: "恢复此版" }).click();
   await expect.poll(() => graph.nodes.filter((item) => item.payload.assetId === restoredTwo.id).length).toBe(1);

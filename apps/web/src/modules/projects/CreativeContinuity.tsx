@@ -3,13 +3,13 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../auth/AuthProvider";
 import { rememberCreativeVisit } from "./creative-memory";
+import { workspaceRoute } from "../workspace-route";
 export function CreativeContinuity() {
   const pathname = usePathname();
   const { session } = useAuth();
   useEffect(() => {
-    const match = /^\/([a-zA-Z0-9-]+)(?:\/studio)?$/u.exec(pathname);
-    const projectId = match?.[1];
-    if (!session || !projectId || ["login", "fabrics", "trends"].includes(projectId)) return;
+    const { projectId } = workspaceRoute(pathname);
+    if (!session || !projectId) return;
     const save = () => { if (window.location.pathname === pathname) rememberCreativeVisit(session.user.id, projectId, window.location.pathname + window.location.search); };
     save();
     document.addEventListener("visibilitychange", save);

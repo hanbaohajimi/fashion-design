@@ -6,7 +6,7 @@ import { motionEase, motionTime } from "./motion-policy";
 import styles from "../ui.module.css";
 
 export function MotionDialog({ open = true, label, children, onClose, onAfterClose,
-  returnFocusSelector, describedBy, busy = false, className = "", variant = "dialog" }: {
+  returnFocusSelector, describedBy, busy = false, keepMounted = false, className = "", variant = "dialog" }: {
   readonly open?: boolean;
   readonly label: string;
   readonly children: ReactNode;
@@ -15,6 +15,8 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
   readonly returnFocusSelector?: string | undefined;
   readonly describedBy?: string | undefined;
   readonly busy?: boolean;
+  /** Preserve form state while a closed native dialog remains hidden. */
+  readonly keepMounted?: boolean;
   readonly className?: string | undefined;
   readonly variant?: "dialog" | "sheet" | "guide" | "navigation";
 }) {
@@ -38,7 +40,9 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
       }
     }
     const target = (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? previous.current;
-    const activeDialog = [...document.querySelectorAll("dialog[open]")].at(-1);
+    // The assistant's floating window is an open, nonmodal dialog. Only a
+    // modal surface should prevent focus returning to the underlying canvas.
+    const activeDialog = [...document.querySelectorAll("dialog:modal")].at(-1);
     if (activeDialog && (!(target instanceof Node) || !activeDialog.contains(target))) return;
     const fallback = document.querySelector<HTMLElement>("#main-content h1, main h1, #main-content");
     const safeTarget = target instanceof HTMLElement && target.isConnected && !target.closest("[inert],[hidden]") && !(variant === "guide" && target.matches('input,textarea,select,[contenteditable="true"]'));
@@ -177,5 +181,5 @@ export function MotionDialog({ open = true, label, children, onClose, onAfterClo
       if (!first || !last) { event.preventDefault(); event.currentTarget.focus(); }
       else if (!event.currentTarget.contains(document.activeElement) || document.activeElement === event.currentTarget || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
     }}
-  >{presence.present ? children : null}</dialog>;
+  >{presence.present || keepMounted ? children : null}</dialog>;
 }

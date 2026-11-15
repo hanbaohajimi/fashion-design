@@ -556,7 +556,7 @@ export function AgentPlanEditor({
                 </div>
                 {historical?.attempts?.length ? (
                   <section className={styles.history} aria-label="节点尝试历史">
-                    <h4>每次尝试与候选</h4>
+                    <h4>每次尝试与图片</h4>
                     {historical.attempts.map((attempt) => (
                       <GridDetails key={attempt.id}>
                         <summary>
@@ -586,7 +586,7 @@ export function AgentPlanEditor({
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={candidate.thumbnailUrl ?? candidate.url}
-                                alt={`尝试 ${attempt.ordinal} 候选`}
+                                alt={`尝试 ${attempt.ordinal} 图片`}
                               />
                               <span>设计路径</span>
                             </button>

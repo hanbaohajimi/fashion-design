@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
+import { seedCollectionWorkbench } from "./collection-workbench-fixture";
 import {
   workspaceFixture,
   experimentFixture,
@@ -7,6 +8,7 @@ import {
 
 test.beforeEach(async ({ page }) => {
   await seedVisualApp(page);
+  await seedCollectionWorkbench(page, PROJECT, workspaceFixture());
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: workspaceFixture() }),
   );

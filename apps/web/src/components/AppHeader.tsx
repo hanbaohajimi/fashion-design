@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { useAuth } from "../modules/auth/AuthProvider";
 import { Button, Menu } from "./ui";
 import { ArchiveNavigation, type ArchiveSection } from "./ArchiveNavigation";
+import type { StudioDirectoryNavigation } from "./WorkspaceDirectory";
 import { useFeatureGuide } from "./feature-guide/FeatureGuideProvider";
 import { useWorkspaceChromeActions } from "./WorkspaceChrome";
 
@@ -15,6 +16,7 @@ export function AppHeader(props: {
   readonly navigation?: ReactNode;
   readonly hideProjectReturn?: boolean;
   readonly currentIsParent?: boolean;
+  readonly studioNavigation?: StudioDirectoryNavigation;
 }) {
   return (
     <ArchiveNavigation {...props} account={props.account ?? <Account />} />

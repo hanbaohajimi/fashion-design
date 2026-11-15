@@ -65,7 +65,7 @@ export function useMaterialRepair({ projectId, sourceAssetId, name, category, op
       if (!current(run)) return;
       if (result.status !== "ready" || !result.candidates.length) {
         run.deriveFailed = result.status === "failed";
-        setError(result.error ?? "候选处理尚未返回可核对的图片，原候选与选区保留。请重试处理。"); setPhase("failed"); return;
+        setError(result.error ?? "图片处理尚未返回可核对的图片，原图片与选区保留。请重试处理。"); setPhase("failed"); return;
       }
       run.result = result; apply(run, turn);
     } catch (cause) {
@@ -80,13 +80,13 @@ export function useMaterialRepair({ projectId, sourceAssetId, name, category, op
     const task = await fetchGenerationTask(run.taskId);
     if (signal.aborted || !current(run) || !openRef.current || epoch.current !== turn) return;
     if (task.status === "failed" || task.status === "moderation_failed" || task.status === "canceled") {
-      setError(task.error?.message ?? (task.status === "canceled" ? "候选处理已取消，原候选与选区保留。" : "候选生成失败，原候选与选区保留。"));
+      setError(task.error?.message ?? (task.status === "canceled" ? "图片处理已取消，原图片与选区保留。" : "图片生成失败，原图片与选区保留。"));
       setPhase(task.status === "canceled" ? "canceled" : "failed"); return;
     }
     if (task.status !== "succeeded") return;
     const images = task.output && typeof task.output === "object" && "images" in task.output ? task.output.images : undefined;
     const raw = Array.isArray(images) ? images.find(value => value && typeof value.assetId === "string") : undefined;
-    if (!raw) { setError("任务未返回可追溯的图片素材，请在项目任务中查看。原候选与选区保留。"); setPhase("failed"); return; }
+    if (!raw) { setError("任务未返回可追溯的图片素材，请在项目任务中查看。原图片与选区保留。"); setPhase("failed"); return; }
     run.rawAssetId = raw.assetId as string;
     setHasRawAsset(true);
     await derive(run, turn);

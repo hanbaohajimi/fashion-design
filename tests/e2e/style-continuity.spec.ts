@@ -17,7 +17,8 @@ const continueTo = async (page: Page, name: string) => {
 test("新款式保存后列表失败或陈旧，继续编辑与交付仍使用刚保存的对象", async ({ page }) => {
   const state = await prepareStyleContinuity(page, { empty: true });
   await state.open();
-  await page.getByRole("dialog", { name: "图片工作区" }).getByRole("link", { name: "保存为款式", exact: true }).click();
+  await page.getByRole("dialog", { name: "图片工作区" }).getByRole("button", { name: "关闭图片工作区", exact: true }).click();
+  await page.goto(`/${PROJECT}/studio?tab=styles&assetId=look-0`);
   await page.getByLabel("款号", { exact: true }).fill("JK-NEW");
   await page.getByLabel("款式名称", { exact: true }).fill("轻量通勤外套");
   await page.getByLabel("品类", { exact: true }).fill("外套");
@@ -96,10 +97,10 @@ for (const width of [1440, 320]) {
     await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
     await expect(image.getByAltText("外套调整 1", { exact: true })).toBeVisible();
     await image.screenshot({ path: `${output}/edited-image-${width}.png` });
-    if (width === 320) await image.getByRole("button", { name: "图像", exact: false }).click();
-    await expect(image.getByRole("link", { name: "更新款式修订", exact: true })).toHaveAttribute("href", /assetId=edited-1&styleRevisionId=style-r1/);
+    await expect(image.getByRole("link", { name: "更新款式修订", exact: true })).toHaveCount(0);
     await demoPause(page);
-    await image.getByRole("link", { name: "更新款式修订", exact: true }).click();
+    await image.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
+    await page.goto(`/${PROJECT}/studio?tab=styles&assetId=edited-1&styleRevisionId=style-r1`);
     await expect(page.getByLabel("款式名称", { exact: true })).toHaveValue("藏蓝通勤外套");
     await expect(page.getByLabel("本次修改说明", { exact: true })).toHaveValue("基于 r1 更新主设计图");
     await page.getByRole("button", { name: "继续创作与交付", exact: true }).click();

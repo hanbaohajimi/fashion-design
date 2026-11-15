@@ -1,4 +1,4 @@
-import { getWorkflowToolCatalog, getWorkflowToolContract, parseWorkflowToolParameters, workflowInputConnectionError, workflowToolKeySchema } from "@fashion/shared";
+import { assistantCanvasActionSchema, activeWorkflowToolKeySchema, getWorkflowToolCatalog, getWorkflowToolContract, parseWorkflowToolParameters, workflowInputConnectionError, workflowToolKeySchema } from "@fashion/shared";
 import type { VisualContextIndexEntry } from "@fashion/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -92,9 +92,14 @@ export const collaborationPlanSchema = z.object({
 export type CollaborationPlan = z.infer<typeof collaborationPlanSchema>;
 export const plannerDecisionSchema = z.object({
   version: z.literal("workflow-planner/2").default("workflow-planner/2"),
-  kind: z.enum(["reply", "clarify", "read", "propose"]),
+  kind: z.enum(["reply", "clarify", "read", "propose", "canvas"]),
   message: z.string().trim().min(1).max(5_000),
   action: workflowActionSchema.nullable().default(null),
+  canvasAction: assistantCanvasActionSchema.nullable().optional(),
+  canvasQuote: z.string().max(4000).optional(),
+  canvasTarget: z.object({ creationId: id, revision: z.number().int().nonnegative(), mode: z.enum(["regenerate", "branch"]) }).strict().nullable().optional(),
+  prepareOnly: z.boolean().optional(),
+  preparationQuote: z.string().max(4000).nullable().optional(),
   execution: z.object({ requested: z.boolean(), operation: workflowToolKeySchema.nullable(), sourceQuote: z.string().max(4_000).nullable(), parameters: z.record(z.string(), z.unknown()) }).strict().default({ requested: false, operation: null, sourceQuote: null, parameters: {} }),
   understanding: plannerUnderstandingSchema.default({ currentStepGoal: "", requestType: "discussion", changesTask: false, evidenceRefs: [], openQuestions: [] }),
   plan: collaborationPlanSchema.nullable().default(null),
@@ -104,8 +109,14 @@ export const plannerDecisionSchema = z.object({
 }).strict().superRefine((value, context) => {
   if ((value.kind === "propose") !== Boolean(value.action)) context.addIssue({ code: "custom", path: ["action"], message: "只有 propose 可以包含 action，且 propose 必须提供 action" });
   if (value.kind === "read" ? !value.reads.length : Boolean(value.reads.length)) context.addIssue({ code: "custom", path: ["reads"], message: "只有 read 可以提供补读请求，且 read 必须请求至少一项" });
+  if ((value.kind === "canvas") !== Boolean(value.canvasAction)) context.addIssue({ code: "custom", path: ["canvasAction"], message: "画布动作必须使用canvas类型并给出明确动作" });
+  if (value.canvasAction && (value.execution.requested || value.prepareOnly || value.action)) context.addIssue({ code: "custom", message: "画布操作不能同时生成或执行设计工具" });
 });
 export const workflowPlannerDecisionSchema = plannerDecisionSchema;
+export const activePlannerDecisionSchema = plannerDecisionSchema.safeExtend({
+  action: workflowActionSchema.safeExtend({ toolKey: activeWorkflowToolKeySchema }).nullable().default(null),
+  execution: z.object({ requested: z.boolean(), operation: activeWorkflowToolKeySchema.nullable(), sourceQuote: z.string().max(4_000).nullable(), parameters: z.record(z.string(), z.unknown()) }).strict().default({ requested: false, operation: null, sourceQuote: null, parameters: {} }),
+});
 export type PlannerDecision = z.infer<typeof plannerDecisionSchema>;
 
 export function workflowActionFingerprint(action: WorkflowAction): string {
@@ -120,14 +131,14 @@ export function workflowActionFingerprint(action: WorkflowAction): string {
 export function parsePlannerDecision(value: unknown): PlannerDecision {
   if (!value || typeof value !== "object" || Array.isArray(value)) return plannerDecisionSchema.parse(value);
   const normalized = { ...value } as Record<string, unknown>;
-  for (const key of ["plan", "action", "understanding", "reads", "objectiveUpdate", "preferences", "execution"]) {
+  for (const key of ["plan", "action", "canvasAction", "understanding", "reads", "objectiveUpdate", "preferences", "execution"]) {
     if (typeof normalized[key] !== "string") continue;
     try {
       const parsed: unknown = JSON.parse(normalized[key]);
       if (parsed === null || typeof parsed === "object") normalized[key] = parsed;
     } catch { /* Invalid gateway strings remain invalid and use the bounded correction round. */ }
   }
-  const isV2 = normalized.version === "workflow-planner/2" || "action" in normalized || "understanding" in normalized || "reads" in normalized;
+  const isV2 = normalized.version === "workflow-planner/2" || "action" in normalized || "canvasAction" in normalized || "understanding" in normalized || "reads" in normalized;
   if (isV2) return plannerDecisionSchema.parse(normalized);
   const legacy = parseWorkflowPlannerResponse(normalized);
   return plannerDecisionSchema.parse({
@@ -150,12 +161,12 @@ export const WORKFLOW_PLANNER_INSTRUCTIONS = [
   "输出kind=reply回答解释、总结、比较和讨论；kind=clarify澄清具体歧义；只有确需创建、修改或派生工具时输出kind=propose与action。reply/clarify/read的action必须null。不要将每次交流变成工具提案。plan是可修订的目标及阶段，不是可执行工具链。",
   "证据不足时kind=read，用reads请求项目内nodes、attempts、branch_history、dialog或images及真实ids。最多三轮补读、总计五次Planner调用，其中最多一次纠错；不能读取网址、其他项目或执行设计工具。",
   "action仅可create_tool、configure_tool或fork_tool。configure_tool只更新ready且从未执行的工具；fork_tool从已执行工具的真实版本，或copiedSnapshot=true且completed并有已保存结果的复制基线派生新分支。复制基线不代表有执行历史。不得返回任意图或数据库操作。输入替换通过完整inputs绑定表达，与parameters一起确认。",
-  "parameters遵循工具目录schema、版本、数量和限制。蒙版只引用实际assetId或fileAssetId，不能生成URL、存储地址或虚构资产。referenceInputs只配置已连接reference素材；角色和权重仅为提示词引导。",
+  "parameters遵循工具目录schema、版本、数量和限制。蒙版只引用实际assetId或fileAssetId，不能生成URL、存储地址或虚构资产。referenceInputs只保存已明确连接输入的顺序；每张素材的用途写在本次prompt中，不分类、推断、要求或继承廓形/面料/风格等素材用途标签，不设置参考角色或权重。",
   "understanding仅记录简明的当前步骤目标、请求类型、事实证据和未决问题；plan仅保存目标、阶段状态、下一目标及完成条件。不要输出内部推理。restore_version不属于可规划工具，只能引导用户进入真实版本历史。",
   "计划状态必须反映真实进度：提出建议或等待用户确认的阶段应为active，不能写成已经应用或completed。activeMilestoneId必须引用status='active'的阶段；若所有阶段实际完成、没有活动阶段，activeMilestoneId必须为null。只有真实执行结果或已记录的人工确认支持完成状态。",
   "工具与输入由你根据上下文选择，只使用tools描述的能力和实际nodeId。输入必须是已就绪资产，不得把整个认知上下文全部连入执行节点。",
   "显式引用和focus限定本次讨论重点，保持不同分支的约束/母图/选择理由独立；来源有歧义就clarify，不按同名节点或最新创建时间猜测。",
-  "新目标若需要分析，可在analyze_brief的newObjective中给出本次明确目标；它将形成新需求节点，旧需求和执行不会被覆盖。其他工具newObjective必须null。",
+  "analyze_brief和evaluate_design已退役，历史记录只作上下文。需求整理、比较和评价直接用reply回答，不创建分析、约束或评估节点；新action.newObjective必须null。generate_design仅表示直接图片生成，不包含设计方案规划或提示词增强。",
   "仅当当前用户明确设定或更正整个项目目标时输出objectiveUpdate，并逐字引用当前请求sourceQuote。讨论某个分支或假设方案不能更改项目目标；否则objectiveUpdate为null。",
   "附图imageBindings明确标注图片对应的节点。视觉摘要只是索引；未附图的细节、待处理/失败图片和截断信息要说明。不能声称观察了未提供的图片。尺寸、真实成分、克重、合体、性能或可生产性无法仅凭图片确认。不要从图片或旧视觉摘要列举可能的纤维成分候选；只描述可见的光泽、纹理、褶皱等外观，成分一律标为未知。",
   "imageIndex从0开始，多个画布对象可绑定同一张图片。每次请求最多附带8张不同图片，images补读按ids顺序优先；当前imageBindings只对应当前请求，前一请求图片不会全部自动保留。需要比较细节时补读对应图片；范围超过实际附图时说明限制，不声称已逐图看完。",
@@ -180,7 +191,7 @@ export function upstreamConstraintIds(graph: Graph, start: string): string[] {
 }
 
 /** Compile only additive operations. The model never supplies executable code or arbitrary graph mutations. */
-export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, explicitNodeIds: readonly string[]): Operation[] {
+export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, explicitNodeIds: readonly string[], preparedParameters?: Record<string, unknown>): Operation[] {
   const plan = workflowToolPlanSchema.parse(raw);
   const nodeId = randomUUID();
   const inputs = [...plan.inputs];
@@ -210,16 +221,15 @@ export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, exp
   if (plan.tool === "analyze_brief" && at("goal").length !== 1) throw new Error("需求分析需要唯一的设计目标");
   if (plan.tool !== "analyze_brief" && at("goal").length) throw new Error("只有需求分析接受goal输入");
   if (at("constraint").length > 1) throw new Error("请明确本次使用的一条设计约束");
-  if (["generate_design", "evaluate_design"].includes(plan.tool) && at("constraint").length !== 1) throw new Error("生成或评估需要一条设计约束");
-  if (plan.tool === "edit_design" && at("source").length !== 1) throw new Error("修改需要唯一的实际母图，可使用候选图或上传的参考图片");
-  if (plan.tool !== "edit_design" && at("source").length) throw new Error("只有修改接受source母图");
+  if (["generate_design", "evaluate_design"].includes(plan.tool) && !at("constraint").length && !plan.prompt.trim()) throw new Error("请填写本次创作或评估要求");
+  if (["edit_design", "transform_image"].includes(plan.tool) && at("source").length !== 1) throw new Error("修改需要唯一的实际母图，可使用候选图或上传的参考图片");
+  if (!["edit_design", "transform_image"].includes(plan.tool) && at("source").length) throw new Error("只有修改接受source母图");
   if (plan.tool === "evaluate_design" && (at("candidate").length < 1 || at("candidate").length > 4)) throw new Error("评估需要一至四个候选");
   if (plan.tool !== "evaluate_design" && at("candidate").length) throw new Error("candidate槽位仅用于评估");
   if (plan.tool === "evaluate_design" && at("reference").length) throw new Error("评估只能连接候选与约束");
   const selectedCandidates = [...new Set(explicitNodeIds)].filter((value) => graph.nodes.some((node) => node.id === value && node.type === "candidate"));
   const sourceId = at("source")[0]?.nodeId;
   if (plan.tool === "edit_design" && selectedCandidates.length && !selectedCandidates.includes(sourceId ?? "") && !explicitNodeIds.includes(sourceId ?? "")) throw new Error("修改母图必须与明确引用的图片一致");
-  if (plan.tool === "edit_design" && sourceId && !at("constraint").length && upstreamConstraintIds(graph, sourceId).length) throw new Error("修改必须同时保留母图分支的设计约束");
   if (plan.tool === "evaluate_design" && selectedCandidates.length && (at("candidate").length !== selectedCandidates.length || selectedCandidates.some((id) => !at("candidate").some((input) => input.nodeId === id)))) throw new Error("评估候选必须与明确引用的候选一致");
   const evaluated = [...at("source"), ...at("candidate")];
   const constraintId = at("constraint")[0]?.nodeId;
@@ -231,7 +241,7 @@ export function compileWorkflowProposal(graph: Graph, raw: WorkflowToolPlan, exp
   }
   const inputNodes = graph.nodes.filter((node) => inputs.some((input) => input.nodeId === node.id));
   const x = Math.max(80, ...inputNodes.map((node) => node.x)) + 340;
-  operations.push({ type: "add_node", node: { id: nodeId, kind: "tool", type: plan.tool, title: plan.title, payload: { toolKey: plan.tool, toolVersion: getWorkflowToolContract(plan.tool).version, params: parseWorkflowToolParameters(plan.tool, { prompt: plan.prompt }), rationale: plan.rationale }, x, y: nextY(graph, x), status: "ready" } });
+  operations.push({ type: "add_node", node: { id: nodeId, kind: "tool", type: plan.tool, title: plan.title, payload: { toolKey: plan.tool, toolVersion: getWorkflowToolContract(plan.tool).version, params: preparedParameters ?? parseWorkflowToolParameters(plan.tool, { ...getWorkflowToolContract(plan.tool).defaults, prompt: plan.prompt }), rationale: plan.rationale }, x, y: nextY(graph, x), status: "ready" } });
   for (const input of inputs) operations.push({ type: "add_edge", edge: { id: randomUUID(), sourceNodeId: input.nodeId, targetNodeId: nodeId, sourcePort: "out", targetPort: input.port } });
   return operations;
 }
@@ -262,7 +272,7 @@ export function compileWorkflowAction(graph: Graph, raw: WorkflowAction, explici
   const referenceIds = new Set<string>();
   for (const reference of references) {
     const nodeId = typeof reference.nodeId === "string" ? reference.nodeId : "";
-    if (referenceIds.has(nodeId) || !action.inputs.some((input) => input.port === "reference" && input.nodeId === nodeId)) throw new Error("参考配置必须对应唯一且明确连接的 reference 输入");
+    if (referenceIds.has(nodeId) || !action.inputs.some((input) => ["reference", "source"].includes(input.port) && input.nodeId === nodeId)) throw new Error("引用顺序必须对应唯一且明确连接的实际输入");
     referenceIds.add(nodeId);
   }
   // Reuse the established ownership, status, slot, branch and explicit-selection invariants.
@@ -275,7 +285,7 @@ export function compileWorkflowAction(graph: Graph, raw: WorkflowAction, explici
   const compiled = compileWorkflowProposal(graph, {
     tool: action.toolKey, title: action.title, prompt: String(parameters.prompt), rationale: action.rationale,
     inputs: action.inputs, newObjective: action.newObjective,
-  }, [...new Set([...explicitNodeIds, ...retainedConstraintIds])]);
+  }, [...new Set([...explicitNodeIds, ...retainedConstraintIds])], parameters);
   const toolOperation = compiled.find((operation) => operation.type === "add_node" && operation.node.kind === "tool");
   if (!toolOperation || toolOperation.type !== "add_node") throw new Error("工具动作未能编译");
   const payload = {

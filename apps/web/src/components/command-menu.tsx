@@ -46,8 +46,11 @@ export function Menu({
   trigger,
   align = "end",
   className = "",
+  popupClassName,
   triggerRef,
   guideAnchor,
+  disabled = false,
+  nativeTitle = true,
 }: {
   readonly label: string;
   readonly children: ReactNode;
@@ -56,8 +59,11 @@ export function Menu({
   readonly placement?: "top" | "bottom";
   readonly align?: "start" | "end";
   readonly className?: string | undefined;
+  readonly popupClassName?: string | undefined;
   readonly triggerRef?: Ref<HTMLElement>;
   readonly guideAnchor?: string | undefined;
+  readonly disabled?: boolean;
+  readonly nativeTitle?: boolean;
   readonly portal?: boolean;
 }) {
   const anchor = useRef<HTMLElement>(null);
@@ -92,7 +98,7 @@ export function Menu({
     [session],
   );
   const show = (end = false) => {
-    if (!anchor.current) return;
+    if (!anchor.current || disabled) return;
     fromEnd.current = end;
     setQuery("");
     setSession(
@@ -149,7 +155,8 @@ export function Menu({
         data-guide={guideAnchor}
         role="button"
         aria-label={label}
-        title={label}
+        aria-disabled={disabled || undefined}
+        title={nativeTitle ? label : undefined}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         ref={anchor}
@@ -179,6 +186,7 @@ export function Menu({
         label={label}
         id={`${id}-popup`}
         align={align}
+        className={popupClassName ?? ""}
         onClose={close}
       >
         <div className={choices.panelBody} onKeyDown={onKeyDown}>
@@ -204,7 +212,7 @@ export function Menu({
             ref={panel}
             onClick={(event) => {
               const target = (event.target as Element).closest("button,a");
-              if (target && !target.matches(":disabled,[aria-disabled='true']"))
+              if (target && !target.matches(":disabled,[aria-disabled='true'],[data-menu-keep-open]"))
                 close(true);
             }}
           >

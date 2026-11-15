@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import styles from "./studio.module.css";
 
-export const StudioHeaderContext = createContext<{ actions: ReactNode; readOnly: boolean } | null>(null);
+export const StudioHeaderContext = createContext<{ actions: ReactNode; readOnly: boolean; embedded?: boolean } | null>(null);
 export function StudioProjectActions() {
   const context = useContext(StudioHeaderContext);
   return context ? <div className={styles.projectActions}>{context.actions}</div> : null;

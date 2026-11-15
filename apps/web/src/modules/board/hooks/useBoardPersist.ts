@@ -43,14 +43,7 @@ function isShapeRecord(record: TLRecord): record is TLShape {
   return record.typeName === "shape";
 }
 
-function roleForShape(shape: TLShape): string {
-  if (isBoardShape(shape)) {
-    return normalizeBoardRole(shape.props.role);
-  }
-
-  const role = shape.meta.role;
-  return typeof role === "string" ? role : "generic";
-}
+function roleForShape(_shape: TLShape): string { return "reference"; }
 
 function semanticForShape(shape: TLShape) {
   const candidate =

@@ -139,9 +139,6 @@ export function WorkflowImageInputs({
                 item.ready.thumbnail1024Url ?? item.ready.thumbnail256Url ?? "",
               width: item.ready.width,
               height: item.ready.height,
-              role: "style_ref",
-              roleSource: "default",
-              roleInferenceState: "pending",
             },
             item.point,
           );

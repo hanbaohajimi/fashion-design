@@ -35,7 +35,7 @@ describe("active board persistence", () => {
   it("为活动画布生成返回路径，无记录时回退项目库", () => {
     const storage = createStorage();
 
-    expect(activeBoardPath(storage)).toBe("/");
+    expect(activeBoardPath(storage)).toBe("/projects");
     writeActiveBoardId("project/a", storage);
     expect(activeBoardPath(storage)).toBe("/project%2Fa");
   });
@@ -54,15 +54,15 @@ describe("active board persistence", () => {
       label: "← 返回画布",
     });
     expect(resolveTrendReturnTarget("projects", "project/a")).toEqual({
-      href: "/",
+      href: "/projects",
       label: "← 返回项目库",
     });
     expect(resolveTrendReturnTarget("board", "   ")).toEqual({
-      href: "/",
+      href: "/projects",
       label: "← 返回项目库",
     });
     expect(resolveTrendReturnTarget(undefined, undefined)).toEqual({
-      href: "/",
+      href: "/projects",
       label: "← 返回项目库",
     });
   });

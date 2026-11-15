@@ -4,6 +4,10 @@
   font-size: 14px;
   border-block: var(--border-hairline) solid var(--color-border);
 }
+.root[data-compact] { padding: 0; margin: 0; border: 0; }
+.statusLine { display: flex; align-items: center; gap: 8px; }
+.statusLine > :first-child { flex: 0 0 16px; }
+.root[data-compact] .actions button { border: 0; padding: 4px 0; background: transparent; color: var(--color-ink-secondary); font-size: 12px; }
 .counts {
   display: flex;
   flex-wrap: wrap;

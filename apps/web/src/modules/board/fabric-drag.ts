@@ -102,6 +102,7 @@ export function createNativeFileDropController({
 }
 
 export interface FabricDragPayload {
+  readonly title?: string;
   readonly fabricId: string;
   readonly fabricTags: readonly string[];
   readonly thumbnailUrl: string;
@@ -114,7 +115,6 @@ function isFabricDragPayload(value: unknown): value is FabricDragPayload {
     typeof candidate.fabricId === "string" &&
     candidate.fabricId.length > 0 &&
     Array.isArray(candidate.fabricTags) &&
-    candidate.fabricTags.length > 0 &&
     candidate.fabricTags.every(
       (tag) => typeof tag === "string" && tag.trim().length > 0,
     ) &&
@@ -125,6 +125,7 @@ function isFabricDragPayload(value: unknown): value is FabricDragPayload {
 export function fabricToDragPayload(fabric: Fabric): FabricDragPayload {
   return {
     fabricId: fabric.id,
+    title: fabric.details?.name || "面料图片",
     fabricTags: fabric.tags,
     thumbnailUrl: fabric.mainImageUrl,
   };
@@ -142,10 +143,11 @@ export function decodeFabricDragPayload(raw: string): FabricDragPayload | null {
 export function fabricToShapeProps(payload: FabricDragPayload) {
   return {
     fabricId: payload.fabricId,
+    title: typeof payload.title === "string" && payload.title.trim() ? payload.title.slice(0, 200) : "面料图片",
     fabricTags: payload.fabricTags,
     // Landscape: typical offcuts are wider than tall.
     h: 174,
-    role: "fabric_ref",
+    role: "reference",
     thumbnailUrl: payload.thumbnailUrl,
     w: 260,
   } as const;

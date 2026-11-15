@@ -1,5 +1,5 @@
 import { Prisma, ensureWorkflowNodeVersions, type PrismaClient } from "@fashion/db";
-import { getWorkflowToolCatalog } from "@fashion/shared";
+import { ASSISTANT_CANVAS_TOOL_CATALOG, canvasCreationDraftSchema, getWorkflowToolCatalog, type AssistantCanvasObservation } from "@fashion/shared";
 import type { AssistantStreamObserver } from "@fashion/shared";
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
 import { Inject, Injectable, Optional } from "@nestjs/common";
@@ -10,17 +10,21 @@ import { InformationIntegrationService } from "../design-context/information-int
 import { VisualContextService } from "../design-context/visual-context.service";
 import { mergeVisualContext, visualImageIdentity } from "../design-context/visual-context-images";
 import { WorkflowsService } from "../workflows/workflows.service";
-import { compileWorkflowAction, workflowActionFingerprint, parsePlannerDecision, plannerDecisionSchema, projectPlannerVisualIndex,
-  WORKFLOW_PLANNER_INSTRUCTIONS, type PlannerDecision } from "./workflow-planner";
+import { compileWorkflowAction, workflowActionFingerprint, parsePlannerDecision, projectPlannerVisualIndex,
+  WORKFLOW_PLANNER_INSTRUCTIONS, activePlannerDecisionSchema, type PlannerDecision } from "./workflow-planner";
 import { WORKFLOW_RUNTIME_DB } from "./workflow-runtime.tokens";
-import { CANVAS_EXECUTION_INSTRUCTIONS } from "./direct-execution";
+import { allowsCanvasPreparation, CANVAS_EXECUTION_INSTRUCTIONS } from "./direct-execution";
 import { applyWorkflowReadPolicy, WorkflowReadGateway, type ReadPolicy } from "./workflow-read-gateway";
+import { actionShapeIds, allowsAssistantCanvasAction, readAssistantCanvasContext } from "./canvas-action-context";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export type CoordinatorInput = {
   stream?: AssistantStreamObserver;
   userId: string; projectId: string; conversationId?: string; request: string;
   referencedNodeIds: string[]; focusNodeIds?: string[]; trigger?: "user" | "observation";
+  focusCreationId?: string;
+  focusCreationRevision?: number;
+  canvasObservation?: AssistantCanvasObservation;
   readPolicy?: ReadPolicy; previousPlan?: unknown;
   initialBudget?: { modelCalls: number; readRounds: number; repairUsed: boolean };
   deadlineAt?: number;
@@ -53,10 +57,20 @@ export class WorkflowCoordinator {
       return ms;
     };
     remaining();
+    const focused = input.focusCreationId ? await this.database.canvasCreation.findFirst({ where: { id: input.focusCreationId, projectId: input.projectId, removedAt: null } }) : null;
+    if (input.focusCreationId && !focused) throw new Error("当前创作目标已不可用，请重新选择");
+    if (focused && input.focusCreationRevision !== undefined && focused.revision !== input.focusCreationRevision) throw new Error("创作要求已更新，请重新发送以读取最新草稿。");
+    const focusedDraft = focused ? canvasCreationDraftSchema.parse(focused.draft) : null;
+    const upstreamIds = focusedDraft?.inputs.filter(binding => !binding.nodeId && binding.creationId).map(binding => binding.creationId as string) ?? [];
+    const upstream = upstreamIds.length ? await this.database.canvasCreation.findMany({ where: { projectId: input.projectId, id: { in: upstreamIds }, removedAt: null }, select: { id: true, currentResultNodeId: true } }) : [];
+    const focusedInputs = focusedDraft?.inputs.flatMap(binding => {
+      const nodeId = binding.nodeId ?? upstream.find(item => item.id === binding.creationId)?.currentResultNodeId;
+      return nodeId ? [nodeId] : [];
+    }) ?? [];
     const canvasMode = (await this.database.project.findUnique({ where: { id: input.projectId }, select: { canvasInteractionMode: true } }))?.canvasInteractionMode === "canvas";
     const built = await this.contexts.build(input.userId, input.projectId, {
       ...(input.conversationId ? { conversationId: input.conversationId } : {}), referencedNodeIds: input.referencedNodeIds,
-      ...(input.focusNodeIds ? { focusNodeIds: input.focusNodeIds } : {}),
+      ...(focused ? { focusNodeIds: input.referencedNodeIds.length ? input.referencedNodeIds : focusedInputs } : input.focusNodeIds ? { focusNodeIds: input.focusNodeIds } : {}),
     });
     await this.database.$transaction(async (tx) => {
       const graph = await tx.workflowGraph.upsert({ where: { projectId: input.projectId }, create: { projectId: input.projectId }, update: {} });
@@ -64,7 +78,7 @@ export class WorkflowCoordinator {
       await ensureWorkflowNodeVersions(tx, input.projectId, built.graph.revision, built.graph.nodes, built.graph.edges);
     });
     const [visual, profile, versions, attempts, declined] = await Promise.all([
-      this.visual.enrich(input.userId, input.projectId, built.graph.nodes, [...input.referencedNodeIds, ...built.context.focusNodeIds]),
+      this.visual.enrich(input.userId, input.projectId, built.graph.nodes, [...input.referencedNodeIds, ...focusedInputs, ...built.context.focusNodeIds]),
       this.contexts.get(input.userId, input.projectId),
       built.graph.nodes.length ? this.database.$queryRaw<{ id: string; nodeId: string; origin: string; baseline: boolean }[]>(Prisma.sql`
         SELECT DISTINCT ON (node_id) id, node_id AS "nodeId", origin, baseline FROM workflow_node_versions
@@ -78,11 +92,19 @@ export class WorkflowCoordinator {
     for (const version of versions) if (!eligibility[version.nodeId]) eligibility[version.nodeId] = { nodeVersionId: version.id, copiedSnapshot: version.origin === "project_copy" && version.baseline,
       attemptCount: attempts.find((attempt) => attempt.toolNodeId === version.nodeId)?._count ?? 0 };
     const tools = getWorkflowToolCatalog();
+    const canvas = canvasMode ? await readAssistantCanvasContext(this.database, input.userId, input.projectId, input.canvasObservation) : null;
     const integrated = this.integration ? await this.integration.integrate(input.userId, input.projectId, {
       built, ...(input.conversationId ? { conversationId: input.conversationId } : {}), visual, tools, currentStep: input.previousPlan,
+      ...(input.focusCreationId ? { focusCreationId: input.focusCreationId } : {}),
     }) : { context: built.context, slots: undefined };
+    if (focused) {
+      const current = await this.database.canvasCreation.findFirst({ where: { id: focused.id, projectId: input.projectId, removedAt: null }, select: { revision: true } });
+      if (current?.revision !== focused.revision) throw new Error("读取期间创作要求已更新，请重新发送。");
+    }
     const projected = projectPlannerVisualIndex(visual.index);
-    const context = { ...integrated.context, nodes: built.context.nodes.map((node) => ({ ...node, nodeVersionId: eligibility[node.id]?.nodeVersionId ?? null,
+    const context = { ...integrated.context, canvas, focusCreationId: input.focusCreationId ?? null,
+      focusedCreation: focused && focusedDraft ? { id: focused.id, revision: focused.revision, title: focused.title, module: focused.module, draft: focusedDraft, currentResultNodeId: focused.currentResultNodeId } : null,
+      nodes: built.context.nodes.map((node) => ({ ...node, nodeVersionId: eligibility[node.id]?.nodeVersionId ?? null,
       attemptCount: eligibility[node.id]?.attemptCount ?? 0, copiedSnapshot: eligibility[node.id]?.copiedSnapshot ?? false })),
       inactivePreferences: profile.state.preferences.filter((item) => item.status === "inactive"),
       visualIndex: projected.index, visualSummaryCoverage: projected.coverage, visualCoverage: visual.coverage, imageBindings: visual.imageBindings,
@@ -109,7 +131,7 @@ export class WorkflowCoordinator {
       let streamed = "";
       const stream = input.stream; const streamJson = this.model.streamJson?.bind(this.model);
       const generate = stream && streamJson ? (request: Parameters<AmuxClaudeJsonClient["generateJson"]>[0]) => streamJson(request, async ({ text, kind }) => {
-        if (!kind || kind === "read") return;
+        if (!kind || kind === "read" || kind === "canvas") return;
         if (!text.startsWith(streamed)) { await stream.reset(); streamed = ""; }
         const delta = text.slice(streamed.length); streamed = text; if (delta) await stream.delta(delta);
       }) : this.model.generateJson.bind(this.model);
@@ -129,18 +151,24 @@ export class WorkflowCoordinator {
         }
         decision = parsePlannerDecision(await generate({ schemaName: "fashion_workflow_collaboration",
           signal, timeoutMs,
-          instructions: `${canvasMode ? WORKFLOW_PLANNER_INSTRUCTIONS.replace("不执行工具、不采用/否决候选，不声称生成已经发生。建议需用户确认加入画布，生图需再主动执行。", CANVAS_EXECUTION_INSTRUCTIONS) : WORKFLOW_PLANNER_INSTRUCTIONS}\n遵守workflow-planner/2回复协议。后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好，execution.requested=false。`,
-          jsonSchema: z.toJSONSchema(plannerDecisionSchema), maxTokens: 6_000, images: attached.images,
+          instructions: `${canvasMode ? WORKFLOW_PLANNER_INSTRUCTIONS.replace("不执行工具、不采用/否决候选，不声称生成已经发生。建议需用户确认加入画布，生图需再主动执行。", CANVAS_EXECUTION_INSTRUCTIONS) : WORKFLOW_PLANNER_INSTRUCTIONS}\n画布操作使用kind=canvas、canvasAction和逐字完整canvasQuote，action=null、execution.requested=false。只可操作context.canvas中有实际id的对象及已有目标。名称不唯一先澄清；selectedIds是真实选择，bounds/viewport为画布坐标。创建色卡、添加面料、排版、打开面板和连接输入均不生成图片。组合只选同级对象，取消组合只选group；缩放是显示尺寸而非原图像素。连接通过targetCreationId及sourceShapeIds追加，移除使用目标的实际inputIds。一次给出一个明确动作，不能假称已经完成；系统收到画布成功回执后才报告完成。缺少canvas时说明画布未连接，不捏造操作。\n遵守workflow-planner/2回复协议。后台observation只分析实际结果和提出下一步，不修改项目目标、焦点、已确认要求或偏好，execution.requested=false。`,
+          jsonSchema: z.toJSONSchema(activePlannerDecisionSchema), maxTokens: 6_000, images: attached.images,
           prompt: JSON.stringify({ request: input.request, trigger: input.trigger ?? "user", context: { ...projectedContext.context, imageBindings: attached.imageBindings, visualCoverage: attached.coverage },
-            contextSlots: projectedContext.slots, tools, previousPlan: projectedContext.previousPlan ?? null, readResults,
+            contextSlots: projectedContext.slots, tools, canvasTools: canvas ? ASSISTANT_CANVAS_TOOL_CATALOG : [], previousPlan: projectedContext.previousPlan ?? null, readResults,
             imageBindings: attached.imageBindings, visualCoverage: attached.coverage,
-            responseSchema: z.toJSONSchema(plannerDecisionSchema), validationError,
+            responseSchema: z.toJSONSchema(activePlannerDecisionSchema), validationError,
             budget: { remainingCalls: MAX_PLANNER_CALLS - calls, remainingReadRounds: MAX_READ_ROUNDS - readRounds },
             ...(validationError ? { correction: "仅修正所列格式或输入错误；不要增加新的设计要求。" } : {}),
-          }), parse: parsePlannerDecision,
+          }), parse: value => activePlannerDecisionSchema.parse(parsePlannerDecision(value)),
         }));
         remaining();
         parsed = true;
+        if (decision.canvasAction) {
+          if (!canvas || input.trigger === "observation" || !allowsAssistantCanvasAction(input.request, decision.canvasQuote, decision.canvasAction)) throw new Error("没有明确且可执行的画布操作指令");
+          const ids = actionShapeIds(decision.canvasAction);
+          if (ids.some(id => !canvas.objects.some(item => item.id === id))) throw new Error("画布对象不存在或在已读取范围之外，请重新选择并明确引用");
+          if (decision.canvasAction.type !== "open_panel" && ids.some(id => canvas.objects.some(item => item.id === id && (item.locked || item.hidden)))) throw new Error("目标已锁定或隐藏，不能修改");
+        }
         if (decision.kind === "read") {
           await input.stream?.phase("reading");
           if (readRounds >= MAX_READ_ROUNDS || calls >= MAX_PLANNER_CALLS) throw new Error("补读预算已用尽，请根据真实已读信息回答或澄清");
@@ -159,7 +187,8 @@ export class WorkflowCoordinator {
         await input.stream?.phase("validating");
         if ((decision.kind === "propose") !== Boolean(decision.action)) throw new Error("只有propose可以包含action，且propose必须提供action");
         if (decision.action) {
-          const operations = compileWorkflowAction(built.graph, decision.action, [...new Set([...input.referencedNodeIds, ...built.context.focusNodeIds])], eligibility);
+          if (decision.prepareOnly && (input.trigger === "observation" || !canvasMode || !allowsCanvasPreparation(input.request, decision))) throw new Error("只有用户明确要求准备画布时才能创建或修改目标");
+          const operations = decision.prepareOnly ? [] : compileWorkflowAction(built.graph, decision.action, [...new Set([...input.referencedNodeIds, ...built.context.focusNodeIds])], eligibility);
           const operation = operations.find((item) => item.type === "update_node" || item.type === "add_node" && item.node.kind === "tool");
           const parameters = operation?.type === "update_node" ? object(operation.payload).params
             : operation?.type === "add_node" ? object(operation.node.payload).params : decision.action.parameters;

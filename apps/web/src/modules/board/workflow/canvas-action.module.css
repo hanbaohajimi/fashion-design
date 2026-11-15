@@ -1,0 +1,8 @@
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 36px; height: 36px; padding: 0; flex-shrink: 0; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.action svg { width: 18px; height: 18px; flex-shrink: 0; }
+.withText { width: auto; padding-inline: 9px; white-space: nowrap; }
+.action:hover:not(:disabled) { background: var(--surface-1); }
+.action:focus-visible { outline: 2px solid var(--color-action); outline-offset: 2px; }
+.action:disabled { opacity: .4; cursor: default; }
+.action[aria-checked="true"], .action[aria-pressed="true"] { color: var(--color-action); background: var(--surface-1); }
+@media (max-width: 767px), (pointer: coarse) { .action { min-width: 44px; min-height: 44px; } }

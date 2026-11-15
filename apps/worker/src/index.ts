@@ -57,12 +57,8 @@ import {
   S3TrendCoverService,
   TrendDigestProcessor,
 } from "./processors/trend.digest.processor";
-import {
-  createVlmInferenceProcessor,
-  markRoleInferenceFailed,
-} from "./processors/vlm-inference.processor";
+import { retireMaterialPurposeJob } from "./processors/retire-material-purpose.processor";
 import { S3ThumbnailStorage } from "./storage";
-import { AmuxClaudeVlmClassifier } from "./vlm-classifier";
 import { AmuxClaudeContentModerationService } from "./content-moderation.service";
 import { captureWorkerException, flushWorkerSentry } from "./sentry.config";
 import {
@@ -130,11 +126,6 @@ const processThumbnail = createThumbnailProcessor({
   storage,
   visualSummaryJobs,
 });
-const processRoleInference = createVlmInferenceProcessor({
-  classifier: new AmuxClaudeVlmClassifier(amuxClaude),
-  database: prisma,
-  storage,
-});
 const collectionSimilarityQueue = new Queue<CollectionSimilarityJobData>(
   COLLECTION_SIMILARITY_QUEUE_NAME,
   { connection: redisConnection() },
@@ -191,7 +182,7 @@ const visualSummaryWorker = new Worker<VisualSummaryJobData>(VISUAL_SUMMARY_QUEU
   { concurrency: 2, connection: redisConnection(), lockDuration: 120_000, maxStalledCount: 1 });
 const inferenceWorker = new Worker<VlmInferenceJobData>(
   VLM_INFERENCE_QUEUE_NAME,
-  async (job) => processRoleInference(job.data),
+  async (job) => retireMaterialPurposeJob(prisma, job.data),
   {
     concurrency: 2,
     connection: redisConnection(),
@@ -359,7 +350,7 @@ inferenceWorker.on("failed", (job, error) => {
     queue: "vlm-inference",
   });
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-    void markRoleInferenceFailed(prisma, job.data).catch((fallbackError) => {
+    void retireMaterialPurposeJob(prisma, job.data).catch((fallbackError) => {
       console.error("角色推断最终回退状态写入失败：", fallbackError);
       captureWorkerException(fallbackError, {
         phase: "fallback",

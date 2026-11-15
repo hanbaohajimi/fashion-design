@@ -102,7 +102,7 @@ it("opens the dedicated generation flow without dispatching from the library", (
   const values = props();
   vi.stubGlobal("fetch", vi.fn());
   render(<PresentationSets {...values} />);
-  fireEvent.click(screen.getByRole("button", { name: "生成展示候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "生成展示图" }));
   expect(values.onGenerate).toHaveBeenCalledTimes(1);
   expect(fetch).not.toHaveBeenCalled();
 });

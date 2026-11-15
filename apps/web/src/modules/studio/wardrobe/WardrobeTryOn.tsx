@@ -13,10 +13,11 @@ import { useRealtimeOutfit } from "./use-realtime-outfit";
 import { addWardrobeResultToCanvas, uploadWardrobeModel } from "./wardrobe-assets";
 import styles from "./wardrobe.module.css";
 
-export function WardrobeTryOn({ projectId, assets, data, snapshot, draft, revisions, dirty, canEdit, onChanged, onDirty }: {
+export function WardrobeTryOn({ projectId, assets, data, snapshot, draft, revisions, dirty, canEdit, onChanged, onDirty, active = true }: {
   projectId: string; assets: StudioSummary["assets"]; data: WardrobeSummary; snapshot: OutfitSnapshotView | null;
   dirty: boolean; canEdit: boolean; onChanged: () => Promise<void>; onDirty: (value: boolean) => void;
   draft: OutfitDraft; revisions: Map<string, WardrobeRevisionView>;
+  active?: boolean;
 }) {
   const [mode, setMode] = useState<"model" | "self">("model");
   const [captureDirty, setCaptureDirty] = useState(false);
@@ -37,7 +38,7 @@ export function WardrobeTryOn({ projectId, assets, data, snapshot, draft, revisi
   };
   useEffect(() => () => upload.current?.abort(), []);
   const requestKey = (signature: string) => { if (packet.current?.signature !== signature) packet.current = { signature, key: crypto.randomUUID() }; return packet.current.key; };
-  const realtime = useRealtimeOutfit({ projectId, draft, revisions, base: snapshot, capabilities: data.capabilities, enabled: mode === "self" && canEdit });
+  const realtime = useRealtimeOutfit({ projectId, draft, revisions, base: snapshot, capabilities: data.capabilities, enabled: active && mode === "self" && canEdit });
   const run = async (action: () => Promise<void>) => {
     if (locked.current || !canEdit) return;
     locked.current = true; setBusy(true); setError(null);
@@ -61,7 +62,7 @@ export function WardrobeTryOn({ projectId, assets, data, snapshot, draft, revisi
       })}>{history.length ? "更新试穿" : "确认生成模特试衣图"}</Button>
     </> : <>
       {realtime.error ? <Notice tone="error">搭配参考更新失败：{realtime.error}<Button onClick={realtime.retry}>重试搭配更新</Button></Notice> : null}
-      <RealtimeTryOnPanel projectId={projectId} assets={assets} canEdit={canEdit} embedded outfitSnapshot={realtime.snapshot} outfitUpdating={realtime.updating} wardrobeCapabilities={data.capabilities} onSaved={onChanged} onDirty={handleCaptureDirty} />
+      <RealtimeTryOnPanel projectId={projectId} assets={assets} canEdit={canEdit} active={active} embedded outfitSnapshot={realtime.snapshot} outfitUpdating={realtime.updating} wardrobeCapabilities={data.capabilities} onSaved={onChanged} onDirty={handleCaptureDirty} />
     </>}
     {history.length ? <section className={styles.history} aria-label="模特试衣历史"><h3>模特试衣历史</h3>{history.map(task => {
       const version = snapshotById.get(task.snapshotId);

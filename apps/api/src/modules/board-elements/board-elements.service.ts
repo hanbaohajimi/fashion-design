@@ -190,10 +190,6 @@ export class BoardElementsService {
       sketchMeta.sketchDirty !== false ||
       sketchMeta.sketchFingerprint !== input.fingerprint ||
       sketchProps?.fileId !== input.fileId ||
-      sketchProps.role !== "silhouette_ref" ||
-      sketchProps.roleSource !== "manual" ||
-      sketchProps.roleInferenceState !== "ready" ||
-      sketchProps.roleLabel !== "fashion_sketch" ||
       typeof sketchProps.url !== "string" ||
       sketchProps.url.length === 0
     ) {
@@ -209,10 +205,8 @@ export class BoardElementsService {
         fileAssetId: input.fileId,
         projectId,
         record,
-        role: "silhouette_ref",
-        roleInferenceState: RoleInferenceState.READY,
-        roleLabel: "fashion_sketch",
-        roleSource: RoleSource.MANUAL,
+        role: "reference",
+        roleInferenceState: RoleInferenceState.NONE,
         shapeId,
         shapeType: "fashion-image",
       },
@@ -220,11 +214,11 @@ export class BoardElementsService {
         deletedAt: null,
         fileAssetId: input.fileId,
         record,
-        role: "silhouette_ref",
+        role: "reference",
         roleConfidence: null,
-        roleInferenceState: RoleInferenceState.READY,
-        roleLabel: "fashion_sketch",
-        roleSource: RoleSource.MANUAL,
+        roleInferenceState: RoleInferenceState.NONE,
+        roleLabel: null,
+        roleSource: RoleSource.DEFAULT,
         shapeType: "fashion-image",
       },
     });

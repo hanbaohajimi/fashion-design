@@ -102,7 +102,21 @@ export function useConversationViewport(conversationId: string) {
       },
       onPointerUp: () => { if (readingPointer.current) scrollIntentUntil.current = performance.now() + 1200; readingPointer.current = false; },
       onPointerCancel: () => { scrollIntentUntil.current = 0; },
-      onKeyDown: (event: React.KeyboardEvent) => { if (!["PageUp", "PageDown", "ArrowUp", "ArrowDown", "Home", "End", " "].includes(event.key)) return; interrupt(); if (["PageUp", "ArrowUp", "Home"].includes(event.key)) followMessages.current = false; },
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.defaultPrevented || event.nativeEvent.isComposing || !["PageUp", "PageDown", "ArrowUp", "ArrowDown", "Home", "End", " "].includes(event.key)) return;
+        if (event.target !== event.currentTarget && (event.target as Element).closest("button,a,input,textarea,summary,select")) return;
+        interrupt();
+        if (["PageUp", "ArrowUp", "Home"].includes(event.key)) followMessages.current = false;
+        // Native Home/End can target the document when the reader is in a non-modal dialog.
+        if ((event.key === "Home" || event.key === "End") && conversationView.current) {
+          event.preventDefault();
+          const end = event.key === "End";
+          followMessages.current = end;
+          conversationView.current.scrollTop = end ? conversationView.current.scrollHeight : 0;
+          setAwayFromLatest(!end);
+          if (end) { readingAnchor.current = null; setNewMessages(false); } else capture();
+        }
+      },
       onScroll: () => {
         if (frame.current || scrollWrite.current || performance.now() > scrollIntentUntil.current) return;
         const view = conversationView.current;

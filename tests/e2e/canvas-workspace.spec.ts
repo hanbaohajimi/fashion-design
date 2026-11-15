@@ -8,7 +8,8 @@ import type {
 } from "../../packages/shared/src/canvas-workspace";
 import type { WorkflowGraph } from "../../apps/web/src/modules/board/workflow/workflow-api";
 
-test("自由白板保留外壳、选择引用、整理容器与只读流程", async ({ page, context }) => {
+test("自由白板保持选择与引用独立、整理容器与只读流程", async ({ page, context }) => {
+  test.setTimeout(90_000);
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await seedVisualApp(page);
   await page.clock.setSystemTime(new Date(NOW));
@@ -56,6 +57,14 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   };
   const commands: CanvasCommand[] = [];
   const saves: CanvasSave[] = [];
+  const assistantRequests: string[] = [];
+  page.on("request", request => {
+    const path = new URL(request.url()).pathname;
+    const assistantRequest = /\/api\/(?:generations(?:\/|$)|agent-conversations\/[^/]+\/(?:messages|workflow-messages|chat|message-streams)(?:\/|$))/u.test(path);
+    if (request.method() === "POST" && assistantRequest) {
+      assistantRequests.push(path);
+    }
+  });
   let graphWrites = 0;
   await page.route(`**/api/projects/${PROJECT}/workflow**`, (route) => {
     if (route.request().method() === "PATCH") graphWrites++;
@@ -128,9 +137,15 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
     bounds.x + bounds.width / 2,
     bounds.y + bounds.height / 2,
   );
-  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText(
-    "藏蓝通勤外套",
-  );
+  const references = page.getByLabel("正在讨论", { exact: true }).locator("[data-assistant-reference-id]");
+  await expect(page.getByRole("toolbar", { name: "所选对象操作", exact: true })).toBeVisible();
+  await expect(references).toHaveCount(0);
+  await page.getByRole("button", { name: "取消选择", exact: true }).click();
+  await expect(references).toHaveCount(0);
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.getByRole("button", { name: "引用到助手", exact: true }).click();
+  await expect(references).toHaveCount(1);
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("藏蓝通勤外套");
   const beforeDrag = saves.length;
   await page.mouse.move(bounds.x + bounds.width / 2 + 30, bounds.y + bounds.height / 2 + 30);
   await page.mouse.down();
@@ -138,6 +153,7 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await page.mouse.up();
   await expect.poll(async () => (await image.boundingBox())?.x).not.toBe(bounds.x);
   await expect.poll(() => saves.length).toBeGreaterThan(beforeDrag);
+  await expect(references).toHaveCount(1);
   expect(commands).toHaveLength(0);
   await page.evaluate(() => navigator.clipboard.writeText(""));
   await page.keyboard.press("Control+c");
@@ -155,13 +171,19 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await page.keyboard.press("Control+v");
   await expect(image).toHaveCount(2);
   await expect.poll(() => document.bindings.filter(binding => binding.nodeId === "candidate" && !binding.removed).length).toBe(2);
+  await expect(references).toHaveCount(1);
   expect(commands).toHaveLength(0);
   await page.getByLabel("正在讨论", { exact: true }).getByRole("button", { name: /移除/ }).click();
+  await expect(references).toHaveCount(0);
   const copiedBounds = await image.last().boundingBox();
   if (!copiedBounds) throw new Error("复制的图片不可见");
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
   await page.mouse.click(copiedBounds.x + copiedBounds.width / 2, copiedBounds.y + copiedBounds.height / 2);
+  await expect(references).toHaveCount(0);
+  await page.getByRole("button", { name: "引用到助手", exact: true }).click();
+  await expect(references).toHaveCount(1);
   await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("藏蓝通勤外套");
+  await page.getByRole("button", { name: "选择工具", exact: true }).click();
   await page.keyboard.press("Control+a");
   await page.getByRole("button", { name: "分组", exact: true }).click();
   await expect.poll(() => Object.values((document.snapshot.document as { store?: Record<string, { type?: string }> } | undefined)?.store ?? {}).some(record => record.type === "group")).toBe(true);
@@ -172,8 +194,8 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await expect.poll(() => commands.length).toBe(1);
   await expect.poll(() => saves.length).toBeGreaterThan(0);
   const nodeCount = graph.nodes.length;
-  await expect(page.getByRole("button", { name: "分组", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "解除分组", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "分组", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "解除分组", exact: true })).toHaveCount(0);
   expect(graph.nodes).toHaveLength(nodeCount);
   expect(graph.edges).toHaveLength(0);
   await page.getByRole("button", { name: "流程画布", exact: true }).click();
@@ -201,13 +223,17 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await expect(page.getByRole("textbox", { name: "备注内容", exact: true })).toBeInViewport();
   const noteBounds = await page.getByRole("textbox", { name: "备注内容", exact: true }).boundingBox();
   if (!noteBounds) throw new Error("流程返回后便签丢失");
+  const beforeNoteMove = saves.length;
   await page.mouse.move(noteBounds.x - 12, noteBounds.y + 16);
   await page.mouse.down();
   await page.mouse.move(noteBounds.x + 388, noteBounds.y + 16, { steps: 8 });
   await page.mouse.up();
+  await expect.poll(() => saves.length).toBeGreaterThan(beforeNoteMove);
+  await expect.poll(() => JSON.stringify(document.snapshot)).toContain("探索通勤外套的廓形");
   await canvasAction(page, "查看全图");
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText("已保存");
+  // Successful autosaves are silent; verify the persisted snapshot and cleared pending status.
+  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveCount(0);
   await page.mouse.move(190, 110);
   await page.screenshot({
     path: "output/playwright/canvas-workspace.png",
@@ -220,7 +246,7 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await page.mouse.move(5, 350);
   await page.screenshot({ path: "output/playwright/canvas-workspace-mobile.png", fullPage: true });
   expect(errors).toEqual([]);
-  // A large selection is rejected as a whole, with no silent truncation or model call.
+  // Selection alone preserves references; exceeding the limit disables the explicit action.
   const beforeLimit = commands.length;
   const extras: WorkflowGraph["nodes"] = Array.from({ length: 17 }, (_, index) => ({ id: `extra-${index}`, kind: "asset", type: "reference_text", title: `参考 ${index}`, payload: { text: `参考 ${index}` }, status: "ready", x: 0, y: 0, createdAt: NOW, updatedAt: NOW }));
   graph = { ...graph, nodes: [...graph.nodes, ...extras] };
@@ -230,10 +256,14 @@ test("自由白板保留外壳、选择引用、整理容器与只读流程", as
   await canvasAction(page, "查看全图");
   const firstImage = image.first();
   await expect(firstImage).toBeVisible();
+  await expect(references).toHaveCount(1);
   // A note can legitimately overlap an image. Focus the canvas tool instead of
   // clicking through the note's textarea, where Ctrl+A selects its text.
   await page.getByRole("button", { name: "选择工具", exact: true }).click();
   await page.keyboard.press("Control+a");
-  await expect(page.getByRole("alert").filter({ hasText: "每次最多引用 16 项" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "引用到助手", exact: true })).toBeDisabled();
+  await expect(references).toHaveCount(1);
+  await expect(page.getByRole("alert").filter({ hasText: "每次最多引用 16 项" })).toHaveCount(0);
   expect(commands).toHaveLength(beforeLimit);
+  expect(assistantRequests).toEqual([]);
 });

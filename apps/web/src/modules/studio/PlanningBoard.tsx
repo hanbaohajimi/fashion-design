@@ -4,7 +4,7 @@ import { useSubmitFeedback } from "../../components/interactions/use-submit-feed
 
 /* refactoring-ui §2.1/§2.8/§3.3：主要内容为真实款式位置与当前编辑对象；状态统计和历史为次级。保存为主操作，网格不引入排序行为。 */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   StudioDocumentInput,
   StudioDocumentView,
@@ -27,6 +27,9 @@ import styles from "./studio.module.css";
 import { StudioEditSection } from "./StudioEditSection";
 import { StudioPageHeader } from "./StudioPageHeader";
 import { StudioCount } from "./StudioCount";
+import { useDraftScope } from "../../components/drafts/use-persistent-draft";
+import { planningDraftKey } from "./planning-drafts";
+import { mergeSavedRecords } from "./studio-records";
 
 type Slot = Extract<
   StudioDocumentInput,
@@ -41,7 +44,7 @@ const states = {
 };
 
 export function PlanningBoard(
-  props: StudioPanelProps & { readonly data: StudioSummary },
+  props: StudioPanelProps & { readonly data: StudioSummary; readonly collectionId?: string },
 ) {
   const feedback = useSubmitFeedback();
   const beforeChange = async () => {
@@ -49,18 +52,30 @@ export function PlanningBoard(
     if (allowed) feedback.reset();
     return allowed;
   };
-  const [id, setId] = useState<string | null>(props.data.slots[0]?.id ?? null);
+  const [savedSlots, setSavedSlots] = useState<StudioDocumentView[]>([]);
+  const slots = mergeSavedRecords(props.data.slots, savedSlots);
+  const [id, setId] = useState<string | null>(() => props.data.slots.find((slot) =>
+    !props.collectionId || (slot.currentRevision.payload as Slot).collectionId === props.collectionId,
+  )?.id ?? null);
   const [draftVersion, setDraftVersion] = useState(0);
   const [creating, setCreating] = useState(false);
-  const [collectionId, setCollectionId] = useState(
+  const [localCollectionId, setCollectionId] = useState(
     (props.data.slots[0]?.currentRevision.payload as Slot | undefined)
       ?.collectionId ??
       props.data.collections[0]?.id ??
       "",
   );
+  const collectionId = props.collectionId ?? localCollectionId;
   const [editorOpen, setEditorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const existing = props.data.slots.find((slot) => slot.id === id);
+  const existing = slots.find((slot) => slot.id === id &&
+    (slot.currentRevision.payload as Slot).collectionId === collectionId);
+  const acceptSaved = (document: StudioDocumentView) => {
+    setSavedSlots((current) => mergeSavedRecords(current, [document]));
+    props.onDocumentSaved?.(document);
+    if ((document.currentRevision.payload as Slot).collectionId === collectionId) setId(document.id);
+    else { setId(null); setEditorOpen(false); }
+  };
   const closeEditor = () => {
     setEditorOpen(false);
     requestAnimationFrame(() =>
@@ -73,11 +88,11 @@ export function PlanningBoard(
     <div className={styles.section}>
       <StudioPageHeader
         title={
-          props.data.collections.find(
+          props.collectionId ? "款式规划" : props.data.collections.find(
             (collection) => collection.id === collectionId,
           )?.name ?? "建立设计系列"
         }
-        type="系列规划"
+        {...(!props.collectionId ? { type: "款式规划" } : {})}
         description="安排款式位置，查看系列中的角色与进度"
         actions={
           <Button
@@ -102,7 +117,7 @@ export function PlanningBoard(
             <div key={value}>
               <strong>
                 <StudioCount value={
-                  props.data.slots.filter(
+                  slots.filter(
                     (slot) =>
                       (slot.currentRevision.payload as Slot).status === value &&
                       (!collectionId ||
@@ -159,7 +174,7 @@ export function PlanningBoard(
         className={styles.planningWorkspace}
         data-editing={editorOpen || undefined}
       >
-        {props.data.collections.length > 1 ? (
+        {!props.collectionId && props.data.collections.length > 1 ? (
           <Field label="当前系列">
             <Select searchable
               value={collectionId}
@@ -169,7 +184,7 @@ export function PlanningBoard(
                   if (await beforeChange()) {
                     setCollectionId(value);
                     setId(
-                      props.data.slots.find(
+                      slots.find(
                         (slot) =>
                           (slot.currentRevision.payload as Slot)
                             .collectionId === value,
@@ -189,7 +204,7 @@ export function PlanningBoard(
           </Field>
         ) : null}
         <aside className={styles.planningGrid} aria-label="系列款式位置">
-          {props.data.slots
+          {slots
             .filter(
               (slot) =>
                 !collectionId ||
@@ -263,7 +278,7 @@ export function PlanningBoard(
             >
               关闭位置编辑
             </Button>
-            <SlotEditor
+            <PlanningSlotEditor
               key={
                 (existing?.id ?? "new") +
                 ":" +
@@ -272,10 +287,10 @@ export function PlanningBoard(
                 draftVersion
               }
               {...props}
-          feedback={feedback}
-          beforeChange={beforeChange}
+              feedback={feedback}
+              beforeChange={beforeChange}
               existing={existing}
-              onCreated={setId}
+              onDocumentSaved={acceptSaved}
               collectionId={collectionId}
             />
           </section>
@@ -290,6 +305,30 @@ export function PlanningBoard(
   );
 }
 
+type SlotEditorProps = StudioPanelProps & {
+  readonly data: StudioSummary;
+  readonly existing: StudioDocumentView | undefined;
+  readonly collectionId: string;
+};
+
+function PlanningSlotEditor(props: SlotEditorProps) {
+  const scope = useDraftScope();
+  const [draftKey, setDraftKey] = useState(props.existing?.id ?? "");
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (props.existing) return;
+    let active = true;
+    void planningDraftKey(scope, props.collectionId).then((key) => {
+      if (active) { setDraftKey(key); setError(false); }
+    }).catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [scope, props.collectionId, props.existing, retry]);
+  if (error) return <Notice tone="error">本机规划草稿读取失败，当前草稿仍保留。<Button onClick={() => setRetry((value) => value + 1)}>重试读取草稿</Button></Notice>;
+  if (!draftKey) return <p role="status">正在读取规划草稿…</p>;
+  return <SlotEditor {...props} draftKey={draftKey} />;
+}
+
 function SlotEditor({
   projectId,
   data,
@@ -299,14 +338,10 @@ function SlotEditor({
   onSaved,
   beforeChange,
   feedback,
-  onCreated,
+  onDocumentSaved,
   collectionId,
-}: StudioPanelProps & {
-  readonly data: StudioSummary;
-  readonly existing: StudioDocumentView | undefined;
-  readonly onCreated: (id: string) => void;
-  readonly collectionId: string;
-}) {
+  draftKey,
+}: SlotEditorProps & { readonly draftKey: string }) {
   const initial: Slot = existing
     ? (existing.currentRevision.payload as Slot)
     : {
@@ -317,25 +352,24 @@ function SlotEditor({
         status: "PLANNED",
         notes: "",
       };
-  const form = useStudioForm(initial, onDirty, { feedback, draftKey: existing?.id ?? "new" });
+  const form = useStudioForm(initial, onDirty, { feedback, draftKey });
   const { draft, setDraft } = form;
   const update = <K extends keyof Slot>(key: K, value: Slot[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const save = async () => {
-    let id = "";
+    let saved: StudioDocumentView | undefined;
     if (
       await form.submit(async (key) => {
-        const saved = await saveStudioDocument(
+        saved = await saveStudioDocument(
           projectId,
           { type: "COLLECTION_SLOT", payload: draft },
           key,
           existing,
         );
-        id = saved.id;
       })
     ) {
+      if (saved && form.isMounted()) onDocumentSaved?.(saved);
       await onSaved();
-      onCreated(id);
     }
   };
   return (

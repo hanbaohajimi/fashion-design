@@ -207,7 +207,7 @@ export function AssetPicker({
         )
       ) : (
         <p className={styles.note}>
-          还没有设计图片。先从任务入口上传草图或在画布生成候选。
+          还没有设计图片。先从任务入口上传草图或在画布生成图片。
         </p>
       )}
       {limit ? (

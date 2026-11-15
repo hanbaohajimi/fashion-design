@@ -266,7 +266,7 @@ export function ProposalReview({
           这条旧确认缺少可核实的执行关联，可查看任务记录，或发送新需求继续。
         </p>
       ) : null}
-      {execution?.progress && projectId ? (
+      {execution?.progress && projectId && !onRevealResult ? (
         <AssistantExecutionStatus
           key={execution.progress.executionId}
           progress={execution.progress}

@@ -46,7 +46,6 @@ export function ImageViewer({
   onFrame,
   crop,
   onCrop,
-  onZoomPreview,
   previousUrl,
   nextUrl,
   onNavigate,
@@ -90,7 +89,6 @@ export function ImageViewer({
     | undefined;
   crop?: ImageRect | undefined;
   onCrop?: ((crop: ImageRect) => void) | undefined;
-  onZoomPreview?: ((percent: number | null) => void) | undefined;
   previousUrl?: string | undefined;
   nextUrl?: string | undefined;
   onNavigate?: ((direction: -1 | 1) => void) | undefined;
@@ -108,11 +106,11 @@ export function ImageViewer({
 }) {
   const adjustmentId = `image-adjust-${useId()}`;
   const geometryHintId = useId();
+  const viewHintId = useId();
   const adjusted = adjustments && hasImageAdjustments(adjustments);
   const host = useRef<HTMLDivElement>(null);
   const media = useRef<HTMLDivElement>(null);
   const frameElement = useRef<HTMLDivElement>(null);
-  const readout = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState<ImageSize>({ width: 768, height: 1024 });
   const [bounds, setBounds] = useState({ width: 800, height: 600 });
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -146,7 +144,7 @@ export function ImageViewer({
     1,
   );
   const scale = zoom === null ? Math.max(0.01, fit) : zoom / 100;
-  const viewport = useImageViewport({ enabled: mode === "view" || mode === "orient" || mode === "adjust" || mode === "text_edit", url, scale, fit: Math.max(.01, fit), size: display, bounds, host, frame: frameElement, readout, onCommit: (next, nextPan, fitted) => { setPan({ x: nextPan.x, y: nextPan.y }); onZoom(fitted ? null : next * 100); }, onPreview: onZoomPreview, previous: Boolean(previousUrl), next: Boolean(nextUrl), onNavigate });
+  const viewport = useImageViewport({ enabled: mode === "view" || mode === "orient" || mode === "adjust" || mode === "text_edit", url, scale, fit: Math.max(.01, fit), size: display, bounds, host, frame: frameElement, onCommit: (next, nextPan, fitted) => { setPan({ x: nextPan.x, y: nextPan.y }); onZoom(fitted ? null : next * 100); }, previous: Boolean(previousUrl), next: Boolean(nextUrl), onNavigate });
   useEffect(() => {
     const element = host.current;
     if (!element) return;
@@ -183,12 +181,22 @@ export function ImageViewer({
       className={styles.viewport}
       ref={host}
       aria-label="图片查看区域"
+      tabIndex={0}
+      aria-keyshortcuts="F"
+      aria-describedby={viewHintId}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget || event.nativeEvent.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.key.toLowerCase() !== "f" || dragCleanup.current || overlayInteracting.current) return;
+        event.preventDefault(); event.stopPropagation();
+        if (["view", "orient", "adjust", "text_edit"].includes(mode)) viewport.fit();
+        else { onZoom(null); setPan({ x: 0, y: 0 }); }
+      }}
       onPointerDownCapture={event => {
         const input = document.activeElement;
         if ((frame || crop) && event.button === 0 && !dragCleanup.current && input instanceof HTMLInputElement && input.type === "number" && input.closest('[role="dialog"]') === event.currentTarget.closest('[role="dialog"]')) {
           // Commit the numeric field before the bubbling drag reads its starting frame.
           flushSync(() => input.blur());
         }
+        if (event.button === 0 && !(event.target instanceof Element && event.target.closest("button,input,textarea,select,a,[contenteditable]"))) event.currentTarget.focus({ preventScroll: true });
       }}
       onDoubleClick={(event) => { if (!overlayInteracting.current && !(event.target instanceof Element && event.target.closest("button"))) viewport.onDoubleClick(event); }}
       onWheel={(event) => {
@@ -549,17 +557,8 @@ export function ImageViewer({
           />
         ) : null}
       </div>
+      <span className={styles.srOnly} id={viewHintId}>滚轮或双指缩放；浏览时双击切换细节与全图；聚焦图片后按 F 恢复全图。</span>
       {frame ? <span className={styles.srOnly} id={geometryHintId}>方向键微调，Shift 加快；拖动时按 Escape 撤回。</span> : null}
-      <button
-        className={styles.fit}
-        onClick={() => {
-          if (mode === "view") { viewport.fit(); return; }
-          onZoom(null);
-          setPan({ x: 0, y: 0 });
-        }}
-      >
-        适合窗口 <span ref={readout}>{`${Math.round(scale * 100)}%`}</span>
-      </button>
       {previewLabel ? <span className={styles.previewStatus}>{previewLabel}</span> : null}
       {error ? (
         <div className={styles.loadError} role="alert">

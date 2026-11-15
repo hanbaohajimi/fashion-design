@@ -207,7 +207,7 @@ export function AgentNodeRationalePanel({
           </section>
         ) : null}
         <p className={styles.caveat}>
-          这是本步的规划依据，结果是否符合由实际候选与人工选择确认。
+          这是本步的规划依据，结果是否符合由实际图片与人工选择确认。
         </p>
       </div>
     </GridDetails>
@@ -268,7 +268,7 @@ export function CandidateAgentCheck({
         <ActionStatus action={action} />
       ) : (
         <p className={styles.caveat}>
-          按设计条件检查这张候选，供你决定是否采用。
+          按设计条件检查这张图片，供你决定是否采用。
         </p>
       )}
       {evaluation ? (

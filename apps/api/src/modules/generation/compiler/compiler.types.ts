@@ -7,6 +7,7 @@ export interface ImageReference {
   readonly elementId: string;
   readonly imageUrl: string;
   readonly labels: readonly string[];
+  readonly order?: number;
 }
 
 export interface FabricReference extends ImageReference {
@@ -52,6 +53,8 @@ export interface SilhouetteReference {
 }
 
 export interface CompiledGenInput {
+  readonly referencePolicy?: "instruction";
+  readonly orderedReferences?: readonly ImageReference[];
   readonly sources?: readonly DesignSourceSnapshot[];
   readonly version: 1;
   readonly mode: "text_only" | "board_guided";

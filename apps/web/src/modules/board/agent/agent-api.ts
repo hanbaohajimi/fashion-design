@@ -59,12 +59,13 @@ export interface WorkflowConversationContext {
 }
 
 export type WorkflowMessageView = Omit<AgentMessageView, "context"> & {
-  readonly kind?: "reply" | "clarify" | "propose" | null;
+  readonly conversationId?: string;
+  readonly kind?: "reply" | "clarify" | "propose" | "executing" | null;
   readonly proposal?: WorkflowProposal | null;
-  readonly origin?: "user" | "execution_result" | "background_analysis";
+  readonly origin?: "user" | "execution_result" | "background_analysis" | "creative_activity";
   readonly executionId?: string | null;
   readonly sourceEventId?: string | null;
-  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary; readonly executionProgress?: WorkflowExecutionProgress; readonly executionResult?: WorkflowExecutionResult; readonly executionReceipt?: { readonly status: string; readonly nodeId: string | null }; readonly referenceSnapshots?: readonly { readonly nodeId: string; readonly nodeVersionId: string; readonly assetId: string | null }[] }) | null;
+  readonly context: (Omit<Partial<WorkflowConversationContext>, "focusNodeIds"> & { readonly canvasAction?: import("@fashion/shared").AssistantCanvasEnvelope; readonly canvasActionResult?: import("@fashion/shared").AssistantCanvasResult; readonly focusCreationId?: string; readonly focusCreationRevision?: number; readonly creationActivity?: CreationActivity; readonly focusNodeIds?: readonly string[] | null; readonly referencedNodeIds?: readonly string[]; readonly respondingToProposalId?: string | null; readonly referenceSummary?: WorkflowReferenceSummary; readonly executionProgress?: WorkflowExecutionProgress; readonly executionResult?: WorkflowExecutionResult; readonly executionReceipt?: { readonly status: string; readonly nodeId: string | null }; readonly referenceSnapshots?: readonly { readonly nodeId: string; readonly nodeVersionId: string; readonly assetId: string | null }[] }) | null;
 };
 
 interface CursorPage<T> {
@@ -230,6 +231,9 @@ export function sendWorkflowMessage(
     readonly content: string;
     readonly referencedNodeIds: readonly string[];
     readonly focusNodeIds?: readonly string[];
+    readonly focusCreationId?: string;
+    readonly focusCreationRevision?: number;
+    readonly canvasObservation?: import("@fashion/shared").AssistantCanvasObservation;
     readonly respondingToProposalId?: string;
   },
   onEvent?: AssistantEventHandler,
@@ -515,3 +519,4 @@ export async function cancelAssistantReply(conversationId: string, requestId: st
   if (!response.ok) throw new Error("停止结果尚未确认，请读取消息状态后重试");
   return response.json() as Promise<{ status: string; messageId: string }>;
 }
+import type { CreationActivity } from "@fashion/shared";

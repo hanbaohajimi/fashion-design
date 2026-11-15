@@ -12,3 +12,61 @@
 .overlay[data-inline="false"] { width: min(384px, calc(100vw - 32px)); height: calc(100dvh - 32px); max-height: none; margin: 16px 16px 16px auto; padding: 0; border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-ink); background: var(--color-paper); overflow: visible; }
 .overlay[data-inline="false"] > aside { position: relative !important; inset: auto !important; width: 100% !important; height: 100% !important; max-height: none; box-shadow: none; }
 .overlay::backdrop { background: var(--color-scrim-soft); }
+
+.root[data-assistant-window] { position: relative; }
+.overlay[data-floating="true"] {
+  position: absolute;
+  inset: var(--assistant-y, 16px) auto auto var(--assistant-x, 16px);
+  width: var(--assistant-width, 400px);
+  height: var(--assistant-height, 640px);
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-panel-v3);
+  overflow: visible;
+  z-index: 30;
+}
+.overlay[data-floating="true"][open] { display: flex !important; }
+.overlay[data-floating="true"]:not([open]) { display: none !important; }
+.overlay[data-floating="true"] > aside {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: inherit;
+}
+.overlay[data-adjusting] { user-select: none; }
+.root[data-assistant-window="mobile"] .overlay > aside {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.windowHandle { position: absolute; z-index: 2; touch-action: none; }
+.windowHandle:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; border-radius: 4px; }
+.windowHandle[data-edge="n"], .windowHandle[data-edge="s"] { left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
+.windowHandle[data-edge="n"] { top: -4px; }
+.windowHandle[data-edge="s"] { bottom: -4px; }
+.windowHandle[data-edge="e"], .windowHandle[data-edge="w"] { top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
+.windowHandle[data-edge="e"] { right: -4px; }
+.windowHandle[data-edge="w"] { left: -4px; }
+.windowHandle[data-edge="ne"], .windowHandle[data-edge="nw"], .windowHandle[data-edge="se"], .windowHandle[data-edge="sw"] { width: 16px; height: 16px; }
+.windowHandle[data-edge="ne"] { top: -4px; right: -4px; cursor: nesw-resize; }
+.windowHandle[data-edge="nw"] { top: -4px; left: -4px; cursor: nwse-resize; }
+.windowHandle[data-edge="se"] { bottom: -4px; right: -4px; cursor: nwse-resize; }
+.windowHandle[data-edge="sw"] { bottom: -4px; left: -4px; cursor: nesw-resize; }
+@media (pointer: coarse) {
+  .windowHandle[data-edge="se"] { width: 44px; height: 44px; right: -12px; bottom: -12px; }
+}

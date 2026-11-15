@@ -141,6 +141,7 @@ export async function assistantResultsFixture(
     }),
   );
   await page.route(`**/api/projects/${PROJECT}/canvas**`, (route) => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: options.canEdit ?? true } });
     if (route.request().method() === "PATCH") {
       const save = route.request().postDataJSON() as CanvasSave;
       document = {

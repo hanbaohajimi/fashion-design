@@ -122,7 +122,7 @@ function GeneratedFilesContent({ projectId, accountId, onClose, onLocate, canPla
     }}>查看已放入的{file.domain === "runway" ? "媒体" : "版本"}</button> : canPlace && ((file.domain === "asset" && file.kind === "image") || (file.domain === "runway" && ["video", "audio"].includes(file.kind))) && !isPlaced?.(file.resourceId, file.domain as "asset" | "runway") ? <button type="button" disabled={!placement.ready || placementPreparing || placement.busy || Boolean(placement.pending) || file.status !== "ready"} onClick={() => void place(file)}>{file.domain === "asset" && file.archived ? "以新版本放入画布" : "放入画布"}</button> : null}
     {file.sourceHref ? <a href={file.sourceHref} onClick={close}>{expired(file) ? "回到来源重新导出" : "查看来源"}</a> : null}
   </div>;
-  return <Dialog label="生成文件" onClose={() => selected ? back() : close()} returnFocusSelector="[data-canvas-chrome] summary" className={styles.dialog}>
+  return <Dialog label="生成文件" onClose={() => selected ? back() : close()} returnFocusSelector='[data-guide="workspace-functions"]' className={styles.dialog}>
     <div className={styles.shell} data-generated-files>
       <header className={styles.header}><div><h2>生成文件</h2><p>项目中的图片、媒体和导出记录</p></div><button type="button" aria-label="关闭生成文件" onClick={close}><WorkspaceIcon name="close" /></button></header>
       {placement.pending || placement.error || placementError || placementPreparing || placedNode ? <section className={styles.placement} aria-label="文件放置状态">

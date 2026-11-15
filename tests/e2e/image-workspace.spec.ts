@@ -1,3 +1,4 @@
+import { imageScale, zoomImageToDetail } from "./image-workspace-controls";
 import { seedNodeInteraction } from "./node-stage-fixture";
 import { chooseValue } from "./choice-control";
 import { expect, test, type Page } from "@playwright/test";
@@ -155,13 +156,13 @@ test.describe("图片手势与复制反馈", () => {
     expect(await view.evaluate((element) => parseFloat(getComputedStyle(element).getPropertyValue("--gallery-x")))).toBeLessThan(-30);
     await page.mouse.up();
     await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-b", { exact: true })).toBeVisible();
-    await chooseValue(workspace.getByLabel("缩放比例"), "200");
+    await zoomImageToDetail(workspace);
     await page.mouse.move(box.x + box.width * .8, box.y + box.height * .5);
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * .3, box.y + box.height * .5, { steps: 14 });
     await page.mouse.up();
     await expect(workspace.getByLabel("图片查看区域").getByAltText("设计 gesture-b", { exact: true })).toBeVisible();
-    await expect(workspace.getByLabel("缩放比例")).toHaveValue("200");
+    await expect.poll(() => imageScale(workspace)).toBeCloseTo(2, 2);
     await expect.poll(() => view.evaluate((element) => parseFloat(getComputedStyle(element).getPropertyValue("--gallery-x")))).toBe(0);
     await workspace.screenshot({ path: "output/playwright/workflow-motion-results/gallery-pan.png" });
   });
@@ -173,7 +174,8 @@ test.describe("图片手势与复制反馈", () => {
   await page.getByRole("button", { name: "查看新方案 ↗", exact: true }).click();
     const workspace = page.getByRole("dialog", { name: "图片工作区" });
     await expect(workspace).toBeVisible();
-    await workspace.getByRole("button", { name: "分享", exact: true }).click();
+    await workspace.getByRole("button", { name: "导出", exact: true }).click();
+  await workspace.getByRole("button", { name: "分享链接", exact: true }).click();
     await workspace.getByRole("button", { name: "创建只读链接" }).click();
     await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => undefined } }));
     await workspace.getByRole("button", { name: "复制链接", exact: true }).click();
@@ -242,15 +244,16 @@ test("首张明确查看，同批追加不抢图，标注评论和分享可完�
   await expect(
     workspace.getByAltText("设计 edited-1", { exact: true }),
   ).toBeVisible();
-  await workspace.getByRole("button", { name: "分享", exact: false }).click();
+  await workspace.getByRole("button", { name: "导出", exact: true }).click();
+  await workspace.getByRole("button", { name: "分享链接", exact: true }).click();
   await workspace.getByRole("button", { name: "创建只读链接" }).click();
   await expect(workspace.getByLabel("分享链接")).toHaveValue(/\/share\//u);
   await workspace.getByRole("button", { name: "撤销链接" }).click();
   await expect(workspace.getByText("已撤销", { exact: true })).toBeVisible();
-  await workspace.getByRole("button", { name: "收起工具" }).click();
+  await workspace.getByRole("button", { name: "返回导出", exact: false }).click();
   await page.route("**/api/design-assets/*/file", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=", "base64") }));
   const downloaded = page.waitForEvent("download");
-  await workspace.getByRole("button", { name: "下载原图", exact: true }).click();
+  await workspace.getByRole("button", { name: "下载图片", exact: true }).click();
   expect((await downloaded).suggestedFilename()).toBe("设计 edited-1.png");
   await page.screenshot({ path: "output/image-workspace-desktop.png" });
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
@@ -328,7 +331,7 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
   await expect(
     workspace.getByAltText("设计 draft", { exact: true }),
   ).toBeVisible();
-  await chooseValue(workspace.getByLabel("缩放比例"), "200");
+  await zoomImageToDetail(workspace);
   await workspace
     .getByRole("button", { name: "添加评论", exact: true })
     .click();
@@ -345,7 +348,7 @@ test("编辑中到图仅提示，缩放坐标与关闭后的草稿保留", async
     page.getByText("新的设计方案已到达", { exact: true }),
   ).toBeVisible();
   await expect(picture).toBeVisible();
-  await expect(workspace.getByLabel("缩放比例")).toHaveValue("200");
+  await expect.poll(() => imageScale(workspace)).toBeCloseTo(2, 2);
   await workspace
     .getByRole("complementary")
     .getByRole("button", { name: "添加评论", exact: true })

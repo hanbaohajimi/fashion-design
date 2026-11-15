@@ -207,8 +207,8 @@ function FabricLibrary() {
                 {searchState.pending || fabrics.isSearching ? "正在搜索，暂显示上次结果…" : fabrics.isPreviousData ? `仍显示上次结果，共 ${fabrics.total} 项` : deferredSearch
                   ? `“${deferredSearch}”找到 ${fabrics.total} 项`
                   : projectId
-                    ? "选择面料，加入当前设计项目"
-                    : "选择面料查看图片与规格"}
+                    ? "点击面料查看规格，可加入当前项目"
+                    : "点击面料查看规格"}
               </p>
             </div>
             {fabrics.isLoading && !fabrics.items.length ? (

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@fashion/db";
 import type { CanvasDocumentView, CanvasSave } from "@fashion/shared";
+import { retireCanvasNotes, stripCanvasTransientDrafts } from "@fashion/shared";
 import {
   BadRequestException,
   ConflictException,
@@ -54,12 +55,14 @@ export class CanvasService {
       async (tx) => {
         await this.writable(userId, projectId, tx);
         await this.lock(tx, projectId);
-        if (await tx.canvasDocument.findUnique({ where: { projectId } }))
+        if (await tx.canvasDocument.findUnique({ where: { projectId } })) {
+          await tx.project.updateMany({ where: { id: projectId, canvasInteractionMode: { not: "canvas" } }, data: { canvasInteractionMode: "canvas" } });
           return;
+        }
         const nodes = await tx.workflowNode.findMany({ where: { projectId } });
         const existingBindings = await tx.canvasObjectBinding.findMany({
           where: { projectId },
-          select: { nodeId: true },
+          select: { nodeId: true, shapeId: true },
         });
         const represented = new Set(
           existingBindings.map((binding) => binding.nodeId),
@@ -74,7 +77,7 @@ export class CanvasService {
           where: { projectId },
         });
         // Never mix a current graph with an older board. Preserve the old document verbatim.
-        const snapshot = nodes.length ? {} : canvasObject(old?.snapshot);
+        const snapshot = retireCanvasNotes(nodes.length ? {} : canvasObject(old?.snapshot), nodes.map(node => ({ ...node, payload: canvasObject(node.payload) })), existingBindings).snapshot;
         const operations: WorkflowSemanticPatchInput["operations"] = [];
         const bindings: {
           projectId: string;
@@ -91,7 +94,7 @@ export class CanvasService {
             .map((record) => [String(record.id), record]),
         );
         for (const element of elements)
-          if (element.record)
+          if (element.record && !["fashion-note", "note"].includes(element.shapeType))
             legacyRecords.set(element.shapeId, canvasObject(element.record));
         if (elements.length) {
           if (snapshot.document)
@@ -112,7 +115,7 @@ export class CanvasService {
           if (
             ![
               "fashion-image",
-              "fashion-note",
+              "fashion-text",
               "fashion-swatch",
               "fashion-fabric",
             ].includes(String(type))
@@ -120,7 +123,7 @@ export class CanvasService {
             continue;
           const nodeId = randomUUID();
           const payload =
-            type === "fashion-note"
+            type === "fashion-text"
               ? { text: String(props.text ?? ""), historicalImport: true }
               : type === "fashion-swatch"
                 ? {
@@ -158,7 +161,7 @@ export class CanvasService {
               id: nodeId,
               kind: "asset",
               type:
-                type === "fashion-note"
+                type === "fashion-text"
                   ? "reference_text"
                   : type === "fashion-swatch"
                     ? "swatch"
@@ -281,7 +284,7 @@ export class CanvasService {
         projectId,
         revision: document?.revision ?? 0,
         formatVersion: document?.formatVersion ?? 1,
-        snapshot: canvasObject(document?.snapshot),
+        snapshot: stripCanvasTransientDrafts(canvasObject(document?.snapshot)),
         initializedFrom: document?.initializedFrom ?? "uninitialized",
         bindings: bindings.map((binding) => ({
           shapeId: binding.shapeId,
@@ -322,13 +325,33 @@ export class CanvasService {
       ];
       const nodes = await tx.workflowNode.findMany({
         where: { projectId, id: { in: nodeIds }, kind: "asset" },
-        select: { id: true },
+        select: { id: true, type: true, title: true, payload: true },
       });
       if (nodes.length !== nodeIds.length)
         throw new BadRequestException("白板引用包含未保存或不属于本项目的素材");
+      const requestHash = canvasHash(input);
+      const cleaned = retireCanvasNotes(input.snapshot, nodes.map(node => ({ ...node, payload: canvasObject(node.payload) })), input.bindings);
+      input = { ...input, snapshot: stripCanvasTransientDrafts(cleaned.snapshot), bindings: input.bindings.filter(binding => !cleaned.removedShapeIds.includes(binding.shapeId)) };
       const records = canvasObject(
         canvasObject(input.snapshot.document).store ?? input.snapshot.store,
       );
+      const creationIdsIn = (snapshot: unknown) => {
+        const root = canvasObject(snapshot);
+        const store = canvasObject(canvasObject(root.document).store ?? root.store);
+        return [...new Set(Object.values(store).flatMap((value) => {
+          const record = canvasObject(value);
+          const props = canvasObject(record.props);
+          return record.typeName === "shape" && record.type === "fashion-creation" && typeof props.creationId === "string" ? [props.creationId] : [];
+        }))];
+      };
+      const beforeCreations = creationIdsIn(document.snapshot);
+      const currentCreations = creationIdsIn(input.snapshot);
+      const validCreations = await tx.canvasCreation.findMany({ where: { projectId, id: { in: currentCreations } }, select: { id: true } });
+      if (validCreations.length !== currentCreations.length) throw new BadRequestException("创作节点不存在或不属于本项目");
+      // Only a removal from a previously saved layout changes target visibility.
+      // A target reserved concurrently by another operation is not deleted here.
+      await tx.canvasCreation.updateMany({ where: { projectId, id: { in: beforeCreations.filter((id) => !currentCreations.includes(id)) } }, data: { removedAt: new Date() } });
+      await tx.canvasCreation.updateMany({ where: { projectId, id: { in: currentCreations }, removedAt: { not: null } }, data: { removedAt: null } });
       for (const binding of input.bindings)
         if (canvasObject(records[binding.shapeId]).typeName !== "shape")
           throw new BadRequestException("素材绑定缺少对应的白板对象");
@@ -357,7 +380,7 @@ export class CanvasService {
         data: {
           projectId,
           mutationId: input.mutationId,
-          requestHash: canvasHash(input),
+          requestHash,
           kind: "layout",
           result: { revision: input.baseRevision + 1 },
         },

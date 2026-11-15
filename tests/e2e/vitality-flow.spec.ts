@@ -9,7 +9,7 @@ import {
   studioFixture,
   styleFixture,
 } from "../../apps/web/src/modules/studio/studio-test-fixtures";
-test("创作首页与工作室从真实修订接续，窄屏和减弱动态均可使用", async ({
+test("首页项目卡片与历史工作室资料从真实修订接续，窄屏和减弱动态均可使用", async ({
   page,
 }) => {
   await seedVisualApp(page);
@@ -29,18 +29,21 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await expect(page.getByRole("region", { name: "继续创作" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "最近项目" })).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "继续创作" }).getByRole("link"),
+    page.getByRole("region", { name: "最近项目" }).getByRole("link", { name: /秋冬通勤服装设计/ }),
   ).toHaveCount(1);
   expect(summaryRequests).toBe(0);
   await page.screenshot({
     path: "output/playwright/vitality-projects-desktop.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "继续创作", exact: true }).click();
-  await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "款式与交付", exact: true }).click();
-  await page.getByRole("tab", { name: "色料实验", exact: true }).click();
+  await page.getByRole("link", { name: /秋冬通勤服装设计/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/${PROJECT}$`));
+  await page.goto(`/${PROJECT}/studio?tab=experiments`);
+  await expect(page).toHaveURL(new RegExp(`/${PROJECT}/studio\\?tab=experiments$`));
+  await expect(page.locator('[data-studio-page="experiments"][data-guide-ready="true"]')).toBeVisible();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
   await page.getByRole("button", { name: "创作进展" }).click();
   await expect(page.getByRole("region", { name: "创作进展" })).toBeVisible();
   await expect(
@@ -57,15 +60,15 @@ test("创作首页与工作室从真实修订接续，窄屏和减弱动态均�
   await page.goto("/");
   await page.reload();
   await expect(
-    page.getByText("继续你在本机的创作", { exact: true }),
+    page.getByRole("heading", { name: "最近项目", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "继续创作", exact: true }),
-  ).toHaveAttribute("href", new RegExp("studio\\?tab=experiments$", "u"));
+    page.getByRole("link", { name: /秋冬通勤服装设计/ }),
+  ).toHaveAttribute("href", `/${PROJECT}`);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(
-    page.getByRole("link", { name: "继续创作", exact: true }),
+    page.getByRole("link", { name: /秋冬通勤服装设计/ }),
   ).toBeVisible();
   expect(
     await page.evaluate(

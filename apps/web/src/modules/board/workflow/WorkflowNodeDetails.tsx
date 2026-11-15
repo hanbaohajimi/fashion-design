@@ -7,9 +7,9 @@ import { GridDetails } from "../../../components/GridDetails";
 import { useEffect, useRef, useState } from "react";
 import {
   getWorkflowToolContract,
+  isRetiredWorkflowTool,
   parseWorkflowToolParameters,
   WORKFLOW_TOOL_KEYS,
-  WORKFLOW_REFERENCE_ROLES,
   type WorkflowToolKey,
   type AgentDesignBrief,
   type AgentDesignEvaluation,
@@ -47,16 +47,8 @@ import { TryOnReferenceEntry } from "./TryOnReferenceEntry";
 import { WardrobeReferenceEntry } from "./WardrobeReferenceEntry";
 import { projectCanvasMedia, mediaDuration } from "./canvas-media";
 
-const REFERENCE_ROLE_OPTIONS = [
-  { value: "style_ref", label: "风格参考" },
-  { value: "silhouette_ref", label: "廓形参考" },
-  { value: "detail_ref", label: "细节参考" },
-  { value: "fabric_texture", label: "面料纹理" },
-  { value: "palette_ref", label: "配色参考" },
-] as const;
-
 const PORT_LABELS: Readonly<Record<WorkflowInputPort, string>> = {
-  candidate: "候选方案",
+  candidate: "设计图",
   constraint: "设计约束",
   goal: "设计目标",
   reference: "参考素材",
@@ -76,7 +68,6 @@ export function NodeDetails({
   projectId,
   onGraphChange,
   onSavePayload,
-  onInferRole,
   onEnsureConversation,
   setError,
   onDirtyChange,
@@ -100,7 +91,6 @@ export function NodeDetails({
     nodeId: string,
     payload: Readonly<Record<string, unknown>>,
   ) => Promise<void>;
-  readonly onInferRole: (nodeId: string) => Promise<void>;
   readonly onEnsureConversation: () => Promise<string>;
   readonly setError: (message: string | null) => void;
 }) {
@@ -157,6 +147,7 @@ export function NodeDetails({
       {node.kind === "tool" &&
       (isTaskActive(node.status) || state.state === "failed") ? (
         <TaskFeedback
+          visual
           motionKey={`node:${node.id}`}
           taskId={`${projectId}:${node.id}`}
           status={node.status}
@@ -206,61 +197,6 @@ export function NodeDetails({
             fileAssetId={node.payload.fileAssetId}
             canEdit={!readOnly && node.canEditPayload === true}
           /> : null}
-          <h4>参考图角色</h4>
-          <p>
-            当前标签：
-            {String(
-              node.payload.roleLabel ?? node.payload.role ?? "待识别",
-            )} {" "}
-            {node.payload.roleSource === "manual"
-              ? "设计师指定"
-              : node.payload.roleSource === "inferred"
-                ? "模型建议"
-                : "默认值"}
-            。角色仅说明素材用途，不会自动成为硬性设计要求。
-          </p>
-          <Select
-            aria-label="参考图角色"
-            disabled={readOnly || node.status !== "ready"}
-            onChange={(event) =>
-              void onSavePayload(node.id, {
-                ...node.payload,
-                role: event.target.value,
-                roleSource: "manual",
-                roleInferenceState: "ready",
-              }).catch((cause: unknown) =>
-                setError(
-                  cause instanceof Error ? cause.message : "参考角色保存失败",
-                ),
-              )
-            }
-            value={
-              typeof node.payload.role === "string"
-                ? node.payload.role
-                : node.type === "sketch"
-                  ? "silhouette_ref"
-                  : "style_ref"
-            }
-          >
-            {REFERENCE_ROLE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-          {!readOnly && node.status === "ready" &&
-          node.payload.roleSource !== "manual" &&
-          !(
-            node.payload.roleSource === "inferred" &&
-            node.payload.roleInferenceState === "ready"
-          ) &&
-          typeof node.payload.fileAssetId === "string" ? (
-            <button onClick={() => void onInferRole(node.id)} type="button">
-              {node.payload.roleInferenceState === "failed"
-                ? "重试识别参考角色"
-                : "识别参考角色"}
-            </button>
-          ) : null}
         </section>
       ) : null}
       {brief ? (
@@ -287,13 +223,13 @@ export function NodeDetails({
       ) : null}
       {report?.evaluations ? (
         <section className={styles.detailSection}>
-          <h4>逐候选评估</h4>
+          <h4>逐图评估</h4>
           {report.evaluations.map((evaluation) => (
             <div className={styles.constraintRow} key={evaluation.assetId}>
               <strong>
                 {graph.nodes.find(
                   (item) => item.payload.assetId === evaluation.assetId,
-                )?.title ?? "候选方案"}
+                )?.title ?? "设计方案"}
               </strong>
               <p>{evaluation.summary}</p>
               {evaluation.checks.map((check) => (
@@ -346,7 +282,7 @@ export function NodeDetails({
       ) : null}
       {node.type === "candidate" && assetId ? (
         <section className={styles.detailSection}>
-          <h4>候选方案</h4>
+          <h4>设计方案</h4>
           {!embedded ? <button onClick={() => onOpenAsset(assetId)} type="button">
             打开大图、版本与局部重绘
           </button> : null}
@@ -511,8 +447,6 @@ interface ToolDraft {
   readonly quality: string;
   readonly referenceInputs: readonly {
     readonly nodeId: string;
-    readonly role: string;
-    readonly weight: number;
   }[];
 }
 
@@ -537,7 +471,10 @@ function toolDraft(node: WorkflowNode): ToolDraft {
     height: String(params.height ?? defaults.height ?? 1024),
     quality: String(params.quality ?? defaults.quality ?? "high"),
     referenceInputs: Array.isArray(params.referenceInputs)
-      ? (params.referenceInputs as ToolDraft["referenceInputs"])
+      ? params.referenceInputs.flatMap((value) => {
+          const reference = value && typeof value === "object" ? value as Record<string, unknown> : {};
+          return typeof reference.nodeId === "string" ? [{ nodeId: reference.nodeId }] : [];
+        })
       : [],
   };
 }
@@ -593,7 +530,8 @@ export function ToolSettings({
     null,
   );
   const [localError, setLocalError] = useState<string | null>(null);
-  const canEdit = !readOnly && node.status === "ready" && node.type !== "restore_version";
+  const retired = isRetiredWorkflowTool(node.type);
+  const canEdit = !readOnly && !retired && node.status === "ready" && node.type !== "restore_version";
   const imageTool =
     node.type === "generate_design" || node.type === "edit_design";
   const dirty =
@@ -718,13 +656,13 @@ export function ToolSettings({
     <section className={styles.detailSection}>
       <h4>工具设置</h4>
       <p>
-        {canEdit
+        {retired ? "此旧流程已退役，原参数和历史结果仍可查看。新需求请在助手中讨论。" : canEdit
           ? "确认执行前可调整参数，保存后会记录到设计路径。"
           : "以下参数为该节点记录的设置；已运行节点不可修改。"}
       </p>
       {node.type === "edit_design" && !draftMode ? (
         <p>
-          将要修改的候选图或上传图片连接为「原图」；其他图片可连接为「参考素材」。
+          将要修改的设计图或上传图片连接为「原图」；其他图片可连接为「参考素材」。
         </p>
       ) : null}
       <div className={styles.toolForm}>
@@ -772,9 +710,9 @@ export function ToolSettings({
             </label>
             <div className={styles.toolDimensions}>
               <label>
-                候选数量
+                生成数量
                 <input
-                  aria-label="候选数量"
+                  aria-label="生成数量"
                   disabled={!canEdit || saving}
                   max={4}
                   min={1}
@@ -834,70 +772,11 @@ export function ToolSettings({
               </Select>
             </label>
             {referenceNodes.length ? (
-              <>
-                <p>参考作用与强度仅为提示词引导，不能保证模型精确控制。</p>
-                {referenceNodes.map((reference) => {
-                  const current = draft.referenceInputs.find(
-                    (entry) => entry.nodeId === reference.id,
-                  ) ?? {
-                    nodeId: reference.id,
-                    role:
-                      typeof reference.payload.role === "string"
-                        ? reference.payload.role
-                        : "style_ref",
-                    weight: 0.7,
-                  };
-                  const update = (value: Partial<typeof current>) =>
-                    setDraft({
-                      ...draft,
-                      referenceInputs: [
-                        ...draft.referenceInputs.filter(
-                          (entry) => entry.nodeId !== reference.id,
-                        ),
-                        { ...current, ...value },
-                      ],
-                    });
-                  return (
-                    <div className={styles.referenceConfig} key={reference.id}>
-                      <strong>{displayNodeTitle(reference)}</strong>
-                      <label>
-                        参考作用
-                        <Select
-                          aria-label={`参考作用 ${reference.title}`}
-                          disabled={!canEdit || saving}
-                          value={current.role}
-                          onChange={(event) =>
-                            update({ role: event.target.value })
-                          }
-                        >
-                          {WORKFLOW_REFERENCE_ROLES.map((role) => (
-                            <option key={role} value={role}>
-                              {REFERENCE_ROLE_OPTIONS.find(
-                                (option) => option.value === role,
-                              )?.label ?? role}
-                            </option>
-                          ))}
-                        </Select>
-                      </label>
-                      <label>
-                        参考强度
-                        <input
-                          aria-label={`参考强度 ${reference.title}`}
-                          disabled={!canEdit || saving}
-                          type="number"
-                          min={0}
-                          max={1}
-                          step={0.1}
-                          value={current.weight}
-                          onChange={(event) =>
-                            update({ weight: Number(event.target.value) })
-                          }
-                        />
-                      </label>
-                    </div>
-                  );
-                })}
-              </>
+              <div className={styles.referenceConfig} aria-label="本次引用">
+                {referenceNodes.map((reference, index) => (
+                  <span key={reference.id}>{index + 1} {displayNodeTitle(reference)}</span>
+                ))}
+              </div>
             ) : null}
           </GridDetails>
         ) : null}
@@ -918,7 +797,7 @@ export function ToolSettings({
             {saving ? "正在保存…" : "保存工具参数"}
           </Button>
         ) : null}
-        {!readOnly && node.type !== "restore_version" &&
+        {!readOnly && !retired && node.type !== "restore_version" &&
         ["ready", "failed"].includes(node.status) ? (
           <Button
             variant={dirty ? "secondary" : "primary"}
@@ -1004,18 +883,6 @@ export function ToolSettings({
                             String(id),
                         )
                         .join("、") || "无"}
-                    </p>
-                  ) : null}
-                  {Array.isArray(attempt.request.referenceInputs) &&
-                  attempt.request.referenceInputs.length > 0 ? (
-                    <p>
-                      参考角色：
-                      {attempt.request.referenceInputs
-                        .map((item: unknown) => {
-                          const ref = item as Record<string, unknown>;
-                          return `${String(ref.role ?? "参考")} 权重 ${String(ref.weight ?? "—")}`;
-                        })
-                        .join("；")}
                     </p>
                   ) : null}
                   {attempt.error ? (

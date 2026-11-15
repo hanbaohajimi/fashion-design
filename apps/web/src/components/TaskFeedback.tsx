@@ -1,17 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useTaskMotion } from "./motion/use-task-motion";
-import { isTaskActive, taskState } from "./task-feedback-state";
-import { PAINTING_LOADERS_ENABLED, UI_TIMING } from "./ui-config";
-import { paintingFor, type TaskOperation } from "./painting-media";
+import { isTaskActive, taskState, type TaskOperation } from "./task-feedback-state";
+import { UI_TIMING } from "./ui-config";
+import { RefineFrame, refineStatus } from "./RefineFrame";
 import { userFacingError } from "./user-facing-error";
 import styles from "./task-feedback.module.css";
-
-const PaintingLoader = dynamic(() => import("./PaintingLoader"), {
-  ssr: false,
-});
 
 export interface TaskFeedbackProps {
   readonly taskId: string;
@@ -24,7 +19,7 @@ export interface TaskFeedbackProps {
   readonly completed?: number;
   readonly total?: number;
   readonly compact?: boolean;
-  readonly painting?: boolean;
+  readonly visual?: boolean;
   readonly actions?: ReactNode;
 }
 
@@ -51,7 +46,7 @@ function TaskFeedbackContent({
   completed,
   total,
   compact = false,
-  painting = false,
+  visual = false,
   actions,
 }: TaskFeedbackProps & { motionAnchor: RefObject<HTMLParagraphElement | null> }) {
   const active = isTaskActive(status);
@@ -65,13 +60,8 @@ function TaskFeedbackContent({
       () => setElapsed(1),
       UI_TIMING.busyFeedback,
     );
-    const paintingTimer = setTimeout(
-      () => setElapsed(2),
-      UI_TIMING.paintingDelay,
-    );
     return () => {
       clearTimeout(feedbackTimer);
-      clearTimeout(paintingTimer);
     };
   }, [active]);
   useEffect(() => {
@@ -84,8 +74,8 @@ function TaskFeedbackContent({
     return () => clearTimeout(timer);
   }, [active, updatedAt, staleKey]);
   const imageTask = !["analysis", "export"].includes(operation);
-  const showPainting =
-    PAINTING_LOADERS_ENABLED && painting && imageTask && active && elapsed >= 2;
+  const frameStatus = refineStatus(status);
+  const showFrame = visual && imageTask && active && frameStatus;
   const count =
     typeof completed === "number" &&
     typeof total === "number" &&
@@ -102,13 +92,7 @@ function TaskFeedbackContent({
       data-compact={compact}
       aria-label={title ? `${title}任务状态` : "任务状态"}
     >
-      {showPainting ? (
-        <PaintingLoader
-          key={paintingFor(operation)}
-          painting={paintingFor(operation)}
-          compact={compact}
-        />
-      ) : null}
+      {showFrame ? <div className={styles.visualFrame}><RefineFrame status={frameStatus} compact={compact} showStatus={false} animate={elapsed >= 1} aspectRatio="4 / 3" /></div> : null}
       <div className={styles.feedbackContent}>
         {title ? <strong>{title}</strong> : null}
         <p ref={motionAnchor} role="status" aria-atomic="true">

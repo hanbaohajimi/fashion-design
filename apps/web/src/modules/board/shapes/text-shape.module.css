@@ -1,0 +1,8 @@
+.text { display: flex; flex-direction: column; padding: 16px; border: .5px solid var(--color-border); border-radius: 12px; background: var(--surface-3); color: var(--color-ink); }
+.text header { font-size: 13px; font-weight: 500; padding-bottom: 12px; color: var(--color-ink-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.text textarea, .content { flex: 1; min-height: 0; width: 100%; margin: 0; padding: 0; border: 0; resize: none; background: transparent; color: inherit; font: inherit; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
+.text textarea { --shadow-input-focus: none; }
+.text textarea, .text a { pointer-events: auto; }
+.text a { flex: none; margin-top: 8px; color: var(--color-action); font-size: 12px; }
+.text textarea:focus-visible { outline: none; }
+.text:focus-within { border-color: var(--color-action); }

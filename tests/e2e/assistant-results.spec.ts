@@ -27,7 +27,9 @@ for (const width of [1440, 320])
       .getByRole("button", { name: "关闭结果预览", exact: true })
       .click();
     await expect(input(page)).toHaveValue("保留原正文，只修正袖口");
-    await gallery(page)
+    await expect(viewer(page)).toBeHidden();
+    await gallery(page).getByRole("button", { name: "更多图片操作：藏蓝通勤外套", exact: true }).click();
+    await page
       .getByRole("button", { name: "继续修改：藏蓝通勤外套", exact: true })
       .click();
     await expect(
@@ -68,7 +70,7 @@ test("部分失败保留真实图片，取消无图片不伪造缩略图", async
     status: "partial_failed",
   });
   await state.open();
-  await expect(gallery(page)).toContainText("1 项操作未完成");
+  await expect(page.locator('[data-task-state="partial_failed"] [data-task-summary]')).toContainText("其余操作未完成");
   await expect(gallery(page).getByRole("img")).toHaveCount(2);
   state.messages = state.messages.map((message) => ({
     ...message,
@@ -81,7 +83,7 @@ test("部分失败保留真实图片，取消无图片不伪造缩略图", async
   await page.reload();
   await expect(gallery(page)).toHaveCount(0);
   await expect(
-    page.getByText("本次执行已取消。", { exact: true }),
+    page.getByText("生成已停止。", { exact: true }),
   ).toBeVisible();
   expect(state.sends).toEqual([]);
   expect(state.errors).toEqual([]);
@@ -329,7 +331,7 @@ test("320px长会话名不挤走四个操作，键盘仍能打开要求和设置
       }),
   );
   await state.open();
-  for (const name of ["历史对话", "新建对话", "设计要求", "助手设置"]) {
+  for (const name of ["历史对话", "新建对话", "助手设置", "返回画布"]) {
     const button = page.getByRole("button", { name, exact: true });
     await expect(button).toBeInViewport({ ratio: 1 });
     const box = await button.boundingBox();
@@ -340,13 +342,14 @@ test("320px长会话名不挤走四个操作，键盘仍能打开要求和设置
     name: "设计要求",
     exact: true,
   });
+  await page.getByRole("button", { name: "助手设置", exact: true }).click();
   await requirements.focus();
   await requirements.press("Enter");
   await expect(
     page.getByRole("dialog", { name: "设计要求与偏好", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(requirements).toBeFocused();
+  await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeFocused();
   const settings = page.getByRole("button", { name: "助手设置", exact: true });
   await settings.focus();
   await settings.press("ArrowDown");

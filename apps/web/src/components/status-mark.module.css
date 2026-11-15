@@ -1,0 +1,111 @@
+.root {
+  display: inline-flex;
+  flex: none;
+  width: var(--status-size, 16px);
+  height: var(--status-size, 16px);
+  color: var(--color-action);
+  vertical-align: middle;
+  line-height: 1;
+}
+.root svg {
+  display: block;
+  flex: none;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--status-stroke, 1.5);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.root[data-status="failed"] {
+  color: var(--color-error);
+}
+.root[data-status="partial"],
+.root[data-status="unconfirmed"] {
+  color: var(--color-warning-ink);
+}
+.root[data-status="cancelled"] {
+  color: var(--color-ink-secondary);
+}
+.track {
+  fill: currentColor;
+  fill-opacity: 0;
+  stroke-opacity: 0;
+}
+.ring {
+  stroke-dasharray: 0.0375 0.0875;
+  opacity: 0.65;
+}
+.rotation {
+  transform-origin: 12px 12px;
+  animation: statusTurn 1100ms linear infinite paused;
+}
+.check,
+.cross {
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.05;
+  opacity: 0;
+}
+.warning,
+.question {
+  opacity: 0;
+}
+.root[data-status="running"] .track {
+  stroke-opacity: 0.18;
+}
+.root[data-status="running"] .ring {
+  stroke-dasharray: 0.68 0.32;
+  opacity: 1;
+}
+.root:is([data-status="done"], [data-status="failed"], [data-status="partial"])
+  .ring {
+  stroke-dasharray: 1 0;
+  opacity: 1;
+}
+.root:is([data-status="done"], [data-status="failed"], [data-status="partial"])
+  .track {
+  fill-opacity: 0.04;
+}
+.root[data-status="done"] .check,
+.root:is([data-status="failed"], [data-status="cancelled"]) .cross {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+.root[data-status="partial"] .warning,
+.root[data-status="unconfirmed"] .question {
+  opacity: 1;
+}
+.root[data-motion="true"] {
+  transition: color 160ms ease;
+}
+.root[data-motion="true"] .ring {
+  transition:
+    stroke-dasharray 220ms var(--ease-enter),
+    opacity 160ms ease;
+}
+.root[data-motion="true"] .track {
+  transition:
+    fill-opacity 160ms ease,
+    stroke-opacity 160ms ease;
+}
+.root[data-motion="true"] .check,
+.root[data-motion="true"] .cross {
+  transition: stroke-dashoffset 220ms var(--ease-enter);
+}
+.root[data-motion="true"][data-status="running"] .rotation {
+  animation-play-state: running;
+}
+@keyframes statusTurn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .root * {
+    transition: none !important;
+  }
+  .rotation {
+    animation: none;
+  }
+}

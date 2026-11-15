@@ -19,7 +19,7 @@ export function RepairTransparentMaterial({ projectId, source, canEdit, generati
 }) {
   const correction = operation === "correction";
   const title = correction ? "局部细节修正" : "修复透明材质";
-  const actionName = correction ? "生成修正候选" : "生成修复候选";
+  const actionName = correction ? "生成修正图片" : "生成修复图片";
   const [open, setOpen] = useState(false);
   const [brushRatio, setBrushRatio] = useState(.025);
   const [softness, setSoftness] = useState("standard");
@@ -50,18 +50,18 @@ export function RepairTransparentMaterial({ projectId, source, canEdit, generati
   return <>
     <Button disabled={!canEdit || !generationEnabled} onClick={() => setOpen(true)}>{maskState.strokeCount || repair.taskId ? correction ? "继续局部细节修正" : "继续透明材质修复" : title}</Button>
     {open ? <Dialog label={title} className={styles.prepareDialog} onClose={close}>
-      <header className={styles.sectionHeader}><h2>{title}</h2><Button onClick={close}>返回候选核对</Button></header>
+      <header className={styles.sectionHeader}><h2>{title}</h2><Button onClick={close}>返回图片核对</Button></header>
       <div className={styles.stack}>
-        <p>{correction ? "涂选不透明面料内部需要调整的印花、纹理或缝线，并填写修正说明。原图透明度、外轮廓及选区外内容保持不变；外形或长度调整请使用其他候选修正流程。" : "适用于浅色蕾丝与网纱。涂选薄纱所在的区域，保留衣身内衬、领口和袖口；新候选中的花瓣与网线必须保持。"}</p>
+        <p>{correction ? "涂选不透明面料内部需要调整的印花、纹理或缝线，并填写修正说明。原图透明度、外轮廓及选区外内容保持不变；外形或长度调整请使用其他图片修正流程。" : "适用于浅色蕾丝与网纱。涂选薄纱所在的区域，保留衣身内衬、领口和袖口；新图片中的花瓣与网线必须保持。"}</p>
         {correction ? <p>半透明区域、细边和轮廓附近会保持原样。细小配件可能没有可修正范围。</p> : null}
         {!correction ? <p>只涂选后方能看到背景的透纱。薄纱叠在衣身或内衬前方时，应保留后方衣片，不能透穿整件服装。</p> : null}
-        {sidePreparationId ? <p>本次处理当前侧挂候选。完成后仍需核对侧挂方向、材质和挂点，再手动确认侧挂展示图。</p> : null}
+        {sidePreparationId ? <p>本次处理当前侧挂图。完成后仍需核对侧挂方向、材质和挂点，再手动确认侧挂展示图。</p> : null}
         <Notice>{actionName}按项目规则计费。新结果仍需三种底色核对并手动确认，不会自动进入衣架。</Notice>
         {localError || repair.error ? <Notice tone="error">{localError ?? repair.error}</Notice> : null}
         <div className={repairStyles.stage}>
           <div className={repairStyles.media} data-busy={editingLocked}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={source.url} alt={correction ? "局部细节修正原候选" : "透明材质修复原候选"} draggable={false} />
+            <img src={source.url} alt={correction ? "局部细节修正原图片" : "透明材质修复原图片"} draggable={false} />
             {bounds ? <MaskCanvas key={`${source.assetId}:${bounds.width}:${bounds.height}`} ref={mask} width={bounds.width} height={bounds.height} brushRatio={brushRatio} softness={correction ? softness === "light" ? .2 : softness === "soft" ? .8 : .5 : 0} initialDraft={maskState.draft} disabled={editingLocked} label={correction ? "涂选局部修正区域" : "涂选透纱区域"} selectionTone="currentColor" descriptionId="material-repair-selection-help" onChange={changed} /> : null}
           </div>
         </div>
@@ -75,9 +75,9 @@ export function RepairTransparentMaterial({ projectId, source, canEdit, generati
         </div>
         <details className={repairStyles.details}><summary>补充原图纹理细节（可选）</summary><p>{correction ? "选择原图中需要保留的清晰面料与花纹区域。" : "选择原图中清晰的网眼与花纹区域，帮助保留原有纹理。"}</p><fieldset className={repairStyles.region} disabled={editingLocked}><RegionSelector src={source.url} region={region} onChange={setRegion} purpose="material-detail" /></fieldset></details>
         <Field label={correction ? "修正说明" : "修复说明（可选）"}><Textarea required={correction} maxLength={1000} value={notes} disabled={editingLocked} onChange={event => setNotes(event.target.value)} placeholder={correction ? "例如：只恢复所选裤腿的细密斜纹，保留原色、棕色缝线及全部轮廓。" : "例如：保留花瓣和实体内衬，只修复两袖薄纱的透射。"} /></Field>
-        {repair.taskId ? <TaskFeedback taskId={repair.taskId} status={repair.phase === "failed" ? "failed" : repair.phase === "canceled" ? "canceled" : "running"} title={repair.phase === "deriving" ? "正在整理候选" : title} compact /> : null}
+        {repair.taskId ? <TaskFeedback taskId={repair.taskId} status={repair.phase === "failed" ? "failed" : repair.phase === "canceled" ? "canceled" : "running"} title={repair.phase === "deriving" ? "正在整理图片" : title} compact /> : null}
         {repair.phase === "uploading" || repair.phase === "creating" ? <p role="status">{repair.phase === "uploading" ? "正在保存所选区域…" : "正在创建修复任务…"}</p> : null}
-        {repair.canRetryProcessing ? <><Notice>图片已生成，候选整理未完成。重试处理沿用上次选区，不会再次生成或计费；也可以调整选区后重新生成。</Notice><div className={styles.actions}><Button disabled={busy || !canEdit} onClick={() => void repair.retryProcessing()}>重试候选处理</Button><Button disabled={busy || !canEdit} onClick={() => void repair.cancel()}>调整选区</Button></div></> : null}
+        {repair.canRetryProcessing ? <><Notice>图片已生成，图片整理未完成。重试处理沿用上次选区，不会再次生成或计费；也可以调整选区后重新生成。</Notice><div className={styles.actions}><Button disabled={busy || !canEdit} onClick={() => void repair.retryProcessing()}>重试图片处理</Button><Button disabled={busy || !canEdit} onClick={() => void repair.cancel()}>调整选区</Button></div></> : null}
         <div className={styles.actions}>
           <Button variant="primary" disabled={editingLocked || !bounds || !maskState.strokeCount || !canEdit || !generationEnabled || (correction && !notes.trim())} onClick={() => void submit()}>{repair.phase === "failed" || repair.phase === "canceled" ? `重新${actionName}` : actionName}</Button>
           {busy ? <Button onClick={() => { exportEpoch.current += 1; setExporting(false); void repair.cancel(); }}>{correction ? "取消局部细节修正" : "取消透明材质修复"}</Button> : null}

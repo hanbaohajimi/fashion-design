@@ -38,7 +38,7 @@ test("正式毛绒入口与右侧同一聊天：首访、草稿光标、阅读�
   expect(Math.abs(after.y - before.y)).toBeLessThan(3);
   expect(Math.abs(after.width - before.width)).toBeLessThan(1);
   const sidebar = page.getByRole("complementary", { name: "设计助手", exact: true });
-  expect(Math.abs((await elementBox(sidebar)).width - 384)).toBeLessThan(3);
+  expect(Math.abs((await elementBox(sidebar)).width - 400)).toBeLessThan(3);
   await input.fill("下一轮的中文设计草稿，先不要发送");
   await input.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(4, 8));
   const original = await input.elementHandle();
@@ -58,6 +58,7 @@ test("正式毛绒入口与右侧同一聊天：首访、草稿光标、阅读�
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBeCloseTo(reading, -1);
   await expect.poll(async () => Math.abs((await relativeArtwork()).x - before.x)).toBeLessThan(3);
   const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
   const divider = await separator.boundingBox();
   if (!divider) throw new Error("侧栏分隔条缺失");
   const beforeResize = await relativeArtwork();
@@ -196,7 +197,7 @@ test.describe("触屏与窄屏", () => {
     const input = page.getByRole("textbox", { name: "描述设计需求", exact: true });
     await expect(input).toBeVisible(); await expect(input).not.toBeFocused();
     await input.tap(); await input.fill("手机里的设计草稿");
-    await page.getByRole("button", { name: "收起设计助手", exact: true }).tap();
+    await page.getByRole("button", { name: "返回画布", exact: true }).tap();
     await expect(zhiya(page)).toBeVisible();
     await expect(zhiya(page)).toHaveAttribute("data-rendering", "false");
     // Deeply nested contents must appear with the shell, without inherited visibility transitions.
@@ -296,7 +297,7 @@ test("WebGL 丢失和恢复沿用原图，渲染失败仍保留普通聊天入�
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeFocused();
 });
 
-test("连续开合后聊天中的结果记录仍可定位回白板，保留下一条草稿", async ({ page }) => {
+test("连续开合后消息正文与下一条草稿保留，不展示引用记录", async ({ page }) => {
   const state = await prepareZhiya(page);
   await page.route("**/api/agent-conversations/visual-chat/messages*", route => route.fulfill({ json: {
     items: [{ id: "result-receipt", conversationId: "visual-chat", role: "assistant", status: "completed", origin: "execution_result", content: "这一轮已完成，可以回到白板继续查看。", referencedNodeIds: [], context: { focusNodeIds: ["material-2"] }, createdAt: "2026-11-08T12:00:00Z", updatedAt: "2026-11-08T12:00:00Z" }], nextCursor: null,
@@ -309,14 +310,8 @@ test("连续开合后聊天中的结果记录仍可定位回白板，保留下�
     await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
     await openZhiya(page);
   }
-  await page.getByText("查看引用记录", { exact: true }).click();
-  await page.getByRole("button", { name: "通勤外套 3（当前名称）", exact: true }).click();
-  await expect(page.getByRole("button", { name: "引用到助手", exact: true })).toBeEnabled();
-  await expect.poll(async () => {
-    const board = await elementBox(page.getByLabel("无限白板", { exact: true }));
-    const result = await elementBox(page.getByRole("group", { name: "通勤外套 3", exact: true }));
-    return Math.abs(result.x + result.width / 2 - board.x - board.width / 2);
-  }).toBeLessThan(24);
+  await expect(page.getByText("这一轮已完成，可以回到白板继续查看。", { exact: true })).toBeVisible();
+  await expect(page.getByText("查看引用记录", { exact: true })).toHaveCount(0);
   await expect(input).toHaveValue("下一轮再调整袖口");
   expect(state.mutations).toEqual([]);
 });

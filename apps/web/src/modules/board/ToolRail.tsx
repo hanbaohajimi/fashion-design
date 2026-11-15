@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from "react";
 import {
   ArrowShapeArrowheadEndStyle,
   ArrowShapeArrowheadStartStyle,
@@ -28,7 +28,6 @@ import {
 import {
   createFinalizedSketchImageRecord,
   type ImageShape,
-  NOTE_SHAPE_TYPE,
   SWATCH_HEIGHT,
   SWATCH_SHAPE_TYPE,
   computeSwatchWidth,
@@ -40,8 +39,13 @@ import {
   type SketchPencilColor,
   type SketchPencilSize,
 } from "./tools/MountTool";
-import { boardTrendsPath } from "../trends/active-board";
 import styles from "./tool-rail.module.css";
+import { BottomToolbarIcon } from "./BottomToolbarIcon";
+import WarmTooltip from "../../components/WarmTooltip";
+
+function RailButton({ title, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return <WarmTooltip content={title ?? props["aria-label"]}><button {...props} /></WarmTooltip>;
+}
 
 const SKETCH_PAPER_WIDTH = 640;
 const SKETCH_PAPER_HEIGHT = 860;
@@ -182,18 +186,17 @@ interface ToolRailProps {
   readonly onUpload?: () => void;
   readonly onOpenTrends?: () => void;
   readonly children?: ReactNode;
+  readonly addNodeControl?: ReactNode;
 }
 
 export function ToolRail({
-  collectionsOpen,
-  onOpenCollections,
   onOpenFabrics,
   embedded = false,
   ready = true,
   onOpenSketch,
   onUpload,
-  onOpenTrends,
   children,
+  addNodeControl,
 }: ToolRailProps) {
   const editor = useEditor();
   const readOnly = useValue("tool-rail-readonly", () => editor.getInstanceState().isReadonly, [editor]);
@@ -433,7 +436,7 @@ export function ToolRail({
   }, [activeSketchId, editor, sketchEraserSize]);
 
   const createShape = (
-    type: typeof NOTE_SHAPE_TYPE | typeof SWATCH_SHAPE_TYPE,
+    type: typeof SWATCH_SHAPE_TYPE,
   ): void => {
     if (!editable) return;
     editor.markHistoryStoppingPoint("新增白板素材");
@@ -441,7 +444,6 @@ export function ToolRail({
     const id = createShapeId();
     const center = editor.getViewportPageBounds().center;
     const sizes: Readonly<Record<typeof type, readonly [number, number]>> = {
-      [NOTE_SHAPE_TYPE]: [260, 210],
       [SWATCH_SHAPE_TYPE]: [computeSwatchWidth(1), SWATCH_HEIGHT],
     };
     const [width, height] = sizes[type];
@@ -450,11 +452,7 @@ export function ToolRail({
       x: center.x - width / 2,
       y: center.y - height / 2,
     };
-    if (embedded && type === NOTE_SHAPE_TYPE) {
-      editor.createShape({ ...placement, type, props: { text: "" } });
-    } else {
-      editor.createShape({ ...placement, type });
-    }
+    editor.createShape({ ...placement, type });
     editor.select(id);
     editor.focus();
   };
@@ -547,8 +545,6 @@ export function ToolRail({
       id: shapeId,
       meta: {
         fashionSketch: true,
-        role: "silhouette_ref",
-        roleSource: "manual",
         sketchDirty: true,
         sketchIndex: sketchNumber,
         sketchStatus: "draft",
@@ -1144,8 +1140,28 @@ export function ToolRail({
           <div className={styles.toolScroller}>
             {/* ── 导航工具 ── */}
             <div className={styles.toolGroup}>
+              {/* 添加节点或上传图片 */}
+              {addNodeControl ??
+              <RailButton
+                className={styles.toolButton}
+                onClick={() =>
+                  onUpload ? onUpload() : window.dispatchEvent(new Event(BOARD_FILE_PICKER_EVENT))
+                }
+                disabled={!editable}
+                title="上传图片"
+                type="button"
+                aria-label="上传图片"
+              >
+                <BottomToolbarIcon name="upload" />
+              </RailButton>}
+            </div>
+
+            <div className={styles.toolDivider} />
+
+            {/* ── 绘制工具 ── */}
+            <div className={styles.toolGroup}>
               {/* 选择 */}
-              <button
+              <RailButton
                 className={styles.toolButton}
                 onClick={() => setTool("select")}
                 disabled={!ready}
@@ -1154,49 +1170,11 @@ export function ToolRail({
                 aria-label="选择工具"
                 aria-pressed={currentToolId === "select"}
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M5 2.5 L5 15 L8.5 11.5 L11.5 17 L13.5 16 L10.5 10.5 L16 10.5 Z"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
-                    fill="currentColor"
-                    fillOpacity="0.1"
-                  />
-                </svg>
-              </button>
+                <BottomToolbarIcon name="select" />
+              </RailButton>
 
-              {/* 抓手 */}
-              <button
-                className={styles.toolButton}
-                onClick={() => setTool("hand")}
-                disabled={!ready}
-                title="抓手 (H)"
-                type="button"
-                aria-label="抓手工具"
-                aria-pressed={currentToolId === "hand"}
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M7.5 13.5V8a1.25 1.25 0 0 1 2.5 0v3.5
-                     M10 8.5V6.25a1.25 1.25 0 0 1 2.5 0v4
-                     M12.5 9V7.5a1.25 1.25 0 0 1 2.5 0V12
-                     a5 5 0 0 1-5 5h-.5a5 5 0 0 1-5-5v-2.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <div className={styles.toolDivider} />
-
-            {/* ── 绘制工具 ── */}
-            <div className={styles.toolGroup}>
               {/* 服装草绘入口 */}
-              <button
+              <RailButton
                 className={styles.toolButton}
                 data-tool="sketch"
                 onClick={openSketch}
@@ -1208,160 +1186,17 @@ export function ToolRail({
                 }
                 aria-pressed={Boolean(selectedSketchId)}
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M4.5 15 L13 6.5 a2.1 2.1 0 0 1 2.95 2.95 L7.4 17.5 Z"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
-                    fill="currentColor"
-                    fillOpacity="0.1"
-                  />
-                  <path
-                    d="M12 7.5 L15 10.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                  <path d="M4 16.5 L3.5 17.5 L4.5 17 Z" fill="currentColor" />
-                </svg>
-              </button>
+                <BottomToolbarIcon name="sketch" />
+              </RailButton>
 
-              {/* 上传图片 */}
-              <button
-                className={styles.toolButton}
-                onClick={() =>
-                  onUpload ? onUpload() : window.dispatchEvent(new Event(BOARD_FILE_PICKER_EVENT))
-                }
-                disabled={!editable}
-                title="上传图片"
-                type="button"
-                aria-label="上传图片"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <rect
-                    x="3"
-                    y="5.5"
-                    width="14"
-                    height="10.5"
-                    rx="1.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  <circle cx="7" cy="9.5" r="1.3" fill="currentColor" />
-                  <path
-                    d="M3 13.5 L6.5 10 L9.5 12.5 L13 8.5 L17 12"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {/* upload arrow */}
-                  <path
-                    d="M14 3.5 V1.5 M12.5 3 L14 1.5 L15.5 3"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {/* 文本 */}
-              <button
-                className={styles.toolButton}
-                onClick={() => setTool("text")}
-                disabled={!editable}
-                title="文本 (T)"
-                type="button"
-                aria-label="文本工具"
-                aria-pressed={currentToolId === "text"}
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M4.5 5.5 H15.5 M10 5.5 V15.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M7.5 15.5 H12.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-
-              {/* 箭头 — Figma 风格的单向实线箭头 */}
-              <button
-                aria-label="箭头工具"
-                aria-pressed={currentToolId === "arrow"}
-                className={styles.toolButton}
-                data-tool="arrow"
-                onClick={() => setTool("arrow")}
-                disabled={!editable}
-                title="箭头 (Shift+L)"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  width="20"
-                >
-                  <path
-                    d="M3.5 16.5 16 4m-6.5 0H16v6.5"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-              </button>
             </div>
 
             <div className={styles.toolDivider} />
 
             {/* ── 设计对象 ── */}
             <div className={styles.toolGroup}>
-              {/* 便签 — sticky note 折角形 */}
-              <button
-                className={styles.toolButton}
-                onClick={() => createShape(NOTE_SHAPE_TYPE)}
-                disabled={!editable}
-                title="灵感便签"
-                type="button"
-                aria-label="添加灵感便签"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <path
-                    d="M4 4 H13 L16.5 7.5 V16 H4 Z"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
-                    fill="currentColor"
-                    fillOpacity="0.07"
-                  />
-                  {/* folded corner */}
-                  <path
-                    d="M13 4 V7.5 H16.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M7 9.5 H13 M7 12.5 H11"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-
               {/* 色卡 — 三列色带 */}
-              <button
+              <RailButton
                 className={styles.toolButton}
                 onClick={() => createShape(SWATCH_SHAPE_TYPE)}
                 disabled={!editable}
@@ -1369,84 +1204,12 @@ export function ToolRail({
                 type="button"
                 aria-label="添加色卡"
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <rect
-                    x="3.5"
-                    y="5"
-                    width="13"
-                    height="10"
-                    rx="1.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    fill="currentColor"
-                    fillOpacity="0.07"
-                  />
-                  <line
-                    x1="8.2"
-                    y1="5"
-                    x2="8.2"
-                    y2="15"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                  />
-                  <line
-                    x1="12.8"
-                    y1="5"
-                    x2="12.8"
-                    y2="15"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                  />
-                  {/* center band slight fill suggestion */}
-                  <rect
-                    x="8.2"
-                    y="5"
-                    width="4.6"
-                    height="10"
-                    fill="currentColor"
-                    fillOpacity="0.12"
-                  />
-                </svg>
-              </button>
+                <BottomToolbarIcon name="swatches" />
+              </RailButton>
 
-              {/* 固定素材 */}
-              <button
-                className={`${styles.toolButton} ${styles.pinButton}`}
-                onClick={() => setTool("mount")}
-                disabled={!editable}
-                title="固定素材"
-                type="button"
-                aria-label="固定素材"
-                aria-pressed={currentToolId === "mount"}
-                data-tool="mount"
-              >
-                <svg
-                  className={styles.pinIcon}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M8.6 3.25h6.8l-.85 5.1 2.35 2.35v1.55H7.1V10.7l2.35-2.35-.85-5.1Z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill={currentToolId === "mount" ? "currentColor" : "none"}
-                  />
-                  <path
-                    d="M12 12.25v8.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
 
               {/* 面料库 — 布卷图标 */}
-              <button
+              <RailButton
                 className={styles.toolButton}
                 onClick={onOpenFabrics}
                 disabled={!ready}
@@ -1454,97 +1217,10 @@ export function ToolRail({
                 type="button"
                 aria-label="打开面料库"
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  {/* cylinder body */}
-                  <path
-                    d="M4 7 V14.5 a6 2.5 0 0 0 12 0 V7"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    fill="currentColor"
-                    fillOpacity="0.07"
-                  />
-                  {/* top ellipse */}
-                  <ellipse
-                    cx="10"
-                    cy="7"
-                    rx="6"
-                    ry="2.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  {/* mid ellipse */}
-                  <path
-                    d="M4 10.8 a6 2.5 0 0 0 12 0"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    strokeDasharray="2.5 2"
-                  />
-                </svg>
-              </button>
+                <BottomToolbarIcon name="fabric" />
+              </RailButton>
 
-              {/* 系列工作台 */}
-              <button
-                aria-label="打开系列工作台"
-                aria-pressed={collectionsOpen}
-                className={styles.toolButton}
-                data-tool="collection"
-                onClick={onOpenCollections}
-                disabled={!ready}
-                title="系列工作台"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  height="18"
-                  viewBox="0 0 20 20"
-                  width="18"
-                >
-                  <path
-                    d="M4.5 5.25h8.75v10H4.5z"
-                    fill="currentColor"
-                    fillOpacity="0.08"
-                    stroke="currentColor"
-                    strokeWidth="1.35"
-                  />
-                  <path
-                    d="M7.25 2.75H15.5v10h-2.25M7.25 7.25h3.5M7.25 10h2.5"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.35"
-                  />
-                </svg>
-              </button>
 
-              {/* 趋势分析 — 导航 */}
-              <button
-                className={styles.navButton}
-                onClick={() =>
-                  onOpenTrends ? onOpenTrends() : window.open(boardTrendsPath(projectId), "_blank", "noopener")
-                }
-                disabled={!ready}
-                title="趋势分析"
-                type="button"
-                aria-label="打开趋势分析"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <polyline
-                    points="3,15 7,9.5 10.5,12.5 14.5,6.5 17,8.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <polyline
-                    points="14.5,6.5 17,6.5 17,9"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
             </div>
           </div>
         )}

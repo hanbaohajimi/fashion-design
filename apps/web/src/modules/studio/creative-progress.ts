@@ -10,6 +10,6 @@ export function creativeProgress(data: StudioSummary) {
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
   return { records: records.slice(0, 3), styles: data.styles.length, assets: data.assets.length, packs: data.techPacks.length,
     next: data.styles.length ? { tab: "experiments", title: "探索这件作品的色彩与材质", action: "进入色料实验" } :
-      data.assets.length ? { tab: "styles", title: "把候选整理成可延续的款式", action: "比较并保存款式" } :
+      data.assets.length ? { tab: "styles", title: "把图片整理成可延续的款式", action: "比较并保存款式" } :
         { tab: "tasks", title: "从一张草图或一个想法开始", action: "开始设计任务" } };
 }

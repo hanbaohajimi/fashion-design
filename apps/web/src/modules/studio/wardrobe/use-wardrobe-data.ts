@@ -3,7 +3,7 @@ import type { WardrobeSummary } from "@fashion/shared";
 import { userFacingError } from "../../../components/user-facing-error";
 import { wardrobeApi } from "./wardrobe-api";
 
-export function useWardrobeData(projectId: string) {
+export function useWardrobeData(projectId: string, active = true) {
   const [data, setData] = useState<WardrobeSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,11 +23,11 @@ export function useWardrobeData(projectId: string) {
   useEffect(() => { mounted.current = true; void Promise.resolve().then(() => mounted.current ? refresh() : undefined); return () => { mounted.current = false; request.current?.abort(); }; }, [refresh]);
   const pending = data?.preparations.some(item => item.status === "queued" || item.status === "running") || data?.tryOns.some(item => item.status === "queued" || item.status === "running");
   useEffect(() => {
-    if (!pending) return;
+    if (!pending || !active) return;
     const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 4000);
     const resume = () => { if (!document.hidden) void refresh(); };
     document.addEventListener("visibilitychange", resume);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", resume); };
-  }, [pending, refresh]);
+  }, [pending, refresh, active]);
   return { data, error, loading, refresh };
 }

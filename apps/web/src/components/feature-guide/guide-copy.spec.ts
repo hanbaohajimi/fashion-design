@@ -30,21 +30,21 @@ describe("设计助手导览与当前入口一致", () => {
   it.each([
     ["collapsed", "点击画布中的织芽或助手入口展开对话"],
     ["mobile", "从画布中的织芽进入对话"],
-    ["input", "生成前再请你确认"],
+    ["input", "核对草稿后发送"],
     ["history", "顶部“新建对话”"],
-    ["paused", "“助手设置”中选择“恢复设计助手”"],
+    ["paused", "输入区的“恢复设计助手”"],
   ])("在 %s 状态说明当前可用操作", (variant, action) => {
     anchor("workspace-assistant", { guideVariant: variant });
 
     expect(resolveGuideSteps("workspace")[0]).toMatchObject({
-      title: "和设计助手讨论想法",
+      title: "和设计助手一起创作",
       description: expect.stringContaining(action),
     });
   });
 
   it("同一对话区切换为历史或暂停后，不继续介绍输入设计需求", () => {
     const target = anchor("workspace-assistant", { guideVariant: "input" });
-    expect(resolveGuideSteps("workspace")[0]?.description).toContain("在这里描述设计想法");
+    expect(resolveGuideSteps("workspace")[0]?.description).toContain("核对草稿后发送");
 
     target.dataset.guideVariant = "history";
     const history = resolveGuideSteps("workspace")[0]?.description;
@@ -99,5 +99,6 @@ describe("面料导览", () => {
     expect(steps.map(step => step.id)).toEqual(["filters", "preview"]);
     expect(steps[0]?.description).toContain("展开规格筛选");
     expect(steps[0]?.description).toContain("搜索框还可查");
+    expect(steps[1]?.description).toContain("点击面料图片翻到背面");
   });
 });

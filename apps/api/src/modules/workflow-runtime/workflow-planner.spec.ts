@@ -43,9 +43,9 @@ describe("Fig8 tool contract and action protocol", () => {
   });
   it("provides one serializable tool catalog with parameter defaults and honest reference semantics", () => {
     const tools = getWorkflowToolCatalog();
-    expect(tools.map((tool) => tool.key)).toEqual(["analyze_brief", "generate_design", "evaluate_design", "edit_design", "transform_image"]);
+    expect(tools.map((tool) => tool.key)).toEqual(["generate_text", "generate_design", "edit_design", "transform_image"]);
     expect(tools.find((tool) => tool.key === "generate_design")?.defaults).toMatchObject({ count: 2, width: 768, height: 1024, quality: "high" });
-    expect(tools.find((tool) => tool.key === "edit_design")?.limits.join(" ")).toContain("提示词");
+    expect(tools.find((tool) => tool.key === "edit_design")?.limits.join(" ")).toContain("本次明确指令");
     expect(JSON.stringify(tools)).toContain("negativePrompt");
     expect(parseWorkflowToolParameters("generate_design", { prompt: "外套", count: 4, width: 1024, quality: "auto" })).toMatchObject({ count: 4, width: 1024, quality: "auto", negativePrompt: "" });
     expect(() => parseWorkflowToolParameters("generate_design", { prompt: "外套", count: 5 })).toThrow();
@@ -73,7 +73,7 @@ describe("Fig8 tool contract and action protocol", () => {
   it("keeps all selected parameters in the executable node and rejects reference config outside explicit inputs", () => {
     const ops = compileWorkflowAction(graph, { ...action, parameters: { prompt: edit.prompt, negativePrompt: "拉链", count: 3, width: 1024, height: 1536, quality: "medium" } }, ["a"]);
     expect(ops.find((op) => op.type === "add_node" && op.node.kind === "tool")).toMatchObject({ node: { payload: { params: { negativePrompt: "拉链", count: 3, width: 1024, height: 1536, quality: "medium" } } } });
-    expect(() => compileWorkflowAction(graph, { ...action, parameters: { prompt: edit.prompt, referenceInputs: [{ nodeId: "unused", role: "style_ref", weight: 0.5 }] } }, ["a"])).toThrow("参考配置");
+    expect(() => compileWorkflowAction(graph, { ...action, parameters: { prompt: edit.prompt, referenceInputs: [{ nodeId: "unused", role: "style_ref", weight: 0.5 }] } }, ["a"])).toThrow("引用顺序");
   });
   it("updates a ready unexecuted tool atomically and preserves unrelated payload", () => {
     const draft = { id: "draft", kind: "tool", type: "edit_design", status: "ready", title: "旧标题", x: 0, y: 0, payload: { localNote: "保留", params: { prompt: "旧提示词", width: 1536, count: 3 } } };
@@ -147,8 +147,8 @@ describe("workflow planner action enablement", () => {
   it("does not silently switch the explicitly referenced editing parent", () => {
     expect(() => compileWorkflowProposal(graph, edit, ["b"])).toThrow("明确引用");
   });
-  it("preserves the parent's existing constraints and the explicitly selected evaluation candidates", () => {
-    expect(() => compileWorkflowProposal(graph, { ...edit, inputs: [{ nodeId: "a", port: "source" }] }, ["a"])).toThrow("分支的设计约束");
+  it("uses this request's instructions without inherited constraints and preserves explicit evaluation candidates", () => {
+    expect(() => compileWorkflowProposal(graph, { ...edit, inputs: [{ nodeId: "a", port: "source" }] }, ["a"])).not.toThrow();
     expect(() => compileWorkflowProposal(graph, { ...edit, tool: "evaluate_design", inputs: [{ nodeId: "b", port: "candidate" }, { nodeId: "c2", port: "constraint" }] }, ["a"])).toThrow("明确引用");
   });
   it("requires explicit constraint selection for a cross-branch comparison", () => {

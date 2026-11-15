@@ -4,6 +4,7 @@ import { ImageShapeUtil } from "./ImageShape";
 import { NoteShapeUtil } from "./NoteShape";
 import { SwatchShapeUtil } from "./SwatchShape";
 import { MediaShapeUtil } from "./MediaShape";
+import { TextShapeUtil } from "./TextShape";
 
 export {
   BOARD_ROLES,
@@ -41,6 +42,7 @@ export {
 export const boardShapeUtils = [
   ImageShapeUtil,
   NoteShapeUtil,
+  TextShapeUtil,
   SwatchShapeUtil,
   FrameShapeUtil,
   FabricShapeUtil,

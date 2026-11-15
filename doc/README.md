@@ -10,6 +10,30 @@
 
 ## 现行入口
 
+2026-11-15普通图片名称统一、同次执行消息归并、适中结果预览与“查看画布”、保存记录退出聊天主线及旧记录保留，见[助手任务归并与显示层级](design/assistant-task-transcript-validation.md)。
+
+2026-11-15系列规划并入系列工作台，提供设计方向、款式规划与系列扩展，款式档案及商品展示继续独立；数据、历史链接、草稿与验证范围见[系列工作台合并](design/collection-workbench-validation.md)。
+
+2026-11-15接入用户确认的StatusMark轻量状态图标，完善ThoughtLine的默认单行、真实计时与阶段交接；文字和结果块保持稳定，历史／后台恢复不重播。见[状态动效验证](design/assistant-status-motion-validation.md)。
+
+2026-11-15助手消息的结果层级、真实对象与连接方向、成功／失败／部分完成／待确认，以及320–420px面板呈现，见[消息结果展示验证](design/assistant-message-feedback-validation.md)。状态变化更新原反馈，实际执行链路复用。
+
+2026-11-15接续使用真实 Claude Sonnet 4.6 验证四色色卡、图片排版、面料库和空节点连接，修正口语指令的执行校验；聊天消息下方的“查看引用记录”已移除，引用元数据继续保存。见[真实模型与消息简化验证](design/assistant-canvas-real-validation.md)。
+
+2026-11-15设计助手接入色卡／已有面料、画布排版、功能面板与输入连接的类型化动作；实际保存或界面出现后才形成完成回执。能力、恢复与验证边界见[助手画布工具](design/assistant-canvas-actions-validation.md)。
+
+2026-11-15输入框主动提示词增强、旧需求分析／方案规划／评估流程退役，以及保留直接生图与历史结果的边界，见[接入与退役验证](design/prompt-enhancement-retirement-validation.md)。
+
+2026-11-15“添加节点”已接通文本手动编辑与AI起草、16:9空图片、视频导入播放及本项目已有资源选择；空图片/文本可预先建立连接。便签退役、画布对象收纳继续生效。实现、保存恢复与验证边界见[添加节点与资源交互](design/add-node-interaction.md)。
+
+2026-11-14后续按LibTV截图调整选图后的上下工具栏，并将画布常驻动作图标化；WarmTooltip支持连续悬停、键盘与长按说明。见[工具栏与图标入口验证](design/canvas-toolbars-validation.md)，包含1440/1280/390/320px、上浮参数、草稿和触控回归的范围。
+
+2026-11-14助手的引用悬停／双击定位／图号插入、LatticeLoader、RefineFrame 与点击式语音草稿输入，见[助手动效与语音接入验证](design/assistant-motion-voice-validation.md)。验证使用隔离浏览器接口，不录制真实麦克风，也不调用付费模型。
+
+2026-11-14统一创作画布将素材摆放、直接连接、图片上下工具、重跑/分支/历史与功能目录合并在同一工作区；普通生图仅使用显式参考、原始文字和真实参数，旧用途皮肤停止显示。见[实施与验证](plans/unified-canvas/IMPLEMENTATION.md)及[数据与命令架构](architecture/unified-creation-canvas.md)，包含LibTV实机观察、269项去重定向检查和15项分批单worker浏览器验证的范围与限制。
+
+2026-11-14画布助手改为默认浮窗、一键停靠与图标工具栏，引用采用编号小缩略图；草稿、会话、技能和已有任务连续性、63项单元与89项不同浏览器用例的范围见[助手改版验证](design/assistant-redesign-validation.md)。独立终审仅覆盖四项已评分修正，截图使用布局与接口夹具。
+
 2026-11-12生成视频/音频明确放回无限白板，带权限与原文件核验、点击播放、来源定位、恢复与性能记录；详情见[媒体白板验收](design/canvas-media-validation.md)。素材仍需用户明确添加，静态画布遇媒体时不会静默漏图导出。
 
 2026-11-12审批发现的七项问题、窄屏修正与实际数据库回归见[审批问题修正验证](design/workspace-approval-fixes-validation.md)，覆盖私有品牌引用、登录返回、WEBP迁移、研究响应、委托状态、技能作用域和评审分页；整体产品优化继续进行。

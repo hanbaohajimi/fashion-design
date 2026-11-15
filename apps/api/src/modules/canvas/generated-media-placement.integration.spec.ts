@@ -12,6 +12,7 @@ import { WorkflowsService } from "../workflows/workflows.service";
 import { S3FileStorage } from "../files/storage.service";
 import { CanvasCommandService } from "../workflow-runtime/canvas-command.service";
 import { CanvasCommandsController } from "../workflow-runtime/canvas-commands.controller";
+import { CanvasCreationsService } from "../workflow-runtime/canvas-creations.service";
 import { RateLimitGuard } from "../../security/rate-limit.guard";
 import { ProjectGeneratedFilesService } from "../project-generated-files/project-generated-files.service";
 import { generatedAudioBytes, generatedVideoBytes } from "../../../../../tests/e2e/generated-media-fixture";
@@ -27,6 +28,7 @@ beforeAll(async () => {
   const mediaStorage = new RunwayStorage();
   const module = await Test.createTestingModule({ controllers: [CanvasCommandsController, RunwayController], providers: [
     { provide: CanvasCommandService, useValue: commands },
+    { provide: CanvasCreationsService, useValue: new CanvasCreationsService(canvas, commands, workflows, access) },
     { provide: RunwayService, useValue: new RunwayService(prisma, access, mediaStorage) },
     { provide: RunwayStorage, useValue: mediaStorage },
   ] }).overrideGuard(RateLimitGuard).useValue({ canActivate: () => true }).compile();

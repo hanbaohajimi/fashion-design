@@ -1,0 +1,947 @@
+{
+  "tool": "comp-spec",
+  "version": 1,
+  "createdAt": "2026-11-14T05:19:43.597Z",
+  "comp": ".impeccable/mocks/public-fashion-02.png",
+  "warnings": [
+    "region nav-surface: \"container\": true set in the regions file (the region-size refusal is overridden: one undivided element)",
+    "region hero-photo: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region material-photo: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region sketch-photo: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)",
+    "region collection-photo: \"bleed\": true set in the regions file (the clipped-artwork refusal is overridden: the page crops it there)"
+  ],
+  "uncoveredInkCells": [
+    "A7"
+  ],
+  "compSize": {
+    "width": 1568,
+    "height": 1003
+  },
+  "aspect": 1.5633,
+  "orientation": "landscape",
+  "palette": [
+    {
+      "hex": "#f1ede6",
+      "coverage": 0.3881
+    },
+    {
+      "hex": "#bdb09d",
+      "coverage": 0.2227
+    },
+    {
+      "hex": "#89806a",
+      "coverage": 0.1907
+    },
+    {
+      "hex": "#55533e",
+      "coverage": 0.1842
+    },
+    {
+      "hex": "#1f1a18",
+      "coverage": 0.0143
+    }
+  ],
+  "bands": [
+    {
+      "y": 0.0732,
+      "strength": 0.944
+    },
+    {
+      "y": 0.3415,
+      "strength": 0.2128
+    },
+    {
+      "y": 0.3902,
+      "strength": 0.3376
+    },
+    {
+      "y": 0.4512,
+      "strength": 0.2143
+    },
+    {
+      "y": 0.6829,
+      "strength": 1
+    },
+    {
+      "y": 0.7927,
+      "strength": 0.6024
+    }
+  ],
+  "regions": [
+    {
+      "id": "nav-surface",
+      "kind": "chrome",
+      "note": "Warm ivory navigation strip with existing brand and links.",
+      "grid": null,
+      "container": true,
+      "box": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 0.0678
+      },
+      "px": {
+        "x": 0,
+        "y": 0,
+        "w": 1568,
+        "h": 68
+      },
+      "aspect": 23.0588,
+      "palette": [
+        {
+          "hex": "#f8f8f1",
+          "coverage": 0.9469
+        },
+        {
+          "hex": "#1e593b",
+          "coverage": 0.0326
+        },
+        {
+          "hex": "#bfc5ba",
+          "coverage": 0.0097
+        },
+        {
+          "hex": "#434a43",
+          "coverage": 0.0066
+        },
+        {
+          "hex": "#233026",
+          "coverage": 0.0041
+        }
+      ],
+      "detail": {
+        "energy": 19.2314
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": true
+      }
+    },
+    {
+      "id": "brand",
+      "kind": "control",
+      "note": "森织 设计工作室 home identity.",
+      "grid": null,
+      "box": {
+        "x": 0.0676,
+        "y": 0.008,
+        "w": 0.1728,
+        "h": 0.0489
+      },
+      "px": {
+        "x": 106,
+        "y": 8,
+        "w": 271,
+        "h": 49
+      },
+      "aspect": 5.5306,
+      "palette": [
+        {
+          "hex": "#f7f7ef",
+          "coverage": 0.8897
+        },
+        {
+          "hex": "#63715d",
+          "coverage": 0.033
+        },
+        {
+          "hex": "#c5c9bd",
+          "coverage": 0.0309
+        },
+        {
+          "hex": "#9a9c8c",
+          "coverage": 0.0235
+        },
+        {
+          "hex": "#323e35",
+          "coverage": 0.0229
+        }
+      ],
+      "detail": {
+        "energy": 37.2477
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-inspiration",
+      "kind": "text",
+      "note": "作品与灵感 navigation link.",
+      "grid": null,
+      "box": {
+        "x": 0.3929,
+        "y": 0.0199,
+        "w": 0.0759,
+        "h": 0.0269
+      },
+      "px": {
+        "x": 616,
+        "y": 20,
+        "w": 119,
+        "h": 27
+      },
+      "aspect": 4.4074,
+      "palette": [
+        {
+          "hex": "#f6f6f1",
+          "coverage": 0.7346
+        },
+        {
+          "hex": "#323b34",
+          "coverage": 0.1089
+        },
+        {
+          "hex": "#b2b5ad",
+          "coverage": 0.081
+        },
+        {
+          "hex": "#6d746f",
+          "coverage": 0.0615
+        },
+        {
+          "hex": "#8e9e92",
+          "coverage": 0.014
+        }
+      ],
+      "detail": {
+        "energy": 35.6968
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-process",
+      "kind": "text",
+      "note": "创作方式 navigation link.",
+      "grid": null,
+      "box": {
+        "x": 0.4968,
+        "y": 0.0199,
+        "w": 0.0593,
+        "h": 0.0269
+      },
+      "px": {
+        "x": 779,
+        "y": 20,
+        "w": 93,
+        "h": 27
+      },
+      "aspect": 3.4444,
+      "palette": [
+        {
+          "hex": "#f7f7f2",
+          "coverage": 0.7384
+        },
+        {
+          "hex": "#465146",
+          "coverage": 0.0896
+        },
+        {
+          "hex": "#7f827e",
+          "coverage": 0.0824
+        },
+        {
+          "hex": "#afb4ad",
+          "coverage": 0.0681
+        },
+        {
+          "hex": "#252d2b",
+          "coverage": 0.0215
+        }
+      ],
+      "detail": {
+        "energy": 27.2516
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-tools",
+      "kind": "text",
+      "note": "设计工具 navigation link.",
+      "grid": null,
+      "box": {
+        "x": 0.5829,
+        "y": 0.0199,
+        "w": 0.058,
+        "h": 0.0269
+      },
+      "px": {
+        "x": 914,
+        "y": 20,
+        "w": 91,
+        "h": 27
+      },
+      "aspect": 3.3704,
+      "palette": [
+        {
+          "hex": "#f7f7f2",
+          "coverage": 0.7921
+        },
+        {
+          "hex": "#525f54",
+          "coverage": 0.086
+        },
+        {
+          "hex": "#b6bdb4",
+          "coverage": 0.0645
+        },
+        {
+          "hex": "#7f847f",
+          "coverage": 0.0323
+        },
+        {
+          "hex": "#2a3331",
+          "coverage": 0.0251
+        }
+      ],
+      "detail": {
+        "energy": 25.1988
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "nav-login",
+      "kind": "control",
+      "note": "Forest-green 登录 button.",
+      "grid": null,
+      "box": {
+        "x": 0.8718,
+        "y": 0.013,
+        "w": 0.0599,
+        "h": 0.0439
+      },
+      "px": {
+        "x": 1367,
+        "y": 13,
+        "w": 94,
+        "h": 44
+      },
+      "aspect": 2.1364,
+      "palette": [
+        {
+          "hex": "#1c573a",
+          "coverage": 0.7558
+        },
+        {
+          "hex": "#f3f6ef",
+          "coverage": 0.0821
+        },
+        {
+          "hex": "#cadacd",
+          "coverage": 0.0821
+        },
+        {
+          "hex": "#94aaa1",
+          "coverage": 0.0442
+        },
+        {
+          "hex": "#547869",
+          "coverage": 0.0358
+        }
+      ],
+      "detail": {
+        "energy": 15.6151
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "hero-photo",
+      "kind": "plate",
+      "note": "Continuous panoramic atelier fashion photograph: pale wall and sage fabric folds on left, ivory wrap-coat model around two thirds, dress form and garment rail right. UI text is a separate layer.",
+      "grid": null,
+      "bleed": true,
+      "box": {
+        "x": 0,
+        "y": 0.0678,
+        "w": 1,
+        "h": 0.6132
+      },
+      "px": {
+        "x": 0,
+        "y": 68,
+        "w": 1568,
+        "h": 615
+      },
+      "aspect": 2.5496,
+      "palette": [
+        {
+          "hex": "#e3dbcd",
+          "coverage": 0.2926
+        },
+        {
+          "hex": "#b0a390",
+          "coverage": 0.2809
+        },
+        {
+          "hex": "#54503c",
+          "coverage": 0.2118
+        },
+        {
+          "hex": "#7f7761",
+          "coverage": 0.2014
+        },
+        {
+          "hex": "#195739",
+          "coverage": 0.0133
+        }
+      ],
+      "detail": {
+        "energy": 30.1156
+      },
+      "medium": "raster",
+      "plate": "assets/plates/hero-photo.png",
+      "text": null
+    },
+    {
+      "id": "headline",
+      "kind": "text",
+      "note": "让灵感，穿上形状。 One line Chinese serif headline.",
+      "grid": null,
+      "box": {
+        "x": 0.102,
+        "y": 0.2223,
+        "w": 0.3642,
+        "h": 0.0688
+      },
+      "px": {
+        "x": 160,
+        "y": 223,
+        "w": 571,
+        "h": 69
+      },
+      "aspect": 8.2754,
+      "palette": [
+        {
+          "hex": "#ece2d6",
+          "coverage": 0.6064
+        },
+        {
+          "hex": "#cbc0b0",
+          "coverage": 0.1906
+        },
+        {
+          "hex": "#233428",
+          "coverage": 0.1549
+        },
+        {
+          "hex": "#84887b",
+          "coverage": 0.029
+        },
+        {
+          "hex": "#556052",
+          "coverage": 0.0191
+        }
+      ],
+      "detail": {
+        "energy": 71.0548
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      },
+      "type": {
+        "comp": {
+          "lines": 1,
+          "glyphs": 9,
+          "capHeightPx": 56.2,
+          "inkIsDark": true,
+          "allCaps": false,
+          "advance": 0.9609,
+          "advTall": 0.9609,
+          "advX": null,
+          "gap": 0.1068,
+          "xRatio": 0.6762,
+          "stemW": 0.1157,
+          "contrast": 2.1672,
+          "serif": null,
+          "densTall": 0.359,
+          "densX": null,
+          "weight": 0.359
+        },
+        "widthClass": "wide",
+        "weightClass": "regular"
+      }
+    },
+    {
+      "id": "intro",
+      "kind": "text",
+      "note": "从面料、廓形与色彩出发，把创意做成可继续的服装系列。 Single-line product explanation.",
+      "grid": null,
+      "box": {
+        "x": 0.1027,
+        "y": 0.321,
+        "w": 0.3833,
+        "h": 0.0299
+      },
+      "px": {
+        "x": 161,
+        "y": 322,
+        "w": 601,
+        "h": 30
+      },
+      "aspect": 20.0333,
+      "palette": [
+        {
+          "hex": "#ece5d9",
+          "coverage": 0.6267
+        },
+        {
+          "hex": "#c3bdad",
+          "coverage": 0.1623
+        },
+        {
+          "hex": "#313f2f",
+          "coverage": 0.0799
+        },
+        {
+          "hex": "#95988d",
+          "coverage": 0.0656
+        },
+        {
+          "hex": "#656960",
+          "coverage": 0.0656
+        }
+      ],
+      "detail": {
+        "energy": 81.2328
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "primary-action",
+      "kind": "control",
+      "note": "Deep-green 开始创作 action with small right arrow.",
+      "grid": null,
+      "box": {
+        "x": 0.1033,
+        "y": 0.3888,
+        "w": 0.1556,
+        "h": 0.0568
+      },
+      "px": {
+        "x": 162,
+        "y": 390,
+        "w": 244,
+        "h": 57
+      },
+      "aspect": 4.2807,
+      "palette": [
+        {
+          "hex": "#1b573a",
+          "coverage": 0.899
+        },
+        {
+          "hex": "#e9e9e2",
+          "coverage": 0.0547
+        },
+        {
+          "hex": "#b5c8bc",
+          "coverage": 0.0212
+        },
+        {
+          "hex": "#799685",
+          "coverage": 0.0187
+        },
+        {
+          "hex": "#527562",
+          "coverage": 0.0064
+        }
+      ],
+      "detail": {
+        "energy": 16.4867
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "secondary-action",
+      "kind": "control",
+      "note": "Outlined 探索设计灵感 action.",
+      "grid": null,
+      "box": {
+        "x": 0.2742,
+        "y": 0.3888,
+        "w": 0.1429,
+        "h": 0.0568
+      },
+      "px": {
+        "x": 430,
+        "y": 390,
+        "w": 224,
+        "h": 57
+      },
+      "aspect": 3.9298,
+      "palette": [
+        {
+          "hex": "#e6ddd2",
+          "coverage": 0.8552
+        },
+        {
+          "hex": "#455d4d",
+          "coverage": 0.0927
+        },
+        {
+          "hex": "#92a091",
+          "coverage": 0.0271
+        },
+        {
+          "hex": "#1a3926",
+          "coverage": 0.0185
+        },
+        {
+          "hex": "#b8b8b4",
+          "coverage": 0.0064
+        }
+      ],
+      "detail": {
+        "energy": 26.2031
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "example-caption",
+      "kind": "text",
+      "note": "AI 设计示例 caption in warm white.",
+      "grid": null,
+      "box": {
+        "x": 0.9126,
+        "y": 0.6341,
+        "w": 0.074,
+        "h": 0.0289
+      },
+      "px": {
+        "x": 1431,
+        "y": 636,
+        "w": 116,
+        "h": 29
+      },
+      "aspect": 4,
+      "palette": [
+        {
+          "hex": "#615540",
+          "coverage": 0.4301
+        },
+        {
+          "hex": "#392c1b",
+          "coverage": 0.3091
+        },
+        {
+          "hex": "#e7e0d4",
+          "coverage": 0.1129
+        },
+        {
+          "hex": "#7d7868",
+          "coverage": 0.0995
+        },
+        {
+          "hex": "#c4bfae",
+          "coverage": 0.0484
+        }
+      ],
+      "detail": {
+        "energy": 24.0527
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": true,
+        "rules": false
+      }
+    },
+    {
+      "id": "process-heading",
+      "kind": "text",
+      "note": "从一块面料，到一个系列 Chinese serif section title.",
+      "grid": null,
+      "box": {
+        "x": 0.058,
+        "y": 0.7228,
+        "w": 0.354,
+        "h": 0.0499
+      },
+      "px": {
+        "x": 91,
+        "y": 725,
+        "w": 555,
+        "h": 50
+      },
+      "aspect": 11.1,
+      "palette": [
+        {
+          "hex": "#f7f7f0",
+          "coverage": 0.8451
+        },
+        {
+          "hex": "#25372b",
+          "coverage": 0.0831
+        },
+        {
+          "hex": "#586559",
+          "coverage": 0.025
+        },
+        {
+          "hex": "#bfc3bb",
+          "coverage": 0.0247
+        },
+        {
+          "hex": "#8a9087",
+          "coverage": 0.0221
+        }
+      ],
+      "detail": {
+        "energy": 61.3331
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "material-photo",
+      "kind": "plate",
+      "note": "Sage woven linen fabric folds, tactile macro photograph.",
+      "grid": null,
+      "bleed": true,
+      "box": {
+        "x": 0.0587,
+        "y": 0.7946,
+        "w": 0.264,
+        "h": 0.2054
+      },
+      "px": {
+        "x": 92,
+        "y": 797,
+        "w": 414,
+        "h": 206
+      },
+      "aspect": 2.0097,
+      "palette": [
+        {
+          "hex": "#565841",
+          "coverage": 0.4786
+        },
+        {
+          "hex": "#8c8c70",
+          "coverage": 0.4061
+        },
+        {
+          "hex": "#363726",
+          "coverage": 0.0597
+        },
+        {
+          "hex": "#b7b49b",
+          "coverage": 0.0555
+        }
+      ],
+      "detail": {
+        "energy": 19.3697
+      },
+      "medium": "raster",
+      "plate": "assets/plates/material-photo.png",
+      "text": null
+    },
+    {
+      "id": "sketch-photo",
+      "kind": "plate",
+      "note": "Fashion pencil drawing of a draped garment beside matching sage dress on dress form.",
+      "grid": null,
+      "bleed": true,
+      "box": {
+        "x": 0.331,
+        "y": 0.7946,
+        "w": 0.2066,
+        "h": 0.2054
+      },
+      "px": {
+        "x": 519,
+        "y": 797,
+        "w": 324,
+        "h": 206
+      },
+      "aspect": 1.5728,
+      "palette": [
+        {
+          "hex": "#e5dad3",
+          "coverage": 0.647
+        },
+        {
+          "hex": "#7d7d61",
+          "coverage": 0.1897
+        },
+        {
+          "hex": "#b3a995",
+          "coverage": 0.0955
+        },
+        {
+          "hex": "#50533b",
+          "coverage": 0.0628
+        },
+        {
+          "hex": "#222a1a",
+          "coverage": 0.005
+        }
+      ],
+      "detail": {
+        "energy": 13.105
+      },
+      "medium": "raster",
+      "plate": "assets/plates/sketch-photo.png",
+      "text": null
+    },
+    {
+      "id": "process-arrow",
+      "kind": "control",
+      "note": "Thin dark-green arrow showing progression to the collection.",
+      "grid": null,
+      "box": {
+        "x": 0.5619,
+        "y": 0.8814,
+        "w": 0.0242,
+        "h": 0.0279
+      },
+      "px": {
+        "x": 881,
+        "y": 884,
+        "w": 38,
+        "h": 28
+      },
+      "aspect": 1.3571,
+      "palette": [
+        {
+          "hex": "#f7f8f2",
+          "coverage": 0.8692
+        },
+        {
+          "hex": "#253f35",
+          "coverage": 0.0923
+        },
+        {
+          "hex": "#738373",
+          "coverage": 0.0231
+        },
+        {
+          "hex": "#506058",
+          "coverage": 0.0154
+        }
+      ],
+      "detail": {
+        "energy": 7.0144
+      },
+      "medium": "semantic",
+      "plate": null,
+      "text": null,
+      "surface": {
+        "flat": false,
+        "rules": false
+      }
+    },
+    {
+      "id": "collection-photo",
+      "kind": "plate",
+      "note": "Three editorial looks together, ivory wrap coat, sage draped dress and charcoal tailoring, equal studio background.",
+      "grid": null,
+      "bleed": true,
+      "box": {
+        "x": 0.6065,
+        "y": 0.7807,
+        "w": 0.3355,
+        "h": 0.2193
+      },
+      "px": {
+        "x": 951,
+        "y": 783,
+        "w": 526,
+        "h": 220
+      },
+      "aspect": 2.3909,
+      "palette": [
+        {
+          "hex": "#b8a894",
+          "coverage": 0.6596
+        },
+        {
+          "hex": "#1f1a17",
+          "coverage": 0.1007
+        },
+        {
+          "hex": "#8c8168",
+          "coverage": 0.0873
+        },
+        {
+          "hex": "#5f5b3e",
+          "coverage": 0.0769
+        },
+        {
+          "hex": "#46403a",
+          "coverage": 0.0755
+        }
+      ],
+      "detail": {
+        "energy": 23.3115
+      },
+      "medium": "raster",
+      "plate": "assets/plates/collection-photo.png",
+      "text": null
+    }
+  ],
+  "compSha256": "464e960e6e7d7281a02b07ca1cc06d40928d5c4e6b87c43a641e044ef7ca903e",
+  "regionsSource": {
+    "path": "../../output/public-landing-redesign/regions.json",
+    "sha256": "fa66bd4761faebd33c56ba18e49351b813d449b4a37da36e3383b19f69137593"
+  }
+}

@@ -1,11 +1,24 @@
 "use client";
+import { assistantCanvasEnvelopeSchema, type AssistantCanvasEnvelope, type AssistantCanvasObservation, creationActivitySchema } from "@fashion/shared";
+import { AssistantActionFeedback } from "./AssistantActionFeedback";
+import { canvasActionFeedback, followsUserRequest } from "./assistant-action-feedback";
+import { assistantTranscript, assistantTaskState } from "./assistant-transcript";
+import { AssistantTaskMessage } from "./AssistantTaskMessage";
+import messageStyles from "./assistant-message.module.css";
+import type { AssistantCreationContext } from "./assistant-creation-context";
 
-import { Select } from "../../../components/ui";
+import { AssistantHeader } from "./AssistantHeader";
+import { AssistantIconButton } from "./AssistantIconButton";
+import { PromptEnhancementControl } from "./PromptEnhancementControl";
+import { ThoughtLine } from "../../../components/ThoughtLine";
+import { VoicePill } from "../../../components/VoicePill";
+import { insertDictation, type DictationAnchor } from "../../../components/browser-voice";
+import redesign from "./assistant-redesign.module.css";
 import { AssistantMentionInput } from "./AssistantMentionInput";
 import { AssistantStarters } from "./AssistantStarters";
 import { AssistantDelegationsPanel } from "./AssistantDelegationsPanel";
 import { AssistantReferencePreview, referenceLabel, referenceTypeLabel } from "./AssistantReferencePreview";
-import { Button, Notice, Skeleton, Menu } from "../../../components/ui";
+import { Button, Notice, Skeleton, Menu, Tooltip, Dialog } from "../../../components/ui";
 import { StreamingReply, useAssistantStream, assistantPhaseLabel } from "../../../components/StreamingReply";
 import type { AssistantStreamEvent } from "@fashion/shared";
 import prose from "../../../components/reading.module.css";
@@ -52,7 +65,6 @@ import {
   MAX_ASSISTANT_REFERENCES,
 } from "./AssistantReferencePicker";
 import { DesignRequirementsDrawer } from "./DesignRequirementsDrawer";
-import { MessageReferenceRecord } from "./MessageReferenceRecord";
 import { mergeMessages, executionObservationKey } from "./conversation-messages";
 import {
   appendDraftReferences,
@@ -89,7 +101,7 @@ import {
   type WorkflowNode,
   type WorkflowProposal,
 } from "./workflow-api";
-import { displayNodeTitle } from "./workflow-graph";
+import { displayNodeTitle, nodeImageUrl } from "./workflow-graph";
 import styles from "./workflow-canvas.module.css";
 
 export interface WorkflowAssistantDraftRequest {
@@ -105,11 +117,13 @@ interface Props {
   readonly graph: WorkflowGraph;
   readonly projectId: string;
   readonly selected: WorkflowNode | null;
+  readonly focusedCreationId?: string | null;
   readonly onGraphChange: (graph: WorkflowGraph) => void;
   readonly onProposal: (proposal: WorkflowProposal | null) => void;
   readonly onNotice: (message: string | null) => void;
   readonly onError: (message: string | null) => void;
   readonly onLocate: (nodeId: string) => void;
+  readonly onVisitReference?: (nodeId: string, instances?: readonly string[]) => boolean;
   readonly onOpenResult: (nodeId: string) => void;
   readonly onAddMaterial: () => void;
   readonly focusRequest?: number;
@@ -123,10 +137,13 @@ interface Props {
     readonly onConsumed?: () => void;
   } | null;
   readonly referencesPreparing?: boolean;
-  readonly onBeforeSend?: (ids: readonly string[], instances: ReferenceInstances) => Promise<CanvasReferenceSelection>;
+  readonly onBeforeSend?: (ids: readonly string[], instances: ReferenceInstances) => Promise<CanvasReferenceSelection & Partial<AssistantCreationContext>>;
+  readonly onBeforeEnhance?: (ids: readonly string[], instances: ReferenceInstances) => Promise<CanvasReferenceSelection>;
+  readonly onExecuteCanvasAction?: ((value: AssistantCanvasEnvelope) => Promise<WorkflowMessageView>) | undefined;
   readonly directExecution?: boolean;
   readonly onExecution?: () => void;
   readonly canUploadReferences?: boolean;
+  readonly canManageAssistant?: boolean;
   readonly onPrepareImageImport?: (signal: AbortSignal) => Promise<void>;
   readonly onImageImported?: (result: AssistantImageImportResult, signal: AbortSignal) => Promise<void>;
   readonly referencePlacement?: ReferencePlacementActions;
@@ -161,11 +178,13 @@ export function WorkflowAssistantPanel({
   graph,
   projectId,
   selected,
+  focusedCreationId,
   onGraphChange,
   onProposal,
   onNotice,
   onError,
   onLocate,
+  onVisitReference,
   renderLegacyRuns,
   onConversationChange,
   onActivityChange,
@@ -176,9 +195,11 @@ export function WorkflowAssistantPanel({
   referenceRequest,
   referencesPreparing = false,
   onBeforeSend,
-  directExecution: _directExecution = false,
+  onBeforeEnhance,
+  onExecuteCanvasAction,
   onExecution,
   canUploadReferences = false,
+  canManageAssistant = true,
   onPrepareImageImport,
   onImageImported,
   referencePlacement,
@@ -189,6 +210,11 @@ export function WorkflowAssistantPanel({
   const { session } = useAuth();
   const draftScope = useDraftScope();
   const imageInput = useRef<HTMLInputElement>(null);
+  const [voiceFeedback, setVoiceFeedback] = useState<HTMLDivElement | null>(null);
+  const voiceAnchor = useRef<DictationAnchor>({ value: "", start: 0, end: 0 });
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [enhancementFeedback, setEnhancementFeedback] = useState<HTMLDivElement | null>(null);
+  const [enhancing, setEnhancing] = useState(false);
   const [imagesDragging, setImagesDragging] = useState(false);
   const [previewReferenceId, setPreviewReferenceId] = useState<string | null>(null);
   const [resultPreview, setResultPreview] = useState<{ images: readonly WorkflowResultImage[]; compare: boolean } | null>(null);
@@ -198,6 +224,8 @@ export function WorkflowAssistantPanel({
   >([]);
   const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<readonly WorkflowMessageView[]>([]);
+  const presented = useMemo(() => assistantTranscript(messages, conversationId), [messages, conversationId]);
+  const [activityHistoryId, setActivityHistoryId] = useState<string | null>(null);
   const streaming = useAssistantStream(conversationId);
   const receiveStream = (targetId: string, event: AssistantStreamEvent) => {
     if (activeId.current !== targetId) return;
@@ -211,6 +239,11 @@ export function WorkflowAssistantPanel({
   const [localSubmission, setLocalSubmission] = useState<LocalSubmission | null>(null);
   const acknowledgedRequests = useRef(new Set<string>());
   const freshMessages = useRef(new Set<string>());
+  const canvasAttempts = useRef(new Set<string>());
+  const canvasFlights = useRef(new Set<string>());
+  const [canvasBusy, setCanvasBusy] = useState<Record<string, boolean>>({});
+  const [canvasErrors, setCanvasErrors] = useState<Record<string, string>>({});
+  const canvasPackets = useRef(new Map<string, AssistantCanvasObservation>());
   const { conversationView, composerSurface, followMessages, followedConversation, newMessages, awayFromLatest, setNewMessages, stopScroll, scrollToLatest, preserveReading, viewportProps } = useConversationViewport(`${session?.user.id ?? "guest"}:${projectId}:${conversationId}`);
   const [cursor, setCursor] = useState<string | null>(null);
   const [olderLoading, setOlderLoading] = useState(false);
@@ -252,7 +285,6 @@ export function WorkflowAssistantPanel({
   const [contextSaving, setContextSaving] = useState(false);
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [resultIndexOpen, setResultIndexOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addingMaterial, setAddingMaterial] = useState(false);
@@ -266,7 +298,10 @@ export function WorkflowAssistantPanel({
   );
   const [legacyReload, setLegacyReload] = useState(0);
   const [legacyRunsOpen, setLegacyRunsOpen] = useState(false);
-  const [workflowPlannerOpen, setWorkflowPlannerOpen] = useState(false);
+  const [historyTasksOpen, setHistoryTasksOpen] = useState(false);
+  const [historyTaskTab, setHistoryTaskTab] = useState<"delegations" | "plans">("delegations");
+  const [pendingSkill, setPendingSkill] = useState<AssistantSkill | null>(null);
+  const [skillError, setSkillError] = useState<string | null>(null);
   const accountId = session?.user.id ?? "";
   const [skillState, setSkillState] = useState<{
     readonly accountId: string;
@@ -282,7 +317,6 @@ export function WorkflowAssistantPanel({
       items: readPersonalSkills(accountId),
     };
   });
-  const [delegationsOpen, setDelegationsOpen] = useState(false);
   const personalSkills = useMemo(() => {
     if (skillState.accountId === accountId && skillState.projectId === projectId) return skillState.items;
     return readPersonalSkills(accountId);
@@ -309,16 +343,18 @@ export function WorkflowAssistantPanel({
       controller.abort();
     };
   }, [accountId, projectId]);
-  const applyAssistantSkill = useCallback(
-    (skill: AssistantSkill) => {
-      setPrompt(skill.prompt);
-      setReferencedIds([]);
-      setReferenceInstances({});
-      setDraftNotice(`已载入”${skill.name}”，发送前可以继续修改。`);
-      requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
-    },
-    [],
-  );
+  const commitAssistantSkill = (skill: AssistantSkill, mode: "append" | "replace") => {
+    const current = composerInput.current?.value ?? prompt;
+    const value = mode === "append" && current.trim() ? `${current}\n\n${skill.prompt}` : skill.prompt;
+    if (value.length > MAX_AGENT_MESSAGE_LENGTH) { setSkillError("载入后将超出输入上限，请先精简草稿或选择替换。"); return; }
+    setPrompt(value); setPendingSkill(null); setDraftNotice(null); setSkillError(null);
+    requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+  };
+  const applyAssistantSkill = (skill: AssistantSkill) => {
+    setSkillError(null);
+    if ((composerInput.current?.value ?? prompt).trim()) setPendingSkill(skill);
+    else commitAssistantSkill(skill, "replace");
+  };
   const activeId = useRef(conversationId);
   const starterPromptPending = useRef(Boolean(starterPrompt));
   const initializedMessages = useRef("");
@@ -429,7 +465,7 @@ export function WorkflowAssistantPanel({
         onError("视频和音频可在白板播放，但当前助手与图片生成暂不支持分析媒体内容；请回到服装秀来源查看原文件。");
         return false;
       }
-      const result = appendDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, referencedIds.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")), incoming.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media")));
+      const result = appendDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, referencedIds.filter(id => !graph.nodes.some(node => node.id === id && node.type === "media")), incoming);
       if (result.error) { onError(result.error); return false; }
       if (result.ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("还在准备的图片也占用引用名额，请先完成或移除部分附件。"); return false; }
       setReferencedIds(result.ids);
@@ -615,6 +651,8 @@ export function WorkflowAssistantPanel({
       setLegacyMessageError(null);
       setConversationError(null);
       setRequirementsOpen(false);
+      setPendingSkill(null);
+      setHistoryTasksOpen(false);
       setPreviewReferenceId(null);
       setResultPreview(null);
       setCorrectionError(null);
@@ -871,11 +909,14 @@ export function WorkflowAssistantPanel({
       void refreshContext().catch(() => undefined);
   }, [messages, onProposal, pendingReply, refreshContext]);
 
-  const latestMessage = messages.at(-1);
+  const latestRow = presented.rows.at(-1);
+  const latestMessage = latestRow?.kind === "message" ? latestRow.message : latestRow?.task.messages[0];
   const latestMessageKey = latestMessage
     ? JSON.stringify([latestMessage.id, latestMessage.status, latestMessage.content])
     : "";
-  const proposalResults = useMemo(() => new Map(messages.map(message => [message.id, executionObservationKey(message)])), [messages]);
+  const proposalResults = useMemo(() => new Map(presented.rows.map(row => row.kind === "message"
+    ? [row.message.id, executionObservationKey(row.message)]
+    : [row.task.id, `${row.task.executionId ?? row.task.activity?.runId}:${["preparing", "queued", "running", "processing"].includes(assistantTaskState(row.task)) ? "active" : assistantTaskState(row.task)}:${row.task.result?.images.map(image => image.assetId).join(",") ?? ""}`])), [presented]);
   const latestSeen = useRef({ conversationId: "", key: "", results: new Map<string, string>() });
   useEffect(() => {
     const key = `${latestMessageKey}:${localSubmission?.clientRequestId ?? ""}`;
@@ -954,6 +995,8 @@ export function WorkflowAssistantPanel({
     const content = prompt.trim();
     if (
       !content ||
+      voiceBusy ||
+      enhancing ||
       sendFlight.current ||
       sending ||
       referencesPreparing ||
@@ -1001,6 +1044,9 @@ export function WorkflowAssistantPanel({
     onError(null);
     try {
       const prepared = await onBeforeSend?.(refs, draftInstances);
+      if (activeId.current !== conversationId) throw new Error("会话已切换，尚未发送当前内容。");
+      const focusCreationId = prepared && "focusCreationId" in prepared ? prepared.focusCreationId : focusedCreationId;
+      const focusCreationRevision = prepared?.focusCreationRevision;
       if (prepared && JSON.stringify(prepared.nodeIds) !== JSON.stringify(refs)) {
         // A consumed canvas material can fork when edited. Surface its new
         // identity before sending, instead of silently changing the preview.
@@ -1023,9 +1069,14 @@ export function WorkflowAssistantPanel({
         content,
         refs,
         focus,
+        focusCreationId,
+        focusCreationRevision,
+        canvas: prepared?.canvasObservation ? { clientId: prepared.canvasObservation.clientId, selectedIds: prepared.canvasObservation.selectedIds } : null,
         proposalId: adjustment?.id,
       });
       const requestId = requestIds.current.get(key) ?? proposedRequestId;
+      const canvasObservation = canvasPackets.current.get(requestId) ?? prepared?.canvasObservation;
+      if (canvasObservation) canvasPackets.current.set(requestId, canvasObservation);
       attemptedRequestId = requestId;
       requestIds.current.set(key, requestId);
       setLocalSubmission({ conversationId: targetId, clientRequestId: requestId, content, phase: "sending" });
@@ -1048,11 +1099,14 @@ export function WorkflowAssistantPanel({
         content,
         referencedNodeIds: refs,
         focusNodeIds: focus,
+        ...(focusCreationId ? { focusCreationId, ...(focusCreationRevision !== undefined ? { focusCreationRevision } : {}) } : {}),
+        ...(canvasObservation ? { canvasObservation } : {}),
         ...(adjustment ? { respondingToProposalId: adjustment.id } : {}),
       }, (event) => { receiveStream(targetId, event); if ("turn" in event) void acceptDraft(); }, streaming.signalFor(targetId));
       await acceptDraft();
       if (turn.assistantMessage.context?.executionReceipt) onExecution?.();
       requestIds.current.delete(key);
+      canvasPackets.current.delete(requestId);
       acknowledgedRequests.current.add(requestId);
       if (activeId.current !== targetId) return;
       freshMessages.current.add(turn.userMessage.id);
@@ -1145,6 +1199,8 @@ export function WorkflowAssistantPanel({
         clientRequestId: retryId,
         content: user.content,
         referencedNodeIds: user.context?.referencedNodeIds ?? [],
+        ...(user.context?.focusCreationId ? { focusCreationId: user.context.focusCreationId } : {}),
+        ...(typeof user.context?.focusCreationRevision === "number" ? { focusCreationRevision: user.context.focusCreationRevision } : {}),
         ...(Array.isArray(user.context?.focusNodeIds)
           ? { focusNodeIds: user.context.focusNodeIds }
           : {}),
@@ -1309,7 +1365,20 @@ export function WorkflowAssistantPanel({
     onError(null);
     requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
   }, [collaborationReadOnly, contextSaving, graph.nodes, onError, reviewableCandidates, selected, sending]);
-  const previewReference = graph.nodes.find(node => node.id === previewReferenceId && node.type === "reference_image");
+  const previewReference = graph.nodes.find(node => node.id === previewReferenceId);
+  const removeDraftReference = (id: string) => {
+    setReferencedIds(current => current.filter(item => item !== id));
+    setPrompt(value => removeReferenceMentions(value, assistantReferenceNodes, [id]));
+  };
+  const insertReferenceNumber = (index: number) => {
+    const input = composerInput.current;
+    const start = input?.selectionStart ?? prompt.length, end = input?.selectionEnd ?? prompt.length;
+    const token = `图${index + 1}`;
+    const next = prompt.slice(0, start) + token + prompt.slice(end);
+    if (next.length > MAX_AGENT_MESSAGE_LENGTH) { onError("输入已到上限，请先缩短正文。"); return; }
+    setPrompt(next);
+    requestAnimationFrame(() => { input?.focus({ preventScroll: true }); input?.setSelectionRange(start + token.length, start + token.length); });
+  };
   const retryContext = () => {
     void refreshContext().catch((error: unknown) =>
       setContextError(
@@ -1357,69 +1426,106 @@ export function WorkflowAssistantPanel({
   }, [graph, onOpenResult]);
   const continueResultImage = useCallback((image: WorkflowResultImage) => {
     const node = resultImageNode(graph, image);
-    if (node) transcriptActions.current.addReference(node.id);
+    if (node) { transcriptActions.current.addReference(node.id); requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true })); }
     else onError("这张结果已移出当前画布，请从项目生成文件放回后继续修改。");
   }, [graph, onError]);
+  const visitTaskOutput = useCallback((nodeId: string) => {
+    if (!onVisitReference) { onLocate(nodeId); return; }
+    if (!onVisitReference(nodeId)) onNotice("这份结果当前不在画布中，可点击图片预览查看原图。");
+  }, [onLocate, onNotice, onVisitReference]);
   const retryMessageSync = messageSync.retry;
   const refreshExecution = useCallback(() => { retryMessageSync(); window.dispatchEvent(new Event("fashion-workflow:refresh")); }, [retryMessageSync]);
   const revealExecutionResult = useCallback((executionId: string) => {
     const element = conversationView.current?.querySelector<HTMLElement>(`[data-execution-results="${CSS.escape(executionId)}"]`);
     if (element) { followMessages.current = false; element.scrollIntoView({ block: "start", behavior: "auto" }); element.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true }); }
   }, [conversationView, followMessages]);
-  const resultReceipts = useMemo(() => new Set(messages.flatMap(message => {
-    const result = message.origin === "execution_result" ? workflowExecutionResultSchema.safeParse(message.context?.executionResult) : null;
-    return result?.success && result.data.executionId === message.executionId && result.data.images.length ? [result.data.executionId] : [];
-  })), [messages]);
-  const resultIndex = useMemo(() => messages.flatMap((message) => {
-    if (message.origin !== "execution_result" || !message.executionId) return [];
-    const parsed = workflowExecutionResultSchema.safeParse(message.context?.executionResult);
-    if (!parsed.success || !parsed.data.images.length) return [];
-    const status = parsed.data.status === "completed"
+  const resultReceipts = useMemo(() => new Set(presented.rows.flatMap(row => row.kind === "task" && row.task.result?.images.length ? [row.task.result.executionId] : [])), [presented]);
+  const resultIndex = useMemo(() => presented.rows.flatMap((row) => {
+    if (row.kind !== "task" || !row.task.result?.images.length) return [];
+    const result = row.task.result;
+    const status = result.status === "completed"
       ? "已完成"
-      : parsed.data.status === "partial_failed"
+      : result.status === "partial_failed"
         ? "部分完成"
-        : parsed.data.status === "canceled"
+        : result.status === "canceled"
           ? "已取消"
           : "未完成";
     return [{
-      executionId: message.executionId,
-      imageCount: parsed.data.images.length,
+      executionId: result.executionId,
+      imageCount: result.images.length,
       status,
     }];
-  }), [messages]);
-  const transcript = useMemo(() => ([...messages.map((message) => ({ kind: "server" as const, message })),
+  }), [presented]);
+  const runCanvasAction = useCallback(async (envelope: AssistantCanvasEnvelope) => {
+    if (!onExecuteCanvasAction || canvasFlights.current.has(envelope.id)) return;
+    canvasAttempts.current.add(envelope.id); canvasFlights.current.add(envelope.id);
+    setCanvasBusy(current => ({ ...current, [envelope.id]: true })); setCanvasErrors(current => ({ ...current, [envelope.id]: "" }));
+    try {
+      const result = await onExecuteCanvasAction(envelope);
+      if (activeId.current === envelope.conversationId) setMessages(current => mergeMessages(current, [result]));
+    } catch (cause) {
+      if (activeId.current === envelope.conversationId) setCanvasErrors(current => ({ ...current, [envelope.id]: cause instanceof Error ? cause.message : "画布回执尚未确认，请继续核对。" }));
+    } finally { canvasFlights.current.delete(envelope.id); setCanvasBusy(current => ({ ...current, [envelope.id]: false })); }
+  }, [onExecuteCanvasAction]);
+  useEffect(() => {
+    for (const message of messages) {
+      const parsed = assistantCanvasEnvelopeSchema.safeParse(message.context?.canvasAction);
+      if (parsed.success && parsed.data.conversationId === conversationId && freshMessages.current.has(message.id) && parsed.data.state === "pending" && !canvasAttempts.current.has(parsed.data.id)) void runCanvasAction(parsed.data);
+    }
+  }, [conversationId, messages, runCanvasAction]);
+
+  const transcript = useMemo(() => ([...presented.rows,
           ...(localSubmission && localSubmission.conversationId === conversationId && !messages.some((message) => message.role === "user" && message.clientRequestId === localSubmission.clientRequestId)
             ? [{ kind: "local" as const, submission: localSubmission }] : []),
-        ]).map((row) => {
-          if (row.kind === "local") return <article className={styles.workflowMessage} data-role="user" data-new="true" key={`request:${conversationId}:${row.submission.clientRequestId}`}>
-            <div className={styles.userExample}>{row.submission.content}</div>
+        ]).map((row, index, rows) => {
+          const previous = rows[index - 1];
+          const followingRequest = previous?.kind === "message" && (row.kind === "message" ? followsUserRequest(row.message, previous.message) : row.kind === "task" && row.task.messages.some(message => followsUserRequest(message, previous.message)));
+          const messageClass = `${styles.workflowMessage} ${messageStyles.message}`;
+          if (row.kind === "local") return <article className={messageClass} data-role="user" data-new="true" key={`request:${conversationId}:${row.submission.clientRequestId}`}>
+            <div className={messageStyles.userBubble}>{row.submission.content}</div>
             <small role="status">{row.submission.phase === "sending" ? "正在发送…" : "发送结果尚未确认，可用下方发送按钮重试。"}</small>
           </article>;
+          if (row.kind === "task") return <article className={messageClass} data-role="assistant" data-following-request={followingRequest} data-message-id={row.task.id} key={row.task.id}>
+            <AssistantTaskMessage task={row.task} graph={graph} projectId={projectId} disabled={sending || contextSaving || pendingReply || collaborationReadOnly}
+              onRefresh={refreshExecution} onOpen={openResultImage} onContinue={continueResultImage} onCompare={images => setResultPreview({ images, compare: true })} onLocate={visitTaskOutput} />
+          </article>;
           const message = row.message;
+          const draft = streaming.drafts[message.id];
+          const receivedText = draft?.text ?? message.content;
+          const showBody = message.role !== "assistant" || message.status !== "pending" || Boolean(receivedText.trim() && !["正在理解画布与设计过程…", "正在理解你的设计需求…"].includes(receivedText));
+          const canvasAction = assistantCanvasEnvelopeSchema.safeParse(message.context?.canvasAction);
           const parsedResult = message.origin === "execution_result" ? workflowExecutionResultSchema.safeParse(message.context?.executionResult) : null;
-          const parsedProgress = message.origin !== "execution_result" && !message.proposal ? workflowExecutionProgressSchema.safeParse(message.context?.executionProgress) : null;
+          const parsedProgress = message.origin !== "execution_result" && message.kind !== "clarify" && !message.proposal ? workflowExecutionProgressSchema.safeParse(message.context?.executionProgress) : null;
           return (
           <article
-            className={styles.workflowMessage}
+            className={messageClass}
             data-role={message.role}
+            data-following-request={followingRequest}
             data-message-id={message.id}
-            data-new={freshMessages.current.has(message.id)}
+            data-new={message.role === "user" && freshMessages.current.has(message.id)}
             key={messageDisplayKey(conversationId, message)}
           >
             {message.kind === "clarify" ? (
               <span className={styles.messageKind}>需要补充</span>
             ) : null}
-            {message.origin === "execution_result" ? (
-              <span className={styles.messageKind}>执行结果</span>
-            ) : message.origin === "background_analysis" ? (
+            {message.origin === "background_analysis" ? (
               <span className={styles.messageKind}>结果分析 可继续输入</span>
             ) : null}
-            <div
+            {message.role === "assistant" && canvasAction.success ? <AssistantActionFeedback
+              actionId={canvasAction.data.id}
+              live={freshMessages.current.has(message.id) || canvasAttempts.current.has(canvasAction.data.id)}
+              model={canvasActionFeedback(canvasAction.data, message.context?.canvasActionResult, {
+                ...(canvasErrors[canvasAction.data.id] ? { error: userFacingError(canvasErrors[canvasAction.data.id], "暂时无法核实保存结果，请继续确认。") } : {}),
+                awaitingConfirmation: !canvasBusy[canvasAction.data.id] && !freshMessages.current.has(message.id),
+              })}
+            >
+              {onExecuteCanvasAction && ["pending", "applying"].includes(canvasAction.data.state) && !canvasBusy[canvasAction.data.id] && (!freshMessages.current.has(message.id) || canvasErrors[canvasAction.data.id]) ? <Button variant="ghost" size="small" onClick={() => void runCanvasAction(canvasAction.data)}>继续确认画布操作</Button> : null}
+            </AssistantActionFeedback> : showBody ? <div
               data-revealed={message.role === "assistant" && message.status !== "pending" && freshMessages.current.has(message.id) && !streaming.drafts[message.id]}
               className={
                 message.role === "user"
-                  ? styles.userExample
-                  : `${styles.assistantReply} ${prose.prose}`
+                  ? messageStyles.userBubble
+                  : `${styles.assistantReply} ${prose.prose} ${messageStyles.body}`
               }
             >
               {message.role === "assistant" ? (
@@ -1427,12 +1533,12 @@ export function WorkflowAssistantPanel({
               ) : (
                 message.content
               )}
-            </div>
-            {message.status === "pending" ? (
-              <small role="status" className={styles.thinking}>{assistantPhaseLabel(streaming.drafts[message.id])}<span aria-hidden="true"><i /><i /><i /></span></small>
+            </div> : null}
+            {message.role === "assistant" && !canvasAction.success ? (
+              <ThoughtLine status={message.status} label={assistantPhaseLabel(draft)} startedAt={message.createdAt} updatedAt={message.updatedAt} attemptId={draft?.attemptId} />
             ) : null}
             {message.status === "canceled" ? <small role="status">已停止回复，以上内容尚未完成校验。</small> : null}
-            {message.error && message.status !== "canceled" ? (
+            {message.error && message.status !== "canceled" && !canvasAction.success ? (
               <small role="alert">
                 {userFacingError(
                   message.error.message,
@@ -1455,13 +1561,6 @@ export function WorkflowAssistantPanel({
               >
                 重试这条回复
               </button>
-            ) : null}
-            {message.role === "assistant" && message.status !== "pending" && message.origin !== "execution_result" && (!message.context?.executionReceipt && !message.proposal?.execution || Boolean(message.context?.referenceSummary)) ? (
-              <MessageReferenceRecord
-                context={message.context}
-                graph={graph}
-                onLocate={previewOrLocate}
-              />
             ) : null}
             {parsedResult?.success && parsedResult.data.executionId === message.executionId ? <AssistantResultGallery result={parsedResult.data} graph={graph} disabled={sending || contextSaving || pendingReply || collaborationReadOnly} onOpen={openResultImage} onContinue={continueResultImage} onCompare={images => setResultPreview({ images, compare: true })} /> : null}
             {parsedProgress?.success && parsedProgress.data.executionId === message.executionId ? <AssistantExecutionStatus key={parsedProgress.data.executionId} progress={parsedProgress.data} projectId={projectId} onRefresh={refreshExecution} disabled={collaborationReadOnly} /> : null}
@@ -1496,83 +1595,39 @@ export function WorkflowAssistantPanel({
               />
             ) : null}
           </article>
-        ); }), [messages, localSubmission, conversationId, streaming.drafts, graph, legacy, sending, contextSaving, pendingReply, collaborationReadOnly, submittingProposal, executionErrors, previewOrLocate, onOpenResult, openResultImage, continueResultImage, projectId, refreshExecution, resultReceipts, revealExecutionResult]);
+        ); }), [onExecuteCanvasAction, canvasBusy, canvasErrors, runCanvasAction, presented, messages, localSubmission, conversationId, streaming.drafts, graph, legacy, sending, contextSaving, pendingReply, collaborationReadOnly, submittingProposal, executionErrors, visitTaskOutput, onOpenResult, openResultImage, continueResultImage, projectId, refreshExecution, resultReceipts, revealExecutionResult]);
 
   return (
-    <div className={styles.assistantBody}>
-      <div className={ui.toolbar}>
-        <strong className={ui.conversationTitle} title={active?.title || "新设计对话"}>
-          {active?.title || "新设计对话"}
-        </strong>
-        <div className={ui.toolbarActions}>
-          <Button
-            size="small"
-            variant="ghost"
-            aria-label="新建对话"
-            title="新建对话"
-            disabled={loading || sending || contextSaving}
-            onClick={newConversation}
-          >
-            <WorkspaceIcon name="new_chat" />
-          </Button>
-          {<Menu label="助手设置" trigger={<WorkspaceIcon name="settings" />}>
-            <button type="button" onClick={() => setHistoryOpen((v) => !v)}>历史对话</button>
-            {resultIndex.length ? <button type="button" onClick={() => { setResultIndexOpen((v) => !v); setHistoryOpen(false); setDelegationsOpen(false); }}>本轮结果 ({resultIndex.length})</button> : null}
-            {!legacy ? <button type="button" onClick={() => setRequirementsOpen(true)}>设计要求</button> : null}
-            {!legacy && BUILT_IN_ASSISTANT_SKILLS.length ? <>
-              <p className={ui.menuHint} style={{marginBottom: 0}}>快速载入技能</p>
-              {BUILT_IN_ASSISTANT_SKILLS.map((skill) => (
-                <button key={`builtin:${skill.id}`} type="button" onClick={() => { applyAssistantSkill(skill); }}>
-                  {skill.name}
-                </button>
-              ))}
-              {personalSkills.map((skill) => (
-                <button key={`personal:${skill.id}`} type="button" onClick={() => { applyAssistantSkill(skill); }}>
-                  {skill.name}
-                </button>
-              ))}
-            </> : null}
-            {!legacy ? <button type="button" onClick={() => { setDelegationsOpen((v) => !v); }}>设计委托</button> : null}
-            {!legacy && reviewableCandidates.length ? <button type="button" disabled={loading || sending || contextSaving} onClick={prepareDesignReview}>审阅当前方案</button> : null}
-            {!legacy && conversationId ? <button type="button" disabled={loading || sending || contextSaving} onClick={() => setWorkflowPlannerOpen(true)}>分步计划</button> : null}
-            {legacy ? <button onClick={() => setLegacyRunsOpen((v) => !v)} type="button">旧设计运行</button> : null}
-            <button disabled={sending} onClick={toggleAgent} type="button">
-              {agentVersion === 2 ? "暂停本项目设计助手" : "恢复设计助手"}
-            </button>
-            <p className={ui.menuHint}>设置作用于整个项目；暂停后，已有任务继续运行。</p>
-          </Menu>}
+    <div className={`${styles.assistantBody} ${redesign.body}`}>
+      <AssistantHeader title={active?.title || "新对话"} busy={loading || sending || contextSaving} onNew={newConversation} history={<>
+        {conversations.map(item => <button key={item.id} type="button" data-conversation-id={item.id} className={redesign.historyItem} aria-current={item.id === conversationId ? "true" : undefined} onClick={() => activateConversation(item.id)}>
+          <WorkspaceIcon name="comment" /><span>{item.title || "未命名对话"}{item.mode === "workflow" ? "" : "（只读历史）"}</span>
+        </button>)}
+        {!conversations.length && !loading ? <p className={redesign.menuHint}>发送第一条需求，开始新的对话。</p> : null}
+        {conversations.length ? <p className={redesign.menuHint}>已载入 {conversations.length} 条对话</p> : null}
+        {conversationCursor || conversationPageError ? <button data-menu-keep-open type="button" disabled={conversationPageLoading} onClick={() => void loadConversations()}>{conversationPageLoading ? "正在读取…" : conversationPageError ? "重试读取对话" : "读取更早对话"}</button> : null}
+        {conversationPageError ? <p role="alert" className={redesign.menuHint}>{conversationPageError}</p> : null}
+      </>}>
+        {!legacy ? <button type="button" onClick={() => setRequirementsOpen(true)}><WorkspaceIcon name="requirements" />设计要求</button> : null}
+        {resultIndex.length ? <button type="button" onClick={() => setResultIndexOpen(value => !value)}><WorkspaceIcon name="results" />本轮结果 ({resultIndex.length})</button> : null}
+        {!legacy ? <button type="button" onClick={() => setHistoryTasksOpen(true)}><WorkspaceIcon name="history" />历史任务</button> : null}
+        {presented.records.length ? <button type="button" onClick={() => setActivityHistoryId(conversationId)}><WorkspaceIcon name="history" />画布操作记录</button> : null}
+        {legacy ? <button onClick={() => setLegacyRunsOpen(value => !value)} type="button"><WorkspaceIcon name="history" />旧设计运行</button> : null}
+      </AssistantHeader>
+      {activityHistoryId === conversationId && activityHistoryId ? <Dialog label="画布操作记录" onClose={() => setActivityHistoryId(null)}>
+        <div className={messageStyles.history}><h2>画布操作记录</h2><p>这些保存和版本操作仍保留在历史中，不占用聊天主线。</p>
+          <button type="button" onClick={() => setActivityHistoryId(null)}>关闭记录</button>
+          {presented.records.map(message => {
+            const activity = creationActivitySchema.safeParse(message.context?.creationActivity);
+            const id = activity.success ? activity.data.resultNodeId : null;
+            return <article key={message.id}><p>{message.content}</p><small>{new Date(message.createdAt).toLocaleString("zh-CN")}</small>
+              {id && graph.nodes.some(node => node.id === id) ? <button type="button" onClick={() => { setActivityHistoryId(null); previewOrLocate(id); }}>查看对应结果</button> : null}
+            </article>;
+          })}
+          {cursor ? <button type="button" disabled={olderLoading} onClick={() => void loadOlderMessages()}>{olderLoading ? "正在读取…" : "读取更早记录"}</button> : null}
+          {olderError ? <p role="alert">{olderError}</p> : null}
         </div>
-      </div>
-      {historyOpen ? (
-        <div className={ui.history}>
-          <label htmlFor={`${inputId}-history`}>选择历史对话</label>
-          <Select searchable
-            id={`${inputId}-history`}
-            aria-label="历史对话"
-            disabled={sending || contextSaving || loading}
-            onChange={(event) => activateConversation(event.target.value)}
-            value={conversationId}
-          >
-            {!conversationId ? <option value="">新设计对话</option> : null}
-            {conversations.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title || "未命名对话"}
-                {item.mode === "workflow" ? "" : " 只读历史"}
-              </option>
-            ))}
-          </Select>
-          <div className={ui.historyPages}>
-            <small>{conversations.length ? `已载入 ${conversations.length} 条对话` : ""}</small>
-            {conversationCursor ? <Button size="small" variant="ghost" disabled={conversationPageLoading} onClick={() => void loadConversations()}>
-              {conversationPageLoading ? "正在读取…" : conversationPageError ? "重试读取对话" : "读取更早对话"}
-            </Button> : null}
-          </div>
-          {conversationPageError ? <p role="alert">{conversationPageError}</p> : null}
-          {!conversations.length && !loading ? (
-            <small>还没有历史对话。发送第一条需求后会建立对话。</small>
-          ) : null}
-        </div>
-      ) : null}
+      </Dialog> : null}
       {resultIndexOpen ? (
         <section className={ui.resultIndex} aria-label="本轮执行结果">
           <header className={ui.resultIndexHeader}>
@@ -1610,52 +1665,40 @@ export function WorkflowAssistantPanel({
           </div>
         </section>
       ) : null}
-      {delegationsOpen && !legacy ? (
-        <AssistantDelegationsPanel
-          canEdit={!collaborationReadOnly}
-          conversationId={conversationId}
-          onClose={() => setDelegationsOpen(false)}
-          projectId={projectId}
-        />
-      ) : null}
-      {workflowPlannerOpen && !legacy && conversationId ? (
-        <details className={ui.planner} open aria-label="分步设计计划">
-          <summary className={ui.plannerSummary}>
-            <span>分步设计计划</span>
-            <button
-              className={ui.plannerClose}
-              onClick={(e) => { e.preventDefault(); setWorkflowPlannerOpen(false); }}
-              type="button"
-            >
-              返回讨论
-            </button>
-          </summary>
-          <div className={ui.plannerBody}>
-            <AgentWorkflowPanel
-              conversationId={conversationId}
-              contextReady={!conversationId || Boolean(context)}
-              contextItems={
-                <p className={ui.plannerContext}>
-                  {discussionIds.length
-                    ? `当前讨论引用 ${discussionIds.length} 项工作流素材。`
-                    : "当前计划从整段设计目标开始，可在节点中继续补充素材。"}
-                </p>
-              }
-              initialIntent={prompt.trim() || context?.currentObjective || "请把当前设计目标拆成可确认的执行步骤"}
-              shapeIds={plannerShapeIds}
-              onTaskCreated={plannerTaskCreated}
-            />
-          </div>
-        </details>
-      ) : null}
-      <div className={styles.conversationViewport} hidden={workflowPlannerOpen}>
+      <Dialog open={historyTasksOpen && !legacy} label="历史任务" className={redesign.assistantDialog} onClose={() => setHistoryTasksOpen(false)}>
+        <div className={redesign.dialogContent}>
+        <h2>历史任务</h2>
+        <div className={redesign.taskTabs} role="group" aria-label="历史任务类型">
+          <button type="button" aria-pressed={historyTaskTab === "delegations"} onClick={() => setHistoryTaskTab("delegations")}>设计委托</button>
+          <button type="button" aria-pressed={historyTaskTab === "plans"} onClick={() => setHistoryTaskTab("plans")}>分步计划</button>
+        </div>
+        <div className={redesign.taskContent}>
+          {historyTasksOpen && historyTaskTab === "delegations" ? <AssistantDelegationsPanel canEdit={canManageAssistant} allowCreate={false} conversationId={conversationId} onClose={() => setHistoryTasksOpen(false)} projectId={projectId} /> : null}
+          {historyTasksOpen && historyTaskTab === "plans" ? conversationId ? <AgentWorkflowPanel allowCreate={false} readOnly={!canManageAssistant} conversationId={conversationId} contextReady={Boolean(context)} contextItems={null} initialIntent="" shapeIds={plannerShapeIds} onTaskCreated={plannerTaskCreated} /> : <p>开始对话后，可以在这里查看已有计划。</p> : null}
+        </div>
+        </div>
+      </Dialog>
+      <Dialog open={Boolean(pendingSkill)} label="载入技能" className={redesign.assistantDialog} onClose={() => setPendingSkill(null)}>
+        <div className={redesign.dialogContent}>
+        <h2>{pendingSkill?.name}</h2>
+        <p>输入框已有内容，选择如何使用这份技能。已有图片引用会保留。</p>
+        <div className={redesign.skillPreview}>{pendingSkill?.prompt}</div>
+        {skillError ? <p role="alert">{skillError}</p> : null}
+        <div className={redesign.dialogActions}>
+          <Button onClick={() => pendingSkill && commitAssistantSkill(pendingSkill, "append")}>追加到草稿</Button>
+          <Button variant="ghost" onClick={() => pendingSkill && commitAssistantSkill(pendingSkill, "replace")}>替换草稿</Button>
+          <Button variant="ghost" onClick={() => setPendingSkill(null)}>取消</Button>
+        </div>
+        </div>
+      </Dialog>
+      <div className={`${styles.conversationViewport} ${redesign.viewport}`}>
       <div
         ref={conversationView}
         {...viewportProps}
         aria-label="设计对话"
         aria-live="polite"
         tabIndex={0}
-        className={styles.assistantConversation}
+        className={`${styles.assistantConversation} ${redesign.thread}`}
         data-empty={!loading && messages.length === 0}
       >
         {messageSync.error ? (
@@ -1695,7 +1738,9 @@ export function WorkflowAssistantPanel({
         ) : !conversationError &&
           !legacyMessageError &&
           messages.length === 0 && !(localSubmission && localSubmission.conversationId === conversationId) ? (
-          <div className={styles.assistantWelcome}>
+          <div className={`${styles.assistantWelcome} ${redesign.welcome}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {!legacy ? <img className={redesign.welcomeMark} src="/assistant/zhiya/assets/sprout.webp" alt="" /> : null}
             <h3>
               {legacy
                 ? "这段历史会话没有消息"
@@ -1714,6 +1759,7 @@ export function WorkflowAssistantPanel({
                   composerInput.current?.focus({ preventScroll: true });
                 }}
                 onReview={prepareDesignReview}
+                onUpload={uploadEnabled ? () => imageInput.current?.click() : undefined}
               />
             ) : null}
           </div>
@@ -1751,8 +1797,7 @@ export function WorkflowAssistantPanel({
       {legacy && legacyRunsOpen ? renderLegacyRuns(conversationId) : null}
       <div
         ref={composerSurface}
-        className={styles.composer}
-        hidden={workflowPlannerOpen}
+        className={`${styles.composer} ${redesign.composer}`}
         data-guide="workspace-assistant"
         data-guide-variant={legacy ? "history" : agentVersion === 1 ? "paused" : "input"}
         data-assistant-image-drop
@@ -1785,11 +1830,14 @@ export function WorkflowAssistantPanel({
           </div>
         ) : agentVersion === 1 ? (
           <div className={styles.legacyReadOnly}>
-            <p>本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。</p>
+            <p>本项目设计助手已暂停，已有任务继续运行。</p>
+            {canManageAssistant ? <Button disabled={sending} onClick={toggleAgent}>恢复设计助手</Button> : null}
           </div>
         ) : (
           <>
-            <div className={styles.composerReferences} data-composer-references>
+            <div className={redesign.references} data-composer-references>
+            <div ref={setVoiceFeedback} />
+            <div ref={setEnhancementFeedback} />
             {imagesDragging && uploadEnabled ? <p className={uploadStyles.dropHint}>松开添加参考图片</p> : null}
             <AssistantImageUploadTray ready={uploads.ready} items={uploads.items} error={uploads.error} queue={uploads.queue} disabled={!uploadEnabled} />
             {draftNotice ? (
@@ -1808,7 +1856,7 @@ export function WorkflowAssistantPanel({
               {discussionIds.length > 0 ? (
                 <>
                   <div className={ui.discussionReferences} data-discussion-references>
-                    {discussionIds.map((id) => {
+                    {discussionIds.map((id, index) => {
                       const node = graph.nodes.find(item => item.id === id);
                       const label = node ? referenceLabel(node, graph.nodes) : "已移除节点";
                       return (
@@ -1817,38 +1865,45 @@ export function WorkflowAssistantPanel({
                         data-assistant-reference-id={id}
                         key={id}
                       >
-                        <button
+                        <Tooltip closeOnClick className={redesign.imageTooltip} content={node && nodeImageUrl(node) ? <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={nodeImageUrl(node) ?? undefined} alt={`引用 ${index + 1}：${label}`} /><span>双击定位到画布</span>
+                        </> : `引用 ${index + 1}：${label}`}><button
                           className={ui.referenceLocate}
                           data-reference-preview={id}
-                          title={node?.type === "reference_image" ? `预览：${label}` : `在画布中定位：${label}`}
                           aria-label={label}
+                          aria-describedby={`${inputId}-reference-${index}`}
                           disabled={!node}
-                          onClick={() => node?.type === "reference_image" ? setPreviewReferenceId(id) : onLocate(id)}
+                          onClick={event => { if (!node || !nodeImageUrl(node) || event.detail === 0 || matchMedia("(hover: none), (pointer: coarse), (max-width: 767px)").matches) setPreviewReferenceId(id); }}
+                          onDoubleClick={event => { event.preventDefault(); event.stopPropagation(); if (!onVisitReference?.(id, draftInstances[id])) setPreviewReferenceId(id); }}
+                          onContextMenu={event => { event.preventDefault(); setPreviewReferenceId(id); }}
+                          onKeyDown={event => {
+                            if ((event.key === "Delete" || event.key === "Backspace") && draftReferences.ids.length && !sending && !contextSaving) {
+                              event.preventDefault(); event.stopPropagation(); removeDraftReference(id);
+                              requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+                            }
+                          }}
                           type="button"
                         >
-            {node && node.type !== "media" ? <AssistantReferencePreview node={node} /> : null}
-                          <span className={ui.referenceCaption}>
+            {node && node.type !== "media" ? <AssistantReferencePreview node={node} compact /> : null}
+                          <span className={redesign.referenceNumber} data-reference-index={index + 1} aria-hidden="true">{index + 1}</span>
+                          <span className={`${ui.referenceCaption} ${redesign.referenceCaption}`} id={`${inputId}-reference-${index}`}>
                             <span>{label}</span>
                             {node ? <small>{referenceTypeLabel(node)}</small> : null}
+                            <span>引用 {index + 1}。悬停预览，双击定位，Enter 查看大图，Delete 移除。</span>
                           </span>
-                        </button>
+                        </button></Tooltip>
+                        {node ? <Tooltip closeOnClick content={`插入图${index + 1}引用`}><button type="button" className={redesign.referenceMention} aria-label={`插入图${index + 1}引用`} disabled={sending || contextSaving || collaborationReadOnly} onClick={() => insertReferenceNumber(index)}><WorkspaceIcon name="mention" /></button></Tooltip> : null}
                         {draftReferences.ids.length ? (
-                          <button
+                          <Tooltip closeOnClick content={`移除引用 ${node ? label : id}`}><button
                             className={ui.removeReference}
                             disabled={sending || contextSaving}
                             aria-label={`移除引用 ${node ? label : id}`}
-                            onClick={() => {
-                              setReferencedIds((current) =>
-                                current.filter((item) => item !== id),
-                              );
-                              setPrompt((value) =>
-                                removeReferenceMentions(value, assistantReferenceNodes, [id]),
-                              );
-                            }}
+                            onClick={() => { removeDraftReference(id); requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true })); }}
                             type="button"
                           >
-                            ×
-                          </button>
+                            <WorkspaceIcon name="close" />
+                          </button></Tooltip>
                         ) : null}
                       </span>
                       );
@@ -1919,23 +1974,20 @@ export function WorkflowAssistantPanel({
               </div>
             ) : null}
             </div>
-            <label className={ui.fieldLabel} htmlFor={inputId}>
+            <label className={redesign.inputLabel} htmlFor={inputId}>
               描述设计需求
             </label>
             <AssistantMentionInput
               id={inputId}
               ref={composerInput}
               contextKey={`${projectId}:${conversationId}`}
-              nodes={graph.nodes.filter(node => node.type !== "media")}
+              nodes={assistantReferenceNodes}
               referencedIds={referencedIds}
               onAddReference={addReference}
               skillChoices={[...BUILT_IN_ASSISTANT_SKILLS, ...personalSkills]}
-              onApplySkill={(skill) => {
-                setPrompt(skill.prompt);
-                setReferencedIds([]);
-                setReferenceInstances({});
-                setDraftNotice(`已载入"${skill.name}"，发送前可以继续修改。`);
-                requestAnimationFrame(() => composerInput.current?.focus({ preventScroll: true }));
+              onApplySkill={choice => {
+                const skill = [...BUILT_IN_ASSISTANT_SKILLS, ...personalSkills].find(item => item.id === choice.id);
+                if (skill) applyAssistantSkill(skill);
               }}
               disabled={loading || !localDraft.ready || sending || contextSaving}
               maxLength={MAX_AGENT_MESSAGE_LENGTH}
@@ -1944,76 +1996,60 @@ export function WorkflowAssistantPanel({
               placeholder={
                 adjustment
                   ? "例如：保留版型，将面料改为亚麻，生成 2 张。"
-                  : "例如：设计一件秋冬通勤风衣，藏蓝色，宽松廓形。"
+                  : "描述你的想法，或 @ 引用素材"
               }
               rows={3}
               value={prompt}
             />
           </>
         )}
-        <div className={styles.composerActions}>
-          {canUploadReferences && !collaborationReadOnly ? <>
-            <input ref={imageInput} hidden multiple type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" aria-label="选择助手参考图片" onChange={event => {
-              const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void uploads.queue.add(files);
+        {!legacy && agentVersion === 2 && !collaborationReadOnly ? <div className={redesign.tools} data-voice-active={voiceBusy || undefined}>
+          {canUploadReferences ? <input ref={imageInput} hidden multiple type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" aria-label="选择助手参考图片" onChange={event => {
+            const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void uploads.queue.add(files);
+          }} /> : null}
+          <div className={redesign.toolsLeft} inert={voiceBusy}>
+          <Tooltip content="添加素材"><Menu label="添加素材" className={redesign.iconMenu} guideAnchor="workspace-reference" trigger={<WorkspaceIcon name="add" />}>
+            {canUploadReferences ? <button type="button" disabled={!uploadEnabled || !uploads.ready} onClick={() => imageInput.current?.click()}><WorkspaceIcon name="image" />上传图片</button> : null}
+            <button type="button" data-assistant-reference-trigger disabled={loading || !localDraft.ready || sending || contextSaving} onClick={() => setPickerOpen(true)}><WorkspaceIcon name="variation" />添加引用</button>
+          </Menu></Tooltip>
+          <Tooltip content="常用技能"><Menu label="常用技能" className={redesign.iconMenu} disabled={loading || !localDraft.ready || sending || contextSaving} trigger={<WorkspaceIcon name="skill_card" />}>
+            {[...BUILT_IN_ASSISTANT_SKILLS, ...personalSkills].map(skill => <button className={redesign.skillOption} key={skill.id} type="button" onClick={() => applyAssistantSkill(skill)}>
+              <WorkspaceIcon name="skill_card" /><span>{skill.name}</span><small>{skill.description}{skill.scope === "WORKSPACE" ? "（工作区）" : ""}</small>
+            </button>)}
+          </Menu></Tooltip>
+          </div>
+          <span className={redesign.toolsSpacer} />
+          <PromptEnhancementControl scopeKey={`${accountId}:${projectId}:${conversationId}`} projectId={projectId} value={prompt} referenceIds={draftReferences.ids} instances={draftInstances} feedbackHost={enhancementFeedback}
+            disabled={voiceBusy || loading || !localDraft.ready || sending || contextSaving || referencesPreparing || imagesPending || Boolean(draftReferences.error) || missingReferenceIds.length > 0} onPrepare={onBeforeEnhance} onBusy={setEnhancing}
+            onChange={value => { setPrompt(value); requestAnimationFrame(() => { composerInput.current?.focus({ preventScroll: true }); composerInput.current?.setSelectionRange(value.length, value.length); }); }} />
+          <VoicePill scopeKey={`${accountId}:${projectId}:${conversationId}`} disabled={enhancing || loading || !localDraft.ready || sending || contextSaving} feedbackHost={voiceFeedback} onPhaseChange={setVoiceBusy}
+            onStart={() => { const field = composerInput.current; voiceAnchor.current = { value: field?.value ?? prompt, start: field?.selectionStart ?? prompt.length, end: field?.selectionEnd ?? prompt.length }; }}
+            onCommit={text => {
+              const result = insertDictation(composerInput.current?.value ?? prompt, voiceAnchor.current, text, MAX_AGENT_MESSAGE_LENGTH);
+              if (!result) return "语音文字超出输入上限，已保留识别结果。精简草稿后可再次加入。";
+              setPrompt(result.value);
+              requestAnimationFrame(() => { composerInput.current?.focus({ preventScroll: true }); composerInput.current?.setSelectionRange(result.caret, result.caret); });
+              return null;
             }} />
-            <Button size="small" disabled={!uploadEnabled || !uploads.ready} onClick={() => imageInput.current?.click()}>上传图片</Button>
-          </> : null}
-          {pendingReply ? <Button loading={stopping} onClick={() => void stopReply()}>停止回复</Button> : null}
-          {!collaborationReadOnly ? (
-            <Button
-              size="small"
-              data-assistant-reference-trigger
-              data-guide="workspace-reference"
-              disabled={loading || !localDraft.ready || sending || contextSaving}
-              onClick={() => setPickerOpen(true)}
-            >
-              添加引用
-            </Button>
-          ) : null}
-          {!collaborationReadOnly ? (
-            <button
-              className={styles.actionPrimary}
-              disabled={
-                loading ||
-                sending ||
-                referencesPreparing ||
-                imagesPending ||
-                !localDraft.ready ||
-                contextSaving ||
-                pendingReply ||
-                !prompt.trim() ||
-                Boolean(conversationError) ||
-                Boolean(draftReferences.error) ||
-                missingReferenceIds.length > 0 ||
-                draftReferences.ids.length > MAX_ASSISTANT_REFERENCES ||
-                staleAdjustment ||
-                (Boolean(conversationId) && !context)
-              }
-              onClick={() => void send()}
-              type="button"
-            >
-              {sending
-                ? executionFlight.current
-                  ? "提交中…"
-                  : "发送中…"
-                : adjustment
-                  ? "发送修改要求"
-                  : "发送需求"}
-            </button>
-          ) : null}
-        </div>
-        {!collaborationReadOnly ? (
-          <small className={ui.keyboardHint}>
-            Enter 发送 Shift + Enter 换行
-          </small>
-        ) : null}
+
+          {pendingReply ? <AssistantIconButton primary icon="stop" label={stopping ? "正在停止回复" : "停止回复"} busy={stopping} disabled={stopping} onClick={() => void stopReply()} /> :
+            <AssistantIconButton primary icon="send" label={sending ? "发送中…" : adjustment ? "发送修改要求" : "发送需求"} busy={sending}
+              disabled={enhancing || voiceBusy || loading || sending || referencesPreparing || imagesPending || !localDraft.ready || contextSaving || !prompt.trim() || Boolean(conversationError) || Boolean(draftReferences.error) || missingReferenceIds.length > 0 || draftReferences.ids.length > MAX_ASSISTANT_REFERENCES || staleAdjustment || (Boolean(conversationId) && !context)}
+              onClick={() => void send()} />}
+        </div> : null}
       </div>
         {resultPreview ? <AssistantResultViewer images={resultPreview.images} compare={resultPreview.compare} graph={graph} disabled={sending || contextSaving || pendingReply || collaborationReadOnly} onClose={() => setResultPreview(null)} onOpen={openResultImage} onContinue={continueResultImage} onOpenFiles={onOpenGeneratedFiles} /> : null}
         {previewReference ? <AssistantReferenceViewer
           key={previewReference.id}
           node={previewReference}
           projectId={projectId}
-          actions={referencePlacement}
+          actions={previewReference.type === "reference_image" ? referencePlacement : undefined}
+          onLocate={previewReference.type !== "reference_image" && referencePlacement?.isPlaced(previewReference.id) ? () => onLocate(previewReference.id) : undefined}
+          onRemove={draftReferences.ids.includes(previewReference.id) && !collaborationReadOnly ? () => removeDraftReference(previewReference.id) : undefined}
+          removeDisabled={sending || contextSaving}
+          onInsert={discussionIds.includes(previewReference.id) ? () => insertReferenceNumber(discussionIds.indexOf(previewReference.id)) : undefined}
+          insertLabel={`插入图${discussionIds.indexOf(previewReference.id) + 1}引用`}
+          removedFocusSelector="#workflow-design-assistant [data-discussion-references] [data-reference-preview], #workflow-design-assistant [data-guide='workspace-reference']"
           onClose={() => setPreviewReferenceId(null)}
         /> : null}
         <AssistantReferencePicker
@@ -2021,8 +2057,8 @@ export function WorkflowAssistantPanel({
           graph={graph}
           selectedIds={draftReferences.ids}
           onApply={(ids) => {
-            if (resolveDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, ids.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"))).ids.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("待添加图片和所选引用合并后超过 16 项，请先减少部分内容。"); return; }
-            setReferencedIds(ids);
+            if (resolveDraftReferences(graph.nodes.filter(node => node.type !== "media"), prompt, ids.filter(id => graph.nodes.some(node => node.id === id && node.type !== "media"))).ids.length + missingReferenceIds.length + uploads.items.length > MAX_ASSISTANT_REFERENCES) { onError("待添加图片和所选引用合并后超过 16 项，请先减少部分内容。"); return; }
+            setReferencedIds([...new Set([...missingReferenceIds, ...ids])]);
             setPrompt((value) =>
               removeReferenceMentions(
                 value,

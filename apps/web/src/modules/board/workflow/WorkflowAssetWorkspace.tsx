@@ -1,5 +1,4 @@
 "use client";
-import { useSearchParams } from "next/navigation";
 import { useDraftScope, usePersistentDraft } from "../../../components/drafts/use-persistent-draft";
 import { draftRepository } from "../../../components/drafts/draft-repository";
 
@@ -9,9 +8,10 @@ import { Select } from "../../../components/ui";
 import {
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import {
   imageAnnotationsSvg,
@@ -43,12 +43,10 @@ import { ImageComparison } from "./ImageComparison";
 import { imageToolEntryMode, type ImageToolEntryRequest } from "./image-tool-entry";
 import type { AssetRestoreResult } from "./use-asset-restore";
 import { hasOrientationChange, imageOrientationSchema, originalOrientation, type ImageOrientation } from "./image-orientation";
-import { ImageZoomControl, type ImageZoomControlHandle } from "./ImageZoomControl";
 import { CopyImageLinkButton } from "./CopyImageLinkButton";
 import { Button, IconButton } from "../../../components/ui";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import { LegacyAssetTools } from "./LegacyAssetTools";
-import { ExportModal } from "../generation/ExportModal";
 import { useWorkspaceDraft } from "./workspace-drafts";
 import {
   executeWorkflowNode,
@@ -78,10 +76,7 @@ type Mode =
   | "text_edit"
   | "inpaint"
   | "variation"
-  | "history"
-  | "share"
-  | "export"
-  | "details";
+  | "history";
 export interface WorkflowAssetWorkspaceProps {
   embedded?: boolean;
   projectId: string;
@@ -101,7 +96,6 @@ export interface WorkflowAssetWorkspaceProps {
   candidates?: readonly WorkflowNode[];
   onSelectAsset?: (id: string) => void;
   onRestoredAsset?: (result: AssetRestoreResult) => void;
-  details?: ReactNode;
   entryRequest?: ImageToolEntryRequest | undefined;
   active?: boolean;
   canEdit?: boolean;
@@ -148,23 +142,17 @@ function ImageWorkspace({
   tasks = [],
   onSelectAsset,
   onRestoredAsset,
-  details,
   entryRequest,
   active = true,
   canEdit = true,
 }: WorkflowAssetWorkspaceProps) {
-  const query = useSearchParams();
   const draftScope = useDraftScope();
-  const returnRevisionId = query.get("styleRevisionId");
-  const styleHref = `/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(assetId)}${returnRevisionId ? `&styleRevisionId=${encodeURIComponent(returnRevisionId)}` : ""}`;
   const [storedMode, setMode] = useState<Mode>("view");
-  const mode = canEdit || ["view", "compare", "history", "details"].includes(storedMode) ? storedMode : "view";
+  const mode = canEdit || ["view", "compare", "history"].includes(storedMode) ? storedMode : "view";
   const [legacyTab, setLegacyTab] = useState<
     "inpaint" | "variation" | "erase" | "history" | null
   >(null);
   const [zoom, setZoom] = useState<number | null>(null);
-  const zoomControl = useRef<ImageZoomControlHandle>(null);
-  const previewZoom = useCallback((percent: number | null) => zoomControl.current?.previewZoom(percent), []);
   const [size, setSize] = useState<ImageSize | null>(null);
   const textEditor = useImageTextEditor(assetId, size);
   const [feedback, setFeedback] = useState<ImageFeedback>(empty);
@@ -193,9 +181,11 @@ function ImageWorkspace({
   const [preparingCommand, setHasPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState<"versions" | "export" | null>(null);
+  const [exportView, setExportView] = useState<"options" | "share">("options");
+  const [includeAnnotations, setIncludeAnnotations] = useState(false);
   const [shares, setShares] = useState<Share[]>([]);
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [outpaintDraft, setOutpaintDraft] = useState<OutpaintDraft>(emptyOutpaintDraft);
   const resizeKind = outpaintDraft.kind;
@@ -238,6 +228,11 @@ function ImageWorkspace({
   const outpaintDirty = outpaintDraft.frame !== null || outpaintDraft.prompt !== emptyOutpaintDraft.prompt;
   const root = useRef<HTMLElement>(null);
   const menuAnchor = useRef<HTMLDivElement>(null);
+  const menuPanel = useRef<HTMLDivElement>(null);
+  const menuTrigger = useRef<HTMLButtonElement | null>(null);
+  const versionsTrigger = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  const [shareLoaded, setShareLoaded] = useState(false);
   const pending = useRef<Extract<CanvasCommand, { type: "run_tool" }> | null>(null);
   const durableCommand = useCanvasCommand(projectId, `image-command:${assetId}`);
   const hasPending = preparingCommand || durableCommand.pending !== null;
@@ -247,7 +242,7 @@ function ImageWorkspace({
   const feedbackDraftBaseline = (value: ImageFeedback) => JSON.stringify({ feedback: value, comment: "", mode: "view" });
   // Omit empty optional fields so pre-marker drafts retain the same baseline.
   const feedbackPersistence = usePersistentDraft<ImageFeedbackDraft>({ value: feedbackDraft(), baseline: feedbackDraftBaseline(JSON.parse(baseline) as ImageFeedback), enabled: feedbackLoaded, objectKey: `image:${assetId}`, restore: draft => {
-    setFeedback(draft.feedback); setComment(draft.comment); setMode(draft.mode);
+    setFeedback(draft.feedback); setComment(draft.comment); setMode(["share", "export", "details"].includes(draft.mode) ? "view" : draft.mode);
     setPoint(draft.point ?? null);
     setEditingComment(draft.feedback.comments.some(c => c.id === draft.editingComment) ? draft.editingComment ?? null : null);
     setSelected((draft.selected ?? []).filter(id => draft.feedback.comments.some(c => c.id === id)));
@@ -285,7 +280,7 @@ function ImageWorkspace({
         return;
       }
       const next = imageToolEntryMode(entryRequest.action);
-      setMode(next); setMenu(false); setComparingOriginal(false); setError(null);
+      setMode(next); setMenu(null); setComparingOriginal(false); setError(null);
       if (["inpaint", "variation", "erase", "history"].includes(next)) setLegacyTab(next as "inpaint" | "variation" | "erase" | "history");
       if (entryRequest.action === "crop" || entryRequest.action === "outpaint") {
         setOutpaintDraft(value => ({ ...value, kind: entryRequest.action as "crop" | "outpaint" }));
@@ -364,11 +359,20 @@ function ImageWorkspace({
   useEffect(() => {
     if (!menu) return;
     const dismiss = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menuAnchor.current?.contains(event.target)) setMenu(false);
+      if (event.target instanceof Node && !menuAnchor.current?.contains(event.target)) setMenu(null);
     };
     document.addEventListener("pointerdown", dismiss, true);
     return () => document.removeEventListener("pointerdown", dismiss, true);
   }, [menu]);
+  useLayoutEffect(() => {
+    if (menu) menuPanel.current?.querySelector<HTMLElement>("button:not(:disabled), input:not(:disabled)")?.focus({ preventScroll: true });
+  }, [menu, exportView]);
+  const closeMenu = () => { setMenu(null); menuTrigger.current?.focus({ preventScroll: true }); };
+  const toggleMenu = (next: "versions" | "export", trigger: HTMLButtonElement) => {
+    menuTrigger.current = trigger;
+    setExportView("options");
+    setMenu(value => value === next ? null : next);
+  };
   const act = async (action: () => Promise<void>) => {
     if (actionLock.current) return;
     actionLock.current = true;
@@ -406,9 +410,9 @@ function ImageWorkspace({
     setFeedback((value) => ({ ...value, annotations: next }));
   };
   const changeMode = (next: Mode) => {
-    if (busy || !canEdit && !["view", "compare", "history", "details"].includes(next)) return;
+    if (busy || !canEdit && !["view", "compare", "history"].includes(next)) return;
     setMode(next);
-    setMenu(false);
+    setMenu(null);
     setError(null);
     setComparingOriginal(false);
     if (next === "orient" || next === "adjust" || next === "text_edit") setZoom(null);
@@ -424,10 +428,14 @@ function ImageWorkspace({
       setTarget(size);
       setCrop({ left: 0, top: 0, ...size });
     }
-    if (next === "share")
-      void act(async () =>
-        setShares(await imageRequest<Share[]>(`${base}/shares`)),
-      );
+  };
+  const loadShares = () => {
+    setNow(Date.now());
+    setShareLoaded(false);
+    return act(async () => {
+      setShares(await imageRequest<Share[]>(`${base}/shares`));
+      setShareLoaded(true);
+    });
   };
   const submit = async (params: Record<string, unknown>, transform = false) => {
     if (!canEdit) throw new Error("当前图片仅可查看，无法提交修改。");
@@ -456,16 +464,6 @@ function ImageWorkspace({
         parameters: params,
         inputs: [
           { nodeId: source.id, port: "source" },
-          ...graph.edges
-            .filter(
-              (edge) =>
-                edge.targetNodeId ===
-                  graph.edges.find((edge) => edge.targetNodeId === source.id)
-                    ?.sourceNodeId &&
-                edge.targetPort === "constraint" &&
-                !transform,
-            )
-            .map((edge) => ({ nodeId: edge.sourceNodeId, port: "constraint" as const })),
         ],
       };
       const conversationId = await onEnsureConversation?.();
@@ -608,6 +606,7 @@ function ImageWorkspace({
       role="dialog"
       aria-modal="true"
       aria-label="图片工作区"
+      data-canvas-image-tool={mode === "resize" ? resizeKind : mode}
       data-image-editing={mode !== "view" || busy}
       data-image-legacy={legacy && mode !== "history"}
       data-comparing={mode === "compare"}
@@ -618,8 +617,7 @@ function ImageWorkspace({
           event.stopPropagation();
           if (menu) {
             event.preventDefault();
-            setMenu(false);
-            menuAnchor.current?.querySelector<HTMLButtonElement>("button")?.focus();
+            closeMenu();
             return;
           }
           if (!busy) {
@@ -664,59 +662,51 @@ function ImageWorkspace({
       }}
     >
       <header className={styles.topbar}>
-        <div className={styles.currentImage}><strong>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}</span></div>
-        {canEdit ? <a className={styles.saveStyle} href={styleHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{returnRevisionId ? "更新款式修订" : "保存为款式"}</a> : <span className={styles.readOnly}>仅查看</span>}
-        <div className={styles.menuAnchor} ref={menuAnchor}>
-          <Button onClick={() => setMenu(!menu)} aria-expanded={menu}>
-            <WorkspaceIcon name="image" />图像<WorkspaceIcon name="chevron" />
+        <div className={styles.currentImage}><strong title={title}>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}{!canEdit ? " · 仅查看" : ""}</span></div>
+        <div className={styles.topActions} ref={menuAnchor}>
+          <Button ref={versionsTrigger} onClick={event => toggleMenu("versions", event.currentTarget)} aria-expanded={menu === "versions"} aria-controls={menu === "versions" ? menuId : undefined}>
+            版本与对比<WorkspaceIcon name="chevron" />
           </Button>
-          {menu ? (
-            <div className={styles.menu}>
-              <strong>{title}</strong>
-              <span>
-                {size ? `${size.width} × ${size.height}` : "正在加载原图"}
-              </span>
-              {canEdit ? <a className={styles.mobileAction} href={styleHref} aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{returnRevisionId ? "更新款式修订" : "保存为款式"}</a> : null}
-              <button className={styles.mobileAction} disabled={busy} onClick={() => { setMenu(false); void act(() => download()); }}>下载原图</button>
-              {canEdit ? <><button className={styles.mobileAction} onClick={() => changeMode("share")}>分享</button>
-              <a href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=realtime&assetId=${encodeURIComponent(assetId)}`}>实时试穿</a>
-              <a href={`/${encodeURIComponent(projectId)}/studio?tab=presentation&mode=wardrobe&assetId=${encodeURIComponent(assetId)}`}>加入衣架</a></> : null}
-              <button onClick={() => changeMode("history")}>版本历史</button>
-              {comparisonChoices.length > 0 && onSelectAsset ? <button disabled={busy} onClick={() => changeMode("compare")}>比较方案</button> : null}
-              {canEdit ? <button onClick={() => changeMode("export")}>更多导出选项</button> : null}
-              {details ? (
-                <button onClick={() => changeMode("details")}>
-                  来源与设计决策
-                </button>
-              ) : null}
-              <button
-                disabled={busy}
-                onClick={() => void act(() => download(true))}
-              >
-                下载带标注图片
-              </button>
-
+          <Button onClick={event => toggleMenu("export", event.currentTarget)} aria-expanded={menu === "export"} aria-controls={menu === "export" ? menuId : undefined}>
+            导出<WorkspaceIcon name="chevron" />
+          </Button>
+          {menu ? <div ref={menuPanel} id={menuId} className={`${styles.menu} ${menu === "export" && exportView === "share" ? styles.shareMenu : ""}`} role="group" aria-label={menu === "versions" ? "版本与对比选项" : "导出选项"}>
+            {menu === "versions" ? <>
+              <button disabled={busy} onClick={() => { closeMenu(); changeMode("history"); }}>版本历史</button>
+              {comparisonChoices.length > 0 && onSelectAsset ? <button disabled={busy} onClick={() => { closeMenu(); changeMode("compare"); }}>对比图片</button> : null}
+            </> : exportView === "options" || !canEdit ? <>
+              <button disabled={busy} onClick={() => void act(async () => { await download(includeAnnotations && (feedback.annotations.length > 0 || feedback.comments.some(comment => comment.point))); closeMenu(); })}><WorkspaceIcon name="download" />下载图片</button>
+              {feedback.annotations.length > 0 || feedback.comments.some(comment => comment.point) ? <label className={styles.annotationOption}><input type="checkbox" checked={includeAnnotations} disabled={busy} onChange={event => setIncludeAnnotations(event.target.checked)} />包含标注</label> : null}
+              {canEdit ? <button disabled={busy} onClick={() => { setExportView("share"); void loadShares(); }}><WorkspaceIcon name="share" />分享链接</button> : null}
+            </> : <div className={styles.shareContents}>
+              <button className={styles.shareBack} onClick={() => setExportView("options")}>← 返回导出</button>
+              <p>链接有效期 7 天，仅分享当前图片。</p>
+              <button disabled={busy || !shareLoaded} onClick={() => void act(async () => {
+                const result = await imageRequest<{ path: string }>(`${base}/shares`, "POST");
+                setShareUrl(new URL(result.path, window.location.origin).href);
+                setShares(await imageRequest<Share[]>(`${base}/shares`));
+              })}>创建只读链接</button>
+              {!shareLoaded ? busy ? <span role="status">正在读取分享链接…</span> : <button onClick={() => void loadShares()}>重新读取分享链接</button> : null}
+              {shareUrl ? <div className={styles.shareLink}><input aria-label="分享链接" value={shareUrl} readOnly onFocus={event => event.currentTarget.select()} /><CopyImageLinkButton value={shareUrl} onError={setError} /></div> : null}
+              {shares.map(share => <div className={styles.shareEntry} key={share.id}>
+                <span>{share.revokedAt ? "已撤销" : new Date(share.expiresAt).getTime() < now ? "已过期" : `有效至 ${new Date(share.expiresAt).toLocaleDateString()}`}</span>
+                {!share.revokedAt && new Date(share.expiresAt).getTime() >= now ? <button disabled={busy} onClick={() => void act(async () => {
+                  await imageRequest(`${base}/shares/${share.id}`, "DELETE");
+                  setShareUrl(null);
+                  setShares(current => current.map(value => value.id === share.id ? { ...value, revokedAt: new Date().toISOString() } : value));
+                  requestAnimationFrame(() => menuPanel.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true }));
+                })}>撤销链接</button> : null}
+              </div>)}
             </div>
-          ) : null}
-        </div>
-        <div className={styles.topActions}>
-          <div className={styles.desktopActions}>
-          <ImageZoomControl ref={zoomControl} zoom={zoom} onChange={setZoom} />
-          <button
-            disabled={busy}
-            aria-label="下载原图"
-            onClick={() => void act(() => download())}
-          >
-            <WorkspaceIcon name="download" /> <span>下载</span>
-          </button>
-          {canEdit ? <Button onClick={() => changeMode("share")}><WorkspaceIcon name="share" />分享</Button> : null}
-          </div>
+            }
+            {menu === "export" && error ? <p className={styles.menuError} role="alert">{error}</p> : null}
+          </div> : null}
           <IconButton className={styles.closeWorkspace} disabled={busy} label="关闭图片工作区" onClick={closeWorkspace}>
             <WorkspaceIcon name="close" />
           </IconButton>
         </div>
       </header>
-      {error || notice ? (
+      {(error || notice) && !(error && menu === "export") ? (
         <div className={styles.notice} role={error ? "alert" : "status"}>
           {error ?? notice}
           {!feedbackLoaded ? (
@@ -751,7 +741,6 @@ function ImageWorkspace({
           <span>{derived.length > 0 ? `这张图已有 ${derived.length} 个编辑版本` : "当前为编辑后的新版本"}</span>
           {latestDerived ? <button disabled={busy} onClick={() => onSelectAsset(String(latestDerived.payload.assetId))} type="button">查看编辑结果</button> : null}
           {parent ? <button disabled={busy} onClick={() => onSelectAsset(String(parent.payload.assetId))} type="button">返回来源图片</button> : null}
-          <button data-compare-trigger disabled={busy} onClick={() => changeMode("compare")} type="button">{derived.length > 0 ? "对比编辑结果" : "对比来源图片"}</button>
         </div>
       ) : null}
       {conflict ? (
@@ -813,7 +802,6 @@ function ImageWorkspace({
           title={title}
           zoom={zoom}
           onZoom={setZoom}
-          onZoomPreview={previewZoom}
           previousUrl={canSwipe ? siblingUrl(siblingIndex - 1) : undefined}
           nextUrl={canSwipe ? siblingUrl(siblingIndex + 1) : undefined}
           onNavigate={canSwipe ? (direction) => { const id = siblings[siblingIndex + direction]?.payload.assetId; if (typeof id === "string") onSelectAsset?.(id); } : undefined}
@@ -850,12 +838,10 @@ function ImageWorkspace({
         />
         {mode !== "view" &&
         mode !== "compare" &&
-        !legacy &&
-        mode !== "export" &&
-        mode !== "details" ? (
+        !legacy ? (
           <aside className={`${styles.panel} ${mode === "orient" || mode === "adjust" || mode === "text_edit" || (mode === "resize" && resizeKind === "outpaint") ? styles.orientationPanel : ""} ${mode === "text_edit" || (mode === "resize" && resizeKind === "outpaint") ? styles.outpaintPanel : ""}`} aria-label="图片工具参数">
             <div className={styles.panelHeading}>
-              <h2>{mode === "resize" && resizeKind === "outpaint" ? "AI 扩图" : tools.find((t) => t.mode === mode)?.label ?? "分享图片"}</h2>
+              <h2>{mode === "resize" && resizeKind === "outpaint" ? "AI 扩图" : tools.find((t) => t.mode === mode)?.label}</h2>
               <button
                 disabled={busy}
                 onClick={() => setMode("view")}
@@ -1207,65 +1193,6 @@ function ImageWorkspace({
                 ) : null}
               </>
             ) : null}
-            {mode === "share" ? (
-              <>
-                <p>
-                  链接有效期七天。获得链接的人可查看此图片，评论和项目内容不会公开。
-                </p>
-                <button
-                  className={styles.primary}
-                  disabled={busy}
-                  onClick={() =>
-                    void act(async () => {
-                      const result = await imageRequest<{ path: string }>(
-                        `${base}/shares`,
-                        "POST",
-                      );
-                      setShareUrl(
-                        new URL(result.path, window.location.origin).href,
-                      );
-                      setShares(await imageRequest<Share[]>(`${base}/shares`));
-                    })
-                  }
-                >
-                  创建只读链接
-                </button>
-                {shareUrl ? (
-                  <>
-                    <input aria-label="分享链接" value={shareUrl} readOnly />
-                    <CopyImageLinkButton value={shareUrl} onError={setError} />
-                  </>
-                ) : null}
-                {shares.map((share) => (
-                  <div className={styles.comment} key={share.id}>
-                    <span>
-                      {share.revokedAt
-                        ? "已撤销"
-                        : new Date(share.expiresAt).getTime() < now
-                          ? "已过期"
-                          : `有效至 ${new Date(share.expiresAt).toLocaleDateString()}`}
-                    </span>
-                    <button
-                      disabled={busy || Boolean(share.revokedAt)}
-                      onClick={() =>
-                        void act(async () => {
-                          await imageRequest(
-                            `${base}/shares/${share.id}`,
-                            "DELETE",
-                          );
-                          setShareUrl(null);
-                          setShares(
-                            await imageRequest<Share[]>(`${base}/shares`),
-                          );
-                        })
-                      }
-                    >
-                      撤销链接
-                    </button>
-                  </div>
-                ))}
-              </>
-            ) : null}
             {dirty ? (
               <small>
                 有未保存的标注或评论，关闭工作区后仍会保留本次草稿。
@@ -1280,7 +1207,6 @@ function ImageWorkspace({
             </button>
             <LegacyAssetTools
               readOnly={!canEdit}
-              styleHref={styleHref}
               initialTab={legacyTab}
               embedded
               open
@@ -1298,26 +1224,10 @@ function ImageWorkspace({
           <ImageComparison
             current={{ id: assetId, title }}
             choices={comparisonChoices}
-            onClose={() => { setMode("view"); requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>("[data-compare-trigger]")?.focus()); }}
+            onClose={() => { setMode("view"); requestAnimationFrame(() => versionsTrigger.current?.focus()); }}
             {...(onSelectAsset ? { onOpen: onSelectAsset } : {})}
           />
         </div> : null}
-        {mode === "export" ? (
-          <div className={styles.legacy}>
-            <ExportModal
-              embedded
-              onClose={() => setMode("view")}
-              onBack={() => setMode("view")}
-              source={{ type: "asset", assetId, previewUrl: `${base}/content` }}
-            />
-          </div>
-        ) : null}
-        {mode === "details" ? (
-          <div className={styles.legacy}>
-            <button onClick={() => setMode("view")}>← 返回图片</button>
-            {details}
-          </div>
-        ) : null}
       </div>
       {siblings.length > 1 && mode !== "compare" && (!legacy || mode === "history") ? (
         <div className={styles.galleryFooter}>
@@ -1339,7 +1249,6 @@ function ImageWorkspace({
             </button>
           ))}
         </nav>
-        {onSelectAsset ? <button data-compare-trigger className={styles.compareTrigger} disabled={busy} onClick={() => changeMode("compare")} type="button">比较方案</button> : null}
         </div>
       ) : null}
       <nav className={styles.toolbar} data-surface="inverse" aria-label="图片工具" hidden={!canEdit || mode === "compare" || (legacy && mode !== "history")}>

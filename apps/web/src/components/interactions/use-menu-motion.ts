@@ -5,7 +5,7 @@ import { motionEase, motionTime, observeMotionCancellation } from "./motion-poli
 import { afterSurfaceMotion } from "./floating-position";
 
 /** Native details closes immediately. Only a noninteractive visual may outlive it. */
-export function useMenuMotion(open: boolean, panel: RefObject<HTMLDivElement | null>, placement: "top" | "bottom") {
+export function useMenuMotion(open: boolean, panel: RefObject<HTMLDivElement | null>, placement: "top" | "bottom", variant: "default" | "glide" | "instant" = "default") {
   const previous = useRef<{ element: HTMLDivElement; bounds: DOMRect; container: Element; above: boolean } | null>(null);
   const active = useRef<Animation[]>([]);
   const ghost = useRef<HTMLElement | null>(null);
@@ -28,15 +28,15 @@ export function useMenuMotion(open: boolean, panel: RefObject<HTMLDivElement | n
         previous.current = { element, bounds, container, above };
       };
       capture();
-      const duration = motionTime("--motion-menu-enter", 300);
+      const duration = variant === "instant" ? 0 : variant === "glide" ? motionTime("--motion-select-enter", 180) : motionTime("--motion-menu-enter", 300);
       if (!duration || !element.animate || document.hidden) return;
       const above = previous.current?.above ?? placement === "top";
-      element.style.setProperty("transform-origin", above ? "bottom right" : "top right");
+      element.style.setProperty("transform-origin", `${above ? "bottom" : "top"} ${variant === "glide" && element.dataset.popupAlign === "start" ? "left" : "right"}`);
       active.current.push(element.animate([
-        interrupted ?? { opacity: 0, transform: `translateY(${above ? 6 : -6}px) scale(.98)` },
+        interrupted ?? { opacity: 0, transform: variant === "glide" ? "scale(.95)" : `translateY(${above ? 6 : -6}px) scale(.98)` },
         { opacity: 1, transform: "none" },
       ], { duration, easing: motionEase() }));
-      [...element.querySelectorAll<HTMLElement>("button,a")].slice(0, 6).forEach((item, index) => {
+      [...element.querySelectorAll<HTMLElement>(variant === "glide" ? ":scope > [data-no-stagger]" : "button,a")].slice(0, 6).forEach((item, index) => {
         active.current.push(item.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100, delay: index * 40, easing: motionEase(), fill: "backwards" }));
       });
       window.addEventListener("resize", capture);
@@ -47,7 +47,7 @@ export function useMenuMotion(open: boolean, panel: RefObject<HTMLDivElement | n
     } else if (previous.current) {
       const { element, bounds, container, above } = previous.current;
       previous.current = null;
-      const duration = motionTime("--motion-menu-exit", 200);
+      const duration = variant === "instant" ? 0 : variant === "glide" ? motionTime("--motion-select-exit", 120) : motionTime("--motion-menu-exit", 200);
       if (!duration || !element.animate || document.hidden || !bounds.width) return;
       if (!container.isConnected || (container instanceof HTMLDialogElement && !container.open)) return;
       const clone = element.cloneNode(true) as HTMLElement;
@@ -58,12 +58,12 @@ export function useMenuMotion(open: boolean, panel: RefObject<HTMLDivElement | n
       Object.assign(clone.style, { position: "fixed", inset: "auto", left: `${bounds.left}px`, top: `${bounds.top}px`, width: `${bounds.width}px`, height: `${bounds.height}px`, pointerEvents: "none", margin: "0", boxSizing: "border-box" });
       container.append(clone);
       ghost.current = clone;
-      const animation = clone.animate([interrupted ?? { opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${above ? 6 : -6}px) scale(.98)` }], { duration, easing: motionEase(true) });
+      const animation = clone.animate([interrupted ?? { opacity: 1, transform: "none" }, { opacity: 0, transform: variant === "glide" ? "scale(.95)" : `translateY(${above ? 6 : -6}px) scale(.98)` }], { duration, easing: motionEase(variant !== "glide") });
       animation.onfinish = () => { clone.remove(); if (ghost.current === clone) ghost.current = null; };
       active.current.push(animation);
     }
     const cancel = () => { active.current.forEach(animation => animation.cancel()); ghost.current?.remove(); ghost.current = null; };
     return observeMotionCancellation(cancel);
-  }, [open, panel, placement]);
+  }, [open, panel, placement, variant]);
   useLayoutEffect(() => () => { active.current.forEach(animation => animation.cancel()); ghost.current?.remove(); }, []);
 }

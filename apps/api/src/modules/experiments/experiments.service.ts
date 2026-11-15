@@ -178,20 +178,15 @@ export class ExperimentsService implements OnModuleInit, OnModuleDestroy {
           : null;
         const prompt = [
           input.prompt,
-          "Preserve: " + input.preserve,
+          input.preserve ? "保留要求：" + input.preserve : "",
           color
             ? "Change garment color to " +
               color.name +
               " " +
               color.hex +
-              ". Color is a visual target, not a measured color guarantee."
-            : "",
-          fabric
-            ? "Explore the fabric appearance in the attached swatch. Declared material information: " +
-              JSON.stringify({ tags: fabric.tags, details: fabric.details })
+              "."
             : "",
           variation ? "Requested variation: " + variation : "",
-          "Produce exactly one image of the same garment. Do not add a collage or labels.",
         ]
           .filter(Boolean)
           .join("\n");

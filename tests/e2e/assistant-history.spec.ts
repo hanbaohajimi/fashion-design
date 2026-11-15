@@ -244,7 +244,6 @@ test("切换会话后迟到的旧历史响应不会混入新会话", async ({ pa
   });
   await loadZhiya(page);
   await openZhiya(page);
-  await page.getByRole("button", { name: "历史对话", exact: true }).click();
   const conversation = page.getByLabel("设计对话", { exact: true });
   await conversation.hover();
   await page.mouse.wheel(0, -100000);

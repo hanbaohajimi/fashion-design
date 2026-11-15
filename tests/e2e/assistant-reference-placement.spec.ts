@@ -27,7 +27,7 @@ async function upload(page: Page) {
 async function preview(page: Page) {
   await chips(page)
     .getByRole("button", { name: "外套参考.png", exact: true })
-    .click();
+    .press("Enter");
   await expect(dialog(page)).toBeVisible();
 }
 
@@ -292,7 +292,7 @@ test("320×400预览操作完整可见，键盘关闭后焦点回到原引用", 
   expect(state.errors).toEqual([]);
 });
 
-test("发送后可从回复的引用记录预览图片，继续放入画布", async ({ page }) => {
+test("发送后隐藏消息引用记录，保留已发送引用且不自动放入画布", async ({ page }) => {
   const state = await assistantImageUploadFixture(page);
   await state.open();
   await input(page).fill("分析这份参考");
@@ -300,19 +300,10 @@ test("发送后可从回复的引用记录预览图片，继续放入画布", as
   await page.getByRole("button", { name: "发送需求", exact: true }).click();
   await expect.poll(() => state.sends.length).toBe(1);
   await expect(chips(page)).toHaveCount(0);
-  await page.getByText("查看引用记录", { exact: true }).click();
-  await page
-    .getByRole("button", { name: /外套参考.png/ })
-    .first()
-    .click();
-  await expect(dialog(page)).toBeVisible();
-  await dialog(page)
-    .getByRole("button", { name: "放入画布", exact: true })
-    .click();
-  await expect(
-    dialog(page).getByRole("button", { name: "在画布中查看", exact: true }),
-  ).toBeVisible();
-  expect(state.placements).toHaveLength(1);
+  await expect(page.getByText("查看引用记录", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("这条回复未保存引用记录", { exact: true })).toHaveCount(0);
+  expect(state.sends[0]?.referencedNodeIds).toHaveLength(1);
+  expect(state.placements).toHaveLength(0);
   expect(state.sends).toHaveLength(1);
   expect(state.errors).toEqual([]);
 });

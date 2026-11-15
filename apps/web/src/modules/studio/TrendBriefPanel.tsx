@@ -239,11 +239,15 @@ export function TrendBriefPanel({
   brands,
   canEdit = true,
   onDirty,
+  onRecord,
+  onContinue,
 }: {
   projectId: string;
   brands: readonly StudioDocumentView[];
   canEdit?: boolean;
   onDirty?: (dirty: boolean) => void;
+  onRecord?: (nodeId: string) => void | Promise<void>;
+  onContinue?: (nodeIds: readonly string[]) => void | Promise<void>;
 }) {
   const router = useRouter();
   const [articles, setArticles] = useState<readonly TrendItem[]>([]);
@@ -358,6 +362,10 @@ export function TrendBriefPanel({
     setContinuing(true);
     setError(null);
     try {
+      if (onContinue) {
+        await onContinue(savedResearchNodeIds.length ? savedResearchNodeIds : savedBriefNodeId ? [savedBriefNodeId] : []);
+        return;
+      }
       const conversation = await createAgentConversation(projectId, {
         mode: "workflow",
       });
@@ -444,6 +452,7 @@ export function TrendBriefPanel({
       );
       setBaseline(signature);
       onDirty?.(false);
+      await onRecord?.(patch.nodeId);
       setNotice(
         "任务简报已保存到画布，可连接需求分析或引用给设计助手。尚未执行图片生成。",
       );

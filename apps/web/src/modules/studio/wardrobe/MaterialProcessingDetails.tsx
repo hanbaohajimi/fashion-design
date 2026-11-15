@@ -8,9 +8,9 @@ export function MaterialProcessingDetails({ processing }: { processing: Wardrobe
   const correction = processing.kind === "masked-edit";
   const description = correction
     ? processing.algorithm === "masked-provider-rgb-interior-v2"
-      ? "局部细节修正候选。只调整不透明面料内部，半透明区域、细边和轮廓附近保持原样；请对照原图核对颜色接缝、纹理与缝线。"
-      : "局部细节修正候选。保留原图透明度与外轮廓，选区外内容保持原样；请对照原图核对选区内的纹理与缝线。"
-    : "透明材质修复候选。保留原图颜色，只处理所选薄纱区域；请在三种底色下核对实体、纹理与透射。";
+      ? "局部细节修正图片。只调整不透明面料内部，半透明区域、细边和轮廓附近保持原样；请对照原图核对颜色接缝、纹理与缝线。"
+      : "局部细节修正图片。保留原图透明度与外轮廓，选区外内容保持原样；请对照原图核对选区内的纹理与缝线。"
+    : "透明材质修复图片。保留原图颜色，只处理所选薄纱区域；请在三种底色下核对实体、纹理与透射。";
   return <div className={styles.stack}>
     <p>{description}</p>
     <details><summary>{correction ? "查看修正来源" : "查看修复来源"}</summary><div className={styles.comparison}>

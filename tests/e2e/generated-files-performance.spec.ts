@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { generatedFilesFixture } from "./generated-files-fixture";
@@ -51,7 +52,7 @@ test("100对象白板与120项生成文件浏览，关闭后恢复平移", async
   expect(await page.evaluate(() => Boolean((Date as DateConstructor & { isFake?: boolean }).isFake))).toBe(false);
   const before = await sample(page, "canvas");
   const begin = Date.now();
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click(); await page.getByRole("button", { name: "生成文件", exact: true }).click();
+  await openCanvasFunction(page, "生成文件");
   const panel = page.getByRole("dialog", { name: "生成文件", exact: true });
   await expect(panel.locator("[data-generated-file-id]")).toHaveCount(30);
   const firstPageMs = Date.now() - begin;

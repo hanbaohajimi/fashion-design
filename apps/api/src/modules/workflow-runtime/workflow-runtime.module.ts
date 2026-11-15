@@ -2,6 +2,8 @@ import { ProjectAccessModule } from "../studio/project-access.module";
 import { CanvasModule } from "../canvas/canvas.module";
 import { CanvasCommandService } from "./canvas-command.service";
 import { CanvasCommandsController } from "./canvas-commands.controller";
+import { CanvasCreationsController } from "./canvas-creations.controller";
+import { CanvasCreationsService } from "./canvas-creations.service";
 import { AssistantStreamsModule } from "../agent-conversations/assistant-streams.module";
 import { ImageTransformQueue } from "./image-transform-queue.service";
 import { prisma } from "@fashion/db";
@@ -19,6 +21,9 @@ import { WorkflowAssistantController } from "./workflow-assistant.controller";
 import { WorkflowCoordinator } from "./workflow-coordinator";
 import { WorkflowOutboxConsumer } from "./workflow-outbox.consumer";
 import { TaskDispatchService } from "./task-dispatch.service";
+import { PromptEnhancementService } from "./prompt-enhancement.service";
+import { PromptEnhancementController } from "./prompt-enhancement.controller";
+import { AssistantCanvasActionsService } from "./assistant-canvas-actions.service";
 import { ExportsModule } from "../exports/exports.module";
 import { WorkflowRuntimeController } from "./workflow-runtime.controller";
 import {
@@ -39,10 +44,13 @@ import {
     VisualContextModule,
     ExportsModule,
   ],
-  controllers: [WorkflowRuntimeController, WorkflowAssistantController, CanvasCommandsController],
+  controllers: [WorkflowRuntimeController, WorkflowAssistantController, CanvasCommandsController, CanvasCreationsController, PromptEnhancementController],
   providers: [
+    AssistantCanvasActionsService,
+    PromptEnhancementService,
     WorkflowRuntimeService,
     CanvasCommandService,
+    CanvasCreationsService,
     ImageTransformQueue,
     WorkflowAssistantService,
     WorkflowCoordinator,

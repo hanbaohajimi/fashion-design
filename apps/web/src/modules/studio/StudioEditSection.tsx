@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { StudioHeaderContext } from "./StudioPageHeader";
 import { Button } from "../../components/ui";
 import { revealInvalidField } from "../../components/workspace-ui";
 import styles from "./studio-edit-section.module.css";
@@ -32,6 +33,7 @@ export function StudioEditSection({
   readonly persistent?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultOpen);
+  const embedded = useContext(StudioHeaderContext)?.embedded ?? false;
   const open = controlledOpen ?? expanded;
   const setOpen = (next: boolean) => {
     setExpanded(next);
@@ -75,6 +77,7 @@ export function StudioEditSection({
       element.close();
       if (
         open &&
+        !embedded &&
         media?.matches &&
         (userOpened.current || controlledOpen !== undefined)
       )
@@ -84,7 +87,7 @@ export function StudioEditSection({
     sync();
     media?.addEventListener("change", sync);
     return () => media?.removeEventListener("change", sync);
-  }, [open, controlledOpen]);
+  }, [open, controlledOpen, embedded]);
   const close = () => {
     setOpen(false);
     trigger.current?.querySelector("button")?.focus({ preventScroll: true });

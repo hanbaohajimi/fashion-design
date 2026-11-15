@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   createShapeId,
   DefaultColorStyle,
@@ -13,6 +13,7 @@ import {
 import { Menu } from "../../../components/ui";
 import { BoardProjectContext } from "../board-context";
 import { ToolRail } from "../ToolRail";
+import { BottomToolbarIcon } from "../BottomToolbarIcon";
 import { CanvasWelcome } from "./CanvasWelcome";
 import { CanvasObjectsPanel } from "./CanvasObjectsPanel";
 import { CanvasOverview } from "./CanvasOverview";
@@ -22,6 +23,10 @@ import { canvasImageFitBounds, fitCanvasImageToSource } from "./canvas-image-siz
 import { imageToolEntries, type ImageToolEntry } from "./image-tool-entry";
 import { WorkspaceIcon } from "./WorkspaceIcon";
 import styles from "./infinite-workspace.module.css";
+import { CreationWorkspaceContext } from "./creation-context";
+import WarmTooltip from "../../../components/WarmTooltip";
+import { CanvasAction } from "./CanvasAction";
+import { AddNodeMenu } from "./AddNodeMenu";
 
 const icons: Record<string, ReactNode> = {
   more: (
@@ -69,6 +74,9 @@ const sizes: readonly [TLDefaultSizeStyle, string][] = [
 ];
 
 export interface CanvasToolActions {
+  projectFunctions?: readonly import("./canvas-project-functions").CanvasProjectFunction[];
+  onProjectFunction?: (id: string) => void | Promise<void>;
+  onFunctionsReady?: (ready: boolean) => void;
   toolsOpen: boolean;
   collectionsOpen: boolean;
   onOpenCollections: () => void;
@@ -78,10 +86,12 @@ export interface CanvasToolActions {
   onUpload: () => void;
   onUseTools: () => void;
   onReference?: () => void;
+  onReferenceNodeIds?: (ids: readonly string[]) => void;
   referencesPreparing?: boolean;
   onStartConversation?: (focusInput: boolean) => void;
   assistantOpen?: boolean;
   onCanvasPanelOpenChange?: (open: boolean) => void;
+  onCreationPanelOpenChange?: (open: boolean) => void;
   onObjectHistoryOpenChange?: (open: boolean) => void;
   onOpenAssetHistory?: (nodeId: string, assetId: string) => boolean;
   imageToolNodeIds?: readonly string[];
@@ -104,6 +114,16 @@ export function CanvasTools({
   onAddMaterial: () => void;
 }) {
   const editor = useEditor();
+  useEffect(() => {
+    const retireNoteShortcut = (event: KeyboardEvent) => {
+      if (event.code !== "KeyN" || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || !editor.getInstanceState().isFocused) return;
+      if (event.target instanceof HTMLElement && (event.target.matches("input,textarea,select") || event.target.isContentEditable)) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", retireNoteShortcut, true);
+    return () => window.removeEventListener("keydown", retireNoteShortcut, true);
+  }, [editor]);
+  const creation = useContext(CreationWorkspaceContext);
   const [showTips, setShowTips] = useState(false);
   const [showObjects, setShowObjects] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
@@ -114,6 +134,8 @@ export function CanvasTools({
   useEffect(() => () => onObjectHistoryOpenChange?.(false), [onObjectHistoryOpenChange]);
   const objectsId = useId();
   const objectsButton = useRef<HTMLButtonElement>(null);
+  const registerObjects = creation?.registerObjects;
+  useEffect(() => registerObjects?.(() => { setShowObjects(true); setShowTips(false); setShowOverview(false); }), [registerObjects]);
   const moreButton = useRef<HTMLElement>(null);
   const closeObjects = useCallback(() => { setShowObjects(false); objectsButton.current?.focus(); }, []);
   const closeOverview = useCallback(() => { setShowOverview(false); moreButton.current?.focus(); }, []);
@@ -140,7 +162,7 @@ export function CanvasTools({
       return {
         tool: editor.getCurrentToolId(),
         count: selected.length,
-        referenceCount: ids.length + materials.filter((shape) => typeof shape.meta.canvasNodeId !== "string" && ["draw", "text", "note", "fashion-note", "fashion-swatch"].includes(shape.type)).length,
+        referenceCount: ids.length + materials.filter((shape) => typeof shape.meta.canvasNodeId !== "string" && ["draw", "text", "fashion-text", "fashion-swatch"].includes(shape.type)).length,
         ids,
         hasGroup: selected.some((shape) => shape.type === "group"),
         hasLocked: selected.some((shape) => editor.isShapeOrAncestorLocked(shape)),
@@ -202,35 +224,26 @@ export function CanvasTools({
       onKeyDown={(event) => event.stopPropagation()}
     >
       <BoardProjectContext.Provider value={projectId}>
-        <ToolRail {...actions} embedded ready={ready}>
+        <ToolRail {...actions} embedded ready={ready} {...(creation ? { addNodeControl: <AddNodeMenu disabled={!editable || creation.creating} onCreate={creation.createNode} onUpload={() => creation.openResources("upload")} onExisting={() => creation.openResources("existing")} /> } : {})}>
           <div className={styles.railExtras}>
-            <button
+            <WarmTooltip content="全部功能模块"><button
               ref={objectsButton}
-              type="button"
-              aria-label="画布对象"
-              title="画布对象"
-              aria-expanded={showObjects}
-              aria-controls={showObjects ? objectsId : undefined}
-              disabled={!ready}
-              onClick={() => { setShowObjects(value => !value); setShowTips(false); setShowOverview(false); }}
-            >
-              <Icon name="layers" />
-            </button>
-            <button
               className={styles.designToolsButton}
               type="button"
-              aria-label="使用设计工具"
-              aria-expanded={actions.toolsOpen}
+              aria-label="全部功能模块"
+              data-guide="workspace-functions"
+              aria-expanded={creation?.functionsOpen ?? actions.toolsOpen}
               data-canvas-menu-trigger
-              disabled={!editable}
-              onClick={actions.onUseTools}
+              disabled={!ready}
+              onClick={creation?.openFunctions ?? actions.onUseTools}
             >
-              设计工具
-            </button>
-            <Menu
+              <BottomToolbarIcon name="modules" />
+            </button></WarmTooltip>
+            <WarmTooltip content="更多白板操作" triggerSelector="summary"><Menu
+              nativeTitle={false}
               label="更多白板操作"
               triggerRef={moreButton}
-              trigger={<Icon name="more" />}
+              trigger={<BottomToolbarIcon name="more" />}
               align="start"
               guideAnchor="workspace-materials"
             >
@@ -345,21 +358,21 @@ export function CanvasTools({
               <button onClick={() => { setShowTips(value => !value); setShowObjects(false); setShowOverview(false); }}>
                 白板操作提示
               </button>
-            </Menu>
+            </Menu></WarmTooltip>
           </div>
         </ToolRail>
       </BoardProjectContext.Provider>
       {ready && showObjects ? <CanvasObjectsPanel id={objectsId} editable={editable} onClose={closeObjects} onHistory={openHistory} /> : null}
       {history ? <CanvasObjectHistory key={history.assetId} target={history} onClose={() => setHistory(null)} onOpenWorkspace={editable && actions.onOpenAssetHistory ? () => actions.onOpenAssetHistory?.(history.nodeId ?? "", history.assetId) ?? false : undefined} /> : null}
       {ready && showOverview ? <CanvasOverview onClose={closeOverview} /> : null}
-      {ready && state.count > 0 && !showTips && !showObjects && !showOverview ? (
+      {ready && state.count > 0 && !(creation && state.count === 1 && (state.imageToFit || editor.getOnlySelectedShape()?.type === "fashion-creation")) && !showTips && !showObjects && !showOverview ? (
         <div
           className={styles.selectionBar}
           role="toolbar"
           aria-label="所选对象操作"
         >
           <span className={styles.selectionCount}>已选 {state.count} 项</span>
-          {actions.onReference ? <button type="button" disabled={!state.referenceCount || state.referenceCount > 16 || actions.referencesPreparing} onClick={actions.onReference}>{actions.referencesPreparing ? "正在准备引用…" : "引用到助手"}</button> : null}
+          {actions.onReference ? <CanvasAction label={actions.referencesPreparing ? "正在准备引用…" : "引用到助手"} icon="comment" disabled={!state.referenceCount || state.referenceCount > 16 || actions.referencesPreparing} onClick={actions.onReference} /> : null}
           {state.history?.nodeId && editable && !state.hasLocked && actions.imageToolNodeIds?.includes(state.history.nodeId) && actions.onOpenImageTool ? <div data-canvas-image-tools><Menu key={`${state.history.nodeId}:${state.history.assetId}`} label="图片工具" align="start" trigger={<><WorkspaceIcon name="inpaint" />图片工具<WorkspaceIcon name="chevron" /></>}>
             {imageToolEntries.map(entry => <button type="button" key={entry.action} onClick={() => {
               const target = state.history;
@@ -369,48 +382,39 @@ export function CanvasTools({
               if (selected.meta.canvasNodeId === target.nodeId && "assetId" in selected.props && selected.props.assetId === target.assetId) actions.onOpenImageTool?.(target.nodeId, target.assetId, entry.action);
             }}>{entry.label}</button>)}
           </Menu></div> : null}
-          <button
-            type="button"
+          <CanvasAction
+            label="查看详情" icon="results"
             disabled={state.ids.length !== 1}
             onClick={() => {
               if (state.ids[0]) onOpen(state.ids[0]);
             }}
-          >
-            查看详情
-          </button>
-          {state.history ? <button type="button" onClick={() => { if (state.history) openHistory(state.history); }}>查看历史</button> : null}
-          {state.imageToFit ? <button type="button" disabled={!editableSelection || !state.canFitImage} onClick={() => {
+          />
+          {state.history ? <CanvasAction label="查看历史" icon="history" onClick={() => { if (state.history) openHistory(state.history); }} /> : null}
+          {state.imageToFit ? <CanvasAction label="匹配图片比例" icon="frame" disabled={!editableSelection || !state.canFitImage} onClick={() => {
             if (state.imageToFit) fitCanvasImageToSource(editor, state.imageToFit);
-          }}>匹配图片比例</button> : null}
-          {state.count >= 2 ? <button
-            type="button"
+          }} /> : null}
+          {state.count >= 2 ? <CanvasAction
+            label="分组" icon="group_objects"
             disabled={!editableSelection || state.count < 2}
             onClick={() =>
               action("整理分组", () =>
                 editor.groupShapes(editor.getSelectedShapeIds()),
               )
             }
-          >
-            分组
-          </button> : null}
-          {state.hasGroup ? <button
-            type="button"
+          /> : null}
+          {state.hasGroup ? <CanvasAction
+            label="解除分组" icon="ungroup_objects"
             disabled={!editableSelection || !state.hasGroup}
             onClick={() =>
               action("解除分组", () =>
                 editor.ungroupShapes(editor.getSelectedShapeIds()),
               )
             }
-          >
-            解除分组
-          </button> : null}
-          <button
-            type="button"
-            aria-label="取消选择"
+          /> : null}
+          <CanvasAction
+            label="取消选择" icon="close"
             onClick={() => editor.selectNone()}
-          >
-            <Icon name="close" />
-          </button>
+          />
         </div>
       ) : null}
       {showStyles && !showTips && !showObjects && !showOverview && !state.hasLocked ? (

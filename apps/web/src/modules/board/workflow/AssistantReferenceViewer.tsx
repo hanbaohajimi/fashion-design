@@ -7,6 +7,7 @@ import { nodeImageUrl } from "./workflow-graph";
 import type { WorkflowNode } from "./workflow-api";
 import { useImagePlacement, type PlacementResult } from "./use-image-placement";
 import styles from "./assistant-reference-viewer.module.css";
+import { referenceTypeLabel } from "./AssistantReferencePreview";
 
 const noop = () => {};
 export interface ReferencePlacementActions {
@@ -22,11 +23,23 @@ export function AssistantReferenceViewer({
   projectId,
   actions,
   onClose,
+  onRemove,
+  onLocate,
+  onInsert,
+  insertLabel = "插入图片引用",
+  removeDisabled = false,
+  removedFocusSelector,
 }: {
   node: WorkflowNode;
   projectId: string;
   actions?: ReferencePlacementActions | undefined;
   onClose: () => void;
+  onRemove?: (() => void) | undefined;
+  onLocate?: (() => void) | undefined;
+  onInsert?: (() => void) | undefined;
+  insertLabel?: string;
+  removeDisabled?: boolean;
+  removedFocusSelector?: string;
 }) {
   const [zoom, setZoom] = useState<number | null>(null);
   const [placedHere, setPlacedHere] = useState(false);
@@ -35,6 +48,8 @@ export function AssistantReferenceViewer({
   const active = useRef(true),
     lock = useRef(false),
     request = useRef<AbortController | null>(null);
+  const removed = useRef(false);
+  const isReferenceImage = node.type === "reference_image";
   const placement = useImagePlacement(
     projectId,
     `assistant-reference-placement:${node.id}`,
@@ -52,8 +67,14 @@ export function AssistantReferenceViewer({
     return () => {
       active.current = false;
       request.current?.abort();
+      if (removed.current && removedFocusSelector)
+        requestAnimationFrame(() =>
+          document
+            .querySelector<HTMLElement>(removedFocusSelector)
+            ?.focus({ preventScroll: true }),
+        );
     };
-  }, []);
+  }, [removedFocusSelector]);
   const placed = placedHere || Boolean(actions?.isPlaced(node.id));
   const place = async () => {
     if (lock.current || !actions?.canPlace || !placement.ready) return;
@@ -94,7 +115,7 @@ export function AssistantReferenceViewer({
   return (
     <Dialog
       open
-      label="参考图片预览"
+      label={url || isReferenceImage ? "参考图片预览" : "引用素材预览"}
       className={styles.dialog}
       returnFocusSelector={`[data-reference-preview="${CSS.escape(node.id)}"]`}
       onClose={onClose}
@@ -102,7 +123,7 @@ export function AssistantReferenceViewer({
       <header className={styles.header}>
         <div>
           <h2>{node.title}</h2>
-          <span>项目参考图片</span>
+          <span>{referenceTypeLabel(node)}</span>
         </div>
         <Button variant="ghost" onClick={onClose}>
           关闭预览
@@ -123,8 +144,14 @@ export function AssistantReferenceViewer({
             onAnnotation={noop}
             onPoint={noop}
           />
-        ) : (
+        ) : isReferenceImage ? (
           <p role="alert">参考图片暂时无法读取。</p>
+        ) : (
+          <div className={styles.referenceText}>
+            {typeof node.payload.text === "string"
+              ? node.payload.text
+              : "可以在画布中查看这项素材的完整内容。"}
+          </div>
         )}
       </div>
       <footer className={styles.footer}>
@@ -139,7 +166,20 @@ export function AssistantReferenceViewer({
           <p role="alert">{error ?? placement.error}</p>
         ) : null}
         <div className={styles.actions}>
-          <Button onClick={() => setZoom(100)}>原始大小</Button>
+          {url ? <Button onClick={() => setZoom(100)}>原始大小</Button> : null}
+          {onInsert ? <Button disabled={removeDisabled} onClick={() => { onInsert(); onClose(); }}>{insertLabel}</Button> : null}
+          {onRemove ? (
+            <Button
+              disabled={removeDisabled || preparing || placement.busy}
+              onClick={() => {
+                removed.current = true;
+                onRemove();
+                onClose();
+              }}
+            >
+              移除引用
+            </Button>
+          ) : null}
           {!placement.ready && placement.error ? (
             <Button onClick={() => void placement.reload()}>
               重新读取放置记录
@@ -162,6 +202,16 @@ export function AssistantReferenceViewer({
             <Button
               onClick={() => {
                 actions.locate(node.id);
+                onClose();
+              }}
+            >
+              在画布中查看
+            </Button>
+          ) : null}
+          {onLocate ? (
+            <Button
+              onClick={() => {
+                onLocate();
                 onClose();
               }}
             >

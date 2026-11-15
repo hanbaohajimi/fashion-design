@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ASSISTANT_WINDOW, type AssistantPresentation } from "../../../components/assistant-window-geometry";
 import { STUDIO_LAYOUT } from "../../../components/ui-config";
 import { readWorkspacePreference, saveWorkspacePreference, workspacePreferenceKey } from "../../../components/workspace-preferences";
 
-export type WorkspaceMode = "mobile" | "overlay" | "docked";
+export type WorkspaceMode = "mobile" | "overlay" | "docked" | "floating";
 export type MobileView = "canvas" | "nodes" | "assistant";
 export interface WorkspaceLayout {
   mode: WorkspaceMode;
@@ -38,9 +39,13 @@ export function changeWorkspaceMode(
   };
 }
 
-export function useWorkspaceLayout(options?: { accountId?: string; projectId: string; defaultOpen?: boolean }) {
+export function useWorkspaceLayout(options?: { accountId?: string; projectId: string; defaultOpen?: boolean; assistantWindow?: boolean }) {
   const storageKey = options?.accountId ? workspacePreferenceKey(options.accountId, options.projectId) : "";
   const defaultOpen = options?.defaultOpen;
+  const assistantWindow = options?.assistantWindow ?? false;
+  const preferred = useRef<AssistantPresentation>("floating");
+  const dockAvailable = useRef(false);
+  const [canDock, setCanDock] = useState(false);
   const [restoredKey, setRestoredKey] = useState<string | null>(null);
   const [layout, setLayout] = useState<WorkspaceLayout>({
     mode: "docked",
@@ -51,8 +56,12 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
     const mobile = matchMedia(`(max-width: ${STUDIO_LAYOUT.mobileMax}px)`);
     let surface = document.querySelector("main");
     const available = () => (surface?.isConnected ? surface : document.querySelector("main"))?.clientWidth ?? window.innerWidth;
-    const mode = (): WorkspaceMode =>
-      mobile.matches ? "mobile" : available() >= STUDIO_LAYOUT.canvasMin + STUDIO_LAYOUT.sidebarMin + 6 ? "docked" : "overlay";
+    preferred.current = readWorkspacePreference(storageKey).presentation ?? "floating";
+    const mode = (): WorkspaceMode => {
+      dockAvailable.current = available() >= (assistantWindow ? ASSISTANT_WINDOW.canvasMin + ASSISTANT_WINDOW.minWidth + ASSISTANT_WINDOW.separator : STUDIO_LAYOUT.canvasMin + STUDIO_LAYOUT.sidebarMin + 6);
+      setCanDock(dockAvailable.current);
+      return mobile.matches ? "mobile" : assistantWindow ? preferred.current === "docked" && dockAvailable.current ? "docked" : "floating" : dockAvailable.current ? "docked" : "overlay";
+    };
     let initialized = false;
     let focusFrame = 0;
     const update = () => {
@@ -82,7 +91,7 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
           ) {
             const surface = focused.closest("main");
             const target = surface?.querySelector<HTMLElement>(
-              '[data-zhiya]:not([hidden]) .pp-hit, [data-canvas-assistant-entry], [data-guide="workspace-views"] [aria-pressed="true"]',
+              '[data-zhiya]:not([hidden]) .pp-hit, [data-canvas-assistant-entry], [data-guide="workspace-functions"]',
             );
             target?.focus();
           }
@@ -103,11 +112,11 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
       observer?.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [storageKey, defaultOpen]);
+  }, [storageKey, defaultOpen, assistantWindow]);
   useEffect(() => {
     if (restoredKey !== storageKey || !storageKey) return;
-    saveWorkspacePreference(storageKey, { open: layout.mode === "mobile" ? layout.mobileView === "assistant" : layout.sidebarOpen });
-  }, [layout.mode, layout.mobileView, layout.sidebarOpen, storageKey, restoredKey]);
+    saveWorkspacePreference(storageKey, { open: layout.mode === "mobile" ? layout.mobileView === "assistant" : layout.sidebarOpen }, assistantWindow ? ASSISTANT_WINDOW.width : STUDIO_LAYOUT.sidebarDefault);
+  }, [layout.mode, layout.mobileView, layout.sidebarOpen, storageKey, restoredKey, assistantWindow]);
   const setMobileView = useCallback(
     (mobileView: MobileView) =>
       setLayout((current) => ({
@@ -122,6 +131,11 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
       setLayout((current) => ({ ...current, sidebarOpen })),
     [],
   );
+  const setPresentation = useCallback((value: AssistantPresentation) => {
+    preferred.current = value;
+    saveWorkspacePreference(storageKey, { presentation: value }, ASSISTANT_WINDOW.width);
+    setLayout(current => ({ ...current, mode: current.mode === "mobile" ? "mobile" : value === "docked" && dockAvailable.current ? "docked" : "floating" }));
+  }, [storageKey]);
   return {
     ...layout,
     sidebarOpen:
@@ -130,5 +144,7 @@ export function useWorkspaceLayout(options?: { accountId?: string; projectId: st
         : layout.sidebarOpen,
     setMobileView,
     setSidebarOpen,
+    canDock,
+    setPresentation,
   };
 }

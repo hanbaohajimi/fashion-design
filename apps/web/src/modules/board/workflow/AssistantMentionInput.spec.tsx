@@ -6,7 +6,7 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AssistantMentionInput } from "./AssistantMentionInput";
 
@@ -26,6 +26,11 @@ function setup({
   allow = true,
   initial = "",
   candidates = nodes,
+}: {
+  maxLength?: number;
+  allow?: boolean;
+  initial?: string;
+  candidates?: ComponentProps<typeof AssistantMentionInput>["nodes"];
 } = {}) {
   const send = vi.fn();
   const add = vi.fn((id: string) => Boolean(id) && allow);
@@ -69,7 +74,7 @@ it("chooses with arrows and Enter at the caret without sending or losing surroun
   const { input, fill, send, add } = setup();
   fill("请参考@候，保留衣领。", "请参考@候".length);
   fireEvent.keyDown(input, { key: "ArrowDown" });
-  const chosen = screen.getByRole("option", { name: "@候选 B 素材" });
+  const chosen = screen.getByRole("option", { name: "候选 B" });
   expect(chosen.getAttribute("aria-selected")).toBe("true");
   expect(input.getAttribute("aria-activedescendant")).toBe(chosen.id);
   fireEvent.keyDown(input, { key: "Enter" });
@@ -135,10 +140,91 @@ it("preserves explicit identity when titles are duplicated and pointer focus mov
     candidates: [...nodes, { id: "d", title: "候选 A", kind: "asset" }],
   });
   fill("@候选 A");
-  const choice = screen.getByRole("option", { name: "@候选 A 素材 d" });
+  const choice = screen.getByRole("option", { name: "候选 A（2）" });
   fireEvent.blur(input, { relatedTarget: choice });
   fireEvent.click(choice);
   expect(add).toHaveBeenCalledWith("d");
   expect(input.value).toBe("@候选 A ");
   expect(send).not.toHaveBeenCalled();
+});
+
+it("renders image thumbnails and clean names without node IDs, type metadata or background tools", () => {
+  const { fill } = setup({
+    candidates: [
+      {
+        id: "image-resource-103938",
+        title: "4be5c6b871ac012345678901234567890.png",
+        kind: "asset",
+        type: "candidate",
+        payload: {
+          imageUrl: "/coat.png",
+          model: "内部模型参数",
+          quality: "high",
+        },
+      },
+      {
+        id: "tool-resource-293824",
+        title: "后台执行参数",
+        kind: "tool",
+        type: "generate_design",
+        payload: {},
+      },
+      {
+        id: "draft-resource-182938",
+        title: "未确认输出",
+        kind: "asset",
+        type: "candidate",
+        status: "proposed",
+      },
+    ],
+  });
+  fill("@");
+  const option = screen.getByRole("option", { name: "设计方案" });
+  expect(option.querySelector("img")?.getAttribute("src")).toBe("/coat.png");
+  expect(option.textContent).toBe("设计方案");
+  expect(option.getAttribute("title")).toBe("设计方案");
+  expect(screen.getAllByRole("option")).toHaveLength(1);
+  expect(screen.queryByText("后台执行参数")).toBeNull();
+  expect(screen.queryByText("内部模型参数")).toBeNull();
+});
+
+it("searches the readable image label and retains the actual reference identity", () => {
+  const { fill, add, input } = setup({
+    candidates: [
+      {
+        id: "original-image",
+        title: "4be5c6b871ac012345678901234567890.png",
+        kind: "asset",
+        type: "reference_image",
+        payload: { imageUrl: "/reference.png" },
+      },
+    ],
+  });
+  fill("@参考图");
+  fireEvent.click(screen.getByRole("option", { name: "参考图片" }));
+  expect(add).toHaveBeenCalledWith("original-image");
+  expect(input.value).toBe("@4be5c6b871ac012345678901234567890.png ");
+});
+
+it("falls back to the image icon after a thumbnail fails and still permits choosing the object", () => {
+  const { fill, add } = setup({
+    candidates: [
+      {
+        id: "missing-image",
+        title: "长外套",
+        kind: "asset",
+        type: "candidate",
+        payload: { imageUrl: "/missing.png" },
+      },
+    ],
+  });
+  fill("@");
+  const option = screen.getByRole("option", { name: "长外套" });
+  const thumbnail = option.querySelector("img");
+  if (!thumbnail) throw new Error("缩略图未渲染");
+  fireEvent.error(thumbnail);
+  expect(option.querySelector("img")).toBeNull();
+  expect(option.querySelector("svg")).toBeTruthy();
+  fireEvent.click(option);
+  expect(add).toHaveBeenCalledWith("missing-image");
 });

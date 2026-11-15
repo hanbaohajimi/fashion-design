@@ -537,7 +537,7 @@ export function GenerationWorkspace({
       const taskId = candidateId.slice(0, separator);
       const index = Number(candidateId.slice(separator + 1));
       if (separator <= 0 || !Number.isInteger(index) || index < 0) {
-        setNotice("候选标识不合法，无法保存状态");
+        setNotice("图片标识不合法，无法保存状态");
         return;
       }
       setTasks((current) =>
@@ -553,12 +553,12 @@ export function GenerationWorkspace({
       try {
         await setGenerationCandidateDisposition(taskId, index, disposition);
       } catch (cause) {
-        setNotice(cause instanceof Error ? cause.message : "候选状态保存失败");
+        setNotice(cause instanceof Error ? cause.message : "图片状态保存失败");
         try {
           const detail = await fetchGenerationTask(taskId);
           updateTask(detail);
         } catch {
-          setNotice("候选状态保存失败，任务状态重新读取也失败");
+          setNotice("图片状态保存失败，任务状态重新读取也失败");
         }
       }
     },

@@ -59,6 +59,21 @@ const workspaceProps = () => ({
   onSaved: vi.fn(async () => {}),
   beforeChange: vi.fn(async () => true),
 });
+
+it("pauses an embedded show's event subscription while hidden and resumes it in place", async () => {
+  const props = workspaceProps();
+  const before = window.location.href;
+  const view = render(<RunwayWorkspace {...props} embedded active={false} />);
+  await screen.findByRole("heading", { name: "庭院亚麻秀" });
+  expect(watchRunway).not.toHaveBeenCalled();
+  view.rerender(<RunwayWorkspace {...props} embedded active />);
+  await waitFor(() => expect(watchRunway).toHaveBeenCalledTimes(1));
+  const signal = vi.mocked(watchRunway).mock.calls[0]?.[2];
+  expect(signal?.aborted).toBe(false);
+  view.rerender(<RunwayWorkspace {...props} embedded active={false} />);
+  expect(signal?.aborted).toBe(true);
+  expect(window.location.href).toBe(before);
+});
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   HTMLDialogElement.prototype.close = function () { this.open = false; };

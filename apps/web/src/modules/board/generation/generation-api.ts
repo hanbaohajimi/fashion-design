@@ -216,7 +216,7 @@ export async function setGenerationCandidateDisposition(
     },
   );
   if (!response.ok) {
-    throw await apiError(response, "候选状态保存失败");
+    throw await apiError(response, "图片状态保存失败");
   }
   return (await response.json()) as GenerationTaskDetail;
 }

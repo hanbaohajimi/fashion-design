@@ -39,7 +39,7 @@ async function mockProjects(page: Page) {
 
 test("项目搜索等待IME提交并保留旧结果，归档批次可真实恢复", async ({ page }) => {
   const { searches, writes } = await mockProjects(page);
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(page.locator("[data-project-id]")).toHaveCount(2);
   const search = page.getByRole("searchbox", { name: "搜索项目" });
   await search.dispatchEvent("compositionstart");

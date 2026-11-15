@@ -1,3 +1,4 @@
+import { openImageComparison } from "./image-workspace-controls";
 import { mkdir } from "node:fs/promises";
 import { expect, test, type Locator } from "@playwright/test";
 import { prepareImageEditing } from "./image-editing-fixture";
@@ -153,7 +154,7 @@ test("提交中与回执待确认时锁住选区，刷新重试保留原任务�
   await expect(
     workspace.getByAltText("藏蓝通勤外套", { exact: true }),
   ).toBeVisible();
-  await workspace.getByRole("button", { name: "对比编辑结果" }).click();
+  await openImageComparison(workspace);
   await expect(
     workspace.getByRole("region", { name: "当前图片" }),
   ).toBeVisible();
@@ -244,7 +245,7 @@ test("320px 去背景回执丢失后继续原操作，并能比较结果与返�
   await expect(
     workspace.getByRole("button", { name: "查看编辑结果" }),
   ).toBeInViewport({ ratio: 1 });
-  await workspace.getByRole("button", { name: "对比编辑结果" }).click();
+  await openImageComparison(workspace);
   await expect(
     workspace.getByRole("region", { name: "对比图片" }),
   ).toBeVisible();

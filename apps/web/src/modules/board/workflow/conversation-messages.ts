@@ -2,6 +2,7 @@ import type { WorkflowMessageView } from "../agent/agent-api";
 import {
   workflowExecutionProgressSchema,
   workflowExecutionResultSchema,
+  creationActivitySchema,
   type WorkflowExecutionProgress,
 } from "@fashion/shared";
 
@@ -50,6 +51,17 @@ function retainExecutionObservations(
   update: WorkflowMessageView,
 ) {
   let next = update;
+  const oldResult = workflowExecutionResultSchema.safeParse(previous.context?.executionResult);
+  const newResult = workflowExecutionResultSchema.safeParse(update.context?.executionResult);
+  if (previous.executionId && previous.executionId === update.executionId && oldResult.success && oldResult.data.executionId === previous.executionId &&
+    (!newResult.success || newResult.data.executionId !== update.executionId || Date.parse(newResult.data.completedAt ?? update.updatedAt) < Date.parse(oldResult.data.completedAt ?? previous.updatedAt))) {
+    next = { ...next, context: { ...next.context, executionResult: oldResult.data } };
+  }
+  const previousActivity = creationActivitySchema.safeParse(previous.context?.creationActivity);
+  const incomingActivity = creationActivitySchema.safeParse(update.context?.creationActivity);
+  if (previousActivity.success && previousActivity.data.updatedAt && (!incomingActivity.success || previousActivity.data.runId === incomingActivity.data.runId && Date.parse(incomingActivity.data.updatedAt ?? "1970-01-01") < Date.parse(previousActivity.data.updatedAt))) {
+    next = { ...next, context: { ...next.context, creationActivity: previousActivity.data } };
+  }
   const previousProgress = previous.context?.executionProgress;
   if (
     previousProgress &&

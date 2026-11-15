@@ -6,7 +6,7 @@ import { workspaceFixture } from "../visual/workspace-fixture";
 test.describe.configure({ timeout: 90_000 });
 
 const surfaces = [
-  { id: "projects", path: "/" },
+  { id: "projects", path: "/projects" },
   { id: "workspace", path: `/${PROJECT}` },
   { id: "studio", path: `/${PROJECT}/studio?tab=styles` },
   { id: "fabrics", path: `/fabrics?from=board&boardId=${PROJECT}` },
@@ -125,7 +125,7 @@ for (const width of [320, 390, 1024, 1280, 1440]) {
 
 test("跳过后记住选择，账号菜单可重播并完成", async ({ page }) => {
   const writes = await prepare(page);
-  await page.goto("/");
+  await page.goto("/projects");
   await guide(page).getByRole("button", { name: "跳过", exact: true }).click();
   await expect(guide(page)).toBeHidden();
   expect(await page.evaluate(key => localStorage.getItem(key), preferenceKey("projects"))).toBe("skipped");
@@ -145,7 +145,7 @@ test("业务弹窗关闭前不抢焦点，关闭后再展示功能指引", async
   const projectsReady = new Promise<void>(resolve => { releaseProjects = resolve; });
   await page.route("**/api/projects?*", async route => { await projectsReady; await route.fallback(); });
   try {
-    await page.goto("/");
+    await page.goto("/projects");
     await page.getByRole("button", { name: "新建项目", exact: true }).click();
     const createDialog = page.getByRole("dialog", { name: "给新系列一个名字", exact: true });
     await expect(createDialog).toBeVisible();
@@ -183,7 +183,7 @@ for (const width of [390, 1440]) {
 
 test("键盘焦点保留在指引内，Escape 退出并可从菜单再次打开", async ({ page }) => {
   const writes = await prepare(page);
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(guide(page)).toBeVisible();
   for (let index = 0; index < 8; index += 1) {
     await page.keyboard.press(index % 3 ? "Tab" : "Shift+Tab");
@@ -202,8 +202,8 @@ test("键盘焦点保留在指引内，Escape 退出并可从菜单再次打开"
 test("加载失败时不显示功能指引或记录已看过", async ({ page }) => {
   const writes = await prepare(page);
   await page.route("**/api/projects?*", route => route.fulfill({ status: 503, json: { message: "项目读取暂不可用" } }));
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "项目库", exact: true })).toBeVisible();
+  await page.goto("/projects");
+  await expect(page.getByRole("heading", { name: "项目", exact: true })).toBeVisible();
   await expect(page.locator('[data-guide-page="projects"]')).toHaveAttribute("data-guide-ready", "false");
   await page.waitForTimeout(1000);
   await expect(guide(page)).toBeHidden();
@@ -236,7 +236,7 @@ test("空项目库、面料库和趋势档案仅介绍存在的入口", async ({
 test("调整窗口和目标移除后重新定位并跳过失效步骤", async ({ page }) => {
   const writes = await prepare(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(guide(page)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expectGuideGeometry(page);
@@ -260,7 +260,7 @@ test("兄弟内容增高和图片加载只移动目标时，高亮仍跟随目�
   });
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/");
+    await page.goto("/projects");
     await guide(page).getByRole("button", { name: "下一步", exact: true }).click();
     await expect(guide(page).locator("[data-guide-step]")).toHaveAttribute("data-guide-step", "create");
     const target = page.locator('[data-guide="projects-create"]');
@@ -310,7 +310,7 @@ test("兄弟内容增高和图片加载只移动目标时，高亮仍跟随目�
 test("带边框的滚动祖先只高亮真实内容可视区", async ({ page }) => {
   const writes = await prepare(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/projects");
   await guide(page).getByRole("button", { name: "下一步", exact: true }).click();
   await expect(guide(page).locator("[data-guide-step]")).toHaveAttribute("data-guide-step", "create");
   await page.locator('[data-guide="projects-create"]').evaluate(element => {
@@ -349,7 +349,7 @@ test("普通动效下 Escape 经过 120ms 淡出后恢复原焦点", async ({ pa
   const projectsReady = new Promise<void>(resolve => { releaseProjects = resolve; });
   await page.route("**/api/projects?*", async route => { await projectsReady; await route.fallback(); });
   try {
-    await page.goto("/");
+    await page.goto("/projects");
     const origin = page.getByRole("button", { name: "新建项目", exact: true });
     await origin.focus();
     releaseProjects?.();
@@ -453,7 +453,7 @@ test("工作室帮助中的入口关闭原弹窗后重播功能指引", async ({
 
 test("运行中的指引为新弹窗让出焦点，关闭后恢复当前步骤", async ({ page }) => {
   await prepare(page);
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(guide(page)).toBeVisible();
   await guide(page).getByRole("button", { name: "下一步", exact: true }).click();
   await page.evaluate(() => {
@@ -480,7 +480,7 @@ test("运行中的指引为新弹窗让出焦点，关闭后恢复当前步骤",
 test("320 短屏的说明可滚动，操作按钮与高亮保持可见", async ({ page }) => {
   await prepare(page);
   await page.setViewportSize({ width: 320, height: 480 });
-  await page.goto("/");
+  await page.goto("/projects");
   for (let index = 0; index < 4; index += 1) {
     await expectGuideGeometry(page);
     await expect.poll(async () => {
@@ -498,7 +498,7 @@ test("320 短屏的说明可滚动，操作按钮与高亮保持可见", async (
 
 test("指引暂停后将焦点交给非原生业务弹层", async ({ page }) => {
   await prepare(page);
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(guide(page)).toBeVisible();
   await page.evaluate(() => {
     const modal = document.createElement("div");

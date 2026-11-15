@@ -5,11 +5,6 @@ import { createShapeId, type TLShapeId, useEditor } from "tldraw";
 
 import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import {
-  fetchElementRole,
-  registerRoleInference,
-  type RoleInferenceResult,
-} from "./board-api";
-import {
   completeUpload,
   putOriginal,
   signImageUpload,
@@ -22,7 +17,6 @@ import {
 } from "./fabric-drag";
 import {
   IMAGE_SHAPE_TYPE,
-  normalizeImageRole,
   type ImageShape,
 } from "./shapes";
 import {
@@ -65,80 +59,6 @@ export function BoardFileDrop() {
     [editor],
   );
 
-  const applyInference = useCallback(
-    (result: RoleInferenceResult): void => {
-      const shape = editor.getShape<ImageShape>(result.shapeId as TLShapeId);
-      if (
-        !shape ||
-        shape.type !== IMAGE_SHAPE_TYPE ||
-        shape.props.roleSource === "manual" ||
-        shape.meta.roleSource === "manual"
-      ) {
-        return;
-      }
-      editor.updateShape({
-        id: shape.id,
-        type: IMAGE_SHAPE_TYPE,
-        props: {
-          ...shape.props,
-          role: normalizeImageRole(result.role, shape.props),
-          roleConfidence: result.confidence ?? undefined,
-          roleInferenceState: result.state,
-          roleLabel: result.label ?? undefined,
-          roleSource: result.source,
-        },
-      });
-    },
-    [editor],
-  );
-
-  const failInference = useCallback(
-    (shapeId: TLShapeId): void => {
-      const shape = editor.getShape<ImageShape>(shapeId);
-      if (
-        shape?.type !== IMAGE_SHAPE_TYPE ||
-        shape.props.roleSource === "manual" ||
-        shape.meta.roleSource === "manual"
-      ) {
-        return;
-      }
-      updateImage(shapeId, {
-        role: "style_ref",
-        roleConfidence: undefined,
-        roleInferenceState: "failed",
-        roleLabel: undefined,
-        roleSource: "default",
-      });
-    },
-    [editor, updateImage],
-  );
-
-  const trackInference = useCallback(
-    async (shapeId: TLShapeId, fileId?: string): Promise<void> => {
-      try {
-        let result = fileId
-          ? await registerRoleInference(projectId, shapeId, fileId)
-          : await fetchElementRole(projectId, shapeId);
-        applyInference(result);
-        for (
-          let attempt = 0;
-          result.state === "pending" && attempt < 60;
-          attempt += 1
-        ) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-          result = await fetchElementRole(projectId, shapeId);
-          applyInference(result);
-        }
-        if (result.state === "pending") {
-          failInference(shapeId);
-        }
-      } catch {
-        failInference(shapeId);
-      }
-    },
-    [applyInference, failInference, projectId],
-  );
-
   const runUpload = useCallback(
     async (task: UploadTask): Promise<void> => {
       if (uploadingTaskIds.current.has(task.id)) return;
@@ -156,9 +76,6 @@ export function BoardFileDrop() {
         const signed = await signImageUpload(projectId, task.file);
         updateImage(task.shapeId, {
           fileId: signed.file.id,
-          role: "style_ref",
-          roleInferenceState: "pending",
-          roleSource: "default",
           uploadStatus: signed.file.status === "READY" ? "ready" : "processing",
         });
         const processing = signed.upload
@@ -173,18 +90,18 @@ export function BoardFileDrop() {
         const width = Math.min(Math.max(ready.width ?? 340, 180), maxWidth);
         updateImage(task.shapeId, {
           h: Math.max(80, Math.round(width * ratio)),
+          pixelWidth: ready.width ?? 0,
+          pixelHeight: ready.height ?? 0,
           uploadStatus: "ready",
           url: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
           w: width,
         });
-        void trackInference(task.shapeId, signed.file.id);
         clearUploadPreview(task.shapeId);
         setTasks((current) => current.filter((item) => item.id !== task.id));
       } catch (cause) {
         const error =
           cause instanceof Error ? cause.message : "图片上传失败，请重试";
         updateImage(task.shapeId, { uploadStatus: "failed" });
-        failInference(task.shapeId);
         setTasks((current) =>
           current.map((item) =>
             item.id === task.id ? { ...item, error, status: "failed" } : item,
@@ -194,7 +111,7 @@ export function BoardFileDrop() {
         uploadingTaskIds.current.delete(task.id);
       }
     },
-    [failInference, projectId, trackInference, updateImage],
+    [projectId, updateImage],
   );
 
   const removeTask = useCallback(
@@ -208,18 +125,6 @@ export function BoardFileDrop() {
   );
 
   useEffect(() => {
-    const legacyUploadedGarments = editor
-      .getCurrentPageShapes()
-      .filter(
-        (shape): shape is ImageShape =>
-          shape.type === IMAGE_SHAPE_TYPE &&
-          Boolean(shape.props.fileId) &&
-          shape.props.role === "garment_ref",
-      );
-    for (const shape of legacyUploadedGarments) {
-      updateImage(shape.id, { role: "reference_garment" });
-    }
-
     const pending = editor
       .getCurrentPageShapes()
       .filter(
@@ -239,29 +144,12 @@ export function BoardFileDrop() {
             uploadStatus: "ready",
             url: ready.thumbnail1024Url ?? ready.thumbnail256Url ?? "",
           });
-          void trackInference(shape.id, fileId);
         })
         .catch(() => {
           updateImage(shape.id, { uploadStatus: "failed" });
-          failInference(shape.id);
         });
     }
-    const pendingRoles = editor
-      .getCurrentPageShapes()
-      .filter(
-        (shape): shape is ImageShape =>
-          shape.type === IMAGE_SHAPE_TYPE &&
-          Boolean(shape.props.fileId) &&
-          shape.props.uploadStatus === "ready" &&
-          shape.props.roleInferenceState === "pending",
-      );
-    for (const shape of pendingRoles) {
-      const fileId = shape.props.fileId;
-      if (fileId) {
-        void trackInference(shape.id, fileId);
-      }
-    }
-  }, [editor, failInference, trackInference, updateImage]);
+  }, [editor, updateImage]);
 
   const addFiles = useCallback(
     (

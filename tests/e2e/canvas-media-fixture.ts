@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { expect, type Page } from "@playwright/test";
 import { canvasCommandSchema, type CanvasCommand, type CanvasDocumentView, type CanvasSave } from "../../packages/shared/src/canvas-workspace";
 import { canvasMediaUrl } from "../../packages/shared/src/canvas-media";
@@ -74,8 +75,7 @@ export async function canvasMediaFixture(page: Page, options: { width?: number; 
 export const mediaPanel = (page: Page) => page.getByRole("dialog", { name: "生成文件", exact: true });
 export const mediaCard = (page: Page, id = "result-3") => page.locator(`[data-canvas-media="${id}"]`);
 export async function openMediaFiles(page: Page) {
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "生成文件", exact: true }).click();
+  await openCanvasFunction(page, "生成文件");
   await expect(mediaPanel(page)).toBeVisible();
 }
 export async function placeMedia(page: Page, id = "result-3") {

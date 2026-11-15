@@ -52,7 +52,7 @@ export function projectParameters(value: unknown) {
   }
   if (Array.isArray(source.referenceInputs)) result.referenceInputs = source.referenceInputs.slice(0, 16).map((value) => {
     const input = contextObject(value);
-    return { nodeId: contextText(input.nodeId, 128), role: contextText(input.role, 80), weight: typeof input.weight === "number" && Number.isFinite(input.weight) ? input.weight : null };
+    return { nodeId: contextText(input.nodeId, 128) };
   });
   if (source.mask) {
     const mask = contextObject(source.mask);
@@ -132,6 +132,16 @@ export function projectEvaluation(value: unknown) {
 function textList(value: unknown, count: number, length: number): string[] {
   return (Array.isArray(value) ? value : []).map((item) => safeContextText(item, length)).filter(Boolean).slice(0, count);
 }
+
+/** Current swatches store named hex values; legacy text palettes remain readable in order. */
+function projectColors(value: unknown): (string | { hex: string; name: string })[] {
+  return (Array.isArray(value) ? value : []).slice(0, 24).flatMap((item): (string | { hex: string; name: string })[] => {
+    if (typeof item === "string") { const text = safeContextText(item, 40); return text ? [text] : []; }
+    const color = contextObject(item);
+    const hex = contextText(color.hex, 40);
+    return /^#[\da-f]{6}$/iu.test(hex) ? [{ hex, name: safeContextText(color.name, 48) }] : [];
+  });
+}
 export function stringIds(value: unknown): string[] {
   return [...new Set((Array.isArray(value) ? value : []).map((item) => contextText(item, 128)).filter(Boolean))].slice(0, 100);
 }
@@ -144,12 +154,11 @@ export function projectNode(node: ContextGraphNode, detailed: boolean) {
   return {
     ...base, detailIncluded: true as const,
     content: safeContextText(payload.text, 2_000),
-    role: contextText(payload.role, 80),
     assetId: contextText(payload.assetId, 128) || null,
     fileAssetId: contextText(payload.fileAssetId, 128) || null,
     fabricId: contextText(payload.fabricId, 128) || null,
     trendItemId: contextText(payload.trendItemId, 128) || null,
-    color: contextText(payload.color, 40), colors: textList(payload.colors, 24, 40),
+    color: contextText(payload.color, 40), colors: projectColors(payload.colors),
     tags: textList(payload.tags ?? payload.fabricTags, 30, 120),
     rationale: safeContextText(payload.rationale, 800),
     ...(node.kind === "tool" ? { parameters: projectParameters(payload.params), toolVersion: contextText(payload.toolVersion, 40) } : {}),

@@ -1,8 +1,39 @@
 import type { ReactNode } from "react";
 
-type WorkspaceIconName = "image" | "annotate" | "comment" | "remove_background" | "erase" | "resize" | "inpaint" | "variation" | "download" | "share" | "close" | "chevron" | "orient" | "adjust" | "rotate_left" | "flip_horizontal" | "flip_vertical" | "reset" | "text_edit" | "history" | "results" | "new_chat" | "requirements" | "settings" | "review" | "skills" | "delegation";
+type WorkspaceIconName = "video" | "image" | "annotate" | "comment" | "remove_background" | "erase" | "resize" | "inpaint" | "variation" | "download" | "share" | "close" | "chevron" | "orient" | "adjust" | "rotate_left" | "flip_horizontal" | "flip_vertical" | "reset" | "text_edit" | "history" | "results" | "new_chat" | "requirements" | "settings" | "review" | "skills" | "delegation";
 
-const paths: Record<WorkspaceIconName, ReactNode> = {
+export type AssistantIconName = "enhance" | WorkspaceIconName | "add" | "send" | "stop" | "dock" | "float" | "more" | "minimize" | "back" | "compare" | "expand" | "arrow_right" | "skill_card" | "mention" | "microphone" | "palette" | "fabric" | "functions" | "connections" | "save" | "frame" | "reference" | "tasks" | "collapse" | "spinner" | "group_objects" | "ungroup_objects";
+const paths: Record<AssistantIconName | "check" | "warning", ReactNode> = {
+  check: <path d="m5 12 4 4L19 6" />,
+  warning: <><path d="m12 3 10 18H2Z" /><path d="M12 9v5m0 3v.01" /></>,
+  video: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m10 8 6 4-6 4Z" /></>,
+  group_objects: <><path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5" /><rect x="7" y="7" width="6" height="6" rx="1" /><rect x="11" y="11" width="6" height="6" rx="1" /></>,
+  ungroup_objects: <><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><path d="M15 9h6V3M3 21v-6h6" /></>,
+  palette: <><path d="M20.7 13A9 9 0 1 0 12 21h1.2a2.5 2.5 0 0 0 1.8-4.2 1.5 1.5 0 0 1 1.1-2.6h2.1a2.5 2.5 0 0 0 2.5-1.2Z" /><circle cx="7" cy="10" r=".7" /><circle cx="10" cy="6.5" r=".7" /><circle cx="15" cy="7" r=".7" /></>,
+  fabric: <><path d="m5 4 15-1-2 17-15 1Z" /><path d="m8 4-2 16M13 3l-2 17M18 3l-2 17M4 9l15-1M3 15l15-1" /></>,
+  functions: <><rect x="3" y="3" width="6" height="6" rx="1.5" /><rect x="3" y="15" width="6" height="6" rx="1.5" /><rect x="15" y="15" width="6" height="6" rx="1.5" /><path d="M18 3v6m-3-3h6" /></>,
+  connections: <><rect x="3" y="3" width="6" height="6" rx="2" /><rect x="15" y="15" width="6" height="6" rx="2" /><path d="M6 9v6a3 3 0 0 0 3 3h6M9 6h6a3 3 0 0 1 3 3v6" /></>,
+  save: <><path d="M5 3h12l4 4v14H3V3Z" /><path d="M7 3v6h9V3M7 21v-8h10v8" /></>,
+  frame: <rect x="3" y="5" width="18" height="14" rx="2" />,
+  reference: <><rect x="3" y="3" width="14" height="14" rx="2" /><path d="m12 12 9 3-4 2-2 4Z" /><path d="m4 13 4-4 3 3" /></>,
+  tasks: <><path d="M9 5h11M9 12h11M9 19h11" /><circle cx="4" cy="5" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="19" r="1" /></>,
+  collapse: <path d="M3 8h5V3m13 5h-5V3M8 21v-5H3m13 5v-5h5" />,
+  enhance: <><path d="m10 3 2.4 5.6L18 11l-5.6 2.4L10 19l-2.4-5.6L2 11l5.6-2.4ZM19 2v6m-3-3h6M19 16v5m-2.5-2.5h5" /></>,
+  spinner: <path d="M20 12a8 8 0 1 1-8-8" />,
+  mention: <><circle cx="11" cy="12" r="4" /><path d="M15 8v7a3 3 0 0 0 6 0v-3a9 9 0 1 0-3 7" /></>,
+  microphone: <><rect x="8" y="2" width="8" height="13" rx="4" /><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" /></>,
+  add: <path d="M12 4v16M4 12h16" />,
+  send: <path d="M12 20V4m-6 6 6-6 6 6" />,
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" />,
+  dock: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16M7 12h5m-2-2 2 2-2 2" /></>,
+  float: <><path d="M11 4H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h9M15 3h6v6m0-6-8 8" /><rect x="9" y="11" width="12" height="10" rx="2" /></>,
+  more: <><circle cx="5" cy="12" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="19" cy="12" r="1" fill="currentColor" /></>,
+  minimize: <path d="M5 12h14" />,
+  back: <path d="m11 5-7 7 7 7M4 12h16" />,
+  compare: <><rect x="3" y="5" width="7" height="14" rx="1.5" /><rect x="14" y="5" width="7" height="14" rx="1.5" /></>,
+  expand: <path d="M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5" />,
+  arrow_right: <path d="M4 12h16m-6-6 6 6-6 6" />,
+  skill_card: <><path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7M7 12h6M7 16h9" /><path d="m18 2 1.5 3.5L23 7l-3.5 1.5L18 12l-1.5-3.5L13 7l3.5-1.5Z" /></>,
   history: <><path d="M3 4v5h5M3 9a9 9 0 1 1 0 7" /><path d="M12 7v5l3 2" /></>,
   results: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 9h8M8 13h5M8 17h3" /></>,
   new_chat: <><path d="M14 4H5a2 2 0 0 0-2 2v15l5-4h11a2 2 0 0 0 2-2v-4M18 2v6m-3-3h6" /></>,
@@ -33,6 +64,6 @@ const paths: Record<WorkspaceIconName, ReactNode> = {
 };
 
 /** One stroke system for image controls; artwork and annotations retain their colors. */
-export function WorkspaceIcon({ name }: { readonly name: WorkspaceIconName }) {
+export function WorkspaceIcon({ name }: { readonly name: AssistantIconName | "check" | "warning" }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[name]}</svg>;
 }

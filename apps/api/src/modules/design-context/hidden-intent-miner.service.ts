@@ -1,4 +1,5 @@
 import type { AmuxClaudeJsonClient } from "@fashion/ai";
+import { withoutMaterialPurpose } from "@fashion/shared";
 import type { PrismaClient } from "@fashion/db";
 import { ConflictException, Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { createHash } from "node:crypto";
@@ -66,12 +67,12 @@ export class HiddenIntentMiner {
       const anchorVersions = anchorVersion ? this.causalVersionIds(anchorVersion, versions) : null;
       const eligible = anchorNodeId ? changes.filter((change) => anchorVersions?.has(change.afterVersionId)) : changes;
       if (eligible.length < 2) return skipped("two_semantic_changes_required");
-      const active = profile.state.preferences.filter((item) => item.status === "active");
-      const inactive = profile.state.preferences.filter((item) => item.status === "inactive");
+      const active = withoutMaterialPurpose(profile.state.preferences.filter((item) => item.status === "active"));
+      const inactive = withoutMaterialPurpose(profile.state.preferences.filter((item) => item.status === "inactive"));
       const response = await this.model.generateJson({
         schemaName: "fashion_hidden_intent_mining", jsonSchema: z.toJSONSchema(minedPreferencesSchema), maxTokens: 2_000,
         instructions: "你是设计过程的隐含意图挖掘器，不是Planner。只依据至少两次真实人工确认的输入或参数变化，归纳同一因果分支中反复出现的偏好。每条推断引用不同afterVersionId及该变化evidenceAfter中的逐字quote；数字和布尔值用原始字符串表示。未变化的参数不是新证据。禁止从布局、系统填充、技术失败、取消、审核失败推断审美；禁止把推断变成硬要求；不能恢复已停用偏好（包括换一种说法）。无充分证据返回preferences:[]。",
-        prompt: JSON.stringify({ semanticChanges: eligible.slice(-60), activePreferences: active, inactivePreferences: inactive, scope: "branch_only", sourceAuthority: "immutable_node_versions" }),
+        prompt: JSON.stringify(withoutMaterialPurpose({ semanticChanges: eligible.slice(-60), activePreferences: active, inactivePreferences: inactive, scope: "branch_only", sourceAuthority: "immutable_node_versions", retiredPurposePolicy: "素材旧用途标签、角色识别和默认参考权重已停用，禁止从它们挖掘或继承偏好。仅本次用户文字与实际功能参数可以提供证据。" })),
         parse: (value) => minedPreferencesSchema.parse(value),
       });
       const byChangeId = new Map(eligible.map((change) => [change.afterVersionId, change]));

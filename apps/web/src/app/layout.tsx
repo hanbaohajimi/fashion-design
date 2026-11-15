@@ -9,6 +9,7 @@ import { QueryProvider } from "../modules/projects/QueryProvider";
 import { CreativeContinuity } from "../modules/projects/CreativeContinuity";
 import { MotionEnvironment } from "../components/interactions/MotionEnvironment";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { ProjectEntryProvider } from "../modules/projects/ProjectEntryProvider";
 import { FeatureGuideProvider } from "../components/feature-guide/FeatureGuideProvider";
 import { Suspense } from "react";
 
@@ -63,7 +64,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           <AuthProvider>
             <FeatureGuideProvider><Suspense fallback={null}><WorkspaceShell>
               <CreativeContinuity />
-              <QueryProvider>{children}</QueryProvider>
+              <QueryProvider><ProjectEntryProvider>{children}</ProjectEntryProvider></QueryProvider>
             </WorkspaceShell></Suspense></FeatureGuideProvider>
           </AuthProvider>
         </div>

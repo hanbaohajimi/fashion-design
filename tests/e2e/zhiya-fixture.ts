@@ -44,6 +44,7 @@ export async function prepareZhiya(page: Page, options: { count?: number; activi
     return route.fulfill({ json: { ...graph, projectId: new URL(route.request().url()).pathname.split("/")[3] } });
   });
   await page.route(/\/api\/projects\/[^/]+\/canvas(?:\/[^?]*)?(?:\?.*)?$/, route => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: options.canEdit ?? true } });
     if (route.request().url().endsWith("/commands")) throw new Error("织芽交互不应提交画布命令");
     if (route.request().method() === "PATCH") {
       const save = route.request().postDataJSON() as CanvasSave;
@@ -61,7 +62,7 @@ export async function prepareZhiya(page: Page, options: { count?: number; activi
   if (options.history) await page.route("**/api/agent-conversations/visual-chat/messages*", route => route.fulfill({ json: {
     items: Array.from({ length: 20 }, (_, index) => ({ id: `history-${index}`, conversationId: "visual-chat", role: index % 2 ? "assistant" : "user", status: "completed", content: `第 ${index + 1} 条设计讨论：保留面料肌理，比较不同廓形的空间关系。\n\n用柔和的比例与实用的细节完成本轮方案。`, referencedNodeIds: [], createdAt: NOW, updatedAt: NOW })), nextCursor: null,
   } }));
-  return Object.assign(state, { graph, setCanEdit: (canEdit: boolean) => { document = { ...document, canEdit }; } });
+  return Object.assign(state, { graph, getCanvasDocument: () => document, setCanvasDocument: (next: CanvasDocumentView) => { document = next; }, setCanEdit: (canEdit: boolean) => { document = { ...document, canEdit }; }, setCanvasSnapshot: (snapshot: CanvasDocumentView["snapshot"]) => { document = { ...document, snapshot }; } });
 }
 
 export const zhiya = (page: Page) => page.locator("[data-zhiya]");

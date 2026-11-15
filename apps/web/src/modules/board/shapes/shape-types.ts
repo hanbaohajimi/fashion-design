@@ -64,6 +64,8 @@ declare module "tldraw" {
       h: number;
       imageWidth?: number;
       imageHeight?: number;
+      pixelWidth?: number;
+      pixelHeight?: number;
       imageSource?: string;
       mounts?: readonly Mount[];
       role: string;
@@ -104,6 +106,12 @@ declare module "tldraw" {
       w: number;
     };
     [FABRIC_SHAPE_TYPE]: {
+      title?: string;
+      pixelWidth?: number;
+      pixelHeight?: number;
+      imageWidth?: number;
+      imageHeight?: number;
+      imageSource?: string;
       appearance?: MaterialAppearance;
       fabricId: string;
       fabricTags: readonly string[];
@@ -154,8 +162,6 @@ export function createFinalizedSketchImageRecord(
       ...frame.meta,
       fashionSketch: true,
       fashionSketchImage: true,
-      role: "silhouette_ref",
-      roleSource: "manual",
       sketchDirty: false,
       sketchFileId: input.fileId,
       sketchFingerprint: input.fingerprint,
@@ -170,10 +176,7 @@ export function createFinalizedSketchImageRecord(
     props: {
       fileId: input.fileId,
       h: frame.props.h,
-      role: "silhouette_ref",
-      roleInferenceState: "ready",
-      roleLabel: "fashion_sketch",
-      roleSource: "manual",
+      role: "reference",
       title,
       uploadStatus: "ready",
       url: input.previewUrl,

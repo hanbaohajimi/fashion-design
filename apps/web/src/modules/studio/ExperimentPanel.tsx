@@ -80,6 +80,9 @@ export function ExperimentPanel({
   onDirty,
   initialMode = "color",
   initialSourceAssetId,
+  initialBatchId,
+  onRecord,
+  requireExplicitSource = false,
 }: {
   projectId: string;
   assets: readonly StudioAssetView[];
@@ -89,6 +92,9 @@ export function ExperimentPanel({
   onDirty?: (dirty: boolean) => void;
   initialMode?: ExperimentCreateInput["mode"];
   initialSourceAssetId?: string;
+  initialBatchId?: string;
+  onRecord?: (batch: ExperimentView) => void | Promise<void>;
+  requireExplicitSource?: boolean;
 }) {
   const surfaceId = useId();
   const [resultFilter, setResultFilter] = useState("all");
@@ -105,20 +111,12 @@ export function ExperimentPanel({
   const [sourceAssetId, setSource] = useState(
     initialSourceAssetId
       ? (assets.find((asset) => asset.id === initialSourceAssetId)?.id ?? "")
-      : (assets[0]?.id ?? ""),
+      : requireExplicitSource ? "" : (assets[0]?.id ?? ""),
   );
-  const [prompt, setPrompt] = useState("保持原设计，仅完成指定的视觉修改");
-  const [preserve, setPreserve] = useState(
-    "保持廓形、领型、口袋、门襟、标识和服装主体结构",
-  );
-  const [colorText, setColorText] = useState(
-    "墨黑 #202020\n海军蓝 #243A59\n米白 #E6DDCA",
-  );
-  const [variations, setVariations] = useState(
-    initialMode === "presentation"
-      ? "白色背景，服装平铺商品摄影\n简洁室内陈列场景，保持服装细节"
-      : "修改为立领\n修改为翻领",
-  );
+  const [prompt, setPrompt] = useState("");
+  const [preserve, setPreserve] = useState("");
+  const [colorText, setColorText] = useState("");
+  const [variations, setVariations] = useState("");
   const [fabrics, setFabrics] = useState<FabricOption[]>([]);
   const [fabricIds, setFabricIds] = useState<string[]>([]);
   const [batches, setBatches] = useState<ExperimentView[]>([]);
@@ -127,7 +125,7 @@ export function ExperimentPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [viewingItemId, setViewingItemId] = useState<string | null>(null);
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(initialBatchId ?? null);
   const selectedBatch =
     batches.find((batch) => batch.id === selectedBatchId) ?? batches[0];
   const signature = JSON.stringify({
@@ -262,6 +260,7 @@ export function ExperimentPanel({
         created,
         ...current.filter((batch) => batch.id !== created.id),
       ]);
+      await onRecord?.(created);
       setNotice(
         "实验计划已保存。核对单元格后，选择“提交待执行方案”才会生成图片。",
       );
@@ -312,6 +311,7 @@ export function ExperimentPanel({
       setBatches((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+      await onRecord?.(updated);
       onRefresh?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "操作失败");
@@ -367,12 +367,6 @@ export function ExperimentPanel({
                           const value = event.target
                             .value as ExperimentCreateInput["mode"];
                           setMode(value);
-                          if (value === "presentation")
-                            setVariations(
-                              "白色背景，服装平铺商品摄影\n简洁室内陈列场景，保持服装细节",
-                            );
-                          if (value === "detail")
-                            setVariations("修改为立领\n修改为翻领");
                         }}
                       >
                         <option value="color">批量配色</option>
@@ -399,9 +393,8 @@ export function ExperimentPanel({
                       />
                     </label>
                     <label className={styles.wide}>
-                      明确保留的内容
+                      需要保留的内容（可选）
                       <Textarea
-                        required
                         value={preserve}
                         maxLength={1000}
                         onChange={(event) => setPreserve(event.target.value)}

@@ -33,17 +33,23 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
-  padding-inline-start: var(--workspace-heading-inset, 52px);
+  padding-inline-start: 0;
   pointer-events: none;
 }
 .canvasChrome[hidden] { display: none; }
+.shortcutStatus { position: absolute; z-index: 9; top: 68px; left: 12px; max-width: calc(100% - 24px); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border: var(--border-hairline) solid var(--color-border); border-radius: 8px; background: var(--surface-3); color: var(--color-ink); font-size: 14px; }
 .canvasChrome > * { pointer-events: auto; }
-.canvasProjectMenu { min-width: 0; max-width: min(260px, calc(100% - 88px)); }
+.canvasProjectMenu { min-width: 0; max-width: min(320px, 100%); margin-right: auto; }
+.projectNameForm { width: min(420px, calc(100vw - 64px)); display: grid; gap: 16px; padding: 24px; }
+.projectNameForm h2 { margin: 0; font-size: 20px; }
+.projectNameForm > div:last-child { display: flex; justify-content: flex-end; gap: 12px; }
 .canvasProjectMenu > summary { display: flex; gap: 8px; align-items: center; min-height: 44px; padding: 0 12px; background: var(--color-paper); border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-material-1); }
 .canvasProjectMenu > summary > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvasProjectMenu > summary > svg { flex: none; }
 .canvasChrome > :last-child { flex: none; }
 .canvasSyncNotice { position: absolute; left: 16px; bottom: 100px; z-index: 9; max-width: calc(100% - 32px); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; font-size: 14px; border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-md); background: var(--color-paper); color: var(--color-ink); }
-.canvasAssistantEntry { position: absolute; right: 20px; bottom: 112px; z-index: 8; min-height: 44px; padding: 8px 14px; border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-ink); background: var(--color-paper); box-shadow: var(--shadow-material-1); cursor: pointer; font: inherit; }
+.canvasAssistantEntry { position: absolute; right: 20px; bottom: 112px; z-index: 8; border: var(--border-hairline) solid var(--color-border); border-radius: 12px; color: var(--color-ink); background: var(--color-paper); box-shadow: var(--shadow-material-1); }
+.canvasAssistantEntry button { width: 44px; height: 44px; }
 
 .nativeDialog {
   max-width: calc(100vw - 32px);
@@ -3284,3 +3290,8 @@
 .sourcePreview small { display: block; font-size: 12px; margin-block-start: 4px; }
 .sourceActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .sourceActions a { color: inherit; min-height: 44px; display: inline-flex; align-items: center; }
+.creativeActivity { color: var(--color-text-secondary); font-size: 13px; }
+.creativeActivity summary { cursor: pointer; padding: 10px 0; min-height: 40px; color: var(--color-text); }
+.creativeActivity p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.creativeActivity > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.creativeActivity > div > button { border: .5px solid var(--color-border); background: var(--surface-1); color: var(--color-action); border-radius: 5px; padding: 6px 8px; font-size: 12px; }

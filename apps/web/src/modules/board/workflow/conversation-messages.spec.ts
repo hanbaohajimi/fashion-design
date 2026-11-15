@@ -5,6 +5,7 @@ import {
   executionObservationKey,
 } from "./conversation-messages";
 import type {
+  CreationActivity,
   WorkflowExecutionProgress,
   WorkflowProposalExecution,
 } from "@fashion/shared";
@@ -23,6 +24,13 @@ const item = (
   }) as WorkflowMessageView;
 
 describe("conversation page merging", () => {
+  it("迟到的模块状态不覆盖已经观察到的真实产物", () => {
+    const activity: CreationActivity = { creationId: "target", runId: "experiment", event: "submitted", title: "换色实验", prompt: "蓝色", inputNodeIds: ["source"], resultNodeId: null, status: "completed", resultNodeIds: ["result"], updatedAt: "2026-11-14T10:00:00Z" };
+    const previous = item("receipt", { context: { creationActivity: activity } });
+    const incoming = item("receipt", { context: { creationActivity: { ...activity, status: "queued", resultNodeIds: [], updatedAt: "2026-11-14T09:00:00Z" } } });
+    expect(mergeMessages([previous], [incoming])[0]?.context?.creationActivity).toEqual(activity);
+  });
+
   it("prepends older messages while preserving the newer version at overlapping boundaries", () => {
     const current = [item("50"), item("51")];
     const merged = mergeMessages(

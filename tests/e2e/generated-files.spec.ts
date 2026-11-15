@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { expect, test, type Page } from "@playwright/test";
@@ -14,7 +15,7 @@ test.setTimeout(60_000);
 const panel = (page: Page) => page.getByRole("dialog", { name: "生成文件", exact: true });
 const rows = (page: Page) => panel(page).locator("[data-generated-file-id]");
 const row = (page: Page, id: string) => panel(page).locator(`[data-generated-file-id="${id}"]`);
-const open = async (page: Page) => { await page.getByRole("button", { name: "项目菜单", exact: true }).click(); await page.getByRole("button", { name: "生成文件", exact: true }).click(); await expect(panel(page)).toBeVisible(); };
+const open = async (page: Page) => { await openCanvasFunction(page, "生成文件"); await expect(panel(page)).toBeVisible(); };
 const close = async (page: Page) => panel(page).getByRole("button", { name: "关闭生成文件", exact: true }).click();
 
 test("生成文件独立于画布完整分页，筛选搜索到未加载的结果", async ({ page }) => {
@@ -46,7 +47,8 @@ test("开合文件列表和预览保留画布、聊天草稿及列表阅读位�
   await close(page); await expect(panel(page)).toHaveCount(0);
   await expect(input).toHaveValue("先看看上次的结果，不要发送"); expect(await element?.evaluate(element => element.isConnected)).toBe(true);
   expect(await input.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([2, 5]);
-  expect(await shape.boundingBox()).toEqual(before); await expect(page.getByRole("button", { name: "项目菜单", exact: true })).toBeFocused();
+  expect(await shape.boundingBox()).toEqual(before);
+  await expect(page.getByRole("button", { name: "全部功能模块", exact: true })).toBeFocused();
   expect(state.mutations).toEqual([]); expect(state.saves).toEqual([]); expect(state.errors).toEqual([]);
 });
 
@@ -259,7 +261,7 @@ for (const missing of [false, true]) test(`系列导出来源${missing ? "已删
   await page.route("**/api/collections/original-collection/consistency", route => route.fulfill({ json: { looks: [], referenceLabel: "参考相似度", similarities: [] } }));
   await loadZhiya(page); await open(page);
   await row(page, file.id).getByRole("link", { name: "回到来源重新导出" }).click();
-  const drawer = page.getByRole("dialog", { name: "系列 DNA", exact: true });
+  const drawer = page.getByRole("dialog", { name: "系列工作台", exact: true });
   await expect(drawer).toBeVisible();
   await expect.poll(() => calls.length).toBeGreaterThan(0);
   if (missing) {
@@ -270,7 +272,7 @@ for (const missing of [false, true]) test(`系列导出来源${missing ? "已删
     await expect(drawer).toContainText("原系列羊毛");
     await expect(drawer.getByRole("button", { name: "导出 PDF" })).toBeEnabled();
   }
-  await drawer.getByRole("button", { name: "关闭系列抽屉" }).click();
+  await drawer.getByRole("button", { name: "关闭系列工作台" }).click();
   await expect(drawer).toHaveCount(0);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });

@@ -13,7 +13,6 @@ import { useEditor, useValue } from "tldraw";
 import { BoardProjectContext } from "../board-context";
 import {
   SWATCH_SHAPE_TYPE,
-  normalizeBoardRole,
   type SwatchShape,
 } from "../shapes/shape-types";
 import { getSwatchColors, normalizeSwatchHex } from "../shapes/swatch-colors";
@@ -107,7 +106,6 @@ export function InpaintPanel({
       editor.getCurrentPageShapes().flatMap((shape): AvailablePalette[] => {
         if (shape.type !== SWATCH_SHAPE_TYPE) return [];
         const swatch = shape as SwatchShape;
-        if (normalizeBoardRole(swatch.props.role) !== "palette") return [];
         const colors = getSwatchColors(swatch.props).flatMap(
           (entry): GenerationPaletteColor[] => {
             const hex = normalizeSwatchHex(entry.color);

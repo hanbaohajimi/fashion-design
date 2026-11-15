@@ -68,6 +68,7 @@ export function StyleLibrary(
     readonly onRunway?: (revisionId: string) => void;
     readonly onPresentation?: (revisionId: string) => void;
     readonly onWardrobe?: (revisionId: string, assetId: string) => void;
+    readonly onEditInCanvas?: (assetId: string, revisionId: string) => void | Promise<void>;
   },
 ) {
   const feedback = useSubmitFeedback();
@@ -178,7 +179,7 @@ export function StyleLibrary(
                 ))}
                 {!availableStyles.length ? (
                   <p className={styles.muted}>
-                    还没有款式。选择一张已有候选保存第一款。
+                    还没有款式。选择一张已有设计图保存第一款。
                   </p>
                 ) : null}
               </aside>
@@ -194,8 +195,8 @@ export function StyleLibrary(
         }
         actions={
           <>
-            <Button aria-label="比较候选并选款（选择 2–4 张）" disabled={saving} onClick={() => setComparisonOpen(true)}>
-              比较候选
+            <Button aria-label="比较方案并选款（选择 2–4 张）" disabled={saving} onClick={() => setComparisonOpen(true)}>
+              比较方案
             </Button>
             {props.canEdit ? (
               <Button disabled={saving} onClick={() => void selectStyle(null)}>新建款式</Button>
@@ -211,12 +212,12 @@ export function StyleLibrary(
       {comparisonOpen ? (
         <Dialog
           className={styles.dialog}
-          label="候选比较"
+          label="方案比较"
           onClose={() => setComparisonOpen(false)}
         >
           <div className={styles.progressDialog}>
             <div className={styles.recordHeader}>
-              <h2>比较候选并选款</h2>
+              <h2>比较方案并选款</h2>
               <Button onClick={() => setComparisonOpen(false)}>关闭</Button>
             </div>
             <GridDetails
@@ -230,7 +231,7 @@ export function StyleLibrary(
                 selected={comparison}
                 onChange={setComparison}
                 max={4}
-                label="候选比较"
+                label="方案比较"
               />
               <Button
                 disabled={comparison.length < 2}
@@ -254,7 +255,7 @@ export function StyleLibrary(
                     <article key={id}>
                       <span className={styles.assetImage}>
                         <ImagePreview
-                          alt={"候选方案 " + (index + 1)}
+                          alt={"设计方案 " + (index + 1)}
                           src={asset.url}
                         />
                       </span>
@@ -295,7 +296,7 @@ export function StyleLibrary(
         <div className={styles.styleContinuation}>
           <span>{editingDirty ? "请先保存修改，再继续后续工作。" : `后续工作使用 r${viewed.revision}`}</span>
           <div>
-          {!editingDirty && !saving ? <a className={styles.canvasReturn} href={`/${encodeURIComponent(props.projectId)}?assetId=${encodeURIComponent(viewed.payload.sourceAssetId)}&styleRevisionId=${encodeURIComponent(viewed.id)}`}>在白板中继续编辑</a> : null}
+          {!editingDirty && !saving ? props.onEditInCanvas ? <Button onClick={() => void props.onEditInCanvas?.(viewed.payload.sourceAssetId, viewed.id)}>在白板中继续编辑</Button> : <a className={styles.canvasReturn} href={`/${encodeURIComponent(props.projectId)}?assetId=${encodeURIComponent(viewed.payload.sourceAssetId)}&styleRevisionId=${encodeURIComponent(viewed.id)}`}>在白板中继续编辑</a> : null}
           {props.onExplore || props.onTechPack || props.onPresentation || props.canEdit && (props.onRunway || props.onWardrobe) ? <Menu label="继续创作与交付" trigger="继续工作" align="end">
           {props.onExplore ? <Button
             disabled={editingDirty || saving}
@@ -496,7 +497,7 @@ function StyleEditor({
           <div className={styles.workIntro}>
             <h3>从主设计图建立款式</h3>
             <p>
-              选择一张真实图片，再补充款号、名称和品类。候选比较不会改变已保存的修订。
+              选择一张真实图片，再补充款号、名称和品类。方案比较不会改变已保存的修订。
             </p>
           </div>
         )}

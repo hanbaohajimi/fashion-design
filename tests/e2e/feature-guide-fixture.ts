@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 export async function seedReturningFeatureGuideUser(page: Page, accountIds: readonly string[]) {
   await page.addInitScript((ids) => {
     for (const accountId of ids) {
-      for (const surface of ["projects", "workspace", "studio", "fabrics", "trends"]) {
+      for (const surface of ["home", "assets", "projects", "workspace", "studio", "fabrics", "trends"]) {
         localStorage.setItem(`fashion:feature-guide:v1:${accountId}:${surface}`, "completed");
       }
     }

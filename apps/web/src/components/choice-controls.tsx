@@ -27,6 +27,7 @@ export interface ChoiceOption {
   readonly group?: string | undefined;
   readonly disabled?: boolean | undefined;
   readonly placeholder?: boolean | undefined;
+  readonly decoration?: ReactNode;
 }
 
 export interface ChoiceSelectProps extends Pick<
@@ -53,6 +54,9 @@ export interface ChoiceSelectProps extends Pick<
   readonly searchable?: boolean | undefined;
   readonly compact?: boolean | undefined;
   readonly error?: string | undefined;
+  readonly motionVariant?: "default" | "glide";
+  /** Prevent another change while preserving the focused trigger during a save. */
+  readonly pending?: boolean;
   readonly onNativeChange?:
     ((event: ChangeEvent<HTMLSelectElement>) => void) | undefined;
 }
@@ -179,6 +183,8 @@ export function ChoiceSelect({
   compact = false,
   error,
   onNativeChange,
+  motionVariant = "default",
+  pending = false,
   ...props
 }: ChoiceSelectProps) {
   const generated = useId();
@@ -188,6 +194,9 @@ export function ChoiceSelect({
   const native = useRef<HTMLSelectElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const [inputMode, setInputMode] = useState<"pointer" | "keyboard">("pointer");
+  const [instantPopup, setInstantPopup] = useState(false);
   const [labelledBy, setLabelledBy] = useState<string | undefined>(
     props["aria-labelledby"],
   );
@@ -202,7 +211,7 @@ export function ChoiceSelect({
   const useSearch = searchable || realOptions.length > 10;
   const inline =
     !compact && !searchable && realOptions.length > 0 && realOptions.length < 5;
-  const available = !props.disabled && !inline;
+  const available = !props.disabled && !pending && !inline;
   const [wasAvailable, setWasAvailable] = useState(available);
   if (wasAvailable !== available) {
     setWasAvailable(available);
@@ -270,6 +279,7 @@ export function ChoiceSelect({
   const commit = (next: string) => {
     if (
       props.disabled ||
+      pending ||
       native.current?.matches(":disabled") ||
       options.find((option) => option.value === next)?.disabled
     )
@@ -280,15 +290,17 @@ export function ChoiceSelect({
     }
     close(true);
   };
-  const show = () => {
-    if (!trigger.current || props.disabled || !realOptions.length) return;
+  const show = (keyboard = false) => {
+    if (!trigger.current || props.disabled || pending || !realOptions.length) return;
     setSession(
       popupSession(
         trigger.current,
-        realOptions.length * 36 + (useSearch ? 50 : 0) + 12,
+        realOptions.length * (motionVariant === "glide" ? 44 : 36) + (useSearch ? 50 : 0) + 12,
       ),
     );
     setQuery("");
+    setInputMode(keyboard ? "keyboard" : "pointer");
+    setInstantPopup(keyboard);
     setComposing(false);
     setActive(selected?.disabled ? undefined : selected?.value);
     setOpen(true);
@@ -306,6 +318,13 @@ export function ChoiceSelect({
         )
         ?.scrollIntoView?.({ block: "nearest" });
   }, [activeValue, id, open, realOptions]);
+  useLayoutEffect(() => {
+    if (motionVariant !== "glide" || !open || !pill.current || !list.current) return;
+    const option = list.current.querySelector<HTMLElement>('[data-active="true"]');
+    if (!option) return;
+    pill.current.style.transform = `translateY(${option.offsetTop}px)`;
+    pill.current.style.height = `${option.offsetHeight}px`;
+  }, [activeValue, open, motionVariant]);
 
   const aria = {
     "aria-label": accessibleLabel,
@@ -318,6 +337,7 @@ export function ChoiceSelect({
       className={`${styles.control} ${props.className ?? ""}`}
       ref={root}
       data-choice-control
+      data-motion-variant={motionVariant}
     >
       {inline ? (
         <RadioGroup
@@ -326,7 +346,7 @@ export function ChoiceSelect({
           id={id}
           options={realOptions}
           value={value}
-          disabled={props.disabled}
+          disabled={props.disabled || pending}
           onValueChange={commit}
         />
       ) : (
@@ -338,20 +358,22 @@ export function ChoiceSelect({
           className={styles.trigger}
           title={props.title}
           disabled={props.disabled || !realOptions.length}
+          aria-disabled={pending || undefined}
+          aria-busy={pending || undefined}
           autoFocus={props.autoFocus}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? `${id}-list` : undefined}
-          onClick={() => (open ? close(true) : show())}
+          onClick={event => (open ? close(true) : show(event.detail === 0))}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault();
-              show();
+              show(true);
             }
           }}
         >
           <span>
-            {selected?.label ?? (value ? "当前选项已不可用" : placeholder)}
+            {selected?.label ?? (value ? "当前选项已不可用" : placeholder)}{selected?.decoration}
           </span>
           <svg
             aria-hidden="true"
@@ -374,7 +396,7 @@ export function ChoiceSelect({
         name={props.name}
         form={props.form}
         required={props.required}
-        disabled={props.disabled}
+        disabled={props.disabled || pending}
         value={value}
         onChange={(event) => {
           setInvalid(false);
@@ -419,16 +441,19 @@ export function ChoiceSelect({
         </small>
       ) : null}
       <AdaptivePopup
-        open={open && !props.disabled}
+        open={open && !props.disabled && !pending}
         session={session}
         anchor={trigger}
         label={accessibleLabel ?? "选择选项"}
         onClose={close}
         id={`${id}-popup`}
+        motionVariant={motionVariant === "glide" && instantPopup ? "instant" : motionVariant}
+        className={motionVariant === "glide" ? styles.glidePopup ?? "" : ""}
       >
         <div
           className={styles.panelBody}
           onKeyDown={(event) => {
+            if (motionVariant === "glide") { setInputMode("keyboard"); setInstantPopup(true); }
             if (
               composing ||
               event.nativeEvent.isComposing ||
@@ -491,6 +516,8 @@ export function ChoiceSelect({
           <div
             id={`${id}-list`}
             className={styles.list}
+            data-glide={motionVariant === "glide" || undefined}
+            data-input-mode={inputMode}
             ref={list}
             role="listbox"
             tabIndex={useSearch ? -1 : 0}
@@ -502,6 +529,7 @@ export function ChoiceSelect({
                 : `${id}-option-${realOptions.findIndex((option) => option.value === activeValue)}`
             }
           >
+            {motionVariant === "glide" ? <span ref={pill} className={styles.glidePill} aria-hidden="true" /> : null}
             {filtered.map((option, index) => (
               <span key={option.value}>
                 {option.group && option.group !== filtered[index - 1]?.group ? (
@@ -515,11 +543,17 @@ export function ChoiceSelect({
                   aria-disabled={option.disabled || undefined}
                   data-active={option.value === activeValue || undefined}
                   onPointerDown={(event) => event.preventDefault()}
+                  onPointerMove={event => {
+                    if (motionVariant === "glide" && event.pointerType !== "touch" && !option.disabled && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+                      setInputMode("pointer"); setActive(option.value);
+                    }
+                  }}
                   onClick={() => {
                     if (!option.disabled) commit(option.value);
                   }}
                 >
-                  <span>{option.label}</span>
+                  <span>{option.label}{option.decoration}</span>
+                  {motionVariant === "glide" ? <svg className={styles.glideCheck} data-selected={option.value === value} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> : null}
                   {option.description ? (
                     <span className={styles.description}>
                       {option.description}

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { mkdir } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures } from "./review-accessibility";
+import { settleImages } from "../visual/fixtures";
 
 test.beforeEach(async ({ page }) => {
   await seedReturningFeatureGuideUser(page, ["a", "b", "cover-user", "matrix"]);
@@ -29,17 +30,22 @@ test("登录样式契约、发送和失败状态", async ({ page }) => {
 });
 
 test("未登录首页展示公开工作室入口而不是受保护页面错误态", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
   await page.route("**/api/auth/login", (route) => route.fulfill({ status: 401, json: { message: "未登录" } }));
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /让每一版服装方案/u })).toBeVisible();
-    await expect(page.getByRole("link", { name: "进入设计工作室", exact: true })).toHaveAttribute("href", "/login");
-    await expect(page.getByRole("link", { name: "开始设计", exact: true })).toHaveAttribute("href", "/login");
+    await expect(page.getByRole("heading", { name: /让灵感，\s*穿上形状/u })).toBeVisible();
+    await expect(page.getByRole("link", { name: "登录", exact: true })).toHaveAttribute("href", "/login");
+    await expect(page.getByRole("link", { name: "开始创作", exact: true })).toHaveAttribute("href", "/login");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    expect(await contrastFailures(page)).toEqual([]);
+    expect(await contrastFailures(page, true)).toEqual([]);
     expect(await controlFontFailures(page)).toEqual([]);
+    await settleImages(page);
+    for (const figure of await page.locator("main figure").all()) await figure.scrollIntoViewIfNeeded();
+    await page.locator("main > footer").scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `output/playwright/public-landing-${viewport.width}.png`, fullPage: true });
   }
 });
@@ -114,7 +120,7 @@ test("后台会话变更时隔离项目缓存，旧请求不会回填新账号",
     if (delayOld && captured === "a") await new Promise<void>((resolve) => { releaseOld = resolve; });
     await route.fulfill({ json: { items: [{ id: `project-${captured}`, name: `账号 ${captured} 的项目`, assetCount: 0, coverUrl: null, archived: false, createdAt: "2026-10-18T00:00:00Z", updatedAt: "2026-10-18T00:00:00Z" }], page: 1, total: 1, hasMore: false } }).catch(() => undefined);
   });
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(page.getByRole("link", { name: "打开项目 账号 a 的项目" })).toBeVisible();
   await expect(page.locator("article").first()).toHaveCSS("opacity", "1");
   await page.screenshot({ path: "output/playwright/review-projects-after.png" });
@@ -140,7 +146,7 @@ test("真实项目封面优先显示，加载失败有可读回退", async ({ pa
   })), page: 1, total: 5, hasMore: false } }));
   await page.route("**/review-valid-cover", (route) => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#263950"/></svg>' }));
   await page.route("**/review-invalid-cover", (route) => route.fulfill({ status: 404 }));
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(page.getByRole("img", { name: "封面项目 0 封面", exact: true }).last()).toBeVisible();
   await expect(page.getByText("图片暂时无法加载", { exact: true })).toBeVisible();
   expect(await contrastFailures(page)).toEqual([]);
@@ -157,7 +163,7 @@ for (const viewport of REVIEW_VIEWPORTS) {
       await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: Array.from({ length: 5 }, (_, index) => ({
         id: `matrix-${index}`, name: `秋冬通勤服装 ${index + 1}`, assetCount: index, coverUrl: null, archived: false, createdAt: "2026-10-18T00:00:00Z", updatedAt: "2026-10-18T00:00:00Z",
       })), page: 1, total: 5, hasMore: false } }));
-      await page.goto(screen === "login" ? "/login" : "/");
+      await page.goto(screen === "login" ? "/login" : "/projects");
       if (screen === "projects") await expect(page.locator("article")).toHaveCount(5);
       else await expect(page.getByRole("heading", { name: "登录或注册" })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

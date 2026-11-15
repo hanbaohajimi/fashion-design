@@ -71,6 +71,7 @@ const EDGE_LIMIT = 600;
 const assetTypes = new Set<string>(workflowAssetTypes);
 const toolTypes = new Set<string>(workflowToolTypes);
 const toolOutputType: Record<string, string> = {
+  generate_text: "reference_text",
   analyze_brief: "constraint",
   generate_design: "candidate",
   evaluate_design: "evaluation",
@@ -623,12 +624,17 @@ export class WorkflowsService {
       if (node.type === "media") {
         const parsed = canvasMediaPayloadSchema.safeParse(node.payload);
         if (!parsed.success || node.kind !== "asset") throw invalidGraph("媒体素材必须使用有效的项目文件身份");
+        if (parsed.data.fileAssetId) {
+          const file = await requireProjectFile(transaction, this.access, ownerId, parsed.data.fileAssetId, projectId, transaction);
+          if (file.status !== "READY" || !["video/mp4", "video/webm"].includes(file.mimeType) || parsed.data.mimeType !== file.mimeType || parsed.data.mediaUrl !== canvasMediaUrl(projectId, file.id, file.id) || parsed.data.width !== file.width || parsed.data.height !== file.height || parsed.data.durationMs !== null) throw invalidGraph("视频文件身份或状态已变化");
+        } else {
         const media = await transaction.runwayMedia.findFirst({ where: { id: parsed.data.mediaId, projectId }, select: { mimeType: true, source: true, width: true, height: true, durationMs: true, runId: true, run: { select: { showId: true } } } });
         if (!media || (media.source as Record<string, unknown> | null)?.input === true || !/^(video|audio)\//u.test(media.mimeType)
           || parsed.data.mimeType !== media.mimeType || parsed.data.mediaKind !== (media.mimeType.startsWith("video/") ? "video" : "audio")
           || parsed.data.mediaUrl !== canvasMediaUrl(projectId, parsed.data.mediaId) || parsed.data.runId !== media.runId || parsed.data.showId !== media.run.showId
           || parsed.data.width !== media.width || parsed.data.height !== media.height || parsed.data.durationMs !== media.durationMs)
           throw invalidGraph("媒体身份、来源或文件信息与项目记录不一致，请刷新后重试");
+        }
       }
       if (node.type === "sketch" && node.payload.sketchDocument !== undefined) {
         const parsed = sketchDocumentSchema.safeParse(node.payload.sketchDocument);

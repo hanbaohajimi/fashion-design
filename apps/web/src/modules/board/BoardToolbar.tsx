@@ -16,7 +16,6 @@ import { BOARD_FILE_PICKER_EVENT, BoardProjectContext } from "./board-context";
 import type { BoardPersistStatus } from "./hooks/useBoardPersist";
 import {
   FRAME_SHAPE_TYPE,
-  NOTE_SHAPE_TYPE,
   SWATCH_HEIGHT,
   SWATCH_SHAPE_TYPE,
   computeSwatchWidth,
@@ -72,14 +71,12 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
 
   const createShape = (
     type:
-      | typeof NOTE_SHAPE_TYPE
       | typeof SWATCH_SHAPE_TYPE
       | typeof FRAME_SHAPE_TYPE,
   ): void => {
     const center = editor.getViewportPageBounds().center;
     const sizes: Readonly<Record<typeof type, readonly [number, number]>> = {
       [FRAME_SHAPE_TYPE]: [760, 520],
-      [NOTE_SHAPE_TYPE]: [260, 210],
       [SWATCH_SHAPE_TYPE]: [computeSwatchWidth(1), SWATCH_HEIGHT],
     };
     const [width, height] = sizes[type];
@@ -98,7 +95,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
   return (
     <div className={styles.boardToolbar}>
       <div className={styles.boardIdentity}>
-        <Link href="/" aria-label="返回项目库">
+        <Link href="/projects" aria-label="返回项目库">
           ←
         </Link>
         <strong title={projectName}>{projectName}</strong>
@@ -122,13 +119,6 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
           type="button"
         >
           图片
-        </button>
-        <button
-          onClick={() => createShape(NOTE_SHAPE_TYPE)}
-          title="添加便签"
-          type="button"
-        >
-          便签
         </button>
         <button
           onClick={() => createShape(SWATCH_SHAPE_TYPE)}
@@ -182,7 +172,7 @@ export function BoardToolbar({ status }: BoardToolbarProps) {
           title={
             selectedCollectionId
               ? "打开已保存系列"
-              : "先将一个候选设为 Hero 建立系列"
+              : "先将一张图片设为 Hero 建立系列"
           }
           type="button"
         >

@@ -23,7 +23,7 @@ for (const width of [1440, 320]) test(`${width}px 视频放回白板可点击播
   expect(state.errors).toEqual([]);
 });
 
-test("音频与视频一次只播放一项，切换画布视图和离开视野都停止播放", async ({ page }) => {
+test("音频与视频一次只播放一项，打开功能界面和离开视野都停止播放", async ({ page }) => {
   const state = await canvasMediaFixture(page); await loadZhiya(page); await placeMedia(page); await placeMedia(page, "result-4");
   await canvasAction(page, "查看全图");
   const video = mediaCard(page).locator("video"), audio = mediaCard(page, "result-4").locator("audio");
@@ -36,14 +36,15 @@ test("音频与视频一次只播放一项，切换画布视图和离开视野�
   const videoNode = await video.elementHandle();
   await audio.evaluate((element: HTMLAudioElement) => element.pause());
   await video.evaluate((element: HTMLVideoElement) => element.play());
-  await page.getByRole("button", { name: "抓手工具", exact: true }).click();
   const canvas = await page.getByLabel("无限白板", { exact: true }).boundingBox(); if (!canvas) throw new Error("缺少画布");
+  await page.mouse.click(canvas.x + 200, canvas.y + 200); await page.keyboard.down("Space");
   await page.mouse.move(canvas.x + 200, canvas.y + 200); await page.mouse.down(); await page.mouse.move(canvas.x + canvas.width + 1600, canvas.y + 200, { steps: 20 }); await page.mouse.up();
+  await page.keyboard.up("Space");
   await expect.poll(() => videoNode?.evaluate((element: HTMLVideoElement) => element.paused)).toBe(true);
   await canvasAction(page, "查看全图");
   await audio.evaluate((element: HTMLAudioElement) => element.play());
   const handle = await audio.elementHandle();
-  await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await page.getByRole("button", { name: "全部功能模块", exact: true }).click();
   await expect.poll(() => handle?.evaluate((element: HTMLAudioElement) => element.paused)).toBe(true);
   expect(state.placements).toHaveLength(2); expect(state.errors).toEqual([]);
 });
@@ -56,7 +57,8 @@ test("白板隐藏媒体后停止播放，移动和刷新只更新摆放", async
   const moved = await header.boundingBox(); expect(moved?.x).not.toBe(before.x);
   await card.getByRole("button", { name: "播放 秋冬服装秀成片", exact: true }).click();
   const video = await card.locator("video").elementHandle();
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await page.getByRole("button", { name: "全部功能模块", exact: true }).click();
+  await page.getByRole("dialog", { name: "全部功能模块", exact: true }).getByRole("region", { name: "画布管理", exact: true }).getByRole("button", { name: "画布对象", exact: true }).click();
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("button", { name: "隐藏 秋冬服装秀成片", exact: true }).click();
   await expect.poll(() => video?.evaluate((element: HTMLVideoElement) => element.paused)).toBe(true);

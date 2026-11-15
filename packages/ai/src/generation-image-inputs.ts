@@ -9,9 +9,9 @@ export interface GenerationImageInputs {
   readonly urls: readonly string[];
   readonly references: readonly {
     readonly order: number;
-    readonly role: AiReferenceImageRole;
+    readonly role?: AiReferenceImageRole | undefined;
     readonly url: string;
-    readonly weight: number;
+    readonly weight?: number | undefined;
     /** One-based position in the actual multipart image list. */
     readonly imageNumber: number;
   }[];
@@ -33,13 +33,22 @@ export function resolveGenerationImageInputs(
   // For creation the singular field is a legacy alias. For editing it is the source.
   const source =
     request.taskType !== "t2i" ? request.referenceImageUrl : undefined;
-  const urls: string[] = source ? [source] : [];
+  if (request.referencePolicy === "instruction" && request.taskType !== "inpaint" && !request.imageEdit && structured.length) {
+    const ordered = structured.map((reference) => reference.url);
+    const urls = source && !ordered.includes(source) ? [source, ...ordered] : ordered;
+    return { urls, references: structured.map((reference) => ({ ...reference, imageNumber: urls.indexOf(reference.url) + 1 })) };
+  }
+  // Feedback adds one server-rendered marker image after the source. It is not
+  // a user reference and must not renumber the user's explicit inputs.
+  const marker = request.referencePolicy === "instruction" && request.imageEdit?.intent === "feedback" && structured.length
+    ? request.referenceImageUrls?.find((url) => url !== source && !structured.some((reference) => reference.url === url)) : undefined;
+  const urls: string[] = [...(source ? [source] : []), ...(marker ? [marker] : [])];
   const references: GenerationImageInputs["references"][number][] = [];
   for (const [index, url] of explicitUrls.entries()) {
     const isSource = source && url === source;
     if (!isSource) urls.push(url);
     const reference = structured[index];
-    // Retain each role, including different uses of the same source image.
+    // Keep visible reference numbering even when a reference is the edit source.
     if (reference)
       references.push({
         ...reference,

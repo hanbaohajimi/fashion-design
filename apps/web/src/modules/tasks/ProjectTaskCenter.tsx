@@ -11,6 +11,7 @@ import { Button, Dialog, Notice } from "../../components/ui";
 import { TaskFeedback } from "../../components/TaskFeedback";
 import { useLocalActivities } from "./local-activities";
 import styles from "./project-tasks.module.css";
+import WarmTooltip from "../../components/WarmTooltip";
 
 const activityDomainLabels: Record<ProjectTaskDomain, string> = {
   assistant: "设计助手",
@@ -27,12 +28,12 @@ const activityOutcomeLabels = {
   canceled: "已停止",
 } as const;
 
-export function ProjectTaskCenter({ projectId }: { projectId: string }) {
+export function ProjectTaskCenter({ projectId, iconOnly = false, hideTrigger = false }: { projectId: string; iconOnly?: boolean; hideTrigger?: boolean }) {
   const source = useProjectTaskSource();
-  return source?.projectId === projectId ? <ProjectTaskCenterContent projectId={projectId} /> : <ProjectTaskProvider projectId={projectId}><ProjectTaskCenterContent projectId={projectId} /></ProjectTaskProvider>;
+  return source?.projectId === projectId ? <ProjectTaskCenterContent projectId={projectId} iconOnly={iconOnly} hideTrigger={hideTrigger} /> : <ProjectTaskProvider projectId={projectId}><ProjectTaskCenterContent projectId={projectId} iconOnly={iconOnly} hideTrigger={hideTrigger} /></ProjectTaskProvider>;
 }
 
-function ProjectTaskCenterContent({ projectId }: { projectId: string }) {
+function ProjectTaskCenterContent({ projectId, iconOnly, hideTrigger }: { projectId: string; iconOnly: boolean; hideTrigger: boolean }) {
   const source = useProjectTaskSource();
   const { session } = useAuth();
   const cache = useQueryClient();
@@ -96,10 +97,10 @@ function ProjectTaskCenterContent({ projectId }: { projectId: string }) {
     finally { setBusy(null); flight.current = false; }
   };
   return <>
-    <span data-project-tasks className={styles.trigger}><Button size="small" data-guide="project-tasks" onClick={() => setOpen(true)} aria-label={`项目任务${summary.data ? `，${summary.data.counts.running} 项进行中，${summary.data.counts.attention} 项待处理` : ""}`}>
+    {!hideTrigger ? <span data-project-tasks className={styles.trigger}>{iconOnly ? <WarmTooltip content="项目任务" side="bottom"><Button className={styles.iconTrigger} data-guide="project-tasks" onClick={() => setOpen(true)} aria-label={`项目任务${summary.data ? `，${summary.data.counts.running} 项进行中，${summary.data.counts.attention} 项待处理` : ""}`}><svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M9 5h11M9 12h11M9 19h11" /><circle cx="4" cy="5" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="19" r="1" /></svg>{summary.data && (summary.data.counts.running || summary.data.counts.attention) ? <span className={styles.iconCount}>{summary.data.counts.attention || summary.data.counts.running}</span> : null}</Button></WarmTooltip> : <Button size="small" data-guide="project-tasks" onClick={() => setOpen(true)} aria-label={`项目任务${summary.data ? `，${summary.data.counts.running} 项进行中，${summary.data.counts.attention} 项待处理` : ""}`}>
       <span className={styles.desktopLabel}>项目任务</span><span className={styles.mobileLabel}>任务</span>{summary.data && (summary.data.counts.running || summary.data.counts.attention) ? <span className={styles.counts}>{summary.data.counts.running} / {summary.data.counts.attention}</span> : null}
-    </Button></span>
-    <Dialog open={open} label="项目任务" onClose={() => setOpen(false)} className={styles.dialog}>
+    </Button>}</span> : null}
+    <Dialog open={open} label="项目任务" onClose={() => setOpen(false)} returnFocusSelector={hideTrigger ? '[data-guide="workspace-functions"]' : undefined} className={styles.dialog}>
       <header><h2>项目任务</h2><Button onClick={() => setOpen(false)}>关闭</Button></header>
       <nav aria-label="任务状态筛选">{[["active", "进行中与待处理"], ["running", "进行中"], ["attention", "待处理"], ["ended", "已结束"]].map(([value, label]) => <Button key={value} aria-pressed={group === value} onClick={() => { setGroup(value ?? "active"); setCursor(null); setPrevious([]); }}>{label}</Button>)}</nav>
       {activity ? <section className={styles.activity} aria-label="项目运行概览">

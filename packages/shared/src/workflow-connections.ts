@@ -10,6 +10,9 @@ const referenceTypes = new Set([
   "fabric",
   "legacy",
   "candidate",
+  "brief",
+  "constraint",
+  "evaluation",
 ]);
 
 /** The same input contract is used by the canvas and API. Order expresses preference. */
@@ -17,9 +20,10 @@ export function workflowInputPorts(
   assetType: string,
   toolType: string,
 ): readonly WorkflowConnectionPort[] {
-  if (toolType === "transform_image") return assetType === "candidate" ? ["source"] : [];
+  if (toolType === "transform_image") return ["candidate", "reference_image", "sketch"].includes(assetType) ? ["source"] : [];
+  if (toolType === "generate_text") return referenceTypes.has(assetType) ? ["reference"] : [];
   if (toolType === "analyze_brief") {
-    if (assetType === "brief") return ["goal"];
+    if (assetType === "brief") return ["goal", "reference"];
     if (assetType === "reference_text") return ["goal", "reference"];
     return referenceTypes.has(assetType) ? ["reference"] : [];
   }
@@ -32,10 +36,10 @@ export function workflowInputPorts(
     ].includes(toolType)
   )
     return [];
-  if (assetType === "constraint") return ["constraint"];
-  if (toolType === "edit_design" && assetType === "reference_image")
+  if (assetType === "constraint") return toolType === "evaluate_design" ? ["constraint"] : ["constraint", "reference"];
+  if (toolType === "edit_design" && ["reference_image", "sketch"].includes(assetType))
     return ["source", "reference"];
-  if (assetType === "candidate")
+  if (assetType === "candidate" || toolType === "evaluate_design" && ["reference_image", "sketch"].includes(assetType))
     return toolType === "evaluate_design"
       ? ["candidate", "reference"]
       : ["source", "reference"];

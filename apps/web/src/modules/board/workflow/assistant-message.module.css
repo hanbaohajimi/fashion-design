@@ -1,0 +1,80 @@
+.message.message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--color-ink);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.message.message + .message.message {
+  margin-block-start: 22px;
+}
+.message.message + .message.message[data-following-request="true"] {
+  margin-block-start: 10px;
+}
+.message.message[data-role="user"] {
+  display: flex;
+  align-self: stretch;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  white-space: normal;
+}
+.message.message[data-role="user"]:not(:first-child) {
+  margin-block-start: 22px;
+}
+.userBubble {
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 90%;
+  min-width: 0;
+  padding: 9px 12px;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 11px;
+  background: var(--surface-1);
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message .body {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.message .body p,
+.message .body li {
+  color: inherit;
+}
+.message[data-role="user"] > small {
+  align-self: flex-end;
+  max-width: 90%;
+  color: var(--color-ink-secondary);
+  font-size: 12px;
+}
+.activityDetails {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--color-ink-secondary);
+}
+.history { display: grid; gap: 12px; padding: 24px; max-height: 80dvh; overflow: auto; }
+.history article { padding-block: 12px; border-top: var(--border-hairline) solid var(--color-border); }
+.history p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.history small { color: var(--color-ink-secondary); }
+.history button { display: block; min-height: 44px; border: 0; background: transparent; color: var(--color-action); font: inherit; cursor: pointer; }

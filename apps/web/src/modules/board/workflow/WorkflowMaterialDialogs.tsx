@@ -94,7 +94,7 @@ export function WorkflowLibraryDialog({ kind, onAdd, onClose }: {
     return () => controller.abort();
   }, [kind, page, query, retry]);
   return <WorkflowDialog label={label} onClose={onClose} returnFocusSelector="[data-material-trigger]">
-    <section aria-label={label} className={styles.libraryDialog}>
+    <section aria-label={label} data-canvas-panel={kind === "fabric" ? "fabrics" : "trend-library"} className={styles.libraryDialog}>
       <header><h2>{label}参考</h2><button aria-label="关闭" onClick={onClose} type="button">×</button></header>
       {kind === "fabric" ? <form onSubmit={(event) => { event.preventDefault(); setLoading(true); setLoadError(null); setItems([]); setPage(1); setQuery({ search, scope }); }}>
         <Field label="搜索面料"><Input value={search} onChange={(event) => setSearch(event.target.value)} /></Field>

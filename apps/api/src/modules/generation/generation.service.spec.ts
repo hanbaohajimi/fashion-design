@@ -177,8 +177,8 @@ describe("GenerationService", () => {
       "editor-a",
       "editor-b",
     ]);
-    expect(compiler.compile).toHaveBeenCalledWith("editor-a", "project-1", request.prompt, undefined, { modelCalls: "skip" });
-    expect(compiler.compile).toHaveBeenCalledWith("editor-b", "project-1", request.prompt, undefined, { modelCalls: "skip" });
+    expect(compiler.compile).toHaveBeenCalledWith("editor-a", "project-1", "请生成", undefined, { modelCalls: "skip" });
+    expect(compiler.compile).toHaveBeenCalledWith("editor-b", "project-1", "请生成", undefined, { modelCalls: "skip" });
     expect(billing.canGenerate).toHaveBeenCalledWith("owner");
     expect(billing.withLockedGenerationQuota).toHaveBeenCalledWith(
       "owner",
@@ -374,13 +374,13 @@ describe("GenerationService", () => {
         id: expect.any(String),
         input: expect.objectContaining({
           ...request,
-          negativePrompt: expect.stringContaining("fashion model"),
-          prompt: expect.stringContaining("garment-only"),
+          negativePrompt: "",
+          prompt: request.prompt,
         }),
         compiledPrompt: expect.objectContaining({
           presentationPolicy: {
             matchedSignals: [],
-            mode: "garment_only",
+            mode: "preserve_source",
             version: 1,
           },
           positivePrompt: "fashion editorial",
@@ -482,7 +482,7 @@ describe("GenerationService", () => {
     expect(compiler.compile).toHaveBeenCalledWith(
       "user-1",
       "project-1",
-      "fashion editorial",
+      "请生成",
       ["shape-1"],
       { modelCalls: "skip" },
     );
@@ -526,7 +526,7 @@ describe("GenerationService", () => {
               intent: "修改袖口",
               inputSnapshot: expect.objectContaining({
                 version: 1,
-                sources,
+                sources: sources.map((source) => ({ ...source, role: "reference" })),
                 constraints: expect.objectContaining({
                   palette: ["#112233"],
                   notes: ["保留立领"],
@@ -539,62 +539,23 @@ describe("GenerationService", () => {
     );
   });
 
-  it("用户未明确要求试穿时默认注入无人物展示硬约束", async () => {
-    await service.create("user-1", {
-      ...request,
-      negativePrompt: "blurry",
-      prompt: "设计一件黑色廓形夹克",
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.prompt).toContain("garment-only");
-    expect(createData.input.prompt).toContain("without any human wearer");
-    expect(createData.input.negativePrompt).toContain("fashion model");
-    expect(createData.input.negativePrompt).toContain("blurry");
-    expect(createData.input.negativePrompt).toContain("watermark");
-    expect(createData.compiledPrompt.presentationPolicy).toEqual({
-      matchedSignals: [],
-      mode: "garment_only",
-      version: 1,
-    });
+  it("普通生图只提交用户输入，不追加人物、展示方式、默认负向词或保留要求", async () => {
+    await service.create("user-1", { ...request, negativePrompt: "blurry", prompt: "设计一件黑色廓形夹克" });
+    const data = database.generationTask.create.mock.calls[0]?.[0].data;
+    expect(data.input.prompt).toBe("设计一件黑色廓形夹克");
+    expect(data.input.negativePrompt).toBe("blurry");
+    expect(data.input.referencePolicy).toBe("instruction");
+    expect(data.compiledPrompt.presentationPolicy).toEqual({ matchedSignals: [], mode: "preserve_source", version: 1 });
   });
 
-  it("局部重绘把所选色卡持久化并约束在蒙版区域", async () => {
-    await service.create("user-1", {
-      height: 1024,
-      maskImageUrl: "https://signed.test/mask.png",
-      palette: [
-        { hex: "#C8AB84", name: "OAT" },
-        { hex: "#39443E", name: "INK" },
-      ],
-      prompt: "将领口改成窄驳领",
-      referenceImageUrl: "https://signed.test/source.png",
-      taskType: "inpaint",
-      width: 768,
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.palette).toEqual([
-      { hex: "#C8AB84", name: "OAT" },
-      { hex: "#39443E", name: "INK" },
-    ]);
-    expect(createData.input.prompt).toContain("OAT #C8AB84");
-    expect(createData.input.prompt).toContain("INK #39443E");
-    expect(createData.input.prompt).toContain("将领口改成窄驳领");
-    expect(createData.input.prompt).toContain("inside the masked area");
-    expect(createData.input.prompt).toContain(
-      "Preserve all colors outside the masked area",
-    );
-    expect(createData.input.prompt).not.toContain("fashion editorial");
-    expect(createData.input.prompt).not.toContain("garment-only");
-    expect(createData.input.negativePrompt).not.toContain("fashion model");
-    expect(createData.compiledPrompt.presentationPolicy).toEqual({
-      matchedSignals: ["inpaint_source_preservation"],
-      mode: "preserve_source",
-      version: 1,
-    });
+  it("局部重绘不把色卡资料自动转成强制配色提示词", async () => {
+    await service.create("user-1", { taskType: "inpaint", prompt: "将领口改成窄驳领", width: 768, height: 1024,
+      referenceImageUrl: "https://signed.test/source.png", maskImageUrl: "https://signed.test/mask.png",
+      palette: [{ hex: "#C8AB84", name: "OAT" }] });
+    const data = database.generationTask.create.mock.calls[0]?.[0].data;
+    expect(data.input.prompt).toBe("将领口改成窄驳领");
+    expect(data.input.negativePrompt).toBe("");
+    expect(data.input.palette).toEqual([{ hex: "#C8AB84", name: "OAT" }]);
   });
 
   it("多参考局部编辑固定父图首位，签名私有蒙版并记录全部来源", async () => {
@@ -696,13 +657,11 @@ describe("GenerationService", () => {
 
     const createData =
       database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.prompt).toBe(
-      "a fashion model wearing a black jacket",
-    );
-    expect(createData.input.negativePrompt).toBe("watermark");
+    expect(createData.input.prompt).toBe("让模特试穿这件黑色夹克");
+    expect(createData.input.negativePrompt).toBe("");
     expect(createData.compiledPrompt.presentationPolicy).toEqual({
-      matchedSignals: ["zh_model_try_on"],
-      mode: "on_model",
+      matchedSignals: [],
+      mode: "preserve_source",
       version: 1,
     });
   });
@@ -722,7 +681,7 @@ describe("GenerationService", () => {
 
     await service.create(
       "user-1",
-      { ...request, prompt: "生成一件短款通勤夹克" },
+      { ...request, prompt: "生成一件短款通勤夹克", shapeIds: ["selected-note"] },
       "note-model-intent",
       "根据画布备注生成",
     );
@@ -733,8 +692,8 @@ describe("GenerationService", () => {
     expect(createData.input.prompt).not.toContain("without any human wearer");
     expect(createData.input.negativePrompt).not.toContain("fashion model");
     expect(createData.compiledPrompt.presentationPolicy).toEqual({
-      matchedSignals: ["zh_model_try_on"],
-      mode: "on_model",
+      matchedSignals: [],
+      mode: "preserve_source",
       version: 1,
     });
   });
@@ -747,10 +706,10 @@ describe("GenerationService", () => {
 
     const createData =
       database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.prompt).toContain("garment-only");
+    expect(createData.input.prompt).toBe("不要模特试穿，只展示服装单品");
     expect(createData.compiledPrompt.presentationPolicy).toEqual({
-      matchedSignals: ["zh_explicit_denial"],
-      mode: "garment_only",
+      matchedSignals: [],
+      mode: "preserve_source",
       version: 1,
     });
   });
@@ -773,15 +732,14 @@ describe("GenerationService", () => {
 
     const createData =
       database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.prompt).toContain("garment-only");
-    expect(createData.compiledPrompt.presentationPolicy.mode).toBe(
-      "garment_only",
-    );
+    expect(createData.input.prompt).toBe("设计一条红色连衣裙");
+    expect(createData.compiledPrompt.presentationPolicy.mode).toBe("preserve_source");
   });
 
-  it("在生成任务同一事务中记录 fabric_id 与标签快照血缘", async () => {
+  it("在生成任务同一事务中记录面料身份，不保存默认用途或权重", async () => {
     compiler.compile.mockResolvedValue({
       enhancement: "keywords",
+      sources: [{ elementId: "board-element-1", fabricId: "fabric-1", role: "reference", title: "面料", tags: ["cotton blend", "plain"] }],
       fabricInputs: [
         {
           boardElementId: "board-element-1",
@@ -808,9 +766,9 @@ describe("GenerationService", () => {
                 boardElementId: "board-element-1",
                 fabricId: "fabric-1",
                 inputType: "fabric",
-                role: "fabric_texture",
+                role: null,
                 tagsSnapshot: ["cotton blend", "plain"],
-                weight: 0.7,
+                weight: null,
               },
             ],
           },
@@ -933,202 +891,34 @@ describe("GenerationService", () => {
     });
   });
 
-  it("把白板 style_ref 注入文生图 Provider 请求", async () => {
+  it("按显式素材顺序传递参考，不再从旧用途通道或权重选图", async () => {
     compiler.compile.mockResolvedValueOnce({
-      enhancement: "keywords",
-      mode: "board_guided",
-      negativePrompt: "watermark",
-      positivePrompt: "fashion editorial",
-      silhouetteReferences: [],
-      styleReferences: [
-        {
-          elementId: "style-1",
-          imageUrl: "https://signed.test/style.png",
-          labels: [],
-        },
+      version: 1, enhancement: "keywords", mode: "board_guided", positivePrompt: "保持图1版型，使用图2纹理", negativePrompt: "",
+      orderedReferences: [
+        { elementId: "a", imageUrl: "https://signed.test/a.png", order: 0, labels: [] },
+        { elementId: "b", imageUrl: "https://signed.test/b.png", order: 1, labels: [] },
       ],
-      version: 1,
+      styleReferences: [{ elementId: "ignored", imageUrl: "https://signed.test/ignored.png", labels: [] }],
     });
-
-    await service.create("user-1", {
-      ...request,
-      projectId: "project-1",
-      shapeIds: ["style-shape"],
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input).toMatchObject({
-      referenceImageUrl: "https://signed.test/style.png",
-      taskType: "t2i",
-    });
-    expect(createData.compiledPrompt).toMatchObject({
-      styleReferences: [
-        {
-          elementId: "style-1",
-          imageUrl: "https://signed.test/style.png",
-        },
-      ],
-    });
-  });
-
-  it("趋势 style_ref 使用通道提供的 0.5 权重", async () => {
-    compiler.compile.mockResolvedValueOnce({
-      enhancement: "keywords",
-      mode: "board_guided",
-      negativePrompt: "watermark",
-      positivePrompt: "dopamine dressing",
-      silhouetteReferences: [],
-      styleReferences: [
-        {
-          elementId: "trend-image-1",
-          imageUrl: "https://signed.test/trend.png",
-          labels: ["dopamine dressing"],
-          role: "style_ref",
-          trendItemId: "trend-1",
-          weight: 0.5,
-        },
-      ],
-      version: 1,
-    });
-
-    await service.create("user-1", {
-      ...request,
-      projectId: "project-1",
-      shapeIds: ["trend-image-shape"],
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input).toMatchObject({
-      referenceImageUrl: "https://signed.test/trend.png",
-      taskType: "t2i",
-    });
-  });
-
-  it("没有风格或廓形参考时把面料纹理图和通道权重注入 Provider", async () => {
-    compiler.compile.mockResolvedValueOnce({
-      enhancement: "keywords",
-      fabricInputs: [],
-      fabricReferences: [
-        {
-          elementId: "fabric-element-1",
-          fabricId: "fabric-1",
-          imageUrl: "https://signed.test/fabric.png",
-          labels: ["cotton 100%", "plain"],
-          role: "fabric_texture",
-          weight: 0.7,
-        },
-      ],
-      mode: "board_guided",
-      negativePrompt: "watermark",
-      positivePrompt: "fabric material: cotton 100%, weave type: plain",
-      silhouetteReferences: [],
-      styleReferences: [],
-      version: 1,
-    });
-
-    await service.create("user-1", {
-      ...request,
-      projectId: "project-1",
-      shapeIds: ["fabric-shape"],
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input).toMatchObject({
-      referenceImageUrl: "https://signed.test/fabric.png",
-      referenceImages: [
-        {
-          order: 0,
-          role: "fabric_texture",
-          url: "https://signed.test/fabric.png",
-          weight: 0.7,
-        },
-      ],
-      taskType: "t2i",
-    });
-  });
-
-  it("保留多标签参考图的角色、权重和稳定顺序并让细节参考参与 Provider", async () => {
-    compiler.compile.mockResolvedValueOnce({
-      avoidLabels: [],
-      detailReferences: [
-        {
-          elementId: "detail-1",
-          imageUrl: "https://signed.test/detail.png",
-          labels: ["bound seam"],
-        },
-      ],
-      enhancement: "keywords",
-      fabricInputs: [],
-      fabricReferences: [
-        {
-          elementId: "fabric-1",
-          fabricId: "fabric-1",
-          imageUrl: "https://signed.test/fabric.png",
-          labels: ["silk"],
-          role: "fabric_texture",
-          weight: 0.7,
-        },
-      ],
-      mode: "board_guided",
-      negativePrompt: "watermark",
-      notes: [],
-      palette: [],
-      paletteReferences: [],
-      patternReferences: [],
-      positivePrompt: "silk dress with bound seam",
-      silhouetteReferences: [
-        {
-          edgeImageUrl: "https://signed.test/silhouette.png",
-          elementId: "silhouette-1",
-        },
-      ],
-      styleReferences: [
-        {
-          elementId: "style-1",
-          imageUrl: "https://signed.test/style.png",
-          labels: [],
-        },
-      ],
-      version: 1,
-    });
-
-    await service.create("user-1", {
-      ...request,
-      projectId: "project-1",
-      shapeIds: ["style-1", "fabric-1", "silhouette-1", "detail-1"],
-    });
-
-    const createData =
-      database.generationTask.create.mock.calls.at(0)?.[0].data;
-    expect(createData.input.referenceImages).toEqual([
-      {
-        order: 0,
-        role: "style_ref",
-        url: "https://signed.test/style.png",
-        weight: 0.72,
-      },
-      {
-        order: 1,
-        role: "fabric_texture",
-        url: "https://signed.test/fabric.png",
-        weight: 0.7,
-      },
-      {
-        order: 2,
-        role: "detail_ref",
-        url: "https://signed.test/detail.png",
-        weight: 0.65,
-      },
-      {
-        order: 3,
-        role: "silhouette_ref",
-        url: "https://signed.test/silhouette.png",
-        weight: 0.55,
-      },
+    await service.create("user-1", { ...request, projectId: "project-1", shapeIds: ["a", "b"] });
+    const data = database.generationTask.create.mock.calls[0]?.[0].data;
+    expect(data.input.referencePolicy).toBe("instruction");
+    expect(data.input.referenceImages).toEqual([
+      { order: 0, url: "https://signed.test/a.png" }, { order: 1, url: "https://signed.test/b.png" },
     ]);
+    expect(data.compiledPrompt.styleReferences).toEqual([]);
+    expect(JSON.stringify(data.input)).not.toContain("ignored.png");
+    expect(JSON.stringify(data.input)).not.toContain("weight");
+  });
+
+  it("只有旧用途通道时不补写新的参考，避免历史标签影响本次生成", async () => {
+    compiler.compile.mockResolvedValueOnce({ version: 1, enhancement: "keywords", mode: "text_only", positivePrompt: "新要求", negativePrompt: "",
+      styleReferences: [{ imageUrl: "https://signed.test/old.png", weight: 0.7, role: "style_ref", labels: [] }] });
+    await service.create("user-1", request);
+    const data = database.generationTask.create.mock.calls[0]?.[0].data;
+    expect(data.input.referenceImages).toBeUndefined();
+    expect(data.input.referenceImageUrl).toBeUndefined();
+    expect(data.input.prompt).toBe(request.prompt);
   });
 
   it("显式参考不被画布编译出的参考列表覆盖", async () => {
@@ -1136,12 +926,12 @@ describe("GenerationService", () => {
       version: 1, styleReferences: [{ imageUrl: "https://signed.test/implicit.png", labels: [] }] });
     const explicit = [{ order: 0, url: "https://signed.test/explicit.png", role: "detail_ref" as const, weight: 0.4 }];
     await service.create("user-1", { ...request, referenceImages: explicit });
-    expect(database.generationTask.create.mock.calls[0]?.[0].data.input.referenceImages).toEqual(explicit);
+    expect(database.generationTask.create.mock.calls[0]?.[0].data.input.referenceImages).toEqual(explicit.map(({ order, url }) => ({ order, url })));
   });
 
   it("编译参考超过16张时明确拒绝，不截掉后面的参考继续入队", async () => {
     compiler.compile.mockResolvedValueOnce({ enhancement: "keywords", mode: "board_guided", positivePrompt: "new design", negativePrompt: "", version: 1,
-      styleReferences: Array.from({ length: 17 }, (_, i) => ({ imageUrl: `https://signed.test/ref-${i}.png`, labels: [] })) });
+      orderedReferences: Array.from({ length: 17 }, (_, i) => ({ elementId: `ref-${i}`, order: i, imageUrl: `https://signed.test/ref-${i}.png`, labels: [] })) });
     await expect(service.create("user-1", request)).rejects.toThrow("最多16张");
     expect(database.generationTask.create).not.toHaveBeenCalled();
     expect(jobs.enqueue).not.toHaveBeenCalled();
@@ -1167,7 +957,7 @@ describe("GenerationService", () => {
     const input = database.generationTask.create.mock.calls[0]?.[0].data.input;
     expect(input.referenceImageUrl).toBe("https://private.example/source.png?signature=fresh");
     expect(input.referenceImageUrls[0]).toBe(input.referenceImageUrl);
-    expect(input.referenceImages[0]).toEqual({ order: 0, url: input.referenceImageUrl, role: "silhouette_ref", weight: 0.9 });
+    expect(input.referenceImages[0]).toEqual({ order: 0, url: input.referenceImageUrl });
   });
 
   it.each(["edit", "feedback"])("%s超过含原图与标记图的总量时在编译和入队前拒绝", async (intent) => {
@@ -1192,7 +982,7 @@ describe("GenerationService", () => {
     const input = database.generationTask.create.mock.calls[0]?.[0].data.input;
     expect(input.referenceImages[0].url).toBe(input.referenceImageUrl);
     expect(input.referenceImageUrl).not.toBe(source);
-    expect(input.referenceImages[1]).toEqual({ order: 1, url: "https://private.example/detail.png", role: "detail_ref", weight: 0.5 });
+    expect(input.referenceImages[1]).toEqual({ order: 1, url: "https://private.example/detail.png" });
   });
 
   it("变体任务校验父资产归属并保存 parentAssetId", async () => {
@@ -1384,8 +1174,8 @@ describe("GenerationService", () => {
 
     const input = database.generationTask.create.mock.calls.at(0)?.[0].data
       .input as { readonly prompt: string } | undefined;
-    expect(input?.prompt).toContain("normalized fashion collection prompt");
-    expect(input?.prompt).toContain("系列变化硬约束（必须逐条执行）");
+    expect(input?.prompt).not.toContain("normalized fashion collection prompt");
+    expect(input?.prompt).not.toContain("系列变化硬约束（必须逐条执行）");
     expect(input?.prompt).toContain("必须替换面料，不得沿用 Hero 的原面料");
   });
 

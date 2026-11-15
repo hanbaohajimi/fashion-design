@@ -1,5 +1,5 @@
 import { ProjectAccessPolicy } from "../studio/project-access.policy";
-import { workflowReferenceSummarySchema, workflowExecutionResultSchema } from "@fashion/shared";
+import { assistantCanvasObservationSchema, assistantCanvasResultSchema, type AssistantCanvasProof, canvasCreationDraftSchema, creationActivitySchema, workflowReferenceSummarySchema, workflowExecutionResultSchema } from "@fashion/shared";
 import { readWorkflowMessageExecutions } from "./workflow-message-executions";
 import { buildWorkflowExecutionResults, workflowExecutionResultText } from "./workflow-execution-result";
 import { buildWorkflowReferenceSummary } from "./workflow-reference-summary";
@@ -16,8 +16,11 @@ import { WorkflowsService } from "../workflows/workflows.service";
 import { WORKFLOW_RUNTIME_DB, WorkflowRuntimeService } from "./workflow-runtime.service";
 import { WorkflowCoordinator, MAX_PLANNER_CALLS } from "./workflow-coordinator";
 import { CanvasCommandService } from "./canvas-command.service";
-import { allowsDirectExecution, directMutationId } from "./direct-execution";
+import { CanvasCreationsService } from "./canvas-creations.service";
+import { readCreationResource, type ResourceSnapshot } from "./canvas-creation-resources";
+import { allowsCanvasPreparation, allowsDirectExecution, directMutationId } from "./direct-execution";
 import { plannerDecisionSchema } from "./workflow-planner";
+import { AssistantCanvasActionsService } from "./assistant-canvas-actions.service";
 
 const nodeId = z.string().trim().min(1).max(128);
 export const workflowMessageSchema = z.object({
@@ -25,6 +28,9 @@ export const workflowMessageSchema = z.object({
   content: z.string().trim().min(1).max(4_000),
   referencedNodeIds: z.array(nodeId).max(16).default([]),
   focusNodeIds: z.array(nodeId).max(16).optional(),
+  focusCreationId: nodeId.optional(),
+  focusCreationRevision: z.number().int().nonnegative().optional(),
+  canvasObservation: assistantCanvasObservationSchema.optional(),
   respondingToProposalId: nodeId.optional(),
 }).strict();
 export const workflowContextCorrectionSchema = z.object({
@@ -58,6 +64,8 @@ export class WorkflowAssistantService {
     @Optional() @Inject(WorkflowCoordinator) private readonly coordinator?: WorkflowCoordinator,
     @Inject(ProjectAccessPolicy) private readonly access: ProjectAccessPolicy = new ProjectAccessPolicy(database),
     @Optional() @Inject(CanvasCommandService) private readonly canvasCommands?: CanvasCommandService,
+    @Optional() @Inject(CanvasCreationsService) private readonly canvasCreations?: CanvasCreationsService,
+    @Optional() @Inject(AssistantCanvasActionsService) private readonly canvasActions?: AssistantCanvasActionsService,
   ) {}
 
   private async conversation(userId: string, id: string, write = false) {
@@ -153,11 +161,25 @@ export class WorkflowAssistantService {
     const missing = page.filter(row => row.origin === "execution_result" && row.executionId && !workflowExecutionResultSchema.safeParse(object(row.context).executionResult).success);
     const executionIds = page.flatMap(row => row.executionId && (row.origin !== "execution_result" || missing.includes(row)) ? [row.executionId] : []);
     const observation = await readWorkflowMessageExecutions(this.database, { projectId: conversation.projectId, conversationId, userId, canEdit: capabilities.edit && !archived }, executionIds, page.flatMap(row => row.proposal ? [row.proposal] : []));
+    const activityIds = page.flatMap((row) => { const activity = creationActivitySchema.safeParse(object(row.context).creationActivity); return activity.success && activity.data.runId ? [activity.data.runId] : []; });
+    const activityRuns = activityIds.length ? await this.database.canvasCreationRun.findMany({ where: { projectId: conversation.projectId, conversationId, actorId: userId, id: { in: activityIds } } }) : [];
+    const domainRuns = activityRuns.filter(run => run.state === "domain");
+    const domainViews = new Map(await Promise.all(domainRuns.map(async (run) => {
+      const resource = await readCreationResource(this.database, conversation.projectId, object(run.command).resourceSnapshot as ResourceSnapshot);
+      const nodes = await this.database.workflowNode.findMany({ where: { projectId: conversation.projectId, payload: { path: ["canvasCreationRunId"], equals: run.id } }, select: { id: true } });
+      const snapshot = object(object(run.command).resourceSnapshot);
+      return [run.id, { task: Array.isArray(snapshot.taskIds) && snapshot.taskIds.length > 0, status: resource.status, resultNodeIds: nodes.map((node) => node.id), updatedAt: resource.updatedAt ?? run.updatedAt.toISOString() }] as const;
+    })));
     return { items: page.reverse().map(row => {
       const result = row.executionId ? observation.results.get(row.executionId) : undefined;
       const progress = row.executionId ? observation.progress.get(row.executionId) : undefined;
       const view = messageView(result && row.origin === "execution_result" ? { ...row, context: { ...object(row.context), executionResult: result } } : row);
-      const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { ...view.context, ...(progress && row.origin !== "execution_result" ? { executionProgress: progress } : {}) };
+      const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { ...view.context, ...(progress ? { executionProgress: progress } : {}), ...(result ? { executionResult: result } : {}) };
+      const activity = creationActivitySchema.safeParse(context.creationActivity);
+      const domain = activity.success && activity.data.runId ? domainViews.get(activity.data.runId) : null;
+      if (activity.success && domain) context.creationActivity = { ...activity.data, ...domain };
+      else if (activity.success && progress) context.creationActivity = { ...activity.data, status: progress.status === "processing" ? "running" : progress.status === "moderation_failed" ? "failed" : progress.status, updatedAt: progress.updatedAt };
+      else if (activity.success && activityRuns.some(run => run.id === activity.data.runId && run.error)) context.creationActivity = { ...activity.data, status: "unconfirmed" };
       return { ...view, context, ...(view.proposal && row.proposal ? { proposal: { ...view.proposal, execution: observation.proposalExecutions.get(row.proposal.id) } } : {}) };
     }), nextCursor: rows.length > input.limit ? page[0]?.id ?? null : null };
   }
@@ -186,6 +208,18 @@ export class WorkflowAssistantService {
   }
 
   async authorizeStream(userId: string, conversationId: string) { return this.conversation(userId, conversationId, true); }
+  async claimCanvasAction(userId: string, conversationId: string, messageId: string, clientId: string) {
+    if (!this.canvasActions) throw new BadRequestException("画布操作服务未连接");
+    return messageView(await this.canvasActions.claim(userId, conversationId, messageId, clientId));
+  }
+  async applyCanvasAction(userId: string, conversationId: string, messageId: string, clientId: string) {
+    if (!this.canvasActions) throw new BadRequestException("画布操作服务未连接");
+    return this.canvasActions.applyServer(userId, conversationId, messageId, clientId);
+  }
+  async finishCanvasAction(userId: string, conversationId: string, messageId: string, clientId: string, status: "succeeded" | "failed", proof: AssistantCanvasProof, error?: string) {
+    if (!this.canvasActions) throw new BadRequestException("画布操作服务未连接");
+    return messageView(await this.canvasActions.finish(userId, conversationId, messageId, clientId, status, proof, error));
+  }
 
   async send(userId: string, conversationId: string, raw: MessageInput, observer?: AssistantStreamObserver) {
     const input = workflowMessageSchema.parse(raw);
@@ -221,7 +255,7 @@ export class WorkflowAssistantService {
       const versions = await ensureWorkflowNodeVersions(tx, conversation.projectId, graph.revision);
       const referenceSnapshots = input.referencedNodeIds.map((id) => ({ nodeId: id, nodeVersionId: versions.get(id)?.id ?? null, assetId: object(versions.get(id)?.payload).assetId ?? null }));
       const userMessage = previous ?? await tx.agentMessage.create({ data: { conversationId, role: "USER", content: input.content,
-        turnId: record.id, clientRequestId: input.clientRequestId, context: json({ requestFingerprint: fingerprint, referenceSnapshots, referencedNodeIds: input.referencedNodeIds, focusNodeIds: input.focusNodeIds ?? null, respondingToProposalId: input.respondingToProposalId ?? null, fileAssetIds: [], shapeIds: [] }) } });
+        turnId: record.id, clientRequestId: input.clientRequestId, context: json({ requestFingerprint: fingerprint, ...(input.canvasObservation ? { canvasObservation: input.canvasObservation } : {}), referenceSnapshots, referencedNodeIds: input.referencedNodeIds, focusNodeIds: input.focusNodeIds ?? null, focusCreationId: input.focusCreationId ?? null, focusCreationRevision: input.focusCreationRevision ?? null, respondingToProposalId: input.respondingToProposalId ?? null, fileAssetIds: [], shapeIds: [] }) } });
       const assistantMessage = previous?.reply
         ? await tx.agentMessage.update({ where: { id: previous.reply.id }, data: { turnId: record.id, status: "PENDING", content: "正在理解画布与设计过程…", errorCode: null, errorMessage: null, kind: null, proposalId: null } })
         : await tx.agentMessage.create({ data: { conversationId, turnId: record.id, role: "ASSISTANT", status: "PENDING", content: "正在理解画布与设计过程…", replyToId: userMessage.id } });
@@ -275,6 +309,10 @@ export class WorkflowAssistantService {
     if (!conversation) return "completed";
     try { await this.access.require(execution.userId, execution.projectId, "edit"); } catch (error) { if (error instanceof ForbiddenException || error instanceof NotFoundException) return "superseded"; throw error; }
     const result = (await buildWorkflowExecutionResults(this.database, execution.projectId, [execution])).get(execution.id);
+    const creationRun = await this.database.canvasCreationRun.findFirst({ where: { projectId: execution.projectId, toolNodeId: execution.toolNodeId }, include: { creation: true } });
+    const creationDraft = creationRun ? canvasCreationDraftSchema.parse(creationRun.draftSnapshot) : null;
+    const outputNodes = creationRun ? await this.database.workflowNode.findMany({ where: { projectId: execution.projectId, kind: "asset", payload: { path: ["executionId"], equals: execution.id } }, select: { id: true } }) : [];
+    const activity = creationRun && creationDraft ? { creationId: creationRun.creationId, runId: creationRun.id, event: "completed", task: true, status: execution.status === "moderation_failed" ? "failed" : execution.status, title: creationRun.creation.title, prompt: creationDraft.prompt, inputNodeIds: creationDraft.inputs.flatMap((binding) => binding.nodeId ? [binding.nodeId] : []), resultNodeId: null, resultNodeIds: outputNodes.map(node => node.id) } : null;
     const lease = randomUUID();
     const reserved = await this.database.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM agent_conversations WHERE id = ${conversationId} FOR UPDATE`;
@@ -283,7 +321,9 @@ export class WorkflowAssistantService {
       const factKey = "execution-receipt:" + execution.id;
       await tx.agentMessage.upsert({ where: { conversationId_clientRequestId: { conversationId, clientRequestId: factKey } }, update: {}, create: { conversationId, role: "ASSISTANT", kind: "reply", origin: "execution_result", sourceEventId: eventId, executionId: execution.id,
         clientRequestId: factKey, content: workflowExecutionResultText(execution.status, result?.images.length ?? 0),
-        context: json({ executionId: execution.id, fileAssetIds: [], shapeIds: [], sourceEventId: eventId, ...(result ? { executionResult: result } : {}) }) } });
+        context: json({ executionId: execution.id, fileAssetIds: [], shapeIds: [], sourceEventId: eventId, ...(activity ? { creationActivity: activity } : {}), ...(result ? { executionResult: result } : {}) }) } });
+      // Creative records are factual receipts. They never start another model turn.
+      if (creationRun) return null;
       if (existing && ["completed", "superseded"].includes(existing.status)) return null;
       if (execution.intentEpoch !== null && execution.intentEpoch !== live.intentEpoch) {
         await tx.agentTurn.upsert({ where: { sourceEventId: eventId }, create: { projectId: execution.projectId, conversationId, userId: execution.userId,
@@ -330,6 +370,9 @@ export class WorkflowAssistantService {
     const initialBudget = { modelCalls: typeof storedBudget.modelCalls === "number" ? storedBudget.modelCalls : 0,
       readRounds: typeof storedBudget.readRounds === "number" ? storedBudget.readRounds : 0, repairUsed: storedBudget.repairUsed === true };
     const result = await this.coordinatorService().run({ userId, projectId, conversationId, request: input.content, referencedNodeIds: input.referencedNodeIds,
+      ...(input.focusCreationId ? { focusCreationId: input.focusCreationId } : {}),
+      ...(input.focusCreationRevision !== undefined ? { focusCreationRevision: input.focusCreationRevision } : {}),
+      ...(input.canvasObservation ? { canvasObservation: input.canvasObservation } : {}),
       ...(observer ? { stream: observer, ...(observer.signal ? { signal: observer.signal } : {}) } : {}),
       deadlineAt: turnRecord.leaseExpiresAt?.getTime() ?? Date.now() + TURN_TIMEOUT_MS,
       trigger: observation ? "observation" : "user", previousPlan: previousPlan?.plan, initialBudget,
@@ -343,8 +386,14 @@ export class WorkflowAssistantService {
         });
       } });
     const { decision, built, visual } = result;
+    const selectedCanvasAction = decision.canvasAction;
+    const canvasAction = selectedCanvasAction ? await (async () => {
+      if (!this.canvasActions || !turn.assistantMessage?.id) throw new BadRequestException("画布操作服务尚未连接。");
+      return this.canvasActions.prepare(userId, projectId, conversationId, turn.assistantMessage.id, turn.lease, turn.epoch, selectedCanvasAction, input.canvasObservation);
+    })() : null;
     const canvasMode = (await this.database.project.findUnique({ where: { id: projectId }, select: { canvasInteractionMode: true } }))?.canvasInteractionMode === "canvas";
-    const direct = !observation && canvasMode && Boolean(this.canvasCommands) && allowsDirectExecution(input.content, decision);
+    const preparation = !observation && canvasMode && Boolean(this.canvasCreations) && allowsCanvasPreparation(input.content, decision);
+    const direct = preparation || !observation && canvasMode && Boolean(this.canvasCommands) && allowsDirectExecution(input.content, decision);
     if (decision.kind === "read") throw new Error("补读尚未形成最终回复");
     const memoryOperations: PatchProjectDesignContextInput["operations"] = [];
     if (!observation && decision.objectiveUpdate) memoryOperations.push({ type: "set_objective", ...decision.objectiveUpdate, origin: "explicit" });
@@ -379,7 +428,7 @@ export class WorkflowAssistantService {
       if (!observation && decision.understanding.changesTask && decision.understanding.currentStepGoal)
         await tx.agentContextSummary.update({ where: { conversationId }, data: { currentTask: decision.understanding.currentStepGoal } });
       if (!observation) await tx.agentConversation.updateMany({ where: { id: conversationId, title: "新的设计对话" }, data: { title: input.content.slice(0, 24) } });
-      const proposal = decision.action && (!canvasMode || direct) ? await this.runtime.prepareAction(userId, projectId, {
+      const proposal = decision.action && !preparation && (!canvasMode || direct) ? await this.runtime.prepareAction(userId, projectId, {
         content: input.content, referencedNodeIds: [...new Set([...input.referencedNodeIds, ...built.context.focusNodeIds])],
         mutationId: turn.lease, conversationId, graphRevision: built.graph.revision, contextRevision,
         ...(planRevision === undefined ? {} : { planRevision }), action: decision.action,
@@ -392,11 +441,12 @@ export class WorkflowAssistantService {
         }
       }
       const inputVersions = Object.fromEntries((decision.action?.inputs ?? []).flatMap((binding) => { const version = result.eligibility[binding.nodeId]; return version ? [[binding.nodeId, version.nodeVersionId]] : []; }));
-      const data = { status: direct ? "PENDING" as const : "COMPLETED" as const, role: "ASSISTANT" as const, kind: direct ? "executing" : canvasMode && decision.kind === "propose" ? "reply" : decision.kind, content: decision.message,
+      const data = { status: direct ? "PENDING" as const : "COMPLETED" as const, role: "ASSISTANT" as const, kind: direct ? "executing" : canvasMode && decision.kind === "propose" ? "reply" : decision.kind, content: canvasAction ? "正在应用画布操作，完成后会核对保存结果。" : decision.message,
         turnId: turn.turnId, origin: observation ? "background_analysis" : "user", sourceEventId: observation?.eventId ?? null,
         executionId: observation?.executionId ?? null, proposalId: proposal?.id ?? null,
         context: json({ version: "workflow-message-context/2", graphRevision: built.graph.revision, contextRevision, planRevision,
-          ...(direct ? { directExecution: { decision, proposalId: proposal?.id, intentEpoch: turn.epoch, inputVersions, lease: turn.lease } } : {}),
+          ...(canvasAction ? { canvasAction: canvasAction.envelope, canvasActionData: canvasAction.data } : {}),
+          ...(direct ? { directExecution: { decision, proposalId: proposal?.id, intentEpoch: turn.epoch, inputVersions, lease: turn.lease, creationProtocol: this.canvasCreations ? 1 : null, prepareOnly: preparation } } : {}),
           referencedNodeIds: input.referencedNodeIds, focusNodeIds: built.context.focusNodeIds, coverage: result.coverage,
           referenceSummary: buildWorkflowReferenceSummary(built.graph.nodes, input.referencedNodeIds, built.context.focusNodeIds, visual.coverage.providedNodeIds ?? visual.coverage.attachedNodeIds),
           visualCoverage: visual.coverage, imageBindings: visual.imageBindings, understanding: decision.understanding, fileAssetIds: [], shapeIds: [] }) };
@@ -440,28 +490,28 @@ export class WorkflowAssistantService {
       if (!claimed) return this.database.agentMessage.findUniqueOrThrow({ where: { id: messageId }, include: { proposal: true } });
       const turn = message.turnId ? await this.database.agentTurn.findUnique({ where: { id: message.turnId } }) : null;
       if (turn?.status !== "dispatching" || message.conversation.intentEpoch !== epoch) throw new ConflictException("本次筹备已被更新的设计意图替代，请重新确认");
-      if (!message.proposal) throw new ConflictException("执行步骤缺失，请重新发送请求");
       const decision = plannerDecisionSchema.parse(execution.decision);
+      if (execution.prepareOnly === true && this.canvasCreations) {
+        const creation = await this.canvasCreations.prepareAssistant(userId, projectId, message.id, decision);
+        return this.finishDirectMessage(message.id, conversationId, message.turnId, String(execution.lease), {
+          content: `已准备「${creation.title}」，尚未生成。`, kind: "reply",
+          context: json({ ...stored, executionReceipt: { status: "prepared", nodeId: null, creationId: creation.id }, directExecution: { ...execution, status: "prepared" } }),
+        });
+      }
+      if (!message.proposal) throw new ConflictException("执行步骤缺失，请重新发送请求");
       const commandId = directMutationId(`direct:${message.id}`);
+      if (execution.creationProtocol === 1 && this.canvasCreations) {
+        const creation = await this.canvasCreations.executeAssistant(userId, projectId, conversationId, message.id, decision, guard);
+        const run = creation.runs[0];
+        await this.database.workflowProposal.updateMany({ where: { id: message.proposal.id, status: "pending" }, data: { status: "accepted" } });
+        return this.finishDirectMessage(message.id, conversationId, message.turnId, String(execution.lease), {
+          content: `已提交「${creation.title}」，可在画布查看进度与结果。`, kind: "reply", executionId: run?.executionId ?? null,
+          context: json({ ...stored, executionReceipt: { status: "submitted", nodeId: run?.toolNodeId, creationId: creation.id }, directExecution: { ...execution, status: "submitted" } }),
+        });
+      }
       await this.runtime.accept(userId, projectId, message.proposal.id, { mutationId: commandId, baseRevision: message.proposal.baseRevision });
       executionNodeId = String(object(message.proposal.evidence).toolNodeId ?? "");
-      let result = await this.canvasCommands.execute(userId, projectId, { type: "execute_tool", nodeId: executionNodeId, mutationId: commandId, conversationId }, guard);
-      if (decision.action?.toolKey === "analyze_brief" && decision.execution.operation === "generate_design") {
-        const source = result.graph.nodes.find((node) => node.id === executionNodeId);
-        if (source?.status === "running") {
-          await this.database.agentMessage.updateMany({ where: { id: messageId, status: "PENDING" }, data: { context: json({ ...stored, directExecution: { ...execution, dispatchStartedAt: 0 } }) } });
-          return message;
-        }
-        if (source?.status !== "completed") throw new BadRequestException("需求分析未完成，请查看任务记录并重新确认需求");
-        const outputIds = result.graph.edges.filter((edge) => edge.sourceNodeId === executionNodeId).map((edge) => edge.targetNodeId);
-        const constraints = result.graph.nodes.filter((node) => outputIds.includes(node.id) && node.type === "constraint" && node.status === "completed");
-        const constraint = constraints[0];
-        if (constraints.length !== 1 || !constraint) throw new BadRequestException("需求分析没有形成唯一约束，暂未开始生成");
-        // One fixed continuation is authorized by the original message; no autonomous loop.
-        result = await this.canvasCommands.execute(userId, projectId, { type: "run_tool", mutationId: directMutationId(`direct:${message.id}:generate`), toolKey: "generate_design", title: "生成设计方案", parameters: decision.execution.parameters,
-          inputs: [{ nodeId: constraint.id, port: "constraint" }, ...decision.action.inputs.filter((binding) => binding.port === "reference")], conversationId }, guard);
-        executionNodeId = result.nodeId;
-      }
+      await this.canvasCommands.execute(userId, projectId, { type: "execute_tool", nodeId: executionNodeId, mutationId: commandId, conversationId }, guard);
       const attempts = await this.database.workflowAttempt.findMany({ where: { projectId, toolNodeId: executionNodeId }, orderBy: { ordinal: "desc" }, select: { id: true, executionId: true, generationTaskId: true, status: true } });
       return await this.finishDirectMessage(message.id, conversationId, message.turnId, String(execution.lease), {
         content: "本次操作已提交，可在白板和任务中心查看进度与结果。", kind: "reply", executionId: attempts[0]?.executionId ?? null,
@@ -518,9 +568,14 @@ type MessageRow = {
 };
 function messageView(row: MessageRow) {
   const raw = object(row.context);
-  const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { fileAssetIds: [], shapeIds: [], ...Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]])) };
+  const context: Record<string, unknown> & { fileAssetIds: string[]; shapeIds: string[] } = { fileAssetIds: [], shapeIds: [], ...Object.fromEntries(["version", "graphRevision", "contextRevision", "planRevision", "understanding", "referencedNodeIds", "focusNodeIds", "focusCreationId", "focusCreationRevision", "respondingToProposalId", "coverage", "visualCoverage", "imageBindings", "fileAssetIds", "shapeIds"].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]])) };
   const summary = workflowReferenceSummarySchema.safeParse(raw.referenceSummary);
+  const activity = creationActivitySchema.safeParse(raw.creationActivity);
+  if (activity.success) context.creationActivity = activity.data;
   if (raw.executionReceipt) context.executionReceipt = raw.executionReceipt;
+  if (raw.canvasAction) context.canvasAction = raw.canvasAction;
+  const canvasResult = assistantCanvasResultSchema.safeParse(raw.canvasActionResult);
+  if (canvasResult.success) context.canvasActionResult = canvasResult.data;
   const result = workflowExecutionResultSchema.safeParse(raw.executionResult);
   if (row.origin === "execution_result" && result.success && result.data.executionId === row.executionId) context.executionResult = result.data;
   if (raw.referenceSnapshots) context.referenceSnapshots = raw.referenceSnapshots;

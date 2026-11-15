@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import styles from "./canvas-welcome.module.css";
+import { CanvasAction } from "./CanvasAction";
 
 export function CanvasWelcome({
   canEdit,
@@ -69,8 +70,9 @@ export function CanvasWelcome({
         </p>
         {canEdit ? (
           <>
+            <div className={styles.actions}>
             {!assistantOpen && onStart ? (
-              <button
+              <CanvasAction label="描述设计想法" icon="comment"
                 className={styles.primary}
                 type="button"
                 onPointerDown={(event) => {
@@ -79,17 +81,10 @@ export function CanvasWelcome({
                 onClick={(event) =>
                   onStart(event.detail === 0 || pointer.current !== "touch")
                 }
-              >
-                描述设计想法 <span aria-hidden="true">↗</span>
-              </button>
+              />
             ) : null}
-            <div className={styles.actions}>
-              <button type="button" onClick={onUpload}>
-                上传参考图
-              </button>
-              <button type="button" onClick={onSketch}>
-                绘制草图
-              </button>
+              <CanvasAction label="上传参考图" icon="image" onClick={onUpload} />
+              <CanvasAction label="绘制草图" icon="annotate" onClick={onSketch} />
             </div>
             <small>图片可直接拖入，也可以复制后粘贴。</small>
           </>

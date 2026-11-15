@@ -696,9 +696,13 @@ export function TabPanel<T extends string>({
 export function Tooltip({
   children,
   content,
+  className = "",
+  closeOnClick = false,
 }: {
   readonly children: ReactElement<{ "aria-describedby"?: string }>;
-  readonly content: string;
+  readonly content: ReactNode;
+  readonly className?: string | undefined;
+  readonly closeOnClick?: boolean;
 }) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
@@ -746,7 +750,7 @@ export function Tooltip({
     if (!open) return;
     const place = () => {
       if (!anchor || !tip.current) return;
-      const trigger = anchor.getBoundingClientRect();
+      const trigger = (anchor.firstElementChild ?? anchor).getBoundingClientRect();
       const box = tip.current.getBoundingClientRect();
       const gap =
         parseFloat(
@@ -758,10 +762,13 @@ export function Tooltip({
     };
     place();
     const stopSurface = afterSurfaceMotion(tip.current, place);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    if (tip.current) observer?.observe(tip.current);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
       stopSurface();
+      observer?.disconnect();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
@@ -770,6 +777,7 @@ export function Tooltip({
     <span
       className={styles.tooltipAnchor}
       ref={setAnchor}
+      onClick={() => { if (closeOnClick) { dismissed.current = true; close(); } }}
       onPointerDown={(event) => {
         touchFocus.current = event.pointerType === "touch";
         if (touchFocus.current) close();
@@ -811,7 +819,7 @@ export function Tooltip({
       {anchor
         ? createPortal(
             <span
-              className={styles.tooltip}
+              className={`${styles.tooltip} ${className}`}
               hidden={!presence.present}
               aria-hidden={!open || undefined}
               id={id}

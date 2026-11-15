@@ -4,21 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { WorkflowExecutionProgress } from "@fashion/shared";
 import { TaskFeedback } from "../../../components/TaskFeedback";
+import { StatusMark } from "../../../components/StatusMark";
 import { useAuth } from "../../auth/AuthProvider";
 import { privateFetch } from "../../auth/private-fetch";
 import { requestProjectTaskCenter } from "../../tasks/project-task-navigation";
 import styles from "./assistant-execution-status.module.css";
+import redesign from "./assistant-redesign.module.css";
 
 export function AssistantExecutionStatus({
   progress,
   projectId,
   onRefresh,
   disabled = false,
+  compact = false,
 }: {
   progress: WorkflowExecutionProgress;
   projectId: string;
   onRefresh: () => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const { session } = useAuth(),
     cache = useQueryClient();
@@ -91,12 +95,24 @@ export function AssistantExecutionStatus({
     "running",
     "processing",
   ].includes(progress.status);
+  if (compact) return <section className={styles.root} data-compact aria-label="本次执行进度" data-execution-progress={progress.executionId}>
+    <div className={styles.statusLine} role="status"><StatusMark status={progress.status === "queued" || progress.status === "preparing" ? "pending" : "running"} decorative />
+      <span>{progress.status === "queued" ? "生成任务排队中…" : progress.status === "preparing" ? "正在准备生成…" : progress.status === "processing" ? "正在整理生成结果…" : progress.operation === "image" ? "正在生成图片…" : "正在处理…"}{progress.counts.total > 1 ? `（已完成 ${progress.counts.completed} / ${progress.counts.total}）` : ""}</span>
+    </div>
+    {currentNotice ? <p role={currentNotice.failed ? "alert" : "status"}>{currentNotice.message}</p> : null}
+    {progress.cancelTaskIds.length ? <div className={styles.actions}><button type="button" disabled={busy || disabled} onClick={() => void stop()}>{busy ? "正在请求停止…" : `停止 ${progress.cancelTaskIds.length} 项图片任务`}</button>{currentNotice?.failed ? <button type="button" onClick={onRefresh}>重新读取状态</button> : null}</div> : null}
+  </section>;
   return (
     <section
       className={styles.root}
       aria-label="本次执行进度"
       data-execution-progress={progress.executionId}
     >
+      <details>
+        <summary className={redesign.progressSummary}>
+          <span>{({ preparing: "准备中", queued: "排队中", running: "处理中", processing: "正在核对结果", completed: "已完成", partial_failed: "部分完成", failed: "未完成", canceled: "已取消" } as Record<string, string>)[progress.status] ?? progress.title}，已完成 {progress.counts.completed} / {progress.counts.total} 项</span>
+        </summary>
+        <div className={redesign.progressDetails}>
       <TaskFeedback
         taskId={progress.executionId}
         status={state}
@@ -129,6 +145,9 @@ export function AssistantExecutionStatus({
         ) : null}
       </div>
       {progress.status === "processing" ? <p>正在核对任务结果。</p> : null}
+        <button type="button" onClick={() => requestProjectTaskCenter(projectId)}>查看任务详情</button>
+        </div>
+      </details>
       {progress.status === "partial_failed" ? (
         <p>部分操作未完成，已完成的结果会保留。</p>
       ) : null}
@@ -154,12 +173,6 @@ export function AssistantExecutionStatus({
             重新读取状态
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => requestProjectTaskCenter(projectId)}
-        >
-          查看任务详情
-        </button>
       </div>
     </section>
   );

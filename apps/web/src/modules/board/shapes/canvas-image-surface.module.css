@@ -1,0 +1,17 @@
+.surface { position: absolute; overflow: visible; color: var(--color-ink); font-family: var(--font-sans); background: transparent; box-shadow: none; }
+.caption { position: absolute; left: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 20px; transform-origin: bottom left; pointer-events: none; user-select: none; color: var(--color-ink-secondary); font-size: 13px; line-height: 20px; font-weight: 400; white-space: nowrap; }
+.name { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.name svg { flex: none; }
+.dimensions { flex: none; font-size: 12px; font-variant-numeric: tabular-nums; }
+.picture { position: relative; width: 100%; height: 100%; overflow: hidden; padding: 0; background: transparent; box-shadow: none; }
+.picture::after { content: ""; position: absolute; inset: 0; z-index: 4; border: var(--image-outline-width, 1px) solid transparent; border-radius: inherit; pointer-events: none; }
+.picture[data-hovered="true"]::after { border-color: color-mix(in srgb, var(--color-action) 45%, transparent); }
+.picture[data-selected="true"]::after { border-color: var(--color-action); }
+.picture img { position: absolute; display: block; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: none; }
+.picture img[hidden] { display: none; }
+.placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; background: var(--surface-1); color: var(--color-ink-secondary); text-align: center; font-size: 14px; }
+.placeholder strong { font-size: 16px; font-weight: 500; color: var(--color-ink); }
+.placeholder p { margin: 0; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 80%; overflow: auto; }
+.placeholder button { min-height: 36px; padding: 6px 12px; border: .5px solid var(--color-border); border-radius: 6px; background: var(--color-paper); color: var(--color-action); font: inherit; cursor: pointer; pointer-events: auto; }
+.status { position: absolute; bottom: 10px; left: 10px; padding: 5px 8px; border-radius: 5px; background: var(--color-paper); color: var(--color-ink-secondary); font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .surface, .picture { transition: none; animation: none; } }

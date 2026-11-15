@@ -9,10 +9,9 @@ import {
   useValue,
 } from "tldraw";
 
-import { RoleBadge } from "./RoleBadge";
-import { NOTE_SHAPE_TYPE, type NoteShape, normalizeBoardRole } from "./shape-types";
+import { NOTE_SHAPE_TYPE, type NoteShape } from "./shape-types";
 import { MaterialShell } from "./MaterialShell";
-import { generateMaterialAppearance, resolveMaterialAppearance } from "./material-appearance";
+import { generateMaterialAppearance } from "./material-appearance";
 import styles from "./shapes.module.css";
 
 const NOTE_REFERENCE_WIDTH = 260;
@@ -33,7 +32,7 @@ export class NoteShapeUtil extends BaseBoxShapeUtil<NoteShape> {
   override getDefaultProps(): NoteShape["props"] {
     return {
       h: NOTE_REFERENCE_HEIGHT,
-      role: "note",
+      role: "reference",
       text: "记录轮廓、材质或需要继续探索的方向。",
       tone: "#f2d978",
       w: NOTE_REFERENCE_WIDTH,
@@ -80,10 +79,9 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
   const editor = useEditor();
   const exporting = Boolean(useSvgExportContext());
   const readOnly = useValue("note-readonly", () => editor.getInstanceState().isReadonly, [editor]);
-  const role = normalizeBoardRole(shape.props.role);
   const seed = parseInt(shape.id.replace(/\D/g, "").slice(0, 8)) || 12345;
   const appearance = shape.props.appearance ?? generateMaterialAppearance(
-    resolveMaterialAppearance(role),
+    "archive-note",
     seed,
   );
 
@@ -173,7 +171,6 @@ function NoteShapeContent({ shape }: { readonly shape: NoteShape }) {
 
   return (
     <MaterialShell
-      annotation={<RoleBadge role={shape.props.role} shapeId={shape.id} />}
       annotationScale={noteScale}
       appearance={appearance}
       width={shape.props.w}

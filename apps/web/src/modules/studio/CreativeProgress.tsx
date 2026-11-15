@@ -19,7 +19,7 @@ export function CreativeProgress({
       <summary>
         创作进展{" "}
         <span>
-          {progress.styles} 款档案 {progress.assets} 张候选
+          {progress.styles} 款档案 {progress.assets} 张图片
         </span>
       </summary>
       <section className={styles.progress} aria-label="创作进展">
@@ -31,11 +31,11 @@ export function CreativeProgress({
               {progress.next.action} <span aria-hidden="true">↗</span>
             </button>
             <button type="button" onClick={() => onNavigate("planning")}>
-              查看系列规划
+              查看系列工作台
             </button>
           </div>
           <p>
-            {progress.styles} 款档案 {progress.assets} 张候选 {" "}
+            {progress.styles} 款档案 {progress.assets} 张图片 {" "}
             {progress.packs} 份技术包
           </p>
         </div>

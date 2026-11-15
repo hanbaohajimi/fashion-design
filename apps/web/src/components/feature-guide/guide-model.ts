@@ -1,4 +1,5 @@
-export const GUIDE_SURFACES = ["projects", "workspace", "studio", "fabrics", "trends"] as const;
+import { workspaceRoute } from "../../modules/workspace-route";
+export const GUIDE_SURFACES = ["home", "assets", "projects", "workspace", "studio", "fabrics", "trends"] as const;
 export type GuideSurface = typeof GUIDE_SURFACES[number];
 export type GuideStatus = "viewed" | "skipped" | "completed";
 
@@ -19,6 +20,21 @@ export interface ResolvedGuideStep extends GuideStep {
 }
 
 export const GUIDE_DEFINITIONS: Record<GuideSurface, GuideDefinition> = {
+  home: {
+    surface: "home",
+    steps: [
+      { id: "create", anchors: ["home-create"], title: "从空白画布开始", description: "点击后创建一个未命名项目，直接进入独立画布。可以在画布底部的“全部功能”中修改项目名称。" },
+      { id: "shortcuts", anchors: ["home-shortcuts"], title: "用一个功能开始新项目", description: "点击色料实验、印花、展示或试穿等入口，会直接创建新项目，进入画布并展开对应功能。关闭后可以继续这张画布。已有项目从下方项目卡片打开。" },
+      { id: "recent", anchors: ["home-recent"], title: "继续最近的设计", description: "这里显示最近更新的项目。点击进入画布，查看全部可管理、搜索和归档项目。" },
+    ],
+  },
+  assets: {
+    surface: "assets",
+    steps: [
+      { id: "filters", anchors: ["assets-filters"], title: "跨项目查找创作文件", description: "按图片、视频、音频和文档浏览，也可以搜索名称或筛选生成、上传与交付文件。" },
+      { id: "rating", anchors: ["assets-rating"], title: "用星级整理自己的资产", description: "在卡片或预览中设置个人评级，再按评级筛选或排序。你的评级不会改变其他成员的选择。" },
+    ],
+  },
   projects: {
     surface: "projects",
     steps: [
@@ -31,17 +47,18 @@ export const GUIDE_DEFINITIONS: Record<GuideSurface, GuideDefinition> = {
   workspace: {
     surface: "workspace",
     steps: [
-      { id: "views", anchors: ["workspace-views"], title: "作品与流程，两种查看方式", description: "设计工作台集中展示作品；流程画布可以查看工具、连接和参数。切换视图会保留当前项目。" },
+      { id: "connections", anchors: ["workspace-connections"], title: "在同一画布连接创作", description: "连接素材与创作目标，准备本次输入。这个开关只隐藏连线和端口，素材位置、草稿和输入都会保留；点击生成才会执行。" },
+      { id: "functions", anchors: ["workspace-functions"], title: "从全部功能开始", description: "创作工具、衣橱、交付评审与项目资料集中在这里，也可以查看项目任务、生成文件或导出画布。有选中的图片时，图片工具使用该图片作为输入。" },
+      { id: "creation", anchors: ["workspace-creation"], title: "选择参考，写下要求", description: "单击图片即可打开创作框。上传或引用素材，输入本次要求，再点击生成或按 Ctrl+Enter。系统不自动添加用途权重或额外提示词。" },
       { id: "materials", anchors: ["workspace-materials"], title: "把创作参考放在这里", description: "从这里添加图片、面料等参考资料。素材保留在项目中，可以用于后续讨论和设计。" },
-      { id: "assistant", anchors: ["workspace-assistant"], title: "和设计助手讨论想法", description: "在这里描述设计想法。助手会先整理需求，生成前再请你确认。" },
-      { id: "reference", anchors: ["workspace-reference"], title: "明确告诉助手参考什么", description: "添加本次讨论要引用的作品或资料。选中作品与引用给助手是两个独立动作。" },
-      { id: "tasks", anchors: ["project-tasks"], title: "在这里查看项目任务", description: "生成、导出等任务的进展集中在这里。可以查看真实状态、失败原因和当前可用的处理操作。" },
+      { id: "assistant", anchors: ["workspace-assistant"], title: "和设计助手一起创作", description: "描述想法，或点击麦克风说出需求，再次点击结束，核对草稿后发送。浮窗与右侧停靠切换时保留草稿和引用。" },
+      { id: "reference", anchors: ["workspace-reference"], title: "添加本次创作的参考", description: "点击加号或输入 @ 添加素材。悬停缩略图查看大图，双击定位，点击角上的 @ 插入图号；手机点击查看。普通选择不会自动加入引用。" },
     ],
   },
   studio: {
     surface: "studio",
     steps: [
-      { id: "navigation", anchors: ["studio-navigation"], title: "按需要切换功能", description: "款式、色料实验、技术包和展示等功能都在这个目录中。按当前工作需要选择，不必依次完成。" },
+      { id: "navigation", anchors: ["studio-navigation"], title: "返回项目画布", description: "返回画布继续创作，也可以从底部“全部功能”打开项目的其他工具与资料。离开前会检查未保存的修改。" },
       { id: "object", anchors: ["studio-object"], title: "确认正在查看的资料", description: "这里显示当前功能或资料的名称与说明，先确认当前内容，再继续操作。" },
       { id: "actions", anchors: ["studio-actions"], title: "留意保存与提交状态", description: "当前页面的保存或提交操作在这里。修改后查看状态提示，本机暂存与正式保存是不同的状态。" },
     ],
@@ -50,7 +67,7 @@ export const GUIDE_DEFINITIONS: Record<GuideSurface, GuideDefinition> = {
     surface: "fabrics",
     steps: [
       { id: "filters", anchors: ["fabrics-filters"], title: "找到合适的面料参考", description: "展开规格筛选，可按分类、成分、供应商和克重缩小范围。搜索框还可查名称、标签或编号。" },
-      { id: "preview", anchors: ["fabrics-preview"], title: "先看面料，再看资料", description: "从这里查看面料图片和档案。图片与 AI 描述用于设计参考，实际物性和色准仍需核对实物。" },
+      { id: "preview", anchors: ["fabrics-preview"], title: "点击翻面，查看面料规格", description: "点击面料图片翻到背面，查看核心规格；再次点击卡片可返回图片，完整资料在背面的“完整档案”中查看。图片与 AI 描述用于设计参考，实际物性和色准仍需核对实物。" },
       { id: "add", anchors: ["fabrics-add"], title: "把面料加入当前项目", description: "通过这个入口把面料作为项目参考。加入后可回到工作台，在讨论设计时引用。" },
     ],
   },
@@ -75,9 +92,7 @@ export function guideStepCopy(
   },
 ): Pick<GuideStep, "title" | "description"> {
   if (step.id === "navigation" && metadata.variant === "collapsed") {
-    return { title: step.title, description: surface === "studio"
-      ? "点击这里展开目录，可切换款式、色料实验、技术包和展示等功能。收起目录后，可以专心处理当前资料。"
-      : "点击这里展开工作区目录，访问项目库、面料库和趋势档案。进入项目后，也能找到设计工作台与款式资料。" };
+    return { title: step.title, description: "点击这里展开目录，访问项目、资产库、衣橱、面料库和发现。项目工具集中在画布底部的“全部功能”中。" };
   }
   if (surface === "workspace" && step.id === "assistant") {
     let description = step.description;
@@ -92,7 +107,7 @@ export function guideStepCopy(
         description = "当前为只读历史，可查看已有消息。使用顶部“新建对话”继续设计。";
         break;
       case "paused":
-        description = "本项目设计助手已暂停，当前可查看历史。在顶部“助手设置”中选择“恢复设计助手”后继续讨论。";
+        description = "本项目设计助手已暂停，当前可查看历史。点击输入区的“恢复设计助手”继续讨论。";
         break;
     }
     return { title: step.title, description };
@@ -111,12 +126,15 @@ export function guideStepCopy(
 }
 
 export function guideSurfaceForPath(pathname: string): GuideSurface | null {
-  if (pathname === "/") return "projects";
+  if (pathname === "/") return "home";
+  if (pathname === "/projects") return "projects";
+  if (pathname === "/assets") return "assets";
   if (pathname === "/fabrics") return "fabrics";
   if (pathname === "/trends") return "trends";
   if (/^\/(?:login|auth|share|prototypes)(?:\/|$)/u.test(pathname)) return null;
-  if (/^\/[^/]+\/studio\/?$/u.test(pathname)) return "studio";
-  if (/^\/[^/]+\/?$/u.test(pathname)) return "workspace";
+  const route = workspaceRoute(pathname);
+  if (route.studio) return "studio";
+  if (route.canvas) return "workspace";
   return null;
 }
 

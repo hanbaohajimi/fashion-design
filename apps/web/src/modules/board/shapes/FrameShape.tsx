@@ -9,6 +9,7 @@ import {
 
 import { FRAME_SHAPE_TYPE, type FrameShape } from "./shape-types";
 import styles from "./shapes.module.css";
+import nameStyles from "./canvas-node-name.module.css";
 
 export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
   static override type = FRAME_SHAPE_TYPE;
@@ -22,7 +23,7 @@ export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
   override getDefaultProps(): FrameShape["props"] {
     return {
       h: 520,
-      role: "note",
+      role: "reference",
       title: "系列方向",
       w: 760,
     };
@@ -48,7 +49,7 @@ export class FrameShapeUtil extends BaseBoxShapeUtil<FrameShape> {
     return (
       <HTMLContainer className={styles.frameShape}>
         <div className={styles.frameTitle}>
-          <strong>{shape.props.title}</strong>
+          <strong className={nameStyles.name} title={shape.props.title}>{shape.props.title}</strong>
         </div>
       </HTMLContainer>
     );

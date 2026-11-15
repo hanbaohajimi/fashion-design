@@ -1,7 +1,7 @@
 export const imageToolEntries = [
   { action: "inpaint", label: "局部重绘" },
-  { action: "remove_background", label: "移除背景" },
   { action: "erase", label: "擦除" },
+  { action: "remove_background", label: "移除背景" },
   { action: "crop", label: "裁剪图片" },
   { action: "outpaint", label: "扩展画面" },
   { action: "orient", label: "旋转与翻转" },

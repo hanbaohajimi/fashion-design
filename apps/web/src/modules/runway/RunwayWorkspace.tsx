@@ -38,11 +38,14 @@ export function RunwayWorkspace(
     readonly initialShowId?: string | undefined;
     readonly initialRunId?: string | undefined;
     readonly initialStyleRevisionId?: string | undefined;
+    readonly embedded?: boolean;
+    readonly active?: boolean;
   },
 ) {
   const [capabilities, setCapabilities] = useState<RunwayCapabilities | null>(
     null,
   );
+  const active = props.active ?? true;
   const [shows, setShows] = useState<RunwayShowView[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(
     props.initialShowId ?? null,
@@ -81,7 +84,7 @@ export function RunwayWorkspace(
     Boolean(capabilities?.enabled);
   const updateUrl = useCallback(
     (showId: string | null, runId: string | null) => {
-      if (!mounted.current) return;
+      if (!mounted.current || props.embedded) return;
       const url = new URL(window.location.href);
       url.searchParams.set("tab", "runway");
       if (showId) url.searchParams.set("showId", showId);
@@ -91,7 +94,7 @@ export function RunwayWorkspace(
       url.searchParams.delete("assetId");
       window.history.replaceState(window.history.state, "", url);
     },
-    [],
+    [props.embedded],
   );
   const receiveRun = useCallback(
     (next: RunwayRunView) => {
@@ -223,8 +226,10 @@ export function RunwayWorkspace(
     };
   }, [load]);
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     const timer = setInterval(() => {
+      if (document.hidden) return;
       void fetchRunwayCapabilities(props.projectId, controller.signal).then(
         setCapabilities,
         () => undefined,
@@ -234,7 +239,7 @@ export function RunwayWorkspace(
       clearInterval(timer);
       controller.abort();
     };
-  }, [props.projectId]);
+  }, [props.projectId, active]);
   const refreshRun = useCallback(async () => {
     if (!runId) return;
     if (refreshFlights.current.has(runId)) {
@@ -289,7 +294,7 @@ export function RunwayWorkspace(
   }, [props.projectId, runId]);
   useEffect(() => {
     if (
-      !runId ||
+      !active || !runId ||
       !runStatus ||
       !["QUEUED", "RUNNING", "WAITING_INPUT"].includes(runStatus)
     )
@@ -302,7 +307,7 @@ export function RunwayWorkspace(
       () => void refreshRun(),
     );
     return () => controller.abort();
-  }, [props.projectId, runId, runStatus, refreshRun]);
+  }, [props.projectId, runId, runStatus, refreshRun, active]);
   const selectShow = async (show?: RunwayShowView) => {
     if (!(await props.beforeChange())) return;
     const epoch = ++selectionEpoch.current;

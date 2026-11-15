@@ -24,7 +24,7 @@ const STATUS: Record<RealtimeTryOnStatus, string> = {
 };
 
 export function RealtimeTryOnPanel({
-  projectId, assets, canEdit, initialAssetId, onSaved, onDirty, outfitSnapshot, wardrobeCapabilities, outfitUpdating = false, embedded = false,
+  projectId, assets, canEdit, initialAssetId, onSaved, onDirty, outfitSnapshot, wardrobeCapabilities, outfitUpdating = false, embedded = false, active: panelActive = true, onOpenStyle, onReturnToCanvas,
   controllerFactory = createRealtimeTryOnController,
 }: {
   readonly projectId: string;
@@ -39,6 +39,9 @@ export function RealtimeTryOnPanel({
   /** Keep the current session while a replacement full outfit reference is prepared. */
   readonly outfitUpdating?: boolean;
   readonly embedded?: boolean;
+  readonly active?: boolean;
+  readonly onOpenStyle?: (assetId: string) => void;
+  readonly onReturnToCanvas?: () => void;
   /** Test injection only; no runtime flag or URL can select a simulated adapter. */
   readonly controllerFactory?: () => RealtimeTryOnController;
 }) {
@@ -77,13 +80,21 @@ export function RealtimeTryOnPanel({
   const outfitUnavailable = outfitMode ? outfitTryOnUnavailableReason(outfitSnapshot, wardrobeCapabilities) : null;
   const selectedReferenceId = outfitMode ? outfitSnapshot?.referenceAssetId ?? "" : assetId;
   const outfitReferenceKey = `${outfitSnapshot?.id ?? ""}:${selectedReferenceId}`;
-  const loadingGarment = loadingSingleGarment || (outfitMode && !outfitUnavailable && settledOutfitReference !== outfitReferenceKey);
+  const loadingGarment = panelActive && (loadingSingleGarment || (outfitMode && !outfitUnavailable && settledOutfitReference !== outfitReferenceKey));
   const stopWork = useCallback((reason: string) => {
     operationEpoch.current += 1;
     startFlight.current = false;
     selectionRequest.current?.abort();
     controller.stop(reason);
   }, [controller]);
+
+  useEffect(() => controller.subscribe(() => {
+    if (["idle", "ended", "error"].includes(controller.getSnapshot().status)) setLoadingGarment(false);
+  }), [controller]);
+
+  useEffect(() => {
+    if (!panelActive) stopWork("panel-closed");
+  }, [panelActive, stopWork]);
 
   useEffect(() => {
     mounted.current = true;
@@ -189,7 +200,7 @@ export function RealtimeTryOnPanel({
   };
 
   const start = async () => {
-    if (startFlight.current || outfitUpdating || !consent || !capabilities?.enabled || !capabilities.configured || !canEdit || !selectedReferenceId || outfitUnavailable) return;
+    if (!panelActive || startFlight.current || outfitUpdating || !consent || !capabilities?.enabled || !capabilities.configured || !canEdit || !selectedReferenceId || outfitUnavailable) return;
     startFlight.current = true;
     const epoch = ++operationEpoch.current;
     selectionRequest.current?.abort();
@@ -320,13 +331,13 @@ export function RealtimeTryOnPanel({
         {pending ? <p className={styles.note}>这帧尚未保存，画面保留在本页。重试将沿用同一次保存请求；离开后需要重新截图。</p> : null}
         {saved ? <div className={styles.saved} role="status">
           <p>AI 截图已保存到项目资产。</p>
-          <a href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(saved.assetId)}`}>保存为款式</a>
+          {onOpenStyle ? <Button onClick={() => onOpenStyle(saved.assetId)}>保存为款式</Button> : <a href={`/${encodeURIComponent(projectId)}/studio?tab=styles&assetId=${encodeURIComponent(saved.assetId)}`}>保存为款式</a>}
           <Button disabled={adding || addedToCanvas || !canEdit} loading={adding} onClick={() => {
             if (adding) return;
             setAdding(true);
             void addTryOnCaptureToCanvas(projectId, saved).then(() => { if (mounted.current) setAddedToCanvas(true); }, (cause: unknown) => { if (mounted.current) setError(userFacingError(cause)); }).finally(() => { if (mounted.current) setAdding(false); });
           }}>{addedToCanvas ? "已加入作品区与画布" : "加入作品区与画布"}</Button>
-          {addedToCanvas ? <a href={`/${encodeURIComponent(projectId)}`}>打开设计工作台</a> : null}
+          {addedToCanvas ? onReturnToCanvas ? <Button onClick={onReturnToCanvas}>打开设计工作台</Button> : <a href={`/${encodeURIComponent(projectId)}`}>打开设计工作台</a> : null}
         </div> : null}
         {!canEdit ? <p className={styles.note}>当前项目为只读，无法创建试穿会话或保存结果。</p> : null}
         <details className={styles.instructions}><summary>使用说明</summary><p>{outfitMode ? "完整搭配使用已确认单品和已保存版本。尚未验证的多件或配饰类别会保留选择，并明确暂停实时生成。" : "使用单人、单件、完整且清晰的成衣参考。拼贴图、多人图和草图可能无法稳定还原；不会自动调用其他模型处理图片。"}</p><p>请仅使用有权使用、适合第三方处理的图片和已同意出镜者；敏感未发布设计需先确认数据条款。</p><p>视觉试穿不能证明真实尺码、面料物性或精确版型。停止或隐藏页面后会释放本功能的媒体轨道，重新开启需手动操作。</p></details>

@@ -13,12 +13,13 @@ for (const width of [1440, 320])
     await state.open();
     await input(page).fill("稍后调整袖口");
     const element = await input(page).elementHandle();
-    await expect(status(page)).toContainText("排队 2 项");
+    await page.getByText("查看过程", { exact: true }).click();
+    await expect(page.locator("[data-assistant-task]")).toContainText("排队 2 项");
     state.progress.status = "running";
     state.progress.counts.queued = 1;
     state.progress.counts.running = 1;
     state.update();
-    await expect(status(page)).toContainText("处理中 1 项");
+    await expect(page.locator("[data-assistant-task]")).toContainText("处理中 1 项");
     await expect(input(page)).toHaveValue("稍后调整袖口");
     expect(await element?.evaluate((element) => element.isConnected)).toBe(
       true,
@@ -41,11 +42,11 @@ test("停止先请求核对，终态读取后才显示取消，不提交新的�
     .click();
   await expect(status(page)).toContainText("已请求停止，正在核对");
   expect(state.cancelRequests.sort()).toEqual(["task-1", "task-2"]);
-  await expect(status(page)).toContainText("排队 2 项");
+  await expect(status(page)).toContainText("生成任务排队中");
   state.finish("canceled");
   state.holdMessages = null;
   release();
-  await expect(status(page).getByText("已取消", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-task-state="canceled"] [data-task-summary]')).toContainText("生成已停止");
   await expect(
     status(page).getByRole("button", {
       name: /^停止 \d+ 项图片任务$/,
@@ -66,8 +67,9 @@ test("部分停止失败明确提示，重新读取后保留剩余任务状态",
   await status(page)
     .getByRole("button", { name: "重新读取状态", exact: true })
     .click();
-  await expect(status(page)).toContainText("已取消 1 项");
-  await expect(status(page)).toContainText("排队 1 项");
+  await page.getByText("查看过程", { exact: true }).click();
+  await expect(page.locator("[data-assistant-task]")).toContainText("已取消 1 项");
+  await expect(page.locator("[data-assistant-task]")).toContainText("排队 1 项");
   expect(state.cancelRequests).toHaveLength(2);
   expect(state.executionRequests).toEqual([]);
   expect(state.errors).toEqual([]);
@@ -79,7 +81,7 @@ test("状态读取失败保留旧记录，不把断线显示成业务失败", as
   await expect(
     page.getByText("执行状态暂不可用", { exact: false }),
   ).toBeVisible();
-  await expect(status(page)).toContainText("排队 2 项");
+  await expect(status(page)).toContainText("生成任务排队中");
   await expect(status(page)).not.toContainText("执行失败");
   state.failMessages = false;
   state.finish("completed");
@@ -169,6 +171,7 @@ test("任务详情打开现有任务中心，只读记录不提供停止按钮",
       exact: true,
     }),
   ).toHaveCount(0);
+  await status(page).locator("summary").click();
   await status(page)
     .getByRole("button", { name: "查看任务详情", exact: true })
     .click();

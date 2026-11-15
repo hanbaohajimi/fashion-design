@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  GoneException,
   Body,
   Controller,
   Get,
@@ -20,7 +21,6 @@ import {
   workflowNodeDecisionSchema,
   workflowProposalDecisionSchema,
   workflowProposalRequestSchema,
-  workflowRoleInferenceSchema,
   workflowRejectSchema,
 } from "./workflow-runtime.schemas";
 import { WorkflowRuntimeService } from "./workflow-runtime.service";
@@ -135,18 +135,8 @@ export class WorkflowRuntimeController {
   }
 
   @Post("nodes/:nodeId/infer-role")
-  inferRole(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("projectId") projectId: string,
-    @Param("nodeId") nodeId: string,
-    @Body() body: unknown,
-  ) {
-    return this.runtime.inferRole(
-      user.userId,
-      parse(idSchema, projectId),
-      parse(idSchema, nodeId),
-      parse(workflowRoleInferenceSchema, body),
-    );
+  inferRole() {
+    throw new GoneException("素材用途标签已停用，请在创作框中描述本次要求");
   }
 
   @Get("nodes/:nodeId/history")

@@ -2,6 +2,8 @@ export { workflowReferenceSummarySchema, type WorkflowReferenceSummary } from ".
 export const PLATFORM_NAME = "AI 服装设计平台";
 export * from "./visual-context";
 export * from "./workflow-tools";
+export * from "./prompt-enhancement";
+export * from "./assistant-canvas-actions";
 export { workflowInputPorts, isWorkflowInputPort, workflowInputConnectionError, type WorkflowConnectionPort } from "./workflow-connections";
 export const DESIGN_PATH_MAX_ASSETS = 100;
 export const DESIGN_DECISION_KINDS = [
@@ -414,9 +416,13 @@ export * from "./research";
 export * from "./research-analysis";
 export * from "./project-tasks";
 export * from "./project-generated-files";
+export * from "./asset-library";
 export * from "./realtime-tryon";
 export * from "./wardrobe";
 export * from "./canvas-workspace";
+export * from "./canvas-creations";
+export * from "./retired-canvas-notes";
+export * from "./material-purpose";
 export * from "./canvas-media";
 export { privateStorageObjectKey } from "./private-storage-url";
 export * from "./generation-image-sources";

@@ -18,6 +18,7 @@ export type WorkflowAssetType =
   | "legacy";
 
 export type WorkflowToolType =
+  | "generate_text"
   | "transform_image"
   | "analyze_brief"
   | "generate_design"

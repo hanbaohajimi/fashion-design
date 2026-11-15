@@ -380,6 +380,8 @@
   --motion-tooltip-enter: 150ms;
   --motion-tooltip-exit: 120ms;
   --motion-menu-enter: 300ms;
+  --motion-select-enter: 180ms;
+  --motion-select-exit: 120ms;
   --motion-menu-exit: 200ms;
   --motion-dialog-enter: 350ms;
   --motion-dialog-exit: 250ms;

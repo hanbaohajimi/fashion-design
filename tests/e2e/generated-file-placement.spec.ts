@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { generatedFilePlacementFixture } from "./generated-file-placement-fixture";
 import { loadZhiya, openZhiya } from "./zhiya-fixture";
@@ -6,7 +7,7 @@ import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 test.setTimeout(60_000);
 const panel = (page: Page) => page.getByRole("dialog", { name: "生成文件", exact: true });
 const row = (page: Page, id = "asset:result-1") => panel(page).locator(`[data-generated-file-id="${id}"]`);
-const open = async (page: Page) => { await page.getByRole("button", { name: "项目菜单", exact: true }).click(); await page.getByRole("button", { name: "生成文件", exact: true }).click(); await expect(panel(page)).toBeVisible(); };
+const open = async (page: Page) => { await openCanvasFunction(page, "生成文件"); await expect(panel(page)).toBeVisible(); };
 const close = async (page: Page) => panel(page).getByRole("button", { name: "关闭生成文件" }).click();
 
 for (const width of [1440, 320]) test(`${width}px归档历史放回为新版本，保留文件列表并可定位继续编辑`, async ({ page }) => {

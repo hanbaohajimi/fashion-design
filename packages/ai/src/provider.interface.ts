@@ -16,9 +16,10 @@ export type AiReferenceImageRole = (typeof AI_REFERENCE_IMAGE_ROLES)[number];
 
 const referenceImageSchema = z.object({
   order: z.number().int().min(0).max(15),
-  role: z.enum(AI_REFERENCE_IMAGE_ROLES),
+  // Optional only to decode already-submitted historical requests.
+  role: z.enum(AI_REFERENCE_IMAGE_ROLES).optional(),
   url: z.url(),
-  weight: z.number().min(0).max(1),
+  weight: z.number().min(0).max(1).optional(),
 });
 
 const paletteColorSchema = z.object({
@@ -31,6 +32,7 @@ const paletteColorSchema = z.object({
 
 const commonRequestSchema = z
   .object({
+    referencePolicy: z.literal("instruction").optional(),
     background: z.enum(["auto", "opaque", "transparent"]).optional(),
     imageEdit: z
       .object({

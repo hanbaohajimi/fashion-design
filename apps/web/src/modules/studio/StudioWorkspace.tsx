@@ -16,6 +16,7 @@ import {
 } from "../../components/ui";
 import { ProjectTaskCenter } from "../tasks/ProjectTaskCenter";
 import { AppHeader } from "../../components/AppHeader";
+import { useGuardedRouter } from "../use-guarded-router";
 import { useWorkspaceChromeActions } from "../../components/WorkspaceChrome";
 import { RevisionSaved } from "../../components/motion/RevisionSaved";
 import { fetchProject } from "../projects/projects-api";
@@ -24,7 +25,7 @@ import { useStudioLeaveGuard, errorMessage } from "./studio-ui";
 import { TaskEntry } from "./TaskEntry";
 import { StyleLibrary } from "./StyleLibrary";
 import { BrandLibrary } from "./BrandLibrary";
-import { PlanningBoard } from "./PlanningBoard";
+import { CollectionWorkbench } from "./CollectionWorkbench";
 import { TechPackEditor } from "./TechPackEditor";
 import { SampleRounds } from "./SampleRounds";
 import { CollaborationPanel } from "./CollaborationPanel";
@@ -40,7 +41,6 @@ import { CreativeProgress } from "./CreativeProgress";
 import { useAuth } from "../auth/AuthProvider";
 import { rememberCreativeVisit } from "../projects/creative-memory";
 import { StudioAssetNames } from "./studio-object-context";
-import { StudioNavigation } from "./StudioNavigation";
 import { StudioHeaderContext } from "./StudioPageHeader";
 import { mergeSavedStyles } from "./style-revisions";
 import { mergeSavedDeliveryDocuments, mergeSavedRecords } from "./studio-records";
@@ -48,6 +48,7 @@ import { StudioSaveRecovery } from "./StudioSaveRecovery";
 import { carryStudioSaveDraft, hasActiveStudioSaveForm } from "./studio-save-recovery";
 import {
   isStudioTab,
+  STUDIO_TABS,
   type StudioTab as Tab,
 } from "./studio-navigation";
 
@@ -82,6 +83,7 @@ function StudioWorkspaceContent({
   initialRunId,
   initialPresentationMode,
 }: StudioWorkspaceProps) {
+  const workspaceRouter = useGuardedRouter();
   const { session } = useAuth();
   const queryString = useSearchParams().toString();
   const appliedQuery = useRef(queryString);
@@ -247,6 +249,7 @@ function StudioWorkspaceContent({
   };
   return (
     <StudioHeaderContext value={{ readOnly: Boolean(data && !data.capabilities.edit), actions: <>
+      <Button data-guide="studio-navigation" onClick={() => void workspaceRouter.push(`/${encodeURIComponent(projectId)}`)}>返回画布</Button>
       <Menu label="项目菜单" trigger={<span className={styles.projectMenuName} title={name}>{name}</span>}>
         {data ? <span className={styles.muted}>{ROLE_LABELS[data.role]}</span> : null}
         <Button disabled={!data} onClick={() => setProgressOpen(true)}>创作进展</Button>
@@ -266,13 +269,7 @@ function StudioWorkspaceContent({
         projectId={projectId}
         projectName={name}
         hideProjectReturn
-        navigation={
-          <StudioNavigation
-            id={tabsId}
-            value={tab}
-            onChange={(next) => void changeTab(next)}
-          />
-        }
+        studioNavigation={{ id: tabsId, tab, onChange: (next) => void changeTab(next) }}
       />
       <main
         data-studio-motion
@@ -292,7 +289,7 @@ function StudioWorkspaceContent({
         }}
       >
         <div className={styles.workspaceMain}>
-          <h1 className={styles.accessibleTitle}>{name} 款式与交付</h1>
+          <h1 className={styles.accessibleTitle} id={`${tabsId}-tab-${tab}`}>{name} {STUDIO_TABS.find(item => item.value === tab)?.label}</h1>
           {error ? <Notice tone="error">{error}</Notice> : null}
           {session ? <StudioSaveRecovery accountId={session.user.id} projectId={projectId}
             onConfirmed={({ record, result }) => {
@@ -573,7 +570,7 @@ function StudioWorkspaceContent({
                     <BrandLibrary {...props} data={data} />
                   </TabPanel>
                   <TabPanel tabsId={tabsId} value="planning" activeValue={tab}>
-                    <PlanningBoard {...props} data={data} />
+                    <CollectionWorkbench {...props} data={data} initialTab="planning" />
                   </TabPanel>
                   <TabPanel tabsId={tabsId} value="tech" activeValue={tab}>
                     <TechPackEditor

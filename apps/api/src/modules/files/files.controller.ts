@@ -90,4 +90,11 @@ export class FilesController {
       ),
     );
   }
+
+  @Get(":id/content")
+  @Header("Cache-Control", PRIVATE_NO_STORE)
+  async content(@CurrentUser() user: AuthenticatedUser, @Param("id") fileId: string, @Res() response: Response) {
+    response.setHeader("Cache-Control", PRIVATE_NO_STORE);
+    response.redirect(307, await this.filesService.contentUrl(user.userId, parseOrThrow(fileIdSchema, fileId)));
+  }
 }

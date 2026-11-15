@@ -491,18 +491,16 @@ function buildTrendElements(
   const noteId = trendShapeId(trend.id, "note");
   const note = importedElement(
     noteId,
-    "fashion-note",
-    "note",
+    "fashion-text",
+    "reference",
     position,
     {
       ...sourceMeta,
-      roles: ["note"],
     },
     {
       h: NOTE_HEIGHT,
-      role: "note",
+      title: trend.title,
       text: trend.summary,
-      tone: "#FDB462",
       w: NOTE_WIDTH,
     },
     "a1",

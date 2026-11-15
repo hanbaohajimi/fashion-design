@@ -1,0 +1,524 @@
+.body.body {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  background: var(--surface-2);
+}
+.header {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 8px 10px 8px 14px;
+  touch-action: none;
+}
+.header[tabindex="0"] {
+  cursor: grab;
+}
+.header[tabindex="0"]:active {
+  cursor: grabbing;
+}
+.header:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.iconButton,
+.iconMenu > summary {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+  box-shadow: none;
+}
+.iconMenu {
+  display: inline-flex;
+}
+.iconMenu > summary::after {
+  display: none;
+}
+.iconButton:enabled:hover,
+.iconMenu > summary:hover {
+  color: var(--color-ink);
+  background: var(--color-action-subtle);
+}
+.iconButton:focus-visible,
+.iconMenu > summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+.iconButton:disabled {
+  color: var(--color-disabled-ink);
+  cursor: default;
+}
+.iconButton svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.sendButton.sendButton {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--color-action-on);
+  background: var(--color-action);
+}
+.sendButton.sendButton:enabled:hover {
+  background: var(--color-action-hover);
+  color: var(--color-action-on);
+}
+.sendButton.sendButton:disabled {
+  background: var(--surface-0);
+  color: var(--color-ink-secondary);
+}
+.historyMenu {
+  flex: 1;
+  min-width: 0;
+}
+.historyMenu > summary {
+  display: flex;
+  justify-content: flex-start;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+.historyMenu > summary::after {
+  display: none;
+}
+.historyMenu > summary span {
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.historyMenu > summary svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.historyItem {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.historyItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.historyItem[aria-current="true"] {
+  color: var(--color-action);
+  background: var(--color-selection-bg);
+}
+.menuHint {
+  padding: 6px 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+}
+.viewport.viewport {
+  min-height: 60px;
+}
+.thread.thread {
+  padding: 12px 18px 16px;
+  gap: 0;
+}
+.thread.thread[data-empty="true"] {
+  justify-content: center;
+}
+.welcome.welcome {
+  padding: 16px 8px 24px;
+  margin: auto 0;
+  border: 0;
+  background: transparent;
+}
+.welcomeMark {
+  display: block;
+  width: 48px;
+  height: 52px;
+  margin: 0 auto 18px;
+  object-fit: contain;
+}
+.welcome.welcome h3 {
+  margin: 0 0 28px;
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 500;
+  text-align: center;
+  color: var(--color-ink);
+}
+.body .composer.composer {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 10px 10px;
+  padding: 10px 10px 8px;
+  max-height: 60%;
+  min-height: 0;
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 16px;
+  background: var(--surface-3);
+  box-shadow: none;
+}
+.body .composer.composer:focus-within {
+  border-color: var(--color-action);
+  box-shadow: none;
+}
+.body .composer.composer textarea {
+  min-height: 72px;
+  max-height: 180px;
+  padding: 4px 4px 12px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-ink);
+  caret-color: var(--color-action);
+}
+.body .composer.composer textarea::placeholder {
+  color: var(--color-ink-secondary);
+}
+.body.body .composer.composer [data-assistant-mention-input] textarea {
+  padding: 4px 4px 12px;
+  border: 0;
+  outline: none;
+  box-shadow: none !important;
+  background: transparent;
+}
+.body .iconButton {
+  min-height: 32px;
+  min-width: 32px;
+}
+.inputLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  min-height: 36px;
+}
+.toolsSpacer {
+  flex: 1;
+}
+.toolsLeft { display: flex; align-items: center; gap: 2px; }
+.tools[data-voice-active="true"] .toolsLeft { opacity: 0; pointer-events: none; }
+.references.references {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+  margin: 0;
+  max-height: min(144px, 23dvh);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.references:empty {
+  display: none;
+}
+.references [aria-label="正在讨论"] {
+  padding: 0;
+  margin: 0 0 8px;
+  background: transparent;
+  color: var(--color-ink);
+}
+.references [aria-label="正在讨论"][data-has-references="false"] {
+  margin: 0;
+}
+.references button[aria-label^="移除引用"] svg {
+  width: 14px;
+  height: 14px;
+}
+.references [data-discussion-references] {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 4px;
+  min-height: 56px;
+  max-height: 64px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.references [data-assistant-reference-id] {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+.references [data-reference-preview] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  overflow: hidden;
+}
+.references [data-reference-preview] [data-compact-reference] {
+  width: 48px;
+  height: 48px;
+  min-width: 0;
+  object-fit: contain;
+  border: 0;
+  border-radius: 7px;
+}
+.referenceNumber {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 9px;
+  color: var(--color-action-on);
+  background: var(--color-action);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.referenceCaption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.imageTooltip.imageTooltip { max-width: min(220px, calc(100vw - 24px)); padding: 4px; border-radius: 10px; background: var(--surface-3); color: var(--color-ink); box-shadow: var(--shadow-panel-v3); }
+.imageTooltip img { display: block; width: auto; height: auto; max-width: 200px; max-height: 180px; border-radius: 7px; object-fit: contain; }
+.imageTooltip > span { display: block; padding: 4px 6px 2px; font-size: 12px; color: var(--color-ink-secondary); }
+.referenceMention { --control-height: 24px; position: absolute; right: -2px; bottom: -2px; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; min-width: 24px; min-height: 24px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--color-action); opacity: 0; cursor: pointer; }
+.referenceMention svg { width: 14px; height: 14px; }
+[data-assistant-reference-id]:hover .referenceMention, .referenceMention:focus-visible { opacity: 1; }
+@media (pointer: coarse), (hover: none) { .referenceMention { display: none; } }
+.references.references button[aria-label^="移除引用"] {
+  --control-height: 24px;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: var(--border-hairline) solid var(--color-border);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--color-ink);
+  opacity: 0;
+}
+.references [data-assistant-reference-id]:hover button[aria-label^="移除引用"],
+.references button[aria-label^="移除引用"]:focus-visible {
+  opacity: 1;
+}
+.assistantDialog.assistantDialog {
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+}
+.dialogContent {
+  padding: 24px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dialogContent h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.dialogContent > p {
+  margin: 0 0 16px;
+  line-height: 1.65;
+}
+@media (max-width: 767px), (pointer: coarse), (hover: none) {
+  .references.references button[aria-label^="移除引用"] {
+    display: none;
+  }
+  .historyMenu > summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .dialogContent {
+    padding: 20px;
+  }
+}
+.skillOption {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+}
+.skillOption small {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+  line-height: 1.5;
+}
+.skillPreview {
+  max-height: 40dvh;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font: inherit;
+  background: var(--surface-1);
+  border-radius: 12px;
+  padding: 16px;
+}
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.taskTabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.taskTabs button {
+  border: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink-secondary);
+  cursor: pointer;
+}
+.taskTabs button[aria-pressed="true"] {
+  background: var(--color-selection-bg);
+  color: var(--color-action);
+}
+.taskContent {
+  max-height: 65dvh;
+  overflow-y: auto;
+}
+.resultTools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+.progressSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+}
+.progressSummary span {
+  flex: 1;
+}
+.progressSummary::marker {
+  font-size: 10px;
+}
+.progressDetails {
+  padding-top: 8px;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .iconButton,
+  .iconMenu > summary {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .body .iconButton {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .sendButton.sendButton {
+    width: 44px;
+    height: 44px;
+  }
+  .header {
+    padding: 4px 8px 4px 12px;
+  }
+  .headerActions {
+    gap: 0;
+  }
+  .body .composer.composer textarea {
+    font-size: 16px;
+    max-height: min(160px, 30dvh);
+  }
+}
+@media (max-height: 550px) {
+  .welcomeMark {
+    display: none;
+  }
+  .welcome.welcome {
+    padding: 4px 0;
+  }
+  .welcome.welcome h3 {
+    margin-bottom: 10px;
+  }
+  .body .composer.composer textarea {
+    min-height: 48px;
+    max-height: 24dvh;
+  }
+  .body .composer.composer {
+    max-height: 65%;
+  }
+}

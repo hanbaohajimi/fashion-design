@@ -36,6 +36,31 @@ interface SignUploadResponse {
   } | null;
 }
 
+const UPLOAD_SIGN_RETRY_DELAYS_MS = [750, 1_500, 3_000];
+const UPLOAD_SERVICE_UNAVAILABLE = "上传服务暂时不可用，请稍后重新上传";
+
+function canRetryUploadSignature(response: Response): boolean {
+  return [502, 503, 504].includes(response.status) || (
+    response.status === 500 &&
+    !response.headers.get("Content-Type")?.toLowerCase().includes("json")
+  );
+}
+
+function waitForUploadRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
 export function imageMimeType(file: File): string {
   const declared = file.type.toLowerCase();
   if (declared) {
@@ -50,6 +75,8 @@ export function imageMimeType(file: File): string {
       jpg: "image/jpeg",
       png: "image/png",
       webp: "image/webp",
+      mp4: "video/mp4",
+      webm: "video/webm",
     }[extension ?? ""] ?? ""
   );
 }
@@ -79,23 +106,51 @@ export async function signImageUpload(
   file: File,
   signal?: AbortSignal,
 ): Promise<SignUploadResponse> {
-  const response = await fetch("/api/files/sign-upload", {
-    ...(signal ? { signal } : {}),
-    method: "POST",
-    body: JSON.stringify({
-      mimeType: imageMimeType(file),
-      name: file.name,
-      projectId,
-      sha256: await sha256Hex(file),
-      size: file.size,
-    }),
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
+  const requestSignal = privateRequestSignal(signal);
+  requestSignal.throwIfAborted();
+  const body = JSON.stringify({
+    mimeType: imageMimeType(file),
+    name: file.name,
+    projectId,
+    sha256: await sha256Hex(file),
+    size: file.size,
   });
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "获取上传签名失败"));
+
+  // Signing is deduplicated by account and SHA256; transient proxy failures can
+  // safely retry the same request without uploading the original file again.
+  for (let attempt = 0; ; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch("/api/files/sign-upload", {
+        signal: requestSignal,
+        method: "POST",
+        body,
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      requestSignal.throwIfAborted();
+      if (!(error instanceof TypeError)) throw error;
+      const delayMs = UPLOAD_SIGN_RETRY_DELAYS_MS[attempt];
+      if (delayMs === undefined) {
+        throw new Error(UPLOAD_SERVICE_UNAVAILABLE, { cause: error });
+      }
+      await waitForUploadRetry(delayMs, requestSignal);
+      continue;
+    }
+    if (response.ok) return (await response.json()) as SignUploadResponse;
+
+    const retryable = canRetryUploadSignature(response);
+    const delayMs = UPLOAD_SIGN_RETRY_DELAYS_MS[attempt];
+    if (!retryable || delayMs === undefined) {
+      throw new Error(await readErrorMessage(
+        response,
+        retryable ? UPLOAD_SERVICE_UNAVAILABLE : "获取上传签名失败",
+      ));
+    }
+    await response.body?.cancel();
+    await waitForUploadRetry(delayMs, requestSignal);
   }
-  return (await response.json()) as SignUploadResponse;
 }
 
 export async function putOriginal(

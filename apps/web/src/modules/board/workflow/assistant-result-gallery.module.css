@@ -5,14 +5,14 @@
  * - 缩略图 3:4 比例，服装图标准
  * - hover 覆盖层（继续修改 / 比较操作）
  * - ≥3 张横向 scroll-snap 胶片条
- * - 单图 contain / 多图 cover
+ * - 全部图片 contain，保留完整内容
  * - 测试锚点（data-*, aria-label）完全保留
  */
 
 .root {
   display: grid;
   gap: var(--space-3);
-  margin: var(--space-3) 0;
+  margin: 0;
 }
 
 /* 头部 */
@@ -29,6 +29,7 @@
 }
 
 .count {
+  margin-inline-end: auto;
   font-size: var(--text-label, 12px);
   color: var(--color-ink-tertiary);
   font-variant-numeric: tabular-nums;
@@ -49,7 +50,7 @@
 
 .grid[data-single="true"] {
   grid-template-columns: 1fr;
-  max-width: 220px;
+  max-width: 240px;
 }
 
 /* 胶片条（≥3 张） */
@@ -99,6 +100,8 @@
 .image {
   position: relative;
   aspect-ratio: 3 / 4;
+  max-height: 300px;
+  min-height: 80px;
   overflow: hidden;
   border-radius: var(--radius-lg);
   background: var(--image-stage-background, #e7e9e2);
@@ -107,13 +110,20 @@
   place-items: center;
 }
 
-/* 单图：contain；多图/胶片条：cover */
+/* 所有预览保留完整图片 */
 .image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
+
+.resultActions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; min-width: 0; }
+.locate { min-height: 36px; border: var(--border-hairline) solid var(--color-border); border-radius: 8px; padding: 6px 12px; background: var(--surface-3); color: var(--color-action); font: inherit; font-size: 13px; cursor: pointer; }
+.locate:hover { background: var(--color-action-subtle); }
+.locate:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.resultActions > :last-child { flex: none; }
+@media (max-width: 767px), (pointer: coarse) { .locate, .resultActions button { min-height: 44px; } }
 
 .grid[data-single="true"] .image img {
   object-fit: contain;
@@ -156,22 +166,21 @@
 /* hover 覆盖层（图底部渐变 + 操作按钮） */
 .overlay {
   position: absolute;
+  z-index: 1;
   /* 覆盖在缩略图底部 */
   bottom: 0;
   left: 0;
   right: 0;
   /* 仅覆盖 .image 区域，不超出 */
-  height: calc(100% - 0px);
+  height: auto;
   pointer-events: none;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
+  gap: 4px;
   padding: var(--space-2);
   border-radius: var(--radius-lg);
-  background: linear-gradient(
-    transparent 40%,
-    color-mix(in oklab, var(--color-ink) 44%, transparent)
-  );
+  background: none;
   opacity: 0;
   transform: translateY(2px);
   transition:
@@ -183,11 +192,12 @@
 .card:focus-within .overlay {
   opacity: 1;
   transform: translateY(0);
-  pointer-events: auto;
+  pointer-events: none;
 }
+.card:hover .overlay button, .card:focus-within .overlay button { pointer-events: auto; }
 
 /* 触屏：操作常显 */
-@media (hover: none) {
+@media (hover: none), (max-width: 767px) {
   .overlay {
     opacity: 1;
     transform: none;
@@ -197,6 +207,7 @@
     background: none;
     padding: var(--space-1) 0 0;
   }
+  .overlay button { pointer-events: auto; }
 }
 
 /* 覆盖层内圆形玻璃按钮 */
@@ -207,9 +218,7 @@
   min-height: 32px;
   border-radius: var(--radius-full);
   border: 0;
-  background: color-mix(in oklab, var(--surface-3) 92%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--surface-3);
   color: var(--color-ink);
   cursor: pointer;
   display: grid;
@@ -236,7 +245,7 @@
 /* 已移出画布提示 */
 .detached {
   font-size: var(--text-caption, 11px);
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   padding: 2px 0;
   display: block;
 }
@@ -271,14 +280,6 @@
 }
 
 /* 结果卡入场动画 */
-.root {
-  animation: resultEnter var(--duration-result, 280ms) var(--ease-enter, cubic-bezier(0.23,1,0.32,1)) both;
-}
-
-@keyframes resultEnter {
-  from { opacity: 0; transform: translateY(6px); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .root { animation: none; }
   .overlay { transition: none; }

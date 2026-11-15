@@ -1,3 +1,5 @@
+export type TaskOperation = "generate" | "edit" | "color" | "material" | "print" | "analysis" | "export";
+
 export type FeedbackState =
   | "idle"
   | "submitting"

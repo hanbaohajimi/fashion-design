@@ -34,7 +34,7 @@ test("桌面磁吸、聚光灯、涟漪和静止性能记录", async ({ page }, 
       return original.call(window, callback);
     };
   });
-  await page.goto("/");
+  await page.goto("/projects");
   const card = page.getByRole("region", { name: "继续创作" });
   const link = card.getByRole("link");
   const visual = link.locator(":scope > span");
@@ -224,7 +224,7 @@ for (const width of [1440, 1024, 390, 375]) {
     );
     for (const state of ["long", "failed", "empty"]) {
       variant = state;
-      await page.goto("/");
+      await page.goto("/projects");
       if (state === "empty") {
         const start = page.getByRole("button", {
           name: "创建第一个项目",
@@ -261,7 +261,7 @@ for (const width of [1440, 1024, 390, 375]) {
 }
 
 test("偏好动态切换与高对比度保留操作、焦点和选择", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/projects");
   const card = page.getByRole("region", { name: "继续创作" });
   const link = card.getByRole("link");
   const position = await center(link);
@@ -340,7 +340,7 @@ test.describe("触屏", () => {
     viewport: { width: 390, height: 844 },
   });
   test("粗指针不启用悬停效果，轻触仍打开创建窗口", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/projects");
     const card = page.getByRole("region", { name: "继续创作" });
     const link = card.getByRole("link");
     await link.dispatchEvent("pointermove", {

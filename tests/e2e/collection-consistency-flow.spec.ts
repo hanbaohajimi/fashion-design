@@ -1,6 +1,5 @@
 import { seedNodeInteraction } from "./node-stage-fixture";
 import { valueControl, chooseValue, expectValue } from "./choice-control";
-import { openImageDetails } from "./workflow-navigation";
 import { expect, test } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 
@@ -490,14 +489,14 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     });
   });
 
-  await page.goto("/e2e-collection");
-  await page.locator('[data-type="candidate"]').dblclick();
-  await openImageDetails(page);
-  await page.getByRole("button", { name: "打开关联系列" }).click();
+  await page.route("**/api/projects/e2e-collection/canvas/creations", (route) =>
+    route.fulfill({ json: { items: [], canEdit: true } }),
+  );
+  await page.goto("/e2e-collection?collectionId=collection-e2e");
 
-  const collectionDrawer = page.getByRole("dialog", { name: "系列 DNA" });
+  const collectionDrawer = page.getByRole("dialog", { name: "系列工作台", exact: true });
   await expect(page.getByText("系列原点", { exact: true })).toBeVisible();
-  await expect(collectionDrawer.getByRole("button", { name: "关闭系列抽屉" })).toBeFocused();
+  await expect(collectionDrawer.getByRole("button", { name: "关闭系列工作台" })).toBeFocused();
   await collectionDrawer.getByRole("button", { name: "导出 PDF" }).click();
   const exportDialog = page.getByRole("dialog", { name: "导出成果" });
   await expect(exportDialog).toBeVisible();
@@ -539,9 +538,9 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
   await expect(
     paletteSection.getByRole("button", { name: "解锁" }),
   ).toBeVisible();
-  await expect(page.getByLabel("系列 DNA").getByText("已保存")).toBeVisible();
+  await expect(collectionDrawer.getByText("已保存")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Look 扩展" }).click();
+  await page.getByRole("tab", { name: "系列扩展" }).click();
   const retrySeriesState = collectionDrawer.getByRole("button", {
     name: "重新读取系列状态",
   });
@@ -594,7 +593,7 @@ test("打开系列、定义 DNA 并按服装类型多次生成", async ({ page }
     "生成此款",
   ]) {
     await expect(
-      collectionDrawer.getByText(removedText, { exact: true }),
+      collectionDrawer.getByRole("tabpanel", { name: "系列扩展", exact: true }).getByText(removedText, { exact: true }),
     ).toHaveCount(0);
   }
   await page.screenshot({

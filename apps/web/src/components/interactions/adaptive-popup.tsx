@@ -45,6 +45,7 @@ export function AdaptivePopup({
   id,
   align = "start",
   className = "",
+  motionVariant = "default",
 }: {
   readonly open: boolean;
   readonly session: PopupSession | null;
@@ -55,6 +56,7 @@ export function AdaptivePopup({
   readonly id: string;
   readonly align?: "start" | "end";
   readonly className?: string;
+  readonly motionVariant?: "default" | "glide" | "instant";
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const sheet = session?.sheet ?? false;
@@ -81,7 +83,7 @@ export function AdaptivePopup({
       }
       const bounds = trigger.getBoundingClientRect();
       if (session.phone)
-        popup.style.maxHeight = `${Math.max(0, Math.min(264, edgeTop + height - 16 - bounds.bottom - 8))}px`;
+        popup.style.maxHeight = `${Math.max(0, Math.min(motionVariant === "default" ? 264 : 360, edgeTop + height - 16 - bounds.bottom - 8))}px`;
       popup.style.minWidth = `${Math.min(Math.max(bounds.width, 176), width - 16)}px`;
       const size = popup.getBoundingClientRect();
       const below = edgeTop + height - 16 - bounds.bottom - 8;
@@ -127,8 +129,8 @@ export function AdaptivePopup({
       window.visualViewport?.removeEventListener("resize", position);
       window.visualViewport?.removeEventListener("scroll", position);
     };
-  }, [open, session, anchor, align, onClose, sheet]);
-  useMenuMotion(open && !sheet, panel, "bottom");
+  }, [open, session, anchor, align, onClose, sheet, motionVariant]);
+  useMenuMotion(open && !sheet, panel, "bottom", motionVariant);
 
   if (!session) return null;
   const content = (
@@ -139,6 +141,7 @@ export function AdaptivePopup({
       aria-label={`${label}选项`}
       className={`${styles.popup} ${sheet ? styles.sheetContent : ""} ${className}`}
       data-popup-kind={sheet ? "sheet" : "anchored"}
+      data-popup-align={align}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();

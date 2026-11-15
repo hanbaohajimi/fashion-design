@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  GoneException,
   Inject,
   Param,
   Patch,
@@ -14,9 +15,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import {
   bindSketchReferenceSchema,
-  inferRoleSchema,
   projectIdSchema,
-  setElementRolesSchema,
   shapeIdSchema,
 } from "./board-elements.schemas";
 import { BoardElementsService } from "./board-elements.service";
@@ -40,20 +39,7 @@ export class BoardElementsController {
   ) {}
 
   @Post(":shapeId/infer")
-  infer(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("projectId") projectId: string,
-    @Param("shapeId") shapeId: string,
-    @Body() body: unknown,
-  ) {
-    const input = parseOrThrow(inferRoleSchema, body);
-    return this.boardElementsService.registerInference(
-      user.userId,
-      parseOrThrow(projectIdSchema, projectId),
-      parseOrThrow(shapeIdSchema, shapeId),
-      input.fileId,
-    );
-  }
+  infer() { throw new GoneException("素材用途标签已停用，请在创作框中说明本次要求"); }
 
   @Post(":shapeId/sketch-reference")
   bindSketchReference(
@@ -85,15 +71,5 @@ export class BoardElementsController {
   }
 
   @Patch("roles")
-  setRoles(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param("projectId") projectId: string,
-    @Body() body: unknown,
-  ) {
-    return this.boardElementsService.setRoles(
-      user.userId,
-      parseOrThrow(projectIdSchema, projectId),
-      parseOrThrow(setElementRolesSchema, body),
-    );
-  }
+  setRoles() { throw new GoneException("素材用途标签已停用，请在创作框中说明本次要求"); }
 }
