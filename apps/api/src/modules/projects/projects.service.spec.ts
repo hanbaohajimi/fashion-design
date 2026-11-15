@@ -218,6 +218,12 @@ describe("ProjectsService ownership and soft deletion", () => {
   it("duplicates design assets and remaps asset references in board records", async () => {
     const source = {
       ...projectFixture(),
+      canvasCreations: [{ id: "creation-source", title: "图片创作", module: "image", draft: { prompt: "保留设计", inputs: [{ creationId: "creation-source", nodeId: "ref-source", assetId: "asset-source" }] }, position: null, currentResultNodeId: "ref-source", removedAt: null, createdAt: new Date(), runs: [
+        { id: "run-source", toolNodeId: "tool-source", draftSnapshot: { prompt: "保留设计" }, requestHash: "completed-hash", createdAt: new Date() },
+        { id: "run-pending", toolNodeId: "running-source", draftSnapshot: {}, requestHash: "pending-hash", createdAt: new Date() },
+      ] }],
+      canvasBindings: [],
+      canvasDocument: { formatVersion: 1, snapshot: { document: { store: { "shape:creation-creation-source": { id: "shape:creation-creation-source", typeName: "shape", type: "fashion-creation", props: { creationId: "creation-source" }, meta: { canvasNodeId: "ref-source" } } } } } },
       boardElements: [
         {
           deletedAt: null,
@@ -276,7 +282,7 @@ describe("ProjectsService ownership and soft deletion", () => {
       collections: [],
       workflowGraph: { nodes: [
         { id: "tool-source", kind: "tool", type: "generate_design", title: "设计", payload: { toolKey: "generate_design", toolVersion: "1", params: { referenceInputs: [{ nodeId: "ref-source" }] } }, status: "completed", x: 1, y: 2 },
-        { id: "ref-source", kind: "asset", type: "candidate", title: "结果", payload: { assetId: "asset-source", generationTaskId: "old-task", attemptId: "old-attempt", imageUrl: "/api/design-assets/asset-source/content" }, status: "completed", x: 4, y: 5 },
+        { id: "ref-source", kind: "asset", type: "candidate", title: "结果", payload: { assetId: "asset-source", canvasCreationId: "creation-source", canvasCreationRunId: "run-source", generationTaskId: "old-task", attemptId: "old-attempt", imageUrl: "/api/design-assets/asset-source/content" }, status: "completed", x: 4, y: 5 },
         { id: "running-source", kind: "tool", type: "generate_design", title: "处理中", payload: {}, status: "running", x: 7, y: 8 },
       ], edges: [{ id: "edge-source", sourceNodeId: "tool-source", targetNodeId: "ref-source", sourcePort: "out", targetPort: "source" }] },
       designContext: { state: { currentObjective: "春季通勤", preferences: [] } },
@@ -301,6 +307,9 @@ describe("ProjectsService ownership and soft deletion", () => {
     const boardElementCreateMany = vi.fn().mockResolvedValue({ count: 1 });
     const boardSnapshotCreate = vi.fn().mockResolvedValue({});
     const transaction = {
+      canvasCreation: { create: vi.fn().mockResolvedValue({}) },
+      canvasCreationRun: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      canvasDocument: { create: vi.fn().mockResolvedValue({}) },
       boardElement: { createMany: boardElementCreateMany },
       boardSnapshot: { create: boardSnapshotCreate },
       collection: { create: vi.fn() },
@@ -361,6 +370,17 @@ describe("ProjectsService ownership and soft deletion", () => {
     expect(copiedResult.payload).toMatchObject({ assetId: duplicatedAsset.id, imageUrl: `/api/design-assets/${duplicatedAsset.id}/content` });
     expect(copiedResult.payload).not.toHaveProperty("generationTaskId");
     expect(copiedResult.payload).not.toHaveProperty("attemptId");
+    const creation = transaction.canvasCreation.create.mock.calls[0]?.[0].data;
+    expect(creation.id).not.toBe("creation-source");
+    expect(creation).toMatchObject({ projectId: "project-copy", currentResultNodeId: copiedResult.id });
+    expect(creation.draft.inputs[0]).toMatchObject({ creationId: creation.id, nodeId: copiedResult.id, assetId: duplicatedAsset.id });
+    const runs = transaction.canvasCreationRun.createMany.mock.calls[0]?.[0].data;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ creationId: creation.id, state: "manual", command: {} });
+    expect(copiedResult.payload).toMatchObject({ canvasCreationId: creation.id, canvasCreationRunId: runs[0].id });
+    const copiedStore = transaction.canvasDocument.create.mock.calls[0]?.[0].data.snapshot.document.store;
+    expect(copiedStore[`shape:creation-${creation.id}`]).toMatchObject({ id: `shape:creation-${creation.id}`, props: { creationId: creation.id } });
+    expect(copiedStore).not.toHaveProperty("shape:creation-creation-source");
     expect(nodes.find((node: { title: string }) => node.title === "处理中").status).toBe("ready");
     expect(transaction.workflowNodeVersion.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { origin: "project_copy" } }));
     expect(boardElementCreateMany.mock.calls[0]?.[0].data[0].record).toMatchObject({

@@ -238,6 +238,7 @@ export class ProjectsService {
         boardSnapshot: true,
         canvasDocument: true,
         canvasBindings: true,
+        canvasCreations: { include: { runs: true } },
         collections: {
           include: {
             dna: true,
@@ -269,6 +270,13 @@ export class ProjectsService {
             source.designAssets.map((asset) => [asset.id, randomUUID()]),
           );
           const ids = new Map<string, string>(assetIdMap);
+          const creations = source.canvasCreations ?? [];
+          for (const creation of creations) {
+            const id = randomUUID();
+            ids.set(creation.id, id);
+            ids.set(`shape:creation-${creation.id}`, `shape:creation-${id}`);
+            for (const run of creation.runs) ids.set(run.id, randomUUID());
+          }
           for (const item of [...source.collections, ...source.boardElements, ...(source.workflowGraph?.nodes ?? []), ...(source.workflowGraph?.edges ?? [])]) {
             if (item.id) ids.set(item.id, randomUUID());
           }
@@ -444,6 +452,25 @@ export class ProjectsService {
             await ensureWorkflowNodeVersions(transaction, project.id, 0, nodes, edges);
             await transaction.workflowNodeVersion.updateMany({ where: { projectId: project.id, baseline: true }, data: { origin: "project_copy" } });
           }
+          // Copy durable drafts and finished results, without replaying source tasks or conversations.
+          for (const creation of creations) {
+            const creationId = requiredMappedId(ids, creation.id);
+            await transaction.canvasCreation.create({ data: {
+              id: creationId, projectId: project.id, createdById: userId, title: creation.title,
+              module: creation.module, draft: remapStructuredValue(creation.draft, ids, true) as Prisma.InputJsonValue,
+              position: creation.position === null ? Prisma.DbNull : creation.position as Prisma.InputJsonValue,
+              currentResultNodeId: creation.currentResultNodeId ? ids.get(creation.currentResultNodeId) ?? null : null,
+              removedAt: creation.removedAt, createdAt: creation.createdAt,
+            } });
+            const completed = creation.runs.filter(run => source.workflowGraph?.nodes.some(node => node.kind === "asset" && node.status === "completed" && (node.payload as Record<string, unknown>).canvasCreationRunId === run.id));
+            if (completed.length) await transaction.canvasCreationRun.createMany({ data: completed.map(run => ({
+              id: requiredMappedId(ids, run.id), projectId: project.id, creationId, actorId: userId,
+              mutationId: randomUUID(), requestHash: run.requestHash, draftRevision: 0,
+              draftSnapshot: remapStructuredValue(run.draftSnapshot, ids, true) as Prisma.InputJsonValue,
+              command: {}, toolNodeId: run.toolNodeId ? ids.get(run.toolNodeId) ?? null : null,
+              state: "manual", createdAt: run.createdAt,
+            })) });
+          }
           if (source.canvasDocument) {
             await transaction.canvasDocument.create({ data: { projectId: project.id, snapshot: remapStructuredValue(source.canvasDocument.snapshot, ids, true) as Prisma.InputJsonValue, formatVersion: source.canvasDocument.formatVersion, initializedFrom: "project_copy" } });
             const bindings = source.canvasBindings.filter((binding) => ids.has(binding.nodeId)).map((binding) => ({ projectId: project.id, shapeId: binding.shapeId, nodeId: requiredMappedId(ids, binding.nodeId), removedAt: binding.removedAt }));
@@ -570,7 +597,7 @@ function remapStructuredValue(
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value).filter(([key]) => !stripRuntime || !["generationTaskId", "attemptId", "executionId", "proposalId", "conversationId", "nodeVersionId", "forkedFromNodeVersionId", "error", "errorCode", "errorMessage"].includes(key)).map(([key, item]) => [
-        key,
+        idMap.get(key) ?? key,
         typeof item === "string" && ["text", "prompt", "negativePrompt", "summary", "description", "sourceQuote", "rationale"].includes(key) ? item : remapStructuredValue(item, idMap, stripRuntime),
       ]),
     );

@@ -43,8 +43,6 @@ function isShapeRecord(record: TLRecord): record is TLShape {
   return record.typeName === "shape";
 }
 
-function roleForShape(_shape: TLShape): string { return "reference"; }
-
 function semanticForShape(shape: TLShape) {
   const candidate =
     typeof shape.meta.roleSource === "string"
@@ -338,7 +336,7 @@ export function useBoardPersist(
           : {
               deleted: false,
               record,
-              role: roleForShape(record),
+              role: "reference",
               ...semanticForShape(record),
               shapeId: record.id,
               shapeType: record.type,

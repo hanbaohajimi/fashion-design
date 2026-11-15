@@ -50,8 +50,8 @@ function fuzzyMatch(target: string, query: string): boolean {
   const t = target.toLowerCase();
   const q = query.toLowerCase();
   let ti = 0;
-  for (let qi = 0; qi < q.length; qi++) {
-    const idx = t.indexOf(q[qi]!, ti);
+  for (const character of q) {
+    const idx = t.indexOf(character, ti);
     if (idx === -1) return false;
     ti = idx + 1;
   }
@@ -73,8 +73,9 @@ function groupCommands(commands: Command[]): Array<{ group: string | undefined; 
   const groups = new Map<string | undefined, Command[]>();
   for (const cmd of commands) {
     const key = cmd.group;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(cmd);
+    const items = groups.get(key) ?? [];
+    items.push(cmd);
+    groups.set(key, items);
   }
   return [...groups.entries()].map(([group, items]) => ({ group, items }));
 }
@@ -97,81 +98,75 @@ export function CommandPalette({
     [isControlled, onOpenChange],
   );
 
-  const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const listboxId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
-
-  const filtered = filterCommands(commands, query);
-  const grouped = groupCommands(filtered);
-
-  // Reset state on open
+  // The search session unmounts on close, including controlled closes.
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveIndex(0);
-      // Focus input after dialog animation frame
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
-
-  // Keep active index in bounds
-  useEffect(() => {
-    setActiveIndex((prev) => Math.min(prev, Math.max(filtered.length - 1, 0)));
-  }, [filtered.length]);
-
-  // Scroll active item into view
-  useEffect(() => {
-    if (!listRef.current) return;
-    const active = listRef.current.querySelector<HTMLElement>("[aria-selected='true']");
-    active?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex]);
-
-  // Global ⌘K / Ctrl+K
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
+    const handler = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+        event.preventDefault();
         setOpen(!open);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, setOpen]);
+  return open ? <CommandPaletteSession commands={commands} placeholder={placeholder} onClose={() => setOpen(false)} /> : null;
+}
+
+function CommandPaletteSession({ commands, placeholder, onClose }: { commands: readonly Command[]; placeholder: string; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const [requestedIndex, setActiveIndex] = useState(0);
+  const listboxId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const filtered = filterCommands(commands, query);
+  const grouped = groupCommands(filtered);
+  const activeIndex = Math.max(0, Math.min(requestedIndex, filtered.length - 1));
+  const activeCommand = filtered[activeIndex];
+
+  // Synchronize focus with the mounted dialog.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const active = listRef.current.querySelector<HTMLElement>("[aria-selected='true']");
+    active?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, query, commands]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+        setActiveIndex(Math.min(activeIndex + 1, Math.max(0, filtered.length - 1)));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndex(Math.max(activeIndex - 1, 0));
         break;
       case "Enter": {
         e.preventDefault();
         const cmd = filtered[activeIndex];
         if (cmd && !cmd.disabled) {
           cmd.onSelect();
-          setOpen(false);
+          onClose();
         }
         break;
       }
       case "Escape":
-        setOpen(false);
+        onClose();
         break;
     }
   };
 
-  if (!open) return null;
-
   let flatIndex = -1;
 
   return (
-    <Dialog open onClose={() => setOpen(false)} variant="guide" label="命令面板">
-      <div className={styles.backdrop} onClick={() => setOpen(false)} aria-hidden="true" />
+    <Dialog open onClose={onClose} variant="guide" label="命令面板">
+      <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
       <div
         className={styles.panel}
         role="dialog"
@@ -199,7 +194,7 @@ export function CommandPalette({
             role="combobox"
             aria-expanded="true"
             aria-controls={listboxId}
-            aria-activedescendant={filtered[activeIndex] ? `cmd-${filtered[activeIndex]!.id}` : undefined}
+            aria-activedescendant={activeCommand ? `cmd-${activeCommand.id}` : undefined}
             aria-autocomplete="list"
           />
           <kbd className={styles.escKbd} aria-label="Escape 关闭">Esc</kbd>
@@ -238,7 +233,7 @@ export function CommandPalette({
                       onClick={() => {
                         if (!cmd.disabled) {
                           cmd.onSelect();
-                          setOpen(false);
+                          onClose();
                         }
                       }}
                     >
