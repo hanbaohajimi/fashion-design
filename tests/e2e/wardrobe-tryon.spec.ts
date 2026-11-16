@@ -122,7 +122,7 @@ test("素材候选需并排核对与确认，准备完成不会自动入架", as
   await dialog.getByLabel("单品名称", { exact: true }).fill("核对后的短上衣");
   await dialog.getByRole("button", { name: "继续核对单品", exact: true }).click();
   await expect(dialog.getByAltText("原始服装图片", { exact: true })).toBeVisible();
-  await expect(dialog.getByAltText("待确认单品候选", { exact: true })).toBeVisible();
+  await expect(dialog.getByAltText("待确认单品图", { exact: true })).toBeVisible();
   const confirm = dialog.getByRole("button", { name: "确认单品并挂上衣架", exact: true });
   await expect(confirm).toBeDisabled();
   expect(fixture.summary.items).toHaveLength(0);

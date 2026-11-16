@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import type { CanvasSave } from "../../packages/shared/src/canvas-workspace";
@@ -9,7 +10,7 @@ test.setTimeout(60_000);
 const panel = (page: Page) => page.getByRole("region", { name: "画布对象", exact: true });
 const row = (page: Page, index: number) => panel(page).locator(`[data-canvas-object-id="shape:canvas-material-${index}"]`);
 const shape = (page: Page, index: number) => page.locator(`.tl-shape[data-shape-id="shape:canvas-material-${index}"]`);
-const open = async (page: Page) => { await page.getByRole("button", { name: "画布对象", exact: true }).click(); await expect(panel(page)).toBeVisible(); };
+const open = async (page: Page) => { await openCanvasFunction(page, "画布对象"); await expect(panel(page)).toBeVisible(); };
 const close = async (page: Page) => { await panel(page).getByRole("button", { name: "关闭画布对象" }).click(); };
 const hide = async (page: Page, index: number) => { await row(page, index).getByRole("button", { name: /^隐藏/ }).click(); };
 const show = async (page: Page, index: number) => { await row(page, index).getByRole("button", { name: /^显示/ }).click(); };
@@ -165,9 +166,9 @@ test("隐藏素材收到新版本保留显隐，外部链接打开详情且不�
 });
 
 async function exportPixels(page: Page, name: string) {
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+
   const waiting = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+  await openCanvasFunction(page, "导出画布 PNG");
   const download = await waiting;
   await mkdir("output/playwright/canvas-visibility", { recursive: true });
   const path = `output/playwright/canvas-visibility/${name}.png`;
@@ -225,8 +226,8 @@ test("下载的 PNG 排除隐藏对象与分组后代，空画布不下载", asy
   expect(outside.width).toBe(single.width);
   await open(page); await hide(page, 2); await close(page);
   let downloads = 0; page.on("download", () => downloads++);
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect(page.getByRole("alert").filter({ hasText: "当前没有可导出的可见对象" })).toBeVisible();
   expect(downloads).toBe(0);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
@@ -238,8 +239,8 @@ test("分组内全部对象独立隐藏后，全图不跳动且不导出空白 P
   await hide(page, 0); await hide(page, 1); await close(page);
   await canvasAction(page, "查看全图");
   let downloads = 0; page.on("download", () => downloads++);
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect(page.getByRole("alert").filter({ hasText: "当前没有可导出的可见对象" })).toBeVisible();
   expect(downloads).toBe(0);
   await open(page); await show(page, 0); await expect(shape(page, 0)).toBeVisible();

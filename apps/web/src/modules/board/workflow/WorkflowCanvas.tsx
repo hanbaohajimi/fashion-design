@@ -1,4 +1,5 @@
 "use client";
+import { tldrawAssetUrls } from "../tldraw-assets";
 import dynamic from "next/dynamic";
 import { discardWorkspaceDrafts } from "../../../components/drafts/draft-repository";
 import { ProjectTaskCenter } from "../../tasks/ProjectTaskCenter";
@@ -2047,6 +2048,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                       onDetails={openDetails}
                     >
                       <Tldraw
+                        assetUrls={tldrawAssetUrls}
                         hideUi
                         locale="zh-cn"
                         options={{ createTextOnCanvasDoubleClick: false }}

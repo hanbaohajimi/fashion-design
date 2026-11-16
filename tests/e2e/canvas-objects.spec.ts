@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import type { CanvasSave } from "../../packages/shared/src/canvas-workspace";
@@ -9,7 +10,7 @@ test.setTimeout(60_000);
 const panel = (page: Page) => page.getByRole("region", { name: "画布对象", exact: true });
 const row = (page: Page, index: number) => panel(page).locator(`[data-canvas-object-id="shape:canvas-material-${index}"]`);
 const shape = (page: Page, index: number) => page.locator(`.tl-shape[data-shape-id="shape:canvas-material-${index}"]`);
-const open = async (page: Page) => { await page.getByRole("button", { name: "画布对象", exact: true }).click(); await expect(panel(page)).toBeVisible(); };
+const open = async (page: Page) => { await openCanvasFunction(page, "画布对象"); await expect(panel(page)).toBeVisible(); };
 const close = async (page: Page) => { await panel(page).getByRole("button", { name: "关闭画布对象" }).click(); };
 type RecordShape = { id: string; type: string; typeName: string; x: number; y: number; index: string; parentId: string; isLocked: boolean; props: { title?: string }; meta?: { canvasHidden?: boolean } };
 function records(save?: CanvasSave): RecordShape[] {
@@ -176,7 +177,7 @@ for (const width of [1440, 320]) test(`${width}px 长名称、键盘与定位保
   if (width === 320) { await expect(panel(page)).toBeHidden(); await open(page); }
   await panel(page).getByRole("searchbox").focus(); await page.keyboard.press("Escape");
   await expect(panel(page)).toBeHidden();
-  await expect(page.getByRole("button", { name: "画布对象", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "全部功能模块", exact: true })).toBeFocused();
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
 
@@ -226,7 +227,7 @@ test.describe("对象面板触控", () => {
     const state = await prepareZhiya(page, { realClock: true, count: 30, viewport: { width: 320, height } });
     await loadZhiya(page);
     const before = await shape(page, 0).boundingBox();
-    await page.getByRole("button", { name: "画布对象", exact: true }).tap();
+    await openCanvasFunction(page, "画布对象");
     await expect(panel(page)).toBeVisible();
     await expect(page.locator("[data-zhiya]")).toBeHidden();
     await expect(page.locator("[data-zhiya]")).toHaveAttribute("data-active", "false");

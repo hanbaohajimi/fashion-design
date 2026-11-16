@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { canvasAction } from "./canvas-workspace-controls";
@@ -78,14 +79,14 @@ test("隐藏对象不出现在总览，恢复后立即更新且与对象目录�
   const state = await prepareZhiya(page, { realClock: true, count: 3 });
   await loadZhiya(page); await open(page);
   await expect(map(page)).toHaveAttribute("data-object-count", "3");
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   await expect(panel(page)).toHaveCount(0);
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("button", { name: "隐藏 通勤外套 1", exact: true }).click();
   await open(page);
   await expect(objects).toHaveCount(0);
   await expect(map(page)).toHaveAttribute("data-object-count", "2");
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   await objects.getByRole("button", { name: "显示 通勤外套 1", exact: true }).click();
   await open(page); await expect(map(page)).toHaveAttribute("data-object-count", "3");
   const before = await view(page);
@@ -97,7 +98,7 @@ test("隐藏对象不出现在总览，恢复后立即更新且与对象目录�
 test("总览保留已有选择，双击不会打开详情且绘图工具不会落笔", async ({ page }) => {
   const state = await prepareZhiya(page, { realClock: true });
   await loadZhiya(page);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("button", { name: "选择 通勤外套 1", exact: true }).click();
   await objects.getByRole("button", { name: "关闭画布对象", exact: true }).click();
@@ -109,7 +110,7 @@ test("总览保留已有选择，双击不会打开详情且绘图工具不会�
   await canvasAction(page, "自由手绘"); await open(page);
   const point = await centerPoint(page);
   await page.mouse.move(point.x, point.y); await page.mouse.down(); await page.mouse.move(point.x + 30, point.y + 10, { steps: 5 }); await page.mouse.up();
-  await close(page); await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await close(page); await openCanvasFunction(page, "画布对象");
   await expect(objects.locator("[data-canvas-object-id]")).toHaveCount(3);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
@@ -117,14 +118,14 @@ test("总览保留已有选择，双击不会打开详情且绘图工具不会�
 test("分组隐藏过滤整棵子树，总览随撤销恢复且不计分组外框", async ({ page }) => {
   const state = await prepareZhiya(page, { realClock: true, count: 3 });
   await loadZhiya(page);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("button", { name: "选择 通勤外套 1", exact: true }).click();
   await objects.getByRole("button", { name: "选择 通勤外套 2", exact: true }).click({ modifiers: ["Shift"] });
   await objects.getByRole("button", { name: "关闭画布对象", exact: true }).click();
   await page.getByRole("button", { name: "分组", exact: true }).click();
   await open(page); await expect(map(page)).toHaveAttribute("data-object-count", "3");
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   await objects.getByRole("button", { name: "隐藏 分组", exact: true }).click();
   await open(page); await expect(map(page)).toHaveAttribute("data-object-count", "1");
   await canvasAction(page, "撤销白板操作");
@@ -194,9 +195,9 @@ test("总览和视野框不进入导出，打开后PNG与原图一致", async ({
   const state = await prepareZhiya(page, { realClock: true, count: 10 });
   await loadZhiya(page);
   const download = async () => {
-    await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+
     const pending = page.waitForEvent("download");
-    await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+    await openCanvasFunction(page, "导出画布 PNG");
     const file = await pending, path = await file.path();
     if (!path) throw new Error("没有导出文件");
     return readFile(path);

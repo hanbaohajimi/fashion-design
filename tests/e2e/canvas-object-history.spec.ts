@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { prepareImageComparison } from "./image-comparison-fixture";
@@ -8,7 +9,7 @@ import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 test.setTimeout(60_000);
 const history = (page: Page) => page.getByRole("dialog", { name: "对象历史", exact: true });
 const objects = (page: Page) => page.getByRole("region", { name: "画布对象", exact: true });
-const openObjects = async (page: Page) => { await page.getByRole("button", { name: "画布对象", exact: true }).click(); await expect(objects(page)).toBeVisible(); };
+const openObjects = async (page: Page) => { await openCanvasFunction(page, "画布对象"); await expect(objects(page)).toBeVisible(); };
 async function pathFixture(page: Page) {
   await page.route("**/api/design-assets/*/path", route => {
     const id = new URL(route.request().url()).pathname.split("/")[3];

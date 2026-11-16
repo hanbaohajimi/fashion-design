@@ -1,4 +1,5 @@
 "use client";
+import { tldrawAssetUrls } from "../tldraw-assets";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog } from "../../../components/ui";
@@ -320,6 +321,7 @@ export function LegacyBoardHistory({
             <CanvasLicenseRequired compact />
           ) : (
             <Tldraw
+              assetUrls={tldrawAssetUrls}
               hideUi
               locale="zh-cn"
               onMount={(instance) => {

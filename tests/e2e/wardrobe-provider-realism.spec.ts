@@ -327,11 +327,11 @@ test("真实侧挂候选三底只读核对", async ({ page }) => {
     await page.getByRole("button", { name: "准备新修订", exact: true }).click();
     await page.getByRole("button", { name: "准备侧挂图与挂具宽度", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "准备侧挂展示图" });
-    await dialog.getByRole("button", { name: "核对侧挂候选", exact: true }).click();
+    await dialog.getByRole("button", { name: "核对侧挂图", exact: true }).click();
     await dialog.getByRole("spinbutton", { name: "侧挂点横向 %", exact: true }).fill(String(side.anchor.x * 100));
     await dialog.getByRole("spinbutton", { name: "侧挂点纵向 %", exact: true }).fill(String(side.anchor.y * 100));
     const output = resolve(input.directory, "background", sample.id); await mkdir(output, { recursive: true });
-    const candidate = dialog.getByRole("img", { name: "待核对侧挂候选", exact: true });
+    const candidate = dialog.getByRole("img", { name: "待核对侧挂图", exact: true });
     await expect.poll(() => candidate.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     const source = await candidate.getAttribute("src");
     const control = dialog.getByRole("group", { name: "预览底色", exact: true });

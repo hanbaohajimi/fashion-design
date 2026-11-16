@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { canvasAction } from "./canvas-workspace-controls";
@@ -6,9 +7,9 @@ import { loadZhiya, prepareZhiya } from "./zhiya-fixture";
 test.setTimeout(60_000);
 
 async function exportCanvas(page: Page, name: string) {
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+  await openCanvasFunction(page, "导出画布 PNG");
   const download = await pending;
   const path = `output/playwright/canvas-visibility/${name}.png`;
   await download.saveAs(path);
@@ -18,7 +19,7 @@ async function exportCanvas(page: Page, name: string) {
 test("图片便签色卡导出不含编辑控件，缩放不降质且不修改文档", async ({ page }) => {
   const state = await prepareZhiya(page, { realClock: true, count: 10 });
   await loadZhiya(page);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const panel = page.getByRole("region", { name: "画布对象", exact: true });
   await panel.locator('[data-canvas-object-id="shape:canvas-material-0"]').getByRole("button", { name: /^锁定/ }).click();
   await panel.getByRole("button", { name: "关闭画布对象" }).click();

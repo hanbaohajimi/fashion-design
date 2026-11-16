@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { canvasAction } from "./canvas-workspace-controls";
@@ -53,7 +54,7 @@ test("100 对象白板在对象目录关闭和展开时的原生平移响应", a
   expect(await page.evaluate(() => Boolean((Date as DateConstructor & { isFake?: boolean }).isFake))).toBe(false);
   await page.waitForTimeout(1200);
   const baseline = await sample(page);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const panel = page.getByRole("region", { name: "画布对象", exact: true });
   await expect(panel.locator("[data-canvas-object-id]")).toHaveCount(100);
   await canvasAction(page, "查看全图"); await page.waitForTimeout(1200);

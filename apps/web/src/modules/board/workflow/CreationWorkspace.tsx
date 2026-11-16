@@ -35,6 +35,7 @@ import { CanvasVideoPlayer } from "./CanvasVideoPlayer";
 import nodeStyles from "./node-entry.module.css";
 import { ManualTextEditor } from "./ManualTextEditor";
 import { mergeAssistantConnectionDraft, syncAssistantCreationDraft, type AssistantCreationContext } from "./assistant-creation-context";
+import { canvasImageFitBounds, fitCanvasImageToSource } from "./canvas-image-sizing";
 
 export { CreationShapeUtil };
 const creationShapeId = (id: string) => createShapeId(`creation-${id}`);
@@ -208,6 +209,10 @@ export function CreationWorkspace({ ref, projectId, graph, ready, canEdit, actio
     return { shapes, selected, readOnly: editor.getIsReadonly(), viewport: { x: viewport.x, y: viewport.y, w: viewport.w, h: viewport.h }, idle: editor.isIn("select.idle") };
   }, [editor]);
   const selected = state.shapes.find((shape) => shape.id === state.selected);
+  const imageToFit = useValue("creation-image-fit", () => {
+    const shape = editor.getOnlySelectedShape();
+    return shape?.type === "fashion-image" && canvasImageFitBounds(shape) ? shape.id : null;
+  }, [editor]);
   const selectedCreation = controller.items.find((item) => item.id === selected?.creationId);
   const source = graph.nodes.find((node) => node.id === selected?.nodeId);
   const selectedKey = selectedCreation?.id ?? source?.id;
@@ -215,8 +220,9 @@ export function CreationWorkspace({ ref, projectId, graph, ready, canEdit, actio
   const textMode = selectedCreation?.module === "text" ? (drafts[selectedCreation.id] ?? selectedCreation.draft).textMode ?? "ai" : null;
   const bounds = selected ? creationOverlayLayout(selected.rect, state.viewport) : null;
   const editable = ready && canEdit && controller.canEdit;
+  const layoutEditable = ready && canEdit && !state.readOnly && !selected?.locked;
   // Creation and image tools produce new versions without overwriting source payloads.
-  const selectionEditable = editable && !state.readOnly && !selected?.locked && source?.status !== "proposed";
+  const selectionEditable = layoutEditable && controller.canEdit && source?.status !== "proposed";
   const overlayOpen = functionsOpen || Boolean(moduleSession) || Boolean(resourceSession) || Boolean(history || preview) || Boolean(selected?.image && state.viewport.w < 700);
   const onOverlayChange = actions.onCreationPanelOpenChange;
   useEffect(() => { onOverlayChange?.(overlayOpen); return () => onOverlayChange?.(false); }, [onOverlayChange, overlayOpen]);
@@ -613,6 +619,7 @@ export function CreationWorkspace({ ref, projectId, graph, ready, canEdit, actio
         <span className={styles.secondaryTool}><CanvasAction label="换面料" text="换面料" icon="fabric" disabled={!selectionEditable} onClick={() => report(openEntry("material"))} /></span>
         <WarmTooltip content="更多图片操作" triggerSelector="summary"><Menu nativeTitle={false} key={`${selectedKey}:${assetId ?? "empty"}`} className={styles.toolbarMore} label="更多图片操作" trigger={<><span data-action-label>更多</span><WorkspaceIcon name="chevron" /></>} align="end">{imageToolEntries.slice(3).map((entry) => <button key={entry.action} disabled={!selectionEditable || !source || !imageUrl} onClick={() => report(openImageTool(entry.action))}>{entry.label}</button>)}
           <button disabled={!selectionEditable} onClick={() => report(openEntry("color"))}>换色</button><button disabled={!selectionEditable} onClick={() => report(openEntry("material"))}>换面料</button>
+          {!selectedCreation ? <button type="button" disabled={!layoutEditable || !imageToFit} onClick={() => { if (imageToFit) fitCanvasImageToSource(editor, imageToFit); }}>匹配图片比例</button> : null}
           <button disabled={!editable || !source} onClick={() => report(branch(selectedCreation?.currentResult ?? undefined))}>基于此图继续</button>
           {bounds.compact && actions.onReference ? <button type="button" disabled={actions.referencesPreparing || !source && !selectedCreation?.currentResult?.nodeId} onClick={actions.onReference}>{actions.referencesPreparing ? "正在准备引用…" : "引用到助手"}</button> : null}
           <button disabled={!imageUrl} onClick={() => setPreview(selectedCreation?.currentResult ?? { nodeId: source?.id ?? "", assetId, title: source?.title ?? "图片", imageUrl: imageUrl || null, text: null, width: null, height: null })}>预览图片</button>

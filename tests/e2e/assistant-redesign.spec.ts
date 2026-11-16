@@ -298,7 +298,7 @@ for (const width of [1920, 1440, 1366, 390, 320]) {
   });
 }
 
-test("结果图片完整呈现且比较和修改使用图标", async ({ page }) => {
+test("结果图片完整呈现，图标入口可比较与继续修改", async ({ page }) => {
   const state = await assistantResultsFixture(page);
   await state.open();
   const gallery = page.getByRole("region", {
@@ -319,7 +319,8 @@ test("结果图片完整呈现且比较和修改使用图标", async ({ page }) 
   await gallery
     .getByRole("button", { name: "查看大图：藏蓝通勤外套", exact: true })
     .hover();
-  await gallery
+  await gallery.getByRole("button", { name: "更多图片操作：藏蓝通勤外套", exact: true }).click();
+  await page
     .getByRole("button", { name: "继续修改：藏蓝通勤外套", exact: true })
     .click();
   await expect(input(page)).toBeFocused();

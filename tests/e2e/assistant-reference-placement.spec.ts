@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { expect, test, type Page } from "@playwright/test";
 import { openZhiya } from "./zhiya-fixture";
 import {
@@ -235,7 +236,7 @@ test("放置前画布保存失败时不发送命令，原引用与正文仍可�
   await input(page).fill("保留设计要求");
   await upload(page);
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   state.failSave = true;
   await objects

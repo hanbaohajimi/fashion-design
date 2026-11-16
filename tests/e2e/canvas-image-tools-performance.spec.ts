@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { prepareImageOrientation } from "./image-orientation-fixture";
@@ -30,7 +31,7 @@ test("100对象下反复打开图片工具、旋转预览及返回画布", async
   const state = await prepareImageOrientation(page, 1440, 900, 100);
   expect(await page.evaluate(() => Boolean((Date as DateConstructor & { isFake?: boolean }).isFake))).toBe(false);
   await canvasAction(page, "查看全图");
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("searchbox").fill("藏蓝通勤外套");
   await objects.getByRole("button", { name: "选择 藏蓝通勤外套", exact: true }).click();

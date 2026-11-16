@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { canvasMediaFixture, mediaCard, mediaPanel, openMediaFiles } from "./canvas-media-fixture";
@@ -20,7 +21,7 @@ for (const width of [1440, 320]) test(`${width}px媒体卡片的放置、播放�
   await expect.poll(() => card.locator("video").evaluate((element: HTMLVideoElement) => !element.paused && element.currentTime > 0)).toBe(true);
   await page.waitForTimeout(2200);
   await page.screenshot({ path: `output/playwright/canvas-media/garment-${width}.png` });
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("searchbox", { name: "查找画布对象" }).fill("秋冬服装秀成片");
   await objects.getByRole("button", { name: "选择 秋冬服装秀成片", exact: true }).click();

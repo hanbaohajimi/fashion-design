@@ -1,4 +1,5 @@
 "use client";
+import { tldrawAssetUrls } from "../tldraw-assets";
 import { CanvasSaveStatus } from "./CanvasSaveStatus";
 import {
   useCallback,
@@ -159,6 +160,7 @@ export function InfiniteWorkspace(props: Props) {
       >
           <CanvasMediaActivity value={props.active && props.mediaActive !== false}>
         <Tldraw
+          assetUrls={tldrawAssetUrls}
           store={store}
           shapeUtils={[...boardShapeUtils, CreationShapeUtil]}
           tools={[MountTool] as unknown as TLStateNodeConstructor[]}

@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { prepareZhiya, loadZhiya, zhiya } from "./zhiya-fixture";
@@ -53,7 +54,7 @@ test("100对象白板与60项图片历史浏览，关闭后恢复平移", async 
   await loadZhiya(page); await canvasAction(page, "查看全图"); await page.waitForTimeout(1200);
   expect(await page.evaluate(() => Boolean((Date as DateConstructor & { isFake?: boolean }).isFake))).toBe(false);
   const before = await sample(page, "canvas");
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const start = Date.now();
   await page.getByRole("button", { name: "查看 通勤外套 1 的历史", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "对象历史", exact: true });

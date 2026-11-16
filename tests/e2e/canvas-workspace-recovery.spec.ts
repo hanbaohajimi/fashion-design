@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { canvasAction } from "./canvas-workspace-controls";
 import { expect, test, type Page } from "@playwright/test";
 import { seedVisualApp, PROJECT, NOW } from "../visual/fixtures";
@@ -731,7 +732,7 @@ test("手绘在素材回执到达前锁定和隐藏，元数据与新版图片�
   await page.getByRole("button", { name: "选择工具", exact: true }).click();
   await page.mouse.click(530, 500);
   await expect.poll(() => fixture.commands.length).toBe(1);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   const target = objects.locator(`[data-canvas-object-id="${id}"]`);
   await target.getByRole("button", { name: /^锁定/ }).click();
@@ -755,7 +756,7 @@ test("手绘在素材回执到达前锁定和隐藏，元数据与新版图片�
     canvasNodeId: updatedNode.id, canvasFileAssetId: "new-sketch-version", originalCanvasStroke: { type: "draw" }, canvasHidden: true,
   } });
   await page.reload();
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   await expect(target).toContainText("已经调整的廓形");
   await expect(target).toHaveAttribute("data-locked", "true");
   await expect(target).toHaveAttribute("data-hidden", "true");

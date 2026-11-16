@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { loadZhiya, prepareZhiya } from "./zhiya-fixture";
@@ -5,13 +6,20 @@ import { canvasAction } from "./canvas-workspace-controls";
 
 const proofDirectory = `output/playwright/canvas-image-sizing/${process.env.IMAGE_PROOF_PHASE === "before" ? "before" : "after"}`;
 const shape = (page: Page) => page.locator('.tl-shape[data-shape-id="shape:canvas-material-0"]');
+const visibleImage = (page: Page) => shape(page).locator("[data-canvas-image=plain]");
 const objects = (page: Page) => page.getByRole("region", { name: "画布对象", exact: true });
 const imageRow = (page: Page) => objects(page).locator('[data-canvas-object-id="shape:canvas-material-0"]');
 
 async function selectImage(page: Page) {
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   await imageRow(page).getByRole("button", { name: /^选择/ }).click();
   await objects(page).getByRole("button", { name: "关闭画布对象" }).click();
+}
+
+async function fitControl(page: Page) {
+  const trigger = page.getByRole("toolbar", { name: "常用图片工具", exact: true }).getByRole("button", { name: "更多图片操作", exact: true });
+  if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+  return page.getByRole("group", { name: "更多图片操作选项", exact: true }).getByRole("button", { name: "匹配图片比例", exact: true });
 }
 
 function edgeImage(width: number, height: number, transparent = false) {
@@ -41,9 +49,9 @@ async function loaded(page: Page) {
 }
 
 async function exportPixels(page: Page, name: string) {
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+
   const pending = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+  await openCanvasFunction(page, "导出画布 PNG");
   const download = await pending;
   await mkdir(proofDirectory, { recursive: true });
   await download.saveAs(`${proofDirectory}/${name}.png`);
@@ -73,7 +81,7 @@ for (const [name, width, height] of [["宽幅", 1200, 300], ["竖幅", 300, 1200
     await loadZhiya(page); await loaded(page);
     const pixels = await exportPixels(page, name);
     for (const [color, count] of Object.entries(pixels)) expect(count, `${name}的${color}边缘应保留`).toBeGreaterThan(40);
-    const box = await shape(page).boundingBox();
+    const box = await visibleImage(page).boundingBox();
     if (!box) throw new Error("图片不可见");
     expect(box.width / box.height).toBeCloseTo(width / height, 3);
     await page.screenshot({ path: `${proofDirectory}/${name}-canvas.png` });
@@ -84,21 +92,29 @@ for (const [name, width, height] of [["宽幅", 1200, 300], ["竖幅", 300, 1200
 test("缺失尺寸的旧摆放完整显示，可匹配比例、撤销重做并刷新恢复", async ({ page }) => {
   const state = await prepareImage(page, 1200, 300, false);
   await loadZhiya(page); await loaded(page);
-  const before = await shape(page).boundingBox();
-  if (!before) throw new Error("旧摆放不可见");
-  expect(before.width / before.height).toBeCloseTo(320 / 380, 3);
+  const initial = await visibleImage(page).boundingBox();
+  if (!initial) throw new Error("旧摆放不可见");
+  expect(initial.width / initial.height).toBeCloseTo(4, 3);
   for (const count of Object.values(await exportPixels(page, "旧摆放完整显示"))) expect(count).toBeGreaterThan(40);
   await selectImage(page);
-  const fit = page.getByRole("button", { name: "匹配图片比例", exact: true });
-  await expect(fit).toBeEnabled(); await fit.click();
-  const after = await shape(page).boundingBox();
+  const fit = await fitControl(page);
+  await expect(fit).toBeEnabled();
+  const before = await visibleImage(page).boundingBox();
+  if (!before) throw new Error("选中图片不可见");
+  await fit.click();
+  const after = await visibleImage(page).boundingBox();
   if (!after) throw new Error("比例调整后不可见");
   expect(after.width / after.height).toBeCloseTo(4, 3);
   expect(after.x + after.width / 2).toBeCloseTo(before.x + before.width / 2, 1);
   expect(after.y + after.height / 2).toBeCloseTo(before.y + before.height / 2, 1);
-  await expect(fit).toBeDisabled();
+  await expect(await fitControl(page)).toBeDisabled();
+  await page.keyboard.press("Escape");
   await canvasAction(page, "撤销白板操作");
-  expect(await shape(page).boundingBox()).toEqual(before);
+  expect(await visibleImage(page).boundingBox()).toEqual(before);
+  await expect.poll(() => {
+    const document = state.saves.at(-1)?.snapshot.document as { store?: Record<string, { props?: { h?: number } }> } | undefined;
+    return document?.store?.["shape:canvas-material-0"]?.props?.h;
+  }).toBe(380);
   await canvasAction(page, "重做白板操作");
   await expect.poll(() => {
     const store = state.saves.at(-1)?.snapshot.document as { store?: Record<string, { props?: { w?: number; h?: number } }> } | undefined;
@@ -112,22 +128,23 @@ test("缺失尺寸的旧摆放完整显示，可匹配比例、撤销重做并�
   delete legacyProps.imageHeight;
   delete legacyProps.imageSource;
   await page.reload(); await loaded(page);
-  await expect.poll(() => shape(page).boundingBox()).toEqual(after);
+  await expect.poll(() => visibleImage(page).boundingBox()).toEqual(after);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
 
 for (const readonly of [false, true]) test(`${readonly ? "只读" : "锁定"}图片保持完整，拒绝修改比例`, async ({ page }) => {
   const state = await prepareImage(page, 1200, 300, false, !readonly);
   await loadZhiya(page); await loaded(page);
-  const before = await shape(page).boundingBox();
   if (!readonly) {
-    await page.getByRole("button", { name: "画布对象", exact: true }).click();
+    await openCanvasFunction(page, "画布对象");
     await imageRow(page).getByRole("button", { name: /^锁定/ }).click();
     await objects(page).getByRole("button", { name: "关闭画布对象" }).click();
   }
   await selectImage(page);
-  await expect(page.getByRole("button", { name: "匹配图片比例", exact: true })).toBeDisabled();
-  expect(await shape(page).boundingBox()).toEqual(before);
+  const before = await visibleImage(page).boundingBox();
+  await expect(await fitControl(page)).toBeDisabled();
+  await page.keyboard.press("Escape");
+  expect(await visibleImage(page).boundingBox()).toEqual(before);
   for (const count of Object.values(await exportPixels(page, readonly ? "只读图片" : "锁定图片"))) expect(count).toBeGreaterThan(40);
   if (readonly) expect(state.saves).toEqual([]);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
@@ -136,13 +153,13 @@ for (const readonly of [false, true]) test(`${readonly ? "只读" : "锁定"}图
 test("只读变为可编辑后，已加载的旧图片无需刷新即可匹配比例", async ({ page }) => {
   const state = await prepareImage(page, 1200, 300, false, false);
   await loadZhiya(page); await loaded(page); await selectImage(page);
-  const fit = page.getByRole("button", { name: "匹配图片比例", exact: true });
+  const fit = await fitControl(page);
   await expect(fit).toBeDisabled();
   expect(state.saves).toEqual([]);
   state.setCanEdit(true); state.graph.revision++;
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   await expect(fit).toBeEnabled(); await fit.click();
-  const bounds = await shape(page).boundingBox();
+  const bounds = await visibleImage(page).boundingBox();
   if (!bounds) throw new Error("图片没有呈现");
   expect(bounds.width / bounds.height).toBeCloseTo(4, 3);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
@@ -151,22 +168,30 @@ test("只读变为可编辑后，已加载的旧图片无需刷新即可匹配�
 test("新版图片比例变化保留摆放和位置，以新图片尺寸匹配且可撤销", async ({ page }) => {
   const state = await prepareImage(page, 1200, 300);
   await loadZhiya(page); await loaded(page);
-  const before = await shape(page).boundingBox();
+  const before = await visibleImage(page).boundingBox();
   await page.route("**/canvas-image-size-v2.svg", route => route.fulfill({ contentType: "image/svg+xml", body: edgeImage(300, 1200) }));
   state.node.payload = { assetId: "look-0-v2", imageUrl: "/canvas-image-size-v2.svg", width: 300, height: 1200 };
   state.graph.revision++;
   await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   await expect(shape(page).locator("img")).toHaveAttribute("src", "/canvas-image-size-v2.svg");
   await loaded(page);
-  expect(await shape(page).boundingBox()).toEqual(before);
+  const updated = await visibleImage(page).boundingBox();
+  if (!before || !updated) throw new Error("图片不可见");
+  expect(updated.x + updated.width / 2).toBeCloseTo(before.x + before.width / 2, 1);
+  expect(updated.y + updated.height / 2).toBeCloseTo(before.y + before.height / 2, 1);
+  expect(updated.width / updated.height).toBeCloseTo(.25, 3);
   // The old short frame makes the new portrait small; all four edges must still survive.
   for (const count of Object.values(await exportPixels(page, "新版保留摆放"))) expect(count).toBeGreaterThan(0);
-  await selectImage(page); await page.getByRole("button", { name: "匹配图片比例", exact: true }).click();
-  const after = await shape(page).boundingBox();
+  await selectImage(page); await (await fitControl(page)).click();
+  const after = await visibleImage(page).boundingBox();
   if (!after) throw new Error("新版图片不可见");
   expect(after.width / after.height).toBeCloseTo(.25, 3);
   await canvasAction(page, "撤销白板操作");
-  expect(await shape(page).boundingBox()).toEqual(before);
+  expect(await visibleImage(page).boundingBox()).toEqual(updated);
+  await expect.poll(() => {
+    const document = state.saves.at(-1)?.snapshot.document as { store?: Record<string, { props?: { w?: number } }> } | undefined;
+    return document?.store?.["shape:canvas-material-0"]?.props?.w;
+  }).toBe(320);
   await expect(shape(page).locator("img")).toHaveAttribute("src", "/canvas-image-size-v2.svg");
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
@@ -182,11 +207,15 @@ test("透明参考图片不透出占位说明，加载失败可在原位置重�
   });
   await loadZhiya(page);
   await expect(shape(page).getByText("图片暂不可用", { exact: true })).toBeVisible();
-  const before = await shape(page).boundingBox();
+  const before = await visibleImage(page).boundingBox();
   await shape(page).getByRole("button", { name: "重新加载图片", exact: true }).click();
   await loaded(page);
   await expect(shape(page).getByText(/图片暂不可用|正在载入图片|IMAGE \/ CDN/)).toHaveCount(0);
-  expect(await shape(page).boundingBox()).toEqual(before);
+  const loadedBounds = await visibleImage(page).boundingBox();
+  if (!before || !loadedBounds) throw new Error("图片不可见");
+  expect(loadedBounds.width / loadedBounds.height).toBeCloseTo(4, 3);
+  expect(loadedBounds.x + loadedBounds.width / 2).toBeCloseTo(before.x + before.width / 2, 1);
+  expect(loadedBounds.y + loadedBounds.height / 2).toBeCloseTo(before.y + before.height / 2, 1);
   for (const count of Object.values(await exportPixels(page, "透明参考图片"))) expect(count).toBeGreaterThan(40);
   expect(requests).toBeGreaterThanOrEqual(2);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
@@ -197,11 +226,11 @@ test("320px窄屏可从图片操作区匹配比例并保留居中", async ({ pag
   await page.setViewportSize({ width: 320, height: 568 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await loadZhiya(page); await loaded(page);
-  const before = await shape(page).boundingBox();
+  const before = await visibleImage(page).boundingBox();
   await selectImage(page);
-  const fit = page.getByRole("button", { name: "匹配图片比例", exact: true });
+  const fit = await fitControl(page);
   await fit.scrollIntoViewIfNeeded(); await expect(fit).toBeInViewport(); await fit.click();
-  const after = await shape(page).boundingBox();
+  const after = await visibleImage(page).boundingBox();
   if (!before || !after) throw new Error("窄屏图片不可见");
   expect(after.width / after.height).toBeCloseTo(.25, 3);
   expect(after.x + after.width / 2).toBeCloseTo(before.x + before.width / 2, 1);
@@ -221,8 +250,8 @@ test("图片读取失败不下载缺图文件，恢复后可用同一地址重�
   await loadZhiya(page);
   await expect(shape(page).getByText("图片暂不可用", { exact: true })).toBeVisible();
   let downloads = 0; page.on("download", () => downloads++);
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect(page.getByRole("alert").filter({ hasText: "暂时无法导出" })).toBeVisible();
   expect(downloads).toBe(0);
   available = true;
@@ -244,8 +273,8 @@ test("导出等待期间图片版本更新时，提示重试并避免混用新�
   await page.route("**/canvas-image-size-v2.svg", route => route.fulfill({ contentType: "image/svg+xml", body: edgeImage(300, 1200) }));
   await loadZhiya(page); await loaded(page); hold = true;
   let downloads = 0; page.on("download", () => downloads++);
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect.poll(() => started).toBe(true);
   state.node.payload = { imageUrl: "/canvas-image-size-v2.svg", width: 300, height: 1200 };
   state.graph.revision++;
@@ -281,8 +310,8 @@ test("损坏图片即使返回成功状态也不生成缺图文件", async ({ pa
   await loadZhiya(page);
   await expect(shape(page).getByText("图片暂不可用", { exact: true })).toBeVisible();
   let downloads = 0; page.on("download", () => downloads++);
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect(page.getByRole("alert").filter({ hasText: "暂时无法导出" })).toBeVisible();
   expect(downloads).toBe(0); expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
@@ -301,8 +330,8 @@ test("离开项目取消尚在读取图片的导出，不在其他页面下载�
   page.on("requestfailed", request => { if (request.url().endsWith("/canvas-image-size.svg")) failed = true; });
   let downloads = 0; page.on("download", () => downloads++);
   await loadZhiya(page); await loaded(page); hold = true;
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+
+  await openCanvasFunction(page, "导出画布 PNG");
   await expect.poll(() => started).toBe(true);
   await page.goto("/projects");
   await expect.poll(() => failed).toBe(true);

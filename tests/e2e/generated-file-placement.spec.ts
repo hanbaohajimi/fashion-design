@@ -48,7 +48,7 @@ test("未归档图片放置不创建新版本，不移动原图和聊天草稿",
 
 test("已有画布保存失败时不发送放置，草稿留在原处可重试", async ({ page }) => {
   const state = await generatedFilePlacementFixture(page); await loadZhiya(page);
-  await page.getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const object = page.getByRole("region", { name: "画布对象", exact: true });
   state.failSave = true;
   await object.getByRole("button", { name: "隐藏 通勤外套 1", exact: true }).click();

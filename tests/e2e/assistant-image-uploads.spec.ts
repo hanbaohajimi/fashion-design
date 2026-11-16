@@ -345,7 +345,7 @@ test("账号切换不显示旧附件与迟到引用，只读项目没有上传�
     ),
   );
   await expect(
-    page.getByRole("button", { name: "上传图片", exact: true }),
+    page.getByLabel("选择助手参考图片", { exact: true }),
   ).toBeEnabled();
   release();
   state.holdSign = null;

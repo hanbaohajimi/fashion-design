@@ -64,8 +64,11 @@ for (const width of [1440, 390])
         exact: true,
       });
       const shapeIdentity = await image.elementHandle();
+      const beforeWheel = await image.boundingBox();
+      if (!beforeWheel) throw new Error("画布图片未就绪");
       await page.mouse.move(width / 2, 320);
       await page.mouse.wheel(50, 90);
+      await expect.poll(async () => (await image.boundingBox())?.x).toBeCloseTo(beforeWheel.x - 50, 1);
       const before = await image.boundingBox();
       await openCanvasFunction(page, panel.title);
       const dialog = page.getByRole("dialog", {

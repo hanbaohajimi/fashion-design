@@ -1,3 +1,4 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
 import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { canvasMediaFixture, mediaCard, mediaPanel, openMediaFiles, placeMedia } from "./canvas-media-fixture";
@@ -57,8 +58,7 @@ test("白板隐藏媒体后停止播放，移动和刷新只更新摆放", async
   const moved = await header.boundingBox(); expect(moved?.x).not.toBe(before.x);
   await card.getByRole("button", { name: "播放 秋冬服装秀成片", exact: true }).click();
   const video = await card.locator("video").elementHandle();
-  await page.getByRole("button", { name: "全部功能模块", exact: true }).click();
-  await page.getByRole("dialog", { name: "全部功能模块", exact: true }).getByRole("region", { name: "画布管理", exact: true }).getByRole("button", { name: "画布对象", exact: true }).click();
+  await openCanvasFunction(page, "画布对象");
   const objects = page.getByRole("region", { name: "画布对象", exact: true });
   await objects.getByRole("button", { name: "隐藏 秋冬服装秀成片", exact: true }).click();
   await expect.poll(() => video?.evaluate((element: HTMLVideoElement) => element.paused)).toBe(true);
@@ -93,7 +93,7 @@ test("播放失败可重载，下载沿用原文件；静态画布导出明确�
   await expect(mediaCard(page).getByRole("status")).toContainText("原文件暂不可用");
   state.failContent = false;
   const download = page.waitForEvent("download"); await mediaCard(page).getByRole("button", { name: "原文件", exact: true }).click(); expect((await download).suggestedFilename()).toBe("video.mp4");
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click(); await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
+   await openCanvasFunction(page, "导出画布 PNG");
   await expect(page.getByRole("alert").filter({ hasText: "不能导出为静态图片" })).toBeVisible();
   expect(state.placements).toHaveLength(1); expect(state.errors).toEqual([]);
 });
