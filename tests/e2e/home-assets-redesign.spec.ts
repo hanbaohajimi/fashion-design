@@ -454,9 +454,7 @@ for (const width of [1920, 1440, 1366, 390])
       "data-nav-reserved",
       "false",
     );
-    if (width >= 1200) {
-      await expect(page.getByText("先说说你想做的服装", { exact: true })).toBeVisible();
-    }
+    await expect(page.getByLabel("无限白板", { exact: true })).toBeVisible();
     await settleImages(page);
     await page.screenshot({
       path: `${output}/canvas-${width}.png`,
@@ -507,6 +505,7 @@ test("旧创建链接、画布重命名与返回项目列表仍可使用", async
       },
     });
   });
+  await seedCanvas(page);
   await page.goto(`/${PROJECT}`);
   await openCanvasFunction(page, "重命名项目");
   const dialog = page.getByRole("dialog", { name: "重命名项目", exact: true });
