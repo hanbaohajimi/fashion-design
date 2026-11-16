@@ -1,7 +1,7 @@
 import { seedNodeInteraction } from "./node-stage-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
-import { openImageDetails } from "./workflow-navigation";
+import { openCanvasFunction } from "./canvas-function-navigation";
 
 // These scenarios exercise the editable workflow, not the default design workbench.
 test.beforeEach(async ({ page }) => {
@@ -129,21 +129,21 @@ test("项目库可以安全退出并返回登录页", async ({ page }) => {
     await route.fulfill({ status: 204 });
   });
 
-  await page.goto("/");
+  await page.goto("/projects");
   await expect(page.getByLabel("logout@example.com", { exact: true })).toBeVisible();
 
   const workspaceNavigation = page.getByRole("navigation", {
     name: "工作区导航",
   });
   await expect(
-    workspaceNavigation.getByRole("link", { name: "项目库" }),
+    workspaceNavigation.getByRole("link", { name: "项目", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(
-    workspaceNavigation.getByRole("link", { name: "趋势档案" }),
+    workspaceNavigation.getByRole("link", { name: "发现", exact: true }),
   ).toHaveAttribute("href", "/trends?from=projects");
   await expect(
     workspaceNavigation.getByRole("link", { name: "面料库" }),
-  ).toHaveAttribute("href", "/fabrics");
+  ).toHaveAttribute("href", "/fabrics?from=projects");
 
   await expect(
     page.getByRole("heading", { name: "从第一个系列开始" }),
@@ -324,7 +324,7 @@ test("新建项目成功后立即进入空白设计工作流", async ({ page }) 
   const canvas = page.getByRole("region", { name: "设计工作流画布" });
   await expect(canvas).toBeVisible();
   await expect(canvas.getByRole("heading", { name: "让想法成为设计方案" })).toBeVisible();
-  await expect(canvas.getByRole("button", { name: "开始设计", exact: true })).toBeVisible();
+  await expect(canvas.getByRole("button", { name: "开始设计对话", exact: true })).toBeVisible();
   await expect(canvas.getByRole("button", { name: "＋ 添加素材" })).toBeVisible();
 });
 
@@ -488,18 +488,16 @@ test("本地图片从素材菜单上传后保留来源文件 ID 和名称", asyn
     size: 4,
   });
   await expect.poll(() => workflow.graph.nodes.filter((node) => node.type === "reference_image")).toHaveLength(1);
-  await expect.poll(() => inferredNodeId).toBe(workflow.graph.nodes[0]?.id);
+  expect(inferredNodeId).toBeUndefined();
   expect(workflow.graph.nodes[0]?.payload).toMatchObject({
     fileAssetId: "file-reference-1",
     imageUrl: "/api/files/file-reference-1/thumbnail/1024",
     sourceName: "reference.png",
-    role: "silhouette_ref",
-    roleSource: "inferred",
-    roleInferenceState: "ready",
   });
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   await page.locator('[data-type="reference_image"]').dblclick();
-  await expect(page.getByText(/当前标签：廓形参考\s*模型建议/u)).toBeVisible();
+  await expect(page.getByText(/当前标签：/u)).toHaveCount(0);
+  expect(workflow.graph.nodes[0]?.payload.roleInferenceState).toBeUndefined();
   await page.reload();
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
   expect(workflow.semanticMutations).toHaveLength(1);
@@ -812,32 +810,37 @@ test("约束与参考生成的候选只落图一次，保留来源、尝试与 P
   await page.getByText("执行记录", { exact: true }).click();
   await page.getByRole("button", { name: "读取尝试记录" }).click();
   await expect(page.getByText("来源：秋冬通勤约束、廓形参考")).toBeVisible();
-  await expect(page.getByText("参考角色：silhouette_ref 权重 0.7")).toBeVisible();
+  await expect(page.getByText("参考角色：silhouette_ref 权重 0.7")).toHaveCount(0);
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await details.getByRole("button", { name: "返回画布" }).click();
   await page.getByRole("button", { name: "适合画布", exact: true }).click();
   await canvas.locator('[data-type="candidate"]').dblclick();
   await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
-  await openImageDetails(page);
-  await page.getByPlaceholder("记录选择或否决理由").fill("更符合通勤场景");
-  await page.getByRole("button", { name: "保存决定" }).click();
-  await expect.poll(() => candidateDecision).toMatchObject({
-    assetId: "asset-e2e-1",
-    kind: "selected",
-    reason: "更符合通勤场景",
-  });
-  expect(candidateDecision?.mutationId).toMatch(/^[0-9a-f-]{36}$/u);
+  const imageWorkspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
+  await expect(imageWorkspace.getByRole("img", { name: "候选 A", exact: true })).toHaveAttribute("src", "/api/design-assets/asset-e2e-1/content");
+  expect(candidateDecision).toBeUndefined();
   await page.getByRole("button", { name: "关闭图片工作区" }).click();
 
+  // Historical execution remains readable; export uses the unified canvas's
+  // current catalog after the server projects these same asset identities.
+  await page.route("**/api/projects/e2e-project/canvas**", route => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: false } });
+    return route.fulfill({ json: {
+      projectId: "e2e-project", mode: "canvas", revision: 0, formatVersion: 1,
+      initializedFrom: "workflow", canEdit: false, snapshot: {},
+      bindings: workflow.graph.nodes.filter(node => node.kind === "asset").map(node => ({ shapeId: `shape:canvas-${node.id}`, nodeId: node.id, removed: false })),
+    } });
+  });
+  await page.reload();
+  await expect(canvas.locator('[data-canvas-node-id="candidate-e2e-1"]')).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByText("资料与更多", { exact: true }).click();
-  await page.getByRole("button", { name: "导出画布 PNG" }).click();
+  await openCanvasFunction(page, "导出画布 PNG");
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("fashion-workflow-e2e-project.png");
 
   await page.reload();
-  await expect(canvas.locator('[data-type="candidate"]')).toHaveCount(1);
-  await expect(canvas.locator('[data-type="reference_image"]')).toHaveCount(1);
+  await expect(canvas.locator('[data-canvas-node-id="candidate-e2e-1"]')).toHaveCount(1);
+  await expect(canvas.locator('[data-canvas-node-id="reference"]')).toHaveCount(1);
   expect(workflow.graph.nodes.filter((node) => node.type === "candidate")).toHaveLength(1);
   expect(executeCount).toBe(1);
 });

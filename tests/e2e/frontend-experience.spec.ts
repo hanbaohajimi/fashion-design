@@ -207,7 +207,7 @@ test("趋势读取等待认证完成，空档案与空周报在页面切换后�
   await expect(
     page.getByText("面料档案还是空的", { exact: false }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "趋势档案", exact: true }).click();
+  await page.getByRole("link", { name: "发现", exact: true }).click();
   await expect(
     page.getByText("尚无已采集档案", { exact: false }),
   ).toBeVisible();
@@ -256,13 +256,13 @@ test("认证暂时不可用时显示恢复入口，不把失败显示为空档�
   );
   await page.goto("/trends");
   await expect(
-    page.getByRole("alert").filter({ hasText: "认证服务暂时不可用" }),
+    page.getByRole("alert").filter({ hasText: "登录状态暂时无法恢复" }),
   ).toBeVisible();
   await expect(page.getByText("尚无已采集档案", { exact: false })).toHaveCount(
     0,
   );
   available = true;
-  await page.getByRole("button", { name: "重新加载档案" }).click();
+  await page.getByRole("button", { name: "重试会话" }).click();
   await expect(
     page.getByText("尚无已采集档案", { exact: false }),
   ).toBeVisible();

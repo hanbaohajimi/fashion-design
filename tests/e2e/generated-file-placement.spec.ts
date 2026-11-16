@@ -22,7 +22,7 @@ for (const width of [1440, 320]) test(`${width}px归档历史放回为新版本�
   await expect(panel(page)).toHaveCount(0);
   const node = state.getGraph().nodes.find(node => node.payload.assetId === "restored-1"); if (!node) throw new Error("恢复结果不存在");
   const image = page.locator(`[data-canvas-node-id="${node.id}"]`); await expect(image).toBeVisible();
-  await page.getByRole("button", { name: "查看详情", exact: true }).click();
+  await page.getByRole("toolbar", { name: "常用图片工具", exact: true }).getByRole("button", { name: "移除背景", exact: true }).click();
   const workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await expect(workspace).toBeVisible();
   await expect(workspace.getByRole("img", { name: "已移出画布的初稿", exact: true })).toHaveAttribute("src", "/api/design-assets/restored-1/content");

@@ -11,6 +11,7 @@ export async function generatedFilePlacementFixture(page: Page, options: { width
   const receipts = new Map<string, string>();
   await page.route(`**/api/projects/${PROJECT}/workflow**`, route => route.fulfill({ json: route.request().url().endsWith("/tools") ? { agentVersion: 2, tools: [] } : graph }));
   await page.route(`**/api/projects/${PROJECT}/canvas**`, async route => {
+    if (route.request().url().endsWith("/creations")) return route.fulfill({ json: { items: [], canEdit: options.canEdit ?? true } });
     if (route.request().url().endsWith("/commands")) {
       const command = canvasCommandSchema.parse(route.request().postDataJSON());
       if (command.type !== "place_generated_asset") throw new Error("放置不得提交生成任务");
