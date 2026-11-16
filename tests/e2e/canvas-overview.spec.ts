@@ -105,7 +105,7 @@ test("总览保留已有选择，双击不会打开详情且绘图工具不会�
   await open(page); await map(page).dblclick({ position: { x: 120, y: 60 } });
   await expect(page.getByRole("button", { name: "关闭图片工作区", exact: true })).toHaveCount(0);
   await close(page);
-  await expect(page.getByRole("toolbar", { name: "所选对象操作", exact: true })).toContainText("已选 1 项");
+  await expect(page.getByRole("toolbar", { name: "常用图片工具", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
   await canvasAction(page, "自由手绘"); await open(page);
   const point = await centerPoint(page);

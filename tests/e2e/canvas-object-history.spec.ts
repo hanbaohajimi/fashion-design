@@ -27,7 +27,8 @@ test("从所选图片浏览历史、比较和路径，保留画布及聊天草�
   const box = await image.boundingBox(); if (!box) throw new Error("图片不可见");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   const before = await image.boundingBox();
-  const trigger = page.getByRole("button", { name: "查看历史", exact: true });
+  await openObjects(page);
+  const trigger = objects(page).getByRole("button", { name: "查看 藏蓝通勤外套 的历史", exact: true });
   await trigger.click();
   await expect(history(page)).toBeVisible();
   await expect(history(page).getByRole("button", { name: "恢复此版" })).toHaveCount(0);

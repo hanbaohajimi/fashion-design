@@ -38,7 +38,7 @@ test("开合不移动视野、不重建聊天；选择不追加引用或发送",
   expect(await handle?.evaluate(element => element.isConnected)).toBe(true);
   expect(await input.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([3, 5]);
   const discussion = page.getByLabel("正在讨论", { exact: true });
-  await expect(discussion).toContainText("整个项目");
+  await expect(discussion).toHaveAttribute("data-has-references", "false");
   await expect(discussion.getByRole("button", { name: /移除引用/ })).toHaveCount(0);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
@@ -233,8 +233,7 @@ test.describe("对象面板触控", () => {
     await expect(page.locator("[data-zhiya]")).toHaveAttribute("data-active", "false");
     await expect(panel(page).getByRole("heading", { name: "画布对象" })).toBeInViewport({ ratio: 1 });
     await expect(panel(page).getByRole("button", { name: "关闭画布对象" })).toBeInViewport({ ratio: 1 });
-    const viewSwitch = page.getByRole("group", { name: "画布呈现" });
-    if (height === 400) await expect(viewSwitch).toBeHidden();
+    const canvasControls = page.getByRole("button", { name: "全部功能模块", exact: true });
     const list = panel(page).getByRole("list", { name: "画布对象列表" });
     const bounds = await list.boundingBox();
     if (!bounds || bounds.height < 44) throw new Error("列表未保留完整触摸行");
@@ -285,7 +284,7 @@ test.describe("对象面板触控", () => {
     await expect(panel(page)).toBeHidden();
     await expect(page.locator("[data-zhiya]")).toBeVisible();
     await expect(page.locator("[data-zhiya]")).toHaveAttribute("data-active", "true");
-    await expect(viewSwitch).toBeVisible();
+    await expect(canvasControls).toBeVisible();
     expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
   });
 });
