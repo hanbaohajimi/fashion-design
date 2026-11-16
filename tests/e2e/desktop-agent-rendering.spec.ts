@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { seedVisualApp, PROJECT, settleImages } from "../visual/fixtures";
+import { settleImages } from "../visual/fixtures";
+import { prepareZhiya, loadZhiya, openZhiya } from "./zhiya-fixture";
+import { openCanvasFunction } from "./canvas-function-navigation";
 
 const audit = readFileSync("scripts/manual/clip-audit.js", "utf8");
 
@@ -9,10 +11,11 @@ for (const dpr of [1, 1.25, 2]) {
   test(`多状态阴影与焦点 DPR ${dpr}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: dpr, baseURL: "http://127.0.0.1:3000" });
     const page = await context.newPage();
-    await seedVisualApp(page);
+    await prepareZhiya(page, { count: 1, realClock: true });
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.goto(`/${PROJECT}`);
-    await expect(page.getByRole("heading", { name: "方案与灵感" })).toBeInViewport();
+    await loadZhiya(page);
+    await openZhiya(page);
+    await expect(page.getByRole("group", { name: "通勤外套 1", exact: true })).toBeInViewport();
     await settleImages(page);
     const directory = `output/desktop-agent-ui/states/${dpr}`;
     await mkdir(directory, { recursive: true });
@@ -23,10 +26,10 @@ for (const dpr of [1, 1.25, 2]) {
       expect.soft(result.cut, `${state} shadow clipping`).toBe(0);
     };
     await capture("default");
-    const task = page.getByRole("button", { name: /^项目任务/ });
+    const task = page.getByRole("button", { name: "全部功能模块", exact: true });
     await task.hover();
     await capture("hover");
-    await task.click();
+    await openCanvasFunction(page, "项目任务");
     const dialog = page.getByRole("dialog", { name: "项目任务", exact: true });
     await expect(dialog).toBeVisible();
     await capture("expanded");

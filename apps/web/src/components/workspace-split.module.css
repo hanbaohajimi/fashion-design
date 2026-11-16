@@ -27,7 +27,8 @@
   border-radius: 16px;
   background: var(--surface-2);
   color: var(--color-ink);
-  box-shadow: var(--shadow-panel-v3);
+  /* The floating window reserves a 16px gutter inside its clipping host. */
+  box-shadow: 0 1px 3px rgba(28, 43, 38, 0.06), 0 8px 20px -12px rgba(28, 43, 38, 0.16);
   overflow: visible;
   z-index: 30;
 }
