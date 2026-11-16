@@ -37,7 +37,7 @@ export function resolveGuideSteps(surface: GuideSurface): ResolvedGuideStep[] {
 }
 
 export function hasGuideBlocker(): boolean {
-  return [...document.querySelectorAll<HTMLElement>('dialog[open],[role="dialog"][aria-modal="true"],[data-popup-kind]')].some(element =>
+  return [...document.querySelectorAll<HTMLElement>('dialog[open]:not([role="presentation"]),[role="dialog"][aria-modal="true"],[data-popup-kind]')].some(element =>
     !element.closest("[data-feature-guide]") && hasGuideLayout(element),
   );
 }

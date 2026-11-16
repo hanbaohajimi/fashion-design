@@ -173,7 +173,7 @@ for (const width of [390, 1440]) {
     await page.goto(`/${PROJECT}`);
     await expect(guide(page)).toBeVisible();
     const titles = await finishGuide(page);
-    expect(titles).toContain("和设计助手讨论想法");
+    expect(titles).toContain("和设计助手一起创作");
     expect(titles).not.toContain("明确告诉助手参考什么");
     await expect(page.getByRole("complementary", { name: "设计助手", exact: true })).toBeHidden();
     expect(await page.evaluate(key => localStorage.getItem(key), splitKey)).toBe(savedSplit);
@@ -421,18 +421,18 @@ test("完成同类页面指引后，切换项目不会重新自动介绍", async
   expect(writes).toEqual([]);
 });
 
-test("助手模态展开时等待用户关闭，再介绍工作台", async ({ page }) => {
+test("助手非模态浮窗展开时可介绍工作台，完成后保留助手", async ({ page }) => {
   const writes = await prepare(page);
   await page.setViewportSize({ width: 900, height: 900 });
   await page.goto(`/${PROJECT}?conversationId=visual-chat`);
-  const assistant = page.getByRole("dialog", { name: "设计助手面板", exact: true });
+  const assistant = page.locator("#workflow-design-assistant");
   await expect(assistant).toBeVisible();
-  await page.waitForTimeout(1000);
-  await expect(guide(page)).toBeHidden();
-  await assistant.getByRole("button", { name: "收起设计助手", exact: true }).click();
+  const splitKey = `fashion:workspace-split:visual-designer:${PROJECT}`;
+  const preference = await page.evaluate(key => localStorage.getItem(key), splitKey);
   await expect(guide(page)).toBeVisible();
   await finishGuide(page);
-  await expect(assistant).toBeHidden();
+  await expect(assistant).toBeVisible();
+  expect(await page.evaluate(key => localStorage.getItem(key), splitKey)).toBe(preference);
   expect(writes).toEqual([]);
 });
 
