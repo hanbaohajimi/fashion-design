@@ -1,4 +1,4 @@
-import { openCanvasFunction } from "./canvas-function-navigation";
+import { openCanvasFunction, returnCanvasHome } from "./canvas-function-navigation";
 import { mkdir, readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { canvasAction } from "./canvas-workspace-controls";
@@ -168,7 +168,7 @@ test("总览绘制只随变化发生，离屏后台和卸载停止，重开不�
     // Three object rectangles plus the background and viewport fill, once per camera event.
     expect(await draws() - before).toBeLessThanOrEqual(10);
   }
-  await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await returnCanvasHome(page);
   await expect(panel(page)).toHaveCount(0); const exited = await draws();
   await page.waitForTimeout(150); expect(await draws()).toBe(exited);
   expect(state.errors).toEqual([]);

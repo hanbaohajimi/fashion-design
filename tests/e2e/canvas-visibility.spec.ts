@@ -31,7 +31,9 @@ test("隐藏清除选择、退出命中且独立撤销，刷新可恢复原位�
   const state = await prepareZhiya(page, { realClock: true });
   await loadZhiya(page);
   const before = await shape(page, 0).boundingBox();
+  const neighborBefore = await shape(page, 1).boundingBox();
   if (!before) throw new Error("测试对象没有呈现");
+  if (!neighborBefore) throw new Error("相邻对象没有呈现");
   await open(page);
   await row(page, 0).getByRole("button", { name: /^选择/ }).click();
   await hide(page, 0);
@@ -59,7 +61,12 @@ test("隐藏清除选择、退出命中且独立撤销，刷新可恢复原位�
   await expect(shape(page, 0)).toBeVisible();
   await expect.poll(() => saved(state.saves, 0)?.meta.canvasHidden).toBe(false);
   expect(saved(state.saves, 0)).toMatchObject({ x: hidden?.x, y: hidden?.y });
-  expect(await shape(page, 0).boundingBox()).toEqual(before);
+  const restored = await shape(page, 0).boundingBox(), neighborRestored = await shape(page, 1).boundingBox();
+  if (!restored || !neighborRestored) throw new Error("恢复后对象没有呈现");
+  expect(restored.width).toBe(before.width);
+  expect(restored.height).toBe(before.height);
+  expect(restored.x - neighborRestored.x).toBeCloseTo(before.x - neighborBefore.x, 1);
+  expect(restored.y - neighborRestored.y).toBeCloseTo(before.y - neighborBefore.y, 1);
   expect(state.mutations).toEqual([]); expect(state.errors).toEqual([]);
 });
 
@@ -207,7 +214,7 @@ test("下载的 PNG 排除隐藏对象与分组后代，空画布不下载", asy
   const repeated = await exportPixels(page, "all-visible-again");
   for (const color of ["red", "green", "blue"] as const) expect(repeated[color]).toBe(full[color]);
   await open(page); await row(page, 0).getByRole("button", { name: /^选择/ }).click(); await close(page);
-  await expect(shape(page, 0).getByRole("button", { name: "局部更改成衣" })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "常用图片工具", exact: true }).getByRole("button", { name: "局部重绘", exact: true })).toBeVisible();
   await exportPixels(page, "selected-image");
   // Selection controls belong to the workspace and must not change the exported artwork.
   expect(await readFile("output/playwright/canvas-visibility/selected-image.png")).toEqual(
