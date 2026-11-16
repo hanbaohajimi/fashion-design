@@ -316,6 +316,7 @@ export async function seedVisualApp(page: Page, { guides = false, firstAssistant
       });
     if (/^\/projects\/[^/]+\/(assistant-skills|assistant-delegations)$/u.test(path) && route.request().method() === "GET") return json([]);
     if (/^\/projects\/[^/]+\/tasks$/u.test(path)) return json({ items: [], nextCursor: null, counts: { running: 0, attention: 0 } });
+    if (/^\/projects\/[^/]+\/studio\/shares$/u.test(path) && route.request().method() === "GET") return json([]);
     if (path === "/auth/login") return json({ ok: true });
     throw new Error(
       `视觉测试缺少明确的 API fixture: ${route.request().method()} ${path}`,

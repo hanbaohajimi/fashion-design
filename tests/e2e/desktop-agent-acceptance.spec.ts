@@ -1,3 +1,5 @@
+import { openCanvasFunction } from "./canvas-function-navigation";
+import { prepareZhiya } from "./zhiya-fixture";
 import { test, expect } from "@playwright/test";
 import { seedVisualApp, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
@@ -44,7 +46,7 @@ test("同文档往返公开分享页保留当前账号的助手与草图草稿",
   await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
   const timeOrigin = await page.evaluate(() => performance.timeOrigin);
   await page.getByRole("link", { name: "进入工作室", exact: true }).click();
-  await page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true }).click();
+  await page.getByRole("link", { name: /^秋冬通勤服装设计/ }).click();
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await expect(input).toBeEnabled();
   await input.fill(prompt);
@@ -70,24 +72,23 @@ test("同文档往返公开分享页保留当前账号的助手与草图草稿",
   await expect.poll(hasStoredPrompt).toBe(true);
 
   await page.evaluate(() => history.back());
-  await expect(page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^秋冬通勤服装设计/ })).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(sharePath);
   await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
 
   await page.getByRole("link", { name: "进入工作室", exact: true }).click();
-  await page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true }).click();
+  await page.getByRole("link", { name: /^秋冬通勤服装设计/ }).click();
   await expect(input).toHaveValue(prompt);
   await expect.poll(hasStoredPrompt).toBe(true);
   expect(await page.evaluate(key => localStorage.getItem(key), sketchKey)).toBe(sketch);
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
 });
 
-test("分栏Escape恢复，键盘调整后可刷新恢复", async ({ page }) => {
+test("助手浮窗Escape恢复，键盘调整后可刷新恢复", async ({ page }) => {
   await page.goto(`/${PROJECT}`);
-  const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
-  await expect(page.getByRole("heading", { name: "方案与灵感" })).toBeInViewport();
+  const separator = page.getByRole("separator", { name: "调整助手浮窗左边" });
   await expect(separator).toBeVisible();
   const bounds = await separator.boundingBox();
   if (!bounds) throw new Error("分栏手柄不可见");
@@ -101,7 +102,8 @@ test("分栏Escape恢复，键盘调整后可刷新恢复", async ({ page }) => 
   await separator.press("ArrowLeft");
   await expect.poll(async () => (await separator.boundingBox())?.x ?? Infinity).toBeLessThan(bounds.x);
   const changed = await separator.boundingBox();
-  await expect.poll(() => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith("fashion:workspace-split:")).map(([, value]) => JSON.parse(value) as { width: number }).some(item => item.width > 400))).toBe(true);
+  await separator.press("Tab");
+  await expect.poll(() => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith("fashion:workspace-split:")).map(([, value]) => JSON.parse(value) as { floatingBounds?: { width: number } }).some(item => (item.floatingBounds?.width ?? 0) > 400))).toBe(true);
   await page.reload();
   await expect(separator).toBeVisible();
   await expect.poll(async () => Math.abs(((await separator.boundingBox())?.x ?? 0) - (changed?.x ?? 0))).toBeLessThan(2);
@@ -123,12 +125,13 @@ test("工作室表单本机恢复", async ({ page }) => {
 });
 
 test("项目任务抽屉按真实能力停止并恢复焦点", async ({ page }) => {
+  await prepareZhiya(page, { count: 1, realClock: true });
   let canceled = false;
   await page.route(`**/api/projects/${PROJECT}/tasks*`, route => route.fulfill({ json: { items: [{ id: "generation:task-1", domain: "generation", title: "图片生成", rawStatus: canceled ? "CANCELED" : "RUNNING", status: canceled ? "canceled" : "running", group: canceled ? "ended" : "running", createdAt: "2026-10-27T00:00:00Z", updatedAt: "2026-10-27T00:00:00Z", objectId: null, conversationId: null, href: `/${PROJECT}`, actions: canceled ? [] : [{ kind: "cancel_generation", targetId: "task-1" }] }], counts: { running: canceled ? 0 : 1, attention: 0 }, nextCursor: null } }));
   await page.route("**/api/generations/task-1", route => { canceled = true; return route.fulfill({ json: { status: "CANCELED" } }); });
   await page.goto(`/${PROJECT}`);
-  const trigger = page.getByRole("button", { name: /^项目任务/ });
-  await trigger.click();
+  const trigger = page.getByRole("button", { name: "全部功能模块", exact: true });
+  await openCanvasFunction(page, "项目任务");
   const dialog = page.getByRole("dialog", { name: "项目任务" });
   await expect(dialog.getByText("处理中", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "停止后续处理" }).click();

@@ -8,8 +8,9 @@ jobs:
   quality:
     name: quality + integration + browser contract
     runs-on: ubuntu-24.04
-    # Leave time for pinned screenshot comparisons after the serial browser suite.
-    timeout-minutes: 60
+    # The serial browser suite now contains about 1,000 contracts, followed by
+    # pinned screenshot comparisons. Preserve enough time to finish both.
+    timeout-minutes: 120
     env:
       API_INTERNAL_URL: http://127.0.0.1:3001
       APP_ORIGIN: http://localhost:3000
@@ -129,7 +130,9 @@ jobs:
         run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Run browser contract tests
-        run: pnpm test:e2e
+        # A failing contract still fails the job; stop repeated failures early
+        # so diagnostics are uploaded instead of losing the result to timeout.
+        run: pnpm test:e2e --max-failures=10
 
       - name: Compare Atelier screenshots in pinned Chromium environment
         run: pnpm test:e2e:visual

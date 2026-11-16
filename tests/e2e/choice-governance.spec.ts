@@ -66,8 +66,8 @@ test("对象展开列表搜索已加载款式，取消离开仍保留当前草�
   await page
     .getByLabel("款式名称", { exact: true })
     .fill("当前款式的未保存修改");
-  await page.locator("summary").filter({ hasText: "切换对象" }).click();
-  await page.getByRole("textbox", { name: "搜索切换对象" }).fill("款式 12");
+  await page.locator("summary").filter({ hasText: "切换款式" }).click();
+  await page.getByRole("textbox", { name: "搜索切换款式" }).fill("款式 12");
   const list = page.getByRole("complementary", { name: "已有款式" });
   await expect(list.getByRole("button")).toHaveCount(1);
   await page.screenshot({ path: `${artifacts}/desktop-object-search.png` });
@@ -183,17 +183,13 @@ test("手机上方往下展开，底部使用Sheet且缩小视口不改变形态
   await noOverflow(page);
 });
 
-test("手机功能导航搜索页面并保留未保存保护", async ({ page }) => {
+test("手机工作区目录导航保留未保存保护", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/${PROJECT}/studio?tab=styles`);
   await page.getByLabel("款式名称", { exact: true }).fill("保留未保存款式草稿");
-  const navigation = page.getByLabel("当前功能", { exact: true });
-  await navigation.click();
-  await page.getByRole("searchbox", { name: "搜索当前功能" }).fill("技术包");
-  await page
-    .getByRole("group", { name: "当前功能选项", exact: true })
-    .getByRole("button", { name: "技术包", exact: true })
-    .click();
+  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+  const navigation = page.getByRole("dialog", { name: "工作区目录", exact: true });
+  await navigation.getByRole("link", { name: "项目", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await expect(guard).toBeVisible();
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
@@ -201,9 +197,7 @@ test("手机功能导航搜索页面并保留未保存保护", async ({ page }) 
   await expect(page.getByLabel("款式名称", { exact: true })).toHaveValue(
     "保留未保存款式草稿",
   );
-  await expect(
-    page.getByRole("button", { name: "刷新资料", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "款式名称", exact: true })).toBeVisible();
   await noOverflow(page);
   await page.screenshot({
     path: `${artifacts}/phone-navigation-guard.png`,
@@ -253,7 +247,7 @@ test("成员权限平铺，失败保留原角色，重试只提交所选角色",
   );
   const writes: Record<string, unknown>[] = [];
   await page.route(
-    `**/api/projects/${PROJECT}/studio/members/member-editor`,
+    `**/api/projects/${PROJECT}/studio/members/**`,
     (route) => {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       writes.push(body);
@@ -275,6 +269,7 @@ test("成员权限平铺，失败保留原角色，重试只提交所选角色",
   });
   await expect(role.getByRole("radio")).toHaveCount(3);
   await role.getByRole("radio", { name: "评审", exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
   await expect(
     page.getByText("权限保存失败，请重试", { exact: true }),
   ).toBeVisible();

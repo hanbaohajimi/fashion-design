@@ -138,7 +138,7 @@ test("自由白板保持选择与引用独立、整理容器与只读流程", as
     bounds.y + bounds.height / 2,
   );
   const references = page.getByLabel("正在讨论", { exact: true }).locator("[data-assistant-reference-id]");
-  await expect(page.getByRole("toolbar", { name: "所选对象操作", exact: true })).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "常用图片工具", exact: true })).toBeVisible();
   await expect(references).toHaveCount(0);
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
   await expect(references).toHaveCount(0);
@@ -189,8 +189,7 @@ test("自由白板保持选择与引用独立、整理容器与只读流程", as
   await expect.poll(() => Object.values((document.snapshot.document as { store?: Record<string, { type?: string }> } | undefined)?.store ?? {}).some(record => record.type === "group")).toBe(true);
   await expect(page.getByLabel("正在讨论", { exact: true }).getByRole("button", { name: /移除/ })).toHaveCount(1);
   await page.getByRole("button", { name: "解除分组", exact: true }).click();
-  await page.getByRole("button", { name: "添加灵感便签", exact: true }).click();
-  await page.getByRole("textbox", { name: "备注内容", exact: true }).fill("探索通勤外套的廓形");
+  await page.getByRole("button", { name: "添加色卡", exact: true }).click();
   await expect.poll(() => commands.length).toBe(1);
   await expect.poll(() => saves.length).toBeGreaterThan(0);
   const nodeCount = graph.nodes.length;
@@ -198,38 +197,38 @@ test("自由白板保持选择与引用独立、整理容器与只读流程", as
   await expect(page.getByRole("button", { name: "解除分组", exact: true })).toHaveCount(0);
   expect(graph.nodes).toHaveLength(nodeCount);
   expect(graph.edges).toHaveLength(0);
-  await page.getByRole("button", { name: "流程画布", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "工具条", exact: true })).toBeHidden();
-  await expect(page.locator("[data-workflow-port]")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "＋ 添加素材", exact: true }),
-  ).toBeHidden();
-  const flowNode = page.getByRole("group", { name: "设计节点 藏蓝通勤外套", exact: true });
-  const flowBounds = await flowNode.boundingBox();
-  if (!flowBounds) throw new Error("流程节点不可见");
-  // tldraw routes canvas hit testing through its overlay, so exercise a real pointer.
-  await page.mouse.click(flowBounds.x + flowBounds.width / 2, flowBounds.y + flowBounds.height / 2);
-  await page.keyboard.press("Delete");
-  await page.keyboard.press("Control+v");
-  await expect(flowNode).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "流程画布", exact: true })).toHaveCount(0);
+  document = { ...document, canEdit: false };
+  await page.reload();
+  await expect(image.first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "添加色卡", exact: true })).toBeDisabled();
+  const readOnlyBounds = await image.first().boundingBox();
+  if (!readOnlyBounds) throw new Error("只读图片不可见");
+  await page.mouse.click(readOnlyBounds.x + readOnlyBounds.width / 2, readOnlyBounds.y + readOnlyBounds.height / 2);
+  await page.keyboard.press("Delete"); await page.keyboard.press("Control+v");
+  await expect(image).toHaveCount(2);
+  expect(graph.nodes).toHaveLength(nodeCount);
+  expect(commands).toHaveLength(1);
   expect(graphWrites).toBe(0);
-  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  document = { ...document, canEdit: true };
+  await page.reload();
   await expect(image.first()).toBeVisible();
   const workspace = page.getByLabel("无限白板", { exact: true });
   const beforeCollapse = await workspace.boundingBox();
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
-  await expect.poll(async () => (await workspace.boundingBox())?.width ?? 0).toBeGreaterThan(beforeCollapse?.width ?? 0);
+  await expect.poll(async () => (await workspace.boundingBox())?.width ?? 0).toBe(beforeCollapse?.width ?? 0);
   await canvasAction(page, "查看全图");
-  await expect(page.getByRole("textbox", { name: "备注内容", exact: true })).toBeInViewport();
-  const noteBounds = await page.getByRole("textbox", { name: "备注内容", exact: true }).boundingBox();
-  if (!noteBounds) throw new Error("流程返回后便签丢失");
+  const palette = page.locator('.tl-shape[data-shape-type="fashion-swatch"]');
+  await expect(palette).toBeInViewport();
+  const noteBounds = await palette.boundingBox();
+  if (!noteBounds) throw new Error("刷新后色卡丢失");
   const beforeNoteMove = saves.length;
-  await page.mouse.move(noteBounds.x - 12, noteBounds.y + 16);
+  await page.mouse.move(noteBounds.x + 12, noteBounds.y + 16);
   await page.mouse.down();
   await page.mouse.move(noteBounds.x + 388, noteBounds.y + 16, { steps: 8 });
   await page.mouse.up();
   await expect.poll(() => saves.length).toBeGreaterThan(beforeNoteMove);
-  await expect.poll(() => JSON.stringify(document.snapshot)).toContain("探索通勤外套的廓形");
+  await expect.poll(() => JSON.stringify(document.snapshot)).toContain("fashion-swatch");
   await canvasAction(page, "查看全图");
   await page.getByRole("button", { name: "取消选择", exact: true }).click();
   // Successful autosaves are silent; verify the persisted snapshot and cleared pending status.
@@ -248,7 +247,7 @@ test("自由白板保持选择与引用独立、整理容器与只读流程", as
   expect(errors).toEqual([]);
   // Selection alone preserves references; exceeding the limit disables the explicit action.
   const beforeLimit = commands.length;
-  const extras: WorkflowGraph["nodes"] = Array.from({ length: 17 }, (_, index) => ({ id: `extra-${index}`, kind: "asset", type: "reference_text", title: `参考 ${index}`, payload: { text: `参考 ${index}` }, status: "ready", x: 0, y: 0, createdAt: NOW, updatedAt: NOW }));
+  const extras: WorkflowGraph["nodes"] = Array.from({ length: 17 }, (_, index) => ({ id: `extra-${index}`, kind: "asset", type: "candidate", title: `参考 ${index}`, payload: { assetId: `extra-asset-${index}`, imageUrl: "/visual-garment.svg" }, status: "ready", x: 0, y: 0, createdAt: NOW, updatedAt: NOW }));
   graph = { ...graph, nodes: [...graph.nodes, ...extras] };
   document = { ...document, bindings: [...document.bindings, ...extras.map(node => ({ shapeId: `shape:${node.id}`, nodeId: node.id, removed: false }))] };
   await page.setViewportSize({ width: 1440, height: 900 });
