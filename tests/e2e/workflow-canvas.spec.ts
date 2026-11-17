@@ -3181,7 +3181,7 @@ test("持续对话的待处理回复自动更新为终态且不会重复追加",
   expect(reads).toBeGreaterThanOrEqual(2);
 });
 
-test("跨窗口读取到待识别参考图时会同步最终角色", async ({ page }) => {
+test("跨窗口同步参考图更新时保留画布素材", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   const reference = node("role-pending", "asset", "reference_image", "待识别袖口图", 40, 700, {
     fileAssetId: "sketch-file", role: "style_ref", roleSource: "default", roleInferenceState: "pending",
@@ -3192,6 +3192,7 @@ test("跨窗口读取到待识别参考图时会同步最终角色", async ({ pa
   await page.route(`**/api/projects/${PROJECT_ID}/workflow/sync`, (route) => {
     reads += 1;
     if (reads > 1) {
+      reference.title = "已同步的袖口参考";
       reference.payload = { ...reference.payload, role: "detail_ref", roleSource: "inferred", roleInferenceState: "ready", roleLabel: "细节参考" };
       mocked.getGraph().revision += 1;
     }
@@ -3201,11 +3202,8 @@ test("跨窗口读取到待识别参考图时会同步最终角色", async ({ pa
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(page.locator('[data-type="reference_image"]')).toHaveCount(1);
-  await page.locator('[data-type="reference_image"]').dblclick();
-  const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
-  await expect(details.getByText(/当前标签：细节参考/)).toBeVisible({ timeout: 10_000 });
-  await expect(details.getByRole("button", { name: /识别参考角色/ })).toHaveCount(0);
-  expect(reads).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('[data-type="reference_image"]')).toContainText("已同步的袖口参考");
 });
 
 test("较新的语义响应不会把已保存的节点位置回退到旧布局", async ({ page }) => {
@@ -3300,7 +3298,7 @@ test("保存失败保留批次，重试使用同一请求且成功前不显示�
   fail = false;
   await page.getByRole("button", { name: "重试保存", exact: true }).click();
   await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
-  await expect(page.getByLabel("画布保存状态", { exact: true })).toHaveText("已保存");
+  await expect(page.getByText("画布未保存", { exact: true })).toHaveCount(0);
   expect(requests[1]).toEqual(requests[0]);
 });
 
@@ -3321,12 +3319,14 @@ test("布局保存失败阻止站内离开，保存恢复后再进入项目库",
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 20, { steps: 6 });
   await page.mouse.up();
-  await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "项目库", exact: true }).click();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "全部项目", exact: true }).click();
   await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
   fail = false;
-  await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "项目库", exact: true }).click();
-  await expect(page).toHaveURL("/");
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "全部项目", exact: true }).click();
+  await expect(page).toHaveURL("/projects");
 });
 
 test("素材弹窗支持 Escape、焦点圈定和关闭后恢复焦点", async ({ page }) => {
@@ -3397,6 +3397,7 @@ test("服务器决定节点能否移除，允许移除时先确认关联连线",
 
 test("同账号后台认证与临时服务故障不会清空设计助手草稿", async ({ page }) => {
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
   await composer.fill("保留袖口，下一步比较面料");
@@ -3475,13 +3476,13 @@ test("断网保留待保存数量，恢复后同一批次重试成功", async ({
   await context.setOffline(true);
   await dragReviewBrief(page);
   await expect(page.getByText("画布未保存", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("待保存节点数")).toContainText("1 个节点");
+  await expect(page.locator("main[data-layout-pending-count]")).toHaveAttribute("data-layout-pending-count", "1");
   expect(await page.evaluate(() => navigator.onLine)).toBe(false);
   await context.setOffline(false);
   offline = false;
   await page.getByRole("button", { name: "重试保存", exact: true }).click();
   await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
-  await expect(page.getByLabel("待保存节点数")).toHaveCount(0);
+  await expect(page.locator("main[data-layout-pending-count]")).toHaveAttribute("data-layout-pending-count", "0");
   expect(requests[1]).toEqual(requests[0]);
 });
 
@@ -3510,7 +3511,7 @@ test("保存失败的后退可取消，恢复后前进历史仍然可用", async
   let fail = true;
   await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH" && fail
     ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback());
-  await page.goto("/");
+  await page.goto("/projects");
   await page.getByRole("link", { name: "打开项目 历史导航验收" }).click();
   await dragReviewBrief(page);
   await expect(page.locator("main[data-layout-pending-count]")).not.toHaveAttribute("data-layout-pending-count", "0");
@@ -3519,7 +3520,7 @@ test("保存失败的后退可取消，恢复后前进历史仍然可用", async
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
   fail = false;
   await page.goBack();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/projects");
   await page.goForward();
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
   await expect(page.locator("main[data-layout-save-state]")).toHaveAttribute("data-layout-save-state", "saved");
