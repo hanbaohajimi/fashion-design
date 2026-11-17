@@ -281,10 +281,10 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
   const mocked = await mockStudio(page);
   await openTab(page, "styles");
   await page
-    .getByRole("button", { name: "比较候选并选款（选择 2–4 张）" })
+    .getByRole("button", { name: "比较方案并选款（选择 2–4 张）" })
     .click();
   const comparison = page.getByRole("dialog", {
-    name: "候选比较",
+    name: "方案比较",
     exact: true,
   });
   await comparison
@@ -301,7 +301,7 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
   ).toHaveCount(2);
   await comparison.getByRole("button", { name: /更换或添加图片/ }).click();
   const picker = page
-    .getByRole("dialog", { name: "候选比较", exact: false })
+    .getByRole("dialog", { name: "方案比较", exact: false })
     .last();
   await picker.getByRole("button", { name: "选择图片 3", exact: true }).click();
   await picker.getByRole("button", { name: "选择图片 4", exact: true }).click();
@@ -344,6 +344,8 @@ test("款式候选限制为 2–4 张，采用理由和母图随款式保存并�
 test("实验保存只建立草稿，显式提交才将三个方案送入队列", async ({ page }) => {
   const mocked = await mockStudio(page);
   await openTab(page, "experiments");
+  await page.getByLabel("本轮目标", { exact: true }).fill("探索三种配色，保留原有版型");
+  await page.getByLabel(/配色，每行/).fill("藏蓝 #263950\n米白 #EEE8DA\n栗色 #754C3B");
   await page.getByRole("button", { name: "保存实验计划", exact: true }).click();
   await expect(
     page.getByRole("article").filter({ hasText: "待提交" }),
@@ -451,7 +453,7 @@ test("未保存内容可继续编辑，确认丢弃后新建和切换功能会�
   const mocked = await mockStudio(page);
   await openTab(page, "presentation");
   await page.getByLabel("展示包名称", { exact: true }).fill("尚未保存的展示包");
-  await page.getByRole("tab", { name: "款式档案", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   const dialog = page.getByRole("dialog", {
     name: "保留未保存的修改",
     exact: true,
@@ -465,12 +467,10 @@ test("未保存内容可继续编辑，确认丢弃后新建和切换功能会�
   await dialog.getByRole("button", { name: "丢弃并离开", exact: true }).click();
   await expect(page.getByLabel("展示包名称", { exact: true })).toHaveValue("");
   await page.getByLabel("展示包名称", { exact: true }).fill("第二份草稿");
-  await page.getByRole("tab", { name: "款式档案", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await dialog.getByRole("button", { name: "丢弃并离开", exact: true }).click();
-  await expect(
-    page.getByRole("tabpanel", { name: "款式档案", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("tab", { name: "商品展示", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/${PROJECT_ID}(?:\\?.*)?$`));
+  await page.goto(`/${PROJECT_ID}/studio?tab=presentation`);
   await expect(page.getByLabel("展示包名称", { exact: true })).toHaveValue("");
   expect(mocked.savedDocuments).toHaveLength(0);
   expect(mocked.unexpected).toEqual([]);

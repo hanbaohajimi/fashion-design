@@ -221,6 +221,7 @@ test("服装秀深链优先于 assetId，配对提交媒体 ID 并在刷新后�
 test("从款式修订建立服装秀，保存与执行分开", async ({ page }) => {
   const state = await prepare(page, { empty: true });
   await page.goto("/project-1/studio?tab=styles");
+  await page.getByRole("button", { name: "继续创作与交付", exact: true }).click();
   await page.getByRole("button", { name: "制作服装秀" }).click();
   await expect(page).toHaveURL(/tab=runway.*styleRevisionId=style-r1/);
   await expect(page.getByRole("heading", { name: "建立服装秀" })).toBeVisible();
