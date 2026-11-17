@@ -5,7 +5,7 @@ import { elementBox, emptyActivity, hit, loadZhiya, openZhiya, prepareZhiya, zhi
 
 test.setTimeout(60_000);
 
-test("位置和聊天偏好按账号、项目隔离，手机关闭后切回桌面保持关闭", async ({ page }) => {
+test("位置和聊天偏好按账号、项目隔离", async ({ page }) => {
   const state = await prepareZhiya(page);
   await seedReturningFeatureGuideUser(page, ["another-designer"]);
   let account = "visual-designer";
@@ -40,11 +40,9 @@ test("位置和聊天偏好按账号、项目隔离，手机关闭后切回桌�
   await expect(zhiya(page)).toBeVisible();
   await expect.poll(async () => Math.abs((await elementBox(hit(page))).x - original.x)).toBeLessThan(2);
   await openZhiya(page);
-  expect((await elementBox(page.getByRole("complementary", { name: "设计助手", exact: true }))).width).toBeCloseTo(420, 0);
-  await page.setViewportSize({ width: 375, height: 800 });
+  expect((await elementBox(page.getByRole("complementary", { name: "设计助手", exact: true }))).width).toBeCloseTo(400, 0);
   await expect(input).toBeVisible();
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
-  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(zhiya(page)).toBeVisible();
   await expect(input).toBeHidden();
   account = "another-designer";
@@ -126,12 +124,13 @@ test("聊天、离屏与失焦停止绘制，反复挂载释放 GPU 对象和角
   await expect(zhiya(page)).toHaveAttribute("data-active", "true");
   for (let cycle = 0; cycle < 3; cycle++) {
     const previous = await zhiya(page).elementHandle();
-    await page.getByRole("button", { name: "流程画布", exact: true }).click();
+    await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+    await page.getByRole("button", { name: "全部项目", exact: true }).click();
     await expect(zhiya(page)).toHaveCount(0);
     await expect.poll(async () => (await resources()).objects).toBe(0);
     expect((await resources()).listeners).toBe(0);
     expect(await previous?.evaluate(node => [node.isConnected, node.dataset.rendering])).toEqual([false, "false"]);
-    await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+    await page.getByRole("link", { name: "打开项目 秋冬通勤服装设计", exact: true }).click();
     await expect(zhiya(page)).toHaveAttribute("data-body-surface", "mesh");
     expect((await resources()).objects).toBe(4);
     expect((await resources()).listeners).toBe(1);

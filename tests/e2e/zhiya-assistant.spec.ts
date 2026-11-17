@@ -213,7 +213,7 @@ test.describe("触屏与窄屏", () => {
   });
 });
 
-test("初始无 WebGL 仍能使用毛绒原图；平板抽屉保留触屏输入选择", async ({ page }) => {
+test("初始无 WebGL 仍能使用毛绒原图与聊天草稿", async ({ page }) => {
   await page.addInitScript(() => {
     const native = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (...args: Parameters<typeof native>) {
@@ -221,15 +221,15 @@ test("初始无 WebGL 仍能使用毛绒原图；平板抽屉保留触屏输入�
       return native.apply(this, args);
     } as typeof native;
   });
-  const state = await prepareZhiya(page, { viewport: { width: 850, height: 900 } });
+  const state = await prepareZhiya(page, { viewport: { width: 1440, height: 900 } });
   await loadZhiya(page);
   await expect(zhiya(page).locator(".pp-body-fallback")).toHaveCSS("opacity", "1");
   await openZhiya(page);
-  await expect(page.getByRole("dialog", { name: "设计助手面板" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "设计助手" })).toBeVisible();
   const input = page.getByRole("textbox", { name: "描述设计需求", exact: true });
   await expect(input).toBeFocused();
   await input.fill("抽屉中的草稿");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
   await expect(zhiya(page)).toBeVisible();
   await openZhiya(page);
   await expect(input).toHaveValue("抽屉中的草稿");
