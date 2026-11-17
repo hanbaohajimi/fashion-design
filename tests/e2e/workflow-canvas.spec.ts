@@ -1185,6 +1185,7 @@ for (const width of [1280, 375]) {
   test(`密集连线 ${width}：三类关系色、上下游聚焦与取消恢复`, async ({ page }) => {
     test.setTimeout(60_000);
     const mocked = await mockWorkflow(page);
+    await seedOpenAssistant(page);
     const graph = mocked.getGraph();
     graph.nodes = Array.from({ length: 4 }, (_, index) => node(
       `material-${index}`, "asset", index === 0 ? "candidate" : "reference_text",
@@ -1225,7 +1226,7 @@ for (const width of [1280, 375]) {
     expect((await toolCards.allTextContents()).join(" ")).not.toMatch(/已完成|运行中|处理中|等待执行/);
     if (width === 1280) {
       await page.getByRole("button", { name: "收起设计助手" }).click();
-      await expect(page.getByRole("button", { name: "展开设计助手" })).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "设计助手" })).toBeHidden();
     }
     await page.getByRole("button", { name: "适合画布" }).click();
     const wire = (id: string) => page.locator(`[data-workflow-edge="${id}"]`);
@@ -1300,6 +1301,11 @@ for (const width of [1280, 375]) {
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-workflow-edge][data-muted="true"]')).toHaveCount(0);
     await expect.poll(() => lineOpacity("output-0")).toBeCloseTo(0.9);
+    if (width === 375) {
+      await page.getByRole("group", { name: "设计节点 分支方案 1", exact: true }).locator("strong").first().click();
+      await page.keyboard.press("Shift+2");
+      await page.keyboard.press("Escape");
+    }
     for (const [id, label] of width === 1280
       ? [["input-0-0", "主图输入"], ["input-0-1", "参考素材"], ["output-0", "生成结果"]] as const
       : [["output-0", "生成结果"]] as const) {
@@ -1368,9 +1374,9 @@ for (const width of [1280, 375]) {
     await page.screenshot({ path: `output/playwright/design-workbench/materials-${width}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await work.getByRole("button", { name: "引用素材 廓形参考", exact: true }).click();
-    await expect(page.getByRole("button", { name: "移除引用 廓形参考", exact: true })).toBeVisible();
+    await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("廓形参考");
     expect(mocked.workflowRequests).toHaveLength(0);
-    if (width < 768) await page.getByRole("button", { name: "画布", exact: true }).click();
+    if (width < 768) await page.getByRole("button", { name: "返回画布", exact: true }).click();
     await page.getByRole("button", { name: "流程画布", exact: true }).click();
     await expect(page.locator('[data-kind="tool"]')).toHaveCount(3);
     await page.reload();
