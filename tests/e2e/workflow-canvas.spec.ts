@@ -26,6 +26,15 @@ async function seedOpenAssistant(page: Page) {
   }, PROJECT_ID);
 }
 
+async function addAssistantReference(page: Page, title: string) {
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
+  await picker.getByRole("checkbox", { name: new RegExp(title) }).check();
+  await picker.getByRole("button", { name: "使用所选引用", exact: true }).click();
+  await expect(picker).toBeHidden();
+}
+
 test("助手入口：引用选择、对话草稿恢复与显式发送", async ({ page }) => {
   const mocked = await mockWorkflow(page, "workbench");
   await seedOpenAssistant(page);
@@ -1832,7 +1841,7 @@ async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workfl
     workflowMessages.set(conversationId, history);
     return route.fulfill({ status: 201, json: { userMessage, assistantMessage } });
   });
-  return { getGraph: () => graph, getExecuteCount: () => executeCount, getInferRoleCount: () => inferRoleCount, rejectSketchOnce: () => { rejectNextSketch = true; }, rejectRoleOnce: () => { rejectNextRole = true; }, failMessageOnce: () => { failNextMessage = true; }, setPendingProposal: (value: Record<string, unknown>) => { proposal = value; }, proposalRequests, chatRequests, workflowRequests, contextPatches, executionRequests, rejectionRequests, getContext: () => context, setPlan: (value: Record<string, unknown>) => { currentPlan = value; }, setMessages: (items: Array<Record<string, unknown>>) => workflowMessages.set("workflow-current", items), appendMessage: (value: Record<string, unknown>) => { const items = workflowMessages.get("workflow-current") ?? []; items.push(value); workflowMessages.set("workflow-current", items); }, clearConversations: () => { conversations.length = 0; } };
+  return { getGraph: () => graph, getExecuteCount: () => executeCount, getInferRoleCount: () => inferRoleCount, setAgentVersion: (version: number) => { agentVersion = version; }, rejectSketchOnce: () => { rejectNextSketch = true; }, rejectRoleOnce: () => { rejectNextRole = true; }, failMessageOnce: () => { failNextMessage = true; }, setPendingProposal: (value: Record<string, unknown>) => { proposal = value; }, proposalRequests, chatRequests, workflowRequests, contextPatches, executionRequests, rejectionRequests, getContext: () => context, setPlan: (value: Record<string, unknown>) => { currentPlan = value; }, setMessages: (items: Array<Record<string, unknown>>) => workflowMessages.set("workflow-current", items), appendMessage: (value: Record<string, unknown>) => { const items = workflowMessages.get("workflow-current") ?? []; items.push(value); workflowMessages.set("workflow-current", items); }, clearConversations: () => { conversations.length = 0; } };
 }
 
 test("方案确认显示数量与保留项，一次确认更新原节点并执行", async ({ page }) => {
@@ -1871,15 +1880,18 @@ test("方案确认显示数量与保留项，一次确认更新原节点并执�
 
 test("修改要求复用输入框与引用，关联原提案并覆盖旧引用", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
-  await composer.fill("请修改 @候选 A 的袖型");
+  await addAssistantReference(page, "生成图 A");
+  await composer.fill("请修改袖型");
   await page.getByRole("button", { name: "发送需求" }).click();
   await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
-  await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
-  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
+  await page.getByRole("button", { name: "移除引用 生成图 A", exact: true }).click();
+  await addAssistantReference(page, "生成图 B");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整袖型，生成3张");
   await page.getByRole("button", { name: "发送修改要求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]).toMatchObject({ respondingToProposalId: "proposal-0", referencedNodeIds: ["candidate-b"] });
@@ -1920,11 +1932,13 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("textbox", { name: "描述设计需求" }).fill("请修改 @候选 A 的袖型");
+  await addAssistantReference(page, "生成图 A");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("请修改袖型");
   await page.getByRole("button", { name: "发送需求" }).click();
   await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
-  await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
-  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整 @候选 B 的袖型，生成3张");
+  await page.getByRole("button", { name: "移除引用 生成图 A", exact: true }).click();
+  await addAssistantReference(page, "生成图 B");
+  await page.getByRole("textbox", { name: "描述设计需求" }).fill("保留藏蓝和立领，只调整袖型，生成3张");
   mocked.failMessageOnce();
   await page.getByRole("button", { name: "发送修改要求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
@@ -1941,8 +1955,9 @@ test("Fig8 调整提案失败后重试保留原提案关联和精确输入", asy
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重新启用", async ({ page }) => {
+test("Fig8 逐条纠正有来源的要求，历史暂停项目可重新启用", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -1953,15 +1968,10 @@ test("Fig8 逐条纠正有来源的要求，暂停协作后历史保留并可重
   await expect.poll(() => mocked.contextPatches.length).toBe(1);
   expect(mocked.contextPatches[0]).toMatchObject({ updatedItems: [{ id: "must-navy", text: "保留深藏蓝色，避免纯黑", scope: "project", confirm: true }] });
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
-  await page.getByRole("button", { name: "助手设置", exact: true }).click();
-  await page.getByRole("button", { name: "暂停本项目设计助手", exact: true }).click();
-  await expect(page.getByText("本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
+  mocked.setAgentVersion(1);
   await page.reload();
-  await page.getByRole("button", { name: "适合画布" }).click();
-  await page.waitForTimeout(250);
-  await expect(page.getByText("本项目设计助手已暂停。已有任务继续运行，历史消息仍可查看。", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "助手设置", exact: true }).click();
+  await expect(page.getByText("本项目设计助手已暂停，已有任务继续运行。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "描述设计需求" })).toHaveCount(0);
   await page.getByRole("button", { name: "恢复设计助手", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeEnabled();
 });
