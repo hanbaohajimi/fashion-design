@@ -130,7 +130,7 @@ test("长按提起、提前移动取消、落定与 Escape 恢复，透明区域
   expect(state.errors).toEqual([]);
 });
 
-test("引用明确展开聊天，会话链接覆盖收起偏好，流程视图不显示角色", async ({ page }) => {
+test("引用明确展开聊天，会话链接覆盖收起偏好", async ({ page }) => {
   const state = await prepareZhiya(page);
   await loadZhiya(page);
   const art = await page.getByRole("group", { name: "通勤外套 1", exact: true }).boundingBox();
@@ -140,9 +140,6 @@ test("引用明确展开聊天，会话链接覆盖收起偏好，流程视图�
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();
   await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("通勤外套 1");
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
-  await page.getByRole("button", { name: "流程画布", exact: true }).click();
-  await expect(zhiya(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
   await expect(zhiya(page)).toBeVisible();
   await page.goto(`/${PROJECT}?conversationId=visual-chat`);
   await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();

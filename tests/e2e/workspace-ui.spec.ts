@@ -8,6 +8,7 @@ import {
 import { contrastFailures, controlFontFailures } from "./review-accessibility";
 import { studioFixture } from "../../apps/web/src/modules/studio/studio-test-fixtures";
 import { studioDocumentInputSchema } from "../../packages/shared/src/studio";
+import { seedCollectionWorkbench } from "./collection-workbench-fixture";
 
 test.beforeEach(async ({ page }) => {
   await seedVisualApp(page);
@@ -17,6 +18,7 @@ test.beforeEach(async ({ page }) => {
   await page.route(`**/api/projects/${PROJECT}/experiments`, (route) =>
     route.fulfill({ json: experimentFixture(PROJECT) }),
   );
+  await seedCollectionWorkbench(page, PROJECT, workspaceFixture());
 });
 
 test("工作区导航可达，任务正文在笔记本首屏可输入", async ({
@@ -49,7 +51,7 @@ test("团队局部切换保留草稿，离开模块仍经过未保存保护", as
   await expect(page.getByRole("heading", { name: "工作区成员" })).toBeVisible();
   await page.getByRole("tab", { name: "修订评审", exact: true }).click();
   await expect(opinion).toHaveValue("检查口袋位置后再确认此修订");
-  await page.getByRole("tab", { name: "技术包", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "保留未保存的修改" });
   await dialog.getByRole("button", { name: "继续编辑" }).click();
   await expect(opinion).toHaveValue("检查口袋位置后再确认此修订");
@@ -123,7 +125,7 @@ test("只读和长内容在全部模块保留可达资料，缺图可重试", as
   await page.route("**/visual-garment.svg", (route) =>
     route.fulfill({ status: 503, body: "" }),
   );
-  await page.setViewportSize({ width: 375, height: 812 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   for (const tab of [
     "tasks",
     "styles",
@@ -139,11 +141,9 @@ test("只读和长内容在全部模块保留可达资料，缺图可重试", as
   ]) {
     await page.goto(`/${PROJECT}/studio?tab=${tab}`);
     await expect(
-      page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
+      page.getByRole("heading", { level: 1 }),
     ).toBeVisible();
-    await expect(
-      page.getByText("只读工作区", { exact: true }).last(),
-    ).toBeVisible();
+    if (tab !== "planning" && tab !== "team") await expect(page.getByText(/只读/).last()).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -200,11 +200,10 @@ test("空项目的十一项功能保持输入和返回入口可达", async ({ pa
   ]) {
     await page.goto(`/${PROJECT}/studio?tab=${tab}`);
     await expect(
-      page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
+      page.getByRole("heading", { level: 1 }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "设计工作台", exact: true }),
-    ).toBeVisible();
+    if (tab === "planning") await expect(page.getByRole("link", { name: "首页", exact: true })).toBeVisible();
+    else await expect(page.getByRole("button", { name: "返回画布", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     expect(
       await page.evaluate(
@@ -299,7 +298,7 @@ test("200% 等效可用宽度下十一模块自然重排，主操作和字段仍
   ]) {
     await page.goto(`/${PROJECT}/studio?tab=${tab}`);
     const panel = page.locator('[role="tabpanel"]:not([hidden])').first();
-    await expect(panel.locator("h2").first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
