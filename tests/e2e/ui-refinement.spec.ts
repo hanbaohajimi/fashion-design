@@ -6,6 +6,7 @@ import {
   experimentFixture,
 } from "../visual/workspace-fixture";
 import { controlFontFailures, contrastFailures } from "./review-accessibility";
+import { seedCollectionWorkbench } from "./collection-workbench-fixture";
 
 const tabs = [
   "tasks",
@@ -23,6 +24,7 @@ const tabs = [
 ];
 test.beforeEach(async ({ page }) => {
   await seedVisualApp(page);
+  await seedCollectionWorkbench(page, PROJECT, workspaceFixture());
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: workspaceFixture() }),
   );
@@ -137,7 +139,7 @@ test("素材目录搜索、取消、确认与焦点恢复", async ({ page }) => 
 test("只有一个款式时新建仍可返回原对象", async ({ page }) => {
   await page.goto(`/${PROJECT}/studio?tab=styles`);
   await page.getByRole("button", { name: "新建款式", exact: true }).click();
-  await page.getByText("切换对象", { exact: true }).click();
+  await page.getByText("切换款式", { exact: true }).click();
   await page
     .getByRole("complementary", { name: "已有款式" })
     .getByRole("button")
@@ -192,6 +194,7 @@ test("100 个样衣问题按状态筛选并切换当前编辑对象", async ({ p
 test("款式入口将确切修订带入商品展示并在刷新后保留", async ({ page }) => {
   const revisionId = workspaceFixture().styles[0]?.currentRevision.id;
   await page.goto(`/${PROJECT}/studio?tab=styles`);
+  await page.getByRole("button", { name: "继续创作与交付", exact: true }).click();
   await page.getByRole("button", { name: "继续商品展示", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`tab=presentation.*styleRevisionId=${revisionId}`));
   await expectValue(page.getByLabel("采用款式修订"), revisionId ?? "");

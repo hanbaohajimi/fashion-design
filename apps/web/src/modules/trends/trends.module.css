@@ -436,7 +436,7 @@
   background: transparent;
   color: var(--trend-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
 }
 .categoryTabs button[aria-pressed="true"] {
@@ -643,7 +643,7 @@
   color: var(--trend-ink);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
 }
 .importButton:disabled {
   cursor: wait;
@@ -1003,7 +1003,7 @@
   font-weight: var(--font-semibold);
   letter-spacing: var(--tracking-wider);
   text-transform: uppercase;
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
 }
 
 .externalSourcesList {
@@ -1021,7 +1021,7 @@
   border-radius: var(--radius-full);
   background: var(--color-paper);
   color: var(--color-ink-secondary);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   text-decoration: none;
   transition:
     border-color var(--duration-fast) var(--ease-standard),
